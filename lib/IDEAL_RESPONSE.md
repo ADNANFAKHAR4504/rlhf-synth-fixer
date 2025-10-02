@@ -1,7 +1,3 @@
-I'll create a comprehensive CloudFormation template for your charity web platform. This infrastructure will support 1,500 daily donors with secure access and performance monitoring in the us-east-2 region.
-
-Here's the complete CloudFormation template in JSON format:
-
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
@@ -498,61 +494,3 @@ Here's the complete CloudFormation template in JSON format:
   }
 }
 ```
-
-This CloudFormation template creates a complete infrastructure for your charity web platform with the following components:
-
-## Key Infrastructure Components:
-
-### 1. **Network Infrastructure**
-- VPC with CIDR block 10.50.0.0/16
-- 2 Public subnets (10.50.1.0/24, 10.50.2.0/24) across different availability zones
-- 2 Private subnets (10.50.10.0/24, 10.50.11.0/24) across different availability zones
-- Internet Gateway for public internet access
-- NAT Gateway for private subnet outbound connectivity
-- Properly configured route tables for both public and private subnets
-
-### 2. **Compute Resources**
-- 2 EC2 t3.micro instances deployed across different AZs for high availability
-- Amazon Linux 2023 AMI (latest version via SSM parameter)
-- Launch Template for consistent instance configuration
-- Apache web server automatically installed and configured via UserData
-- CloudWatch monitoring enabled for detailed metrics
-
-### 3. **Security Configuration**
-- Security Group with:
-  - HTTPS (443) access from anywhere (0.0.0.0/0)
-  - HTTP (80) access from anywhere for web traffic
-  - SSH (22) restricted to internal network (10.0.0.0/8)
-- EC2 Instance Connect Endpoint for secure SSH access without bastion hosts
-- IAM role with necessary permissions for S3 and CloudWatch
-
-### 4. **Storage**
-- S3 bucket with:
-  - Server-side encryption (AES256)
-  - Versioning enabled
-  - Public access blocked for security
-  - Proper naming convention including account ID and environment suffix
-
-### 5. **Monitoring**
-- CloudWatch detailed monitoring for EC2 instances
-- CPU alarms configured at 80% threshold
-- Custom CloudWatch Dashboard for visualizing metrics
-- CloudWatch agent permissions for enhanced monitoring
-
-### 6. **Best Practices Implemented**
-- All resources properly tagged with environment suffix
-- No retention policies - all resources are deletable
-- Outputs for all important resource identifiers
-- Use of intrinsic functions for dynamic configuration
-- Proper dependencies between resources
-- Security group follows least privilege principle
-
-## Deployment Notes:
-
-The template is designed to be deployed to the us-east-2 region and includes:
-- Dynamic environment suffix support for multiple deployments
-- Latest AMI ID fetched from SSM parameter store
-- Account-specific resource naming to avoid conflicts
-- Export values for cross-stack references
-
-This infrastructure provides a robust, secure, and scalable foundation for your charity platform supporting 1,500 daily donors with high availability across multiple availability zones.

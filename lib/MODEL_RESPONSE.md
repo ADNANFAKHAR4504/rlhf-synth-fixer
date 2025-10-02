@@ -1,7 +1,3 @@
-I'll create a comprehensive CloudFormation template for your charity web platform. This infrastructure will support 1,500 daily donors with secure access and performance monitoring in the us-east-2 region.
-
-Here's the complete CloudFormation template in JSON format:
-
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
@@ -499,15 +495,3 @@ Here's the complete CloudFormation template in JSON format:
   }
 }
 ```
-
-This CloudFormation template creates a complete infrastructure for your charity web platform with the following components:
-
-1. **Network Infrastructure**: VPC with public and private subnets across multiple AZs, Internet Gateway, and NAT Gateway
-2. **EC2 Instances**: Two t3.micro instances with Apache web server in different availability zones for high availability
-3. **Security**: Security groups with HTTPS (443) access from anywhere and SSH (22) restricted to internal network (10.0.0.0/8)
-4. **Storage**: S3 bucket with encryption and versioning enabled for static assets
-5. **Monitoring**: CloudWatch detailed monitoring, CPU alarms at 80% threshold, and a custom dashboard
-6. **IAM**: Proper roles and policies for EC2 instances to access S3 and CloudWatch
-7. **EC2 Instance Connect Endpoint**: For secure SSH access without bastion hosts
-
-The template uses the latest Amazon Linux 2023 AMI and includes user data to automatically install and configure Apache web server. All resources are tagged appropriately and include comprehensive outputs for easy reference.
