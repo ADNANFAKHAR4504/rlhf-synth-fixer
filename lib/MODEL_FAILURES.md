@@ -1,3 +1,5 @@
+Generated response by the model had failure related to aws cloud watch log  destination group.
+
 ```
 ⚠️ Terraform plan file not found, creating new plan and deploying...
 ╷
