@@ -1,4 +1,4 @@
-Generate production-ready Terraform configuration that provisions a secure, enterprise-grade AWS environment. Use only first-party Terraform AWS resources for thr following requirements
+Generate production-ready Terraform configuration that provisions a secure, enterprise-grade AWS environment. Use only first-party Terraform AWS resources for the following requirements
 - S3: All buckets must use SSE-S3 encryption at rest and have versioning enabled. Store all logs in a dedicated S3 bucket with a lifecycle policy to retain logs for at least 365 days.
 - API Gateway: Any HTTP/REST API endpoints must require AWS IAM authorization (no public/anonymous access).
 - CloudFront: Distributions must be protected by AWS Shield Advanced and log to the logging S3 bucket.
