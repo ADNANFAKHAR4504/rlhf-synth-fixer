@@ -1,4 +1,9 @@
 # tap_stack.tf
+# Random ID for unique bucket naming
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
 # KMS Key for S3 encryption
 resource "aws_kms_key" "content_encryption" {
   description             = "KMS key for encrypting e-book content"
