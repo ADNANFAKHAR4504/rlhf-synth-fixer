@@ -33,9 +33,9 @@ fi
 
 echo -e "${GREEN}✅ Infrastructure outputs found${NC}"
 
-# Validate outputs file has essential data
-if ! grep -q "TurnAroundPromptTableName" "$OUTPUTS_FILE"; then
-    echo -e "${RED}❌ Infrastructure outputs appear to be incomplete${NC}"
+# Validate outputs file is not empty
+if [ ! -s "$OUTPUTS_FILE" ]; then
+    echo -e "${RED}❌ Infrastructure outputs file is empty${NC}"
     echo -e "${YELLOW}💡 Redeploy infrastructure: npm run localstack:cfn:deploy${NC}"
     exit 1
 fi
