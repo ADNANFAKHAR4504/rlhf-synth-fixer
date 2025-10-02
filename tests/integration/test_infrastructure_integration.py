@@ -19,6 +19,13 @@ class TestInfrastructureIntegration(unittest.TestCase):
         with open(outputs_path, 'r') as f:
             cls.outputs = json.load(f)
 
+        # Extract environment suffix from Lambda function name or environment variable
+        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX')
+        if not cls.environment_suffix and 'lambdaFunctionName' in cls.outputs:
+            # Extract suffix from lambda function name (e.g., "cloudwatch-log-exporter-pr3283" -> "pr3283")
+            lambda_name = cls.outputs['lambdaFunctionName']
+            cls.environment_suffix = lambda_name.split('-')[-1]
+
         # Set up AWS clients
         cls.region = 'us-east-1'
         cls.logs_client = boto3.client('logs', region_name=cls.region)
@@ -278,12 +285,13 @@ class TestInfrastructureIntegration(unittest.TestCase):
         """Test that IAM roles were created"""
         iam_client = boto3.client('iam', region_name=self.region)
 
-        # Check for lambda role
+        # Check for lambda role using dynamic environment suffix
+        role_name = f'log-export-lambda-role-{self.environment_suffix}'
         try:
-            response = iam_client.get_role(RoleName='log-export-lambda-role-synth30598714')
+            response = iam_client.get_role(RoleName=role_name)
             self.assertIn('lambda.amazonaws.com', response['Role']['AssumeRolePolicyDocument'])
         except iam_client.exceptions.NoSuchEntityException:
-            self.fail("Lambda IAM role not found")
+            self.fail(f"Lambda IAM role not found: {role_name}")
 
 
 if __name__ == "__main__":
