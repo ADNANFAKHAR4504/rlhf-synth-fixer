@@ -19,7 +19,6 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -33,15 +32,17 @@ export class TapStack extends cdk.Stack {
     // We intentionally do not force a fixed bucketName so CDK synthesizes a unique name.
     // This satisfies the "unique name" constraint, while allowing easy override later.
     const logsBucket = new s3.Bucket(this, 'LoggingBucket', {
+      bucketName: `tap-${environmentSuffix}-logs-${Aws.ACCOUNT_ID}-${Aws.REGION}`,
       versioned: true,
-      removalPolicy: RemovalPolicy.RETAIN, // avoid accidental deletion of logs
+      removalPolicy: RemovalPolicy.DESTROY, // Allow bucket deletion for QA testing
+      autoDeleteObjects: true, // Automatically empty bucket on deletion
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // logging bucket should not be public
       enforceSSL: true,
       lifecycleRules: [
         // Keep a lifecycle rule to expire non-current versions after 365 days (optional)
         {
-          noncurrentVersionExpiration: Duration.days(365)
-        }
+          noncurrentVersionExpiration: Duration.days(365),
+        },
       ],
     });
 
@@ -56,9 +57,9 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 28, // small subnet for minimal footprint
           name: 'PublicSubnet',
-          subnetType: ec2.SubnetType.PUBLIC
-        }
-      ]
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
     });
 
     // --- 3) Security Group: allow SSH & HTTP ---
@@ -66,14 +67,22 @@ export class TapStack extends cdk.Stack {
     const instanceSg = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
       vpc,
       description: 'Allow SSH and HTTP to EC2 instance',
-      allowAllOutbound: true
+      allowAllOutbound: true,
     });
 
     // Allow SSH - restrict in production by replacing '0.0.0.0/0' with a narrow CIDR.
-    instanceSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow SSH (22) from anywhere — restrict in production');
+    instanceSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(22),
+      'Allow SSH (22) from anywhere — restrict in production'
+    );
 
     // Allow HTTP
-    instanceSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP (80) from anywhere');
+    instanceSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP (80) from anywhere'
+    );
 
     // --- 4) IAM Role for EC2 (least privilege) ---
     // The instance role is granted:
@@ -81,22 +90,27 @@ export class TapStack extends cdk.Stack {
     //  - s3: PutObject/GetObject to the specific logging bucket only
     const instanceRole = new iam.Role(this, 'InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'EC2 role with minimal privileges: SSM for management and S3 write to logging bucket'
+      description:
+        'EC2 role with minimal privileges: SSM for management and S3 write to logging bucket',
     });
 
     // Attach managed policy for SSM Core (so you can use Session Manager and Run Command)
-    instanceRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
+    instanceRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+    );
 
     // Inline policy for S3 access limited to the logging bucket
     const bucketArn = logsBucket.bucketArn;
     const bucketObjectsArn = `${bucketArn}/*`;
 
-    instanceRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket'],
-      resources: [bucketArn, bucketObjectsArn],
-      effect: iam.Effect.ALLOW,
-      sid: 'AllowBucketOpsForLogging'
-    }));
+    instanceRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket'],
+        resources: [bucketArn, bucketObjectsArn],
+        effect: iam.Effect.ALLOW,
+        sid: 'AllowBucketOpsForLogging',
+      })
+    );
 
     // --- 5) EC2 Instance (t2.micro) ---
     // Amazon Linux 2 latest
@@ -104,7 +118,7 @@ export class TapStack extends cdk.Stack {
       generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
       edition: ec2.AmazonLinuxEdition.STANDARD,
       virtualization: ec2.AmazonLinuxVirt.HVM,
-      storage: ec2.AmazonLinuxStorage.GENERAL_PURPOSE
+      storage: ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
     });
 
     const publicSubnet = vpc.publicSubnets[0];
@@ -133,8 +147,8 @@ cat > /usr/share/nginx/html/index.html <<'EOF'
   <head><title>Minimal Infra - Welcome</title></head>
   <body>
     <h1>Minimal Infra Deployment</h1>
-    <p>Instance ID: ${INSTANCE_ID}</p>
-    <p>Availability Zone: ${AVAIL_ZONE}</p>
+    <p>Instance ID: $INSTANCE_ID</p>
+    <p>Availability Zone: $AVAIL_ZONE</p>
     <p>Region: ${Aws.REGION}</p>
   </body>
 </html>
@@ -148,34 +162,47 @@ aws s3 cp /usr/share/nginx/html/index.html s3://${logsBucket.bucketName}/deploye
     // Create an Elastic IP and attach it to the instance's primary network interface
     const eip = new ec2.CfnEIP(this, 'InstanceEIP', {
       domain: 'vpc',
-      instanceId: instance.instanceId
+      instanceId: instance.instanceId,
     });
 
     // --- 7) CloudWatch Log Group for instance bootstrap logs (optional) ---
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const logGroup = new logs.LogGroup(this, 'InstanceUserDataLog', {
+      logGroupName: `/aws/tap/${environmentSuffix}/instance-logs`,
       retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: RemovalPolicy.DESTROY
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     // --- 8) SSM parameter: store the bucket name (convenience) ---
     new ssm.StringParameter(this, 'LoggingBucketNameParameter', {
-      parameterName: '/minimal-infra/logging-bucket-name',
+      parameterName: `/tap-${environmentSuffix}/logging-bucket-name`,
       stringValue: logsBucket.bucketName,
-      description: 'Name of the S3 logging bucket created by minimal-infra stack'
+      description:
+        'Name of the S3 logging bucket created by minimal-infra stack',
     });
 
     // --- 9) Outputs ---
     // Public IP of the instance (from the EIP resource)
-    new cdk.CfnOutput(this, 'InstancePublicIp', { value: eip.ref, description: 'Elastic IP attached to the EC2 instance' });
+    new cdk.CfnOutput(this, 'InstancePublicIp', {
+      value: eip.ref,
+      description: 'Elastic IP attached to the EC2 instance',
+    });
 
     // Public DNS (constructed) - can vary; provide a best-effort output
-    new cdk.CfnOutput(this, 'InstanceId', { value: instance.instanceId, description: 'EC2 Instance ID' });
+    new cdk.CfnOutput(this, 'InstanceId', {
+      value: instance.instanceId,
+      description: 'EC2 Instance ID',
+    });
 
-    new cdk.CfnOutput(this, 'LogsBucketName', { value: logsBucket.bucketName, description: 'S3 bucket name for logs (versioned)' });
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      value: logsBucket.bucketName,
+      description: 'S3 bucket name for logs (versioned)',
+    });
 
     // Security note output
     new cdk.CfnOutput(this, 'SecurityNote', {
-      value: 'SSH is open to 0.0.0.0/0 by default in this stack. Restrict SSH ingress in production.'
+      value:
+        'SSH is open to 0.0.0.0/0 by default in this stack. Restrict SSH ingress in production.',
     });
   }
 }
