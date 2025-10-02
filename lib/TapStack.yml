@@ -107,7 +107,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub ${EnvironmentName}-logs-${AWS::AccountId}-webapp
+      BucketName: !Sub ${EnvironmentName}-logs-${AWS::AccountId}-web-app
 
   ### IAM Role for EC2 ###
   EC2InstanceRole:
@@ -191,7 +191,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub ${EnvironmentName}-db-secrets-credential
+      Name: !Sub ${EnvironmentName}-db-secretscredential
       Description: RDS Master user and password
       GenerateSecretString:
         SecretStringTemplate: '{"username":"admin"}'
