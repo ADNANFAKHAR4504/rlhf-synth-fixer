@@ -76,10 +76,6 @@ class TapStack(cdk.Stack):
         props: Optional[TapStackProps] = None,
         **kwargs
     ):
-        # Force us-east-1 region as specified in the prompt
-        kwargs['env'] = kwargs.get('env', {})
-        kwargs['env']['region'] = 'us-east-1'
-        
         super().__init__(scope, construct_id, **kwargs)
 
         # Get environment suffix from props, context, or use 'dev' as default
@@ -390,6 +386,9 @@ class TapStack(cdk.Stack):
             default_interval=Duration.hours(1)
         )
 
+        # Get the default stage for metrics
+        default_stage = self.api.deployment_stage
+
         self.dashboard.add_widgets(
             cloudwatch.GraphWidget(
                 title="Lambda Invocations",
@@ -405,7 +404,11 @@ class TapStack(cdk.Stack):
             cloudwatch.GraphWidget(
                 title="API Gateway Requests",
                 left=[self.api.metric_count()],
-                right=[self.api.metric_4xx(), self.api.metric_5xx()],
+                right=[
+                    # Use stage-specific metrics instead of API-level metrics
+                    default_stage.metric_client_error(),
+                    default_stage.metric_server_error()
+                ],
                 width=12
             ),
             cloudwatch.GraphWidget(
@@ -428,17 +431,18 @@ class TapStack(cdk.Stack):
 
     def _create_outputs(self) -> None:
         """Create stack outputs for easy access"""
+        stack_region = self.region
         CfnOutput(
             self,
             "ApiGatewayUrlDev",
-            value=f"https://{self.api.rest_api_id}.execute-api.us-east-1.amazonaws.com/dev",
+            value=f"https://{self.api.rest_api_id}.execute-api.{stack_region}.amazonaws.com/dev",
             description="API Gateway URL (Development Stage)"
         )
 
         CfnOutput(
             self,
             "ApiGatewayUrlProd",
-            value=f"https://{self.api.rest_api_id}.execute-api.us-east-1.amazonaws.com/prod",
+            value=f"https://{self.api.rest_api_id}.execute-api.{stack_region}.amazonaws.com/prod",
             description="API Gateway URL (Production Stage)"
         )
 
@@ -466,7 +470,7 @@ class TapStack(cdk.Stack):
         CfnOutput(
             self,
             "CloudWatchDashboard",
-            value=f"https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name={self.name_prefix}-monitoring",
+            value=f"https://console.aws.amazon.com/cloudwatch/home?region={stack_region}#dashboards:name={self.name_prefix}-monitoring",
             description="CloudWatch Dashboard URL"
         )
 
