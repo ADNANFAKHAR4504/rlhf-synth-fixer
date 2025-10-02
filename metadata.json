@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-3387",
+  "team": "5",
+  "startedAt": "2025-10-02T23:31:34.238Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "APIGateway, DynamoDB, EventBridge, Cloudwatch"
+}
