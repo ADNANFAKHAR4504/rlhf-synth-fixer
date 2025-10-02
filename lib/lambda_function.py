@@ -49,10 +49,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         try:
             # Parse the message body
             body = json.loads(record.get('body', '{}'))
-            order_id = body.get('order_id')
+            # Handle both orderId and order_id formats
+            order_id = body.get('order_id') or body.get('orderId')
 
             if not order_id:
-                raise ValueError("Missing order_id in message")
+                raise ValueError("Missing order_id or orderId in message")
 
             logger.info(f"Processing order: {order_id}")
 
@@ -60,12 +61,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             process_result = process_order(order_id, body)
 
             if process_result['success']:
+                # Extract customer email for DynamoDB record
+                customer_email = body.get('customer_id') or body.get('customerEmail')
+                
                 # Update status in DynamoDB
                 update_order_status(
                     order_id=order_id,
                     status='PROCESSED',
                     details=process_result.get('details', {}),
-                    error_message=None
+                    error_message=None,
+                    customer_email=customer_email
                 )
                 processed_count += 1
                 logger.info(f"Successfully processed order: {order_id}")
@@ -84,17 +89,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Try to extract order_id for error logging
             try:
                 body = json.loads(record.get('body', '{}'))
-                order_id = body.get('order_id', 'unknown')
+                order_id = body.get('order_id') or body.get('orderId', 'unknown')
             except:
                 order_id = 'unknown'
 
             # Update status as failed in DynamoDB
             try:
+                # Extract customer email for DynamoDB record if possible
+                try:
+                    body = json.loads(record.get('body', '{}'))
+                    customer_email = body.get('customer_id') or body.get('customerEmail')
+                except:
+                    customer_email = None
+                
                 update_order_status(
                     order_id=order_id,
                     status='FAILED',
                     details={'message_id': message_id},
-                    error_message=str(e)
+                    error_message=str(e),
+                    customer_email=customer_email
                 )
             except Exception as db_error:
                 logger.error(f"Failed to update DynamoDB for order {order_id}: {str(db_error)}")
@@ -123,16 +136,22 @@ def process_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
         Dict with processing result
     """
     try:
+        # Normalize field names to handle both formats
+        # Handle customer_id/customerEmail
+        customer_id = order_data.get('customer_id') or order_data.get('customerEmail')
+        # Handle amount/totalAmount  
+        amount = order_data.get('amount') or order_data.get('totalAmount')
+        items = order_data.get('items')
+
         # Validate required fields
-        required_fields = ['customer_id', 'amount', 'items']
-        for field in required_fields:
-            if field not in order_data:
-                raise ValueError(f"Missing required field: {field}")
+        if not customer_id:
+            raise ValueError("Missing required field: customer_id or customerEmail")
+        if not amount:
+            raise ValueError("Missing required field: amount or totalAmount")
+        if not items:
+            raise ValueError("Missing required field: items")
 
         # Simulate order processing logic
-        customer_id = order_data['customer_id']
-        amount = order_data['amount']
-        items = order_data['items']
 
         # Validate amount
         if amount <= 0:
@@ -165,7 +184,7 @@ def process_order(order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
             'error': str(e)
         }
 
-def update_order_status(order_id: str, status: str, details: Dict[str, Any], error_message: str = None) -> None:
+def update_order_status(order_id: str, status: str, details: Dict[str, Any], error_message: str = None, customer_email: str = None) -> None:
     """
     Update order status in DynamoDB table.
 
@@ -174,6 +193,7 @@ def update_order_status(order_id: str, status: str, details: Dict[str, Any], err
         status: Processing status (PROCESSED, FAILED, etc.)
         details: Additional processing details
         error_message: Error message if processing failed
+        customer_email: Customer email address
     """
     try:
         timestamp = datetime.utcnow().isoformat()
@@ -188,6 +208,9 @@ def update_order_status(order_id: str, status: str, details: Dict[str, Any], err
 
         if error_message:
             item['error_message'] = error_message
+            
+        if customer_email:
+            item['customer_email'] = customer_email
 
         # Use paginator-friendly approach for large result sets
         response = table.put_item(Item=item)
