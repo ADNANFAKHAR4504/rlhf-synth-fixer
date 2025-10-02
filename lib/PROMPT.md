@@ -1,12 +1,12 @@
-We need to design and implement a **secure and production-grade AWS environment** using **CDK for Terraform (CDKTF with TypeScript)**.  
-The original requirement describes a CloudFormation YAML template, but your solution should use a **two-file CDKTF approach** with `modules.ts` and `tap-stack.ts`.
+We need to design and implement a secure and production-grade AWS environment using CDK for Terraform (CDKTF with TypeScript).  
+The original requirement describes a CloudFormation YAML template, but your solution should use a two-file CDKTF approach with `modules.ts` and `tap-stack.ts`.
 
 ---
 
 ## Problem Overview
 
-You are tasked with creating a **highly available and secure infrastructure** for a production workload.  
-The design must emphasize **least privilege access, encryption, monitoring, and compliance** with enterprise security policies.  
+You are tasked with creating a highly available and secure infrastructure for a production workload.  
+The design must emphasize least privilege access, encryption, monitoring, and compliance with enterprise security policies.  
 All resources must be deployed in AWS and must meet the required availability and security standards.
 
 ---
@@ -14,38 +14,38 @@ All resources must be deployed in AWS and must meet the required availability an
 ## Key Requirements
 
 ### Core Security and Infrastructure
-- **Tagging**
+- Tagging
   - All resources must be tagged with:  
     `Environment: Production`
 
-- **IAM**
-  - Roles must enforce the **least privilege principle**  
+- IAM
+  - Roles must enforce the least privilege principle  
   - Restrict IAM permissions to specific services only
 
-- **Networking**
-  - VPC with at least **two subnets across separate AZs**  
+- Networking
+  - VPC with at least two subnets across separate AZs  
   - All Lambda functions deployed within the VPC  
   - RDS instances must not be publicly accessible
 
-- **Encryption**
-  - S3 buckets must use **KMS-managed encryption (SSE-KMS)**  
+- Encryption
+  - S3 buckets must use KMS-managed encryption (SSE-KMS)  
   - CloudTrail logs encrypted and stored in a designated S3 bucket  
-  - All communication must enforce **HTTPS**
+  - All communication must enforce HTTPS
 
-- **Monitoring**
-  - Enable **detailed EC2 monitoring**  
+- Monitoring
+  - Enable detailed EC2 monitoring  
   - CloudTrail enabled with secure log delivery  
   - Support rolling updates for minimal downtime
 
-- **Secrets Management**
-  - Store application secrets securely in **AWS Systems Manager Parameter Store**
+- Secrets Management
+  - Store application secrets securely in AWS Systems Manager Parameter Store
 
-- **High Availability**
+- High Availability
   - Infrastructure deployed across multiple AZs  
   - Rolling updates supported with minimal disruption to services  
 
-- **Stack Design**
-  - Use **nested stacks** under a parent stack for organization
+- Stack Design
+  - Use nested stacks under a parent stack for organization
 
 ---
 
@@ -63,7 +63,7 @@ Define reusable modules for:
 - Parameter Store secrets
 - WAF / HTTPS enforcement
 
-Each module should include inline comments highlighting how the design meets **security and compliance requirements**.
+Each module should include inline comments highlighting how the design meets security and compliance requirements.
 
 ---
 
@@ -106,4 +106,4 @@ Each module should include inline comments highlighting how the design meets **s
 - Code must pass:
   - `terraform validate`
   - `terraform plan`
-- Final architecture must align with **enterprise security + HA standards**
+- Final architecture must align with enterprise security + HA standards
