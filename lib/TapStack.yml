@@ -673,7 +673,7 @@ Resources:
         DBSubnetGroupName: !Ref DBSubnetGroup
         BackupRetentionPeriod: 7
         DeleteAutomatedBackups: false
-        DeletionProtection: true
+        DeletionProtection: false
         Tags:
           - Key: Name
             Value: !Sub 'prod-mysql-db-${EnvironmentSuffix}'

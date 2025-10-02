@@ -1196,7 +1196,7 @@
                 },
                 "BackupRetentionPeriod": 7,
                 "DeleteAutomatedBackups": false,
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",
