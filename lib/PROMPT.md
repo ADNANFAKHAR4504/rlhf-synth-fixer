@@ -175,12 +175,15 @@ Rate limiting: set maxReceiveCount and Lambda concurrency to keep Textract below
 - **CloudWatch Dashboard** JSON embedded with key widgets
 
 ## Validation & Testing
+
 - Include a minimal integration test plan as comments (e.g., upload sample PDF, observe state transitions, verify OpenSearch index, DDB row, SNS message)
 - Add example OpenSearch index mapping (as a template resource or AWS::OpenSearchServerless::Collection alt if justified)
 
 ## Non-Goals
+
 - No public S3 access
 - No inline secrets—use Secrets Manager and KMS
 
 ## Output Format
+
 Return only the final YAML template (no prose), fully lint-able and deployable, with comments where helpful.
