@@ -5,6 +5,7 @@ import {
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -65,6 +66,7 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Create KMS key for encryption
+    const identity = new DataAwsCallerIdentity(this, 'current');
     const kmsKey = new KmsKey(this, 'kms-key', {
       description: 'KMS key for encrypting resources',
       enableKeyRotation: true,
@@ -82,8 +84,7 @@ export class TapStack extends TerraformStack {
             Resource: '*',
             Condition: {
               StringEquals: {
-                'aws:PrincipalOrgID':
-                  '${data.aws_caller_identity.current.account_id}',
+                'aws:PrincipalOrgID': identity.accountId, // Replace with your AWS Organization ID if needed
               },
             },
           },
