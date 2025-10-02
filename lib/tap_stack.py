@@ -327,14 +327,18 @@ class TapStack(Stack):
         )
 
         # Attach VPC to Transit Gateway
+        # Use all available subnets for TGW attachment (mix of public and private)
+        all_subnets = self.vpc.public_subnets + self.vpc.isolated_subnets
+        subnet_ids = [subnet.subnet_id for subnet in all_subnets[:3]]
+        
         self.tgw_attachment = ec2.CfnTransitGatewayAttachment(
             self, "TGWAttachment",
             transit_gateway_id=self.transit_gateway.ref,
             vpc_id=self.vpc.vpc_id,
-            subnet_ids=[subnet.subnet_id for subnet in self.vpc.private_subnets[:3]],
+            subnet_ids=subnet_ids,
             tags=[{
                 "key": "Name",
-                "value": "MainVPCAttachment"
+                "value": f"MainVPCAttachment-{self.unique_suffix}"
             }]
         )
 
