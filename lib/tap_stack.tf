@@ -101,7 +101,63 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${local.name_prefix} encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-  
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "key-default-1"
+    Statement = [
+      # Allow account root full control (owner)
+      {
+        Sid      = "AllowAccountRootFullControl"
+        Effect   = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+
+      # Allow CloudWatch Logs service to use the key for encrypt/decrypt/generate data key
+      {
+        Sid = "AllowCloudWatchLogsServiceUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "logs.${var.region}.amazonaws.com"
+          }
+        }
+      },
+
+      # Allow IAM principals in account to use the key for encrypt/decrypt if needed
+      {
+        Sid = "AllowUseByAccountIAM"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
   tags = merge(local.all_tags, {
     Name = local.kms_key_name
   })
@@ -431,9 +487,9 @@ resource "aws_autoscaling_group" "main" {
   
   launch_template {
     id      = aws_launch_template.main.id
-    version = "$Latest"
+    version = aws_launch_template.main.latest_version
   }
-  
+ 
   tag {
     key                 = "Name"
     value               = "${local.asg_name}-instance"
@@ -496,18 +552,18 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # S3 Bucket Lifecycle Policy
 resource "aws_s3_bucket_lifecycle_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-  
+
   rule {
     id     = "move-to-glacier"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
-    
+
     transition {
-      days          = 90
+      days          = 120   # must be >= 30 + 90
       storage_class = "DEEP_ARCHIVE"
     }
   }
@@ -782,7 +838,7 @@ resource "aws_iam_role_policy" "config" {
 # IAM Policy Attachment for Config
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 # S3 Bucket for Config
@@ -860,29 +916,32 @@ resource "aws_s3_bucket_policy" "config" {
 resource "aws_config_configuration_recorder" "main" {
   name     = "${local.name_prefix}-recorder"
   role_arn = aws_iam_role.config.arn
-  
+
   recording_group {
     all_supported = true
   }
-  
-  depends_on = [aws_config_delivery_channel.main]
 }
 
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
   name           = "${local.name_prefix}-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.id
-  
+
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"
   }
+
+  depends_on = [
+    aws_s3_bucket.config,
+    aws_iam_role.config
+  ]
 }
 
 # Start Config Recorder
 resource "aws_config_configuration_recorder_status" "main" {
   name       = aws_config_configuration_recorder.main.name
   is_enabled = true
-  
+
   depends_on = [aws_config_delivery_channel.main]
 }
 
