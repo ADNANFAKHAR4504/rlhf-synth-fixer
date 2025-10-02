@@ -29,7 +29,6 @@ describe('TapStack CloudFormation Template - Static Website Infrastructure', () 
       expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      expect(template.Mappings).toBeDefined();
     });
   });
 
@@ -67,21 +66,6 @@ describe('TapStack CloudFormation Template - Static Website Infrastructure', () 
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toContain('Suffix to append');
-    });
-  });
-
-  describe('Mappings', () => {
-    test('should have RegionMap mapping', () => {
-      expect(template.Mappings).toBeDefined();
-      expect(template.Mappings.RegionMap).toBeDefined();
-    });
-
-    test('RegionMap should contain us-west-2 and us-east-1', () => {
-      const regionMap = template.Mappings.RegionMap;
-      expect(regionMap['us-west-2']).toBeDefined();
-      expect(regionMap['us-east-1']).toBeDefined();
-      expect(regionMap['us-west-2'].S3HostedZoneId).toBe('Z3BJ6K6RIION7M');
-      expect(regionMap['us-east-1'].S3HostedZoneId).toBe('Z3AQBSTGFYJSTF');
     });
   });
 

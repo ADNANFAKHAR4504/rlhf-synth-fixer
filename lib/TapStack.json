@@ -28,16 +28,6 @@
             "Default": "dev"
         }
     },
-    "Mappings": {
-        "RegionMap": {
-            "us-west-2": {
-                "S3HostedZoneId": "Z3BJ6K6RIION7M"
-            },
-            "us-east-1": {
-                "S3HostedZoneId": "Z3AQBSTGFYJSTF"
-            }
-        }
-    },
     "Resources": {
         "WebsiteBucket": {
             "Type": "AWS::S3::Bucket",
@@ -295,15 +285,7 @@
                     "Comment": {
                         "Fn::Sub": "Hosted zone for ${EnvironmentSuffix}-${DomainName}"
                     }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    }
-                ]
+                }
             }
         },
         "WebsiteRecordSet": {

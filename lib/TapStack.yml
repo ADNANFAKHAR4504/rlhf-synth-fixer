@@ -26,13 +26,6 @@ Parameters:
     Description: Suffix to append to all resource names to avoid conflicts
     Default: dev
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      S3HostedZoneId: Z3BJ6K6RIION7M
-    us-east-1:
-      S3HostedZoneId: Z3AQBSTGFYJSTF
-
 Resources:
   # S3 Bucket for Website Content
   WebsiteBucket:
@@ -182,9 +175,6 @@ Resources:
       Name: !Sub '${EnvironmentSuffix}-${DomainName}'
       HostedZoneConfig:
         Comment: !Sub 'Hosted zone for ${EnvironmentSuffix}-${DomainName}'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
 
   # Route 53 Record Set for www subdomain
   WebsiteRecordSet:
