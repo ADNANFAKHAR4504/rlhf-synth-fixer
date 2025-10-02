@@ -7,10 +7,6 @@ import {
   DescribeTrailsCommand
 } from "@aws-sdk/client-cloudtrail";
 import {
-  DescribeDBInstancesCommand,
-  RDSClient
-} from "@aws-sdk/client-rds";
-import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
@@ -23,16 +19,20 @@ import {
   ElasticLoadBalancingV2Client
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
+  GetFunctionConfigurationCommand,
+  LambdaClient
+} from "@aws-sdk/client-lambda";
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from "@aws-sdk/client-rds";
+import {
   GetBucketEncryptionCommand,
   GetBucketNotificationConfigurationCommand,
   GetBucketPolicyCommand,
   GetPublicAccessBlockCommand,
   S3Client
 } from "@aws-sdk/client-s3";
-import {
-  GetFunctionConfigurationCommand,
-  LambdaClient
-} from "@aws-sdk/client-lambda";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import fs from "fs";
 import path from "path";
@@ -45,7 +45,7 @@ if (!fs.existsSync(outputsPath)) {
 }
 const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
-const region = process.env.AWS_REGION ?? "us-west-2";
+const region = "us-west-2";
 
 function getOutputValue(key: string): any {
   const value = outputs[key];
