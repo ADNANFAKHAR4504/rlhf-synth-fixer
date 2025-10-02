@@ -111,25 +111,19 @@ resource "aws_subnet" "database" {
 }
 
 # Elastic IPs for NAT Gateways
-# resource "aws_eip" "nat" {
-#   count  = 2
-#   domain = "vpc"
+resource "aws_eip" "nat" {
+  count  = 2
+  domain = "vpc"
 
-#   tags = merge(local.common_tags, {
-#     Name = "${var.project_name}-nat-eip-${count.index + 1}"
-#   })
-# }
-
-data "aws_eip" "nat" {
-  tags = {
-    Name = "marketing-website-prod-nat-eip-0-35720"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-nat-eip-${count.index + 1}"
+  })
 }
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
   count         = 2
-  allocation_id = data.aws_eip.nat.id
+  allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.common_tags, {
@@ -771,7 +765,7 @@ resource "aws_lambda_function" "rds_backup" {
 
 # EventBridge Rule for Daily Backup
 resource "aws_cloudwatch_event_rule" "daily_backup" {
-  name                = "prod-infra-daily-backup"
+  name                = "${var.project_name}-daily-backup"
   description         = "Trigger daily RDS backup"
   schedule_expression = "cron(0 2 * * ? *)"
 
@@ -992,7 +986,7 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::${aws_s3_bucket.main.id}/*"]
+      values = ["arn:aws:s3:::*/*"]
     }
   }
 
