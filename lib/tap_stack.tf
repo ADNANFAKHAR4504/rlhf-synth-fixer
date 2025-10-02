@@ -746,32 +746,6 @@ resource "aws_api_gateway_deployment" "app" {
 }
 
 # =============================================================================
-# AWS CONFIG RESOURCES
-# =============================================================================
-
-resource "aws_config_configuration_recorder" "main" {
-  name     = "default"
-  role_arn = aws_iam_role.config_role.arn
-
-  recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
-  }
-}
-
-resource "aws_config_delivery_channel" "main" {
-  name           = "default"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.id
-  depends_on     = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-  depends_on = [aws_config_delivery_channel.main]
-}
-
-# =============================================================================
 # CLOUDTRAIL RESOURCES
 # =============================================================================
 
