@@ -1174,6 +1174,8 @@ Resources:
                 Value: !Ref CostCenterTag
               - Key: 'project-id'
                 Value: !Ref ProjectIDTag
+              - Key: 'iac-rlhf-amazon'
+                Value: 'true'
 
   # Auto Scaling Group for web servers
   WebServerAutoScalingGroup:
