@@ -141,14 +141,14 @@ class TapStack(pulumi.ComponentResource):
         # Elastic IPs for NAT Gateways - FIXED: changed vpc=True to domain="vpc"
         self.eip_nat_a = aws.ec2.Eip(
             f"tap-eip-nat-a-{self.environment_suffix}",
-            domain="vpc",  # FIXED: was vpc=True
+            domain="vpc",
             tags={**self.tags, 'Name': f'tap-eip-nat-a-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
         
         self.eip_nat_b = aws.ec2.Eip(
             f"tap-eip-nat-b-{self.environment_suffix}",
-            domain="vpc",  # FIXED: was vpc=True
+            domain="vpc",
             tags={**self.tags, 'Name': f'tap-eip-nat-b-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
@@ -373,7 +373,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # Aurora Cluster Parameter Group with RLS configuration
+        # Aurora Cluster Parameter Group with RLS configuration - FIXED: added apply_method
         self.aurora_cluster_param_group = aws.rds.ClusterParameterGroup(
             f"tap-aurora-cluster-params-{self.environment_suffix}",
             family="aurora-postgresql15",
@@ -381,11 +381,13 @@ class TapStack(pulumi.ComponentResource):
             parameters=[
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name="rds.force_ssl",
-                    value="1"
+                    value="1",
+                    apply_method="pending-reboot"
                 ),
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name="shared_preload_libraries",
-                    value="pg_stat_statements,auto_explain"
+                    value="pg_stat_statements,auto_explain",
+                    apply_method="pending-reboot"
                 )
             ],
             tags={**self.tags, 'Name': f'tap-aurora-cluster-params-{self.environment_suffix}'},
@@ -399,7 +401,7 @@ class TapStack(pulumi.ComponentResource):
             engine_version="15.4",
             database_name="tapdb",
             master_username="tapdbadmin",
-            master_password="TapDbSecure2025!",  # In production: use AWS Secrets Manager
+            master_password="TapDbSecure2025!",
             db_subnet_group_name=self.aurora_subnet_group.name,
             vpc_security_group_ids=[self.aurora_sg.id],
             db_cluster_parameter_group_name=self.aurora_cluster_param_group.name,
@@ -471,7 +473,7 @@ class TapStack(pulumi.ComponentResource):
         self.redis_premium_cluster = aws.elasticache.ReplicationGroup(
             f"tap-redis-premium-{self.environment_suffix}",
             replication_group_id=f"tap-redis-premium-{self.environment_suffix}",
-            description="Dedicated Redis cluster for premium tenants",  # FIXED: was replication_group_description
+            description="Dedicated Redis cluster for premium tenants",
             engine="redis",
             engine_version="7.0",
             node_type="cache.r6g.large",
@@ -494,7 +496,7 @@ class TapStack(pulumi.ComponentResource):
         self.redis_standard_cluster = aws.elasticache.ReplicationGroup(
             f"tap-redis-standard-{self.environment_suffix}",
             replication_group_id=f"tap-redis-standard-{self.environment_suffix}",
-            description="Shared Redis cluster for standard tenants with logical isolation",  # FIXED: was replication_group_description
+            description="Shared Redis cluster for standard tenants with logical isolation",
             engine="redis",
             engine_version="7.0",
             node_type="cache.r6g.xlarge",
@@ -665,45 +667,20 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # ═══════════════════════════════════════════════════════════════
-        # DNS & CERTIFICATES - Route 53 and ACM for Custom Domains
+        # DNS - Route 53 Private Hosted Zone (NO DOMAIN OWNERSHIP REQUIRED)
         # ═══════════════════════════════════════════════════════════════
         
-        # Route 53 Hosted Zone for custom domain
+        # Route 53 Private Hosted Zone for internal DNS
         self.hosted_zone = aws.route53.Zone(
             f"tap-hosted-zone-{self.environment_suffix}",
-            name=f"tap-saas-{self.environment_suffix}.example.com",
-            comment=f"Hosted zone for multi-tenant SaaS custom domains - {self.environment_suffix}",
+            name=f"tap-saas-{self.environment_suffix}.internal",
+            comment=f"Private hosted zone for multi-tenant SaaS - {self.environment_suffix}",
+            vpcs=[aws.route53.ZoneVpcArgs(
+                vpc_id=self.vpc.id,
+                vpc_region=self.region
+            )],
             tags={**self.tags, 'Name': f'tap-hosted-zone-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ACM Certificate for wildcard domain
-        self.acm_certificate = aws.acm.Certificate(
-            f"tap-acm-cert-{self.environment_suffix}",
-            domain_name=f"*.tap-saas-{self.environment_suffix}.example.com",
-            validation_method="DNS",
-            subject_alternative_names=[f"tap-saas-{self.environment_suffix}.example.com"],
-            tags={**self.tags, 'Name': f'tap-acm-cert-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # DNS Validation Record for ACM Certificate
-        self.cert_validation_record = aws.route53.Record(
-            f"tap-cert-validation-{self.environment_suffix}",
-            zone_id=self.hosted_zone.zone_id,
-            name=self.acm_certificate.domain_validation_options[0].resource_record_name,
-            type=self.acm_certificate.domain_validation_options[0].resource_record_type,
-            records=[self.acm_certificate.domain_validation_options[0].resource_record_value],
-            ttl=60,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ACM Certificate Validation
-        self.acm_cert_validation = aws.acm.CertificateValidation(
-            f"tap-acm-cert-validation-{self.environment_suffix}",
-            certificate_arn=self.acm_certificate.arn,
-            validation_record_fqdns=[self.cert_validation_record.fqdn],
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.vpc])
         )
         
         # ═══════════════════════════════════════════════════════════════
@@ -746,7 +723,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ALB Listener on HTTP (redirect to HTTPS in production)
+        # ALB Listener on HTTP (for testing without domain/ACM)
         self.alb_listener_http = aws.lb.Listener(
             f"tap-alb-listener-http-{self.environment_suffix}",
             load_balancer_arn=self.alb.arn,
@@ -761,27 +738,10 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ALB Listener on HTTPS with ACM certificate
-        self.alb_listener_https = aws.lb.Listener(
-            f"tap-alb-listener-https-{self.environment_suffix}",
-            load_balancer_arn=self.alb.arn,
-            port=443,
-            protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS-1-2-2017-01",
-            certificate_arn=self.acm_certificate.arn,
-            default_actions=[
-                aws.lb.ListenerDefaultActionArgs(
-                    type="forward",
-                    target_group_arn=self.target_group.arn
-                )
-            ],
-            opts=ResourceOptions(parent=self, depends_on=[self.acm_cert_validation])
-        )
-        
-        # Host-based routing rule for tenant1
+        # Host-based routing rule for tenant1 (HTTP)
         self.listener_rule_tenant1 = aws.lb.ListenerRule(
             f"tap-listener-rule-tenant1-{self.environment_suffix}",
-            listener_arn=self.alb_listener_https.arn,
+            listener_arn=self.alb_listener_http.arn,
             priority=100,
             actions=[
                 aws.lb.ListenerRuleActionArgs(
@@ -792,7 +752,7 @@ class TapStack(pulumi.ComponentResource):
             conditions=[
                 aws.lb.ListenerRuleConditionArgs(
                     host_header=aws.lb.ListenerRuleConditionHostHeaderArgs(
-                        values=[f"tenant1.tap-saas-{self.environment_suffix}.example.com"]
+                        values=[f"tenant1.tap-saas-{self.environment_suffix}.internal"]
                     )
                 )
             ],
@@ -1058,8 +1018,7 @@ usermod -a -G docker ec2-user
             policy=Output.all(
                 self.tenant_registry_table.arn,
                 self.cognito_user_pool_tenant1.arn,
-                self.hosted_zone.arn,
-                self.acm_certificate.arn
+                self.hosted_zone.arn
             ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -1099,14 +1058,6 @@ usermod -a -G docker ec2-user
                             "route53:GetChange"
                         ],
                         "Resource": args[2]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "acm:RequestCertificate",
-                            "acm:DescribeCertificate"
-                        ],
-                        "Resource": args[3]
                     }
                 ]
             })),
@@ -1137,19 +1088,17 @@ import os
 dynamodb = boto3.resource('dynamodb')
 cognito = boto3.client('cognito-idp')
 route53 = boto3.client('route53')
-acm = boto3.client('acm')
 
 TABLE_NAME = os.environ['TENANT_REGISTRY_TABLE']
 
 def handler(event, context):
-    \"""
+    \"\"\"
     Lambda function to provision new tenant infrastructure:
     1. Create Cognito user pool for tenant
     2. Add DNS record in Route 53
-    3. Request ACM certificate
-    4. Create ALB listener rule for host-based routing
-    5. Register tenant in DynamoDB
-    \"""
+    3. Create ALB listener rule for host-based routing
+    4. Register tenant in DynamoDB
+    \"\"\"
     tenant_id = event.get('tenantId')
     tenant_domain = event.get('tenantDomain')
     tenant_tier = event.get('tenantTier', 'standard')
@@ -1197,15 +1146,14 @@ def handler(event, context):
             opts=ResourceOptions(parent=self, depends_on=[self.lambda_policy])
         )
         
-        # CloudWatch Log Group for Lambda - FIXED: use apply to handle Output[str]
+        # CloudWatch Log Group for Lambda - FIXED: use apply() to handle Output[str]
         self.lambda_log_group = aws.cloudwatch.LogGroup(
             f"tap-lambda-log-group-{self.environment_suffix}",
-            name=self.tenant_provisioning_lambda.name.apply(lambda name: f"/aws/lambda/{name}"),  # ✅ Correct
+            name=self.tenant_provisioning_lambda.name.apply(lambda name: f"/aws/lambda/{name}"),
             retention_in_days=7,
             tags={**self.tags, 'Name': f'tap-lambda-log-group-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
         
         # ═══════════════════════════════════════════════════════════════
         # MONITORING - CloudWatch Log Groups Per Tenant
@@ -1354,7 +1302,6 @@ def handler(event, context):
             's3_bucket_name': self.tenant_data_bucket.bucket,
             'cloudfront_domain': self.cloudfront_distribution.domain_name,
             'hosted_zone_id': self.hosted_zone.zone_id,
-            'hosted_zone_nameservers': self.hosted_zone.name_servers,
             'cognito_user_pool_id_tenant1': self.cognito_user_pool_tenant1.id,
             'cognito_user_pool_client_id_tenant1': self.cognito_user_pool_client_tenant1.id,
             'tenant_registry_table_name': self.tenant_registry_table.name,
