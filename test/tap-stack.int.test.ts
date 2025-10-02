@@ -92,18 +92,56 @@ async function waitForCommandCompletion(
 describe('TapStack Integration Tests', () => {
   describe('Stack Deployment Validation', () => {
     test('all required outputs are present', () => {
+      // Infrastructure outputs
       expect(outputs.VPCId).toBeDefined();
+      expect(outputs.PublicSubnet1Id).toBeDefined();
+      expect(outputs.PublicSubnet2Id).toBeDefined();
+      expect(outputs.PrivateSubnetId).toBeDefined();
+
+      // EC2 outputs
       expect(outputs.EC2InstanceId).toBeDefined();
+      expect(outputs.EC2SecurityGroupId).toBeDefined();
       expect(outputs.InstanceConnectEndpointId).toBeDefined();
+
+      // ALB outputs
+      expect(outputs.WebAppURL).toBeDefined();
+      expect(outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.LoadBalancerArn).toBeDefined();
+      expect(outputs.TargetGroupArn).toBeDefined();
+      expect(outputs.ALBSecurityGroupId).toBeDefined();
+
+      // RDS outputs
       expect(outputs.RDSEndpoint).toBeDefined();
+      expect(outputs.RDSInstanceId).toBeDefined();
+      expect(outputs.RDSSecurityGroupId).toBeDefined();
       expect(outputs.DatabaseSecretArn).toBeDefined();
+
+      // Monitoring outputs
+      expect(outputs.CloudWatchDashboardName).toBeDefined();
     });
 
     test('output values have correct formats', () => {
+      // VPC and Subnets
       expect(outputs.VPCId).toMatch(/^vpc-/);
+      expect(outputs.PublicSubnet1Id).toMatch(/^subnet-/);
+      expect(outputs.PublicSubnet2Id).toMatch(/^subnet-/);
+      expect(outputs.PrivateSubnetId).toMatch(/^subnet-/);
+
+      // EC2
       expect(outputs.EC2InstanceId).toMatch(/^i-/);
+      expect(outputs.EC2SecurityGroupId).toMatch(/^sg-/);
       expect(outputs.InstanceConnectEndpointId).toMatch(/^eice-/);
+
+      // ALB
+      expect(outputs.WebAppURL).toMatch(/^http:\/\//);
+      expect(outputs.LoadBalancerDNS).toContain('.elb.amazonaws.com');
+      expect(outputs.LoadBalancerArn).toMatch(/^arn:aws:elasticloadbalancing:/);
+      expect(outputs.TargetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:/);
+      expect(outputs.ALBSecurityGroupId).toMatch(/^sg-/);
+
+      // RDS
       expect(outputs.RDSEndpoint).toContain('rds.amazonaws.com');
+      expect(outputs.RDSSecurityGroupId).toMatch(/^sg-/);
       expect(outputs.DatabaseSecretArn).toMatch(/^arn:aws:secretsmanager:/);
     });
 
@@ -288,7 +326,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Public URL Access Validation', () => {
     test('Web application is accessible via public URL', async () => {
-      // Wait a bit for target to become healthy
+      // Wait for target to become healthy
       await new Promise((resolve) => setTimeout(resolve, 10000));
 
       const response = await fetchUrl(outputs.WebAppURL);
@@ -308,6 +346,203 @@ describe('TapStack Integration Tests', () => {
       expect(body.status).toBe('healthy');
       expect(body.database).toBe('connected');
     }, 60000);
+
+    test('ALB distributes traffic to healthy targets only', async () => {
+      const response = await elbv2Client.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: outputs.TargetGroupArn,
+        })
+      );
+
+      const healthyTargets = response.TargetHealthDescriptions?.filter(
+        (target) => target.TargetHealth?.State === 'healthy'
+      );
+
+      expect(healthyTargets).toBeDefined();
+      expect(healthyTargets!.length).toBeGreaterThan(0);
+    }, 60000);
+  });
+
+  describe('End-to-End Infrastructure Flow Tests', () => {
+    test('E2E: Internet → ALB → EC2 → RDS complete flow', async () => {
+      // Step 1: Verify ALB is publicly accessible
+      const albResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({
+          LoadBalancerArns: [outputs.LoadBalancerArn],
+        })
+      );
+      expect(albResponse.LoadBalancers![0].Scheme).toBe('internet-facing');
+
+      // Step 2: Verify target is registered and healthy
+      const targetHealthResponse = await elbv2Client.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: outputs.TargetGroupArn,
+        })
+      );
+      const target = targetHealthResponse.TargetHealthDescriptions![0];
+      expect(target.Target?.Id).toBe(outputs.EC2InstanceId);
+
+      // Step 3: Access web app via public URL (ALB → EC2)
+      const webAppResponse = await fetchUrl(outputs.WebAppURL);
+      expect(webAppResponse.statusCode).toBe(200);
+
+      // Step 4: Verify EC2 can connect to RDS via health endpoint
+      const healthResponse = await fetchUrl(`${outputs.WebAppURL}/health`);
+      expect(healthResponse.statusCode).toBe(200);
+      const health = JSON.parse(healthResponse.body);
+      expect(health.database).toBe('connected');
+
+      // Complete flow validated: Internet → ALB → EC2 → RDS
+    }, 90000);
+
+    test('E2E: Database credentials flow via Secrets Manager', async () => {
+      // Step 1: Verify secret exists
+      const secretResponse = await secretsClient.send(
+        new GetSecretValueCommand({
+          SecretId: outputs.DatabaseSecretArn,
+        })
+      );
+      expect(secretResponse.SecretString).toBeDefined();
+
+      // Step 2: Parse and validate secret structure
+      const secret = JSON.parse(secretResponse.SecretString!);
+      expect(secret.username).toBeDefined();
+      expect(secret.password).toBeDefined();
+      expect(secret.host).toBe(outputs.RDSEndpoint);
+      expect(secret.dbname).toBeDefined();
+
+      // Step 3: Verify EC2 can use these credentials (via health check)
+      const healthResponse = await fetchUrl(`${outputs.WebAppURL}/health`);
+      expect(healthResponse.statusCode).toBe(200);
+      const health = JSON.parse(healthResponse.body);
+      expect(health.status).toBe('healthy');
+      expect(health.database).toBe('connected');
+    }, 60000);
+
+    test('E2E: Network security - ALB to EC2 connectivity on port 5000', async () => {
+      // Verify security group allows ALB → EC2 on port 5000
+      const ec2SgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.EC2SecurityGroupId],
+        })
+      );
+
+      const ec2Sg = ec2SgResponse.SecurityGroups![0];
+      const allowsPort5000 = ec2Sg.IpPermissions?.some(
+        (rule) =>
+          (rule.FromPort === 5000 || rule.ToPort === 5000) &&
+          rule.UserIdGroupPairs?.some(
+            (pair) => pair.GroupId === outputs.ALBSecurityGroupId
+          )
+      );
+
+      expect(allowsPort5000).toBe(true);
+
+      // Verify by accessing the app through ALB
+      const response = await fetchUrl(outputs.WebAppURL);
+      expect(response.statusCode).toBe(200);
+    }, 30000);
+
+    test('E2E: Network security - EC2 to RDS connectivity on port 3306', async () => {
+      // Verify security group allows EC2 → RDS on port 3306
+      const rdsSgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.RDSSecurityGroupId],
+        })
+      );
+
+      const rdsSg = rdsSgResponse.SecurityGroups![0];
+      const allowsPort3306 = rdsSg.IpPermissions?.some(
+        (rule) =>
+          (rule.FromPort === 3306 || rule.ToPort === 3306) &&
+          rule.UserIdGroupPairs?.some(
+            (pair) => pair.GroupId === outputs.EC2SecurityGroupId
+          )
+      );
+
+      expect(allowsPort3306).toBe(true);
+
+      // Verify by testing database connection through health endpoint
+      const healthResponse = await fetchUrl(`${outputs.WebAppURL}/health`);
+      expect(healthResponse.statusCode).toBe(200);
+      const health = JSON.parse(healthResponse.body);
+      expect(health.database).toBe('connected');
+    }, 30000);
+
+    test('E2E: High availability - RDS Multi-AZ validation', async () => {
+      const dbIdentifier = outputs.RDSEndpoint.split('.')[0];
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
+      const dbInstance = response.DBInstances![0];
+
+      // Verify Multi-AZ is enabled
+      expect(dbInstance.MultiAZ).toBe(true);
+
+      // Verify storage is encrypted
+      expect(dbInstance.StorageEncrypted).toBe(true);
+
+      // Verify backup retention
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
+
+      // Verify instance is available
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+    }, 30000);
+
+    test('E2E: Load balancer health checks are configured correctly', async () => {
+      const response = await elbv2Client.send(
+        new DescribeTargetGroupsCommand({
+          TargetGroupArns: [outputs.TargetGroupArn],
+        })
+      );
+
+      const targetGroup = response.TargetGroups![0];
+
+      // Verify health check settings
+      expect(targetGroup.HealthCheckEnabled).toBe(true);
+      expect(targetGroup.HealthCheckPath).toBe('/health');
+      expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
+      expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
+      expect(targetGroup.HealthyThresholdCount).toBe(2);
+      expect(targetGroup.UnhealthyThresholdCount).toBe(3);
+
+      // Verify target port
+      expect(targetGroup.Port).toBe(5000);
+    }, 30000);
+
+    test('E2E: Multiple requests succeed - application reliability', async () => {
+      const requests = 5;
+      const results = [];
+
+      for (let i = 0; i < requests; i++) {
+        const response = await fetchUrl(outputs.WebAppURL);
+        results.push(response.statusCode);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // All requests should succeed
+      expect(results.every((code) => code === 200)).toBe(true);
+      expect(results.length).toBe(requests);
+    }, 60000);
+
+    test('E2E: CloudWatch monitoring is active for all components', async () => {
+      // Verify dashboard exists
+      expect(outputs.CloudWatchDashboardName).toBe('SecureWebAppFoundation-pr3165');
+
+      // In a real test, you could verify metrics are being published
+      // For now, we verify the infrastructure is set up correctly
+      const ec2Response = await ec2Client.send(
+        new DescribeInstancesCommand({
+          InstanceIds: [outputs.EC2InstanceId],
+        })
+      );
+
+      const instance = ec2Response.Reservations![0].Instances![0];
+      expect(instance.Monitoring?.State).toBe('enabled');
+    }, 30000);
   });
 
   describe('Database Connectivity Tests', () => {
@@ -382,8 +617,10 @@ describe('TapStack Integration Tests', () => {
           outputs.EC2InstanceId
         );
 
-        // Parse JSON response
-        const healthResponse = JSON.parse(output.trim());
+        // Parse JSON response (get last line which is the curl output)
+        const lines = output.trim().split('\n');
+        const jsonOutput = lines[lines.length - 1];
+        const healthResponse = JSON.parse(jsonOutput);
         expect(healthResponse.status).toBe('healthy');
         expect(healthResponse.database).toBe('connected');
       },

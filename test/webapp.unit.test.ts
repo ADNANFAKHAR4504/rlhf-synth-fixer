@@ -6,17 +6,20 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
 describe('WebAppStack', () => {
   let app: cdk.App;
-  let stack: WebAppStack;
+  let stack: cdk.Stack;
+  let webAppStack: WebAppStack;
   let template: Template;
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new WebAppStack(app, 'TestWebAppStack', {
-      environmentSuffix,
+    stack = new cdk.Stack(app, 'TestStack', {
       env: {
         account: '123456789012',
         region: 'us-east-1',
       },
+    });
+    webAppStack = new WebAppStack(stack, 'TestWebAppStack', {
+      environmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -126,13 +129,23 @@ describe('WebAppStack', () => {
     test('creates IAM policy for EC2 instance', () => {
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
-          Statement: [
+          Statement: Match.arrayWith([
             {
               Action: ['ec2:DescribeInstances', 'ec2:DescribeTags'],
               Effect: 'Allow',
               Resource: '*',
             },
-          ],
+            Match.objectLike({
+              Action: Match.arrayWith([
+                'ssm:UpdateInstanceInformation',
+                'ssmmessages:CreateControlChannel',
+                'ssmmessages:CreateDataChannel',
+                'ssmmessages:OpenControlChannel',
+                'ssmmessages:OpenDataChannel',
+              ]),
+              Effect: 'Allow',
+            }),
+          ]),
         },
       });
     });
@@ -303,7 +316,7 @@ describe('WebAppStack', () => {
 
   describe('Resource Counts', () => {
     test('creates correct number of security groups', () => {
-      template.resourceCountIs('AWS::EC2::SecurityGroup', 3);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 4);
     });
 
     test('creates correct number of subnets', () => {
@@ -319,14 +332,16 @@ describe('WebAppStack', () => {
     test('uses environment suffix in dashboard name', () => {
       const customEnv = 'staging';
       const customApp = new cdk.App();
-      const customStack = new WebAppStack(customApp, 'CustomWebAppStack', {
-        environmentSuffix: customEnv,
+      const customParentStack = new cdk.Stack(customApp, 'CustomParentStack', {
         env: {
           account: '123456789012',
           region: 'us-east-1',
         },
       });
-      const customTemplate = Template.fromStack(customStack);
+      const customStack = new WebAppStack(customParentStack, 'CustomWebAppStack', {
+        environmentSuffix: customEnv,
+      });
+      const customTemplate = Template.fromStack(customParentStack);
 
       customTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
         DashboardName: `SecureWebAppFoundation-${customEnv}`,
@@ -341,13 +356,14 @@ describe('WebAppStack', () => {
 
     test('uses default environment suffix when not provided', () => {
       const defaultApp = new cdk.App();
-      const defaultStack = new WebAppStack(defaultApp, 'DefaultWebAppStack', {
+      const defaultParentStack = new cdk.Stack(defaultApp, 'DefaultParentStack', {
         env: {
           account: '123456789012',
           region: 'us-east-1',
         },
       });
-      const defaultTemplate = Template.fromStack(defaultStack);
+      const defaultStack = new WebAppStack(defaultParentStack, 'DefaultWebAppStack', {});
+      const defaultTemplate = Template.fromStack(defaultParentStack);
 
       defaultTemplate.hasResourceProperties('AWS::CloudWatch::Dashboard', {
         DashboardName: 'SecureWebAppFoundation-dev',

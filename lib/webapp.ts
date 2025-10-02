@@ -156,18 +156,13 @@ export class WebAppStack extends Construct {
       })
     );
 
-    // Create UserData for EC2 instances
+    // Placeholder for UserData - will be configured after database creation
     const userData = ec2.UserData.forLinux();
-    userData.addCommands(
-      'yum install -y amazon-cloudwatch-agent',
-      'systemctl start amazon-cloudwatch-agent',
-      'systemctl enable amazon-cloudwatch-agent'
-    );
 
-    // Create EC2 instance in private subnet
+    // Create EC2 instance in public subnet (for internet access to download packages)
     const instance = new ec2.Instance(this, 'WebAppInstance', {
       vpc,
-      vpcSubnets: { subnets: [privateSubnet] },
+      vpcSubnets: { subnets: [publicSubnet1] },
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
@@ -243,6 +238,97 @@ export class WebAppStack extends Construct {
     // Grant EC2 role permissions to read database secret
     database.secret!.grantRead(ec2Role);
 
+    // Configure UserData with Flask web application
+    userData.addCommands(
+      '#!/bin/bash',
+      'set -e',
+      'exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1',
+      '',
+      '# Install required packages',
+      'yum update -y',
+      'yum install -y amazon-cloudwatch-agent mariadb105 jq python3 python3-pip',
+      'pip3 install flask mysql-connector-python boto3',
+      '',
+      '# Start CloudWatch agent',
+      'systemctl start amazon-cloudwatch-agent',
+      'systemctl enable amazon-cloudwatch-agent',
+      '',
+      '# Create Flask web application',
+      'cat > /home/ec2-user/app.py << "PYEOF"',
+      'from flask import Flask, jsonify',
+      'import mysql.connector',
+      'import boto3',
+      'import json',
+      'import os',
+      '',
+      'app = Flask(__name__)',
+      '',
+      'def get_db_connection():',
+      '    secret_arn = os.environ.get("DB_SECRET_ARN")',
+      '    region = os.environ.get("AWS_REGION", "us-east-1")',
+      '    client = boto3.client("secretsmanager", region_name=region)',
+      '    response = client.get_secret_value(SecretId=secret_arn)',
+      '    secret = json.loads(response["SecretString"])',
+      '    return mysql.connector.connect(',
+      '        host=secret["host"],',
+      '        user=secret["username"],',
+      '        password=secret["password"],',
+      '        database=secret.get("dbname", os.environ.get("DB_NAME"))',
+      '    )',
+      '',
+      '@app.route("/health")',
+      'def health():',
+      '    try:',
+      '        conn = get_db_connection()',
+      '        cursor = conn.cursor()',
+      '        cursor.execute("SELECT 1")',
+      '        result = cursor.fetchone()',
+      '        cursor.close()',
+      '        conn.close()',
+      '        return jsonify({"status": "healthy", "database": "connected"}), 200',
+      '    except Exception as e:',
+      '        return jsonify({"status": "unhealthy", "error": str(e)}), 500',
+      '',
+      '@app.route("/")',
+      'def index():',
+      '    return jsonify({"message": "Web Application Running", "endpoints": ["/health", "/"]})',
+      '',
+      'if __name__ == "__main__":',
+      '    app.run(host="0.0.0.0", port=5000)',
+      'PYEOF',
+      '',
+      '# Set ownership',
+      'chown ec2-user:ec2-user /home/ec2-user/app.py',
+      '',
+      '# Create systemd service',
+      'cat > /etc/systemd/system/webapp.service << "EOF"',
+      '[Unit]',
+      'Description=Flask Web Application',
+      'After=network.target',
+      '',
+      '[Service]',
+      'Type=simple',
+      'User=ec2-user',
+      'WorkingDirectory=/home/ec2-user',
+      `Environment="DB_SECRET_ARN=${database.secret!.secretArn}"`,
+      'Environment="AWS_REGION=us-east-1"',
+      `Environment="DB_NAME=${database.instanceIdentifier}"`,
+      'ExecStart=/usr/bin/python3 /home/ec2-user/app.py',
+      'Restart=always',
+      'RestartSec=5',
+      '',
+      '[Install]',
+      'WantedBy=multi-user.target',
+      'EOF',
+      '',
+      '# Start the application',
+      'systemctl daemon-reload',
+      'systemctl enable webapp',
+      'systemctl start webapp',
+      '',
+      'echo "Web application installation completed successfully"'
+    );
+
     // Create Application Load Balancer in public subnets
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
       vpc,
@@ -255,30 +341,32 @@ export class WebAppStack extends Construct {
     });
 
     // Create target group for EC2 instances
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebAppTargetGroup', {
-      vpc,
-      port: 5000,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.INSTANCE,
-      healthCheck: {
-        enabled: true,
-        path: '/health',
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-        healthyHttpCodes: '200',
-      },
-      deregistrationDelay: cdk.Duration.seconds(30),
-    });
-
-    // Add EC2 instance to target group
-    targetGroup.addTarget(
-      new targets.InstanceTarget(instance, 5000)
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'WebAppTargetGroup',
+      {
+        vpc,
+        port: 5000,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
+        healthCheck: {
+          enabled: true,
+          path: '/health',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+          healthyHttpCodes: '200',
+        },
+        deregistrationDelay: cdk.Duration.seconds(30),
+      }
     );
 
+    // Add EC2 instance to target group
+    targetGroup.addTarget(new targets.InstanceTarget(instance, 5000));
+
     // Create ALB listener on port 80
-    const listener = alb.addListener('WebAppListener', {
+    alb.addListener('WebAppListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],

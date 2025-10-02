@@ -30,7 +30,7 @@ describe('TapStack', () => {
 
     test('instantiates WebAppStack with correct parameters', () => {
       expect(WebAppStack).toHaveBeenCalledWith(
-        app,
+        stack,
         `WebAppStack-${environmentSuffix}`,
         expect.objectContaining({
           environmentSuffix,
@@ -41,12 +41,12 @@ describe('TapStack', () => {
     test('passes environment suffix from props', () => {
       const customEnv = 'prod';
       const customApp = new cdk.App();
-      new TapStack(customApp, 'CustomTapStack', {
+      const customStack = new TapStack(customApp, 'CustomTapStack', {
         environmentSuffix: customEnv,
       });
 
       expect(WebAppStack).toHaveBeenCalledWith(
-        customApp,
+        customStack,
         `WebAppStack-${customEnv}`,
         expect.objectContaining({
           environmentSuffix: customEnv,
@@ -56,10 +56,10 @@ describe('TapStack', () => {
 
     test('uses default environment suffix when not provided', () => {
       const defaultApp = new cdk.App();
-      new TapStack(defaultApp, 'DefaultTapStack', {});
+      const defaultStack = new TapStack(defaultApp, 'DefaultTapStack', {});
 
       expect(WebAppStack).toHaveBeenCalledWith(
-        defaultApp,
+        defaultStack,
         'WebAppStack-dev',
         expect.objectContaining({
           environmentSuffix: 'dev',
@@ -73,10 +73,10 @@ describe('TapStack', () => {
           environmentSuffix: 'staging',
         },
       });
-      new TapStack(contextApp, 'ContextTapStack', {});
+      const contextStack = new TapStack(contextApp, 'ContextTapStack', {});
 
       expect(WebAppStack).toHaveBeenCalledWith(
-        contextApp,
+        contextStack,
         'WebAppStack-staging',
         expect.objectContaining({
           environmentSuffix: 'staging',
@@ -99,7 +99,7 @@ describe('TapStack', () => {
 
       expect(customStack).toBeInstanceOf(cdk.Stack);
       expect(WebAppStack).toHaveBeenCalledWith(
-        customApp,
+        customStack,
         `WebAppStack-${environmentSuffix}`,
         expect.objectContaining({
           environmentSuffix,
@@ -127,10 +127,10 @@ describe('TapStack', () => {
         },
       };
 
-      new TapStack(customApp, 'PropagationTest', testProps);
+      const propagationStack = new TapStack(customApp, 'PropagationTest', testProps);
 
       expect(WebAppStack).toHaveBeenCalledWith(
-        customApp,
+        propagationStack,
         'WebAppStack-integration',
         expect.objectContaining(testProps)
       );
@@ -144,12 +144,12 @@ describe('TapStack', () => {
           environmentSuffix: 'context-env',
         },
       });
-      new TapStack(propsApp, 'PriorityTest', {
+      const priorityStack = new TapStack(propsApp, 'PriorityTest', {
         environmentSuffix: 'props-env',
       });
 
       expect(WebAppStack).toHaveBeenCalledWith(
-        propsApp,
+        priorityStack,
         'WebAppStack-props-env',
         expect.objectContaining({
           environmentSuffix: 'props-env',
@@ -161,26 +161,26 @@ describe('TapStack', () => {
       jest.clearAllMocks();
       const multiApp = new cdk.App();
 
-      new TapStack(multiApp, 'DevStack', { environmentSuffix: 'dev' });
-      new TapStack(multiApp, 'StagingStack', { environmentSuffix: 'staging' });
-      new TapStack(multiApp, 'ProdStack', { environmentSuffix: 'prod' });
+      const devStack = new TapStack(multiApp, 'DevStack', { environmentSuffix: 'dev' });
+      const stagingStack = new TapStack(multiApp, 'StagingStack', { environmentSuffix: 'staging' });
+      const prodStack = new TapStack(multiApp, 'ProdStack', { environmentSuffix: 'prod' });
 
       expect(WebAppStack).toHaveBeenCalledTimes(3);
       expect(WebAppStack).toHaveBeenNthCalledWith(
         1,
-        multiApp,
+        devStack,
         'WebAppStack-dev',
         expect.objectContaining({ environmentSuffix: 'dev' })
       );
       expect(WebAppStack).toHaveBeenNthCalledWith(
         2,
-        multiApp,
+        stagingStack,
         'WebAppStack-staging',
         expect.objectContaining({ environmentSuffix: 'staging' })
       );
       expect(WebAppStack).toHaveBeenNthCalledWith(
         3,
-        multiApp,
+        prodStack,
         'WebAppStack-prod',
         expect.objectContaining({ environmentSuffix: 'prod' })
       );
@@ -195,7 +195,7 @@ describe('TapStack', () => {
 
     test('creates child stack with correct scope', () => {
       expect(WebAppStack).toHaveBeenCalledWith(
-        app,
+        stack,
         expect.any(String),
         expect.any(Object)
       );
