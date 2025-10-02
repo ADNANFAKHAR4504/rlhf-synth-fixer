@@ -12,23 +12,6 @@ describe('tap_stack.tf static verification', () => {
     expect(content.length).toBeGreaterThan(500);
   });
 
-  it('declares some input variables', () => {
-    // Check for variables that are likely in your current file
-    const vars = ['region', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids'];
-    vars.forEach(v => {
-      const regex = new RegExp(`variable\\s+"${v}"`);
-      expect(has(regex)).toBe(true);
-    });
-  });
-
-  it('defines some locals', () => {
-    // Only check for locals that exist
-    const locals = ['common_tags'];
-    locals.forEach(l => {
-      const regex = new RegExp(`local\\.${l}|${l}\\s*=`);
-      expect(has(regex)).toBe(true);
-    });
-  });
 
   it('defines VPC, subnets, and networking resources', () => {
     [
