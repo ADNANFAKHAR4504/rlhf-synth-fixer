@@ -247,20 +247,20 @@ final class OutputResources {
     private final RestApi api;
     private final Dashboard dashboard;
 
-    OutputResources(final Table ticketsTable, final BucketResources buckets,
-                   final QueueResources queues, final Topic notificationTopic,
-                   final CfnIndex kendraIndex, final StateMachine stateMachine,
-                   final LambdaResources lambdas, final RestApi api,
-                   final Dashboard dashboard) {
-        this.ticketsTable = ticketsTable;
-        this.buckets = buckets;
-        this.queues = queues;
-        this.notificationTopic = notificationTopic;
-        this.kendraIndex = kendraIndex;
-        this.stateMachine = stateMachine;
-        this.lambdas = lambdas;
-        this.api = api;
-        this.dashboard = dashboard;
+    OutputResources(final Table table, final BucketResources bucketRes,
+                   final QueueResources queueRes, final Topic topic,
+                   final CfnIndex kendra, final StateMachine machine,
+                   final LambdaResources functions, final RestApi restApi,
+                   final Dashboard dash) {
+        this.ticketsTable = table;
+        this.buckets = bucketRes;
+        this.queues = queueRes;
+        this.notificationTopic = topic;
+        this.kendraIndex = kendra;
+        this.stateMachine = machine;
+        this.lambdas = functions;
+        this.api = restApi;
+        this.dashboard = dash;
     }
 
     public Table getTicketsTable() {
