@@ -3,10 +3,91 @@ Configuration module for serverless S3-triggered Lambda infrastructure.
 Handles environment variables, region enforcement, and deployment settings.
 """
 
+import re
 from typing import Any, Dict
 
 import pulumi
 import pulumi_aws as aws
+
+
+def normalize_s3_bucket_name(name: str) -> str:
+    """
+    Normalize S3 bucket name to comply with AWS naming rules.
+    
+    AWS S3 bucket naming rules:
+    - Must be 3-63 characters long
+    - Can only contain lowercase letters, numbers, dots, and hyphens
+    - Must start and end with a letter or number
+    - Cannot contain consecutive dots
+    - Cannot look like an IP address
+    """
+    # Convert to lowercase
+    normalized = name.lower()
+    
+    # Replace invalid characters with hyphens
+    normalized = re.sub(r'[^a-z0-9.-]', '-', normalized)
+    
+    # Remove consecutive dots and hyphens
+    normalized = re.sub(r'\.{2,}', '.', normalized)
+    normalized = re.sub(r'-{2,}', '-', normalized)
+    
+    # Remove leading/trailing dots and hyphens
+    normalized = normalized.strip('.-')
+    
+    # Handle empty string case first
+    if not normalized:
+        normalized = 'bucket'
+    
+    # Ensure it starts and ends with alphanumeric
+    if normalized and not normalized[0].isalnum():
+        normalized = 'a' + normalized
+    if normalized and not normalized[-1].isalnum():
+        normalized = normalized + 'a'
+    
+    # Handle IP-like addresses by adding prefix/suffix
+    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', normalized):
+        normalized = 'a-' + normalized + '-a'
+    
+    # Ensure minimum length
+    if len(normalized) < 3:
+        normalized = normalized + '-bucket'
+    
+    # Ensure maximum length
+    if len(normalized) > 63:
+        normalized = normalized[:63]
+        # Ensure it ends with alphanumeric
+        while normalized and not normalized[-1].isalnum():
+            normalized = normalized[:-1]
+    
+    return normalized
+
+
+def validate_s3_bucket_name(name: str) -> bool:
+    """
+    Validate S3 bucket name against AWS naming rules.
+    
+    Returns True if valid, False otherwise.
+    """
+    if not name or len(name) < 3 or len(name) > 63:
+        return False
+    
+    # Must start and end with alphanumeric
+    if not name[0].isalnum() or not name[-1].isalnum():
+        return False
+    
+    # Can only contain lowercase letters, numbers, dots, and hyphens
+    if not re.match(r'^[a-z0-9.-]+$', name):
+        return False
+    
+    # Cannot contain consecutive dots
+    if '..' in name:
+        return False
+    
+    # Cannot look like an IP address
+    if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', name):
+        return False
+    
+    return True
 
 
 class ServerlessConfig:
@@ -30,8 +111,22 @@ class ServerlessConfig:
         )
         
         # S3 bucket configuration - using unique names to avoid conflicts
-        self.input_bucket_name = self.config.get("input_bucket_name") or f"clean-s3-lambda-input-{self.environment_suffix}"
-        self.output_bucket_name = self.config.get("output_bucket_name") or f"clean-s3-lambda-output-{self.environment_suffix}"
+        # Normalize environment suffix to ensure valid bucket names
+        normalized_env = normalize_s3_bucket_name(self.environment_suffix)
+        
+        # Generate bucket names with normalized environment suffix
+        input_bucket_base = self.config.get("input_bucket_name") or f"clean-s3-lambda-input-{normalized_env}"
+        output_bucket_base = self.config.get("output_bucket_name") or f"clean-s3-lambda-output-{normalized_env}"
+        
+        # Normalize the complete bucket names
+        self.input_bucket_name = normalize_s3_bucket_name(input_bucket_base)
+        self.output_bucket_name = normalize_s3_bucket_name(output_bucket_base)
+        
+        # Validate the final bucket names
+        if not validate_s3_bucket_name(self.input_bucket_name):
+            raise ValueError(f"Invalid input bucket name: {self.input_bucket_name}")
+        if not validate_s3_bucket_name(self.output_bucket_name):
+            raise ValueError(f"Invalid output bucket name: {self.output_bucket_name}")
         
         # Lambda configuration
         self.lambda_function_name = f"s3-processor-{self.environment_suffix}"
@@ -86,5 +181,11 @@ class ServerlessConfig:
         # Validate Lambda timeout
         if self.lambda_timeout > 300:
             raise ValueError("Lambda timeout cannot exceed 5 minutes (300 seconds)")
+        
+        # Validate S3 bucket names (already validated in __init__, but double-check)
+        if not validate_s3_bucket_name(self.input_bucket_name):
+            raise ValueError(f"Input bucket name validation failed: {self.input_bucket_name}")
+        if not validate_s3_bucket_name(self.output_bucket_name):
+            raise ValueError(f"Output bucket name validation failed: {self.output_bucket_name}")
         
         return True
