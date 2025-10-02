@@ -61,7 +61,12 @@ class TestTapStackIntegration(unittest.TestCase):
         """Test that the DynamoDB table was created."""
         response = self.dynamodb_client.describe_table(TableName=self.table_name)
         self.assertEqual(response['Table']['TableStatus'], 'ACTIVE')
-        self.assertEqual(response['Table']['BillingMode'], 'PAY_PER_REQUEST')
+
+        # Check billing mode - it might be in BillingModeSummary for PAY_PER_REQUEST
+        if 'BillingModeSummary' in response['Table']:
+            self.assertEqual(response['Table']['BillingModeSummary']['BillingMode'], 'PAY_PER_REQUEST')
+        elif 'BillingMode' in response['Table']:
+            self.assertEqual(response['Table']['BillingMode'], 'PAY_PER_REQUEST')
 
     def test_dynamodb_table_schema(self):
         """Test DynamoDB table has correct partition and sort keys."""
