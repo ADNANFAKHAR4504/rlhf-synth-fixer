@@ -8,23 +8,18 @@ import { GlueClient, GetDatabaseCommand } from '@aws-sdk/client-glue';
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 
-// Configuration - These are coming from cfn-outputs after deployment
+// Configuration - Load outputs from deployment
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'prod';
 
-// AWS SDK client configuration
+// AWS SDK client configuration for real AWS (not LocalStack)
 const awsConfig = {
-  endpoint: 'http://localhost:4566',
   region: 'us-east-1',
-  credentials: {
-    accessKeyId: 'test',
-    secretAccessKey: 'test',
-  },
-  forcePathStyle: true,
+  // Use default credential provider chain (AWS CLI, environment variables, IAM roles, etc.)
 };
 
 // Initialize AWS SDK clients
@@ -41,7 +36,7 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
   describe('S3 Buckets - Existence and Configuration', () => {
     
     test('Raw Data Bucket should exist with proper encryption', async () => {
-      const bucketName = `dataanalytics-datalake-raw-prod-000000000000`;
+      const bucketName = outputs.RawDataBucketName;
       
       // Check bucket exists
       const headCommand = new HeadBucketCommand({ Bucket: bucketName });
@@ -58,7 +53,7 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
     });
 
     test('Processed Data Bucket should exist with proper encryption', async () => {
-      const bucketName = `dataanalytics-datalake-processed-prod-000000000000`;
+      const bucketName = outputs.ProcessedDataBucketName;
       
       // Check bucket exists
       const headCommand = new HeadBucketCommand({ Bucket: bucketName });
@@ -171,7 +166,9 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
     });
 
     test('Lambda Execution Role should exist with minimal permissions', async () => {
-      const roleName = 'dataanalytics-lambda-execution-role-prod';
+      // Extract role name from Lambda function ARN - we need to derive it from the pattern
+      const functionName = outputs.DataValidationLambdaArn.split(':').pop();
+      const roleName = functionName.replace('data-validation', 'lambda-execution-role');
       
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
@@ -192,7 +189,9 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
     });
 
     test('EMR Service Role should exist for Glue/EMR operations', async () => {
-      const roleName = 'dataanalytics-emr-service-role-prod';
+      // We can infer EMR service role name from the Glue execution role pattern
+      const glueRoleName = outputs.GlueExecutionRoleArn.split('/').pop();
+      const roleName = glueRoleName.replace('glue-execution-role', 'emr-service-role');
       
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
@@ -288,13 +287,10 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
   describe('VPC and Networking - Infrastructure Configuration', () => {
     
     test('Data Lake VPC should exist with proper configuration', async () => {
+      const vpcId = outputs.VPCId;
+      
       const command = new DescribeVpcsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: ['dataanalytics-datalake-vpc-prod']
-          }
-        ]
+        VpcIds: [vpcId]
       });
       
       const response = await ec2Client.send(command);
@@ -307,18 +303,15 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
     });
 
     test('Private Subnets should exist in different AZs', async () => {
+      const subnetIds = [outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id];
+      
       const command = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: ['*private*']
-          }
-        ]
+        SubnetIds: subnetIds
       });
       
       const response = await ec2Client.send(command);
       expect(response.Subnets).toBeDefined();
-      expect(response.Subnets?.length).toBeGreaterThanOrEqual(2);
+      expect(response.Subnets?.length).toBe(2);
       
       // Check subnets are in different availability zones
       const availabilityZones = response.Subnets?.map(subnet => subnet.AvailabilityZone) || [];
@@ -327,23 +320,19 @@ describe('TAP Stack Integration Tests - AWS SDK Verification', () => {
     });
 
     test('Security Groups should exist with proper rules', async () => {
-      // First try to get security groups with specific names
-      let command = new DescribeSecurityGroupsCommand({
+      // Get security groups for our VPC
+      const vpcId = outputs.VPCId;
+      
+      const command = new DescribeSecurityGroupsCommand({
         Filters: [
           {
-            Name: 'group-name',
-            Values: ['*lambda*', '*glue*']
+            Name: 'vpc-id',
+            Values: [vpcId]
           }
         ]
       });
       
-      let response = await ec2Client.send(command);
-      
-      // If no specific security groups found, get all security groups for the VPC
-      if (!response.SecurityGroups || response.SecurityGroups.length === 0) {
-        command = new DescribeSecurityGroupsCommand({});
-        response = await ec2Client.send(command);
-      }
+      const response = await ec2Client.send(command);
       
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups?.length).toBeGreaterThan(0);
