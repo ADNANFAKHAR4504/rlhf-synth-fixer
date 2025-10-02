@@ -461,7 +461,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain  # Fixed W3011
     Properties:
-      BucketName: !Sub "${AWS::StackName}-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+      BucketName: "cfn-bucket-12345"
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
