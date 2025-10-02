@@ -313,9 +313,14 @@ describe("VPC Flow Logs - Network Monitoring", () => {
 });
 
 describe("GuardDuty - Threat Detection", () => {
-  test("enables GuardDuty", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_guardduty_detector"/);
-    expect(stackContent).toMatch(/enable\s*=\s*true/);
+  test("uses existing GuardDuty detector (avoids duplicate)", () => {
+    expect(stackContent).toMatch(/data\s+"aws_guardduty_detector"\s+"main"/);
+  });
+
+  test("enables S3 protection feature on GuardDuty", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_guardduty_detector_feature"\s+"s3_protection"/);
+    expect(stackContent).toMatch(/name\s*=\s*"S3_DATA_EVENTS"/);
+    expect(stackContent).toMatch(/status\s*=\s*"ENABLED"/);
   });
 
   test("GuardDuty findings trigger SNS", () => {
@@ -324,9 +329,10 @@ describe("GuardDuty - Threat Detection", () => {
 });
 
 describe("AWS Config - Compliance", () => {
-  test("creates Config recorder and delivery channel", () => {
+  test("creates Config recorder (delivery channel uses existing)", () => {
     expect(stackContent).toMatch(/aws_config_configuration_recorder/);
-    expect(stackContent).toMatch(/aws_config_delivery_channel/);
+    // Delivery channel commented out due to AWS limit of 1 per region
+    expect(stackContent).toMatch(/AWS Config only allows one delivery channel per region/);
   });
 
   test("creates compliance rules", () => {

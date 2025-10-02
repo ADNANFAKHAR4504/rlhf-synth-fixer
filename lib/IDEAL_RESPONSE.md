@@ -5,12 +5,14 @@ This is the ideal response that addresses all 30 issues identified in MODEL_FAIL
 ## Summary of Key Improvements
 
 ### Critical Issues Fixed:
+
 1. ✅ **Actual file created** - Provides complete `tap_stack.tf` ready for deployment
 2. ✅ **Functional VPC endpoints** - Includes `route_table_ids` variable and proper configuration
 3. ✅ **Proper security groups** - Deny-all default with specific allow rules for VPC endpoints only
 4. ✅ **Encryption in transit** - S3 bucket policies enforce HTTPS-only access with `aws:SecureTransport` condition
 
 ### High Severity Issues Fixed:
+
 5. ✅ **CloudTrail enabled** - Complete audit logging for API calls with S3 and DynamoDB data events
 6. ✅ **S3 access logging** - Separate logs bucket with lifecycle policies
 7. ✅ **VPC Flow Logs** - Network traffic monitoring configured
@@ -19,6 +21,7 @@ This is the ideal response that addresses all 30 issues identified in MODEL_FAIL
 10. ✅ **Modern Lambda runtime** - Uses nodejs20.x instead of deprecated nodejs14.x
 
 ### Medium Severity Issues Fixed:
+
 11. ✅ **Specific IAM resource ARNs** - No wildcards except where required by service
 12. ✅ **Least-privilege KMS policies** - Service-specific permissions
 13. ✅ **AWS Config fully configured** - Recorder, delivery channel, and rules
@@ -31,6 +34,7 @@ This is the ideal response that addresses all 30 issues identified in MODEL_FAIL
 20. ✅ **HTTPS enforcement** - Bucket policies with SecureTransport conditions
 
 ### Low Severity Issues Fixed:
+
 21. ✅ **CloudWatch KMS encryption** - Dedicated key for logs
 22. ✅ **DynamoDB backup** - PITR + TTL for data management
 23. ✅ **Custom metrics namespace** - FinancialBatch for monitoring
@@ -38,6 +42,7 @@ This is the ideal response that addresses all 30 issues identified in MODEL_FAIL
 25. ✅ **GuardDuty EventBridge** - Automated alerting on findings
 
 ### Completeness Issues Fixed:
+
 26. ✅ **Clear documentation** - Comments explain architecture
 27. ✅ **4-hour window monitoring** - Alarm for processing time breach
 28. ✅ **Variable validation** - Input validation for VPC, subnets, email
@@ -49,6 +54,7 @@ This is the ideal response that addresses all 30 issues identified in MODEL_FAIL
 The complete Terraform script is approximately 2,000+ lines and includes:
 
 ### Infrastructure Components:
+
 - **4 KMS Keys**: S3, SNS, DynamoDB, CloudWatch with service-specific policies
 - **3 S3 Buckets**: Input, output, and dedicated logs bucket with versioning, encryption, lifecycle policies
 - **1 DynamoDB Table**: With GSI, encryption, PITR, and TTL
@@ -68,6 +74,7 @@ The complete Terraform script is approximately 2,000+ lines and includes:
 ### Key Features:
 
 **Security & Compliance:**
+
 - All data encrypted at rest with customer-managed KMS keys
 - All data encrypted in transit (HTTPS enforcement via bucket policies)
 - VPC endpoints prevent internet traffic
@@ -78,6 +85,7 @@ The complete Terraform script is approximately 2,000+ lines and includes:
 - AWS Config for compliance checking
 
 **Operational Excellence:**
+
 - CloudWatch alarms for failures, errors, and SLA breaches
 - Comprehensive dashboard
 - X-Ray distributed tracing
@@ -86,12 +94,14 @@ The complete Terraform script is approximately 2,000+ lines and includes:
 - Log retention aligned with financial compliance (90 days)
 
 **Cost Optimization:**
+
 - S3 lifecycle policies (Glacier after 90 days, expire after 7 years)
 - DynamoDB on-demand billing
 - Auto-scaling Batch compute (min 0 vCPUs)
 - S3 bucket keys for reduced KMS costs
 
 **Reliability:**
+
 - Multi-AZ deployment (requires 2+ subnets)
 - Versioning on all S3 buckets
 - DynamoDB point-in-time recovery
@@ -99,6 +109,7 @@ The complete Terraform script is approximately 2,000+ lines and includes:
 - Lambda DLQ for failed invocations
 
 **Variable Inputs Required:**
+
 ```hcl
 vpc_id           # VPC ID (validated)
 subnet_ids       # At least 2 private subnets
@@ -107,6 +118,7 @@ notification_email # For SNS alerts (validated)
 ```
 
 **Outputs Provided (22 total):**
+
 - All resource ARNs and IDs
 - Bucket names
 - Configuration recorder name
@@ -121,6 +133,7 @@ notification_email # For SNS alerts (validated)
    - Container image in ECR for batch processing jobs
 
 2. **Deployment:**
+
    ```bash
    terraform init
    terraform plan -var="vpc_id=vpc-xxxxx" \
@@ -139,6 +152,7 @@ notification_email # For SNS alerts (validated)
 ## Architecture Highlights
 
 **Data Flow:**
+
 1. EventBridge triggers Lambda nightly
 2. Lambda reads input S3 bucket, submits Batch jobs
 3. Batch jobs process transactions, write to output S3
@@ -147,6 +161,7 @@ notification_email # For SNS alerts (validated)
 6. SNS alerts on completion/failures
 
 **Security Perimeter:**
+
 - All compute in private subnets
 - No public IP addresses
 - All AWS service communication via VPC endpoints
@@ -155,6 +170,7 @@ notification_email # For SNS alerts (validated)
 - TLS 1.2+ for all data in transit
 
 **Compliance:**
+
 - CloudTrail logs all API activity (7-year retention)
 - S3 access logs track object access
 - VPC Flow Logs monitor network traffic
@@ -447,10 +463,10 @@ resource "aws_config_configuration_recorder_status" "main" {
 resource "aws_lambda_function" "orchestrator" {
   function_name = "BatchJobOrchestrator"
   role          = aws_iam_role.lambda_role.arn
-  
+
   filename         = "${path.module}/lambda_function.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function.zip")
-  
+
   handler = "index.handler"
   runtime = "nodejs20.x"  # MODERN RUNTIME
   timeout = 300
@@ -491,6 +507,179 @@ output "cloudtrail_arn" {
 
 **Note**: The above is a condensed version showing the key fixes. The complete file would include all resources from the architecture diagram with full configuration.
 
+---
+
+## Lambda Orchestrator Code
+
+The Lambda function (`lambda_function.js`) orchestrates the batch processing workflow:
+
+```javascript
+/**
+ * AWS Batch Job Orchestrator Lambda Function
+ * Orchestrates batch processing jobs for financial transactions
+ */
+
+// AWS SDK v3 is included in nodejs20.x runtime
+const { BatchClient, SubmitJobCommand } = require('@aws-sdk/client-batch');
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+
+const batchClient = new BatchClient({ region: process.env.AWS_REGION });
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const s3Client = new S3Client({ region: process.env.AWS_REGION });
+const snsClient = new SNSClient({ region: process.env.AWS_REGION });
+
+const JOB_QUEUE = process.env.JOB_QUEUE;
+const JOB_DEFINITION = process.env.JOB_DEFINITION;
+const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE;
+const SNS_TOPIC = process.env.SNS_TOPIC;
+const INPUT_BUCKET = process.env.INPUT_BUCKET;
+const TRANSACTIONS_PER_JOB = parseInt(
+  process.env.TRANSACTIONS_PER_JOB || '10000'
+);
+
+/**
+ * Lambda handler - orchestrates batch job submission
+ */
+exports.handler = async event => {
+  console.log('Event received:', JSON.stringify(event, null, 2));
+
+  try {
+    // List files in input bucket
+    const listCommand = new ListObjectsV2Command({
+      Bucket: INPUT_BUCKET,
+      Prefix: 'transactions/',
+    });
+
+    const response = await s3Client.send(listCommand);
+    const files = response.Contents || [];
+
+    if (files.length === 0) {
+      console.log('No files to process in input bucket');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'No files to process' }),
+      };
+    }
+
+    console.log(`Found ${files.length} files to process`);
+
+    // Submit batch jobs for each file
+    const jobSubmissions = [];
+    for (const file of files) {
+      if (file.Size === 0) continue; // Skip empty files
+
+      const jobName = `financial-batch-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      // Submit batch job
+      const submitJobCommand = new SubmitJobCommand({
+        jobName: jobName,
+        jobQueue: JOB_QUEUE,
+        jobDefinition: JOB_DEFINITION,
+        containerOverrides: {
+          environment: [
+            { name: 'INPUT_FILE', value: file.Key },
+            { name: 'INPUT_BUCKET', value: INPUT_BUCKET },
+            { name: 'JOB_ID', value: jobId },
+          ],
+        },
+      });
+
+      const submitResponse = await batchClient.send(submitJobCommand);
+      console.log(`Submitted job ${submitResponse.jobId} for file ${file.Key}`);
+
+      // Record job status in DynamoDB
+      const putItemCommand = new PutItemCommand({
+        TableName: DYNAMODB_TABLE,
+        Item: {
+          JobId: { S: submitResponse.jobId },
+          JobName: { S: jobName },
+          Status: { S: 'SUBMITTED' },
+          InputFile: { S: file.Key },
+          SubmittedAt: { S: new Date().toISOString() },
+          TransactionsCount: { N: '0' },
+          ProcessedCount: { N: '0' },
+          ErrorCount: { N: '0' },
+        },
+      });
+
+      await dynamoClient.send(putItemCommand);
+      jobSubmissions.push({
+        jobId: submitResponse.jobId,
+        jobName: jobName,
+        inputFile: file.Key,
+      });
+    }
+
+    // Send notification
+    const snsMessage = {
+      Message: JSON.stringify({
+        event: 'BatchJobsSubmitted',
+        timestamp: new Date().toISOString(),
+        jobCount: jobSubmissions.length,
+        jobs: jobSubmissions,
+      }),
+      Subject: `Batch Processing Started - ${jobSubmissions.length} jobs submitted`,
+      TopicArn: SNS_TOPIC,
+    };
+
+    await snsClient.send(new PublishCommand(snsMessage));
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Batch jobs submitted successfully',
+        jobCount: jobSubmissions.length,
+        jobs: jobSubmissions,
+      }),
+    };
+  } catch (error) {
+    console.error('Error processing batch jobs:', error);
+
+    // Send error notification
+    try {
+      await snsClient.send(
+        new PublishCommand({
+          Message: JSON.stringify({
+            event: 'BatchJobSubmissionFailed',
+            timestamp: new Date().toISOString(),
+            error: error.message,
+            stack: error.stack,
+          }),
+          Subject: 'Batch Processing Error',
+          TopicArn: SNS_TOPIC,
+        })
+      );
+    } catch (snsError) {
+      console.error('Failed to send SNS notification:', snsError);
+    }
+
+    throw error;
+  }
+};
+```
+
+**Lambda Function Features:**
+
+- **S3 Integration**: Scans input bucket for transaction files
+- **AWS Batch Orchestration**: Submits jobs with container overrides
+- **DynamoDB Tracking**: Records job metadata for monitoring
+- **SNS Notifications**: Sends alerts on success/failure
+- **Error Handling**: Comprehensive try-catch with DLQ fallback
+- **Modern SDK**: Uses AWS SDK v3 (included in nodejs20.x runtime)
+- **Environment Variables**: All configuration externalized
+- **Logging**: CloudWatch Logs integration
+
+**Deployment:**
+
+1. Package: `zip lambda_function.zip lambda_function.js`
+2. Deploy via Terraform (handled by `aws_lambda_function` resource)
+3. Triggered by EventBridge on schedule or manual invocation
+
+---
+
 ## Validation Checklist
 
 Before deploying, ensure:
@@ -509,6 +698,7 @@ Before deploying, ensure:
 ## Security Compliance Summary
 
 ✅ **CIS AWS Foundations Benchmark** compliance for:
+
 - IAM (least privilege, no wildcards)
 - Logging (CloudTrail, VPC Flow Logs, S3 access logs)
 - Monitoring (CloudWatch alarms, GuardDuty)
@@ -516,6 +706,7 @@ Before deploying, ensure:
 - Network Security (VPC endpoints, security groups)
 
 ✅ **Financial Industry Requirements**:
+
 - 7-year data retention
 - Complete audit trail
 - Encryption at rest and in transit
@@ -524,6 +715,7 @@ Before deploying, ensure:
 - Point-in-time recovery for databases
 
 ✅ **AWS Well-Architected Framework**:
+
 - **Security**: Defense in depth, encryption everywhere
 - **Reliability**: Multi-AZ, backups, retry logic
 - **Performance**: Auto-scaling, right-sized instances

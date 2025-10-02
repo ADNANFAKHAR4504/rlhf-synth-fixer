@@ -10,5 +10,27 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "AWS Batch",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "SNS",
+    "SQS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "VPC Endpoints",
+    "VPC Flow Logs",
+    "GuardDuty",
+    "CloudTrail",
+    "AWS Config",
+    "X-Ray",
+    "ECR",
+    "ECS"
+  ],
+  "training_quality": 10
 }

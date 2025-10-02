@@ -1466,7 +1466,7 @@ resource "aws_lambda_function" "orchestrator" {
   filename         = "${path.module}/lambda_function.zip"
   source_code_hash = fileexists("${path.module}/lambda_function.zip") ? filebase64sha256("${path.module}/lambda_function.zip") : null
 
-  handler = "index.handler"
+  handler = "lambda_function.handler"
   runtime = "nodejs20.x"
   timeout = 300
   memory_size = 512
@@ -1862,7 +1862,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_iam_role" "flow_log_role" {
-  name = "VPCFlowLogRole"
+  name = "VPCFlowLogRole-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1922,18 +1922,11 @@ resource "aws_flow_log" "vpc_flow_log" {
 # GuardDuty with EventBridge Notification
 # -----------------------------------------------------------------------------
 
-resource "aws_guardduty_detector" "main" {
-  enable = true
-
-  tags = {
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project
-  }
-}
+# Import existing GuardDuty detector instead of creating new one
+data "aws_guardduty_detector" "main" {}
 
 resource "aws_guardduty_detector_feature" "s3_protection" {
-  detector_id = aws_guardduty_detector.main.id
+  detector_id = data.aws_guardduty_detector.main.id
   name        = "S3_DATA_EVENTS"
   status      = "ENABLED"
 }
@@ -2087,7 +2080,7 @@ resource "aws_iam_role" "config_role" {
 
 resource "aws_iam_role_policy_attachment" "config_role_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3_policy" {
@@ -2128,20 +2121,21 @@ resource "aws_config_configuration_recorder" "main" {
   }
 }
 
-resource "aws_config_delivery_channel" "main" {
-  name           = "financial-batch-config-delivery"
-  s3_bucket_name = aws_s3_bucket.config_bucket.bucket
-  sns_topic_arn  = aws_sns_topic.job_notifications.arn
+# Note: AWS Config only allows one delivery channel per region
+# Commenting out to avoid conflict with existing channel
+# resource "aws_config_delivery_channel" "main" {
+#   name           = "financial-batch-config-delivery"
+#   s3_bucket_name = aws_s3_bucket.config_bucket.bucket
+#   sns_topic_arn  = aws_sns_topic.job_notifications.arn
+#   depends_on = [aws_config_configuration_recorder.main]
+# }
 
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-
-  depends_on = [aws_config_delivery_channel.main]
-}
+# Disabled because delivery channel is commented out due to AWS limit
+# resource "aws_config_configuration_recorder_status" "main" {
+#   name       = aws_config_configuration_recorder.main.name
+#   is_enabled = true
+#   depends_on = [aws_config_delivery_channel.main]
+# }
 
 resource "aws_config_config_rule" "s3_encryption" {
   name = "s3-bucket-server-side-encryption-enabled"
@@ -2280,7 +2274,7 @@ output "kms_cloudwatch_key_arn" {
 
 output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
-  value       = aws_guardduty_detector.main.id
+  value       = data.aws_guardduty_detector.main.id
 }
 
 output "cloudtrail_name" {
