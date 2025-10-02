@@ -27,15 +27,24 @@ logs_client = boto3.client('logs', region_name='us-east-1')
 cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
 
 
+def find_output(outputs, prefix):
+    """Find output value by key prefix (handles CDK auto-generated suffixes)."""
+    for key, value in outputs.items():
+        if key.startswith(prefix):
+            return value
+    return None
+
+
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
     """Integration tests for the deployed TapStack infrastructure."""
 
     def setUp(self):
         """Set up test data from deployment outputs."""
-        self.bucket_name = flat_outputs.get('BucketName')
-        self.function_name = flat_outputs.get('FunctionName')
-        self.table_name = flat_outputs.get('TableName')
+        # Try to find outputs with CDK-style suffixes
+        self.bucket_name = find_output(flat_outputs, 'BucketName')
+        self.function_name = find_output(flat_outputs, 'FunctionName')
+        self.table_name = find_output(flat_outputs, 'TableName')
 
         # Validate outputs exist
         self.assertIsNotNone(self.bucket_name, "BucketName not found in outputs")
