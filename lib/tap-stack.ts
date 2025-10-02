@@ -22,6 +22,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
+import * as crypto from 'crypto';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -51,6 +52,12 @@ export class TapStack extends cdk.Stack {
     const env = environmentSuffix;
     const region = 'us-east-1';
     
+    // Generate a unique 8-character hash for resource naming
+    const uniqueId = crypto.createHash('md5')
+      .update(`${this.account}-${env}-${Date.now()}`)
+      .digest('hex')
+      .substring(0, 8);
+    
     // FEATURE FLAG: Enable SageMaker resources (default: false)
     const enableSagemaker = this.node.tryGetContext('enableSagemaker') === 'true' || false;
 
@@ -60,7 +67,7 @@ export class TapStack extends cdk.Stack {
 
     // VPC for private resource connectivity - using simple configuration
     const vpc = new ec2.Vpc(this, 'MLPipelineVPC', {
-      vpcName: `ml-pipeline-vpc-${env}-${region}`,
+      vpcName: `ml-vpc-${env}-${uniqueId}`,
       maxAzs: 2,
       natGateways: 0,
       subnetConfiguration: [
@@ -94,7 +101,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket for model artifacts with versioning enabled
     const modelBucket = new s3.Bucket(this, 'ModelArtifactsBucket', {
-      bucketName: `ml-pipeline-models-${env}-${this.account}`,
+      bucketName: `ml-models-${env}-${uniqueId}-${this.account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -115,7 +122,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket for input data and batch processing
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: `ml-pipeline-data-${env}-${this.account}`,
+      bucketName: `ml-data-${env}-${uniqueId}-${this.account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -132,7 +139,7 @@ export class TapStack extends cdk.Stack {
 
     // DynamoDB table for prediction results with TTL
     const predictionsTable = new dynamodb.Table(this, 'PredictionsTable', {
-      tableName: `ml-pipeline-predictions-${env}-${region}`,
+      tableName: `ml-predictions-${env}-${uniqueId}`,
       partitionKey: { name: 'predictionId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -155,7 +162,7 @@ export class TapStack extends cdk.Stack {
 
     // SSM Parameter Store for model version tracking
     const activeModelVersionParam = new ssm.StringParameter(this, 'ActiveModelVersion', {
-      parameterName: `/ml-pipeline/${env}/models/active-version`,
+      parameterName: `/ml-pipeline/${env}/${uniqueId}/models/active-version`,
       stringValue: 'v1.0.0',
       description: 'Currently active model version for inference',
       tier: ssm.ParameterTier.STANDARD,
@@ -163,7 +170,7 @@ export class TapStack extends cdk.Stack {
 
     // Model metadata parameter
     const modelMetadataParam = new ssm.StringParameter(this, 'ModelMetadata', {
-      parameterName: `/ml-pipeline/${env}/models/metadata`,
+      parameterName: `/ml-pipeline/${env}/${uniqueId}/models/metadata`,
       stringValue: JSON.stringify({
         'v1.0.0': {
           s3Path: `s3://${modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
@@ -193,7 +200,7 @@ export class TapStack extends cdk.Stack {
 
       // IAM role for SageMaker execution
       const sagemakerRole = new iam.Role(this, 'SageMakerExecutionRole', {
-        roleName: `ml-pipeline-sagemaker-${env}`,
+        roleName: `ml-sagemaker-${env}-${uniqueId}`,
         assumedBy: new iam.ServicePrincipal('sagemaker.amazonaws.com'),
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSageMakerFullAccess'),
@@ -205,7 +212,7 @@ export class TapStack extends cdk.Stack {
 
       // SageMaker Model
       const sagemakerModel = new sagemaker.CfnModel(this, 'MLModel', {
-        modelName: `ml-pipeline-model-${env}-${Date.now()}`,
+        modelName: `ml-model-${env}-${uniqueId}`,
         executionRoleArn: sagemakerRole.roleArn,
         primaryContainer: {
           image: `763104351884.dkr.ecr.${region}.amazonaws.com/pytorch-inference:2.0.0-cpu-py310`,
@@ -223,7 +230,7 @@ export class TapStack extends cdk.Stack {
 
       // Endpoint configuration with A/B testing variants
       const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'EndpointConfig', {
-        endpointConfigName: `ml-pipeline-endpoint-config-${env}-${Date.now()}`,
+        endpointConfigName: `ml-endpoint-config-${env}-${uniqueId}`,
         productionVariants: [
           {
             variantName: 'ModelA',
@@ -246,7 +253,7 @@ export class TapStack extends cdk.Stack {
 
       // SageMaker Endpoint
       endpoint = new sagemaker.CfnEndpoint(this, 'MLEndpoint', {
-        endpointName: `ml-pipeline-endpoint-${env}-${region}`,
+        endpointName: `ml-endpoint-${env}-${uniqueId}`,
         endpointConfigName: endpointConfig.endpointConfigName!,
       });
 
@@ -275,14 +282,12 @@ export class TapStack extends cdk.Stack {
     // SECTION 5: STREAMING INFRASTRUCTURE
     // ============================================
 
-    // FIXED: Remove explicit streamName to let CloudFormation auto-generate unique names
-    // OR use cdk.Fn.join to create unique names that won't conflict
+    // Kinesis Stream - CloudFormation auto-generates the name for uniqueness
     const inferenceStream = new kinesis.Stream(this, 'InferenceStream', {
-      // Let CloudFormation auto-generate the stream name for uniqueness
       shardCount: 2,
       retentionPeriod: cdk.Duration.hours(24),
       encryption: kinesis.StreamEncryption.MANAGED,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow destruction on rollback
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // ============================================
@@ -291,7 +296,7 @@ export class TapStack extends cdk.Stack {
 
     // IAM role for Lambda functions
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
-      roleName: `ml-pipeline-lambda-${env}`,
+      roleName: `ml-lambda-${env}-${uniqueId}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
@@ -320,7 +325,7 @@ export class TapStack extends cdk.Stack {
 
     // Data preprocessing Lambda function
     const preprocessFunction = new lambda.Function(this, 'PreprocessFunction', {
-      functionName: `ml-pipeline-preprocess-${env}`,
+      functionName: `ml-preprocess-${env}-${uniqueId}`,
       runtime: lambda.Runtime.PYTHON_3_11,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
@@ -426,7 +431,7 @@ def preprocess_data(data):
 
     // Stream processing Lambda for Kinesis
     const streamProcessorFunction = new lambda.Function(this, 'StreamProcessorFunction', {
-      functionName: `ml-pipeline-stream-processor-${env}`,
+      functionName: `ml-stream-${env}-${uniqueId}`,
       runtime: lambda.Runtime.PYTHON_3_11,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
@@ -513,7 +518,7 @@ def handler(event, context):
 
     // REST API with caching enabled
     const api = new apigateway.RestApi(this, 'InferenceAPI', {
-      restApiName: `ml-pipeline-api-${env}`,
+      restApiName: `ml-api-${env}-${uniqueId}`,
       description: 'ML inference API with caching and rate limiting',
       deployOptions: {
         stageName: env,
@@ -580,7 +585,7 @@ def handler(event, context):
     // Batch compute environment
     const batchComputeEnvironment = new batch.CfnComputeEnvironment(this, 'BatchComputeEnv', {
       type: 'MANAGED',
-      computeEnvironmentName: `ml-pipeline-batch-compute-${env}`,
+      computeEnvironmentName: `ml-batch-compute-${env}-${uniqueId}`,
       serviceRole: batchServiceRole.roleArn,
       computeResources: {
         type: 'FARGATE',
@@ -592,7 +597,7 @@ def handler(event, context):
 
     // Batch job queue
     const batchJobQueue = new batch.CfnJobQueue(this, 'BatchJobQueue', {
-      jobQueueName: `ml-pipeline-batch-queue-${env}`,
+      jobQueueName: `ml-batch-queue-${env}-${uniqueId}`,
       priority: 1,
       computeEnvironmentOrder: [
         {
@@ -624,7 +629,7 @@ def handler(event, context):
 
     // Batch job definition
     const batchJobDefinition = new batch.CfnJobDefinition(this, 'BatchJobDefinition', {
-      jobDefinitionName: `ml-pipeline-batch-job-${env}`,
+      jobDefinitionName: `ml-batch-job-${env}-${uniqueId}`,
       type: 'container',
       platformCapabilities: ['FARGATE'],
       containerProperties: {
@@ -670,7 +675,7 @@ def handler(event, context):
 
     // Batch processing state machine
     const batchStateMachine = new stepfunctions.StateMachine(this, 'BatchProcessingStateMachine', {
-      stateMachineName: `ml-pipeline-batch-workflow-${env}`,
+      stateMachineName: `ml-batch-workflow-${env}-${uniqueId}`,
       definitionBody: stepfunctions.DefinitionBody.fromChainable(
         new stepfunctions.Parallel(this, 'ParallelBatchProcessing')
           .branch(
@@ -710,7 +715,7 @@ def handler(event, context):
       timeout: cdk.Duration.hours(2),
       logs: {
         destination: new logs.LogGroup(this, 'StateMachineLogs', {
-          logGroupName: `/aws/states/ml-pipeline-batch-${env}`,
+          logGroupName: `/aws/states/ml-batch-${env}-${uniqueId}`,
           retention: logs.RetentionDays.ONE_WEEK,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         }),
@@ -724,7 +729,7 @@ def handler(event, context):
 
     // EventBridge rule for scheduled batch processing (daily at 2 AM UTC)
     const batchScheduleRule = new events.Rule(this, 'BatchScheduleRule', {
-      ruleName: `ml-pipeline-batch-schedule-${env}`,
+      ruleName: `ml-batch-schedule-${env}-${uniqueId}`,
       description: 'Trigger batch inference workflow daily',
       schedule: events.Schedule.cron({ hour: '2', minute: '0' }),
     });
@@ -739,7 +744,7 @@ def handler(event, context):
     const glueDatabase = new glue.CfnDatabase(this, 'MLPipelineDatabase', {
       catalogId: this.account,
       databaseInput: {
-        name: `ml_pipeline_db_${env}`,
+        name: `ml_db_${env}_${uniqueId}`,
         description: 'Database for ML pipeline analytics and prediction results',
       },
     });
@@ -756,7 +761,7 @@ def handler(event, context):
 
     // Athena workgroup for analytics queries
     const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
-      name: `ml-pipeline-analytics-${env}`,
+      name: `ml-analytics-${env}-${uniqueId}`,
       description: 'Workgroup for running analytics queries on prediction data',
       workGroupConfiguration: {
         resultConfiguration: {
@@ -776,13 +781,13 @@ def handler(event, context):
 
     // SNS topic for alerts
     const alertTopic = new sns.Topic(this, 'AlertTopic', {
-      topicName: `ml-pipeline-alerts-${env}`,
+      topicName: `ml-alerts-${env}-${uniqueId}`,
       displayName: 'ML Pipeline Alerts',
     });
 
     // CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'MLPipelineDashboard', {
-      dashboardName: `ml-pipeline-metrics-${env}`,
+      dashboardName: `ml-metrics-${env}-${uniqueId}`,
     });
 
     // Add metrics to dashboard (only if SageMaker is enabled)
@@ -841,7 +846,7 @@ def handler(event, context):
 
       // CloudWatch Alarms for SageMaker
       const latencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
-        alarmName: `ml-pipeline-high-latency-${env}`,
+        alarmName: `ml-high-latency-${env}-${uniqueId}`,
         alarmDescription: 'Alert when model latency exceeds threshold',
         metric: new cloudwatch.Metric({
           namespace: 'AWS/SageMaker',
@@ -861,7 +866,7 @@ def handler(event, context):
       latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
       const errorRateAlarm = new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
-        alarmName: `ml-pipeline-high-error-rate-${env}`,
+        alarmName: `ml-high-error-rate-${env}-${uniqueId}`,
         alarmDescription: 'Alert when error rate exceeds 5%',
         metric: new cloudwatch.Metric({
           namespace: 'AWS/SageMaker',
@@ -881,7 +886,7 @@ def handler(event, context):
 
     // Lambda errors alarm (always enabled)
     const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
-      alarmName: `ml-pipeline-lambda-errors-${env}`,
+      alarmName: `ml-lambda-errors-${env}-${uniqueId}`,
       alarmDescription: 'Alert on Lambda function errors',
       metric: preprocessFunction.metricErrors({
         statistic: 'Sum',
@@ -896,7 +901,7 @@ def handler(event, context):
 
     // DynamoDB throttling alarm
     const dynamoThrottleAlarm = new cloudwatch.Alarm(this, 'DynamoDBThrottleAlarm', {
-      alarmName: `ml-pipeline-dynamodb-throttle-${env}`,
+      alarmName: `ml-dynamodb-throttle-${env}-${uniqueId}`,
       alarmDescription: 'Alert on DynamoDB throttling events',
       metric: predictionsTable.metricUserErrors({
         statistic: 'Sum',
@@ -913,42 +918,47 @@ def handler(event, context):
     // SECTION 13: STACK OUTPUTS
     // ============================================
 
+    new cdk.CfnOutput(this, 'UniqueID', {
+      value: uniqueId,
+      description: 'Unique identifier for this deployment',
+    });
+
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
       description: 'API Gateway endpoint URL',
-      exportName: `ml-pipeline-api-url-${env}`,
+      exportName: `ml-api-url-${env}-${uniqueId}`,
     });
 
     if (enableSagemaker && endpoint) {
       new cdk.CfnOutput(this, 'SageMakerEndpointName', {
         value: endpoint.endpointName!,
         description: 'SageMaker endpoint name',
-        exportName: `ml-pipeline-endpoint-${env}`,
+        exportName: `ml-endpoint-${env}-${uniqueId}`,
       });
     }
 
     new cdk.CfnOutput(this, 'PredictionsTableName', {
       value: predictionsTable.tableName,
       description: 'DynamoDB predictions table name',
-      exportName: `ml-pipeline-table-${env}`,
+      exportName: `ml-table-${env}-${uniqueId}`,
     });
 
     new cdk.CfnOutput(this, 'ModelBucketName', {
       value: modelBucket.bucketName,
       description: 'S3 bucket for model artifacts',
-      exportName: `ml-pipeline-model-bucket-${env}`,
+      exportName: `ml-model-bucket-${env}-${uniqueId}`,
     });
 
     new cdk.CfnOutput(this, 'KinesisStreamName', {
       value: inferenceStream.streamName,
       description: 'Kinesis stream for real-time inference',
-      exportName: `ml-pipeline-kinesis-stream-${env}`,
+      exportName: `ml-kinesis-stream-${env}-${uniqueId}`,
     });
 
     new cdk.CfnOutput(this, 'StateMachineArn', {
       value: batchStateMachine.stateMachineArn,
       description: 'Step Functions state machine ARN',
-      exportName: `ml-pipeline-state-machine-${env}`,
+      exportName: `ml-state-machine-${env}-${uniqueId}`,
     });
 
     new cdk.CfnOutput(this, 'DashboardURL', {
@@ -966,6 +976,7 @@ def handler(event, context):
     cdk.Tags.of(this).add('Environment', env);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('CostCenter', 'ML-Operations');
+    cdk.Tags.of(this).add('UniqueID', uniqueId);
     cdk.Tags.of(this).add('SageMakerEnabled', enableSagemaker.toString());
   }
 }
