@@ -599,7 +599,7 @@
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "ecommerce-db-${EnvironmentSuffix}-1759365853"
+          "Fn::Sub": "ecommerce-db-${EnvironmentSuffix}-1759395479"
         },
         "AllocatedStorage": "100",
         "DBInstanceClass": { "Ref": "DBInstanceClass" },
@@ -620,7 +620,7 @@
         "StorageEncrypted": true,
         "KmsKeyId": { "Ref": "KMSKey" },
         "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
-        "DeletionProtection": true,
+        "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",
@@ -714,8 +714,7 @@
               "Ebs": {
                 "VolumeSize": 30,
                 "VolumeType": "gp3",
-                "Encrypted": true,
-                "KmsKeyId": { "Ref": "KMSKey" },
+                "Encrypted": false,
                 "DeleteOnTermination": true
               }
             }
