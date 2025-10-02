@@ -20,7 +20,6 @@ import json
 # Add lib to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-
 class TestTapStackArgs(unittest.TestCase):
     """Test TapStackArgs configuration class."""
 
@@ -78,7 +77,6 @@ class TestTapStackArgs(unittest.TestCase):
         self.assertEqual(args.instance_type, 'm5.2xlarge')
         self.assertEqual(args.region, 'us-east-1')  # default
 
-
 class TestTapStackStructure(unittest.TestCase):
     """Test TapStack structure and class definition."""
 
@@ -102,7 +100,6 @@ class TestTapStackStructure(unittest.TestCase):
         self.assertTrue(hasattr(args, 'instance_type'))
         self.assertTrue(hasattr(args, 'region'))
         self.assertTrue(hasattr(args, 'tags'))
-
 
 class TestTapStackInstantiation(unittest.TestCase):
     """Test TapStack instantiation with comprehensive mocking."""
@@ -129,16 +126,17 @@ class TestTapStackInstantiation(unittest.TestCase):
         with patch('lib.tap_stack.pulumi') as mock_pulumi, \
              patch('lib.tap_stack.aws') as mock_aws, \
              patch('lib.tap_stack.json') as mock_json:
-            
-            # Setup Pulumi mocks
+
+            # Setup Pulumi mocks with enhanced ResourceOptions to handle depends_on
             mock_pulumi.ComponentResource = MagicMock()
-            mock_pulumi.ResourceOptions = MagicMock()
+            mock_pulumi.ResourceOptions = MagicMock()  # Mock to accept depends_on
+            mock_pulumi.ResourceOptions.side_effect = lambda **kwargs: MagicMock(depends_on=kwargs.get('depends_on', []))  # Handle depends_on explicitly
             mock_pulumi.Output.all = MagicMock()
             mock_pulumi.Output.all.return_value.apply = MagicMock(return_value=mock_resource)
             mock_pulumi.get_stack.return_value = 'test-stack'
             mock_pulumi.AssetArchive = MagicMock()
             mock_pulumi.StringAsset = MagicMock()
-            
+
             # Setup AWS resource mocks
             mock_aws.ec2.Vpc.return_value = mock_resource
             mock_aws.ec2.InternetGateway.return_value = mock_resource
@@ -160,26 +158,25 @@ class TestTapStackInstantiation(unittest.TestCase):
             mock_aws.ssm.Parameter.return_value = mock_resource
             mock_aws.iam.Role.return_value = mock_resource
             mock_aws.ec2.get_ami.return_value = mock_resource
-            
+
             # Mock all other AWS resources that might be called
-            for service_name in ['rds', 'elasticache', 's3', 'cloudfront', 'route53', 'lb', 
-                               'autoscaling', 'cognito', 'dynamodb', 'lambda_', 'cloudwatch', 
-                               'ssm', 'iam']:
+            for service_name in ['rds', 'elasticache', 's3', 'cloudfront', 'route53', 'lb',
+                                 'autoscaling', 'cognito', 'dynamodb', 'lambda_', 'cloudwatch',
+                                 'ssm', 'iam']:
                 service = getattr(mock_aws, service_name)
                 for attr in dir(service):
                     if not attr.startswith('_') and callable(getattr(service, attr)):
-                        setattr(getattr(service, attr), 'return_value', mock_resource)
+                        setattr(service, attr, MagicMock(return_value=mock_resource))
 
             # Import and create TapStack
             from lib.tap_stack import TapStack, TapStackArgs
-            
             args = TapStackArgs()
             stack = TapStack("test-stack", args)
-            
+
             # Verify the stack was created with expected attributes
             self.assertEqual(stack.environment_suffix, 'dev')
             self.assertEqual(stack.region, 'us-east-1')
-            
+
             # Verify key resources were called
             mock_aws.ec2.Vpc.assert_called()
             mock_aws.rds.Cluster.assert_called()
@@ -194,34 +191,35 @@ class TestTapStackInstantiation(unittest.TestCase):
 
         with patch('lib.tap_stack.pulumi') as mock_pulumi, \
              patch('lib.tap_stack.aws') as mock_aws:
-            
-            # Setup mocks
+
+            # Setup mocks with enhanced ResourceOptions
             mock_pulumi.ComponentResource = MagicMock()
             mock_pulumi.ResourceOptions = MagicMock()
+            mock_pulumi.ResourceOptions.side_effect = lambda **kwargs: MagicMock(depends_on=kwargs.get('depends_on', []))
             mock_pulumi.Output.all = MagicMock()
             mock_pulumi.Output.all.return_value.apply = MagicMock(return_value=mock_resource)
             mock_pulumi.get_stack.return_value = 'prod-stack'
             mock_pulumi.AssetArchive = MagicMock()
             mock_pulumi.StringAsset = MagicMock()
-            
-            # Mock AWS services with lambda to avoid AttributeError
+
+            # Mock AWS services
             def mock_aws_service(service_name):
                 service = getattr(mock_aws, service_name)
                 for attr_name in ['Vpc', 'Subnet', 'InternetGateway', 'NatGateway', 'SecurityGroup',
-                                 'Cluster', 'ClusterInstance', 'Bucket', 'Distribution', 'LoadBalancer',
-                                 'Group', 'UserPool', 'Table', 'Function', 'LogGroup', 'Parameter', 'Role']:
+                                  'Cluster', 'ClusterInstance', 'Bucket', 'Distribution', 'LoadBalancer',
+                                  'Group', 'UserPool', 'Table', 'Function', 'LogGroup', 'Parameter', 'Role']:
                     if hasattr(service, attr_name):
                         getattr(service, attr_name).return_value = mock_resource
-                        
+
             for service in ['ec2', 'rds', 'elasticache', 's3', 'cloudfront', 'route53',
-                          'lb', 'autoscaling', 'cognito', 'dynamodb', 'lambda_', 'cloudwatch',
-                          'ssm', 'iam']:
+                            'lb', 'autoscaling', 'cognito', 'dynamodb', 'lambda_', 'cloudwatch',
+                            'ssm', 'iam']:
                 mock_aws_service(service)
-            
+
             mock_aws.ec2.get_ami.return_value = mock_resource
 
             from lib.tap_stack import TapStack, TapStackArgs
-            
+
             # Create custom args
             args = TapStackArgs(
                 environment_suffix='prod',
@@ -230,9 +228,9 @@ class TestTapStackInstantiation(unittest.TestCase):
                 region='us-west-2',
                 tags={'Project': 'TAP'}
             )
-            
+
             stack = TapStack("prod-stack", args)
-            
+
             # Verify custom configuration
             self.assertEqual(stack.environment_suffix, 'prod')
             self.assertEqual(stack.region, 'us-west-2')
@@ -242,27 +240,28 @@ class TestTapStackInstantiation(unittest.TestCase):
         """Test that TapStack creates all required AWS resource types."""
         mock_resource = MagicMock()
         mock_resource.id = 'test-id'
-        
+
         with patch('lib.tap_stack.pulumi') as mock_pulumi, \
              patch('lib.tap_stack.aws') as mock_aws:
-            
-            # Setup Pulumi mocks
+
+            # Setup Pulumi mocks with enhanced ResourceOptions
             mock_pulumi.ComponentResource = MagicMock()
-            mock_pulumi.ResourceOptions = MagicMock() 
+            mock_pulumi.ResourceOptions = MagicMock()
+            mock_pulumi.ResourceOptions.side_effect = lambda **kwargs: MagicMock(depends_on=kwargs.get('depends_on', []))
             mock_pulumi.Output.all = MagicMock()
             mock_pulumi.Output.all.return_value.apply = MagicMock(return_value='test-policy')
             mock_pulumi.get_stack.return_value = 'test-stack'
             mock_pulumi.AssetArchive = MagicMock()
             mock_pulumi.StringAsset = MagicMock()
-            
+
             # Mock all AWS services and their resource types
             aws_resources = {
-                'ec2': ['Vpc', 'InternetGateway', 'Subnet', 'NatGateway', 'Eip', 'RouteTable', 
-                       'RouteTableAssociation', 'SecurityGroup', 'LaunchTemplate'],
+                'ec2': ['Vpc', 'InternetGateway', 'Subnet', 'NatGateway', 'Eip', 'RouteTable',
+                        'RouteTableAssociation', 'SecurityGroup', 'LaunchTemplate'],
                 'rds': ['SubnetGroup', 'ClusterParameterGroup', 'Cluster', 'ClusterInstance'],
-                'elasticache': ['SubnetGroup', 'ParameterGroup', 'ReplicationGroup'], 
+                'elasticache': ['SubnetGroup', 'ParameterGroup', 'ReplicationGroup'],
                 's3': ['Bucket', 'BucketVersioning', 'BucketServerSideEncryptionConfiguration',
-                      'BucketLifecycleConfiguration', 'BucketPublicAccessBlock', 'BucketPolicy'],
+                       'BucketLifecycleConfiguration', 'BucketPublicAccessBlock', 'BucketPolicy'],
                 'cloudfront': ['OriginAccessIdentity', 'Distribution'],
                 'route53': ['Zone'],
                 'lb': ['LoadBalancer', 'TargetGroup', 'Listener', 'ListenerRule'],
@@ -274,24 +273,24 @@ class TestTapStackInstantiation(unittest.TestCase):
                 'ssm': ['Parameter'],
                 'iam': ['Role', 'Policy', 'RolePolicyAttachment', 'InstanceProfile']
             }
-            
+
             # Set up all AWS resource mocks
             for service_name, resources in aws_resources.items():
                 service = getattr(mock_aws, service_name)
                 for resource_name in resources:
                     setattr(service, resource_name, MagicMock(return_value=mock_resource))
-            
+
             # Special case for get_ami function
             mock_aws.ec2.get_ami = MagicMock(return_value=mock_resource)
-            
+
             from lib.tap_stack import TapStack, TapStackArgs
-            
+
             args = TapStackArgs()
             stack = TapStack("comprehensive-test-stack", args)
-            
+
             # Verify that major AWS service categories were called
             mock_aws.ec2.Vpc.assert_called()
-            mock_aws.rds.Cluster.assert_called() 
+            mock_aws.rds.Cluster.assert_called()
             mock_aws.elasticache.ReplicationGroup.assert_called()
             mock_aws.s3.Bucket.assert_called()
             mock_aws.cloudfront.Distribution.assert_called()
@@ -303,7 +302,6 @@ class TestTapStackInstantiation(unittest.TestCase):
             mock_aws.cloudwatch.LogGroup.assert_called()
             mock_aws.ssm.Parameter.assert_called()
             mock_aws.iam.Role.assert_called()
-
 
 # Static code analysis tests - verify source code contains required resources
 class TestTapStackRequirements(unittest.TestCase):
@@ -344,7 +342,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('ec2.Vpc(', source_code, "Source should create VPC")
         self.assertIn('ec2.InternetGateway(', source_code, "Source should create Internet Gateway")
         self.assertIn('ec2.NatGateway(', source_code, "Source should create NAT Gateway")
@@ -356,7 +353,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         sg_count = source_code.count('ec2.SecurityGroup(')
         self.assertGreaterEqual(sg_count, 4, "Should have at least 4 security groups")
 
@@ -366,7 +362,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('rds.Cluster(', source_code, "Source should create Aurora cluster")
         self.assertIn('rds.ClusterInstance(', source_code, "Source should create Aurora instances")
 
@@ -376,7 +371,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         redis_count = source_code.count('elasticache.ReplicationGroup(')
         self.assertGreaterEqual(redis_count, 2, "Should have at least 2 Redis clusters")
 
@@ -386,7 +380,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('s3.Bucket(', source_code, "Source should create S3 bucket")
         self.assertIn('s3.BucketVersioning(', source_code, "Source should enable versioning")
         self.assertIn('s3.BucketServerSideEncryptionConfiguration(', source_code, "Source should enable encryption")
@@ -397,7 +390,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('cloudfront.Distribution(', source_code, "Source should create CloudFront distribution")
         self.assertIn('cloudfront.OriginAccessIdentity(', source_code, "Source should create OAI")
 
@@ -407,7 +399,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('lb.LoadBalancer(', source_code, "Source should create ALB")
         self.assertIn('lb.TargetGroup(', source_code, "Source should create target group")
         self.assertIn('lb.Listener(', source_code, "Source should create listener")
@@ -418,7 +409,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('autoscaling.Group(', source_code, "Source should create ASG")
         self.assertIn('ec2.LaunchTemplate(', source_code, "Source should create launch template")
 
@@ -428,7 +418,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('cognito.UserPool(', source_code, "Source should create user pool")
         self.assertIn('cognito.UserPoolClient(', source_code, "Source should create user pool client")
         self.assertIn('cognito.IdentityPool(', source_code, "Source should create identity pool")
@@ -439,7 +428,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('dynamodb.Table(', source_code, "Source should create DynamoDB table")
 
     def test_source_code_creates_lambda_function(self):
@@ -448,7 +436,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('lambda_.Function(', source_code, "Source should create Lambda function")
         self.assertIn('lambda_.Permission(', source_code, "Source should create Lambda permission")
 
@@ -458,7 +445,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         log_group_count = source_code.count('cloudwatch.LogGroup(')
         self.assertGreaterEqual(log_group_count, 3, "Should have at least 3 log groups")
         self.assertIn('cloudwatch.MetricAlarm(', source_code, "Source should create metric alarms")
@@ -469,7 +455,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('cloudwatch.EventBus(', source_code, "Source should create event bus")
         self.assertIn('cloudwatch.EventRule(', source_code, "Source should create event rule")
         self.assertIn('cloudwatch.EventTarget(', source_code, "Source should create event target")
@@ -480,7 +465,6 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         ssm_count = source_code.count('ssm.Parameter(')
         self.assertGreaterEqual(ssm_count, 4, "Should have at least 4 SSM parameters")
 
@@ -490,9 +474,7 @@ class TestTapStackRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('register_outputs', source_code, "Stack should register outputs")
-
 
 class TestMultiTenantRequirements(unittest.TestCase):
     """Test that multi-tenant architecture requirements are addressed in code."""
@@ -503,7 +485,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('tenant', source_code.lower(), "Source should mention 'tenant'")
         self.assertIn('isolation', source_code.lower(), "Source should mention 'isolation'")
 
@@ -513,17 +494,15 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         required_services = [
             'vpc', 'subnet', 'aurora', 'rds', 'elasticache', 'redis',
             's3', 'cloudfront', 'route53', 'loadbalancer',
             'autoscaling', 'cognito', 'dynamodb', 'lambda',
             'cloudwatch', 'ssm', 'eventbridge'
         ]
-        
         for service in required_services:
             self.assertIn(service.lower(), source_code.lower(),
-                         f"Source should include {service} service")
+                          f"Source should include {service} service")
 
     def test_source_code_includes_security_groups(self):
         """Test that source code defines security groups."""
@@ -531,7 +510,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('SecurityGroup', source_code, "Source should define Security Groups")
         self.assertIn('ingress', source_code.lower(), "Source should define ingress rules")
         self.assertIn('egress', source_code.lower(), "Source should define egress rules")
@@ -542,7 +520,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('iam.Role', source_code, "Source should define IAM roles")
         self.assertIn('iam.Policy', source_code, "Source should define IAM policies")
         self.assertIn('assume_role_policy', source_code.lower(), "Source should include assume role policies")
@@ -553,7 +530,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('listener', source_code.lower(), "Source should include ALB listeners")
         self.assertIn('host', source_code.lower(), "Source should mention host-based routing")
 
@@ -563,7 +539,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('provision', source_code.lower(), "Source should mention provisioning")
         self.assertIn('tenant', source_code.lower(), "Source should mention tenants")
 
@@ -573,7 +548,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('premium', source_code.lower(), "Source should mention premium tier")
         self.assertIn('standard', source_code.lower(), "Source should mention standard tier")
         self.assertIn('elasticache', source_code.lower(), "Source should include ElastiCache")
@@ -584,7 +558,6 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('cloudwatch', source_code.lower(), "Source should include CloudWatch")
         self.assertIn('log', source_code.lower(), "Source should mention logging")
         self.assertIn('alarm', source_code.lower(), "Source should mention alarms")
@@ -595,11 +568,9 @@ class TestMultiTenantRequirements(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             lines = f.readlines()
-        
         code_lines = [line for line in lines if line.strip() and not line.strip().startswith('#')]
         self.assertGreater(len(code_lines), 500,
-                          f"Implementation should be comprehensive (>500 lines), found {len(code_lines)}")
-
+                           f"Implementation should be comprehensive (>500 lines), found {len(code_lines)}")
 
 class TestNetworkingArchitecture(unittest.TestCase):
     """Test that networking architecture meets requirements."""
@@ -616,7 +587,6 @@ class TestNetworkingArchitecture(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('NatGateway', source_code, "Source should include NAT Gateways")
         nat_count = source_code.count('NatGateway(')
         self.assertGreaterEqual(nat_count, 2, "Should have at least 2 NAT Gateways for HA")
@@ -627,10 +597,8 @@ class TestNetworkingArchitecture(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('RouteTable', source_code, "Source should include Route Tables")
         self.assertIn('RouteTableAssociation', source_code, "Source should associate route tables with subnets")
-
 
 class TestInstanceTypeConfiguration(unittest.TestCase):
     """Test that instance configuration meets requirements."""
@@ -652,7 +620,6 @@ class TestInstanceTypeConfiguration(unittest.TestCase):
         from lib.tap_stack import TapStackArgs
         args = TapStackArgs(instance_type='m5.2xlarge')
         self.assertEqual(args.instance_type, 'm5.2xlarge')
-
 
 class TestRegionConfiguration(unittest.TestCase):
     """Test that region configuration meets requirements."""
@@ -681,7 +648,6 @@ class TestRegionConfiguration(unittest.TestCase):
         args = TapStackArgs(region='ap-southeast-1')
         self.assertEqual(args.region, 'ap-southeast-1')
 
-
 class TestTapStackOutputs(unittest.TestCase):
     """Test that stack registers outputs."""
 
@@ -691,7 +657,6 @@ class TestTapStackOutputs(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         self.assertIn('register_outputs', source_code, "Stack should register outputs")
 
     def test_source_code_has_critical_outputs(self):
@@ -700,15 +665,12 @@ class TestTapStackOutputs(unittest.TestCase):
         file_path = os.path.join(os.path.dirname(__file__), '../../lib/tap_stack.py')
         with open(file_path, 'r') as f:
             source_code = f.read()
-        
         critical_outputs = [
             'vpc_id', 'alb', 'aurora', 'redis', 's3', 'cloudfront', 'cognito'
         ]
-        
         for output in critical_outputs:
             self.assertIn(output, source_code.lower(),
-                         f"Stack should export {output} related output")
-
+                          f"Stack should export {output} related output")
 
 class TestTagsConfiguration(unittest.TestCase):
     """Test tags configuration and propagation."""
@@ -731,7 +693,6 @@ class TestTagsConfiguration(unittest.TestCase):
         from lib.tap_stack import TapStackArgs
         args = TapStackArgs(tags={'Environment': 'Test'})
         self.assertEqual(args.tags, {'Environment': 'Test'})
-
 
 if __name__ == "__main__":
     unittest.main()
