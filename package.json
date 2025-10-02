@@ -185,11 +185,12 @@
     "@types/aws-lambda": "^8.10.152",
     "archiver": "^7.0.1",
     "aws-cdk-lib": "2.204.0",
+    "cdk-ec2-key-pair": "^4.0.1",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2",
     "@inquirer/prompts": "^7.8.0",
-    "fs-extra": "^11.3.0"
+    "fs-extra": "^11.3.0",
     "source-map-support": "^0.5.21",
     "uuid": "^11.1.0"
   }

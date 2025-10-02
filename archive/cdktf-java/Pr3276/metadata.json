@@ -1,0 +1,29 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348962",
+  "team": "6",
+  "startedAt": "2025-09-28T16:33:03.964Z",
+  "task_sub_category": "IaC-Multi-Environment-Management",
+  "use_case_category": "Multi-Environment Consistency and Replication",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "SNS",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "CodeDeploy",
+    "S3",
+    "EventBridge"
+  ],
+  "training_quality": 2,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

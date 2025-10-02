@@ -1,5 +1,6 @@
 package app;
 
+import app.stacks.MainStack;
 import com.hashicorp.cdktf.S3Backend;
 import com.hashicorp.cdktf.S3BackendConfig;
 
@@ -18,7 +19,7 @@ public final class Main {
     public static void main(final String[] args) {
         final App app = new App();
 
-        MainStack stack = new MainStack(app, "cdktf-java");
+        MainStack stack = new MainStack(app, "serverless-infrastructure");
 
         /*
          * Configures S3 backend for remote Terraform state storage.
@@ -29,7 +30,6 @@ public final class Main {
                 .region(System.getenv("TERRAFORM_STATE_BUCKET_REGION"))
                 .encrypt(true)
                 .build());
-
         app.synth();
     }
 }
