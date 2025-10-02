@@ -188,9 +188,10 @@ Resources:
   ### Secrets Manager ###
   DBSecret:
     Type: AWS::SecretsManager::Secret
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub ${EnvironmentName}-db-secret-credentials-
+      Name: !Sub ${EnvironmentName}-db-secrets-credential
       Description: RDS Master user and password
       GenerateSecretString:
         SecretStringTemplate: '{"username":"admin"}'
