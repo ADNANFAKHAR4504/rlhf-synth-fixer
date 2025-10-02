@@ -1,11 +1,10 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeNatGatewaysCommand } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
+import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, GetPublicAccessBlockCommand, S3Client } from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -53,18 +52,18 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       }));
 
       expect(response.Subnets).toHaveLength(4);
-      
+
       // Verify we have subnets in 2 different AZs
       const availabilityZones = new Set(response.Subnets!.map(subnet => subnet.AvailabilityZone));
       expect(availabilityZones.size).toBe(2);
 
       // Verify CIDR blocks
-      const publicSubnets = response.Subnets!.filter(subnet => 
-        subnet.SubnetId === outputs['PublicSubnet1Id'] || 
+      const publicSubnets = response.Subnets!.filter(subnet =>
+        subnet.SubnetId === outputs['PublicSubnet1Id'] ||
         subnet.SubnetId === outputs['PublicSubnet2Id']
       );
-      const privateSubnets = response.Subnets!.filter(subnet => 
-        subnet.SubnetId === outputs['PrivateSubnet1Id'] || 
+      const privateSubnets = response.Subnets!.filter(subnet =>
+        subnet.SubnetId === outputs['PrivateSubnet1Id'] ||
         subnet.SubnetId === outputs['PrivateSubnet2Id']
       );
 
@@ -82,7 +81,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
   describe('Security Groups', () => {
     test('security groups should have correct configurations', async () => {
       const vpcId = outputs['VPCId'];
-      
+
       const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
         Filters: [
           {
@@ -93,16 +92,16 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       }));
 
       // Find our specific security groups
-      const albSG = response.SecurityGroups!.find(sg => 
-        sg.GroupName?.includes('ALBSecurityGroup') || 
+      const albSG = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('ALBSecurityGroup') ||
         sg.Description?.includes('Application Load Balancer')
       );
-      const webServerSG = response.SecurityGroups!.find(sg => 
-        sg.GroupName?.includes('WebServerSecurityGroup') || 
+      const webServerSG = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('WebServerSecurityGroup') ||
         sg.Description?.includes('EC2 instances')
       );
-      const databaseSG = response.SecurityGroups!.find(sg => 
-        sg.GroupName?.includes('DatabaseSecurityGroup') || 
+      const databaseSG = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('DatabaseSecurityGroup') ||
         sg.Description?.includes('RDS database')
       );
 
@@ -139,7 +138,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
 
     test('S3 bucket should have public access blocked', async () => {
       const bucketName = outputs['S3BucketName'];
-      
+
       const response = await s3Client.send(new GetPublicAccessBlockCommand({
         Bucket: bucketName
       }));
@@ -160,7 +159,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
 
       // Extract DB instance identifier from endpoint
       const dbInstanceId = dbEndpoint.split('.')[0];
-      
+
       const response = await rdsClient.send(new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId
       }));
@@ -207,9 +206,9 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       expect(albDns).toBeDefined();
 
       const response = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-      
-      const alb = response.LoadBalancers!.find((lb: any) => 
-        lb.DNSName === albDns || 
+
+      const alb = response.LoadBalancers!.find((lb: any) =>
+        lb.DNSName === albDns ||
         lb.LoadBalancerName?.includes('ecommerce-alb')
       );
 
@@ -217,7 +216,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       expect(alb!.Scheme).toBe('internet-facing');
       expect(alb!.Type).toBe('application');
       expect(alb!.State!.Code).toBe('active');
-      
+
       // Verify ALB is in public subnets
       const albSubnets = alb!.AvailabilityZones!.map((az: any) => az.SubnetId);
       expect(albSubnets).toContain(outputs['PublicSubnet1Id']);
@@ -239,7 +238,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       expect(asg.MaxSize).toBeGreaterThanOrEqual(2);
       expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
       expect(asg.HealthCheckType).toBe('ELB');
-      
+
       // Verify ASG is in public subnets for cost optimization
       expect(asg.VPCZoneIdentifier).toContain(outputs['PublicSubnet1Id']);
       expect(asg.VPCZoneIdentifier).toContain(outputs['PublicSubnet2Id']);
@@ -308,7 +307,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
     test('database should be accessible only from application instances', async () => {
       // This test verifies the network isolation by checking security group configurations
       const vpcId = outputs['VPCId'];
-      
+
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
@@ -318,7 +317,7 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
 
       expect(sgResponse.SecurityGroups).toHaveLength(1);
       const dbSG = sgResponse.SecurityGroups![0];
-      
+
       // Database security group should only have one ingress rule (from web servers)
       expect(dbSG.IpPermissions).toHaveLength(1);
       const mysqlRule = dbSG.IpPermissions![0];
