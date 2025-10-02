@@ -10,5 +10,19 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "S3 Bucket, KMS, CloudTrail, CloudWatch, IAM, EventBridge"
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
 }
