@@ -247,7 +247,35 @@ minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
 
 **Impact**: Enhanced security with proper access controls and modern encryption standards.
 
-### 10. **Testing Infrastructure Support**
+### 10. **Complete Resource Cleanup Support**
+
+**Issue**: Resources were configured with retention policies that prevent complete stack deletion.
+
+**Fix Applied**:
+```javascript
+// Before: Resources retained on stack deletion
+const encryptionKey = new kms.Key(this, `NewsEncryptionKey${environmentSuffix}`, {
+  // No removal policy - defaults to RETAIN
+});
+
+const websiteBucket = new s3.Bucket(this, `NewsWebsiteBucket${environmentSuffix}`, {
+  removalPolicy: RemovalPolicy.RETAIN, // Prevents deletion
+});
+
+// After: Complete cleanup on stack deletion
+const encryptionKey = new kms.Key(this, `NewsEncryptionKey${environmentSuffix}`, {
+  removalPolicy: RemovalPolicy.DESTROY, // Allows deletion
+});
+
+const websiteBucket = new s3.Bucket(this, `NewsWebsiteBucket${environmentSuffix}`, {
+  removalPolicy: RemovalPolicy.DESTROY, // Allows deletion
+  autoDeleteObjects: true, // Automatically deletes all objects
+});
+```
+
+**Impact**: Enables complete infrastructure cleanup without manual intervention.
+
+### 11. **Testing Infrastructure Support**
 
 **Issue**: No support for testing and validation.
 
@@ -256,7 +284,6 @@ minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
 // Store references for testing
 this.websiteBucket = websiteBucket;
 this.distribution = distribution;
-this.hostedZone = hostedZone;
 this.encryptionKey = encryptionKey;
 this.dashboard = dashboard;
 this.environmentSuffix = environmentSuffix;
@@ -268,12 +295,13 @@ this.environmentSuffix = environmentSuffix;
 
 The transformation from MODEL_RESPONSE to IDEAL_RESPONSE involved:
 
-1. **10 major infrastructure improvements**
+1. **11 major infrastructure improvements**
 2. **Enhanced security posture** with modern AWS practices
 3. **Cost optimization** through lifecycle management
 4. **Multi-environment support** for scalable deployments
 5. **Comprehensive monitoring** with proactive alerting
 6. **Production-ready configuration** with proper error handling
-7. **Testing support** for quality assurance
+7. **Complete resource cleanup** for easy stack deletion
+8. **Testing support** for quality assurance
 
-These fixes ensure the infrastructure meets enterprise-grade requirements for security, scalability, cost-effectiveness, and maintainability while serving 10,000+ daily readers globally with minimal latency.
+These fixes ensure the infrastructure meets enterprise-grade requirements for security, scalability, cost-effectiveness, and maintainability while serving 10,000+ daily readers globally with minimal latency. The complete cleanup capability ensures no resources are left behind when the stack is deleted.

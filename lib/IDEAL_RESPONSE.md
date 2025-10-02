@@ -53,6 +53,7 @@ class TapStack extends cdk.Stack {
       enableKeyRotation: true,
       description: `KMS key for news website content encryption - ${environmentSuffix}`,
       alias: `alias/news-website-${environmentSuffix}`,
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     // Create an S3 bucket to store the news articles
@@ -61,7 +62,8 @@ class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: encryptionKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       versioned: true,
       lifecycleRules: [
         {
