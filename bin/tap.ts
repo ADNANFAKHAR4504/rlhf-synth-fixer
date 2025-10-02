@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /* eslint-disable prettier/prettier */
+
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';

@@ -1,26 +1,28 @@
+/* eslint-disable prettier/prettier */
+
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kinesis from 'aws-cdk-lib/aws-kinesis';
-import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
-import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as athena from 'aws-cdk-lib/aws-athena';
 import * as batch from 'aws-cdk-lib/aws-batch';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 import * as glue from 'aws-cdk-lib/aws-glue';
-import * as athena from 'aws-cdk-lib/aws-athena';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambda_event_sources from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 import * as crypto from 'crypto';
 
@@ -51,13 +53,13 @@ export class TapStack extends cdk.Stack {
 
     const env = environmentSuffix;
     const region = 'us-east-1';
-    
+
     // Generate a unique 8-character hash for resource naming
     const uniqueId = crypto.createHash('md5')
       .update(`${this.account}-${env}-${Date.now()}`)
       .digest('hex')
       .substring(0, 8);
-    
+
     // FEATURE FLAG: Enable SageMaker resources (default: false)
     const enableSagemaker = this.node.tryGetContext('enableSagemaker') === 'true' || false;
 
@@ -185,7 +187,7 @@ export class TapStack extends cdk.Stack {
     // ============================================
     // SECTION 4: SAGEMAKER INFRASTRUCTURE (OPTIONAL)
     // ============================================
-    
+
     let endpoint: sagemaker.CfnEndpoint | undefined;
     let sagemakerEndpoint: ec2.IInterfaceVpcEndpoint | undefined;
 
