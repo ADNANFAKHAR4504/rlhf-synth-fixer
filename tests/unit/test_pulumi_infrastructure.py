@@ -13,17 +13,17 @@ class TestPulumiInfrastructure(unittest.TestCase):
     def test_infrastructure_file_exists(self):
         """Test that infrastructure files exist"""
         # Check main infrastructure file
-        self.assertTrue(os.path.exists("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py"))
-        self.assertTrue(os.path.exists("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/__main__.py"))
+        self.assertTrue(os.path.exists("/Users/django/code/iac-test-automations/__main__.py"))
+        self.assertTrue(os.path.exists("/Users/django/code/iac-test-automations/lib/__main__.py"))
 
     def test_lambda_handler_exists(self):
         """Test that Lambda handler file exists"""
-        lambda_path = "/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda/index.py"
+        lambda_path = "/Users/django/code/iac-test-automations/lib/lambda/index.py"
         self.assertTrue(os.path.exists(lambda_path))
 
     def test_infrastructure_uses_environment_suffix(self):
         """Test that infrastructure code uses environment suffix"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check environment suffix is used
             self.assertIn('environment_suffix', content)
@@ -32,7 +32,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_kms_key_policy_configured(self):
         """Test KMS key policy is properly configured"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check KMS key policy
             self.assertIn('key_policy', content)
@@ -41,14 +41,14 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_s3_bucket_force_destroy(self):
         """Test S3 bucket has force_destroy enabled"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check force_destroy is enabled
             self.assertIn('force_destroy=True', content)
 
     def test_s3_lifecycle_configuration(self):
         """Test S3 lifecycle policy configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check lifecycle rules
             self.assertIn('lifecycle_rules', content)
@@ -58,7 +58,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_lambda_function_configuration(self):
         """Test Lambda function configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check Lambda configuration
             self.assertIn('lambda_.Function', content)
@@ -69,7 +69,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_cloudwatch_log_groups(self):
         """Test CloudWatch Log Groups configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check log groups
             self.assertIn('LogGroup', content)
@@ -78,7 +78,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_iam_roles_created(self):
         """Test IAM roles are created"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check IAM roles
             self.assertIn('iam.Role', content)
@@ -88,7 +88,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_eventbridge_scheduler(self):
         """Test EventBridge Scheduler configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check scheduler
             self.assertIn('scheduler.Schedule', content)
@@ -97,7 +97,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_cloudwatch_metric_filter(self):
         """Test CloudWatch metric filter configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check metric filter
             self.assertIn('LogMetricFilter', content)
@@ -106,7 +106,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_cloudwatch_alarm(self):
         """Test CloudWatch alarm configuration"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check alarm
             self.assertIn('MetricAlarm', content)
@@ -115,7 +115,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_no_retain_policies(self):
         """Test no retain deletion policies"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check no retain policies
             self.assertNotIn('retain', content.lower())
@@ -123,7 +123,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_tags_applied(self):
         """Test tags are properly applied"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check tags
             self.assertIn('tags=', content)
@@ -133,7 +133,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_outputs_exported(self):
         """Test infrastructure outputs are exported"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check exports
             self.assertIn('export("logGroupName"', content)
@@ -143,7 +143,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_lambda_handler_structure(self):
         """Test Lambda handler has proper structure"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda/index.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/lib/lambda/index.py", 'r') as f:
             content = f.read()
             # Check handler structure
             self.assertIn('def handler(event, context):', content)
@@ -154,7 +154,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_lambda_error_handling(self):
         """Test Lambda has proper error handling"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda/index.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/lib/lambda/index.py", 'r') as f:
             content = f.read()
             # Check error handling
             self.assertIn('try:', content)
@@ -164,14 +164,14 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_kms_key_rotation_enabled(self):
         """Test KMS key rotation is enabled"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check key rotation
             self.assertIn('enable_key_rotation=True', content)
 
     def test_bucket_encryption_configured(self):
         """Test S3 bucket encryption is configured"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check encryption
             self.assertIn('server_side_encryption_configuration', content)
@@ -180,7 +180,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_dependencies_configured(self):
         """Test resource dependencies are configured"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check dependencies
             self.assertIn('depends_on', content)
@@ -188,7 +188,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_all_required_imports(self):
         """Test all required imports are present"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check imports
             self.assertIn('import pulumi', content)
@@ -199,7 +199,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_boto3_client_usage(self):
         """Test boto3 client is used for account ID"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/__main__.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/__main__.py", 'r') as f:
             content = f.read()
             # Check boto3 usage
             self.assertIn('boto3.client', content)
@@ -208,7 +208,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_lambda_timeout_configuration(self):
         """Test Lambda timeout is properly configured"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda/index.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/lib/lambda/index.py", 'r') as f:
             content = f.read()
             # Check timeout handling
             self.assertIn('max_attempts', content)
@@ -219,7 +219,7 @@ class TestPulumiInfrastructure(unittest.TestCase):
 
     def test_lambda_time_range_calculation(self):
         """Test Lambda time range calculation"""
-        with open("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda/index.py", 'r') as f:
+        with open("/Users/django/code/iac-test-automations/lib/lambda/index.py", 'r') as f:
             content = f.read()
             # Check time calculations
             self.assertIn('datetime', content)
