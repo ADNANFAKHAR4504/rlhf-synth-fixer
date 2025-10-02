@@ -1,4 +1,4 @@
-// test/terraform.int.test.full.ts
+// test/terraform.int.test.ts
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import dns from 'dns/promises';
@@ -51,9 +51,6 @@ const parseJsonArray = (str?: string) => {
 const publicSubnets = parseJsonArray(public_subnet_ids);
 const privateSubnets = parseJsonArray(private_subnet_ids);
 
-// -------------------------------
-// Integration Test Suite
-// -------------------------------
 describe('TAP Stack Full Live Integration Tests', () => {
 
   // -------------------------------
@@ -71,13 +68,13 @@ describe('TAP Stack Full Live Integration Tests', () => {
 
     it('ALB target group exists', async () => {
       const tg = await elbv2.describeTargetGroups({ TargetGroupArns: [target_group_arn] }).promise();
-      expect(tg.TargetGroups.length).toBe(1);
+      expect((tg.TargetGroups ?? []).length).toBe(1);
     });
 
     it('ALB target group health is healthy', async () => {
       const health = await elbv2.describeTargetHealth({ TargetGroupArn: target_group_arn }).promise();
-      health.TargetHealthDescriptions.forEach(desc => {
-        expect(['healthy','initial']).toContain(desc.TargetHealth.State);
+      (health.TargetHealthDescriptions ?? []).forEach(desc => {
+        expect(['healthy','initial']).toContain(desc.TargetHealth?.State);
       });
     });
   });
@@ -88,8 +85,8 @@ describe('TAP Stack Full Live Integration Tests', () => {
   describe('RDS Database', () => {
     it('RDS instance exists', async () => {
       const db = await rds.describeDBInstances({ DBInstanceIdentifier: rds_instance_id }).promise();
-      expect(db.DBInstances.length).toBe(1);
-      expect(db.DBInstances[0].Endpoint.Port).toBe(Number(rds_port));
+      expect((db.DBInstances ?? []).length).toBe(1);
+      expect(db.DBInstances?.[0].Endpoint?.Port).toBe(Number(rds_port));
     });
 
     it('RDS endpoint valid', () => {
@@ -98,7 +95,7 @@ describe('TAP Stack Full Live Integration Tests', () => {
 
     it('Secrets Manager secret exists', async () => {
       const secret = await secretsManager.describeSecret({ SecretId: secrets_manager_secret_name }).promise();
-      expect(secret.Name).toBe(secrets_manager_secret_name);
+      expect(secret?.Name).toBe(secrets_manager_secret_name);
     });
   });
 
@@ -108,30 +105,30 @@ describe('TAP Stack Full Live Integration Tests', () => {
   describe('Networking', () => {
     it('VPC exists and CIDR correct', async () => {
       const vpc = await ec2.describeVpcs({ VpcIds: [vpc_id] }).promise();
-      expect(vpc.Vpcs[0].CidrBlock).toBe(vpc_cidr);
+      expect(vpc.Vpcs?.[0].CidrBlock).toBe(vpc_cidr);
     });
 
     it('Public and private subnets exist', async () => {
       const pub = await ec2.describeSubnets({ SubnetIds: publicSubnets }).promise();
       const priv = await ec2.describeSubnets({ SubnetIds: privateSubnets }).promise();
-      expect(pub.Subnets.length).toBe(publicSubnets.length);
-      expect(priv.Subnets.length).toBe(privateSubnets.length);
+      expect((pub.Subnets ?? []).length).toBe(publicSubnets.length);
+      expect((priv.Subnets ?? []).length).toBe(privateSubnets.length);
     });
 
     it('Internet Gateway exists', async () => {
       const igw = await ec2.describeInternetGateways({ InternetGatewayIds: [internet_gateway_id] }).promise();
-      expect(igw.InternetGateways.length).toBe(1);
+      expect((igw.InternetGateways ?? []).length).toBe(1);
     });
 
     it('NAT Gateways exist', async () => {
       const natIds = parseJsonArray(nat_gateway_ids);
       const nat = await ec2.describeNatGateways({ NatGatewayIds: natIds }).promise();
-      expect(nat.NatGateways.length).toBe(natIds.length);
+      expect((nat.NatGateways ?? []).length).toBe(natIds.length);
     });
 
     it('VPC Flow Log exists', async () => {
       const flows = await ec2.describeFlowLogs({ FlowLogIds: [flow_log_id] }).promise();
-      expect(flows.FlowLogs.length).toBe(1);
+      expect((flows.FlowLogs ?? []).length).toBe(1);
     });
   });
 
@@ -141,17 +138,17 @@ describe('TAP Stack Full Live Integration Tests', () => {
   describe('IAM Roles & Instance Profiles', () => {
     it('EC2 role exists', async () => {
       const role = await iam.getRole({ RoleName: ec2_iam_role_arn.split('/').pop()! }).promise();
-      expect(role.Role.Arn).toBe(ec2_iam_role_arn);
+      expect(role.Role?.Arn).toBe(ec2_iam_role_arn);
     });
 
     it('EC2 instance profile exists', async () => {
       const profile = await iam.getInstanceProfile({ InstanceProfileName: ec2_instance_profile_arn.split('/').pop()! }).promise();
-      expect(profile.InstanceProfile.Arn).toBe(ec2_instance_profile_arn);
+      expect(profile.InstanceProfile?.Arn).toBe(ec2_instance_profile_arn);
     });
 
     it('CloudTrail IAM role exists', async () => {
       const role = await iam.getRole({ RoleName: cloudtrail_iam_role_arn.split('/').pop()! }).promise();
-      expect(role.Role.Arn).toBe(cloudtrail_iam_role_arn);
+      expect(role.Role?.Arn).toBe(cloudtrail_iam_role_arn);
     });
   });
 
@@ -161,13 +158,13 @@ describe('TAP Stack Full Live Integration Tests', () => {
   describe('EC2 & AutoScaling', () => {
     it('Launch template exists', async () => {
       const lt = await ec2.describeLaunchTemplates({ LaunchTemplateIds: [launch_template_id] }).promise();
-      expect(lt.LaunchTemplates.length).toBe(1);
+      expect((lt.LaunchTemplates ?? []).length).toBe(1);
     });
 
     it('AutoScaling Group exists', async () => {
       const asg = new AWS.AutoScaling({ region: 'us-west-2' });
       const groups = await asg.describeAutoScalingGroups({ AutoScalingGroupNames: [autoscaling_group_name] }).promise();
-      expect(groups.AutoScalingGroups.length).toBe(1);
+      expect((groups.AutoScalingGroups ?? []).length).toBe(1);
     });
   });
 
@@ -202,7 +199,7 @@ describe('TAP Stack Full Live Integration Tests', () => {
   describe('CloudWatch Alarms', () => {
     it('At least one alarm exists', async () => {
       const alarms = await cloudwatch.describeAlarms({}).promise();
-      expect(alarms.MetricAlarms.length).toBeGreaterThan(0);
+      expect((alarms.MetricAlarms ?? []).length).toBeGreaterThan(0);
     });
   });
 
@@ -213,7 +210,7 @@ describe('TAP Stack Full Live Integration Tests', () => {
     it('DLM policy exists', async () => {
       const dlm = new AWS.DLM({ region: 'us-west-2' });
       const policies = await dlm.getLifecyclePolicies({ PolicyIds: [dlm_lifecycle_policy_id] }).promise();
-      expect(policies.Policies.length).toBe(1);
+      expect((policies.Policies ?? []).length).toBe(1);
     });
   });
 
