@@ -10,7 +10,7 @@ import pulumi
 import pulumi_aws as aws
 
 # Add lib to path to import the infrastructure module
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib'))
 
 # Set environment variables for testing
 os.environ["ENVIRONMENT_SUFFIX"] = "test123"
@@ -74,7 +74,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_environment_suffix_usage(self):
         """Test that environment suffix is properly used in resource names"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Check environment suffix is used
@@ -87,7 +87,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_kms_key_configuration(self):
         """Test KMS key configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify KMS key has proper policy
@@ -99,7 +99,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_s3_bucket_configuration(self):
         """Test S3 bucket configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Test bucket name includes suffix
@@ -113,7 +113,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_log_groups_created(self):
         """Test that required log groups are created"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify log groups are created
@@ -127,7 +127,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_lambda_function_configuration(self):
         """Test Lambda function configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Test Lambda runtime and handler are set correctly
@@ -139,7 +139,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_iam_roles_created(self):
         """Test that required IAM roles are created"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify roles are created
@@ -154,7 +154,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_scheduler_configuration(self):
         """Test EventBridge Scheduler configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify scheduler is created
@@ -166,7 +166,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_cloudwatch_alarm_configuration(self):
         """Test CloudWatch alarm configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify alarm is created
@@ -178,7 +178,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_metric_filter_configuration(self):
         """Test CloudWatch metric filter configuration"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify metric filter is created
@@ -189,7 +189,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_kms_key_rotation_enabled(self):
         """Test that KMS key rotation is enabled"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # KMS key rotation should be enabled
@@ -198,7 +198,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_s3_lifecycle_policy(self):
         """Test S3 bucket lifecycle policy"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Verify lifecycle rules are configured
@@ -210,7 +210,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_force_destroy_enabled(self):
         """Test that S3 bucket has force_destroy enabled"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
 
         # Force destroy should be enabled for cleanup
@@ -218,7 +218,7 @@ class TestInfrastructure(unittest.TestCase):
 
     def test_lambda_handler_exists(self):
         """Test that Lambda handler file exists"""
-        lambda_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', 'lambda', 'index.py')
+        lambda_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', 'lambda', 'index.py')
         self.assertTrue(os.path.exists(lambda_path))
 
         # Verify handler has required function
@@ -231,7 +231,7 @@ class TestInfrastructure(unittest.TestCase):
     def test_no_retain_policies(self):
         """Test that no resources have retain deletion policies"""
         # Read the infrastructure code
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
             # Check that there are no retain policies
             self.assertNotIn("retain", content.lower())
@@ -239,7 +239,7 @@ class TestInfrastructure(unittest.TestCase):
 
     def test_tags_applied(self):
         """Test that proper tags are applied to resources"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
             # Verify tags are present
             self.assertIn("tags=", content)
@@ -248,7 +248,7 @@ class TestInfrastructure(unittest.TestCase):
 
     def test_exports_configured(self):
         """Test that Pulumi exports are configured"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
             # Verify exports
             self.assertIn('export("logGroupName"', content)
@@ -259,7 +259,7 @@ class TestInfrastructure(unittest.TestCase):
 
     def test_data_protection_policy_handled(self):
         """Test data protection policy"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
             # Check if data protection is mentioned (can be commented)
             self.assertIn("data", content.lower())
@@ -267,7 +267,7 @@ class TestInfrastructure(unittest.TestCase):
 
     def test_lambda_environment_variables(self):
         """Test Lambda environment variables are set"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib', '__main__.py'), 'r') as f:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', '__main__.py'), 'r') as f:
             content = f.read()
             # Verify environment variables
             self.assertIn('"LOG_GROUP_NAME": application_log_group.name', content)
