@@ -1,106 +1,10 @@
-# Ideal Response: Online Education Platform - Terraform Infrastructure
-
-## Executive Summary
-
-This document provides the corrected, production-ready Terraform solution that addresses all 34 identified issues in the original model response. The solution strictly adheres to the prompt requirements for an online education platform serving 20,000 daily students with security and cost optimization as top priorities.
-
-## Critical Corrections Made
-
-### 1. Deliverable Created ✅
-
-**Issue**: Model provided code in markdown
-
-### 2. Security Groups - Default Deny ✅
-
-**Issue**: All security groups had unrestricted egress to `0.0.0.0/0`  
-**Fix**: Implemented true default deny with specific egress rules:
-
-- ALB → App instances only (port 80)
-- App → RDS (3306), Redis (6379), HTTPS (443) only
-- DB → No egress rules (completely locked down)
-- ElastiCache → No egress rules (completely locked down)
-
-### 3. X-Ray Tracing Fully Configured ✅
-
-**Issue**: Only IAM permissions; no actual X-Ray daemon configuration  
-**Fix**: Complete X-Ray implementation in user data with configuration file, daemon installation, and startup
-
-### 4. CloudWatch Agent Configuration ✅
-
-**Issue**: Memory alarm referenced metrics that wouldn't exist  
-**Fix**: Full CloudWatch agent JSON config with CPU, memory, disk, and network metrics
-
-### Production-Ready Enhancements
-
-**No Placeholders**:
-
-- Uses `data.aws_elb_service_account` for ELB account ID
-- Uses `data.aws_availability_zones` for region-specific AZs
-- Dynamic final snapshot naming with timestamp
-
-**Comprehensive Logging**:
-
-- VPC Flow Logs (encrypted with KMS)
-- ALB access logs with S3 lifecycle
-- WAF logging to CloudWatch
-- RDS logs (error, general, slow query)
-- Application logs to CloudWatch
-
-**Security Enhancements**:
-
-- GuardDuty with EventBridge → SNS notifications
-- Secrets Manager for Redis auth token
-- S3 public access blocks
-- S3 bucket policies denying non-HTTPS
-- Enhanced RDS monitoring
-- IMDSv2 required on EC2
-
-**Best Practices**:
-
-- Terraform version constraints
-- Variable validation rules
-- Comprehensive outputs with descriptions
-- S3 versioning and lifecycle policies
-- SNS notifications for scaling events
-- Multiple CloudWatch alarms
-
----
-
-## Complete Terraform Script
-
-### File: `provider.tf`
-
-```terraform
-# provider.tf
-
-terraform {
-  required_version = ">= 1.4.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
-
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}
-```
-
-### File: `tap_stack.tf`
-
-```terraform
 ###################################################################################
 # Online Education Platform - Complete Terraform Infrastructure
 # Supports 20,000 daily students with auto-scaling, session persistence, and
 # comprehensive monitoring. Security-first design with encryption everywhere.
 ###################################################################################
+
+
 
 ###################
 # Variables
@@ -109,6 +13,7 @@ provider "aws" {
 variable "aws_region" {
   description = "AWS region (referenced from provider.tf)"
   type        = string
+  default     = "us-east-1"
 }
 
 variable "vpc_cidr" {
@@ -234,7 +139,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = merge(local.common_tags, { Name = "${var.project}-vpc" })
+  tags                 = merge(local.common_tags, { Name = "${var.project}-vpc" })
 }
 
 # VPC Flow Logs
@@ -250,8 +155,8 @@ resource "aws_iam_role" "vpc_flow_logs" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
     }]
   })
@@ -507,8 +412,8 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -521,9 +426,9 @@ resource "aws_iam_policy" "ec2_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "CloudWatchMetrics"
-        Effect = "Allow"
-        Action = ["cloudwatch:PutMetricData"]
+        Sid      = "CloudWatchMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:PutMetricData"]
         Resource = "*"
         Condition = {
           StringEquals = {
@@ -532,9 +437,9 @@ resource "aws_iam_policy" "ec2_policy" {
         }
       },
       {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Sid      = "CloudWatchLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/${var.project}/*"
       },
       {
@@ -602,9 +507,22 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_parameter_group" "main" {
   name   = "${var.project}-db-params"
   family = "mysql8.0"
-  parameter { name = "character_set_server"; value = "utf8mb4" }
-  parameter { name = "slow_query_log"; value = "1" }
-  parameter { name = "long_query_time"; value = "2" }
+
+  parameter {
+    name  = "character_set_server"
+    value = "utf8mb4"
+  }
+
+  parameter {
+    name  = "slow_query_log"
+    value = "1"
+  }
+
+  parameter {
+    name  = "long_query_time"
+    value = "2"
+  }
+
   tags = local.common_tags
 }
 
@@ -613,8 +531,8 @@ resource "aws_iam_role" "rds_monitoring" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "monitoring.rds.amazonaws.com" }
     }]
   })
@@ -672,7 +590,12 @@ resource "aws_elasticache_subnet_group" "main" {
 resource "aws_elasticache_parameter_group" "main" {
   name   = "${var.project}-redis-params"
   family = "redis7"
-  parameter { name = "maxmemory-policy"; value = "allkeys-lru" }
+
+  parameter {
+    name  = "maxmemory-policy"
+    value = "allkeys-lru"
+  }
+
   tags = local.common_tags
 }
 
@@ -734,12 +657,24 @@ resource "aws_s3_bucket_versioning" "lb_logs" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "lb_logs" {
   bucket = aws_s3_bucket.lb_logs.id
+
   rule {
     id     = "log_lifecycle"
     status = "Enabled"
-    transition { days = 30; storage_class = "STANDARD_IA" }
-    transition { days = 90; storage_class = "GLACIER" }
-    expiration { days = 365 }
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 365
+    }
   }
 }
 
@@ -759,17 +694,17 @@ resource "aws_s3_bucket_policy" "lb_logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = { AWS = data.aws_elb_service_account.main.arn }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
       },
       {
-        Sid    = "DenyInsecureTransport"
-        Effect = "Deny"
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
-        Resource = ["${aws_s3_bucket.lb_logs.arn}", "${aws_s3_bucket.lb_logs.arn}/*"]
+        Action    = "s3:*"
+        Resource  = ["${aws_s3_bucket.lb_logs.arn}", "${aws_s3_bucket.lb_logs.arn}/*"]
         Condition = { Bool = { "aws:SecureTransport" = "false" } }
       }
     ]
@@ -844,12 +779,19 @@ resource "aws_lb_listener" "http_redirect" {
 resource "aws_wafv2_web_acl" "main" {
   name  = "${var.project}-waf"
   scope = "REGIONAL"
-  default_action { allow {} }
+
+  default_action {
+    allow {}
+  }
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-    override_action { none {} }
+
+    override_action {
+      none {}
+    }
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
@@ -866,7 +808,11 @@ resource "aws_wafv2_web_acl" "main" {
   rule {
     name     = "RateLimit"
     priority = 2
-    action { block {} }
+
+    action {
+      block {}
+    }
+
     statement {
       rate_based_statement {
         limit              = 2000
@@ -902,11 +848,11 @@ locals {
     #!/bin/bash
     set -e
     yum update -y
-
+    
     # Install CloudWatch Agent
     wget https://s3.${var.aws_region}.amazonaws.com/amazoncloudwatch-agent-${var.aws_region}/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
     rpm -U ./amazon-cloudwatch-agent.rpm
-
+    
     # CloudWatch config
     cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<CWCONFIG
     {
@@ -919,15 +865,15 @@ locals {
       }
     }
     CWCONFIG
-
+    
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
-
+    
     # Install X-Ray Daemon
     wget https://s3.${var.aws_region}.amazonaws.com/aws-xray-assets.${var.aws_region}/xray-daemon/aws-xray-daemon-3.x.rpm
     yum install -y aws-xray-daemon-3.x.rpm
     systemctl enable xray
     systemctl start xray
-
+    
     # Install app (example: httpd)
     yum install -y httpd
     echo "OK" > /var/www/html/health
@@ -964,7 +910,7 @@ resource "aws_launch_template" "main" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2
+    http_tokens                 = "required" # IMDSv2
     http_put_response_hop_limit = 1
   }
 
@@ -1108,7 +1054,10 @@ resource "aws_cloudwatch_dashboard" "main" {
     widgets = [
       {
         type   = "metric"
-        x      = 0; y = 0; width = 12; height = 6
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           metrics = [["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.main.name]]
           region  = var.aws_region
@@ -1117,7 +1066,10 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 12; y = 0; width = 12; height = 6
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
         properties = {
           metrics = [["CWAgent", "mem_used_percent", "AutoScalingGroupName", aws_autoscaling_group.main.name]]
           region  = var.aws_region
@@ -1157,64 +1109,3 @@ output "vpc_id" {
   value       = aws_vpc.main.id
   description = "VPC ID"
 }
-```
-
----
-
-## Deployment Guide
-
-### Prerequisites
-
-1. AWS CLI configured
-2. Terraform >= 1.0
-3. ACM certificate ARN for HTTPS
-
-### Deploy
-
-```bash
-terraform init
-
-# Create terraform.tfvars
-cat > terraform.tfvars <<EOF
-aws_region          = "us-east-1"
-db_password         = "YourSecurePassword16+"
-ssl_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT:certificate/ID"
-EOF
-
-terraform plan
-terraform apply
-```
-
-### Post-Deployment
-
-1. Subscribe email to `security_alerts` SNS topic (in outputs)
-2. Configure Route53 DNS pointing to `alb_dns_name`
-3. Verify `/health` endpoint responds
-4. Review CloudWatch dashboard
-
----
-
-## Security Checklist ✅
-
-- [x] Security groups default deny (only required egress rules)
-- [x] VPC Flow Logs enabled and encrypted
-- [x] All data encrypted at rest (KMS)
-- [x] All data encrypted in transit (TLS 1.3, encrypted Redis)
-- [x] S3 denies non-HTTPS requests
-- [x] RDS in private subnet, no public access
-- [x] ElastiCache in private subnet with auth token
-- [x] GuardDuty enabled with notifications
-- [x] WAF with managed rules and rate limiting
-- [x] IAM roles with least privilege
-- [x] Enhanced RDS monitoring
-- [x] X-Ray tracing configured
-- [x] CloudWatch comprehensive logging
-- [x] IMDSv2 required on EC2
-- [x] SSM Session Manager (no SSH keys needed)
-- [x] Secrets Manager for sensitive data
-- [x] Multi-AZ for HA
-- [x] Auto-scaling on CPU, memory, and request count
-- [x] S3 versioning and lifecycle policies
-- [x] Production-ready (no placeholders)
-
-This implementation is immediately deployable and production-ready for 20,000 daily users.

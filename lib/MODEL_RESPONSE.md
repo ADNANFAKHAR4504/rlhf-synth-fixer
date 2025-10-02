@@ -1,5 +1,3 @@
-### Reasoning Trace
----
 
 I'll create a comprehensive Terraform script for an online education platform web application, following all the requirements. Let me break this down systematically:
 
