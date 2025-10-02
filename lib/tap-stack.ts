@@ -8,10 +8,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as ses from 'aws-cdk-lib/aws-ses';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as personalize from 'aws-cdk-lib/aws-personalize';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as path from 'path';
 
@@ -30,38 +26,51 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-
     // ==================== S3 BUCKETS ====================
     // Bucket for recipe images and documents
     const recipeMediaBucket = new s3.Bucket(this, 'RecipeMediaBucket', {
       bucketName: `meal-planning-media-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      lifecycleRules: [{
-        id: 'delete-old-versions',
-        noncurrentVersionExpiration: cdk.Duration.days(30),
-        enabled: true
-      }],
-      cors: [{
-        allowedHeaders: ['*'],
-        allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],
-        allowedOrigins: ['*'],
-        maxAge: 3000
-      }],
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      lifecycleRules: [
+        {
+          id: 'delete-old-versions',
+          noncurrentVersionExpiration: cdk.Duration.days(30),
+          enabled: true,
+        },
+      ],
+      cors: [
+        {
+          allowedHeaders: ['*'],
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.POST,
+          ],
+          allowedOrigins: ['*'],
+          maxAge: 3000,
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Bucket for generated meal plans and PDFs
-    const mealPlanDocumentsBucket = new s3.Bucket(this, 'MealPlanDocumentsBucket', {
-      bucketName: `meal-plan-documents-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      lifecycleRules: [{
-        id: 'expire-old-plans',
-        expiration: cdk.Duration.days(90),
-        enabled: true
-      }],
-      removalPolicy: cdk.RemovalPolicy.RETAIN
-    });
+    const mealPlanDocumentsBucket = new s3.Bucket(
+      this,
+      'MealPlanDocumentsBucket',
+      {
+        bucketName: `meal-plan-documents-${this.account}-${this.region}`,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        lifecycleRules: [
+          {
+            id: 'expire-old-plans',
+            expiration: cdk.Duration.days(90),
+            enabled: true,
+          },
+        ],
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      }
+    );
 
     // ==================== DYNAMODB TABLES ====================
     // Recipes table with GSI for dietary requirements
@@ -72,15 +81,18 @@ export class TapStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Global Secondary Index for dietary requirements
     recipesTable.addGlobalSecondaryIndex({
       indexName: 'DietaryRequirementsIndex',
-      partitionKey: { name: 'dietaryType', type: dynamodb.AttributeType.STRING },
+      partitionKey: {
+        name: 'dietaryType',
+        type: dynamodb.AttributeType.STRING,
+      },
       sortKey: { name: 'calories', type: dynamodb.AttributeType.NUMBER },
-      projectionType: dynamodb.ProjectionType.ALL
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     // Global Secondary Index for meal type
@@ -88,17 +100,21 @@ export class TapStack extends cdk.Stack {
       indexName: 'MealTypeIndex',
       partitionKey: { name: 'mealType', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'prepTime', type: dynamodb.AttributeType.NUMBER },
-      projectionType: dynamodb.ProjectionType.ALL
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     // User preferences table
-    const userPreferencesTable = new dynamodb.Table(this, 'UserPreferencesTable', {
-      tableName: 'meal-planning-user-preferences',
-      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
-    });
+    const userPreferencesTable = new dynamodb.Table(
+      this,
+      'UserPreferencesTable',
+      {
+        tableName: 'meal-planning-user-preferences',
+        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecovery: true,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      }
+    );
 
     // Meal plans table
     const mealPlansTable = new dynamodb.Table(this, 'MealPlansTable', {
@@ -108,7 +124,7 @@ export class TapStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       timeToLiveAttribute: 'ttl',
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Grocery lists table
@@ -116,35 +132,45 @@ export class TapStack extends cdk.Stack {
       tableName: 'meal-planning-grocery-lists',
       partitionKey: { name: 'mealPlanId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Nutritional data table
-    const nutritionalDataTable = new dynamodb.Table(this, 'NutritionalDataTable', {
-      tableName: 'meal-planning-nutritional-data',
-      partitionKey: { name: 'recipeId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
-    });
+    const nutritionalDataTable = new dynamodb.Table(
+      this,
+      'NutritionalDataTable',
+      {
+        tableName: 'meal-planning-nutritional-data',
+        partitionKey: { name: 'recipeId', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      }
+    );
 
     // ==================== SNS TOPICS ====================
     const groceryReminderTopic = new sns.Topic(this, 'GroceryReminderTopic', {
       displayName: 'Grocery Shopping Reminders',
-      topicName: 'meal-planning-grocery-reminders'
+      topicName: 'meal-planning-grocery-reminders',
     });
 
-    const mealPlanNotificationTopic = new sns.Topic(this, 'MealPlanNotificationTopic', {
-      displayName: 'Meal Plan Notifications',
-      topicName: 'meal-planning-notifications'
-    });
+    const mealPlanNotificationTopic = new sns.Topic(
+      this,
+      'MealPlanNotificationTopic',
+      {
+        displayName: 'Meal Plan Notifications',
+        topicName: 'meal-planning-notifications',
+      }
+    );
 
     // ==================== IAM ROLES ====================
     // Role for Lambda functions
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
       ],
       inlinePolicies: {
         DynamoDBAccess: new iam.PolicyDocument({
@@ -158,7 +184,7 @@ export class TapStack extends cdk.Stack {
                 'dynamodb:Query',
                 'dynamodb:Scan',
                 'dynamodb:BatchGetItem',
-                'dynamodb:BatchWriteItem'
+                'dynamodb:BatchWriteItem',
               ],
               resources: [
                 recipesTable.tableArn,
@@ -166,10 +192,10 @@ export class TapStack extends cdk.Stack {
                 userPreferencesTable.tableArn,
                 mealPlansTable.tableArn,
                 groceryListsTable.tableArn,
-                nutritionalDataTable.tableArn
-              ]
-            })
-          ]
+                nutritionalDataTable.tableArn,
+              ],
+            }),
+          ],
         }),
         S3Access: new iam.PolicyDocument({
           statements: [
@@ -178,16 +204,16 @@ export class TapStack extends cdk.Stack {
                 's3:GetObject',
                 's3:PutObject',
                 's3:DeleteObject',
-                's3:ListBucket'
+                's3:ListBucket',
               ],
               resources: [
                 recipeMediaBucket.bucketArn,
                 `${recipeMediaBucket.bucketArn}/*`,
                 mealPlanDocumentsBucket.bucketArn,
-                `${mealPlanDocumentsBucket.bucketArn}/*`
-              ]
-            })
-          ]
+                `${mealPlanDocumentsBucket.bucketArn}/*`,
+              ],
+            }),
+          ],
         }),
         SESAccess: new iam.PolicyDocument({
           statements: [
@@ -195,11 +221,11 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'ses:SendEmail',
                 'ses:SendRawEmail',
-                'ses:SendTemplatedEmail'
+                'ses:SendTemplatedEmail',
               ],
-              resources: ['*']
-            })
-          ]
+              resources: ['*'],
+            }),
+          ],
         }),
         SNSAccess: new iam.PolicyDocument({
           statements: [
@@ -207,10 +233,10 @@ export class TapStack extends cdk.Stack {
               actions: ['sns:Publish'],
               resources: [
                 groceryReminderTopic.topicArn,
-                mealPlanNotificationTopic.topicArn
-              ]
-            })
-          ]
+                mealPlanNotificationTopic.topicArn,
+              ],
+            }),
+          ],
         }),
         PersonalizeAccess: new iam.PolicyDocument({
           statements: [
@@ -218,11 +244,11 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'personalize:GetRecommendations',
                 'personalize:GetPersonalizedRanking',
-                'personalize:DescribeCampaign'
+                'personalize:DescribeCampaign',
               ],
-              resources: ['*']
-            })
-          ]
+              resources: ['*'],
+            }),
+          ],
         }),
         ComprehendMedicalAccess: new iam.PolicyDocument({
           statements: [
@@ -230,20 +256,20 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'comprehendmedical:DetectEntitiesV2',
                 'comprehendmedical:InferRxNorm',
-                'comprehendmedical:InferICD10CM'
+                'comprehendmedical:InferICD10CM',
               ],
-              resources: ['*']
-            })
-          ]
-        })
-      }
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
 
     // ==================== LAMBDA LAYERS ====================
     const commonLibsLayer = new lambda.LayerVersion(this, 'CommonLibsLayer', {
       code: lambda.Code.fromAsset(path.join(__dirname, 'layers/common-libs')),
       compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
-      description: 'Common libraries for meal planning functions'
+      description: 'Common libraries for meal planning functions',
     });
 
     // ==================== LAMBDA FUNCTIONS ====================
@@ -258,14 +284,17 @@ export class TapStack extends cdk.Stack {
       MEAL_PLAN_DOCUMENTS_BUCKET: mealPlanDocumentsBucket.bucketName,
       GROCERY_REMINDER_TOPIC_ARN: groceryReminderTopic.topicArn,
       MEAL_PLAN_NOTIFICATION_TOPIC_ARN: mealPlanNotificationTopic.topicArn,
-      AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+      AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
     };
 
     // Meal Plan Generator Function
-    const mealPlanGeneratorFunction = new lambda.Function(this, 'MealPlanGeneratorFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.generateMealPlan',
-      code: lambda.Code.fromInline(`
+    const mealPlanGeneratorFunction = new lambda.Function(
+      this,
+      'MealPlanGeneratorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.generateMealPlan',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         const personalize = new AWS.PersonalizeRuntime();
@@ -346,19 +375,23 @@ export class TapStack extends cdk.Stack {
           return new Date(today.setDate(diff)).toISOString().split('T')[0];
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 1024,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // Grocery List Aggregator Function
-    const groceryListAggregatorFunction = new lambda.Function(this, 'GroceryListAggregatorFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.aggregateGroceryList',
-      code: lambda.Code.fromInline(`
+    const groceryListAggregatorFunction = new lambda.Function(
+      this,
+      'GroceryListAggregatorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.aggregateGroceryList',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         
@@ -437,19 +470,23 @@ export class TapStack extends cdk.Stack {
           return categories;
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.minutes(3),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(3),
+        memorySize: 512,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // Nutritional Analysis Function
-    const nutritionalAnalysisFunction = new lambda.Function(this, 'NutritionalAnalysisFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.analyzeNutrition',
-      code: lambda.Code.fromInline(`
+    const nutritionalAnalysisFunction = new lambda.Function(
+      this,
+      'NutritionalAnalysisFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.analyzeNutrition',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         const comprehendMedical = new AWS.ComprehendMedical();
@@ -553,19 +590,23 @@ export class TapStack extends cdk.Stack {
           };
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.minutes(3),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(3),
+        memorySize: 512,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // Email Delivery Function
-    const emailDeliveryFunction = new lambda.Function(this, 'EmailDeliveryFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.sendMealPlanEmail',
-      code: lambda.Code.fromInline(`
+    const emailDeliveryFunction = new lambda.Function(
+      this,
+      'EmailDeliveryFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.sendMealPlanEmail',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const ses = new AWS.SES();
         const s3 = new AWS.S3();
@@ -696,24 +737,28 @@ export class TapStack extends cdk.Stack {
             </html>
           \`;
         }
-        
+
         function generateEmailText(userName, pdfUrl) {
           return \`Hello \${userName}!\\n\\nYour meal plan is ready: \${pdfUrl}\`;
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 1024,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // Recipe Management Function
-    const recipeManagementFunction = new lambda.Function(this, 'RecipeManagementFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.manageRecipes',
-      code: lambda.Code.fromInline(`
+    const recipeManagementFunction = new lambda.Function(
+      this,
+      'RecipeManagementFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.manageRecipes',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         const s3 = new AWS.S3();
@@ -850,19 +895,23 @@ export class TapStack extends cdk.Stack {
           };
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 512,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // User Preferences Function
-    const userPreferencesFunction = new lambda.Function(this, 'UserPreferencesFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.manageUserPreferences',
-      code: lambda.Code.fromInline(`
+    const userPreferencesFunction = new lambda.Function(
+      this,
+      'UserPreferencesFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.manageUserPreferences',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         
@@ -919,19 +968,72 @@ export class TapStack extends cdk.Stack {
           };
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 256,
+        role: lambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
+
+    // IAM Role for Batch Meal Plan Generator with Lambda invoke permissions
+    const batchLambdaExecutionRole = new iam.Role(
+      this,
+      'BatchLambdaExecutionRole',
+      {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+        ],
+        inlinePolicies: {
+          DynamoDBAccess: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                actions: [
+                  'dynamodb:GetItem',
+                  'dynamodb:PutItem',
+                  'dynamodb:UpdateItem',
+                  'dynamodb:DeleteItem',
+                  'dynamodb:Query',
+                  'dynamodb:Scan',
+                  'dynamodb:BatchGetItem',
+                  'dynamodb:BatchWriteItem',
+                ],
+                resources: [
+                  recipesTable.tableArn,
+                  `${recipesTable.tableArn}/index/*`,
+                  userPreferencesTable.tableArn,
+                  mealPlansTable.tableArn,
+                  groceryListsTable.tableArn,
+                  nutritionalDataTable.tableArn,
+                ],
+              }),
+            ],
+          }),
+          LambdaInvokeAccess: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                actions: ['lambda:InvokeFunction'],
+                resources: [mealPlanGeneratorFunction.functionArn],
+              }),
+            ],
+          }),
+        },
+      }
+    );
 
     // Batch Meal Plan Generator (for scheduled generation)
-    const batchMealPlanGeneratorFunction = new lambda.Function(this, 'BatchMealPlanGeneratorFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.batchGenerateMealPlans',
-      code: lambda.Code.fromInline(`
+    const batchMealPlanGeneratorFunction = new lambda.Function(
+      this,
+      'BatchMealPlanGeneratorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.batchGenerateMealPlans',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         const lambda = new AWS.Lambda();
@@ -942,7 +1044,7 @@ export class TapStack extends cdk.Stack {
           try {
             // Fetch all active users
             const users = await getAllActiveUsers();
-            
+
             console.log(\`Generating meal plans for \${users.length} users\`);
             
             // Process users in batches
@@ -961,7 +1063,7 @@ export class TapStack extends cdk.Stack {
             
             const successful = results.filter(r => r.status === 'fulfilled').length;
             const failed = results.filter(r => r.status === 'rejected').length;
-            
+
             console.log(\`Batch generation complete. Successful: \${successful}, Failed: \${failed}\`);
             
             return {
@@ -1008,30 +1110,28 @@ export class TapStack extends cdk.Stack {
         }
         
         async function processBatch(userBatch) {
+          // Get the meal plan generator function name from the current stack
+          const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME?.replace('BatchMealPlanGeneratorFunction', 'MealPlanGeneratorFunction') || 'MealPlanGeneratorFunction';
+
           const promises = userBatch.map(user => {
             return lambda.invoke({
-              FunctionName: process.env.MEAL_PLAN_GENERATOR_FUNCTION,
+              FunctionName: functionName,
               InvocationType: 'Event',
               Payload: JSON.stringify({ userId: user.userId })
             }).promise();
           });
-          
+
           return Promise.all(promises);
         }
       `),
-      environment: {
-        ...commonEnvironment,
-        MEAL_PLAN_GENERATOR_FUNCTION: mealPlanGeneratorFunction.functionName
-      },
-      timeout: cdk.Duration.minutes(15),
-      memorySize: 3008,
-      role: lambdaExecutionRole,
-      layers: [commonLibsLayer],
-      tracing: lambda.Tracing.ACTIVE
-    });
-
-    // Grant Lambda invoke permissions
-    mealPlanGeneratorFunction.grantInvoke(batchMealPlanGeneratorFunction);
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(15),
+        memorySize: 3008,
+        role: batchLambdaExecutionRole,
+        layers: [commonLibsLayer],
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
     // ==================== API GATEWAY ====================
     const api = new apigateway.RestApi(this, 'MealPlanningAPI', {
@@ -1044,78 +1144,132 @@ export class TapStack extends cdk.Stack {
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         metricsEnabled: true,
         throttlingRateLimit: 1000,
-        throttlingBurstLimit: 2000
+        throttlingBurstLimit: 2000,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key']
-      }
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
+      },
     });
 
     // API Resources and Methods
     // Recipes endpoints
     const recipesResource = api.root.addResource('recipes');
-    recipesResource.addMethod('GET', new apigateway.LambdaIntegration(recipeManagementFunction));
-    recipesResource.addMethod('POST', new apigateway.LambdaIntegration(recipeManagementFunction));
+    recipesResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(recipeManagementFunction)
+    );
+    recipesResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(recipeManagementFunction)
+    );
 
     const recipeIdResource = recipesResource.addResource('{recipeId}');
-    recipeIdResource.addMethod('GET', new apigateway.LambdaIntegration(recipeManagementFunction));
-    recipeIdResource.addMethod('PUT', new apigateway.LambdaIntegration(recipeManagementFunction));
-    recipeIdResource.addMethod('DELETE', new apigateway.LambdaIntegration(recipeManagementFunction));
+    recipeIdResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(recipeManagementFunction)
+    );
+    recipeIdResource.addMethod(
+      'PUT',
+      new apigateway.LambdaIntegration(recipeManagementFunction)
+    );
+    recipeIdResource.addMethod(
+      'DELETE',
+      new apigateway.LambdaIntegration(recipeManagementFunction)
+    );
 
     const recipeNutritionResource = recipeIdResource.addResource('nutrition');
-    recipeNutritionResource.addMethod('GET', new apigateway.LambdaIntegration(nutritionalAnalysisFunction));
+    recipeNutritionResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(nutritionalAnalysisFunction)
+    );
 
     // User endpoints
     const usersResource = api.root.addResource('users');
     const userIdResource = usersResource.addResource('{userId}');
 
     const preferencesResource = userIdResource.addResource('preferences');
-    preferencesResource.addMethod('GET', new apigateway.LambdaIntegration(userPreferencesFunction));
-    preferencesResource.addMethod('PUT', new apigateway.LambdaIntegration(userPreferencesFunction));
+    preferencesResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(userPreferencesFunction)
+    );
+    preferencesResource.addMethod(
+      'PUT',
+      new apigateway.LambdaIntegration(userPreferencesFunction)
+    );
 
     const mealPlansResource = userIdResource.addResource('meal-plans');
-    mealPlansResource.addMethod('POST', new apigateway.LambdaIntegration(mealPlanGeneratorFunction));
-    mealPlansResource.addMethod('GET', new apigateway.LambdaIntegration(mealPlanGeneratorFunction));
+    mealPlansResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(mealPlanGeneratorFunction)
+    );
+    mealPlansResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(mealPlanGeneratorFunction)
+    );
 
     // Grocery lists endpoints
     const groceryListsResource = api.root.addResource('grocery-lists');
-    const groceryListIdResource = groceryListsResource.addResource('{mealPlanId}');
-    groceryListIdResource.addMethod('GET', new apigateway.LambdaIntegration(groceryListAggregatorFunction));
-    groceryListIdResource.addMethod('POST', new apigateway.LambdaIntegration(groceryListAggregatorFunction));
+    const groceryListIdResource =
+      groceryListsResource.addResource('{mealPlanId}');
+    groceryListIdResource.addMethod(
+      'GET',
+      new apigateway.LambdaIntegration(groceryListAggregatorFunction)
+    );
+    groceryListIdResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(groceryListAggregatorFunction)
+    );
 
     // ==================== EVENT BRIDGE RULES ====================
     // Weekly meal plan generation schedule (Every Sunday at 6 AM UTC)
-    const weeklyMealPlanRule = new events.Rule(this, 'WeeklyMealPlanGenerationRule', {
-      ruleName: 'weekly-meal-plan-generation',
-      description: 'Triggers weekly meal plan generation for all users',
-      schedule: events.Schedule.cron({
-        minute: '0',
-        hour: '6',
-        weekDay: 'SUN'
-      })
-    });
+    const weeklyMealPlanRule = new events.Rule(
+      this,
+      'WeeklyMealPlanGenerationRule',
+      {
+        ruleName: 'weekly-meal-plan-generation',
+        description: 'Triggers weekly meal plan generation for all users',
+        schedule: events.Schedule.cron({
+          minute: '0',
+          hour: '6',
+          weekDay: 'SUN',
+        }),
+      }
+    );
 
-    weeklyMealPlanRule.addTarget(new targets.LambdaFunction(batchMealPlanGeneratorFunction, {
-      retryAttempts: 2,
-      maxEventAge: cdk.Duration.hours(2)
-    }));
+    weeklyMealPlanRule.addTarget(
+      new targets.LambdaFunction(batchMealPlanGeneratorFunction, {
+        retryAttempts: 2,
+        maxEventAge: cdk.Duration.hours(2),
+      })
+    );
 
     // Daily meal plan generation schedule (For new users or updates)
-    const dailyMealPlanRule = new events.Rule(this, 'DailyMealPlanGenerationRule', {
-      ruleName: 'daily-meal-plan-generation',
-      description: 'Triggers daily meal plan generation for new users',
-      schedule: events.Schedule.cron({
-        minute: '0',
-        hour: '8'
-      })
-    });
+    const dailyMealPlanRule = new events.Rule(
+      this,
+      'DailyMealPlanGenerationRule',
+      {
+        ruleName: 'daily-meal-plan-generation',
+        description: 'Triggers daily meal plan generation for new users',
+        schedule: events.Schedule.cron({
+          minute: '0',
+          hour: '8',
+        }),
+      }
+    );
 
-    dailyMealPlanRule.addTarget(new targets.LambdaFunction(batchMealPlanGeneratorFunction, {
-      retryAttempts: 2,
-      maxEventAge: cdk.Duration.hours(1)
-    }));
+    dailyMealPlanRule.addTarget(
+      new targets.LambdaFunction(batchMealPlanGeneratorFunction, {
+        retryAttempts: 2,
+        maxEventAge: cdk.Duration.hours(1),
+      })
+    );
 
     // Grocery reminder schedule (Every Saturday at 10 AM UTC)
     const groceryReminderRule = new events.Rule(this, 'GroceryReminderRule', {
@@ -1124,14 +1278,17 @@ export class TapStack extends cdk.Stack {
       schedule: events.Schedule.cron({
         minute: '0',
         hour: '10',
-        weekDay: 'SAT'
-      })
+        weekDay: 'SAT',
+      }),
     });
 
-    const groceryReminderFunction = new lambda.Function(this, 'GroceryReminderFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.sendGroceryReminders',
-      code: lambda.Code.fromInline(`
+    const groceryReminderFunction = new lambda.Function(
+      this,
+      'GroceryReminderFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.sendGroceryReminders',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const sns = new AWS.SNS();
         const dynamodb = new AWS.DynamoDB.DocumentClient();
@@ -1189,19 +1346,22 @@ export class TapStack extends cdk.Stack {
           return result.Items;
         }
       `),
-      environment: commonEnvironment,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      tracing: lambda.Tracing.ACTIVE
-    });
+        environment: commonEnvironment,
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        role: lambdaExecutionRole,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
 
-    groceryReminderRule.addTarget(new targets.LambdaFunction(groceryReminderFunction));
+    groceryReminderRule.addTarget(
+      new targets.LambdaFunction(groceryReminderFunction)
+    );
 
     // ==================== CLOUDWATCH DASHBOARDS ====================
     const dashboard = new cloudwatch.Dashboard(this, 'MealPlanningDashboard', {
       dashboardName: 'meal-planning-system-metrics',
-      defaultInterval: cdk.Duration.hours(6)
+      defaultInterval: cdk.Duration.hours(6),
     });
 
     // Add widgets for monitoring
@@ -1214,13 +1374,13 @@ export class TapStack extends cdk.Stack {
             metricName: 'Count',
             dimensionsMap: {
               ApiName: api.restApiName,
-              Stage: 'prod'
+              Stage: 'prod',
             },
-            statistic: 'Sum'
-          })
+            statistic: 'Sum',
+          }),
         ],
         width: 12,
-        height: 6
+        height: 6,
       }),
       new cloudwatch.GraphWidget({
         title: 'Lambda Invocations',
@@ -1229,21 +1389,21 @@ export class TapStack extends cdk.Stack {
             namespace: 'AWS/Lambda',
             metricName: 'Invocations',
             dimensionsMap: {
-              FunctionName: mealPlanGeneratorFunction.functionName
+              FunctionName: mealPlanGeneratorFunction.functionName,
             },
-            statistic: 'Sum'
+            statistic: 'Sum',
           }),
           new cloudwatch.Metric({
             namespace: 'AWS/Lambda',
             metricName: 'Invocations',
             dimensionsMap: {
-              FunctionName: groceryListAggregatorFunction.functionName
+              FunctionName: groceryListAggregatorFunction.functionName,
             },
-            statistic: 'Sum'
-          })
+            statistic: 'Sum',
+          }),
         ],
         width: 12,
-        height: 6
+        height: 6,
       })
     );
 
@@ -1255,23 +1415,23 @@ export class TapStack extends cdk.Stack {
             namespace: 'AWS/DynamoDB',
             metricName: 'ConsumedReadCapacityUnits',
             dimensionsMap: {
-              TableName: recipesTable.tableName
+              TableName: recipesTable.tableName,
             },
-            statistic: 'Sum'
-          })
+            statistic: 'Sum',
+          }),
         ],
         right: [
           new cloudwatch.Metric({
             namespace: 'AWS/DynamoDB',
             metricName: 'ConsumedWriteCapacityUnits',
             dimensionsMap: {
-              TableName: recipesTable.tableName
+              TableName: recipesTable.tableName,
             },
-            statistic: 'Sum'
-          })
+            statistic: 'Sum',
+          }),
         ],
         width: 12,
-        height: 6
+        height: 6,
       }),
       new cloudwatch.GraphWidget({
         title: 'Lambda Errors',
@@ -1280,23 +1440,23 @@ export class TapStack extends cdk.Stack {
             namespace: 'AWS/Lambda',
             metricName: 'Errors',
             dimensionsMap: {
-              FunctionName: mealPlanGeneratorFunction.functionName
+              FunctionName: mealPlanGeneratorFunction.functionName,
             },
             statistic: 'Sum',
-            color: cloudwatch.Color.RED
+            color: cloudwatch.Color.RED,
           }),
           new cloudwatch.Metric({
             namespace: 'AWS/Lambda',
             metricName: 'Errors',
             dimensionsMap: {
-              FunctionName: emailDeliveryFunction.functionName
+              FunctionName: emailDeliveryFunction.functionName,
             },
             statistic: 'Sum',
-            color: cloudwatch.Color.ORANGE
-          })
+            color: cloudwatch.Color.ORANGE,
+          }),
         ],
         width: 12,
-        height: 6
+        height: 6,
       })
     );
 
@@ -1307,15 +1467,15 @@ export class TapStack extends cdk.Stack {
         metricName: '4XXError',
         dimensionsMap: {
           ApiName: api.restApiName,
-          Stage: 'prod'
+          Stage: 'prod',
         },
-        statistic: 'Sum'
+        statistic: 'Sum',
       }),
       threshold: 100,
       evaluationPeriods: 2,
       datapointsToAlarm: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alert when API 4XX errors exceed threshold'
+      alarmDescription: 'Alert when API 4XX errors exceed threshold',
     });
 
     new cloudwatch.Alarm(this, 'LambdaHighErrorRate', {
@@ -1323,44 +1483,44 @@ export class TapStack extends cdk.Stack {
         namespace: 'AWS/Lambda',
         metricName: 'Errors',
         dimensionsMap: {
-          FunctionName: batchMealPlanGeneratorFunction.functionName
+          FunctionName: batchMealPlanGeneratorFunction.functionName,
         },
-        statistic: 'Sum'
+        statistic: 'Sum',
       }),
       threshold: 50,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alert when batch generation errors exceed threshold'
+      alarmDescription: 'Alert when batch generation errors exceed threshold',
     });
 
     // ==================== OUTPUTS ====================
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
       description: 'Meal Planning API endpoint URL',
-      exportName: 'MealPlanningAPIEndpoint'
+      exportName: 'MealPlanningAPIEndpoint',
     });
 
     new cdk.CfnOutput(this, 'RecipeMediaBucketName', {
       value: recipeMediaBucket.bucketName,
       description: 'S3 bucket for recipe media storage',
-      exportName: 'RecipeMediaBucket'
+      exportName: 'RecipeMediaBucket',
     });
 
     new cdk.CfnOutput(this, 'MealPlanDocumentsBucketName', {
       value: mealPlanDocumentsBucket.bucketName,
       description: 'S3 bucket for meal plan documents',
-      exportName: 'MealPlanDocumentsBucket'
+      exportName: 'MealPlanDocumentsBucket',
     });
 
     new cdk.CfnOutput(this, 'RecipesTableName', {
       value: recipesTable.tableName,
       description: 'DynamoDB table for recipes',
-      exportName: 'RecipesTable'
+      exportName: 'RecipesTable',
     });
 
     new cdk.CfnOutput(this, 'DashboardURL', {
-      value: \`https://console.aws.amazon.com/cloudwatch/home?region=\${this.region}#dashboards:name=\${dashboard.dashboardName}\`,
-      description: 'CloudWatch Dashboard URL'
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
+      description: 'CloudWatch Dashboard URL',
     });
 
     // ==================== TAGS ====================
