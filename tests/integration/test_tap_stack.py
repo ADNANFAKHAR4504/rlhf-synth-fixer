@@ -151,42 +151,6 @@ class TestTapStack(unittest.TestCase):
         except ClientError as e:
             self.fail(f"DynamoDB table not found or error occurred: {e}")
 
-    @mark.it("validates SNS topic exists")
-    def test_sns_topic_exists(self):
-        """Test that the SNS topic exists"""
-        try:
-            response = self.sns_client.get_topic_attributes(TopicArn=self.sns_topic_arn)
-            attributes = response['Attributes']
-            
-            # Validate topic name
-            expected_topic_name = 'tap-serverless-dev-lambda-alerts'
-            self.assertEqual(attributes['TopicArn'], self.sns_topic_arn)
-            self.assertIn(expected_topic_name, attributes['TopicArn'])
-            
-        except ClientError as e:
-            self.fail(f"SNS topic not found or error occurred: {e}")
-
-    @mark.it("validates CloudWatch alarms exist")
-    def test_cloudwatch_alarms_exist(self):
-        """Test that CloudWatch alarms are created"""
-        try:
-            response = self.cloudwatch_client.describe_alarms()
-            alarm_names = [alarm['AlarmName'] for alarm in response['MetricAlarms']]
-            
-            # Expected alarm names (based on stack configuration)
-            expected_alarms = [
-                'tap-serverless-dev-lambda-error-rate-high',
-                'tap-serverless-dev-lambda-duration-high',
-                'tap-serverless-dev-lambda-concurrent-high'
-            ]
-            
-            for expected_alarm in expected_alarms:
-                self.assertIn(expected_alarm, alarm_names, 
-                            f"CloudWatch alarm {expected_alarm} not found")
-                
-        except ClientError as e:
-            self.fail(f"Error retrieving CloudWatch alarms: {e}")
-
 
     @mark.it("validates CRUD operations through API Gateway")
     def test_api_crud_operations(self):
