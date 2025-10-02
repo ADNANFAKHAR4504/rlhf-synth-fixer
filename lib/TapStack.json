@@ -38,7 +38,11 @@
       "Type": "String",
       "Default": "Production",
       "Description": "Environment name for resource tagging",
-      "AllowedValues": ["Development", "Staging", "Production"]
+      "AllowedValues": [
+        "Development",
+        "Staging",
+        "Production"
+      ]
     },
     "ProjectName": {
       "Type": "String",
@@ -90,15 +94,21 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-VPC"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-VPC"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Project",
-            "Value": {"Ref": "ProjectName"}
+            "Value": {
+              "Ref": "ProjectName"
+            }
           }
         ]
       }
@@ -106,13 +116,25 @@
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.60.10.0/24",
-        "AvailabilityZone": {"Fn::FindInMap": ["RegionConfig", {"Ref": "AWS::Region"}, "AZ1"]},
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "RegionConfig",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AZ1"
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateSubnet1"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateSubnet1"
+            }
           },
           {
             "Key": "Type",
@@ -124,13 +146,25 @@
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.60.20.0/24",
-        "AvailabilityZone": {"Fn::FindInMap": ["RegionConfig", {"Ref": "AWS::Region"}, "AZ2"]},
+        "AvailabilityZone": {
+          "Fn::FindInMap": [
+            "RegionConfig",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AZ2"
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateSubnet2"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateSubnet2"
+            }
           },
           {
             "Key": "Type",
@@ -142,11 +176,15 @@
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateRouteTable1"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateRouteTable1"
+            }
           }
         ]
       }
@@ -154,11 +192,15 @@
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateRouteTable2"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-PrivateRouteTable2"
+            }
           }
         ]
       }
@@ -166,26 +208,42 @@
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet1"},
-        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
       }
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet2"},
-        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
       }
     },
     "S3VPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.s3"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
         "VpcEndpointType": "Gateway",
         "RouteTableIds": [
-          {"Ref": "PrivateRouteTable1"},
-          {"Ref": "PrivateRouteTable2"}
+          {
+            "Ref": "PrivateRouteTable1"
+          },
+          {
+            "Ref": "PrivateRouteTable2"
+          }
         ],
         "PolicyDocument": {
           "Version": "2012-10-17",
@@ -199,8 +257,12 @@
                 "s3:ListBucket"
               ],
               "Resource": [
-                {"Fn::Sub": "arn:aws:s3:::${BackupBucket}"},
-                {"Fn::Sub": "arn:aws:s3:::${BackupBucket}/*"}
+                {
+                  "Fn::Sub": "arn:aws:s3:::${BackupBucket}"
+                },
+                {
+                  "Fn::Sub": "arn:aws:s3:::${BackupBucket}/*"
+                }
               ]
             }
           ]
@@ -212,13 +274,19 @@
       "Properties": {
         "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL database",
         "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-DBSubnetGroup"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-DBSubnetGroup"
+            }
           }
         ]
       }
@@ -227,7 +295,9 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for RDS PostgreSQL database",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -240,7 +310,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-DBSecurityGroup"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-DBSecurityGroup"
+            }
           }
         ]
       }
@@ -257,7 +329,9 @@
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
               "Principal": {
-                "AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
               },
               "Action": "kms:*",
               "Resource": "*"
@@ -295,7 +369,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-KMSKey"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-KMSKey"
+            }
           }
         ]
       }
@@ -303,8 +379,12 @@
     "KMSKeyAlias": {
       "Type": "AWS::KMS::Alias",
       "Properties": {
-        "AliasName": {"Fn::Sub": "alias/${ProjectName}-${EnvironmentSuffix}-encryption"},
-        "TargetKeyId": {"Ref": "KMSKey"}
+        "AliasName": {
+          "Fn::Sub": "alias/${ProjectName}-${EnvironmentSuffix}-encryption"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
       }
     },
     "RDSEnhancedMonitoringRole": {
@@ -328,7 +408,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-RDSMonitoringRole"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-RDSMonitoringRole"
+            }
           }
         ]
       }
@@ -347,7 +429,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-DBParameterGroup"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-DBParameterGroup"
+            }
           }
         ]
       }
@@ -355,7 +439,9 @@
     "RDSMasterSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-master"},
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-master"
+        },
         "Description": "RDS master credentials for retail inventory database",
         "GenerateSecretString": {
           "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
@@ -366,11 +452,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-RDSMasterSecret"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-RDSMasterSecret"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           }
         ]
       }
@@ -380,40 +470,89 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-db"
+        },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "postgres",
         "EngineVersion": "16.8",
-        "MasterUsername": {"Fn::Join": ["", ["{{resolve:secretsmanager:", {"Ref": "RDSMasterSecret"}, ":SecretString:username}}"]]},
-        "MasterUserPassword": {"Fn::Join": ["", ["{{resolve:secretsmanager:", {"Ref": "RDSMasterSecret"}, ":SecretString:password}}"]]},
-        "AllocatedStorage": {"Ref": "DBAllocatedStorage"},
-        "MaxAllocatedStorage": {"Ref": "DBMaxAllocatedStorage"},
+        "MasterUsername": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "RDSMasterSecret"
+              },
+              ":SecretString:username}}"
+            ]
+          ]
+        },
+        "MasterUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "RDSMasterSecret"
+              },
+              ":SecretString:password}}"
+            ]
+          ]
+        },
+        "AllocatedStorage": {
+          "Ref": "DBAllocatedStorage"
+        },
+        "MaxAllocatedStorage": {
+          "Ref": "DBMaxAllocatedStorage"
+        },
         "StorageType": "gp3",
         "StorageEncrypted": true,
-        "KmsKeyId": {"Ref": "KMSKey"},
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
         "VPCSecurityGroups": [
-          {"Ref": "DatabaseSecurityGroup"}
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
         ],
-        "DBParameterGroupName": {"Ref": "DBParameterGroup"},
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
         "EnablePerformanceInsights": true,
-        "PerformanceInsightsKMSKeyId": {"Ref": "KMSKey"},
+        "PerformanceInsightsKMSKeyId": {
+          "Ref": "KMSKey"
+        },
         "PerformanceInsightsRetentionPeriod": 7,
         "MonitoringInterval": 60,
-        "MonitoringRoleArn": {"Fn::GetAtt": ["RDSEnhancedMonitoringRole", "Arn"]},
-        "EnableCloudwatchLogsExports": ["postgresql"],
+        "MonitoringRoleArn": {
+          "Fn::GetAtt": [
+            "RDSEnhancedMonitoringRole",
+            "Arn"
+          ]
+        },
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
         "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-DBInstance"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-DBInstance"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           }
         ]
       }
@@ -421,13 +560,17 @@
     "BackupBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "retailinventory-${EnvironmentSuffix}-backups-${AWS::AccountId}"},
+        "BucketName": {
+          "Fn::Sub": "retailinventory-${EnvironmentSuffix}-backups-${AWS::AccountId}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KMSKey"}
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
               },
               "BucketKeyEnabled": true
             }
@@ -474,7 +617,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-BackupBucket"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-BackupBucket"
+            }
           }
         ]
       }
@@ -482,7 +627,9 @@
     "BackupBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": {"Ref": "BackupBucket"},
+        "Bucket": {
+          "Ref": "BackupBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -492,8 +639,15 @@
               "Principal": "*",
               "Action": "s3:*",
               "Resource": [
-                {"Fn::GetAtt": ["BackupBucket", "Arn"]},
-                {"Fn::Sub": "${BackupBucket.Arn}/*"}
+                {
+                  "Fn::GetAtt": [
+                    "BackupBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${BackupBucket.Arn}/*"
+                }
               ],
               "Condition": {
                 "Bool": {
@@ -508,7 +662,6 @@
     "S3BackupRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-S3BackupRole"},
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -536,8 +689,15 @@
                     "s3:DeleteObject"
                   ],
                   "Resource": [
-                    {"Fn::GetAtt": ["BackupBucket", "Arn"]},
-                    {"Fn::Sub": "${BackupBucket.Arn}/*"}
+                    {
+                      "Fn::GetAtt": [
+                        "BackupBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${BackupBucket.Arn}/*"
+                    }
                   ]
                 },
                 {
@@ -547,7 +707,12 @@
                     "kms:Encrypt",
                     "kms:GenerateDataKey"
                   ],
-                  "Resource": {"Fn::GetAtt": ["KMSKey", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -556,7 +721,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-S3BackupRole"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-S3BackupRole"
+            }
           }
         ]
       }
@@ -564,18 +731,24 @@
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DBAlerts"},
+        "TopicName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DBAlerts"
+        },
         "DisplayName": "Database Alerts",
         "Subscription": [
           {
-            "Endpoint": {"Ref": "AlarmEmail"},
+            "Endpoint": {
+              "Ref": "AlarmEmail"
+            },
             "Protocol": "email"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-SNSTopic"}
+            "Value": {
+              "Fn::Sub": "${ProjectName}-${EnvironmentName}-SNSTopic"
+            }
           }
         ]
       }
@@ -583,7 +756,9 @@
     "CPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighCPU"},
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighCPU"
+        },
         "AlarmDescription": "Alarm when database CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
@@ -595,11 +770,15 @@
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": {"Ref": "DBInstance"}
+            "Value": {
+              "Ref": "DBInstance"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "SNSTopic"}
+          {
+            "Ref": "SNSTopic"
+          }
         ],
         "TreatMissingData": "notBreaching"
       }
@@ -607,7 +786,9 @@
     "DatabaseConnectionsAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighConnections"},
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighConnections"
+        },
         "AlarmDescription": "Alarm when database connections exceed 15",
         "MetricName": "DatabaseConnections",
         "Namespace": "AWS/RDS",
@@ -619,11 +800,15 @@
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": {"Ref": "DBInstance"}
+            "Value": {
+              "Ref": "DBInstance"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "SNSTopic"}
+          {
+            "Ref": "SNSTopic"
+          }
         ],
         "TreatMissingData": "notBreaching"
       }
@@ -631,7 +816,9 @@
     "FreeStorageSpaceAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-LowStorage"},
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-LowStorage"
+        },
         "AlarmDescription": "Alarm when free storage space is less than 2GB",
         "MetricName": "FreeStorageSpace",
         "Namespace": "AWS/RDS",
@@ -643,11 +830,15 @@
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": {"Ref": "DBInstance"}
+            "Value": {
+              "Ref": "DBInstance"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "SNSTopic"}
+          {
+            "Ref": "SNSTopic"
+          }
         ],
         "TreatMissingData": "notBreaching"
       }
@@ -655,7 +846,9 @@
     "ReadLatencyAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighReadLatency"},
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighReadLatency"
+        },
         "AlarmDescription": "Alarm when read latency exceeds 200ms",
         "MetricName": "ReadLatency",
         "Namespace": "AWS/RDS",
@@ -667,11 +860,15 @@
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": {"Ref": "DBInstance"}
+            "Value": {
+              "Ref": "DBInstance"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "SNSTopic"}
+          {
+            "Ref": "SNSTopic"
+          }
         ],
         "TreatMissingData": "notBreaching"
       }
@@ -679,7 +876,9 @@
     "WriteLatencyAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighWriteLatency"},
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-DB-HighWriteLatency"
+        },
         "AlarmDescription": "Alarm when write latency exceeds 200ms",
         "MetricName": "WriteLatency",
         "Namespace": "AWS/RDS",
@@ -691,11 +890,15 @@
         "Dimensions": [
           {
             "Name": "DBInstanceIdentifier",
-            "Value": {"Ref": "DBInstance"}
+            "Value": {
+              "Ref": "DBInstance"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "SNSTopic"}
+          {
+            "Ref": "SNSTopic"
+          }
         ],
         "TreatMissingData": "notBreaching"
       }
@@ -704,114 +907,196 @@
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "PrivateSubnet1Id": {
       "Description": "Private Subnet 1 ID",
-      "Value": {"Ref": "PrivateSubnet1"},
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+        }
       }
     },
     "PrivateSubnet2Id": {
       "Description": "Private Subnet 2 ID",
-      "Value": {"Ref": "PrivateSubnet2"},
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+        }
       }
     },
     "DBInstanceId": {
       "Description": "RDS Database Instance ID",
-      "Value": {"Ref": "DBInstance"},
+      "Value": {
+        "Ref": "DBInstance"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBInstanceId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBInstanceId"
+        }
       }
     },
     "DBEndpoint": {
       "Description": "Database Endpoint",
-      "Value": {"Fn::GetAtt": ["DBInstance", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DBInstance",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBEndpoint"
+        }
       }
     },
     "DBPort": {
       "Description": "Database Port",
-      "Value": {"Fn::GetAtt": ["DBInstance", "Endpoint.Port"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DBInstance",
+          "Endpoint.Port"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBPort"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBPort"
+        }
       }
     },
     "BackupBucketName": {
       "Description": "S3 Backup Bucket Name",
-      "Value": {"Ref": "BackupBucket"},
+      "Value": {
+        "Ref": "BackupBucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BackupBucketName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BackupBucketName"
+        }
       }
     },
     "BackupBucketArn": {
       "Description": "S3 Backup Bucket ARN",
-      "Value": {"Fn::GetAtt": ["BackupBucket", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "BackupBucket",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BackupBucketArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BackupBucketArn"
+        }
       }
     },
     "KMSKeyId": {
       "Description": "KMS Key ID",
-      "Value": {"Ref": "KMSKey"},
+      "Value": {
+        "Ref": "KMSKey"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-KMSKeyId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
       }
     },
     "KMSKeyArn": {
       "Description": "KMS Key ARN",
-      "Value": {"Fn::GetAtt": ["KMSKey", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "KMSKey",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-KMSKeyArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
       }
     },
     "DatabaseSecurityGroupId": {
       "Description": "Database Security Group ID",
-      "Value": {"Ref": "DatabaseSecurityGroup"},
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DatabaseSecurityGroupId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseSecurityGroupId"
+        }
       }
     },
     "S3VPCEndpointId": {
       "Description": "S3 VPC Endpoint ID",
-      "Value": {"Ref": "S3VPCEndpoint"},
+      "Value": {
+        "Ref": "S3VPCEndpoint"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-S3VPCEndpointId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3VPCEndpointId"
+        }
       }
     },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for Alerts",
-      "Value": {"Ref": "SNSTopic"},
+      "Value": {
+        "Ref": "SNSTopic"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SNSTopicArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
       }
     },
     "S3BackupRoleArn": {
       "Description": "S3 Backup Role ARN",
-      "Value": {"Fn::GetAtt": ["S3BackupRole", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "S3BackupRole",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-S3BackupRoleArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BackupRoleArn"
+        }
       }
     },
     "RDSMonitoringRoleArn": {
       "Description": "RDS Enhanced Monitoring Role ARN",
-      "Value": {"Fn::GetAtt": ["RDSEnhancedMonitoringRole", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSEnhancedMonitoringRole",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSMonitoringRoleArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSMonitoringRoleArn"
+        }
       }
     },
     "RDSMasterSecretArn": {
       "Description": "RDS Master Secret ARN",
-      "Value": {"Ref": "RDSMasterSecret"},
+      "Value": {
+        "Ref": "RDSMasterSecret"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSMasterSecretArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSMasterSecretArn"
+        }
       }
     }
   }

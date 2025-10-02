@@ -166,7 +166,7 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
     test('should have Secrets Manager secret for RDS credentials', () => {
       expect(template.Resources.RDSMasterSecret).toBeDefined();
       expect(template.Resources.RDSMasterSecret.Type).toBe('AWS::SecretsManager::Secret');
-      
+
       const secret = template.Resources.RDSMasterSecret.Properties;
       expect(secret.GenerateSecretString).toBeDefined();
       expect(secret.GenerateSecretString.SecretStringTemplate).toContain('username');
@@ -206,7 +206,7 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
       expect(JSON.stringify(usernameJoinParts)).toContain('resolve:secretsmanager');
       expect(JSON.stringify(usernameJoinParts)).toContain('RDSMasterSecret');
       expect(JSON.stringify(usernameJoinParts)).toContain('username');
-      
+
       expect(db.MasterUserPassword['Fn::Join']).toBeDefined();
       const passwordJoinParts = db.MasterUserPassword['Fn::Join'][1];
       expect(JSON.stringify(passwordJoinParts)).toContain('resolve:secretsmanager');
