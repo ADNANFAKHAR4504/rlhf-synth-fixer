@@ -56,13 +56,12 @@ import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
-import software.amazon.awssdk.services.sfn.SfnClient;
-import software.amazon.awssdk.services.sfn.model.DescribeStateMachineRequest;
-import software.amazon.awssdk.services.sfn.model.DescribeStateMachineResponse;
-import software.amazon.awssdk.services.sfn.model.StartExecutionRequest;
-import software.amazon.awssdk.services.sfn.model.StartExecutionResponse;
+import software.amazon.awssdk.services.stepfunctions.SfnClient;
+import software.amazon.awssdk.services.stepfunctions.model.DescribeStateMachineRequest;
+import software.amazon.awssdk.services.stepfunctions.model.DescribeStateMachineResponse;
+import software.amazon.awssdk.services.stepfunctions.model.StartExecutionRequest;
+import software.amazon.awssdk.services.stepfunctions.model.StartExecutionResponse;
 import software.amazon.awssdk.core.SdkBytes;
-import java.util.Optional;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -193,6 +192,18 @@ public class MainIntegrationTest {
         
         // Load stack outputs
         stackOutputs = loadStackOutputs();
+        
+        // Debug: Print all available outputs
+        System.out.println("\n=== Stack Outputs Debug ===");
+        if (stackOutputs.isEmpty()) {
+            System.out.println("WARNING: No outputs found in stack!");
+        } else {
+            System.out.println("Found " + stackOutputs.size() + " outputs:");
+            stackOutputs.forEach((key, value) -> 
+                System.out.println("  " + key + " = " + value)
+            );
+        }
+        System.out.println("============================\n");
         
         System.out.println("Integration test setup complete for stack: " + stackName);
     }
