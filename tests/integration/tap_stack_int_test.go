@@ -58,7 +58,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Describe table
 		tableResp, err := dynamoClient.DescribeTable(ctx, &dynamodb.DescribeTableInput{
-			TableName: string(outputs.TableName),
+			TableName: aws.String(outputs.TableName),
 		})
 		require.NoError(t, err, "DynamoDB table should exist")
 
@@ -100,7 +100,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Get function configuration
 		funcResp, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
-			FunctionName: string(functionName),
+			FunctionName: aws.String(functionName),
 		})
 		require.NoError(t, err, "Lambda function should exist")
 
@@ -135,7 +135,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Get API information
 		apiResp, err := apiClient.GetRestApi(ctx, &apigateway.GetRestApiInput{
-			RestApiId: string(apiID),
+			RestApiId: aws.String(apiID),
 		})
 		require.NoError(t, err, "API Gateway should exist")
 
