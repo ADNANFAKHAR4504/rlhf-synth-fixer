@@ -11,11 +11,6 @@
       "Type": "String",
       "Default": "example.com",
       "Description": "Domain for SES email verification"
-    },
-    "SNSSpendLimit": {
-      "Type": "Number",
-      "Default": 50,
-      "Description": "Monthly SMS spend limit in USD"
     }
   },
   "Resources": {

@@ -48,12 +48,6 @@ describe('TapStack CloudFormation Template Tests', () => {
       expect(template.Parameters.EmailDomain.Type).toBe('String');
       expect(template.Parameters.EmailDomain.Default).toBe('example.com');
     });
-
-    test('should have SNSSpendLimit parameter', () => {
-      expect(template.Parameters.SNSSpendLimit).toBeDefined();
-      expect(template.Parameters.SNSSpendLimit.Type).toBe('Number');
-      expect(template.Parameters.SNSSpendLimit.Default).toBe(50);
-    });
   });
 
   describe('SNS Resources', () => {
