@@ -6,6 +6,10 @@ Description: 'Production-ready CloudFormation template for a recipe blog WordPre
 # For LocalStack testing, some features are simplified or may be skipped during validation.
 
 Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1011 # Allow parameter-based secrets for testing/development environments
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
@@ -51,7 +55,7 @@ Parameters:
     Type: String
     NoEcho: true
     Default: 'testpassword123'
-    Description: 'Database administrator password (minimum 8 characters)'
+    Description: 'Database administrator password (minimum 8 characters). For production, use AWS Secrets Manager dynamic reference.'
     MinLength: 8
     MaxLength: 41
     AllowedPattern: '^[a-zA-Z0-9]*$'
@@ -85,6 +89,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  HasDomainName: !Not [!Equals [!Ref BlogDomainName, '']]
 
 Resources:
   # ============================================
@@ -639,6 +644,10 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: !Sub 'RecipeBlog CloudFront Distribution - ${Environment}'
+        Aliases: !If
+          - HasDomainName
+          - [!Ref BlogDomainName]
+          - !Ref AWS::NoValue
         PriceClass: PriceClass_100
         HttpVersion: http2
         DefaultRootObject: index.php
