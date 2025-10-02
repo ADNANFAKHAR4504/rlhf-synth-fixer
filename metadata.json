@@ -6,7 +6,7 @@
   "po_id": "348961",
   "team": "5",
   "startedAt": "2025-10-01T11:05:32.041Z",
-  "subtask": "Web server with EC2 and monitoring",
+  "subtask": "Cloud Environment Setup",
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
