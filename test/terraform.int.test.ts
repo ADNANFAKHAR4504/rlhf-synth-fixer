@@ -90,6 +90,32 @@ beforeAll(async () => {
       console.warn("⚠️ Outputs file not found:", outputsPath);
     }
 
+    // Derive region from outputs if available to avoid mismatches in CI
+    const derivedRegion = (() => {
+      const apiUrl = outputs.api_gateway_url;
+      const alb = outputs.alb_dns_name;
+      const rds = outputs.rds_endpoint;
+      let match: RegExpMatchArray | null = null;
+      if (apiUrl) {
+        match = apiUrl.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com/);
+        if (match && match[1]) return match[1];
+      }
+      if (alb) {
+        match = alb.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/);
+        if (match && match[1]) return match[1];
+      }
+      if (rds) {
+        match = rds.match(/\.([a-z0-9-]+)\.rds\.amazonaws\.com/);
+        if (match && match[1]) return match[1];
+      }
+      return undefined;
+    })();
+
+    if (derivedRegion && derivedRegion !== region) {
+      console.log(`ℹ️ Overriding AWS region from '${region}' to derived region '${derivedRegion}' from outputs.`);
+      region = derivedRegion;
+    }
+
     // Initialize AWS clients
     s3Client = new S3Client({ region });
     lambdaClient = new LambdaClient({ region });
