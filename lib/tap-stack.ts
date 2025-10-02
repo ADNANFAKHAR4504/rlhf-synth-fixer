@@ -68,6 +68,36 @@ export class TapStack extends TerraformStack {
     const kmsKey = new KmsKey(this, 'kms-key', {
       description: 'KMS key for encrypting resources',
       enableKeyRotation: true,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Id: 'Key policy',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: '*', // This represents the AWS account root user
+            },
+            Action: 'kms:*',
+            Resource: '*',
+            Condition: {
+              StringEquals: {
+                'aws:PrincipalOrgID':
+                  '${data.aws_caller_identity.current.account_id}',
+              },
+            },
+          },
+          {
+            Sid: 'Allow CloudTrail to encrypt logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:GenerateDataKey*', 'kms:Decrypt'],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: {
         Environment: 'Production',
       },
