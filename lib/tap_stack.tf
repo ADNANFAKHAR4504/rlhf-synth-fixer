@@ -43,6 +43,12 @@ variable "cloudwatch_alarm_error_threshold" {
   default     = 10
 }
 
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail (set to false if you've reached the 5 trail limit)"
+  type        = bool
+  default     = false
+}
+
 # Data Sources
 data "aws_caller_identity" "current" {}
 
@@ -155,6 +161,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "document_lifecycle" {
   rule {
     id     = "90-day-retention"
     status = "Enabled"
+    filter {}
     expiration {
       days = var.document_retention_days
     }
@@ -216,6 +223,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "log_lifecycle" {
   rule {
     id     = "log-retention"
     status = "Enabled"
+    filter {}
     expiration {
       days = var.log_retention_days
     }
@@ -292,8 +300,9 @@ resource "aws_s3_bucket_logging" "document_bucket_logging" {
   target_prefix = "s3-access-logs/"
 }
 
-# CloudTrail
+# CloudTrail (optional - disable if you've hit the 5 trail limit)
 resource "aws_cloudtrail" "legal_document_trail" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   name                          = "legal-documents-trail"
   s3_bucket_name                = aws_s3_bucket.log_bucket.id
   s3_key_prefix                 = "cloudtrail"
@@ -531,8 +540,8 @@ output "document_kms_key_id" {
 }
 
 output "cloudtrail_name" {
-  description = "Name of the CloudTrail trail"
-  value       = aws_cloudtrail.legal_document_trail.name
+  description = "Name of the CloudTrail trail (empty if disabled)"
+  value       = var.enable_cloudtrail ? aws_cloudtrail.legal_document_trail[0].name : ""
 }
 
 output "document_reader_role_arn" {

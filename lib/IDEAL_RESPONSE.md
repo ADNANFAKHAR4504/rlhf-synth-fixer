@@ -4,25 +4,49 @@
 
 This document provides the corrected, fully deployable Terraform solution that addresses all critical issues identified in the MODEL_FAILURES.md analysis.
 
-## Complete Terraform Script
+## Complete Terraform Scripts
 
- 
+### provider.tf
+
+**Note:** This file already exists in your project and owns the terraform configuration block and aws_region variable.
+
 ```hcl
-# tap_stack.tf - Legal Firm Document Storage System (IDEAL SOLUTION)
+# provider.tf
+
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "us-east-1"
+}
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.4.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.0"
     }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+### tap_stack.tf
+
+```hcl
+# tap_stack.tf - Legal Firm Document Storage System (IDEAL SOLUTION)
 
 # Variables (aws_region already exists in provider.tf)
 variable "environment" {
@@ -592,17 +616,11 @@ output "cloudwatch_alarms" {
    - Referenced in KMS alias names and bucket region output
    - Comment clearly indicates it's defined in `provider.tf`
 
-2. **Complete Terraform Configuration Block**
-
-   ```terraform
-   terraform {
-     required_version = ">= 1.0"
-     required_providers {
-       aws    = { source = "hashicorp/aws", version = "~> 5.0" }
-       random = { source = "hashicorp/random", version = "~> 3.0" }
-     }
-   }
-   ```
+2. **Complete Terraform Configuration Block (in provider.tf)**
+   - ✅ Properly declared in `provider.tf` (not in tap_stack.tf)
+   - ✅ Includes `required_version` constraint
+   - ✅ Declares `aws` and `random` providers with versions
+   - ✅ Follows Terraform best practices for provider management
 
 3. **Functional CloudWatch Monitoring**
    - ✅ Includes `aws_s3_bucket_metric` resource to enable S3 Request Metrics (CRITICAL FIX)
@@ -789,7 +807,7 @@ aws iam list-roles --query 'Roles[?contains(RoleName, `LegalDocument`)]'
 | ------------------------- | ---------------------------- | ----------------------------------- |
 | **aws_region variable**   | ❌ Redeclared (error)        | ✅ Referenced from provider.tf      |
 | **aws_region usage**      | ❌ Not used                  | ✅ Used in locals and outputs       |
-| **Terraform block**       | ❌ Missing                   | ✅ Complete with providers          |
+| **Terraform block**       | ❌ Missing                   | ✅ In provider.tf (best practice)   |
 | **S3 Request Metrics**    | ❌ Not enabled               | ✅ Enabled via aws_s3_bucket_metric |
 | **CloudWatch Alarms**     | ❌ Non-functional            | ✅ Fully functional with 4 alarms   |
 | **Alarm Notifications**   | ❌ Empty array               | ✅ Configurable via variable        |
