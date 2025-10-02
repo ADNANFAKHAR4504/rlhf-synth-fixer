@@ -1,49 +1,31 @@
-### Reasoning Trace
----
-
-The user wants me to create AWS CDK code in TypeScript for a blog platform infrastructure. Here are the requirements:
-
-1. VPC with CIDR 10.0.0.0/16
-2. t3.micro EC2 instances running Apache in public subnets
-3. Security groups allowing only HTTP traffic on port 80
-4. S3 bucket for static content (no public access)
-5. EC2 monitoring with CloudWatch for CPU usage and status checks
-6. IAM roles with least privilege (EC2 can read S3 and write logs)
-7. Deploy to us-east-1
-8. Naming convention: <Service>-BlogApp-us-east-1
-9. Output only code for bin/tap.ts, lib/tap-stack.ts, and cdk.json files
-
-Let me create the three files:
-
-1. bin/tap.ts - The entry point
-2. lib/tap-stack.ts - The main stack definition
-3. cdk.json - CDK configuration
-
-I need to:
-- Create VPC with public subnets across multiple AZs
-- Create multiple EC2 instances with Apache user data
-- Create S3 bucket without public access
-- Set up IAM role for EC2 with S3 read and CloudWatch logs write permissions
-- Create security group allowing only port 80 inbound
-- Enable CloudWatch monitoring for EC2 with proper log groups
-- Use proper naming convention
-- Ensure high availability with instances in different AZs
-
-### Answer 
----
 
 **bin/tap.ts**
 ```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
-new TapStack(app, 'TapStack', {
+
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
+
+new TapStack(app, stackName, {
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1'
-  }
+    region: process.env.CDK_DEFAULT_REGION,
+  },
 });
 ```
 
@@ -54,176 +36,204 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  public readonly vpc: ec2.Vpc;
+  public readonly bucket: s3.Bucket;
+  public readonly instance: ec2.Instance;
+  public readonly securityGroup: ec2.SecurityGroup;
+  public readonly role: iam.Role;
+  public readonly cpuAlarm: cloudwatch.Alarm;
+  public readonly statusCheckAlarm: cloudwatch.Alarm;
+
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    const vpc = new ec2.Vpc(this, 'VPC-BlogApp-us-east-1', {
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    const region = this.region || 'us-east-1';
+    // Use a safe naming suffix that doesn't include tokens for construct IDs
+    const namingSuffix = region.includes('Token')
+      ? 'BlogApp-us-east-1'
+      : `BlogApp-${region}`;
+
+    this.vpc = new ec2.Vpc(this, `VPC-${namingSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
       subnetConfiguration: [
         {
           cidrMask: 24,
           name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC
-        }
-      ]
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
     });
 
-    const bucket = new s3.Bucket(this, 'S3-BlogApp-us-east-1', {
-      bucketName: `s3-blogapp-us-east-1-${cdk.Aws.ACCOUNT_ID}`,
+    // Only set bucket name if we have resolved account and region (not tokens)
+    const bucketName =
+      this.account && !region.includes('Token')
+        ? `s3-blogapp-${region}-${this.account}-${environmentSuffix}`.toLowerCase()
+        : undefined;
+
+    this.bucket = new s3.Bucket(this, `S3-${namingSuffix}`, {
+      bucketName,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
+      versioned: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true
+      autoDeleteObjects: true,
     });
 
-    const logGroup = new logs.LogGroup(this, 'CW-LogGroup-BlogApp-us-east-1', {
-      logGroupName: '/aws/ec2/blogapp',
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
-
-    const role = new iam.Role(this, 'IAM-BlogApp-us-east-1', {
+    this.role = new iam.Role(this, `IAM-${namingSuffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
-      ]
-    });
-
-    bucket.grantRead(role);
-    
-    role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-        'logs:DescribeLogStreams'
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
-      resources: [logGroup.logGroupArn]
-    }));
-
-    const instanceProfile = new iam.CfnInstanceProfile(this, 'InstanceProfile-BlogApp-us-east-1', {
-      roles: [role.roleName]
+      inlinePolicies: {
+        S3ReadPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:ListBucket'],
+              resources: [this.bucket.bucketArn, `${this.bucket.bucketArn}/*`],
+            }),
+          ],
+        }),
+        CloudWatchLogsPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogStreams',
+              ],
+              resources: [`arn:aws:logs:${region}:${this.account}:*`],
+            }),
+          ],
+        }),
+      },
     });
 
-    const securityGroup = new ec2.SecurityGroup(this, 'SG-BlogApp-us-east-1', {
-      vpc,
-      allowAllOutbound: true
+    this.securityGroup = new ec2.SecurityGroup(this, `SG-${namingSuffix}`, {
+      vpc: this.vpc,
+      description: 'Security group for blog platform EC2 instance',
+      allowAllOutbound: true,
     });
 
-    securityGroup.addIngressRule(
+    this.securityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP traffic'
+      'Allow HTTP traffic on port 80'
     );
 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
-      'yum install -y httpd awslogs',
+      'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      'systemctl start awslogsd',
-      'systemctl enable awslogsd',
-      'echo "<h1>Blog Platform</h1>" > /var/www/html/index.html'
+      'echo "<h1>Blog Platform - Environment: ' +
+        environmentSuffix +
+        '</h1>" > /var/www/html/index.html',
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html'
     );
 
-    const publicSubnets = vpc.publicSubnets;
-    
-    const instance1 = new ec2.CfnInstance(this, 'EC2-BlogApp-us-east-1-1', {
-      instanceType: 't3.micro',
-      imageId: ec2.MachineImage.latestAmazonLinux2().getImage(this).imageId,
-      subnetId: publicSubnets[0].subnetId,
-      securityGroupIds: [securityGroup.securityGroupId],
-      iamInstanceProfile: instanceProfile.ref,
-      userData: cdk.Fn.base64(userData.render()),
-      monitoring: true,
-      tags: [
-        {
-          key: 'Name',
-          value: 'EC2-BlogApp-us-east-1-1'
-        }
-      ]
+    this.instance = new ec2.Instance(this, `EC2-${namingSuffix}`, {
+      vpc: this.vpc,
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+      securityGroup: this.securityGroup,
+      role: this.role,
+      userData: userData,
+      detailedMonitoring: true,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
     });
 
-    const instance2 = new ec2.CfnInstance(this, 'EC2-BlogApp-us-east-1-2', {
-      instanceType: 't3.micro',
-      imageId: ec2.MachineImage.latestAmazonLinux2().getImage(this).imageId,
-      subnetId: publicSubnets[1].subnetId,
-      securityGroupIds: [securityGroup.securityGroupId],
-      iamInstanceProfile: instanceProfile.ref,
-      userData: cdk.Fn.base64(userData.render()),
-      monitoring: true,
-      tags: [
-        {
-          key: 'Name',
-          value: 'EC2-BlogApp-us-east-1-2'
-        }
-      ]
-    });
-
-    const cpuAlarm1 = new cloudwatch.Alarm(this, 'CW-CPUAlarm-BlogApp-us-east-1-1', {
+    this.cpuAlarm = new cloudwatch.Alarm(this, `CW-CPUAlarm-${namingSuffix}`, {
+      alarmName: `EC2-CPUUtilization-${namingSuffix}-${environmentSuffix}`,
+      alarmDescription:
+        'Alarm for high CPU utilization on blog platform EC2 instance',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
         metricName: 'CPUUtilization',
         dimensionsMap: {
-          InstanceId: instance1.ref
+          InstanceId: this.instance.instanceId,
         },
         period: cdk.Duration.minutes(5),
-        statistic: 'Average'
+        statistic: 'Average',
       }),
       threshold: 80,
       evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    const cpuAlarm2 = new cloudwatch.Alarm(this, 'CW-CPUAlarm-BlogApp-us-east-1-2', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          InstanceId: instance2.ref
-        },
-        period: cdk.Duration.minutes(5),
-        statistic: 'Average'
-      }),
-      threshold: 80,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING
+    this.statusCheckAlarm = new cloudwatch.Alarm(
+      this,
+      `CW-StatusCheckAlarm-${namingSuffix}`,
+      {
+        alarmName: `EC2-StatusCheckFailed-${namingSuffix}-${environmentSuffix}`,
+        alarmDescription:
+          'Alarm for failed status checks on blog platform EC2 instance',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/EC2',
+          metricName: 'StatusCheckFailed',
+          dimensionsMap: {
+            InstanceId: this.instance.instanceId,
+          },
+          period: cdk.Duration.minutes(1),
+          statistic: 'Maximum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      }
+    );
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID for the blog platform',
     });
 
-    const statusCheckAlarm1 = new cloudwatch.Alarm(this, 'CW-StatusCheckAlarm-BlogApp-us-east-1-1', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'StatusCheckFailed',
-        dimensionsMap: {
-          InstanceId: instance1.ref
-        },
-        period: cdk.Duration.minutes(1),
-        statistic: 'Average'
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.bucket.bucketName,
+      description: 'S3 bucket name for static content',
     });
 
-    const statusCheckAlarm2 = new cloudwatch.Alarm(this, 'CW-StatusCheckAlarm-BlogApp-us-east-1-2', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'StatusCheckFailed',
-        dimensionsMap: {
-          InstanceId: instance2.ref
-        },
-        period: cdk.Duration.minutes(1),
-        statistic: 'Average'
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING
+    new cdk.CfnOutput(this, 'InstanceId', {
+      value: this.instance.instanceId,
+      description: 'EC2 instance ID',
+    });
+
+    new cdk.CfnOutput(this, 'PublicIp', {
+      value: this.instance.instancePublicIp,
+      description: 'Public IP address of the EC2 instance',
+    });
+
+    new cdk.CfnOutput(this, 'WebsiteUrl', {
+      value: `http://${this.instance.instancePublicIp}`,
+      description: 'URL to access the blog platform',
     });
   }
 }
@@ -250,17 +260,82 @@ export class TapStack extends cdk.Stack {
     ]
   },
   "context": {
-    "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": true,
-    "@aws-cdk/core:stackRelativeExports": true,
-    "@aws-cdk/aws-rds:lowercaseDbIdentifier": true,
-    "@aws-cdk/aws-lambda:recognizeVersionProps": true,
-    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true,
-    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
-    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [
       "aws",
       "aws-cn"
-    ]
+    ],
+    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
+    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-route53-patters:useCertificate": true,
+    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
+    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
+    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
+    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
+    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
+    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
+    "@aws-cdk/aws-redshift:columnId": true,
+    "@aws-cdk/aws-stepfunctions-tasks:enableEmrServicePolicyV2": true,
+    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
+    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
+    "@aws-cdk/aws-kms:aliasNameRef": true,
+    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
+    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
+    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
+    "@aws-cdk/aws-opensearchservice:enableOpensearchMultiAzWithStandby": true,
+    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true,
+    "@aws-cdk/aws-efs:mountTargetOrderInsensitiveLogicalId": true,
+    "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": true,
+    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
+    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": true,
+    "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
+    "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": true,
+    "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": true,
+    "@aws-cdk/aws-eks:nodegroupNameAttribute": true,
+    "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": true,
+    "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": true,
+    "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": false,
+    "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false,
+    "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false,
+    "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
+    "@aws-cdk/aws-ecs:reduceEc2FargateCloudWatchPermissions": true,
+    "@aws-cdk/aws-dynamodb:resourcePolicyPerReplica": true,
+    "@aws-cdk/aws-ec2:ec2SumTImeoutEnabled": true,
+    "@aws-cdk/aws-appsync:appSyncGraphQLAPIScopeLambdaPermission": true,
+    "@aws-cdk/aws-rds:setCorrectValueForDatabaseInstanceReadReplicaInstanceResourceId": true,
+    "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": true,
+    "@aws-cdk/aws-lambda-nodejs:sdkV3ExcludeSmithyPackages": true,
+    "@aws-cdk/aws-stepfunctions-tasks:fixRunEcsTaskPolicy": true,
+    "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": true,
+    "@aws-cdk/aws-route53-targets:userPoolDomainNameMethodWithoutCustomResource": true,
+    "@aws-cdk/aws-elasticloadbalancingV2:albDualstackWithoutPublicIpv4SecurityGroupRulesDefault": true,
+    "@aws-cdk/aws-iam:oidcRejectUnauthorizedConnections": true,
+    "@aws-cdk/core:enableAdditionalMetadataCollection": true,
+    "@aws-cdk/aws-lambda:createNewPoliciesWithAddToRolePolicy": false,
+    "@aws-cdk/aws-s3:setUniqueReplicationRoleName": true,
+    "@aws-cdk/aws-events:requireEventBusPolicySid": true,
+    "@aws-cdk/core:aspectPrioritiesMutating": true,
+    "@aws-cdk/aws-dynamodb:retainTableReplica": true,
+    "@aws-cdk/aws-stepfunctions:useDistributedMapResultWriterV2": true,
+    "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": true,
+    "@aws-cdk/aws-ec2:requirePrivateSubnetsForEgressOnlyInternetGateway": true,
+    "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true,
+    "@aws-cdk/aws-lambda:useCdkManagedLogGroup": true
   }
 }
 ```
