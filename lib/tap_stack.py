@@ -7,7 +7,7 @@ Implements comprehensive security controls with automated threat response
 import json
 from typing import Any, Dict, List
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import CfnOutput, CustomResource, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cloudtrail as cloudtrail
 from aws_cdk import aws_config as config
 from aws_cdk import aws_ec2 as ec2
@@ -25,6 +25,7 @@ from aws_cdk import aws_securityhub as securityhub
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
+from aws_cdk import custom_resources as cr
 from constructs import Construct
 
 
@@ -699,29 +700,52 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection"""
         
-        # Use native CDK GuardDuty detector
-        self.guardduty_detector = guardduty.CfnDetector(
-            self, "GuardDutyDetector",
-            enable=True,
-            finding_publishing_frequency="FIFTEEN_MINUTES",
-            data_sources=guardduty.CfnDetector.CFNDataSourceConfigurationsProperty(
-                s3_logs=guardduty.CfnDetector.CFNS3LogsConfigurationProperty(
-                    enable=True
-                ),
-                kubernetes=guardduty.CfnDetector.CFNKubernetesConfigurationProperty(
-                    audit_logs=guardduty.CfnDetector.CFNKubernetesAuditLogsConfigurationProperty(
-                        enable=True
+        # Create Lambda-backed custom resource to handle existing detectors
+        guardduty_provider = cr.Provider(
+            self, "GuardDutyProvider",
+            on_event_handler=lambda_.Function(
+                self, "GuardDutyHandler",
+                runtime=lambda_.Runtime.PYTHON_3_11,
+                handler="index.handler",
+                code=lambda_.Code.from_inline(self._get_guardduty_detector_code()),
+                timeout=Duration.minutes(5),
+                initial_policy=[
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "guardduty:ListDetectors",
+                            "guardduty:GetDetector", 
+                            "guardduty:CreateDetector",
+                            "guardduty:UpdateDetector",
+                            "guardduty:TagResource",
+                            "iam:CreateServiceLinkedRole",
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream", 
+                            "logs:PutLogEvents"
+                        ],
+                        resources=["*"]
                     )
-                )
-            ),
-            tags=[{
-                "key": "Name",
-                "value": f"ZeroTrustDetector-{self.unique_suffix}"
-            }]
+                ]
+            )
         )
         
-        # Get detector ID from native resource
-        self.guardduty_detector_id = self.guardduty_detector.ref
+        # Custom resource for GuardDuty detector
+        guardduty_resource = CustomResource(
+            self, "GuardDutyDetector",
+            service_token=guardduty_provider.service_token,
+            properties={
+                "Enable": True,
+                "FindingPublishingFrequency": "FIFTEEN_MINUTES", 
+                "Tags": {
+                    "Name": f"ZeroTrustDetector-{self.unique_suffix}",
+                    "Environment": self.stack_environment,
+                    "ManagedBy": "CDK"
+                }
+            }
+        )
+        
+        # Get detector ID from custom resource
+        self.guardduty_detector_id = guardduty_resource.get_att_string("DetectorId")
 
         # Create threat intel set for known bad IPs
         self.threat_intel_set = guardduty.CfnThreatIntelSet(
@@ -847,6 +871,254 @@ class TapStack(Stack):
         security_hub_rule.add_target(
             targets.LambdaFunction(self.incident_response_lambda)
         )
+
+    def _get_guardduty_detector_code(self) -> str:
+        """Return Lambda function code for GuardDuty detector management"""
+        
+        return """
+import json
+import boto3
+import logging
+import urllib3
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+guardduty = boto3.client('guardduty')
+http = urllib3.PoolManager()
+
+def handler(event, context):
+    '''
+    GuardDuty detector management handler for CloudFormation custom resource
+    '''
+    try:
+        logger.info(f"Processing event: {json.dumps(event, default=str)}")
+        
+        request_type = event.get('RequestType')
+        properties = event.get('ResourceProperties', {})
+        response_url = event.get('ResponseURL')
+        stack_id = event.get('StackId')
+        request_id = event.get('RequestId')
+        logical_resource_id = event.get('LogicalResourceId')
+        
+        # Initialize response
+        response_data = {}
+        physical_resource_id = event.get('PhysicalResourceId', 'guardduty-detector')
+        
+        try:
+            if request_type == 'Create':
+                response_data = handle_create(properties)
+                physical_resource_id = response_data.get('DetectorId', physical_resource_id)
+            elif request_type == 'Update':
+                physical_resource_id = event.get('PhysicalResourceId', '')
+                response_data = handle_update(properties, physical_resource_id)
+            elif request_type == 'Delete':
+                physical_resource_id = event.get('PhysicalResourceId', '')
+                response_data = handle_delete(properties, physical_resource_id)
+            
+            # Send success response
+            send_response(response_url, {
+                'Status': 'SUCCESS',
+                'Reason': 'Operation completed successfully',
+                'PhysicalResourceId': physical_resource_id,
+                'StackId': stack_id,
+                'RequestId': request_id,
+                'LogicalResourceId': logical_resource_id,
+                'Data': response_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error processing request: {str(e)}")
+            # Send failure response
+            send_response(response_url, {
+                'Status': 'FAILED',
+                'Reason': str(e),
+                'PhysicalResourceId': physical_resource_id,
+                'StackId': stack_id,
+                'RequestId': request_id,
+                'LogicalResourceId': logical_resource_id,
+                'Data': {}
+            })
+            
+    except Exception as e:
+        logger.error(f"Critical error in handler: {str(e)}")
+        # Try to send failure response if possible
+        try:
+            send_response(response_url, {
+                'Status': 'FAILED',
+                'Reason': f'Critical handler error: {str(e)}',
+                'PhysicalResourceId': 'failed-resource',
+                'StackId': stack_id,
+                'RequestId': request_id,
+                'LogicalResourceId': logical_resource_id,
+                'Data': {}
+            })
+        except:
+            pass
+
+def handle_create(properties):
+    '''
+    Handle Create request - use existing detector or create new one
+    '''
+    try:
+        # Check if detector already exists
+        detectors_response = guardduty.list_detectors()
+        detector_ids = detectors_response.get('DetectorIds', [])
+        
+        if detector_ids:
+            # Use existing detector
+            detector_id = detector_ids[0]
+            logger.info(f"Using existing GuardDuty detector: {detector_id}")
+            
+            # Update existing detector configuration
+            try:
+                guardduty.update_detector(
+                    DetectorId=detector_id,
+                    Enable=properties.get('Enable', True),
+                    FindingPublishingFrequency=properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
+                )
+                logger.info(f"Updated existing detector configuration: {detector_id}")
+            except Exception as e:
+                logger.warning(f"Failed to update detector configuration: {str(e)}")
+            
+            # Apply tags if provided
+            tags = properties.get('Tags', {})
+            if tags:
+                try:
+                    detector_arn = f"arn:aws:guardduty:{boto3.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:detector/{detector_id}"
+                    guardduty.tag_resource(
+                        ResourceArn=detector_arn,
+                        Tags=tags
+                    )
+                    logger.info(f"Applied tags to existing detector: {detector_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to apply tags: {str(e)}")
+        else:
+            # Create new detector
+            logger.info("Creating new GuardDuty detector")
+            
+            create_params = {
+                'Enable': properties.get('Enable', True),
+                'FindingPublishingFrequency': properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
+            }
+            
+            # Add tags if provided
+            tags = properties.get('Tags', {})
+            if tags:
+                create_params['Tags'] = tags
+            
+            create_response = guardduty.create_detector(**create_params)
+            detector_id = create_response['DetectorId']
+            logger.info(f"Created new GuardDuty detector: {detector_id}")
+        
+        return {
+            'DetectorId': detector_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to handle create request: {str(e)}")
+        raise
+
+def handle_update(properties, physical_resource_id):
+    '''
+    Handle Update request
+    '''
+    try:
+        # Use the physical resource ID as detector ID if available
+        detector_id = physical_resource_id
+        
+        # If no physical resource ID, get the first available detector
+        if not detector_id or detector_id == 'guardduty-detector':
+            detectors_response = guardduty.list_detectors()
+            detector_ids = detectors_response.get('DetectorIds', [])
+            if not detector_ids:
+                raise Exception("No existing detector found for update")
+            detector_id = detector_ids[0]
+        
+        # Update detector configuration
+        guardduty.update_detector(
+            DetectorId=detector_id,
+            Enable=properties.get('Enable', True),
+            FindingPublishingFrequency=properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
+        )
+        
+        # Update tags if provided
+        tags = properties.get('Tags', {})
+        if tags:
+            detector_arn = f"arn:aws:guardduty:{boto3.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:detector/{detector_id}"
+            guardduty.tag_resource(
+                ResourceArn=detector_arn,
+                Tags=tags
+            )
+        
+        logger.info(f"Updated GuardDuty detector: {detector_id}")
+        
+        return {
+            'DetectorId': detector_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to handle update request: {str(e)}")
+        raise
+
+def handle_delete(properties, physical_resource_id):
+    '''
+    Handle Delete request - do not delete detector, just disable for safety
+    '''
+    try:
+        # Use the physical resource ID as detector ID if available
+        detector_id = physical_resource_id
+        
+        # If no physical resource ID, get the first available detector
+        if not detector_id or detector_id in ['guardduty-detector', 'failed-resource']:
+            detectors_response = guardduty.list_detectors()
+            detector_ids = detectors_response.get('DetectorIds', [])
+            if detector_ids:
+                detector_id = detector_ids[0]
+        
+        if detector_id and detector_id not in ['guardduty-detector', 'failed-resource']:
+            # Only disable, don't delete to preserve findings
+            try:
+                guardduty.update_detector(
+                    DetectorId=detector_id,
+                    Enable=False
+                )
+                logger.info(f"Disabled GuardDuty detector: {detector_id} (not deleted to preserve findings)")
+            except Exception as e:
+                logger.warning(f"Failed to disable detector: {str(e)}")
+        else:
+            logger.info("No valid detector found to disable")
+        
+        return {}
+        
+    except Exception as e:
+        logger.warning(f"Failed to disable detector during delete: {str(e)}")
+        # Return success anyway since detector might not exist
+        return {}
+
+def send_response(response_url, response_body):
+    '''
+    Send response back to CloudFormation
+    '''
+    try:
+        response_body_json = json.dumps(response_body)
+        logger.info(f"Sending response: {response_body_json}")
+        
+        response = http.request(
+            'PUT',
+            response_url,
+            body=response_body_json,
+            headers={'Content-Type': ''}
+        )
+        
+        logger.info(f"Response sent. Status: {response.status}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send response: {str(e)}")
+        raise
+"""
 
     def _get_incident_response_code(self) -> str:
         """Return Lambda function code for incident response"""
