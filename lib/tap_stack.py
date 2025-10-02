@@ -327,9 +327,8 @@ class TapStack(Stack):
         )
 
         # Attach VPC to Transit Gateway
-        # Use all available subnets for TGW attachment (mix of public and private)
-        all_subnets = self.vpc.public_subnets + self.vpc.isolated_subnets
-        subnet_ids = [subnet.subnet_id for subnet in all_subnets[:3]]
+        # Use only public subnets to avoid duplicate AZ issues
+        subnet_ids = [subnet.subnet_id for subnet in self.vpc.public_subnets[:3]]
         
         self.tgw_attachment = ec2.CfnTransitGatewayAttachment(
             self, "TGWAttachment",
@@ -391,9 +390,9 @@ class TapStack(Stack):
                     subnet_id=subnet.subnet_id
                 ) for subnet in self.vpc.public_subnets[:2]
             ],
-            delete_protection=True,
-            firewall_policy_change_protection=True,
-            subnet_change_protection=True,
+            delete_protection=False,
+            firewall_policy_change_protection=False,
+            subnet_change_protection=False,
             description="Network firewall for zero-trust architecture",
             tags=[{
                 "key": "Name",
