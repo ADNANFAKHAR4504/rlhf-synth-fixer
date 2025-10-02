@@ -244,6 +244,7 @@ export class TapStack extends cdk.Stack {
     endpoint.addDependency(endpointConfig);
 
     // Auto-scaling for SageMaker endpoint (target 1000 invocations per instance)
+    // FIXED: Added node dependency on endpoint to ensure it exists before creating auto-scaling
     const endpointVariantA = new applicationautoscaling.ScalableTarget(this, 'EndpointScalingTargetA', {
       serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
       resourceId: `endpoint/${endpoint.endpointName}/variant/ModelA`,
@@ -251,6 +252,9 @@ export class TapStack extends cdk.Stack {
       minCapacity: 1,
       maxCapacity: 10,
     });
+
+    // CRITICAL FIX: Add dependency on the endpoint CloudFormation resource
+    endpointVariantA.node.addDependency(endpoint);
 
     endpointVariantA.scaleToTrackMetric('TargetTrackingA', {
       targetValue: 1000,
@@ -329,13 +333,13 @@ def handler(event, context):
         # Parse input
         body = json.loads(event.get('body', '{}'))
         input_data = body.get('data', [])
-
+        
         # Get active model version
         model_version = ssm.get_parameter(Name=MODEL_VERSION_PARAM)['Parameter']['Value']
-
+        
         # Preprocess data (normalize, feature engineering, etc.)
         processed_data = preprocess_data(input_data)
-
+        
         # Invoke SageMaker endpoint
         response = sagemaker_runtime.invoke_endpoint(
             EndpointName=ENDPOINT_NAME,
@@ -343,17 +347,16 @@ def handler(event, context):
             Body=json.dumps({'instances': processed_data}),
             TargetVariant='ModelA'  # Can be parameterized for A/B testing
         )
-
+        
         # Parse prediction results
         predictions = json.loads(response['Body'].read().decode())
-
+        
         # Store results in DynamoDB with TTL (30 days expiration)
         table = dynamodb.Table(TABLE_NAME)
         timestamp = int(datetime.utcnow().timestamp() * 1000)
         expiration_time = int((datetime.utcnow() + timedelta(days=30)).timestamp())
-
         prediction_id = f"{timestamp}-{context.request_id[:8]}"
-
+        
         table.put_item(
             Item={
                 'predictionId': prediction_id,
@@ -364,7 +367,7 @@ def handler(event, context):
                 'expirationTime': expiration_time
             }
         )
-
+        
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json'},
@@ -374,6 +377,7 @@ def handler(event, context):
                 'modelVersion': model_version
             })
         }
+        
     except Exception as e:
         print(f"Error: {str(e)}")
         return {
@@ -421,24 +425,24 @@ TABLE_NAME = os.environ['TABLE_NAME']
 def handler(event, context):
     """Process Kinesis stream records and perform real-time inference"""
     table = dynamodb.Table(TABLE_NAME)
-
+    
     for record in event['Records']:
         # Decode Kinesis data
         payload = json.loads(base64.b64decode(record['kinesis']['data']))
-
+        
         # Invoke SageMaker for real-time prediction
         response = sagemaker_runtime.invoke_endpoint(
             EndpointName=ENDPOINT_NAME,
             ContentType='application/json',
             Body=json.dumps({'instances': [payload['data']]})
         )
-
+        
         predictions = json.loads(response['Body'].read().decode())
-
+        
         # Store result with TTL
         timestamp = int(datetime.utcnow().timestamp() * 1000)
         expiration_time = int((datetime.utcnow() + timedelta(days=30)).timestamp())
-
+        
         table.put_item(
             Item={
                 'predictionId': f"stream-{record['kinesis']['sequenceNumber']}",
@@ -449,7 +453,7 @@ def handler(event, context):
                 'expirationTime': expiration_time
             }
         )
-
+    
     return {'statusCode': 200, 'body': 'Processed successfully'}
 `),
       timeout: cdk.Duration.seconds(60),
@@ -581,6 +585,7 @@ def handler(event, context):
 
     dataBucket.grantReadWrite(batchJobRole);
     predictionsTable.grantReadWriteData(batchJobRole);
+
     batchJobRole.addToPolicy(new iam.PolicyStatement({
       actions: ['sagemaker:InvokeEndpoint'],
       resources: [`arn:aws:sagemaker:${region}:${this.account}:endpoint/${endpoint.endpointName}`],
@@ -620,10 +625,12 @@ def handler(event, context):
     });
 
     lambdaRole.grantAssumeRole(stepFunctionsRole);
+
     stepFunctionsRole.addToPolicy(new iam.PolicyStatement({
       actions: ['batch:SubmitJob', 'batch:DescribeJobs', 'batch:TerminateJob'],
       resources: ['*'],
     }));
+
     stepFunctionsRole.addToPolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'],
       resources: [preprocessFunction.functionArn],
@@ -800,7 +807,6 @@ def handler(event, context):
     );
 
     // CloudWatch Alarms
-
     // High latency alarm
     const latencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
       alarmName: `ml-pipeline-high-latency-${env}`,
