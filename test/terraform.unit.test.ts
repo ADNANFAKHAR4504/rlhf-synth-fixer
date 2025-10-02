@@ -31,30 +31,82 @@ describe("Required Variables", () => {
     expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
-  test("declares vpc_id variable with validation", () => {
-    expect(stackContent).toMatch(/variable\s+"vpc_id"\s*{/);
-    expect(stackContent).toMatch(/validation\s*{[\s\S]*?vpc_id/);
+  test("declares vpc_cidr variable for dynamic VPC creation", () => {
+    expect(stackContent).toMatch(/variable\s+"vpc_cidr"\s*{/);
+    expect(stackContent).toMatch(/default\s*=\s*"10\.0\.0\.0\/16"/);
   });
 
-  test("declares subnet_ids variable with validation", () => {
-    expect(stackContent).toMatch(/variable\s+"subnet_ids"\s*{/);
-    expect(stackContent).toMatch(/list\(string\)/);
+  test("declares availability_zones variable for multi-AZ", () => {
+    expect(stackContent).toMatch(/variable\s+"availability_zones"\s*{/);
+    expect(stackContent).toMatch(/default\s*=\s*2/);
   });
 
-  test("declares route_table_ids variable (CRITICAL FIX)", () => {
-    expect(stackContent).toMatch(/variable\s+"route_table_ids"\s*{/);
-    expect(stackContent).toMatch(/validation[\s\S]*?route_table_ids/);
-  });
-
-  test("declares notification_email variable with validation", () => {
+  test("declares notification_email variable with default", () => {
     expect(stackContent).toMatch(/variable\s+"notification_email"\s*{/);
-    expect(stackContent).toMatch(/validation[\s\S]*?email/i);
+    expect(stackContent).toMatch(/default\s*=/);
   });
 
   test("declares compute and resource variables", () => {
     expect(stackContent).toMatch(/variable\s+"max_vcpus"/);
     expect(stackContent).toMatch(/variable\s+"compute_type"/);
     expect(stackContent).toMatch(/variable\s+"instance_types"/);
+  });
+
+  test("all variables have defaults (no external dependencies)", () => {
+    expect(stackContent).toMatch(/variable\s+"aws_region"[\s\S]*?default\s*=\s*"us-east-1"/);
+    expect(stackContent).toMatch(/variable\s+"environment"[\s\S]*?default\s*=\s*"prod"/);
+  });
+});
+
+describe("VPC and Networking - Dynamic Infrastructure", () => {
+  test("creates VPC dynamically", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+    expect(stackContent).toMatch(/cidr_block\s*=\s*var\.vpc_cidr/);
+    expect(stackContent).toMatch(/enable_dns_hostnames\s*=\s*true/);
+    expect(stackContent).toMatch(/enable_dns_support\s*=\s*true/);
+  });
+
+  test("creates Internet Gateway", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+  });
+
+  test("creates public subnets for NAT Gateways", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public"/);
+    expect(stackContent).toMatch(/count\s*=\s*var\.availability_zones/);
+    expect(stackContent).toMatch(/map_public_ip_on_launch\s*=\s*true/);
+  });
+
+  test("creates private subnets for Lambda and Batch", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private"/);
+    expect(stackContent).toMatch(/count\s*=\s*var\.availability_zones/);
+  });
+
+  test("creates NAT Gateways for private subnet internet access", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+    expect(stackContent).toMatch(/count\s*=\s*var\.availability_zones/);
+  });
+
+  test("creates Elastic IPs for NAT Gateways", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat"/);
+    expect(stackContent).toMatch(/count\s*=\s*var\.availability_zones/);
+    expect(stackContent).toMatch(/domain\s*=\s*"vpc"/);
+  });
+
+  test("creates route tables for public and private subnets", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"public"/);
+    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"private"/);
+  });
+
+  test("associates subnets with route tables", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"public"/);
+    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"private"/);
+  });
+
+  test("uses dynamic references throughout (no hardcoded IDs)", () => {
+    expect(stackContent).toMatch(/aws_vpc\.main\.id/);
+    expect(stackContent).toMatch(/aws_subnet\.private\[\*\]\.id/);
+    expect(stackContent).toMatch(/aws_route_table\.private\[\*\]\.id/);
   });
 });
 
@@ -185,13 +237,14 @@ describe("Security Groups - Network Security", () => {
 });
 
 describe("VPC Endpoints - Private Network Traffic", () => {
-  test("creates S3 VPC endpoint with route_table_ids", () => {
+  test("creates S3 VPC endpoint with dynamic route tables", () => {
     expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"s3_endpoint"/);
-    expect(stackContent).toMatch(/route_table_ids\s*=\s*var\.route_table_ids/);
+    expect(stackContent).toMatch(/route_table_ids\s*=\s*aws_route_table\.private\[\*\]\.id/);
   });
 
-  test("creates DynamoDB VPC endpoint", () => {
+  test("creates DynamoDB VPC endpoint with dynamic route tables", () => {
     expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"dynamodb_endpoint"/);
+    expect(stackContent).toMatch(/route_table_ids\s*=\s*aws_route_table\.private\[\*\]\.id/);
   });
 
   test("creates interface endpoints for ECR and CloudWatch", () => {

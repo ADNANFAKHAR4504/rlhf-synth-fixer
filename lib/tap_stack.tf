@@ -11,8 +11,8 @@ data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
 
-data "aws_vpc" "selected" {
-  id = var.vpc_id
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
 # -----------------------------------------------------------------------------
@@ -20,8 +20,9 @@ data "aws_vpc" "selected" {
 # -----------------------------------------------------------------------------
 
 variable "aws_region" {
-  description = "The AWS region to deploy to (from provider.tf)"
+  description = "The AWS region to deploy to"
   type        = string
+  default     = "us-east-1"
 }
 
 variable "environment" {
@@ -42,31 +43,16 @@ variable "project" {
   default     = "Transaction Batch Processing"
 }
 
-variable "vpc_id" {
-  description = "The VPC ID where resources will be deployed"
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
   type        = string
-  validation {
-    condition     = can(regex("^vpc-", var.vpc_id))
-    error_message = "VPC ID must be valid (start with vpc-)."
-  }
+  default     = "10.0.0.0/16"
 }
 
-variable "subnet_ids" {
-  description = "List of private subnet IDs for the AWS Batch compute environment"
-  type        = list(string)
-  validation {
-    condition     = length(var.subnet_ids) >= 2
-    error_message = "At least 2 subnets required for high availability."
-  }
-}
-
-variable "route_table_ids" {
-  description = "List of route table IDs for VPC endpoints"
-  type        = list(string)
-  validation {
-    condition     = length(var.route_table_ids) > 0
-    error_message = "At least one route table ID is required for VPC endpoints."
-  }
+variable "availability_zones" {
+  description = "Number of availability zones to use"
+  type        = number
+  default     = 2
 }
 
 variable "transactions_per_job" {
@@ -78,10 +64,7 @@ variable "transactions_per_job" {
 variable "notification_email" {
   description = "Email address for SNS notifications"
   type        = string
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
-    error_message = "Must be a valid email address."
-  }
+  default     = "finance-alerts@example.com"
 }
 
 variable "max_vcpus" {
@@ -140,6 +123,147 @@ variable "log_retention_days" {
   description = "CloudWatch logs retention period in days"
   type        = number
   default     = 90
+}
+
+# -----------------------------------------------------------------------------
+# VPC and Networking Resources
+# -----------------------------------------------------------------------------
+
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-vpc"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-igw"
+  }
+}
+
+# Public Subnets (for NAT Gateways)
+resource "aws_subnet" "public" {
+  count                   = var.availability_zones
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-public-subnet-${count.index + 1}"
+  }
+}
+
+# Private Subnets (for Lambda and Batch)
+resource "aws_subnet" "private" {
+  count             = var.availability_zones
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-private-subnet-${count.index + 1}"
+  }
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = var.availability_zones
+  domain = "vpc"
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-nat-eip-${count.index + 1}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count         = var.availability_zones
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-nat-${count.index + 1}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-public-rt"
+  }
+}
+
+# Route Tables for Private Subnets
+resource "aws_route_table" "private" {
+  count  = var.availability_zones
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+    Name        = "financial-batch-private-rt-${count.index + 1}"
+  }
+}
+
+# Associate Public Subnets with Public Route Table
+resource "aws_route_table_association" "public" {
+  count          = var.availability_zones
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Associate Private Subnets with Private Route Tables
+resource "aws_route_table_association" "private" {
+  count          = var.availability_zones
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
 }
 
 # -----------------------------------------------------------------------------
@@ -1065,14 +1189,14 @@ resource "aws_iam_instance_profile" "batch_instance_profile" {
 resource "aws_security_group" "batch_sg" {
   name        = "batch-compute-sg"
   description = "Security group for Batch compute environment - deny-all default"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   egress {
     description = "HTTPS within VPC for ECR and other services"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   tags = {
@@ -1085,14 +1209,14 @@ resource "aws_security_group" "batch_sg" {
 resource "aws_security_group" "lambda_sg" {
   name        = "lambda-orchestrator-sg"
   description = "Security group for Lambda orchestrator"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   egress {
     description = "HTTPS within VPC"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.selected.cidr_block]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   tags = {
@@ -1107,10 +1231,10 @@ resource "aws_security_group" "lambda_sg" {
 # -----------------------------------------------------------------------------
 
 resource "aws_vpc_endpoint" "s3_endpoint" {
-  vpc_id            = var.vpc_id
+  vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = var.route_table_ids
+  route_table_ids   = aws_route_table.private[*].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1141,10 +1265,10 @@ resource "aws_vpc_endpoint" "s3_endpoint" {
 }
 
 resource "aws_vpc_endpoint" "dynamodb_endpoint" {
-  vpc_id            = var.vpc_id
+  vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = var.route_table_ids
+  route_table_ids   = aws_route_table.private[*].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1171,10 +1295,10 @@ resource "aws_vpc_endpoint" "dynamodb_endpoint" {
 }
 
 resource "aws_vpc_endpoint" "ecr_api_endpoint" {
-  vpc_id              = var.vpc_id
+  vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.subnet_ids
+  subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.batch_sg.id]
   private_dns_enabled = true
 
@@ -1186,10 +1310,10 @@ resource "aws_vpc_endpoint" "ecr_api_endpoint" {
 }
 
 resource "aws_vpc_endpoint" "ecr_dkr_endpoint" {
-  vpc_id              = var.vpc_id
+  vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.subnet_ids
+  subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.batch_sg.id]
   private_dns_enabled = true
 
@@ -1201,10 +1325,10 @@ resource "aws_vpc_endpoint" "ecr_dkr_endpoint" {
 }
 
 resource "aws_vpc_endpoint" "logs_endpoint" {
-  vpc_id              = var.vpc_id
+  vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.logs"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = var.subnet_ids
+  subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.batch_sg.id, aws_security_group.lambda_sg.id]
   private_dns_enabled = true
 
@@ -1230,7 +1354,7 @@ resource "aws_batch_compute_environment" "compute_env" {
     min_vcpus          = var.min_vcpus
     desired_vcpus      = var.desired_vcpus
     instance_type      = var.compute_type == "EC2" ? var.instance_types : []
-    subnets            = var.subnet_ids
+    subnets            = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.batch_sg.id]
     instance_role      = var.compute_type == "EC2" ? aws_iam_instance_profile.batch_instance_profile.arn : null
   }
@@ -1348,7 +1472,7 @@ resource "aws_lambda_function" "orchestrator" {
   memory_size = 512
 
   vpc_config {
-    subnet_ids         = var.subnet_ids
+    subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
@@ -1782,7 +1906,7 @@ resource "aws_iam_role_policy" "flow_log_policy" {
 }
 
 resource "aws_flow_log" "vpc_flow_log" {
-  vpc_id          = var.vpc_id
+  vpc_id          = aws_vpc.main.id
   traffic_type    = "ALL"
   iam_role_arn    = aws_iam_role.flow_log_role.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
