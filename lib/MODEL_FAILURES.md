@@ -232,3 +232,48 @@ Multiple deployment errors occurred when running terraform plan/apply due to mis
 - All module dependencies properly resolved
 - All required template files in place
 - Infrastructure ready for deployment
+
+---
+
+### 7. Additional Terraform Deployment Errors (Round 2)
+
+After initial fixes, additional errors were discovered during terraform plan execution.
+
+**Errors that occurred:**
+
+**Incorrect Output References:**
+- `outputs.tf` referenced `module.content_delivery.domain_name` (should be `distribution_domain_name`)
+- `outputs.tf` referenced `module.security.web_acl_id` (should be `waf_web_acl_id`)
+- `outputs.tf` referenced `module.media_processing.queue_arn` (should be `media_convert_queue_arn`)
+- `outputs.tf` referenced non-existent `module.monitoring.sns_topic_arn`
+
+**Missing Variable:**
+- monitoring module missing `aws_region` variable (used in CloudWatch dashboard)
+
+**Template Variable Conflict:**
+- `media_convert_trigger.js` used JavaScript template literals `${}` which conflicted with Terraform's templatefile function
+- Terraform tried to interpret `${bucket}` and `${key}` as template variables
+
+**What we fixed:**
+
+**Output References:**
+- Changed `domain_name` to `distribution_domain_name` in outputs.tf
+- Changed `web_acl_id` to `waf_web_acl_id` in outputs.tf
+- Changed `queue_arn` to `media_convert_queue_arn` in outputs.tf
+- Changed `sns_topic_arn` output to `dashboard_url` (matches actual monitoring module output)
+
+**Missing Variable:**
+- Added `aws_region` variable to monitoring/variables.tf with default "us-east-1"
+
+**Template Literal Conflict:**
+- Replaced all JavaScript template literals `${}` with string concatenation in media_convert_trigger.js
+- Changed `${bucket}` to `sourceBucket` variable with string concatenation
+- Changed `${key}` to string concatenation
+- Changed `${process.env.DESTINATION_BUCKET}` to string concatenation
+- This prevents Terraform from interpreting JavaScript syntax as template variables
+
+**Result:**
+- All output references now match actual module exports
+- All module variables properly declared
+- JavaScript code no longer conflicts with Terraform templatefile
+- Terraform plan should now execute successfully
