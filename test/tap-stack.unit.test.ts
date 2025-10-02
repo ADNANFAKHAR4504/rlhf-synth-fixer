@@ -197,9 +197,9 @@ describe('TapStack', () => {
         f.Properties.FunctionName && f.Properties.FunctionName.includes('api-handler')
       );
       expect(apiHandler).toBeDefined();
-      expect(apiHandler.Properties.Layers).toBeDefined();
-      expect(apiHandler.Properties.Layers.length).toBeGreaterThan(0);
-      expect(apiHandler.Properties.Layers[0]).toContain('LambdaInsightsExtension');
+      expect(apiHandler?.Properties.Layers).toBeDefined();
+      expect(apiHandler?.Properties.Layers.length).toBeGreaterThan(0);
+      expect(apiHandler?.Properties.Layers[0]).toContain('LambdaInsightsExtension');
     });
   });
 
