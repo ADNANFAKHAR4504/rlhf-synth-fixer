@@ -1,6 +1,4 @@
-### Secure AWS stack (Terraform) – Ideal Response
-
-- All requirements implemented in a single Terraform file `lib/tap_stack.tf`.
+- All requirements implemented in a single Terraform file .
 - References existing `aws_region` variable and enforces allowed regions (us-west-2 primary, us-east-1 secondary).
 - Creates all resources new in this stack; no reuse of existing modules/resources.
 
@@ -21,16 +19,7 @@
 - DevSecOps role plus advisory deny policy scaffold for security-change approvals
 - Comprehensive outputs for key resource identifiers/URLs
 
-#### How to use
-
-1. Ensure `provider.tf` defines the AWS provider using variable `aws_region`.
-2. Set sensitive vars securely (e.g., `TF_VAR_db_password`). Example:
-
-```bash
-export TF_VAR_db_password='strong-password'
-```
-
-3. Initialize and apply:
+Initialize and apply:
 
 ```bash
 cd lib
@@ -38,19 +27,16 @@ terraform init
 terraform apply -auto-approve
 ```
 
-4. Key variables you may override:
+Key variables you may override:
 
 - `project`, `environment`, `allowed_ips`, `vpc_cidr`, `public_subnet_cidrs`, `private_subnet_cidrs`, `db_name`, `db_username`, `rds_instance_class`
 
-#### Notes & security choices
+#### Security Features
 
-- WAF attached at CloudFront (scope CLOUDFRONT) satisfies “edge-optimized” delivery while honoring default block and IP allow.
-- S3 policies enforce HTTPS (`aws:SecureTransport`) for in-transit encryption.
-- RDS parameter `require_secure_transport=ON` enforces TLS to the database.
-- CloudTrail + KMS + CW Logs cover “logging for managed policies” and security auditing needs.
-- IAM policies are scoped and avoid wildcards where possible; network egress is minimized.
-
-All code is in `lib/tap_stack.tf`. Apply will provision a clean, secure, and compliant baseline per the prompt.
+- **Encryption**: TLS enforced (S3 HTTPS-only, RDS SSL required); KMS for data at rest
+- **Network**: WAF at CloudFront edge with IP allowlist; deny-all default security groups
+- **Audit**: CloudTrail + VPC Flow Logs + CloudWatch Logs (encrypted)
+- **Access**: Scoped IAM policies with minimal wildcards; restricted egress
 
 #### Full code
 
