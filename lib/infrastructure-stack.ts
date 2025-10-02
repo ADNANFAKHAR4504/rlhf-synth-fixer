@@ -45,8 +45,10 @@ export class InfrastructureStack extends cdk.Stack {
       }
     );
 
+    // Generate unique alias name using stack name to avoid conflicts
+    const uniqueId = cdk.Names.uniqueId(this).toLowerCase().substring(0, 8);
     new kms.Alias(this, `AuroraKeyAlias-${environmentSuffix}`, {
-      aliasName: `alias/aurora-db-key-${environmentSuffix}`,
+      aliasName: `alias/aurora-db-key-${environmentSuffix}-${uniqueId}`,
       targetKey: encryptionKey,
     });
 

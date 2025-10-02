@@ -81,9 +81,9 @@ describe('InfrastructureStack', () => {
       });
       const customTemplate = Template.fromStack(customStack);
 
-      // Verify resources use the custom suffix
+      // Verify resources use the custom suffix with unique ID
       customTemplate.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/aurora-db-key-custom',
+        AliasName: Match.stringLikeRegexp('^alias/aurora-db-key-custom-[a-z0-9]{8}$'),
       });
     });
 
@@ -94,9 +94,9 @@ describe('InfrastructureStack', () => {
       });
       const defaultTemplate = Template.fromStack(defaultStack);
 
-      // Verify resources use the default suffix 'dev'
+      // Verify resources use the default suffix 'dev' with unique ID
       defaultTemplate.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/aurora-db-key-dev',
+        AliasName: Match.stringLikeRegexp('^alias/aurora-db-key-dev-[a-z0-9]{8}$'),
       });
     });
   });
@@ -136,9 +136,9 @@ describe('InfrastructureStack', () => {
       });
     });
 
-    test('creates KMS key alias', () => {
+    test('creates KMS key alias with unique identifier', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/aurora-db-key-${environmentSuffix}`,
+        AliasName: Match.stringLikeRegexp(`^alias/aurora-db-key-${environmentSuffix}-[a-z0-9]{8}$`),
       });
     });
 
