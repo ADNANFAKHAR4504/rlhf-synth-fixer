@@ -255,7 +255,7 @@
                     "s3:GetObjectVersion"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${UploadBucket.Arn}/*"
+                    "Fn::Sub": "arn:aws:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}/*"
                   }
                 },
                 {
