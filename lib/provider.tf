@@ -14,10 +14,11 @@ terraform {
     }
   }
 
-  # Using local backend for testing without AWS credentials
-  # In production, this should use S3 backend
-  backend "local" {
-    path = "terraform.tfstate"
+  # S3 backend for remote state storage
+  # Configuration will be provided via backend-config parameters during terraform init
+  backend "s3" {
+    # Backend configuration will be provided dynamically via -backend-config flags
+    # This allows the same configuration to work across different environments
   }
 }
 
