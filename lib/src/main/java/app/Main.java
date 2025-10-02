@@ -30,13 +30,10 @@ import software.amazon.awscdk.services.events.Rule;
 import software.amazon.awscdk.services.events.Schedule;
 import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.amazon.awscdk.services.iam.Effect;
-
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
-
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kendra.CfnIndex;
-
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
@@ -44,21 +41,17 @@ import software.amazon.awscdk.services.lambda.Tracing;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
-
 import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.s3.StorageClass;
 import software.amazon.awscdk.services.s3.Transition;
 import software.amazon.awscdk.services.sns.Topic;
-
 import software.amazon.awscdk.services.sqs.DeadLetterQueue;
 import software.amazon.awscdk.services.sqs.Queue;
-
 import software.amazon.awscdk.services.stepfunctions.Chain;
 import software.amazon.awscdk.services.stepfunctions.Choice;
 import software.amazon.awscdk.services.stepfunctions.Condition;
 import software.amazon.awscdk.services.stepfunctions.Pass;
 import software.amazon.awscdk.services.stepfunctions.StateMachine;
-
 import software.amazon.awscdk.services.stepfunctions.StateMachineType;
 import software.amazon.awscdk.services.stepfunctions.tasks.LambdaInvoke;
 import software.constructs.Construct;
@@ -66,23 +59,19 @@ import software.constructs.Construct;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
- *
- * This class provides a simple container for stack-specific configuration
- * including environment suffix for resource naming.
  */
 final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(final String envSuffix, final StackProps Props) {
+    private TapStackProps(final String envSuffix, final StackProps props) {
         this.environmentSuffix = envSuffix;
-        this.stackProps = Props != null ? Props : StackProps.builder().build();
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -118,49 +107,172 @@ final class TapStackProps {
 }
 
 /**
+ * Helper class to hold S3 bucket resources.
+ */
+final class BucketResources {
+    private final Bucket attachmentsBucket;
+    private final Bucket knowledgeBaseBucket;
+
+    BucketResources(final Bucket attachments, final Bucket knowledgeBase) {
+        this.attachmentsBucket = attachments;
+        this.knowledgeBaseBucket = knowledgeBase;
+    }
+
+    public Bucket getAttachmentsBucket() {
+        return attachmentsBucket;
+    }
+
+    public Bucket getKnowledgeBaseBucket() {
+        return knowledgeBaseBucket;
+    }
+}
+
+/**
+ * Helper class to hold SQS queue resources.
+ */
+final class QueueResources {
+    private final Queue deadLetterQueue;
+    private final Queue highPriorityQueue;
+    private final Queue standardPriorityQueue;
+    private final Queue lowPriorityQueue;
+
+    QueueResources(final Queue dlq, final Queue high, final Queue standard, final Queue low) {
+        this.deadLetterQueue = dlq;
+        this.highPriorityQueue = high;
+        this.standardPriorityQueue = standard;
+        this.lowPriorityQueue = low;
+    }
+
+    public Queue getDeadLetterQueue() {
+        return deadLetterQueue;
+    }
+
+    public Queue getHighPriorityQueue() {
+        return highPriorityQueue;
+    }
+
+    public Queue getStandardPriorityQueue() {
+        return standardPriorityQueue;
+    }
+
+    public Queue getLowPriorityQueue() {
+        return lowPriorityQueue;
+    }
+}
+
+/**
+ * Helper class to hold IAM role resources.
+ */
+final class RoleResources {
+    private final Role lambdaExecutionRole;
+    private final Role kendraRole;
+    private final Role stepFunctionsRole;
+
+    RoleResources(final Role lambda, final Role kendra, final Role stepFunctions) {
+        this.lambdaExecutionRole = lambda;
+        this.kendraRole = kendra;
+        this.stepFunctionsRole = stepFunctions;
+    }
+
+    public Role getLambdaExecutionRole() {
+        return lambdaExecutionRole;
+    }
+
+    public Role getKendraRole() {
+        return kendraRole;
+    }
+
+    public Role getStepFunctionsRole() {
+        return stepFunctionsRole;
+    }
+}
+
+/**
+ * Helper class to hold Lambda function resources.
+ */
+final class LambdaResources {
+    private final Function sentimentAnalyzer;
+    private final Function translation;
+    private final Function knowledgeBaseSearch;
+    private final Function escalation;
+    private final Function slaCheck;
+    private final Function autoResponse;
+
+    LambdaResources(final Function sentiment, final Function trans, final Function knowledge,
+                    final Function esc, final Function sla, final Function auto) {
+        this.sentimentAnalyzer = sentiment;
+        this.translation = trans;
+        this.knowledgeBaseSearch = knowledge;
+        this.escalation = esc;
+        this.slaCheck = sla;
+        this.autoResponse = auto;
+    }
+
+    public Function getSentimentAnalyzer() {
+        return sentimentAnalyzer;
+    }
+
+    public Function getTranslation() {
+        return translation;
+    }
+
+    public Function getKnowledgeBaseSearch() {
+        return knowledgeBaseSearch;
+    }
+
+    public Function getEscalation() {
+        return escalation;
+    }
+
+    public Function getSlaCheck() {
+        return slaCheck;
+    }
+
+    public Function getAutoResponse() {
+        return autoResponse;
+    }
+}
+
+/**
  * Represents the main CDK stack for the Tap project.
- *
- * This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
- * It determines the environment suffix from the provided properties,
- * CDK context, or defaults to 'dev'.
- *
- * Note:
- * - Do NOT create AWS resources directly in this stack.
- * - Instead, instantiate separate stacks for each resource type within this stack.
- *
- * @version 1.0
- * @since 1.0
  */
 class TapStack extends Stack {
     private final String environmentSuffix;
 
-    /**
-     * Constructs a new TapStack.
-     *
-     * @param scope The parent construct
-     * @param id The unique identifier for this stack
-     * @param props Optional properties for configuring the stack, including environment suffix
-     */
-    @SuppressWarnings("checkstyle:MethodLength")
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
-        // Get environment suffix from props, context, or use 'dev' as default
-        this.environmentSuffix = Optional.ofNullable(props)
+        this.environmentSuffix = determineEnvironmentSuffix(props);
+
+        Table ticketsTable = createDynamoDBTable();
+        BucketResources buckets = createS3Buckets();
+        QueueResources queues = createSQSQueues();
+        Topic notificationTopic = createSNSTopic();
+        RoleResources roles = createIAMRoles(ticketsTable, buckets, queues, notificationTopic);
+        LambdaResources lambdas = createLambdaFunctions(roles, ticketsTable, buckets, queues, 
+                                                        notificationTopic);
+        CfnIndex kendraIndex = createKendraIndex(roles.getKendraRole(), buckets.getKnowledgeBaseBucket());
+        updateLambdaWithKendra(lambdas.getKnowledgeBaseSearch(), kendraIndex, 
+                              roles.getLambdaExecutionRole());
+        StateMachine stateMachine = createStepFunctions(lambdas, roles.getStepFunctionsRole());
+        RestApi api = createApiGateway(lambdas.getSentimentAnalyzer());
+        createEventBridgeRules(lambdas.getSlaCheck());
+        Dashboard dashboard = createCloudWatchDashboard(ticketsTable, queues, lambdas);
+        createCloudWatchAlarms(queues, lambdas);
+        createOutputs(ticketsTable, buckets, queues, notificationTopic, kendraIndex, 
+                     stateMachine, lambdas, api, dashboard);
+    }
+
+    private String determineEnvironmentSuffix(final TapStackProps props) {
+        return Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
                 .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
                         .map(Object::toString))
                 .orElse("dev");
+    }
 
-        // ========================================================================
-        // COMPREHENSIVE CUSTOMER SUPPORT PLATFORM INFRASTRUCTURE
-        // Region: us-west-2
-        // ========================================================================
-
-        // ========================================================================
-        // 1. DYNAMODB TABLE WITH GSI AND STREAMS
-        // ========================================================================
-        Table ticketsTable = Table.Builder.create(this, "TicketsTable" + environmentSuffix)
+    private Table createDynamoDBTable() {
+        Table table = Table.Builder.create(this, "TicketsTable" + environmentSuffix)
                 .tableName("SupportTickets-" + environmentSuffix)
                 .partitionKey(Attribute.builder()
                         .name("ticketId")
@@ -176,8 +288,7 @@ class TapStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Add Global Secondary Index for status and priority queries
-        ticketsTable.addGlobalSecondaryIndex(GlobalSecondaryIndexProps.builder()
+        table.addGlobalSecondaryIndex(GlobalSecondaryIndexProps.builder()
                 .indexName("StatusPriorityIndex")
                 .partitionKey(Attribute.builder()
                         .name("status")
@@ -189,12 +300,13 @@ class TapStack extends Stack {
                         .build())
                 .build());
 
-        // ========================================================================
-        // 2. S3 BUCKETS FOR ATTACHMENTS AND KNOWLEDGE BASE
-        // ========================================================================
-        // Attachments bucket with encryption, versioning, and lifecycle policies
+        return table;
+    }
+
+    private BucketResources createS3Buckets() {
         Bucket attachmentsBucket = Bucket.Builder.create(this, "AttachmentsBucket" + environmentSuffix)
-                .bucketName("support-attachments-" + environmentSuffix.toLowerCase() + "-" + this.getAccount())
+                .bucketName("support-attachments-" + environmentSuffix.toLowerCase() 
+                           + "-" + this.getAccount())
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -208,9 +320,9 @@ class TapStack extends Stack {
                 .autoDeleteObjects(true)
                 .build();
 
-        // Knowledge base bucket for Kendra content
         Bucket knowledgeBaseBucket = Bucket.Builder.create(this, "KnowledgeBaseBucket" + environmentSuffix)
-                .bucketName("support-knowledge-base-" + environmentSuffix.toLowerCase() + "-" + this.getAccount())
+                .bucketName("support-knowledge-base-" + environmentSuffix.toLowerCase() 
+                           + "-" + this.getAccount())
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -218,10 +330,10 @@ class TapStack extends Stack {
                 .autoDeleteObjects(true)
                 .build();
 
-        // ========================================================================
-        // 3. SQS QUEUES WITH PRIORITY ROUTING AND DLQ
-        // ========================================================================
-        // Dead Letter Queue for failed messages
+        return new BucketResources(attachmentsBucket, knowledgeBaseBucket);
+    }
+
+    private QueueResources createSQSQueues() {
         Queue deadLetterQueue = Queue.Builder.create(this, "DeadLetterQueue" + environmentSuffix)
                 .queueName("support-dead-letter-queue-" + environmentSuffix)
                 .retentionPeriod(Duration.days(14))
@@ -232,40 +344,48 @@ class TapStack extends Stack {
                 .queue(deadLetterQueue)
                 .build();
 
-        // High priority queue for urgent tickets
         Queue highPriorityQueue = Queue.Builder.create(this, "HighPriorityQueue" + environmentSuffix)
                 .queueName("support-high-priority-" + environmentSuffix)
                 .visibilityTimeout(Duration.seconds(300))
                 .deadLetterQueue(dlqConfig)
                 .build();
 
-        // Standard priority queue
         Queue standardPriorityQueue = Queue.Builder.create(this, "StandardPriorityQueue" + environmentSuffix)
                 .queueName("support-standard-priority-" + environmentSuffix)
                 .visibilityTimeout(Duration.seconds(300))
                 .deadLetterQueue(dlqConfig)
                 .build();
 
-        // Low priority queue
         Queue lowPriorityQueue = Queue.Builder.create(this, "LowPriorityQueue" + environmentSuffix)
                 .queueName("support-low-priority-" + environmentSuffix)
                 .visibilityTimeout(Duration.seconds(300))
                 .deadLetterQueue(dlqConfig)
                 .build();
 
-        // ========================================================================
-        // 4. SNS TOPIC FOR AGENT NOTIFICATIONS
-        // ========================================================================
-        Topic agentNotificationTopic = Topic.Builder.create(this, "AgentNotificationTopic" + environmentSuffix)
+        return new QueueResources(deadLetterQueue, highPriorityQueue, standardPriorityQueue, 
+                                 lowPriorityQueue);
+    }
+
+    private Topic createSNSTopic() {
+        return Topic.Builder.create(this, "AgentNotificationTopic" + environmentSuffix)
                 .topicName("support-agent-notifications-" + environmentSuffix)
                 .displayName("Support Agent Notifications")
                 .build();
+    }
 
-        // ========================================================================
-        // 5. IAM ROLES WITH LEAST PRIVILEGE
-        // ========================================================================
-        // Lambda execution role with comprehensive permissions
-        Role lambdaExecutionRole = Role.Builder.create(this, "LambdaExecutionRole" + environmentSuffix)
+    private RoleResources createIAMRoles(final Table ticketsTable, final BucketResources buckets,
+                                        final QueueResources queues, final Topic notificationTopic) {
+        Role lambdaExecutionRole = createLambdaExecutionRole(ticketsTable, buckets, queues, 
+                                                             notificationTopic);
+        Role kendraRole = createKendraRole(buckets.getKnowledgeBaseBucket());
+        Role stepFunctionsRole = createStepFunctionsRole();
+
+        return new RoleResources(lambdaExecutionRole, kendraRole, stepFunctionsRole);
+    }
+
+    private Role createLambdaExecutionRole(final Table ticketsTable, final BucketResources buckets,
+                                          final QueueResources queues, final Topic notificationTopic) {
+        Role role = Role.Builder.create(this, "LambdaExecutionRole" + environmentSuffix)
                 .roleName("support-lambda-execution-role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .managedPolicies(Collections.singletonList(
@@ -273,250 +393,218 @@ class TapStack extends Stack {
                                 "service-role/AWSLambdaBasicExecutionRole")))
                 .build();
 
-        // Add permissions for DynamoDB
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "dynamodb:PutItem",
-                        "dynamodb:GetItem",
-                        "dynamodb:UpdateItem",
-                        "dynamodb:Query",
-                        "dynamodb:Scan"))
-                .resources(Arrays.asList(
-                        ticketsTable.getTableArn(),
-                        ticketsTable.getTableArn() + "/index/*"))
-                .build());
+        addDynamoDBPermissions(role, ticketsTable);
+        addComprehendPermissions(role);
+        addTranslatePermissions(role);
+        addSQSPermissions(role, queues);
+        addSNSPermissions(role, notificationTopic);
+        addS3Permissions(role, buckets);
+        addXRayPermissions(role);
 
-        // Add permissions for Comprehend (sentiment analysis and entity detection)
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+        return role;
+    }
+
+    private void addDynamoDBPermissions(final Role role, final Table table) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "comprehend:DetectSentiment",
-                        "comprehend:DetectEntities",
-                        "comprehend:DetectDominantLanguage"))
+                .actions(Arrays.asList("dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem",
+                                      "dynamodb:Query", "dynamodb:Scan"))
+                .resources(Arrays.asList(table.getTableArn(), table.getTableArn() + "/index/*"))
+                .build());
+    }
+
+    private void addComprehendPermissions(final Role role) {
+        role.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(Arrays.asList("comprehend:DetectSentiment", "comprehend:DetectEntities",
+                                      "comprehend:DetectDominantLanguage"))
                 .resources(Collections.singletonList("*"))
                 .build());
+    }
 
-        // Add permissions for Translate
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void addTranslatePermissions(final Role role) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "translate:TranslateText",
-                        "translate:DetectDominantLanguage"))
+                .actions(Arrays.asList("translate:TranslateText", "translate:DetectDominantLanguage"))
                 .resources(Collections.singletonList("*"))
                 .build());
+    }
 
-        // Add permissions for SQS
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void addSQSPermissions(final Role role, final QueueResources queues) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "sqs:SendMessage",
-                        "sqs:ReceiveMessage",
-                        "sqs:DeleteMessage",
-                        "sqs:GetQueueAttributes"))
-                .resources(Arrays.asList(
-                        highPriorityQueue.getQueueArn(),
-                        standardPriorityQueue.getQueueArn(),
-                        lowPriorityQueue.getQueueArn(),
-                        deadLetterQueue.getQueueArn()))
+                .actions(Arrays.asList("sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage",
+                                      "sqs:GetQueueAttributes"))
+                .resources(Arrays.asList(queues.getHighPriorityQueue().getQueueArn(),
+                                        queues.getStandardPriorityQueue().getQueueArn(),
+                                        queues.getLowPriorityQueue().getQueueArn(),
+                                        queues.getDeadLetterQueue().getQueueArn()))
                 .build());
+    }
 
-        // Add permissions for SNS
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void addSNSPermissions(final Role role, final Topic topic) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(Collections.singletonList("sns:Publish"))
-                .resources(Collections.singletonList(agentNotificationTopic.getTopicArn()))
+                .resources(Collections.singletonList(topic.getTopicArn()))
                 .build());
+    }
 
-        // Add permissions for S3
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void addS3Permissions(final Role role, final BucketResources buckets) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "s3:GetObject",
-                        "s3:PutObject",
-                        "s3:ListBucket"))
-                .resources(Arrays.asList(
-                        attachmentsBucket.getBucketArn(),
-                        attachmentsBucket.getBucketArn() + "/*",
-                        knowledgeBaseBucket.getBucketArn(),
-                        knowledgeBaseBucket.getBucketArn() + "/*"))
+                .actions(Arrays.asList("s3:GetObject", "s3:PutObject", "s3:ListBucket"))
+                .resources(Arrays.asList(buckets.getAttachmentsBucket().getBucketArn(),
+                                        buckets.getAttachmentsBucket().getBucketArn() + "/*",
+                                        buckets.getKnowledgeBaseBucket().getBucketArn(),
+                                        buckets.getKnowledgeBaseBucket().getBucketArn() + "/*"))
                 .build());
+    }
 
-        // Add permissions for X-Ray tracing
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void addXRayPermissions(final Role role) {
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "xray:PutTraceSegments",
-                        "xray:PutTelemetryRecords"))
+                .actions(Arrays.asList("xray:PutTraceSegments", "xray:PutTelemetryRecords"))
                 .resources(Collections.singletonList("*"))
                 .build());
+    }
 
-        // Kendra service role
-        Role kendraRole = Role.Builder.create(this, "KendraRole" + environmentSuffix)
+    private Role createKendraRole(final Bucket knowledgeBaseBucket) {
+        Role role = Role.Builder.create(this, "KendraRole" + environmentSuffix)
                 .roleName("support-kendra-role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("kendra.amazonaws.com"))
                 .build();
 
-        kendraRole.addToPolicy(PolicyStatement.Builder.create()
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "cloudwatch:PutMetricData",
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"))
+                .actions(Arrays.asList("cloudwatch:PutMetricData", "logs:CreateLogGroup",
+                                      "logs:CreateLogStream", "logs:PutLogEvents"))
                 .resources(Collections.singletonList("*"))
                 .build());
 
-        kendraRole.addToPolicy(PolicyStatement.Builder.create()
+        role.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "s3:GetObject",
-                        "s3:ListBucket"))
-                .resources(Arrays.asList(
-                        knowledgeBaseBucket.getBucketArn(),
-                        knowledgeBaseBucket.getBucketArn() + "/*"))
+                .actions(Arrays.asList("s3:GetObject", "s3:ListBucket"))
+                .resources(Arrays.asList(knowledgeBaseBucket.getBucketArn(),
+                                        knowledgeBaseBucket.getBucketArn() + "/*"))
                 .build());
 
-        // Step Functions execution role
-        Role stepFunctionsRole = Role.Builder.create(this, "StepFunctionsRole" + environmentSuffix)
+        return role;
+    }
+
+    private Role createStepFunctionsRole() {
+        return Role.Builder.create(this, "StepFunctionsRole" + environmentSuffix)
                 .roleName("support-step-functions-role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("states.amazonaws.com"))
                 .build();
+    }
 
-        // ========================================================================
-        // 6. LAMBDA FUNCTIONS (NODE.JS 18) WITH X-RAY TRACING
-        // ========================================================================
-        Map<String, String> commonEnv = new HashMap<>();
-        commonEnv.put("TABLE_NAME", ticketsTable.getTableName());
-        commonEnv.put("HIGH_PRIORITY_QUEUE_URL", highPriorityQueue.getQueueUrl());
-        commonEnv.put("STANDARD_PRIORITY_QUEUE_URL", standardPriorityQueue.getQueueUrl());
-        commonEnv.put("LOW_PRIORITY_QUEUE_URL", lowPriorityQueue.getQueueUrl());
-        commonEnv.put("NOTIFICATION_TOPIC_ARN", agentNotificationTopic.getTopicArn());
-        commonEnv.put("ATTACHMENTS_BUCKET", attachmentsBucket.getBucketName());
-        commonEnv.put("KNOWLEDGE_BASE_BUCKET", knowledgeBaseBucket.getBucketName());
+    private LambdaResources createLambdaFunctions(final RoleResources roles, final Table ticketsTable,
+                                                  final BucketResources buckets, 
+                                                  final QueueResources queues,
+                                                  final Topic notificationTopic) {
+        Map<String, String> commonEnv = createCommonEnvironment(ticketsTable, buckets, queues, 
+                                                               notificationTopic);
 
-        // Sentiment Analysis Lambda
-        Function sentimentAnalyzerFunction = Function.Builder.create(this, "SentimentAnalyzerFunction" + environmentSuffix)
-                .functionName("support-sentiment-analyzer-" + environmentSuffix)
+        Function sentimentAnalyzer = createLambdaFunction("SentimentAnalyzerFunction", 
+                "support-sentiment-analyzer", "lambda/sentiment", 256, 30, 
+                roles.getLambdaExecutionRole(), commonEnv);
+
+        Function translation = createLambdaFunction("TranslationFunction", "support-translation",
+                "lambda/translation", 256, 30, roles.getLambdaExecutionRole(), commonEnv);
+
+        Function knowledgeBaseSearch = createLambdaFunction("KnowledgeBaseSearchFunction",
+                "support-knowledge-search", "lambda/search", 256, 30, 
+                roles.getLambdaExecutionRole(), commonEnv);
+
+        Function escalation = createLambdaFunction("EscalationFunction", "support-escalation",
+                "lambda/escalation", 256, 30, roles.getLambdaExecutionRole(), commonEnv);
+
+        Function slaCheck = createLambdaFunction("SLACheckFunction", "support-sla-check",
+                "lambda/sla-check", 512, 60, roles.getLambdaExecutionRole(), commonEnv);
+
+        Function autoResponse = createLambdaFunction("AutoResponseFunction", "support-auto-response",
+                "lambda/auto-response", 256, 30, roles.getLambdaExecutionRole(), commonEnv);
+
+        grantStepFunctionsInvoke(roles.getStepFunctionsRole(), sentimentAnalyzer, translation,
+                                escalation, slaCheck, autoResponse);
+
+        return new LambdaResources(sentimentAnalyzer, translation, knowledgeBaseSearch, escalation,
+                                  slaCheck, autoResponse);
+    }
+
+    private Map<String, String> createCommonEnvironment(final Table table, 
+                                                       final BucketResources buckets,
+                                                       final QueueResources queues, 
+                                                       final Topic topic) {
+        Map<String, String> env = new HashMap<>();
+        env.put("TABLE_NAME", table.getTableName());
+        env.put("HIGH_PRIORITY_QUEUE_URL", queues.getHighPriorityQueue().getQueueUrl());
+        env.put("STANDARD_PRIORITY_QUEUE_URL", queues.getStandardPriorityQueue().getQueueUrl());
+        env.put("LOW_PRIORITY_QUEUE_URL", queues.getLowPriorityQueue().getQueueUrl());
+        env.put("NOTIFICATION_TOPIC_ARN", topic.getTopicArn());
+        env.put("ATTACHMENTS_BUCKET", buckets.getAttachmentsBucket().getBucketName());
+        env.put("KNOWLEDGE_BASE_BUCKET", buckets.getKnowledgeBaseBucket().getBucketName());
+        return env;
+    }
+
+    private Function createLambdaFunction(final String id, final String functionName, 
+                                         final String codePath,
+                                         final int memory, final int timeout, final Role role,
+                                         final Map<String, String> environment) {
+        return Function.Builder.create(this, id + environmentSuffix)
+                .functionName(functionName + "-" + environmentSuffix)
                 .runtime(Runtime.NODEJS_18_X)
                 .handler("index.handler")
-                .code(Code.fromAsset("lambda/sentiment"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
+                .code(Code.fromAsset(codePath))
+                .role(role)
+                .timeout(Duration.seconds(timeout))
+                .memorySize(memory)
                 .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
+                .environment(environment)
                 .build();
+    }
 
-        // Translation Lambda
-        Function translationFunction = Function.Builder.create(this, "TranslationFunction" + environmentSuffix)
-                .functionName("support-translation-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_18_X)
-                .handler("index.handler")
-                .code(Code.fromAsset("lambda/translation"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
-                .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
-                .build();
+    private void grantStepFunctionsInvoke(final Role stepFunctionsRole, final Function... functions) {
+        String[] arns = Arrays.stream(functions)
+                .map(Function::getFunctionArn)
+                .toArray(String[]::new);
 
-        // Knowledge Base Search Lambda (requires Kendra)
-        Function knowledgeBaseSearchFunction = Function.Builder.create(this, "KnowledgeBaseSearchFunction" + environmentSuffix)
-                .functionName("support-knowledge-search-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_18_X)
-                .handler("index.handler")
-                .code(Code.fromAsset("lambda/search"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
-                .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
-                .build();
-
-        // Escalation Lambda
-        Function escalationFunction = Function.Builder.create(this, "EscalationFunction" + environmentSuffix)
-                .functionName("support-escalation-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_18_X)
-                .handler("index.handler")
-                .code(Code.fromAsset("lambda/escalation"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
-                .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
-                .build();
-
-        // SLA Check Lambda
-        Function slaCheckFunction = Function.Builder.create(this, "SLACheckFunction" + environmentSuffix)
-                .functionName("support-sla-check-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_18_X)
-                .handler("index.handler")
-                .code(Code.fromAsset("lambda/sla-check"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(60))
-                .memorySize(512)
-                .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
-                .build();
-
-        // Auto-response Lambda
-        Function autoResponseFunction = Function.Builder.create(this, "AutoResponseFunction" + environmentSuffix)
-                .functionName("support-auto-response-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_18_X)
-                .handler("index.handler")
-                .code(Code.fromAsset("lambda/auto-response"))
-                .role(lambdaExecutionRole)
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
-                .tracing(Tracing.ACTIVE)
-                .environment(commonEnv)
-                .build();
-
-        // Grant Lambda permission to invoke Step Functions
         stepFunctionsRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(Collections.singletonList("lambda:InvokeFunction"))
-                .resources(Arrays.asList(
-                        sentimentAnalyzerFunction.getFunctionArn(),
-                        translationFunction.getFunctionArn(),
-                        escalationFunction.getFunctionArn(),
-                        slaCheckFunction.getFunctionArn(),
-                        autoResponseFunction.getFunctionArn()))
+                .resources(Arrays.asList(arns))
                 .build());
+    }
 
-        // ========================================================================
-        // 7. KENDRA INDEX FOR KNOWLEDGE BASE SEARCH
-        // ========================================================================
-        CfnIndex kendraIndex = CfnIndex.Builder.create(this, "KendraIndex" + environmentSuffix)
+    private CfnIndex createKendraIndex(final Role kendraRole, final Bucket knowledgeBaseBucket) {
+        return CfnIndex.Builder.create(this, "KendraIndex" + environmentSuffix)
                 .name("support-knowledge-base-" + environmentSuffix)
                 .edition("DEVELOPER_EDITION")
                 .roleArn(kendraRole.getRoleArn())
                 .build();
+    }
 
-        // Add Kendra permissions to Lambda role
-        lambdaExecutionRole.addToPolicy(PolicyStatement.Builder.create()
+    private void updateLambdaWithKendra(final Function knowledgeBaseSearch, final CfnIndex kendraIndex,
+                                       final Role lambdaRole) {
+        lambdaRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(Arrays.asList(
-                        "kendra:Query",
-                        "kendra:DescribeIndex",
-                        "kendra:ListDataSources"))
+                .actions(Arrays.asList("kendra:Query", "kendra:DescribeIndex", 
+                                      "kendra:ListDataSources"))
                 .resources(Collections.singletonList(kendraIndex.getAttrArn()))
                 .build());
 
-        // Update environment variable with Kendra Index ID
-        knowledgeBaseSearchFunction.addEnvironment("KENDRA_INDEX_ID", kendraIndex.getAttrId());
+        knowledgeBaseSearch.addEnvironment("KENDRA_INDEX_ID", kendraIndex.getAttrId());
+    }
 
-        // ========================================================================
-        // 8. STEP FUNCTIONS STATE MACHINE FOR ESCALATION WORKFLOW
-        // ========================================================================
-        // Define escalation workflow states
+    private StateMachine createStepFunctions(final LambdaResources lambdas, final Role role) {
         Pass startState = Pass.Builder.create(this, "StartEscalation" + environmentSuffix)
                 .comment("Start escalation workflow")
                 .build();
 
-        LambdaInvoke checkSentiment = LambdaInvoke.Builder.create(this, "CheckSentiment" + environmentSuffix)
-                .lambdaFunction(sentimentAnalyzerFunction)
+        LambdaInvoke checkSentiment = LambdaInvoke.Builder.create(this, 
+                "CheckSentiment" + environmentSuffix)
+                .lambdaFunction(lambdas.getSentimentAnalyzer())
                 .outputPath("$.Payload")
                 .build();
 
@@ -524,7 +612,7 @@ class TapStack extends Stack {
                 .build();
 
         LambdaInvoke escalate = LambdaInvoke.Builder.create(this, "EscalateTicket" + environmentSuffix)
-                .lambdaFunction(escalationFunction)
+                .lambdaFunction(lambdas.getEscalation())
                 .outputPath("$.Payload")
                 .build();
 
@@ -536,13 +624,9 @@ class TapStack extends Stack {
                 .comment("End escalation workflow")
                 .build();
 
-        // Define escalate path with end state
         Chain escalatePath = Chain.start(escalate).next(endState);
-
-        // Define standard path with end state
         Chain standardPath = Chain.start(standardProcessing).next(endState);
 
-        // Define the workflow chain
         Chain escalationChain = Chain.start(startState)
                 .next(checkSentiment)
                 .next(priorityChoice
@@ -550,18 +634,17 @@ class TapStack extends Stack {
                         .when(Condition.stringEquals("$.sentiment", "NEGATIVE"), escalatePath)
                         .otherwise(standardPath));
 
-        StateMachine escalationStateMachine = StateMachine.Builder.create(this, "EscalationStateMachine" + environmentSuffix)
+        return StateMachine.Builder.create(this, "EscalationStateMachine" + environmentSuffix)
                 .stateMachineName("support-escalation-workflow-" + environmentSuffix)
                 .definition(escalationChain)
                 .stateMachineType(StateMachineType.STANDARD)
-                .role(stepFunctionsRole)
+                .role(role)
                 .tracingEnabled(true)
                 .build();
+    }
 
-        // ========================================================================
-        // 9. API GATEWAY REST API WITH X-RAY TRACING AND CORS
-        // ========================================================================
-        RestApi supportApi = RestApi.Builder.create(this, "SupportAPI" + environmentSuffix)
+    private RestApi createApiGateway(final Function sentimentAnalyzer) {
+        RestApi api = RestApi.Builder.create(this, "SupportAPI" + environmentSuffix)
                 .restApiName("support-platform-api-" + environmentSuffix)
                 .description("Customer Support Platform API")
                 .deployOptions(StageOptions.builder()
@@ -575,29 +658,22 @@ class TapStack extends Stack {
                         .build())
                 .build();
 
-        // Add /tickets endpoint
-        var ticketsResource = supportApi.getRoot().addResource("tickets");
+        var ticketsResource = api.getRoot().addResource("tickets");
+        ticketsResource.addMethod("POST", 
+                LambdaIntegration.Builder.create(sentimentAnalyzer).build());
+        ticketsResource.addMethod("GET", 
+                LambdaIntegration.Builder.create(sentimentAnalyzer).build());
 
-        // POST /tickets - Create new ticket
-        ticketsResource.addMethod("POST",
-                LambdaIntegration.Builder.create(sentimentAnalyzerFunction).build());
-
-        // GET /tickets - List tickets
-        ticketsResource.addMethod("GET",
-                LambdaIntegration.Builder.create(sentimentAnalyzerFunction).build());
-
-        // GET /tickets/{ticketId} - Get specific ticket
         var ticketResource = ticketsResource.addResource("{ticketId}");
-        ticketResource.addMethod("GET",
-                LambdaIntegration.Builder.create(sentimentAnalyzerFunction).build());
+        ticketResource.addMethod("GET", 
+                LambdaIntegration.Builder.create(sentimentAnalyzer).build());
+        ticketResource.addMethod("PUT", 
+                LambdaIntegration.Builder.create(sentimentAnalyzer).build());
 
-        // PUT /tickets/{ticketId} - Update ticket
-        ticketResource.addMethod("PUT",
-                LambdaIntegration.Builder.create(sentimentAnalyzerFunction).build());
+        return api;
+    }
 
-        // ========================================================================
-        // 10. EVENTBRIDGE RULE FOR SLA MONITORING (EVERY 5 MINUTES)
-        // ========================================================================
+    private void createEventBridgeRules(final Function slaCheckFunction) {
         Rule slaMonitoringRule = Rule.Builder.create(this, "SLAMonitoringRule" + environmentSuffix)
                 .ruleName("support-sla-monitoring-" + environmentSuffix)
                 .description("Monitor SLA compliance every 5 minutes")
@@ -605,17 +681,16 @@ class TapStack extends Stack {
                 .targets(Collections.singletonList(new LambdaFunction(slaCheckFunction)))
                 .build();
 
-        // Grant EventBridge permission to invoke Lambda
         slaCheckFunction.grantInvoke(new ServicePrincipal("events.amazonaws.com"));
+    }
 
-        // ========================================================================
-        // 11. CLOUDWATCH DASHBOARD WITH METRICS
-        // ========================================================================
-        Dashboard supportDashboard = Dashboard.Builder.create(this, "SupportDashboard" + environmentSuffix)
+    private Dashboard createCloudWatchDashboard(final Table ticketsTable, 
+                                               final QueueResources queues,
+                                               final LambdaResources lambdas) {
+        Dashboard dashboard = Dashboard.Builder.create(this, "SupportDashboard" + environmentSuffix)
                 .dashboardName("support-platform-dashboard-" + environmentSuffix)
                 .build();
 
-        // Ticket count metrics
         IMetric ticketCountMetric = Metric.Builder.create()
                 .namespace("AWS/DynamoDB")
                 .metricName("ItemCount")
@@ -624,18 +699,18 @@ class TapStack extends Stack {
                 .period(Duration.minutes(5))
                 .build();
 
-        // Queue depth metrics
-        IMetric highPriorityQueueDepth = highPriorityQueue.metricApproximateNumberOfMessagesVisible();
-        IMetric standardPriorityQueueDepth = standardPriorityQueue.metricApproximateNumberOfMessagesVisible();
-        IMetric lowPriorityQueueDepth = lowPriorityQueue.metricApproximateNumberOfMessagesVisible();
+        IMetric highPriorityQueueDepth = queues.getHighPriorityQueue()
+                .metricApproximateNumberOfMessagesVisible();
+        IMetric standardPriorityQueueDepth = queues.getStandardPriorityQueue()
+                .metricApproximateNumberOfMessagesVisible();
+        IMetric lowPriorityQueueDepth = queues.getLowPriorityQueue()
+                .metricApproximateNumberOfMessagesVisible();
 
-        // Lambda metrics
-        IMetric lambdaErrors = sentimentAnalyzerFunction.metricErrors();
-        IMetric lambdaDuration = sentimentAnalyzerFunction.metricDuration();
-        IMetric lambdaInvocations = sentimentAnalyzerFunction.metricInvocations();
+        IMetric lambdaErrors = lambdas.getSentimentAnalyzer().metricErrors();
+        IMetric lambdaDuration = lambdas.getSentimentAnalyzer().metricDuration();
+        IMetric lambdaInvocations = lambdas.getSentimentAnalyzer().metricInvocations();
 
-        // Add widgets to dashboard
-        supportDashboard.addWidgets(
+        dashboard.addWidgets(
                 GraphWidget.Builder.create()
                         .title("Ticket Counts")
                         .left(Collections.singletonList(ticketCountMetric))
@@ -643,12 +718,13 @@ class TapStack extends Stack {
                         .build(),
                 GraphWidget.Builder.create()
                         .title("Queue Depths")
-                        .left(Arrays.asList(highPriorityQueueDepth, standardPriorityQueueDepth, lowPriorityQueueDepth))
+                        .left(Arrays.asList(highPriorityQueueDepth, standardPriorityQueueDepth, 
+                                           lowPriorityQueueDepth))
                         .width(12)
                         .build()
         );
 
-        supportDashboard.addWidgets(
+        dashboard.addWidgets(
                 GraphWidget.Builder.create()
                         .title("Lambda Performance")
                         .left(Arrays.asList(lambdaInvocations, lambdaErrors))
@@ -662,11 +738,16 @@ class TapStack extends Stack {
                         .build()
         );
 
-        // ========================================================================
-        // 12. CLOUDWATCH ALARMS FOR QUEUE BACKLOGS AND LAMBDA ERRORS
-        // ========================================================================
-        // High priority queue backlog alarm
-        Alarm highPriorityBacklogAlarm = Alarm.Builder.create(this, "HighPriorityBacklogAlarm" + environmentSuffix)
+        return dashboard;
+    }
+
+    private void createCloudWatchAlarms(final QueueResources queues, final LambdaResources lambdas) {
+        IMetric highPriorityQueueDepth = queues.getHighPriorityQueue()
+                .metricApproximateNumberOfMessagesVisible();
+        IMetric lambdaErrors = lambdas.getSentimentAnalyzer().metricErrors();
+        IMetric dlqDepth = queues.getDeadLetterQueue().metricApproximateNumberOfMessagesVisible();
+
+        Alarm.Builder.create(this, "HighPriorityBacklogAlarm" + environmentSuffix)
                 .alarmName("support-high-priority-backlog-" + environmentSuffix)
                 .metric(highPriorityQueueDepth)
                 .threshold(10)
@@ -675,8 +756,7 @@ class TapStack extends Stack {
                 .treatMissingData(TreatMissingData.NOT_BREACHING)
                 .build();
 
-        // Lambda error alarm
-        Alarm lambdaErrorAlarm = Alarm.Builder.create(this, "LambdaErrorAlarm" + environmentSuffix)
+        Alarm.Builder.create(this, "LambdaErrorAlarm" + environmentSuffix)
                 .alarmName("support-lambda-errors-" + environmentSuffix)
                 .metric(lambdaErrors)
                 .threshold(5)
@@ -685,9 +765,7 @@ class TapStack extends Stack {
                 .treatMissingData(TreatMissingData.NOT_BREACHING)
                 .build();
 
-        // Dead letter queue alarm
-        IMetric dlqDepth = deadLetterQueue.metricApproximateNumberOfMessagesVisible();
-        Alarm dlqAlarm = Alarm.Builder.create(this, "DeadLetterQueueAlarm" + environmentSuffix)
+        Alarm.Builder.create(this, "DeadLetterQueueAlarm" + environmentSuffix)
                 .alarmName("support-dlq-messages-" + environmentSuffix)
                 .metric(dlqDepth)
                 .threshold(1)
@@ -695,76 +773,102 @@ class TapStack extends Stack {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)
                 .treatMissingData(TreatMissingData.NOT_BREACHING)
                 .build();
+    }
 
-        // ========================================================================
-        // 13. CFN OUTPUTS FOR ALL IMPORTANT RESOURCES
-        // ========================================================================
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    private void createOutputs(final Table ticketsTable, final BucketResources buckets,
+                              final QueueResources queues, final Topic notificationTopic,
+                              final CfnIndex kendraIndex, final StateMachine stateMachine,
+                              final LambdaResources lambdas, final RestApi api,
+                              final Dashboard dashboard) {
+        createDynamoDBOutputs(ticketsTable);
+        createApiGatewayOutputs(api);
+        createQueueOutputs(queues);
+        createSNSOutputs(notificationTopic);
+        createS3Outputs(buckets);
+        createKendraOutputs(kendraIndex);
+        createStepFunctionsOutputs(stateMachine);
+        createLambdaOutputs(lambdas);
+        createDashboardOutputs(dashboard);
+    }
+
+    private void createDynamoDBOutputs(final Table table) {
         new CfnOutput(this, "DynamoDBTableName", CfnOutputProps.builder()
                 .description("DynamoDB Tickets Table Name")
-                .value(ticketsTable.getTableName())
+                .value(table.getTableName())
                 .exportName("SupportTicketsTableName-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "DynamoDBTableArn", CfnOutputProps.builder()
                 .description("DynamoDB Tickets Table ARN")
-                .value(ticketsTable.getTableArn())
+                .value(table.getTableArn())
                 .exportName("SupportTicketsTableArn-" + environmentSuffix)
                 .build());
+    }
 
+    private void createApiGatewayOutputs(final RestApi api) {
         new CfnOutput(this, "ApiGatewayUrl", CfnOutputProps.builder()
                 .description("API Gateway Endpoint URL")
-                .value(supportApi.getUrl())
+                .value(api.getUrl())
                 .exportName("SupportApiUrl-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "ApiGatewayId", CfnOutputProps.builder()
                 .description("API Gateway REST API ID")
-                .value(supportApi.getRestApiId())
+                .value(api.getRestApiId())
                 .exportName("SupportApiId-" + environmentSuffix)
                 .build());
+    }
 
+    private void createQueueOutputs(final QueueResources queues) {
         new CfnOutput(this, "HighPriorityQueueUrl", CfnOutputProps.builder()
                 .description("High Priority Queue URL")
-                .value(highPriorityQueue.getQueueUrl())
+                .value(queues.getHighPriorityQueue().getQueueUrl())
                 .exportName("HighPriorityQueueUrl-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "StandardPriorityQueueUrl", CfnOutputProps.builder()
                 .description("Standard Priority Queue URL")
-                .value(standardPriorityQueue.getQueueUrl())
+                .value(queues.getStandardPriorityQueue().getQueueUrl())
                 .exportName("StandardPriorityQueueUrl-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "LowPriorityQueueUrl", CfnOutputProps.builder()
                 .description("Low Priority Queue URL")
-                .value(lowPriorityQueue.getQueueUrl())
+                .value(queues.getLowPriorityQueue().getQueueUrl())
                 .exportName("LowPriorityQueueUrl-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "DeadLetterQueueUrl", CfnOutputProps.builder()
                 .description("Dead Letter Queue URL")
-                .value(deadLetterQueue.getQueueUrl())
+                .value(queues.getDeadLetterQueue().getQueueUrl())
                 .exportName("DeadLetterQueueUrl-" + environmentSuffix)
                 .build());
+    }
 
+    private void createSNSOutputs(final Topic topic) {
         new CfnOutput(this, "AgentNotificationTopicArn", CfnOutputProps.builder()
                 .description("Agent Notification SNS Topic ARN")
-                .value(agentNotificationTopic.getTopicArn())
+                .value(topic.getTopicArn())
                 .exportName("AgentNotificationTopicArn-" + environmentSuffix)
                 .build());
+    }
 
+    private void createS3Outputs(final BucketResources buckets) {
         new CfnOutput(this, "AttachmentsBucketName", CfnOutputProps.builder()
                 .description("Attachments S3 Bucket Name")
-                .value(attachmentsBucket.getBucketName())
+                .value(buckets.getAttachmentsBucket().getBucketName())
                 .exportName("AttachmentsBucketName-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "KnowledgeBaseBucketName", CfnOutputProps.builder()
                 .description("Knowledge Base S3 Bucket Name")
-                .value(knowledgeBaseBucket.getBucketName())
+                .value(buckets.getKnowledgeBaseBucket().getBucketName())
                 .exportName("KnowledgeBaseBucketName-" + environmentSuffix)
                 .build());
+    }
 
+    private void createKendraOutputs(final CfnIndex kendraIndex) {
         new CfnOutput(this, "KendraIndexId", CfnOutputProps.builder()
                 .description("Kendra Index ID")
                 .value(kendraIndex.getAttrId())
@@ -776,73 +880,62 @@ class TapStack extends Stack {
                 .value(kendraIndex.getAttrArn())
                 .exportName("KendraIndexArn-" + environmentSuffix)
                 .build());
+    }
 
+    private void createStepFunctionsOutputs(final StateMachine stateMachine) {
         new CfnOutput(this, "StepFunctionsArn", CfnOutputProps.builder()
                 .description("Escalation Step Functions State Machine ARN")
-                .value(escalationStateMachine.getStateMachineArn())
+                .value(stateMachine.getStateMachineArn())
                 .exportName("EscalationStateMachineArn-" + environmentSuffix)
                 .build());
+    }
 
+    private void createLambdaOutputs(final LambdaResources lambdas) {
         new CfnOutput(this, "SentimentAnalyzerFunctionArn", CfnOutputProps.builder()
                 .description("Sentiment Analyzer Lambda Function ARN")
-                .value(sentimentAnalyzerFunction.getFunctionArn())
+                .value(lambdas.getSentimentAnalyzer().getFunctionArn())
                 .exportName("SentimentAnalyzerFunctionArn-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "TranslationFunctionArn", CfnOutputProps.builder()
                 .description("Translation Lambda Function ARN")
-                .value(translationFunction.getFunctionArn())
+                .value(lambdas.getTranslation().getFunctionArn())
                 .exportName("TranslationFunctionArn-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "KnowledgeBaseSearchFunctionArn", CfnOutputProps.builder()
                 .description("Knowledge Base Search Lambda Function ARN")
-                .value(knowledgeBaseSearchFunction.getFunctionArn())
+                .value(lambdas.getKnowledgeBaseSearch().getFunctionArn())
                 .exportName("KnowledgeBaseSearchFunctionArn-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "EscalationFunctionArn", CfnOutputProps.builder()
                 .description("Escalation Lambda Function ARN")
-                .value(escalationFunction.getFunctionArn())
+                .value(lambdas.getEscalation().getFunctionArn())
                 .exportName("EscalationFunctionArn-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "SLACheckFunctionArn", CfnOutputProps.builder()
                 .description("SLA Check Lambda Function ARN")
-                .value(slaCheckFunction.getFunctionArn())
+                .value(lambdas.getSlaCheck().getFunctionArn())
                 .exportName("SLACheckFunctionArn-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "AutoResponseFunctionArn", CfnOutputProps.builder()
                 .description("Auto-Response Lambda Function ARN")
-                .value(autoResponseFunction.getFunctionArn())
+                .value(lambdas.getAutoResponse().getFunctionArn())
                 .exportName("AutoResponseFunctionArn-" + environmentSuffix)
-                .build());
-
-        new CfnOutput(this, "CloudWatchDashboardName", CfnOutputProps.builder()
-                .description("CloudWatch Dashboard Name")
-                .value(supportDashboard.getDashboardName())
-                .exportName("SupportDashboardName-" + environmentSuffix)
-                .build());
-
-        new CfnOutput(this, "HighPriorityBacklogAlarmName", CfnOutputProps.builder()
-                .description("High Priority Queue Backlog Alarm Name")
-                .value(highPriorityBacklogAlarm.getAlarmName())
-                .exportName("HighPriorityBacklogAlarmName-" + environmentSuffix)
-                .build());
-
-        new CfnOutput(this, "LambdaErrorAlarmName", CfnOutputProps.builder()
-                .description("Lambda Error Alarm Name")
-                .value(lambdaErrorAlarm.getAlarmName())
-                .exportName("LambdaErrorAlarmName-" + environmentSuffix)
                 .build());
     }
 
-    /**
-     * Gets the environment suffix used by this stack.
-     *
-     * @return The environment suffix (e.g., 'dev', 'prod')
-     */
+    private void createDashboardOutputs(final Dashboard dashboard) {
+        new CfnOutput(this, "CloudWatchDashboardName", CfnOutputProps.builder()
+                .description("CloudWatch Dashboard Name")
+                .value(dashboard.getDashboardName())
+                .exportName("SupportDashboardName-" + environmentSuffix)
+                .build());
+    }
+
     public String getEnvironmentSuffix() {
         return environmentSuffix;
     }
@@ -850,54 +943,28 @@ class TapStack extends Stack {
 
 /**
  * Main entry point for the TAP CDK Java application.
- *
- * This class serves as the entry point for the CDK application and is responsible
- * for initializing the CDK app and instantiating the main TapStack.
- *
- * The application supports environment-specific deployments through the
- * environmentSuffix context parameter.
- *
- * @version 1.0
- * @since 1.0
  */
 public final class Main {
 
-    /**
-     * Private constructor to prevent instantiation of utility class.
-     */
     private Main() {
         // Utility class should not be instantiated
     }
 
-    /**
-     * Main entry point for the CDK application.
-     *
-     * This method creates a CDK App instance and instantiates the TapStack
-     * with appropriate configuration based on environment variables and context.
-     *
-     * Region: us-west-2 (as per PROMPT requirements)
-     *
-     * @param args Command line arguments (not used in this application)
-     */
     public static void main(final String[] args) {
         App app = new App();
 
-        // Get environment suffix from context or default to 'dev'
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
         }
 
-        // Get AWS account from environment or use default
         String account = System.getenv("CDK_DEFAULT_ACCOUNT");
         if (account == null) {
             account = System.getenv("AWS_ACCOUNT_ID");
         }
 
-        // Region is set to us-west-2 as per PROMPT requirements
         String region = "us-west-2";
 
-        // Create the main TAP stack with us-west-2 region
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .stackProps(StackProps.builder()
@@ -909,7 +976,6 @@ public final class Main {
                         .build())
                 .build());
 
-        // Synthesize the CDK app
         app.synth();
     }
 }
