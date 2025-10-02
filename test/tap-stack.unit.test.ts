@@ -256,7 +256,7 @@ describe('TapStack CloudFormation Template - Static Website Infrastructure', () 
     describe('Resource Naming Convention', () => {
       test('all named resources should include EnvironmentSuffix', () => {
         const namedResources = ['WebsiteBucket', 'LoggingBucket', 'OriginAccessControl',
-                               'MonitoringDashboard', 'HighTrafficAlarm'];
+          'MonitoringDashboard', 'HighTrafficAlarm'];
 
         namedResources.forEach(resourceName => {
           const resource = template.Resources[resourceName];

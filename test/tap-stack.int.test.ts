@@ -264,7 +264,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
 
       const response = await route53Client.send(command);
       expect(response.HostedZone).toBeDefined();
-      expect(response.HostedZone?.Name).toContain('test-website.local');
+      expect(response.HostedZone?.Name).toContain('test-domain.com');
     });
 
     test('should have A records for subdomain and apex', async () => {
