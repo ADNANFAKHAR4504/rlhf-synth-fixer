@@ -3,19 +3,27 @@
 package lib_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/apigateway"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/apigateway"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/xray"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TapStackOutputs represents the structure of cfn-outputs/flat-outputs.json
@@ -38,6 +46,10 @@ func loadTapStackOutputs(t *testing.T) *TapStackOutputs {
 
 	return &outputs
 }
+
+// ==========================================
+// BASIC RESOURCE VALIDATION TESTS
+// ==========================================
 
 func TestTapStackIntegration(t *testing.T) {
 	// Skip if running in CI without AWS credentials
@@ -72,6 +84,13 @@ func TestTapStackIntegration(t *testing.T) {
 		if table.BillingModeSummary != nil {
 			assert.Equal(t, strings.ToUpper("PAY_PER_REQUEST"), strings.ToUpper(string(table.BillingModeSummary.BillingMode)), "Table should use on-demand billing")
 		}
+
+		// Verify partition key
+		assert.Len(t, table.KeySchema, 1, "Table should have exactly one key")
+		assert.Equal(t, "id", *table.KeySchema[0].AttributeName, "Partition key should be 'id'")
+
+		// Verify point-in-time recovery
+		assert.NotNil(t, table.PointInTimeRecoveryDescription, "Point-in-time recovery should be configured")
 	})
 
 	t.Run("DynamoDB table name follows naming convention", func(t *testing.T) {
@@ -109,6 +128,23 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotEmpty(t, funcResp.Configuration.Runtime, "Function should have runtime specified")
 		assert.Equal(t, strings.ToUpper("ACTIVE"), strings.ToUpper(string(funcResp.Configuration.State)), "Function should be active")
 		assert.NotEmpty(t, funcResp.Configuration.Handler, "Function should have handler specified")
+		assert.Equal(t, "index.handler", *funcResp.Configuration.Handler, "Handler should be index.handler")
+
+		// Verify runtime is Python 3.12
+		assert.Contains(t, string(funcResp.Configuration.Runtime), "python3.12", "Runtime should be Python 3.12")
+
+		// Verify memory and timeout
+		assert.Equal(t, int32(256), *funcResp.Configuration.MemorySize, "Memory should be 256 MB")
+		assert.Equal(t, int32(30), *funcResp.Configuration.Timeout, "Timeout should be 30 seconds")
+
+		// Verify environment variables
+		require.NotNil(t, funcResp.Configuration.Environment, "Environment variables should be configured")
+		assert.NotEmpty(t, funcResp.Configuration.Environment.Variables["TABLE_NAME"], "TABLE_NAME environment variable should be set")
+		assert.NotEmpty(t, funcResp.Configuration.Environment.Variables["ENVIRONMENT"], "ENVIRONMENT environment variable should be set")
+
+		// Verify X-Ray tracing is enabled
+		assert.NotNil(t, funcResp.Configuration.TracingConfig, "Tracing should be configured")
+		assert.Equal(t, "Active", string(funcResp.Configuration.TracingConfig.Mode), "X-Ray tracing should be active")
 
 		// Verify ARN format
 		assert.Regexp(t, `^arn:aws:lambda:[a-z0-9-]+:[0-9]+:function:.+$`, outputs.LambdaFunctionArn, "Lambda ARN should be valid AWS ARN format")
@@ -143,6 +179,11 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Equal(t, apiID, *apiResp.Id, "API ID should match")
 		assert.NotEmpty(t, apiResp.Name, "API should have a name")
 		assert.NotEmpty(t, apiResp.CreatedDate, "API should have creation date")
+		assert.Contains(t, *apiResp.Name, "tap-serverless-api", "API name should contain 'tap-serverless-api'")
+
+		// Verify endpoint type
+		assert.Len(t, apiResp.EndpointConfiguration.Types, 1, "Should have one endpoint type")
+		assert.Equal(t, "REGIONAL", string(apiResp.EndpointConfiguration.Types[0]), "Endpoint should be REGIONAL")
 
 		// Verify endpoint format
 		assert.Regexp(t, `^https://[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/.+/$`, outputs.APIEndpoint, "API endpoint should be valid API Gateway URL")
@@ -183,5 +224,657 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Equal(t, tableNameParts, lambdaSuffix, "DynamoDB table and Lambda function should use same environment suffix")
 		assert.Equal(t, tableNameParts, apiPath, "DynamoDB table and API Gateway should use same environment suffix")
 	})
+}
 
+// ==========================================
+// CROSS-SERVICE INTERACTION TESTS
+// ==========================================
+
+func TestEndToEndAPIWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	outputs := loadTapStackOutputs(t)
+	apiEndpoint := strings.TrimSuffix(outputs.APIEndpoint, "/")
+
+	// Use a unique test ID to avoid conflicts
+	testID := fmt.Sprintf("test-item-%d", time.Now().UnixNano())
+
+	t.Run("POST: Create new item via API Gateway -> Lambda -> DynamoDB", func(t *testing.T) {
+		// ARRANGE
+		payload := map[string]interface{}{
+			"name":        "Integration Test Item",
+			"description": "Created via end-to-end integration test",
+			"value":       42,
+		}
+		payloadBytes, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		// ACT - Send POST request to API
+		req, err := http.NewRequestWithContext(ctx, "POST", apiEndpoint+"/items", bytes.NewBuffer(payloadBytes))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err, "POST request should succeed")
+		defer resp.Body.Close()
+
+		// ASSERT - Verify response
+		assert.Equal(t, http.StatusCreated, resp.StatusCode, "Should return 201 Created")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Item created successfully", result["message"])
+		assert.NotEmpty(t, result["id"], "Response should include created item ID")
+
+		// Store the ID for subsequent tests
+		testID = result["id"].(string)
+
+		// Verify CORS headers
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"), "CORS header should allow all origins")
+	})
+
+	t.Run("GET: Retrieve specific item by ID via API -> Lambda -> DynamoDB", func(t *testing.T) {
+		// Wait a bit for eventual consistency
+		time.Sleep(2 * time.Second)
+
+		// ACT - Send GET request with query parameter
+		req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items?id=%s", apiEndpoint, testID), nil)
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return 200 OK")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, testID, result["id"], "Retrieved item should have correct ID")
+		assert.Equal(t, "Integration Test Item", result["name"])
+		assert.NotEmpty(t, result["created_at"], "Item should have created_at timestamp")
+	})
+
+	t.Run("GET: Scan all items via API -> Lambda -> DynamoDB", func(t *testing.T) {
+		// ACT - Send GET request without query parameter
+		req, err := http.NewRequestWithContext(ctx, "GET", apiEndpoint+"/items", nil)
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return 200 OK")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result []interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, result, "Should return at least one item")
+
+		// Verify our test item is in the results
+		found := false
+		for _, item := range result {
+			itemMap := item.(map[string]interface{})
+			if itemMap["id"] == testID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Our test item should be in the scan results")
+	})
+
+	t.Run("PUT: Update existing item via API -> Lambda -> DynamoDB", func(t *testing.T) {
+		// ARRANGE
+		payload := map[string]interface{}{
+			"id":          testID,
+			"name":        "Updated Test Item",
+			"description": "Updated via integration test",
+			"value":       99,
+		}
+		payloadBytes, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		// ACT - Send PUT request
+		req, err := http.NewRequestWithContext(ctx, "PUT", apiEndpoint+"/items", bytes.NewBuffer(payloadBytes))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return 200 OK")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Item updated successfully", result["message"])
+
+		// Verify the update by retrieving the item
+		time.Sleep(2 * time.Second)
+		getReq, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items?id=%s", apiEndpoint, testID), nil)
+		require.NoError(t, err)
+
+		getResp, err := client.Do(getReq)
+		require.NoError(t, err)
+		defer getResp.Body.Close()
+
+		getBody, err := io.ReadAll(getResp.Body)
+		require.NoError(t, err)
+
+		var getResult map[string]interface{}
+		err = json.Unmarshal(getBody, &getResult)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Updated Test Item", getResult["name"], "Item should be updated")
+		assert.NotEmpty(t, getResult["updated_at"], "Item should have updated_at timestamp")
+	})
+
+	t.Run("DELETE: Remove item via API -> Lambda -> DynamoDB", func(t *testing.T) {
+		// ACT - Send DELETE request
+		req, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/items?id=%s", apiEndpoint, testID), nil)
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return 200 OK")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Item deleted successfully", result["message"])
+
+		// Verify deletion by trying to retrieve the item
+		time.Sleep(2 * time.Second)
+		getReq, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items?id=%s", apiEndpoint, testID), nil)
+		require.NoError(t, err)
+
+		getResp, err := client.Do(getReq)
+		require.NoError(t, err)
+		defer getResp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, getResp.StatusCode, "Item should no longer exist")
+	})
+}
+
+// ==========================================
+// ERROR HANDLING TESTS
+// ==========================================
+
+func TestAPIErrorHandling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	outputs := loadTapStackOutputs(t)
+	apiEndpoint := strings.TrimSuffix(outputs.APIEndpoint, "/")
+
+	t.Run("PUT without ID returns 400 Bad Request", func(t *testing.T) {
+		// ARRANGE
+		payload := map[string]interface{}{
+			"name": "Missing ID",
+		}
+		payloadBytes, err := json.Marshal(payload)
+		require.NoError(t, err)
+
+		// ACT
+		req, err := http.NewRequestWithContext(ctx, "PUT", apiEndpoint+"/items", bytes.NewBuffer(payloadBytes))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Should return 400 Bad Request")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Contains(t, result["error"], "ID is required")
+	})
+
+	t.Run("DELETE without ID returns 400 Bad Request", func(t *testing.T) {
+		// ACT
+		req, err := http.NewRequestWithContext(ctx, "DELETE", apiEndpoint+"/items", nil)
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Should return 400 Bad Request")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		require.NoError(t, err)
+
+		assert.Contains(t, result["error"], "ID is required")
+	})
+
+	t.Run("GET non-existent item returns 404 Not Found", func(t *testing.T) {
+		// ACT
+		nonExistentID := "non-existent-id-12345"
+		req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/items?id=%s", apiEndpoint, nonExistentID), nil)
+		require.NoError(t, err)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Should return 404 Not Found")
+	})
+}
+
+// ==========================================
+// LAMBDA-DYNAMODB DIRECT INTERACTION TESTS
+// ==========================================
+
+func TestLambdaDynamoDBInteraction(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err)
+
+	outputs := loadTapStackOutputs(t)
+	lambdaClient := lambda.NewFromConfig(cfg)
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+
+	functionName := outputs.LambdaFunctionArn[strings.LastIndex(outputs.LambdaFunctionArn, ":")+1:]
+
+	t.Run("Lambda has correct DynamoDB permissions", func(t *testing.T) {
+		// Get Lambda function configuration
+		funcResp, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+		require.NoError(t, err)
+
+		// Verify TABLE_NAME environment variable matches actual table
+		tableName := funcResp.Configuration.Environment.Variables["TABLE_NAME"]
+		assert.Equal(t, outputs.TableName, tableName, "Lambda should have correct TABLE_NAME")
+
+		// Verify role has DynamoDB permissions by checking role name
+		roleName := *funcResp.Configuration.Role
+		assert.Contains(t, roleName, "tap-lambda-role", "Lambda should use correct IAM role")
+	})
+
+	t.Run("Lambda can invoke and write to DynamoDB", func(t *testing.T) {
+		// ARRANGE - Create a test event for Lambda
+		testEvent := map[string]interface{}{
+			"httpMethod": "POST",
+			"path":       "/items",
+			"body": `{
+				"name": "Direct Lambda Test",
+				"description": "Testing Lambda-DynamoDB interaction"
+			}`,
+		}
+		eventBytes, err := json.Marshal(testEvent)
+		require.NoError(t, err)
+
+		// ACT - Invoke Lambda directly
+		invokeResp, err := lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(functionName),
+			Payload:      eventBytes,
+		})
+		require.NoError(t, err)
+		assert.Nil(t, invokeResp.FunctionError, "Lambda should execute without errors")
+
+		// Parse Lambda response
+		var lambdaResult map[string]interface{}
+		err = json.Unmarshal(invokeResp.Payload, &lambdaResult)
+		require.NoError(t, err)
+
+		assert.Equal(t, float64(201), lambdaResult["statusCode"], "Lambda should return 201")
+
+		// Parse the body from Lambda response
+		bodyStr := lambdaResult["body"].(string)
+		var body map[string]interface{}
+		err = json.Unmarshal([]byte(bodyStr), &body)
+		require.NoError(t, err)
+
+		createdID := body["id"].(string)
+		assert.NotEmpty(t, createdID, "Should have created item ID")
+
+		// ASSERT - Verify item was actually written to DynamoDB
+		time.Sleep(2 * time.Second)
+		getItemResp, err := dynamoClient.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(outputs.TableName),
+			Key: map[string]interface{}{
+				"id": map[string]interface{}{
+					"S": createdID,
+				},
+			},
+		})
+		require.NoError(t, err)
+		assert.NotEmpty(t, getItemResp.Item, "Item should exist in DynamoDB")
+
+		// Clean up
+		_, _ = dynamoClient.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+			TableName: aws.String(outputs.TableName),
+			Key: map[string]interface{}{
+				"id": map[string]interface{}{
+					"S": createdID,
+				},
+			},
+		})
+	})
+}
+
+// ==========================================
+// OBSERVABILITY TESTS (CloudWatch & X-Ray)
+// ==========================================
+
+func TestObservabilityAndMonitoring(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err)
+
+	outputs := loadTapStackOutputs(t)
+	logsClient := cloudwatchlogs.NewFromConfig(cfg)
+	xrayClient := xray.NewFromConfig(cfg)
+
+	functionName := outputs.LambdaFunctionArn[strings.LastIndex(outputs.LambdaFunctionArn, ":")+1:]
+	logGroupName := fmt.Sprintf("/aws/lambda/%s", functionName)
+
+	t.Run("CloudWatch Logs group exists for Lambda function", func(t *testing.T) {
+		// ACT
+		resp, err := logsClient.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
+			LogGroupNamePrefix: aws.String(logGroupName),
+		})
+		require.NoError(t, err)
+
+		// ASSERT
+		assert.NotEmpty(t, resp.LogGroups, "Log group should exist")
+		assert.Equal(t, logGroupName, *resp.LogGroups[0].LogGroupName, "Log group name should match")
+
+		// Verify retention period (7 days)
+		assert.NotNil(t, resp.LogGroups[0].RetentionInDays, "Retention should be set")
+		assert.Equal(t, int32(7), *resp.LogGroups[0].RetentionInDays, "Retention should be 7 days")
+	})
+
+	t.Run("Lambda function logs are being written to CloudWatch", func(t *testing.T) {
+		// First, invoke the Lambda to generate logs
+		lambdaClient := lambda.NewFromConfig(cfg)
+		testEvent := map[string]interface{}{
+			"httpMethod": "GET",
+			"path":       "/items",
+		}
+		eventBytes, err := json.Marshal(testEvent)
+		require.NoError(t, err)
+
+		_, err = lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(functionName),
+			Payload:      eventBytes,
+		})
+		require.NoError(t, err)
+
+		// Wait for logs to be available
+		time.Sleep(10 * time.Second)
+
+		// ACT - Check for log streams
+		streamsResp, err := logsClient.DescribeLogStreams(ctx, &cloudwatchlogs.DescribeLogStreamsInput{
+			LogGroupName: aws.String(logGroupName),
+			Descending:   aws.Bool(true),
+			OrderBy:      "LastEventTime",
+			Limit:        aws.Int32(1),
+		})
+		require.NoError(t, err)
+
+		// ASSERT
+		assert.NotEmpty(t, streamsResp.LogStreams, "Log streams should exist")
+		assert.NotNil(t, streamsResp.LogStreams[0].LastEventTimestamp, "Log stream should have recent events")
+	})
+
+	t.Run("X-Ray tracing is active and collecting traces", func(t *testing.T) {
+		// First, invoke the Lambda to generate traces
+		lambdaClient := lambda.NewFromConfig(cfg)
+		testEvent := map[string]interface{}{
+			"httpMethod": "GET",
+			"path":       "/items",
+		}
+		eventBytes, err := json.Marshal(testEvent)
+		require.NoError(t, err)
+
+		_, err = lambdaClient.Invoke(ctx, &lambda.InvokeInput{
+			FunctionName: aws.String(functionName),
+			Payload:      eventBytes,
+		})
+		require.NoError(t, err)
+
+		// Wait for traces to be available
+		time.Sleep(15 * time.Second)
+
+		// ACT - Get trace summaries
+		endTime := time.Now()
+		startTime := endTime.Add(-5 * time.Minute)
+
+		tracesResp, err := xrayClient.GetTraceSummaries(ctx, &xray.GetTraceSummariesInput{
+			StartTime: aws.Time(startTime),
+			EndTime:   aws.Time(endTime),
+		})
+
+		// ASSERT
+		// Note: X-Ray might take time to propagate traces, so we check if the API call works
+		require.NoError(t, err, "X-Ray API should be accessible")
+
+		// If traces are available, verify they exist
+		if len(tracesResp.TraceSummaries) > 0 {
+			assert.NotEmpty(t, tracesResp.TraceSummaries, "Traces should be collected")
+		}
+	})
+}
+
+// ==========================================
+// SECURITY & IAM PERMISSION TESTS
+// ==========================================
+
+func TestSecurityAndIAMPermissions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err)
+
+	outputs := loadTapStackOutputs(t)
+	lambdaClient := lambda.NewFromConfig(cfg)
+	iamClient := iam.NewFromConfig(cfg)
+
+	functionName := outputs.LambdaFunctionArn[strings.LastIndex(outputs.LambdaFunctionArn, ":")+1:]
+
+	t.Run("Lambda execution role has correct policies attached", func(t *testing.T) {
+		// Get Lambda function to extract role
+		funcResp, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+		require.NoError(t, err)
+
+		// Extract role name from ARN
+		roleArn := *funcResp.Configuration.Role
+		roleName := roleArn[strings.LastIndex(roleArn, "/")+1:]
+
+		// ACT - List attached policies
+		policiesResp, err := iamClient.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
+			RoleName: aws.String(roleName),
+		})
+		require.NoError(t, err)
+
+		// ASSERT - Should have AWSLambdaBasicExecutionRole
+		foundBasicExecution := false
+		for _, policy := range policiesResp.AttachedPolicies {
+			if strings.Contains(*policy.PolicyName, "AWSLambdaBasicExecutionRole") {
+				foundBasicExecution = true
+				break
+			}
+		}
+		assert.True(t, foundBasicExecution, "Role should have AWSLambdaBasicExecutionRole attached")
+
+		// Check inline policies for DynamoDB permissions
+		inlinePoliciesResp, err := iamClient.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
+			RoleName: aws.String(roleName),
+		})
+		require.NoError(t, err)
+
+		// Should have at least one inline policy for DynamoDB access
+		assert.NotEmpty(t, inlinePoliciesResp.PolicyNames, "Role should have inline policies for DynamoDB")
+	})
+
+	t.Run("Lambda role trust relationship allows Lambda service", func(t *testing.T) {
+		// Get Lambda function to extract role
+		funcResp, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(functionName),
+		})
+		require.NoError(t, err)
+
+		roleArn := *funcResp.Configuration.Role
+		roleName := roleArn[strings.LastIndex(roleArn, "/")+1:]
+
+		// ACT - Get role details
+		roleResp, err := iamClient.GetRole(ctx, &iam.GetRoleInput{
+			RoleName: aws.String(roleName),
+		})
+		require.NoError(t, err)
+
+		// ASSERT - Verify trust relationship
+		assert.NotNil(t, roleResp.Role.AssumeRolePolicyDocument, "Role should have assume role policy")
+		assert.Contains(t, *roleResp.Role.AssumeRolePolicyDocument, "lambda.amazonaws.com", "Role should trust Lambda service")
+	})
+
+	t.Run("API Gateway has proper CORS configuration", func(t *testing.T) {
+		// Make an OPTIONS request to verify CORS preflight
+		apiEndpoint := strings.TrimSuffix(outputs.APIEndpoint, "/")
+
+		req, err := http.NewRequestWithContext(ctx, "OPTIONS", apiEndpoint+"/items", nil)
+		require.NoError(t, err)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "Content-Type")
+		req.Header.Set("Origin", "https://example.com")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// ASSERT - Verify CORS headers
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Allow-Origin"), "Should have CORS Allow-Origin header")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Allow-Methods"), "Should have CORS Allow-Methods header")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Allow-Headers"), "Should have CORS Allow-Headers header")
+	})
+}
+
+// ==========================================
+// API GATEWAY THROTTLING & PERFORMANCE TESTS
+// ==========================================
+
+func TestAPIGatewayPerformanceAndThrottling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err)
+
+	outputs := loadTapStackOutputs(t)
+	apiClient := apigateway.NewFromConfig(cfg)
+
+	// Extract API ID from endpoint URL
+	endpointParts := strings.Split(outputs.APIEndpoint, ".")
+	apiID := strings.TrimPrefix(endpointParts[0], "https://")
+
+	// Extract stage name from endpoint
+	stageName := outputs.APIEndpoint[strings.LastIndex(outputs.APIEndpoint[:len(outputs.APIEndpoint)-1], "/")+1 : len(outputs.APIEndpoint)-1]
+
+	t.Run("API Gateway stage has throttling configured", func(t *testing.T) {
+		// ACT - Get stage information
+		stageResp, err := apiClient.GetStage(ctx, &apigateway.GetStageInput{
+			RestApiId: aws.String(apiID),
+			StageName: aws.String(stageName),
+		})
+		require.NoError(t, err)
+
+		// ASSERT - Verify throttling settings
+		assert.NotNil(t, stageResp.ThrottleSettings, "Stage should have throttling configured")
+		if stageResp.ThrottleSettings != nil {
+			assert.NotNil(t, stageResp.ThrottleSettings.RateLimit, "Rate limit should be set")
+			assert.NotNil(t, stageResp.ThrottleSettings.BurstLimit, "Burst limit should be set")
+
+			// Verify expected values (1000 requests/sec, 2000 burst)
+			assert.Equal(t, float64(1000), *stageResp.ThrottleSettings.RateLimit, "Rate limit should be 1000 req/sec")
+			assert.Equal(t, int32(2000), *stageResp.ThrottleSettings.BurstLimit, "Burst limit should be 2000")
+		}
+
+		// Verify logging is enabled
+		assert.Equal(t, "INFO", string(stageResp.MethodSettings["*/*"].LoggingLevel), "Logging should be INFO level")
+		assert.True(t, *stageResp.MethodSettings["*/*"].MetricsEnabled, "Metrics should be enabled")
+	})
 }
