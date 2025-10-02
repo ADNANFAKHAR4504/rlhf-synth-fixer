@@ -272,7 +272,7 @@ log_export_function = lambda_.Function(f"log-export-function-{environment_suffix
     runtime="python3.9",
     handler="index.handler",
     role=lambda_role.arn,
-    code=pulumi.FileArchive("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda"),
+    code=pulumi.FileArchive("./lib/lambda"),
     environment=lambda_.FunctionEnvironmentArgs(
         variables={
             "LOG_GROUP_NAME": application_log_group.name,

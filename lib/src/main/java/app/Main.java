@@ -282,7 +282,7 @@ public final class Main {
                 .runtime("python3.9")
                 .handler("index.handler")
                 .role(lambdaRole.arn())
-                .code(new FileArchive("/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-30598714/lib/lambda"))
+                .code(new FileArchive("./lib/lambda"))
                 .environment(FunctionEnvironmentArgs.builder()
                         .variables(Map.of(
                                 "LOG_GROUP_NAME", applicationLogGroup.name(),

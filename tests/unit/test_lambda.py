@@ -9,8 +9,8 @@ import importlib
 from unittest.mock import MagicMock, patch, call
 from datetime import datetime, timedelta
 
-# Add lib/lambda to path
-sys.path.insert(0, '/Users/django/code/iac-test-automations/lib/lambda')
+# Add lib/lambda to path dynamically
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib', 'lambda'))
 
 # Set AWS region for testing
 os.environ['AWS_REGION'] = 'us-east-1'

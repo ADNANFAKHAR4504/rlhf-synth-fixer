@@ -15,7 +15,8 @@ class TestInfrastructureIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Load deployment outputs"""
-        with open('/Users/django/code/iac-test-automations/cfn-outputs/flat-outputs.json', 'r') as f:
+        outputs_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'cfn-outputs', 'flat-outputs.json')
+        with open(outputs_path, 'r') as f:
             cls.outputs = json.load(f)
 
         # Set up AWS clients
