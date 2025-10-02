@@ -78,15 +78,10 @@ export class TapStack extends TerraformStack {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: '*', // This represents the AWS account root user
+              AWS: `arn:aws:iam::${identity.accountId}:root`, // Explicitly grant root account access
             },
             Action: 'kms:*',
             Resource: '*',
-            Condition: {
-              StringEquals: {
-                'aws:PrincipalOrgID': identity.accountId, // Replace with your AWS Organization ID if needed
-              },
-            },
           },
           {
             Sid: 'Allow CloudTrail to encrypt logs',
