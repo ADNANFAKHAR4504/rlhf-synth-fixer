@@ -1028,7 +1028,13 @@ public final class Main {
             account = System.getenv("AWS_ACCOUNT_ID");
         }
 
-        String region = "us-west-2";
+        String region = System.getenv("CDK_DEFAULT_REGION");
+        if (region == null) {
+            region = System.getenv("AWS_REGION");
+        }
+        if (region == null) {
+            region = "us-east-1";
+        }
 
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
