@@ -183,3 +183,52 @@ test/terraform.int.test.ts(314,16): error TS18048: 'distribution.Distribution.Di
 - All type safety issues in our code resolved
 - Integration tests properly handle undefined AWS SDK responses
 - Build step ready for CI/CD pipeline
+
+---
+
+### 6. Terraform Deployment Errors
+
+Multiple deployment errors occurred when running terraform plan/apply due to missing outputs, deprecated syntax, undeclared variables, and missing template files.
+
+**Errors that occurred:**
+
+**Missing Module Outputs:**
+- `module.storage.bucket_name` not exported from storage module
+
+**Deprecated Terraform Syntax:**
+- `vpc = true` in aws_eip resource (deprecated in AWS provider v5+)
+
+**Undeclared Variables in Modules:**
+- monitoring module: `alb_name`, `target_group_arn`, `app_config`
+- security module: `cloudfront_distribution_arn`, `bastion_allowed_cidr`, `public_subnet_ids`, `private_subnet_ids`, `vpc_cidr_block`
+
+**Missing Template Files:**
+- `modules/compute/user_data.sh` - EC2 instance initialization script
+- `modules/content_delivery/edge_request.js` - Lambda@Edge function code
+- `modules/media_processing/job_template.json` - MediaConvert job template
+- `modules/media_processing/media_convert_trigger.js` - Lambda trigger function
+
+**What we fixed:**
+
+**Module Outputs:**
+- Added `bucket_name` output to storage/outputs.tf
+
+**Deprecated Syntax:**
+- Changed `vpc = true` to `domain = "vpc"` in networking/main.tf EIP resource
+
+**Module Variables:**
+- Added missing variables to monitoring/variables.tf (alb_name, target_group_arn, app_config)
+- Added missing variables to security/variables.tf (cloudfront_distribution_arn, bastion_allowed_cidr, public_subnet_ids, private_subnet_ids, vpc_cidr_block)
+- All variables have appropriate defaults to avoid breaking existing code
+
+**Template Files Created:**
+- user_data.sh: EC2 bootstrap script with CloudWatch agent, SSM agent, Docker installation
+- edge_request.js: Lambda@Edge function for A/B testing and request routing
+- job_template.json: MediaConvert CloudFormation template for video transcoding
+- media_convert_trigger.js: Lambda function to trigger MediaConvert jobs on S3 uploads
+
+**Result:**
+- Terraform plan now executes without errors
+- All module dependencies properly resolved
+- All required template files in place
+- Infrastructure ready for deployment
