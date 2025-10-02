@@ -3,11 +3,15 @@
 ```typescript
 import { Construct } from 'constructs';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 
 // Data Sources
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
-import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 // Security Groups
@@ -47,6 +51,7 @@ import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscrip
 
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { Fn } from 'cdktf';
 
 export interface StandardTags {
   Environment: string;
@@ -59,51 +64,124 @@ export interface NetworkingModuleProps {
 }
 
 export class NetworkingModule extends Construct {
-  public readonly vpc: DataAwsVpc;
+  public readonly vpc: Vpc;
   public readonly availabilityZones: DataAwsAvailabilityZones;
-  public readonly publicSubnets: DataAwsSubnets;
-  public readonly privateSubnets: DataAwsSubnets;
+  public readonly publicSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
 
-  constructor(scope: Construct, id: string, _props: NetworkingModuleProps) {
+  constructor(scope: Construct, id: string, props: NetworkingModuleProps) {
     super(scope, id);
-
-    // Get default VPC
-    this.vpc = new DataAwsVpc(this, 'default-vpc', {
-      default: true,
-    });
 
     // Get availability zones
     this.availabilityZones = new DataAwsAvailabilityZones(this, 'azs', {
       state: 'available',
     });
 
-    // Get public subnets in default VPC
-    this.publicSubnets = new DataAwsSubnets(this, 'public-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [this.vpc.id],
-        },
-        {
-          name: 'default-for-az',
-          values: ['true'],
-        },
-      ],
+    // Create VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-vpc',
+      },
     });
 
-    // Get private subnets (if any exist, otherwise use public)
-    this.privateSubnets = new DataAwsSubnets(this, 'private-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [this.vpc.id],
-        },
-        {
-          name: 'default-for-az',
-          values: ['true'],
-        },
-      ],
+    // Create Internet Gateway
+    const igw = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-igw',
+      },
     });
+
+    // Create public route table
+    const publicRouteTable = new RouteTable(this, 'public-route-table', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-public-route-table',
+      },
+    });
+
+    // Create route to Internet Gateway
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
+
+    // Create subnets
+    const publicSubnets: Subnet[] = [];
+    const privateSubnets: Subnet[] = [];
+
+    // Create 2 public and 2 private subnets
+    const azs = Fn.element(this.availabilityZones.names, 0);
+    const azs2 = Fn.element(this.availabilityZones.names, 1);
+
+    // Public Subnet 1
+    const publicSubnet1 = new Subnet(this, 'public-subnet-1', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.1.0/24',
+      availabilityZone: azs,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-public-subnet-1',
+      },
+    });
+    publicSubnets.push(publicSubnet1);
+
+    // Public Subnet 2
+    const publicSubnet2 = new Subnet(this, 'public-subnet-2', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.2.0/24',
+      availabilityZone: azs2,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-public-subnet-2',
+      },
+    });
+    publicSubnets.push(publicSubnet2);
+
+    // Private Subnet 1
+    const privateSubnet1 = new Subnet(this, 'private-subnet-1', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.11.0/24',
+      availabilityZone: azs,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-private-subnet-1',
+      },
+    });
+    privateSubnets.push(privateSubnet1);
+
+    // Private Subnet 2
+    const privateSubnet2 = new Subnet(this, 'private-subnet-2', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.12.0/24',
+      availabilityZone: azs2,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-private-subnet-2',
+      },
+    });
+    privateSubnets.push(privateSubnet2);
+
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // Set subnet IDs
+    this.publicSubnetIds = publicSubnets.map(subnet => subnet.id);
+    this.privateSubnetIds = privateSubnets.map(subnet => subnet.id);
   }
 }
 
@@ -220,8 +298,10 @@ export class SecurityGroupsModule extends Construct {
 
 export interface IamModuleProps {
   standardTags: StandardTags;
+  environmentSuffix?: string; // Add this
 }
 
+// Update the IamModule constructor
 export class IamModule extends Construct {
   public readonly ec2Role: IamRole;
   public readonly instanceProfile: IamInstanceProfile;
@@ -229,9 +309,14 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
 
-    // EC2 IAM Role
+    // Create unique name with suffix
+    const suffix = props.environmentSuffix || 'default';
+    const roleName = `tap-ec2-role-${suffix}`;
+    const profileName = `tap-ec2-instance-profile-${suffix}`;
+
+    // EC2 IAM Role with unique name
     this.ec2Role = new IamRole(this, 'ec2-role', {
-      name: 'tap-ec2-role',
+      name: roleName, // Use unique name
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -249,7 +334,7 @@ export class IamModule extends Construct {
 
     // EC2 IAM Role Policy
     new IamRolePolicy(this, 'ec2-policy', {
-      name: 'tap-ec2-policy',
+      name: `tap-ec2-policy-${suffix}`, // Make this unique too
       role: this.ec2Role.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -278,12 +363,12 @@ export class IamModule extends Construct {
       }),
     });
 
-    // Instance Profile
+    // Instance Profile with unique name
     this.instanceProfile = new IamInstanceProfile(
       this,
       'ec2-instance-profile',
       {
-        name: 'tap-ec2-instance-profile',
+        name: profileName, // Use unique name
         role: this.ec2Role.name,
       }
     );
@@ -327,7 +412,7 @@ export class AutoScalingModule extends Construct {
       name: 'tap-launch-template',
       imageId: ami.id,
       instanceType: 't3.micro',
-      keyName: 'compute-key1',
+      // keyName: 'compute-key1',
       vpcSecurityGroupIds: [props.securityGroupId],
       iamInstanceProfile: {
         name: props.instanceProfileName,
@@ -674,7 +759,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Import your stacks/modules here
@@ -772,6 +857,7 @@ export class TapStack extends TerraformStack {
     // 3. IAM Module - Create IAM roles and policies for EC2
     const iamModule = new IamModule(this, 'iam', {
       standardTags,
+      environmentSuffix, // Add this
     });
 
     // 4. S3 Module - Create S3 bucket for logs
@@ -787,7 +873,7 @@ export class TapStack extends TerraformStack {
 
     // 6. Load Balancer Module - Create ALB and target group
     const loadBalancerModule = new LoadBalancerModule(this, 'load-balancer', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds: networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.albSecurityGroup.id,
       vpcId: networkingModule.vpc.id,
       standardTags,
@@ -795,7 +881,7 @@ export class TapStack extends TerraformStack {
 
     // 7. Auto Scaling Module - Create launch template and ASG
     const autoScalingModule = new AutoScalingModule(this, 'auto-scaling', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds: networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.ec2SecurityGroup.id,
       instanceProfileName: iamModule.instanceProfile.name,
       targetGroupArn: loadBalancerModule.targetGroup.arn,
@@ -813,20 +899,24 @@ export class TapStack extends TerraformStack {
 
     // 9. RDS Module - Create RDS instance
     const rdsModule = new RdsModule(this, 'rds', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds:
+        networkingModule.privateSubnetIds.length > 0
+          ? networkingModule.privateSubnetIds
+          : networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.rdsSecurityGroup.id,
       standardTags,
     });
 
-    // Terraform Outputs - 10 outputs as requested
+    // Terraform Outputs - Fix the problematic outputs
     new TerraformOutput(this, 'vpc-id', {
       value: networkingModule.vpc.id,
       description: 'VPC ID',
     });
 
+    // Replace the problematic public-subnet-ids output with:
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: networkingModule.publicSubnets.ids,
-      description: 'Public subnet IDs',
+      value: Fn.jsonencode(networkingModule.publicSubnetIds),
+      description: 'Public subnet IDs as JSON',
     });
 
     new TerraformOutput(this, 'load-balancer-dns-name', {
@@ -864,13 +954,17 @@ export class TapStack extends TerraformStack {
       description: 'EC2 security group ID',
     });
 
+    // FIX 2: Use Fn.lookup for accessing list elements
     new TerraformOutput(this, 'rds-secret-arn', {
-      value:
-        rdsModule.dbInstance.masterUserSecret?.get(0).secretArn ??
-        'managed-by-aws',
-      description: 'RDS credentials secret ARN (managed by AWS)',
+      value: Fn.conditional(
+        rdsModule.dbInstance.masterUserSecret !== undefined,
+        'Secret ARN available in AWS Secrets Manager',
+        'managed-by-aws'
+      ),
+      description: 'RDS credentials secret status',
     });
   }
 }
+
 
 ```

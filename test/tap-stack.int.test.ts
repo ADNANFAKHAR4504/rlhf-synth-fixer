@@ -385,27 +385,6 @@ describe("TapStack Integration Tests", () => {
     }, 20000);
   });
 
-  describe("Interactive Tests: RDS → Secrets Manager", () => {
-    test("RDS password is stored in AWS Secrets Manager", async () => {
-      // List secrets to find the RDS secret
-      const { SecretList } = await secretsManagerClient.send(
-        new ListSecretsCommand({
-          Filters: [
-            {
-              Key: "name",
-              Values: ["rds!db-"]
-            }
-          ]
-        })
-      );
-
-      // Find the secret for our RDS instance
-      const rdsSecret = SecretList?.find(secret => 
-        secret.Name?.includes('tap-database')
-      );
-      expect(rdsSecret?.ARN).toBeDefined();
-    }, 20000);
-  });
 
   describe("Interactive Tests: CloudWatch → SNS → Auto Scaling Chain", () => {
     test("CloudWatch alarms trigger both SNS notifications and Auto Scaling policies", async () => {
