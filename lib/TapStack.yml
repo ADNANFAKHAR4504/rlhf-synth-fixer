@@ -32,15 +32,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
   
-  DBPassword:
-    Description: Database master password
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must contain only alphanumeric characters
-  
+ 
   AMIId:
     Description: AMI ID for EC2 instances
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
@@ -523,6 +515,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-DBSubnetGroup
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: RDS master password stored in Secrets Manager
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\' ' 
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
@@ -534,7 +535,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:password}}" ] ]
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
