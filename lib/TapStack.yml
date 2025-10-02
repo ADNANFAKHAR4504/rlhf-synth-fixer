@@ -384,7 +384,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'recipeblog-3-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'recipeblog-4-${AWS::AccountId}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -416,7 +416,7 @@ Resources:
             MaxAge: 3000
       Tags:
         - Key: Name
-          Value: !Sub 'RecipeBlog-3-Bucket-${Environment}'
+          Value: !Sub 'RecipeBlog-4-Bucket-${Environment}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -837,9 +837,13 @@ Resources:
           "widgets": [
             {
               "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/EC2", "CPUUtilization", {"stat": "Average", "dimensions": {"InstanceId": "${WordPressInstance}"}}]
+                  ["AWS/EC2", "CPUUtilization", "InstanceId", "${WordPressInstance}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -850,9 +854,13 @@ Resources:
             },
             {
               "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/RDS", "CPUUtilization", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${WordPressDatabase}"}}]
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${WordPressDatabase}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -863,9 +871,13 @@ Resources:
             },
             {
               "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/RDS", "FreeStorageSpace", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${WordPressDatabase}"}}]
+                  ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${WordPressDatabase}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -875,9 +887,13 @@ Resources:
             },
             {
               "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/RDS", "DatabaseConnections", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${WordPressDatabase}"}}]
+                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${WordPressDatabase}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -887,9 +903,13 @@ Resources:
             },
             {
               "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/CloudFront", "Requests", {"stat": "Sum", "dimensions": {"DistributionId": "${CloudFrontDistribution}"}}]
+                  ["AWS/CloudFront", "Requests", "DistributionId", "${CloudFrontDistribution}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -899,9 +919,13 @@ Resources:
             },
             {
               "type": "metric",
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/CloudFront", "BytesDownloaded", {"stat": "Sum", "dimensions": {"DistributionId": "${CloudFrontDistribution}"}}]
+                  ["AWS/CloudFront", "BytesDownloaded", "DistributionId", "${CloudFrontDistribution}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
