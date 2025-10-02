@@ -442,6 +442,34 @@ resource "aws_kms_key" "cloudwatch_key" {
             "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
           }
         }
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DecryptDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:${data.aws_partition.current.partition}:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+          }
+        }
+      },
+      {
+        Sid    = "Allow CloudTrail to describe key"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -1570,7 +1598,8 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
   }
 
   retry_policy {
-    maximum_retry_attempts = 2
+    maximum_retry_attempts       = 2
+    maximum_event_age_in_seconds = 3600  # 1 hour
   }
 }
 
