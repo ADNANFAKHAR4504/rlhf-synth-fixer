@@ -66,7 +66,7 @@ resource "aws_db_instance" "main" {
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
-  deletion_protection       = true
+  deletion_protection       = false
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-${var.environment}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
