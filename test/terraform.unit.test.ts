@@ -13,19 +13,12 @@ describe('tap_stack.tf static verification', () => {
   });
 
   it('declares some input variables', () => {
-    // Only check variables that you actually have in your current infra
-    [
-      'region',
-      'vpc_cidr',
-      'instance_type',
-      'environment'
-    ].forEach(variable =>
+    ['region', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids', 'ec2_instance_type'].forEach(variable =>
       expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true)
     );
   });
 
   it('defines some locals', () => {
-    // Adjust locals to match your current file
     ['common_tags', 'name_prefix', 'azs'].forEach(local =>
       expect(has(new RegExp(`${local}\\s*=`))).toBe(true)
     );
@@ -44,32 +37,36 @@ describe('tap_stack.tf static verification', () => {
     [
       /resource\s+"aws_iam_role"/,
       /resource\s+"aws_iam_policy"/,
-      /resource\s+"aws_iam_role_policy_attachment"/
+      /resource\s+"aws_iam_role_policy_attachment"/,
+      /resource\s+"aws_iam_instance_profile"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
   it('creates S3 buckets that exist', () => {
     [
-      /resource\s+"aws_s3_bucket"/
+      /resource\s+"aws_s3_bucket"/,
+      /resource\s+"aws_s3_bucket_versioning"/,
+      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"/,
+      /resource\s+"aws_s3_bucket_public_access_block"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
   it('creates RDS instance if present', () => {
-    if (has(/resource\s+"aws_db_instance"/)) {
-      expect(has(/resource\s+"aws_db_subnet_group"/)).toBe(true);
-    }
+    [
+      /resource\s+"aws_db_instance"/,
+      /resource\s+"aws_db_subnet_group"/,
+      /resource\s+"aws_ssm_parameter"/
+    ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
   it('creates CloudTrail if present', () => {
-    if (has(/resource\s+"aws_cloudtrail"/)) {
-      expect(has(/resource\s+"aws_s3_bucket"/)).toBe(true);
-    }
+    expect(has(/resource\s+"aws_cloudtrail"/)).toBe(true);
   });
 
   it('declares outputs that exist', () => {
-    // Only check outputs actually present
-    ['vpc_id', 'rds_endpoint', 'alb_dns_name'].forEach(output =>
+    ['vpc_id', 'rds_endpoint', 's3_bucket_id', 'ami_id', 'autoscaling_group_name', 'cloudtrail_name', 'ec2_iam_role_arn'].forEach(output =>
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true)
     );
   });
 });
+
