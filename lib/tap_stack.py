@@ -1259,14 +1259,148 @@ def notify_security_team(event: Dict, response: Dict):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Config recorder
-        config.CfnConfigurationRecorder(
-            self, "ConfigRecorder",
-            role_arn=config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True
-            )
+        # Config recorder - use custom resource to handle existing recorders
+        config_handler_role = iam.Role(
+            self, "ConfigHandlerRole", 
+            role_name=f"ConfigHandler-{self.unique_suffix}",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ],
+            inline_policies={
+                "ConfigHandlerPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "config:DescribeConfigurationRecorders",
+                                "config:DescribeConfigurationRecorderStatus", 
+                                "config:PutConfigurationRecorder",
+                                "config:StartConfigurationRecorder",
+                                "config:StopConfigurationRecorder"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
+                )
+            }
+        )
+
+        config_recorder_handler_function = lambda_.Function(
+            self, "ConfigRecorderHandlerFunction",
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            handler="index.handler",
+            role=config_handler_role,
+            timeout=Duration.minutes(5),
+            code=lambda_.Code.from_inline("""
+import boto3
+import json
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+config_client = boto3.client('config')
+
+def handler(event, context):
+    try:
+        request_type = event['RequestType']
+        properties = event['ResourceProperties']
+        
+        role_arn = properties['RoleArn']
+        
+        logger.info(f"Processing {request_type} request for Config recorder")
+        
+        if request_type == 'Create' or request_type == 'Update':
+            # Check for existing configuration recorders
+            response = config_client.describe_configuration_recorders()
+            recorders = response.get('ConfigurationRecorders', [])
+            
+            if recorders:
+                # Use existing recorder
+                recorder_name = recorders[0]['name']
+                logger.info(f"Found existing configuration recorder: {recorder_name}")
+                
+                # Update the existing recorder with our role
+                config_client.put_configuration_recorder(
+                    ConfigurationRecorder={
+                        'name': recorder_name,
+                        'roleARN': role_arn,
+                        'recordingGroup': {
+                            'allSupported': True,
+                            'includeGlobalResourceTypes': True
+                        }
+                    }
+                )
+                
+                # Start the recorder if it's not running
+                recorder_status = config_client.describe_configuration_recorder_status(
+                    ConfigurationRecorderNames=[recorder_name]
+                )
+                if not recorder_status['ConfigurationRecordersStatus'][0]['recording']:
+                    config_client.start_configuration_recorder(
+                        ConfigurationRecorderName=recorder_name
+                    )
+                    logger.info(f"Started configuration recorder: {recorder_name}")
+                    
+            else:
+                # No existing recorder, create new one
+                recorder_name = f"ConfigRecorder"
+                config_client.put_configuration_recorder(
+                    ConfigurationRecorder={
+                        'name': recorder_name,
+                        'roleARN': role_arn,
+                        'recordingGroup': {
+                            'allSupported': True,
+                            'includeGlobalResourceTypes': True
+                        }
+                    }
+                )
+                
+                config_client.start_configuration_recorder(
+                    ConfigurationRecorderName=recorder_name
+                )
+                logger.info(f"Created and started new configuration recorder: {recorder_name}")
+            
+            return {
+                'Status': 'SUCCESS',
+                'PhysicalResourceId': recorder_name,
+                'Data': {
+                    'RecorderName': recorder_name
+                }
+            }
+            
+        elif request_type == 'Delete':
+            # Don't delete the recorder on stack deletion as it might be used by other resources
+            logger.info("Skipping configuration recorder deletion to avoid disrupting other resources")
+            return {
+                'Status': 'SUCCESS',
+                'PhysicalResourceId': event.get('PhysicalResourceId', 'none')
+            }
+            
+    except Exception as e:
+        logger.error(f"Error handling Config recorder: {str(e)}")
+        return {
+            'Status': 'FAILED',
+            'Reason': str(e),
+            'PhysicalResourceId': event.get('PhysicalResourceId', 'none')
+        }
+""")
+        )
+
+        # Custom resource provider for Config recorder
+        config_recorder_provider = cr.Provider(
+            self, "ConfigRecorderProvider",
+            on_event_handler=config_recorder_handler_function
+        )
+
+        # Custom resource for Config recorder management
+        config_recorder_resource = CustomResource(
+            self, "ConfigRecorderResource",
+            service_token=config_recorder_provider.service_token,
+            properties={
+                'RoleArn': config_role.role_arn
+            }
         )
 
         # Delivery channel
