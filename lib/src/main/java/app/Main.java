@@ -141,6 +141,7 @@ class TapStack extends Stack {
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack, including environment suffix
      */
+    @SuppressWarnings("checkstyle:MethodLength")
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
