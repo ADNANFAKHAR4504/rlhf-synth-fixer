@@ -145,7 +145,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          value: !Sub 'TapPublicRouteTable2-${EnvironmentSuffix}'
+          Value: !Sub 'TapPublicRouteTable2-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
 
@@ -481,7 +481,7 @@ Resources:
     Properties:
       DBName: tap
       Engine: mysql
-      EngineVersion: 8.0.28
+      EngineVersion: 8.0.39
       DBInstanceClass: db.t3.small
       AllocatedStorage: 20
       StorageType: gp2
@@ -500,7 +500,7 @@ Resources:
           Value: !Sub 'TapRDSInstance-${EnvironmentSuffix}'
         - Key: Environment
           Value: Production
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete
 
   # Bastion Host IAM Role
   BastionHostRole:
@@ -531,7 +531,7 @@ Resources:
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316  # Latest Amazon Linux 2 AMI in us-east-1
+      ImageId: ami-0dee22c13ea7a9a67  # Latest Amazon Linux 2 AMI in ap-south-1
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
@@ -565,7 +565,7 @@ Resources:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
         - Key: deletion_protection.enabled
-          Value: 'true'
+          Value: 'false'
       Tags:
         - Key: Name
           Value: !Sub 'TapALB-${EnvironmentSuffix}'

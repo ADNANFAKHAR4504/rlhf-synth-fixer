@@ -7,17 +7,9 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -57,59 +49,288 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('VPC and Networking Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('VPC should have correct properties', () => {
+      const vpc = template.Resources.VPC.Properties;
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.EnableDnsSupport).toBe(true);
+      expect(vpc.EnableDnsHostnames).toBe(true);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have Internet Gateway', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.VPCGatewayAttachment).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have 3 public subnets', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PublicSubnet3).toBeDefined();
+      
+      ['PublicSubnet1', 'PublicSubnet2', 'PublicSubnet3'].forEach((subnet, index) => {
+        expect(template.Resources[subnet].Type).toBe('AWS::EC2::Subnet');
+        expect(template.Resources[subnet].Properties.MapPublicIpOnLaunch).toBe(true);
+        expect(template.Resources[subnet].Properties.CidrBlock).toBe(`10.0.${index}.0/24`);
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have 3 private subnets', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet3).toBeDefined();
+      
+      ['PrivateSubnet1', 'PrivateSubnet2', 'PrivateSubnet3'].forEach((subnet, index) => {
+        expect(template.Resources[subnet].Type).toBe('AWS::EC2::Subnet');
+        expect(template.Resources[subnet].Properties.MapPublicIpOnLaunch).toBe(false);
+        expect(template.Resources[subnet].Properties.CidrBlock).toBe(`10.0.${index + 3}.0/24`);
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have 3 NAT Gateways', () => {
+      expect(template.Resources.NatGateway1).toBeDefined();
+      expect(template.Resources.NatGateway2).toBeDefined();
+      expect(template.Resources.NatGateway3).toBeDefined();
+      
+      ['NatGateway1', 'NatGateway2', 'NatGateway3'].forEach(nat => {
+        expect(template.Resources[nat].Type).toBe('AWS::EC2::NatGateway');
+      });
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have Elastic IPs for NAT Gateways', () => {
+      expect(template.Resources.NatGatewayEIP1).toBeDefined();
+      expect(template.Resources.NatGatewayEIP2).toBeDefined();
+      expect(template.Resources.NatGatewayEIP3).toBeDefined();
+      
+      ['NatGatewayEIP1', 'NatGatewayEIP2', 'NatGatewayEIP3'].forEach(eip => {
+        expect(template.Resources[eip].Type).toBe('AWS::EC2::EIP');
+        expect(template.Resources[eip].Properties.Domain).toBe('vpc');
+      });
+    });
+
+    test('should have separate route tables for each public subnet', () => {
+      expect(template.Resources.PublicRouteTable1).toBeDefined();
+      expect(template.Resources.PublicRouteTable2).toBeDefined();
+      expect(template.Resources.PublicRouteTable3).toBeDefined();
+      
+      ['PublicRouteTable1', 'PublicRouteTable2', 'PublicRouteTable3'].forEach(rt => {
+        expect(template.Resources[rt].Type).toBe('AWS::EC2::RouteTable');
+      });
+    });
+
+    test('should have route table associations', () => {
+      const associations = [
+        'PublicSubnet1RouteTableAssociation',
+        'PublicSubnet2RouteTableAssociation',
+        'PublicSubnet3RouteTableAssociation',
+        'PrivateSubnet1RouteTableAssociation',
+        'PrivateSubnet2RouteTableAssociation',
+        'PrivateSubnet3RouteTableAssociation'
+      ];
+      
+      associations.forEach(assoc => {
+        expect(template.Resources[assoc]).toBeDefined();
+        expect(template.Resources[assoc].Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+      });
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('should have ALB security group with correct rules', () => {
+      expect(template.Resources.ALBSecurityGroup).toBeDefined();
+      const sg = template.Resources.ALBSecurityGroup.Properties;
+      
+      expect(sg.SecurityGroupIngress).toHaveLength(2);
+      expect(sg.SecurityGroupIngress[0].FromPort).toBe(80);
+      expect(sg.SecurityGroupIngress[0].ToPort).toBe(80);
+      expect(sg.SecurityGroupIngress[1].FromPort).toBe(443);
+      expect(sg.SecurityGroupIngress[1].ToPort).toBe(443);
+    });
+
+    test('should have Bastion Host security group', () => {
+      expect(template.Resources.BastionHostSecurityGroup).toBeDefined();
+      const sg = template.Resources.BastionHostSecurityGroup.Properties;
+      
+      expect(sg.SecurityGroupIngress).toHaveLength(1);
+      expect(sg.SecurityGroupIngress[0].FromPort).toBe(22);
+      expect(sg.SecurityGroupIngress[0].CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('should have Database security group with restricted access', () => {
+      expect(template.Resources.DatabaseSecurityGroup).toBeDefined();
+      const sg = template.Resources.DatabaseSecurityGroup.Properties;
+      
+      expect(sg.SecurityGroupIngress).toHaveLength(1);
+      expect(sg.SecurityGroupIngress[0].FromPort).toBe(3306);
+      expect(sg.SecurityGroupIngress[0].SourceSecurityGroupId).toEqual({ Ref: 'WebServerSecurityGroup' });
+    });
+
+    test('should have Web Server security group', () => {
+      expect(template.Resources.WebServerSecurityGroup).toBeDefined();
+      const sg = template.Resources.WebServerSecurityGroup.Properties;
+      
+      expect(sg.SecurityGroupIngress).toHaveLength(3);
+      // Check HTTP from ALB
+      expect(sg.SecurityGroupIngress[0].SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+      // Check SSH from Bastion
+      expect(sg.SecurityGroupIngress[2].SourceSecurityGroupId).toEqual({ Ref: 'BastionHostSecurityGroup' });
+    });
+  });
+
+  describe('RDS Database', () => {
+    test('should have RDS instance with correct configuration', () => {
+      expect(template.Resources.RDSInstance).toBeDefined();
+      const rds = template.Resources.RDSInstance.Properties;
+      
+      expect(rds.Engine).toBe('mysql');
+      expect(rds.MultiAZ).toBe(true);
+      expect(rds.StorageEncrypted).toBe(true);
+      expect(rds.BackupRetentionPeriod).toBe(7);
+      expect(rds.PubliclyAccessible).toBe(false);
+    });
+
+    test('should have DB subnet group', () => {
+      expect(template.Resources.DBSubnetGroup).toBeDefined();
+      const dbSubnet = template.Resources.DBSubnetGroup.Properties;
+      
+      expect(dbSubnet.SubnetIds).toHaveLength(3);
+      expect(dbSubnet.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(dbSubnet.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
+      expect(dbSubnet.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet3' });
+    });
+
+    test('should have RDS secret for credentials', () => {
+      expect(template.Resources.RDSSecret).toBeDefined();
+      expect(template.Resources.RDSSecret.Type).toBe('AWS::SecretsManager::Secret');
+      
+      const secret = template.Resources.RDSSecret.Properties;
+      expect(secret.GenerateSecretString.SecretStringTemplate).toBe('{"username": "admin"}');
+      expect(secret.GenerateSecretString.GenerateStringKey).toBe('password');
+    });
+
+    test('RDS should be destroyable', () => {
+      expect(template.Resources.RDSInstance.DeletionPolicy).toBe('Delete');
+    });
+  });
+
+  describe('Bastion Host', () => {
+    test('should have Bastion Host EC2 instance', () => {
+      expect(template.Resources.BastionHost).toBeDefined();
+      expect(template.Resources.BastionHost.Type).toBe('AWS::EC2::Instance');
+      
+      const bastion = template.Resources.BastionHost.Properties;
+      expect(bastion.InstanceType).toBe('t3.micro');
+      expect(bastion.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
+    });
+
+    test('should have encrypted EBS volume', () => {
+      const bastion = template.Resources.BastionHost.Properties;
+      expect(bastion.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+      expect(bastion.BlockDeviceMappings[0].Ebs.DeleteOnTermination).toBe(true);
+    });
+
+    test('should have IAM role and instance profile', () => {
+      expect(template.Resources.BastionHostRole).toBeDefined();
+      expect(template.Resources.BastionHostInstanceProfile).toBeDefined();
+      
+      const role = template.Resources.BastionHostRole.Properties;
+      expect(role.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
+    });
+  });
+
+  describe('Application Load Balancer', () => {
+    test('should have ALB configured', () => {
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      expect(alb.Scheme).toBe('internet-facing');
+      expect(alb.Subnets).toHaveLength(3);
+    });
+
+    test('ALB should be destroyable', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      const deletionProtection = alb.LoadBalancerAttributes.find(
+        (attr: any) => attr.Key === 'deletion_protection.enabled'
+      );
+      expect(deletionProtection.Value).toBe('false');
+    });
+
+    test('should have target group', () => {
+      expect(template.Resources.ALBTargetGroup).toBeDefined();
+      const tg = template.Resources.ALBTargetGroup.Properties;
+      
+      expect(tg.Port).toBe(80);
+      expect(tg.Protocol).toBe('HTTP');
+      expect(tg.HealthCheckPath).toBe('/health');
+      expect(tg.TargetType).toBe('instance');
+    });
+
+    test('should have listener', () => {
+      expect(template.Resources.ALBListener).toBeDefined();
+      const listener = template.Resources.ALBListener.Properties;
+      
+      expect(listener.Port).toBe(80);
+      expect(listener.Protocol).toBe('HTTP');
+      expect(listener.DefaultActions[0].Type).toBe('forward');
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    test('should have VPC Flow Log configured', () => {
+      expect(template.Resources.VPCFlowLog).toBeDefined();
+      const flowLog = template.Resources.VPCFlowLog.Properties;
+      
+      expect(flowLog.ResourceType).toBe('VPC');
+      expect(flowLog.ResourceId).toEqual({ Ref: 'VPC' });
+      expect(flowLog.LogDestinationType).toBe('s3');
+      expect(flowLog.TrafficType).toBe('ALL');
+    });
+
+    test('should have S3 bucket for flow logs with encryption', () => {
+      expect(template.Resources.VPCFlowLogsBucket).toBeDefined();
+      const bucket = template.Resources.VPCFlowLogsBucket.Properties;
+      
+      expect(bucket.BucketEncryption.ServerSideEncryptionConfiguration[0]
+        .ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(bucket.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    });
+
+    test('should have S3 bucket policy for flow logs', () => {
+      expect(template.Resources.VPCFlowLogsBucketPolicy).toBeDefined();
+      const policy = template.Resources.VPCFlowLogsBucketPolicy.Properties.PolicyDocument;
+      
+      expect(policy.Statement).toHaveLength(2);
+      expect(policy.Statement[0].Principal.Service).toBe('delivery.logs.amazonaws.com');
+    });
+
+    test('should have VPC Flow Logs IAM role', () => {
+      expect(template.Resources.VPCFlowLogsRole).toBeDefined();
+      const role = template.Resources.VPCFlowLogsRole.Properties;
+      
+      expect(role.AssumeRolePolicyDocument.Statement[0].Principal.Service)
+        .toBe('vpc-flow-logs.amazonaws.com');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have all required infrastructure outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
         'StackName',
         'EnvironmentSuffix',
+        'VPC',
+        'PublicSubnets',
+        'PrivateSubnets',
+        'ALBDNSName',
+        'BastionHostPublicIP',
+        'RDSEndpoint',
+        'VPCFlowLogsBucket'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,23 +338,35 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('VPC output should be correct', () => {
+      const output = template.Outputs.VPC;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'VPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-VPCID',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('PublicSubnets output should combine all public subnets', () => {
+      const output = template.Outputs.PublicSubnets;
+      expect(output.Description).toBe('List of public subnet IDs');
+      expect(output.Value['Fn::Join'][1]).toHaveLength(3);
+      expect(output.Value['Fn::Join'][1][0]).toEqual({ Ref: 'PublicSubnet1' });
+    });
+
+    test('ALBDNSName output should be correct', () => {
+      const output = template.Outputs.ALBDNSName;
+      expect(output.Description).toBe('DNS name for the Application Load Balancer');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'],
       });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+    });
+
+    test('RDSEndpoint output should be correct', () => {
+      const output = template.Outputs.RDSEndpoint;
+      expect(output.Description).toBe('Endpoint for the RDS instance');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'],
       });
     });
 
@@ -172,9 +405,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(40); // VPC infrastructure has many resources
     });
 
     test('should have exactly one parameter', () => {
@@ -182,29 +415,116 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have expected outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(9);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('all resources should use environment suffix', () => {
+      const resourcesWithNames = [
+        'VPC', 'InternetGateway', 'PublicSubnet1', 'PublicSubnet2', 'PublicSubnet3',
+        'PrivateSubnet1', 'PrivateSubnet2', 'PrivateSubnet3', 'NatGateway1',
+        'NatGateway2', 'NatGateway3', 'ALBSecurityGroup', 'BastionHostSecurityGroup',
+        'DatabaseSecurityGroup', 'RDSInstance', 'BastionHost', 'ApplicationLoadBalancer'
+      ];
+      
+      resourcesWithNames.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource && resource.Properties && resource.Properties.Tags) {
+          const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+          if (nameTag) {
+            expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          }
+        }
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('all resources should have Production environment tag', () => {
+      Object.keys(template.Resources).forEach(resourceKey => {
+        const resource = template.Resources[resourceKey];
+        if (resource.Properties && resource.Properties.Tags) {
+          const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+          if (envTag) {
+            expect(envTag.Value).toBe('Production');
+          }
+        }
       });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('no resources should have public access where not required', () => {
+      // RDS should not be publicly accessible
+      expect(template.Resources.RDSInstance.Properties.PubliclyAccessible).toBe(false);
+      
+      // Private subnets should not map public IPs
+      ['PrivateSubnet1', 'PrivateSubnet2', 'PrivateSubnet3'].forEach(subnet => {
+        expect(template.Resources[subnet].Properties.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test('encryption should be enabled where applicable', () => {
+      // RDS encryption
+      expect(template.Resources.RDSInstance.Properties.StorageEncrypted).toBe(true);
+      
+      // S3 bucket encryption
+      expect(template.Resources.VPCFlowLogsBucket.Properties.BucketEncryption).toBeDefined();
+      
+      // Bastion host EBS encryption
+      expect(template.Resources.BastionHost.Properties.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+    });
+
+    test('security groups should follow least privilege', () => {
+      // Database should only accept from web servers
+      const dbSg = template.Resources.DatabaseSecurityGroup.Properties;
+      expect(dbSg.SecurityGroupIngress).toHaveLength(1);
+      expect(dbSg.SecurityGroupIngress[0].SourceSecurityGroupId).toBeDefined();
+      
+      // Web servers should only accept from ALB and Bastion
+      const webSg = template.Resources.WebServerSecurityGroup.Properties;
+      webSg.SecurityGroupIngress.forEach((rule: any) => {
+        expect(rule.SourceSecurityGroupId || rule.CidrIp).toBeDefined();
+        if (rule.CidrIp) {
+          expect(rule.CidrIp).not.toBe('0.0.0.0/0');
+        }
+      });
+    });
+
+    test('should use Secrets Manager for database credentials', () => {
+      expect(template.Resources.RDSSecret).toBeDefined();
+      
+      const rds = template.Resources.RDSInstance.Properties;
+      expect(rds.MasterUsername['Fn::Sub']).toContain('secretsmanager');
+      expect(rds.MasterUserPassword['Fn::Sub']).toContain('secretsmanager');
+    });
+  });
+
+  describe('High Availability', () => {
+    test('resources should be distributed across multiple AZs', () => {
+      // Check subnets are in different AZs
+      ['PublicSubnet1', 'PublicSubnet2', 'PublicSubnet3'].forEach((subnet, index) => {
+        const az = template.Resources[subnet].Properties.AvailabilityZone;
+        expect(az['Fn::Select'][0]).toBe(index);
+      });
+      
+      // RDS should be Multi-AZ
+      expect(template.Resources.RDSInstance.Properties.MultiAZ).toBe(true);
+      
+      // ALB should span multiple subnets
+      expect(template.Resources.ApplicationLoadBalancer.Properties.Subnets).toHaveLength(3);
+    });
+
+    test('each private subnet should have its own NAT Gateway', () => {
+      expect(template.Resources.NatGateway1).toBeDefined();
+      expect(template.Resources.NatGateway2).toBeDefined();
+      expect(template.Resources.NatGateway3).toBeDefined();
+      
+      // Check private routes point to different NAT gateways
+      expect(template.Resources.PrivateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway1' });
+      expect(template.Resources.PrivateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway2' });
+      expect(template.Resources.PrivateRoute3.Properties.NatGatewayId).toEqual({ Ref: 'NatGateway3' });
     });
   });
 });
