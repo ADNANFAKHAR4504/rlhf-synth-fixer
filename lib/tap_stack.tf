@@ -1,13 +1,12 @@
-# tap_stack.tf
-# Online Education Platform - Complete Terraform Infrastructure
-# Supports 20,000 daily students with auto-scaling, session persistence, and comprehensive monitoring
+# tap_stack.tf - Online Education Platform Infrastructure
+# Complete Terraform stack for scalable, secure web application
 
-# ========================================
+# ==========================================
 # VARIABLES
-# ========================================
+# ==========================================
 
 variable "aws_region" {
-  description = "AWS region for infrastructure deployment"
+  description = "AWS region for resource deployment"
   type        = string
   default     = "us-east-1"
 }
@@ -18,16 +17,16 @@ variable "environment" {
   default     = "production"
 }
 
-variable "project_name" {
-  description = "Project name for resource tagging"
-  type        = string
-  default     = "online-education-platform"
-}
-
 variable "owner" {
-  description = "Owner tag for resources"
+  description = "Resource owner"
   type        = string
   default     = "platform-team"
+}
+
+variable "project" {
+  description = "Project name"
+  type        = string
+  default     = "online-education-platform"
 }
 
 variable "vpc_cidr" {
@@ -36,34 +35,10 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "availability_zones_count" {
-  description = "Number of availability zones to use"
-  type        = number
-  default     = 2
-}
-
 variable "instance_type" {
-  description = "EC2 instance type for application servers"
+  description = "EC2 instance type for Auto Scaling Group"
   type        = string
   default     = "t3.medium"
-}
-
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
-  type        = number
-  default     = 10
-}
-
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
-  type        = number
-  default     = 4
 }
 
 variable "db_instance_class" {
@@ -72,46 +47,57 @@ variable "db_instance_class" {
   default     = "db.t3.medium"
 }
 
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "educationdb"
-}
-
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  default     = "ChangeMe123!" # Should be overridden in production
-  sensitive   = true
-}
-
 variable "redis_node_type" {
   description = "ElastiCache Redis node type"
   type        = string
   default     = "cache.t3.medium"
 }
 
-variable "redis_num_cache_nodes" {
-  description = "Number of cache nodes in Redis cluster"
+variable "min_size" {
+  description = "Minimum number of EC2 instances in ASG"
   type        = number
   default     = 2
 }
 
-# ========================================
-# DATA SOURCES
-# ========================================
-
-data "aws_availability_zones" "available" {
-  state = "available"
+variable "max_size" {
+  description = "Maximum number of EC2 instances in ASG"
+  type        = number
+  default     = 10
 }
 
+variable "desired_capacity" {
+  description = "Desired number of EC2 instances in ASG"
+  type        = number
+  default     = 4
+}
+
+# ==========================================
+# LOCALS
+# ==========================================
+
+locals {
+  common_tags = {
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+
+  # Availability zones for multi-AZ deployment
+  azs = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
+
+  # Subnet CIDR blocks
+  public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24", "10.0.12.0/24"]
+
+  # Resource naming prefix
+  name_prefix = "edu-platform"
+}
+
+# ==========================================
+# DATA SOURCES
+# ==========================================
+
+# Latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
@@ -127,95 +113,119 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-# ========================================
-# VPC AND NETWORKING
-# ========================================
+# Current AWS account
+data "aws_caller_identity" "current" {}
+
+# ==========================================
+# RANDOM RESOURCES
+# ==========================================
+
+# RDS master username
+resource "random_string" "rds_username" {
+  length  = 10
+  special = false
+  upper   = false
+  numeric = false
+}
+
+# RDS master password
+resource "random_password" "rds_password" {
+  length           = 20
+  special          = true
+  override_special = "!#$%^&*()-_=+[]{}?"
+}
+
+# ==========================================
+# KMS ENCRYPTION KEYS
+# ==========================================
+
+# KMS key for RDS encryption
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for RDS encryption"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-kms"
+  })
+}
+
+resource "aws_kms_alias" "rds" {
+  name          = "alias/${local.name_prefix}-rds"
+  target_key_id = aws_kms_key.rds.key_id
+}
+
+# ==========================================
+# NETWORKING - VPC
+# ==========================================
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
-    Name        = "${var.project_name}-vpc"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# Public Subnets (for ALB and NAT Gateway)
-resource "aws_subnet" "public" {
-  count                   = var.availability_zones_count
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name        = "${var.project_name}-public-subnet-${count.index + 1}"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-    Type        = "public"
-  }
-}
-
-# Private Subnets (for EC2, RDS, ElastiCache)
-resource "aws_subnet" "private" {
-  count             = var.availability_zones_count
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name        = "${var.project_name}-private-subnet-${count.index + 1}"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-    Type        = "private"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name        = "${var.project_name}-igw"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
 }
 
-# Elastic IP for NAT Gateway
+# Public Subnets
+resource "aws_subnet" "public" {
+  count                   = 3
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = local.public_subnet_cidrs[count.index]
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+    Tier = "public"
+  })
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = 3
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = local.private_subnet_cidrs[count.index]
+  availability_zone = local.azs[count.index]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+    Tier = "private"
+  })
+}
+
+# Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  count  = var.availability_zones_count
+  count  = 3
   domain = "vpc"
 
-  tags = {
-    Name        = "${var.project_name}-nat-eip-${count.index + 1}"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
 
-# NAT Gateway
+# NAT Gateways (one per AZ for high availability)
 resource "aws_nat_gateway" "main" {
-  count         = var.availability_zones_count
+  count         = 3
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = {
-    Name        = "${var.project_name}-nat-gateway-${count.index + 1}"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -229,24 +239,21 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = {
-    Name        = "${var.project_name}-public-rt"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
 }
 
-# Public Route Table Association
+# Public Route Table Associations
 resource "aws_route_table_association" "public" {
-  count          = var.availability_zones_count
+  count          = 3
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# Private Route Tables (one per AZ for NAT Gateway)
+# Private Route Tables (one per AZ)
 resource "aws_route_table" "private" {
-  count  = var.availability_zones_count
+  count  = 3
   vpc_id = aws_vpc.main.id
 
   route {
@@ -254,33 +261,30 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
-  tags = {
-    Name        = "${var.project_name}-private-rt-${count.index + 1}"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+  })
 }
 
-# Private Route Table Association
+# Private Route Table Associations
 resource "aws_route_table_association" "private" {
-  count          = var.availability_zones_count
+  count          = 3
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# ========================================
+# ==========================================
 # SECURITY GROUPS
-# ========================================
+# ==========================================
 
 # ALB Security Group
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
+  name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTPS from Internet"
+    description = "HTTPS from internet"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -288,7 +292,7 @@ resource "aws_security_group" "alb" {
   }
 
   ingress {
-    description = "HTTP from Internet (redirect to HTTPS)"
+    description = "HTTP from internet (redirect to HTTPS)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -296,24 +300,21 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description = "Allow all outbound traffic"
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${var.project_name}-alb-sg"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+  })
 }
 
 # EC2 Instance Security Group
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-ec2-sg"
+  name        = "${local.name_prefix}-ec2-sg"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -325,34 +326,23 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description     = "HTTPS from ALB"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
   egress {
-    description = "Allow all outbound traffic"
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${var.project_name}-ec2-sg"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-sg"
+  })
 }
 
 # RDS Security Group
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
-  description = "Security group for RDS MySQL database"
+  name        = "${local.name_prefix}-rds-sg"
+  description = "Security group for RDS MySQL"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -364,24 +354,21 @@ resource "aws_security_group" "rds" {
   }
 
   egress {
-    description = "Allow all outbound traffic"
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${var.project_name}-rds-sg"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-sg"
+  })
 }
 
 # ElastiCache Security Group
 resource "aws_security_group" "elasticache" {
-  name        = "${var.project_name}-elasticache-sg"
+  name        = "${local.name_prefix}-elasticache-sg"
   description = "Security group for ElastiCache Redis"
   vpc_id      = aws_vpc.main.id
 
@@ -394,76 +381,48 @@ resource "aws_security_group" "elasticache" {
   }
 
   egress {
-    description = "Allow all outbound traffic"
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name        = "${var.project_name}-elasticache-sg"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-elasticache-sg"
+  })
 }
 
-# ========================================
-# IAM ROLES AND POLICIES
-# ========================================
+# ==========================================
+# IAM ROLES & POLICIES
+# ==========================================
 
-# EC2 Instance Role
-resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+# EC2 IAM Role
+resource "aws_iam_role" "ec2" {
+  name = "${local.name_prefix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
           Service = "ec2.amazonaws.com"
         }
+        Action = "sts:AssumeRole"
       }
     ]
   })
 
-  tags = {
-    Name        = "${var.project_name}-ec2-role"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# EC2 Instance Policy - CloudWatch Logs
-resource "aws_iam_role_policy" "ec2_cloudwatch_logs" {
-  name = "${var.project_name}-ec2-cloudwatch-logs-policy"
-  role = aws_iam_role.ec2_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogStreams"
-        ]
-        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:/aws/ec2/${var.project_name}*"
-      }
-    ]
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-role"
   })
 }
 
-# EC2 Instance Policy - CloudWatch Metrics
-resource "aws_iam_role_policy" "ec2_cloudwatch_metrics" {
-  name = "${var.project_name}-ec2-cloudwatch-metrics-policy"
-  role = aws_iam_role.ec2_role.id
+# EC2 CloudWatch Policy
+resource "aws_iam_role_policy" "ec2_cloudwatch" {
+  name = "${local.name_prefix}-ec2-cloudwatch-policy"
+  role = aws_iam_role.ec2.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -476,15 +435,25 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_metrics" {
           "cloudwatch:ListMetrics"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/*"
       }
     ]
   })
 }
 
-# EC2 Instance Policy - X-Ray
+# EC2 X-Ray Policy
 resource "aws_iam_role_policy" "ec2_xray" {
-  name = "${var.project_name}-ec2-xray-policy"
-  role = aws_iam_role.ec2_role.id
+  name = "${local.name_prefix}-ec2-xray-policy"
+  role = aws_iam_role.ec2.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -501,171 +470,22 @@ resource "aws_iam_role_policy" "ec2_xray" {
   })
 }
 
-# EC2 Instance Policy - ElastiCache Access
-resource "aws_iam_role_policy" "ec2_elasticache" {
-  name = "${var.project_name}-ec2-elasticache-policy"
-  role = aws_iam_role.ec2_role.id
+# EC2 Instance Profile
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${local.name_prefix}-ec2-instance-profile"
+  role = aws_iam_role.ec2.name
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "elasticache:DescribeCacheClusters",
-          "elasticache:DescribeReplicationGroups"
-        ]
-        Resource = "*"
-      }
-    ]
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-instance-profile"
   })
 }
 
-# EC2 Instance Profile
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-instance-profile"
-  role = aws_iam_role.ec2_role.name
-
-  tags = {
-    Name        = "${var.project_name}-ec2-instance-profile"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# ========================================
-# KMS ENCRYPTION KEY
-# ========================================
-
-resource "aws_kms_key" "main" {
-  description             = "KMS key for ${var.project_name} encryption"
-  deletion_window_in_days = 10
-  enable_key_rotation     = true
-
-  tags = {
-    Name        = "${var.project_name}-kms-key"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}"
-  target_key_id = aws_kms_key.main.key_id
-}
-
-# ========================================
-# RDS MYSQL DATABASE
-# ========================================
-
-# RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name        = "${var.project_name}-db-subnet-group"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# RDS Instance
-resource "aws_db_instance" "main" {
-  identifier     = "${var.project_name}-mysql-db"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = var.db_instance_class
-
-  allocated_storage     = 100
-  max_allocated_storage = 500
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.main.arn
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  multi_az               = true
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
-
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "mon:04:00-mon:05:00"
-
-  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
-
-  deletion_protection = false
-  skip_final_snapshot = true
-
-  tags = {
-    Name        = "${var.project_name}-mysql-db"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# ========================================
-# ELASTICACHE REDIS
-# ========================================
-
-# ElastiCache Subnet Group
-resource "aws_elasticache_subnet_group" "main" {
-  name       = "${var.project_name}-redis-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name        = "${var.project_name}-redis-subnet-group"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# ElastiCache Replication Group (Redis)
-resource "aws_elasticache_replication_group" "main" {
-  replication_group_id          = "${var.project_name}-redis"
-  replication_group_description = "Redis cluster for session persistence"
-  engine                        = "redis"
-  engine_version                = "7.0"
-  node_type                     = var.redis_node_type
-  num_cache_clusters            = var.redis_num_cache_nodes
-  port                          = 6379
-
-  subnet_group_name  = aws_elasticache_subnet_group.main.name
-  security_group_ids = [aws_security_group.elasticache.id]
-
-  at_rest_encryption_enabled = true
-  transit_encryption_enabled = true
-  auth_token_enabled         = false
-
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
-
-  snapshot_retention_limit = 5
-  snapshot_window          = "03:00-05:00"
-
-  tags = {
-    Name        = "${var.project_name}-redis"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# ========================================
+# ==========================================
 # APPLICATION LOAD BALANCER
-# ========================================
+# ==========================================
 
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
+  name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -674,18 +494,17 @@ resource "aws_lb" "main" {
   enable_deletion_protection       = false
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
+  idle_timeout                     = 60
+  drop_invalid_header_fields       = true
 
-  tags = {
-    Name        = "${var.project_name}-alb"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+  })
 }
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-tg"
+  name     = "${local.name_prefix}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -693,24 +512,42 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
+    unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
     path                = "/health"
+    protocol            = "HTTP"
     matcher             = "200"
   }
 
+  deregistration_delay = 30
+
   stickiness {
     type            = "lb_cookie"
-    enabled         = true
     cookie_duration = 86400
+    enabled         = true
   }
 
-  tags = {
-    Name        = "${var.project_name}-target-group"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-tg"
+  })
+}
+
+# HTTPS Listener (requires ACM certificate - placeholder)
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = "arn:aws:acm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:certificate/placeholder"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  lifecycle {
+    ignore_changes = [certificate_arn]
   }
 }
 
@@ -731,81 +568,55 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# HTTPS Listener (requires certificate - using self-signed for demo)
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
+# ==========================================
+# AUTO SCALING GROUP
+# ==========================================
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
-
-# Self-signed certificate for HTTPS (demo purposes)
-resource "aws_acm_certificate" "main" {
-  private_key      = tls_private_key.main.private_key_pem
-  certificate_body = tls_self_signed_cert.main.cert_pem
-
-  tags = {
-    Name        = "${var.project_name}-certificate"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-resource "tls_private_key" "main" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-resource "tls_self_signed_cert" "main" {
-  private_key_pem = tls_private_key.main.private_key_pem
-
-  subject {
-    common_name  = "${var.project_name}.local"
-    organization = "Online Education Platform"
-  }
-
-  validity_period_hours = 8760 # 1 year
-
-  allowed_uses = [
-    "key_encipherment",
-    "digital_signature",
-    "server_auth",
-  ]
-}
-
-# ========================================
-# LAUNCH TEMPLATE
-# ========================================
-
+# Launch Template
 resource "aws_launch_template" "main" {
-  name_prefix   = "${var.project_name}-lt-"
+  name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
+    arn = aws_iam_instance_profile.ec2.arn
   }
 
-  network_interfaces {
-    associate_public_ip_address = false
-    security_groups             = [aws_security_group.ec2.id]
-  }
+  vpc_security_group_ids = [aws_security_group.ec2.id]
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    redis_endpoint = aws_elasticache_replication_group.main.primary_endpoint_address
-    db_endpoint    = aws_db_instance.main.endpoint
-    db_name        = var.db_name
-    db_username    = var.db_username
-    db_password    = var.db_password
-    aws_region     = var.aws_region
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y httpd amazon-cloudwatch-agent aws-xray-daemon
+
+    # Start CloudWatch agent
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+      -a fetch-config -m ec2 -s -c default
+
+    # Start X-Ray daemon
+    systemctl start xray
+    systemctl enable xray
+
+    # Configure application
+    cat > /var/www/html/index.html <<HTML
+    <!DOCTYPE html>
+    <html>
+    <head><title>Online Education Platform</title></head>
+    <body>
+      <h1>Welcome to Online Education Platform</h1>
+      <p>Serving 20,000 students daily</p>
+    </body>
+    </html>
+    HTML
+
+    cat > /var/www/html/health <<HTML
+    OK
+    HTML
+
+    systemctl start httpd
+    systemctl enable httpd
+  EOF
+  )
 
   monitoring {
     enabled = true
@@ -815,216 +626,304 @@ resource "aws_launch_template" "main" {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
   }
 
   tag_specifications {
     resource_type = "instance"
-    tags = {
-      Name        = "${var.project_name}-instance"
-      Environment = var.environment
-      Owner       = var.owner
-      Project     = var.project_name
-    }
+
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-instance"
+    })
   }
 
-  tags = {
-    Name        = "${var.project_name}-launch-template"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-launch-template"
+  })
 }
 
-# ========================================
-# AUTO SCALING GROUP
-# ========================================
-
+# Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-asg"
+  name                      = "${local.name_prefix}-asg"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
 
+  enabled_metrics = [
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupPendingInstances",
+    "GroupTerminatingInstances",
+    "GroupTotalInstances"
+  ]
+
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-asg-instance"
+    value               = "${local.name_prefix}-asg-instance"
     propagate_at_launch = true
   }
 
-  tag {
-    key                 = "Environment"
-    value               = var.environment
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Owner"
-    value               = var.owner
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Project"
-    value               = var.project_name
-    propagate_at_launch = true
+  dynamic "tag" {
+    for_each = local.common_tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
   }
 }
 
-# ========================================
+# ==========================================
 # AUTO SCALING POLICIES
-# ========================================
+# ==========================================
 
-# Target Tracking Scaling Policy - CPU Utilization
-resource "aws_autoscaling_policy" "cpu_target_tracking" {
-  name                   = "${var.project_name}-cpu-target-tracking"
+# CPU-based scaling policy
+resource "aws_autoscaling_policy" "cpu_scale_up" {
+  name                   = "${local.name_prefix}-cpu-scale-up"
+  scaling_adjustment     = 2
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
-  policy_type            = "TargetTrackingScaling"
-
-  target_tracking_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ASGAverageCPUUtilization"
-    }
-    target_value = 70.0
-  }
 }
 
-# Target Tracking Scaling Policy - ALB Request Count
-resource "aws_autoscaling_policy" "alb_request_count" {
-  name                   = "${var.project_name}-alb-request-count-tracking"
-  autoscaling_group_name = aws_autoscaling_group.main.name
-  policy_type            = "TargetTrackingScaling"
-
-  target_tracking_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ALBRequestCountPerTarget"
-      resource_label         = "${aws_lb.main.arn_suffix}/${aws_lb_target_group.main.arn_suffix}"
-    }
-    target_value = 1000.0
-  }
-}
-
-# ========================================
-# CLOUDWATCH ALARMS
-# ========================================
-
-# High CPU Alarm
-resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.project_name}-high-cpu-utilization"
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${local.name_prefix}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "120"
+  period              = 120
   statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = []
+  threshold           = 70
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
 
-  tags = {
-    Name        = "${var.project_name}-high-cpu-alarm"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  alarm_actions = [aws_autoscaling_policy.cpu_scale_up.arn]
+
+  tags = local.common_tags
 }
 
-# ALB Unhealthy Host Count Alarm
-resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
-  alarm_name          = "${var.project_name}-unhealthy-hosts"
+resource "aws_autoscaling_policy" "cpu_scale_down" {
+  name                   = "${local.name_prefix}-cpu-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${local.name_prefix}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 30
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+
+  alarm_actions = [aws_autoscaling_policy.cpu_scale_down.arn]
+
+  tags = local.common_tags
+}
+
+# ALB request count scaling policy
+resource "aws_autoscaling_policy" "request_count_scale_up" {
+  name                   = "${local.name_prefix}-request-count-scale-up"
+  scaling_adjustment     = 2
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "request_count_high" {
+  alarm_name          = "${local.name_prefix}-request-count-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "UnHealthyHostCount"
+  evaluation_periods  = 2
+  metric_name         = "RequestCountPerTarget"
   namespace           = "AWS/ApplicationELB"
-  period              = "60"
-  statistic           = "Average"
-  threshold           = "0"
-  alarm_description   = "This metric monitors unhealthy hosts"
-  alarm_actions       = []
+  period              = 120
+  statistic           = "Sum"
+  threshold           = 1000
 
   dimensions = {
-    LoadBalancer = aws_lb.main.arn_suffix
     TargetGroup  = aws_lb_target_group.main.arn_suffix
+    LoadBalancer = aws_lb.main.arn_suffix
   }
 
-  tags = {
-    Name        = "${var.project_name}-unhealthy-hosts-alarm"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  alarm_actions = [aws_autoscaling_policy.request_count_scale_up.arn]
+
+  tags = local.common_tags
 }
 
-# RDS CPU Utilization Alarm
-resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
-  alarm_name          = "${var.project_name}-rds-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors RDS cpu utilization"
-  alarm_actions       = []
+# ==========================================
+# RDS MYSQL DATABASE
+# ==========================================
 
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
-  }
+# DB Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
 
-  tags = {
-    Name        = "${var.project_name}-rds-high-cpu-alarm"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-subnet-group"
+  })
 }
 
-# ElastiCache CPU Utilization Alarm
-resource "aws_cloudwatch_metric_alarm" "redis_high_cpu" {
-  alarm_name          = "${var.project_name}-redis-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/ElastiCache"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "75"
-  alarm_description   = "This metric monitors ElastiCache CPU utilization"
-  alarm_actions       = []
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier = "${local.name_prefix}-mysql"
 
-  dimensions = {
-    ReplicationGroupId = aws_elasticache_replication_group.main.id
-  }
+  engine         = "mysql"
+  engine_version = "8.0.35"
+  instance_class = var.db_instance_class
 
-  tags = {
-    Name        = "${var.project_name}-redis-high-cpu-alarm"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
+  allocated_storage     = 100
+  max_allocated_storage = 1000
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.rds.arn
+
+  db_name  = "educationdb"
+  username = random_string.rds_username.result
+  password = random_password.rds_password.result
+  port     = 3306
+
+  multi_az               = true
+  publicly_accessible    = false
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
+
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
+
+  deletion_protection      = false
+  skip_final_snapshot      = true
+  copy_tags_to_snapshot    = true
+  performance_insights_enabled = true
+  performance_insights_retention_period = 7
+
+  auto_minor_version_upgrade = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-mysql"
+  })
 }
 
-# ========================================
-# AWS X-RAY (Tracing)
-# ========================================
+# ==========================================
+# ELASTICACHE REDIS
+# ==========================================
 
-# X-Ray sampling rule
+# ElastiCache Subnet Group
+resource "aws_elasticache_subnet_group" "main" {
+  name       = "${local.name_prefix}-redis-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-redis-subnet-group"
+  })
+}
+
+# ElastiCache Replication Group (Redis Cluster)
+resource "aws_elasticache_replication_group" "main" {
+  replication_group_id          = "${local.name_prefix}-redis"
+  replication_group_description = "Redis cluster for session persistence"
+
+  engine               = "redis"
+  engine_version       = "7.1"
+  node_type            = var.redis_node_type
+  num_cache_clusters   = 3
+  port                 = 6379
+  parameter_group_name = "default.redis7"
+
+  subnet_group_name  = aws_elasticache_subnet_group.main.name
+  security_group_ids = [aws_security_group.elasticache.id]
+
+  automatic_failover_enabled = true
+  multi_az_enabled           = true
+
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token_enabled         = false
+
+  snapshot_retention_limit = 5
+  snapshot_window          = "03:00-05:00"
+  maintenance_window       = "sun:05:00-sun:07:00"
+
+  auto_minor_version_upgrade = true
+  apply_immediately          = false
+  notification_topic_arn     = null
+
+  log_delivery_configuration {
+    destination      = aws_cloudwatch_log_group.redis.name
+    destination_type = "cloudwatch-logs"
+    log_format       = "json"
+    log_type         = "slow-log"
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-redis"
+  })
+}
+
+# CloudWatch Log Group for Redis
+resource "aws_cloudwatch_log_group" "redis" {
+  name              = "/aws/elasticache/${local.name_prefix}/redis"
+  retention_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-redis-logs"
+  })
+}
+
+# ==========================================
+# CLOUDWATCH LOG GROUPS
+# ==========================================
+
+resource "aws_cloudwatch_log_group" "application" {
+  name              = "/aws/ec2/${local.name_prefix}/application"
+  retention_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-application-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "alb" {
+  name              = "/aws/alb/${local.name_prefix}"
+  retention_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-logs"
+  })
+}
+
+# ==========================================
+# X-RAY SAMPLING RULE
+# ==========================================
+
 resource "aws_xray_sampling_rule" "main" {
-  rule_name      = "${var.project_name}-sampling-rule"
+  rule_name      = "${local.name_prefix}-sampling-rule"
   priority       = 1000
   version        = 1
   reservoir_size = 1
@@ -1036,125 +935,193 @@ resource "aws_xray_sampling_rule" "main" {
   service_name   = "*"
   resource_arn   = "*"
 
-  tags = {
-    Name        = "${var.project_name}-xray-sampling-rule"
+  attributes = {
     Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
   }
 }
 
-# ========================================
-# GUARDDUTY (Threat Detection)
-# ========================================
+# ==========================================
+# AWS WAF WEB ACL
+# ==========================================
+
+resource "aws_wafv2_web_acl" "main" {
+  name  = "${local.name_prefix}-web-acl"
+  scope = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  # Rate limiting rule
+  rule {
+    name     = "RateLimitRule"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - Common Rule Set
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-common-rules"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules - Known Bad Inputs
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 3
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.name_prefix}-web-acl"
+    sampled_requests_enabled   = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-web-acl"
+  })
+}
+
+# Associate WAF with ALB
+resource "aws_wafv2_web_acl_association" "main" {
+  resource_arn = aws_lb.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.main.arn
+}
+
+# ==========================================
+# GUARDDUTY
+# ==========================================
 
 resource "aws_guardduty_detector" "main" {
   enable = true
 
-  tags = {
-    Name        = "${var.project_name}-guardduty"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
+  datasources {
+    s3_logs {
+      enable = true
+    }
+    kubernetes {
+      audit_logs {
+        enable = false
+      }
+    }
+    malware_protection {
+      scan_ec2_instance_with_findings {
+        ebs_volumes {
+          enable = true
+        }
+      }
+    }
   }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-guardduty"
+  })
 }
 
-# ========================================
-# CLOUDWATCH LOG GROUPS
-# ========================================
-
-resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/ec2/${var.project_name}/application"
-  retention_in_days = 7
-
-  tags = {
-    Name        = "${var.project_name}-application-logs"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-resource "aws_cloudwatch_log_group" "alb" {
-  name              = "/aws/elasticloadbalancing/${var.project_name}"
-  retention_in_days = 7
-
-  tags = {
-    Name        = "${var.project_name}-alb-logs"
-    Environment = var.environment
-    Owner       = var.owner
-    Project     = var.project_name
-  }
-}
-
-# ========================================
+# ==========================================
 # OUTPUTS
-# ========================================
+# ==========================================
 
 output "vpc_id" {
   description = "VPC ID"
   value       = aws_vpc.main.id
 }
 
-output "public_subnet_ids" {
-  description = "Public subnet IDs"
-  value       = aws_subnet.public[*].id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs"
-  value       = aws_subnet.private[*].id
-}
-
 output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
+  description = "Application Load Balancer DNS name"
   value       = aws_lb.main.dns_name
 }
 
 output "alb_arn" {
-  description = "ARN of the Application Load Balancer"
+  description = "Application Load Balancer ARN"
   value       = aws_lb.main.arn
 }
 
 output "rds_endpoint" {
-  description = "RDS instance endpoint"
+  description = "RDS MySQL endpoint"
   value       = aws_db_instance.main.endpoint
   sensitive   = true
 }
 
-output "rds_instance_id" {
-  description = "RDS instance ID"
-  value       = aws_db_instance.main.id
+output "rds_username" {
+  description = "RDS MySQL master username"
+  value       = random_string.rds_username.result
+  sensitive   = true
 }
 
-output "redis_primary_endpoint" {
-  description = "Redis primary endpoint address"
+output "rds_password" {
+  description = "RDS MySQL master password"
+  value       = random_password.rds_password.result
+  sensitive   = true
+}
+
+output "redis_endpoint" {
+  description = "ElastiCache Redis endpoint"
   value       = aws_elasticache_replication_group.main.primary_endpoint_address
   sensitive   = true
 }
 
-output "redis_reader_endpoint" {
-  description = "Redis reader endpoint address"
-  value       = aws_elasticache_replication_group.main.reader_endpoint_address
-  sensitive   = true
-}
-
-output "autoscaling_group_name" {
+output "asg_name" {
   description = "Auto Scaling Group name"
   value       = aws_autoscaling_group.main.name
-}
-
-output "launch_template_id" {
-  description = "Launch Template ID"
-  value       = aws_launch_template.main.id
-}
-
-output "kms_key_id" {
-  description = "KMS key ID for encryption"
-  value       = aws_kms_key.main.key_id
 }
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID"
   value       = aws_guardduty_detector.main.id
+}
+
+output "waf_web_acl_id" {
+  description = "WAF Web ACL ID"
+  value       = aws_wafv2_web_acl.main.id
 }
