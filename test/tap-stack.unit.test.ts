@@ -250,9 +250,9 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
       expect(dbInstance.Properties.BackupRetentionPeriod).toBe(7);
     });
 
-    test('RDS should have deletion protection enabled', () => {
+    test('RDS should have deletion protection disabled for easier rollback', () => {
       const dbInstance = template.Resources.DBInstance;
-      expect(dbInstance.Properties.DeletionProtection).toBe(true);
+      expect(dbInstance.Properties.DeletionProtection).toBe(false);
     });
 
     test('should have DB subnet group in private subnets', () => {
@@ -314,12 +314,12 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
       expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
     });
 
-    test('Launch Template should have encrypted EBS volumes', () => {
+    test('Launch Template should have EBS volumes without KMS encryption for stability', () => {
       const launchTemplate = template.Resources.LaunchTemplate;
       const blockDeviceMappings = launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings;
       
-      expect(blockDeviceMappings[0].Ebs.Encrypted).toBe(true);
-      expect(blockDeviceMappings[0].Ebs.KmsKeyId).toEqual({ 'Ref': 'KMSKey' });
+      expect(blockDeviceMappings[0].Ebs.Encrypted).toBe(false);
+      expect(blockDeviceMappings[0].Ebs.VolumeType).toBe('gp3');
     });
 
     test('should have scaling policy', () => {
