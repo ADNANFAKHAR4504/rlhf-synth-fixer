@@ -987,7 +987,9 @@ export class TapStack extends cdk.Stack {
           iam.ManagedPolicy.fromAwsManagedPolicyName(
             'service-role/AWSLambdaBasicExecutionRole'
           ),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'AWSXRayDaemonWriteAccess'
+          ),
         ],
         inlinePolicies: {
           DynamoDBAccess: new iam.PolicyDocument({

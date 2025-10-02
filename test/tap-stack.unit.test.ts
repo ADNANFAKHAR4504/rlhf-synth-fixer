@@ -19,7 +19,7 @@ describe('TapStack - Meal Planning System', () => {
     test('Should use environment suffix from props', () => {
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStackWithProps', {
-        environmentSuffix: 'test-env'
+        environmentSuffix: 'test-env',
       });
       const testTemplate = Template.fromStack(testStack);
 
