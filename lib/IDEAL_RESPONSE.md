@@ -2,12 +2,12 @@
 
 ```py
 """
-TapStack class for bootstrapping S3-triggered Lambda infrastructure.
+TapStack class for bootstrapping S3-triggered Lambda infrastructurestructure.
 Provides the main entry point for Pulumi stack deployment.
 """
 
 import pulumi
-from infrastructure.main import create_infrastructure
+from infrastructurestructure.main import create_infrastructurestructure
 
 
 class TapStackArgs:
@@ -18,17 +18,17 @@ class TapStackArgs:
 
 class TapStack:
     """
-    TapStack class for S3-triggered Lambda infrastructure.
-    Bootstraps all infrastructure components and handles deployment.
+    TapStack class for S3-triggered Lambda infrastructurestructure.
+    Bootstraps all infrastructurestructure components and handles deployment.
     """
 
     def __init__(self, name: str, args: TapStackArgs):
-        """Initialize the TapStack with all infrastructure components."""
+        """Initialize the TapStack with all infrastructurestructure components."""
         self.name = name
         self.args = args
 
-        # Create the complete infrastructure
-        self.infrastructure = create_infrastructure()
+        # Create the complete infrastructurestructure
+        self.infrastructurestructure = create_infrastructurestructure()
 
         # Register outputs
         self.register_outputs()
@@ -40,40 +40,40 @@ class TapStack:
         """Register Pulumi outputs for the stack."""
 
         # Lambda function outputs
-        pulumi.export("lambda_function_name", self.infrastructure["lambda_function"].name)
-        pulumi.export("lambda_function_arn", self.infrastructure["lambda_function"].arn)
-        pulumi.export("lambda_function_invoke_arn", self.infrastructure["lambda_function"].invoke_arn)
+        pulumi.export("lambda_function_name", self.infrastructurestructure["lambda_function"].name)
+        pulumi.export("lambda_function_arn", self.infrastructurestructure["lambda_function"].arn)
+        pulumi.export("lambda_function_invoke_arn", self.infrastructurestructure["lambda_function"].invoke_arn)
 
         # S3 bucket outputs
-        pulumi.export("input_bucket_name", self.infrastructure["storage"]["input_bucket"].bucket)
-        pulumi.export("input_bucket_arn", self.infrastructure["storage"]["input_bucket"].arn)
-        pulumi.export("output_bucket_name", self.infrastructure["storage"]["output_bucket"].bucket)
-        pulumi.export("output_bucket_arn", self.infrastructure["storage"]["output_bucket"].arn)
+        pulumi.export("input_bucket_name", self.infrastructurestructure["storage"]["input_bucket"].bucket)
+        pulumi.export("input_bucket_arn", self.infrastructurestructure["storage"]["input_bucket"].arn)
+        pulumi.export("output_bucket_name", self.infrastructurestructure["storage"]["output_bucket"].bucket)
+        pulumi.export("output_bucket_arn", self.infrastructurestructure["storage"]["output_bucket"].arn)
 
         # IAM outputs
-        pulumi.export("lambda_role_arn", self.infrastructure["iam"]["lambda_role"].arn)
-        pulumi.export("s3_policy_arn", self.infrastructure["iam"]["s3_policy"].arn)
-        pulumi.export("logs_policy_arn", self.infrastructure["iam"]["logs_policy"].arn)
+        pulumi.export("lambda_role_arn", self.infrastructurestructure["iam"]["lambda_role"].arn)
+        pulumi.export("s3_policy_arn", self.infrastructurestructure["iam"]["s3_policy"].arn)
+        pulumi.export("logs_policy_arn", self.infrastructurestructure["iam"]["logs_policy"].arn)
 
         # Configuration outputs
-        pulumi.export("environment", self.infrastructure["config"].environment_suffix)
-        pulumi.export("region", self.infrastructure["config"].region)
-        pulumi.export("lambda_timeout", self.infrastructure["config"].lambda_timeout)
-        pulumi.export("lambda_memory", self.infrastructure["config"].lambda_memory)
+        pulumi.export("environment", self.infrastructurestructure["config"].environment_suffix)
+        pulumi.export("region", self.infrastructurestructure["config"].region)
+        pulumi.export("lambda_timeout", self.infrastructurestructure["config"].lambda_timeout)
+        pulumi.export("lambda_memory", self.infrastructurestructure["config"].lambda_memory)
 
         # Environment variables for Lambda
-        pulumi.export("environment_variables", self.infrastructure["config"].get_environment_variables())
+        pulumi.export("environment_variables", self.infrastructurestructure["config"].get_environment_variables())
 
         # IP restrictions
-        pulumi.export("allowed_ip_ranges", self.infrastructure["config"].get_allowed_ip_ranges())
+        pulumi.export("allowed_ip_ranges", self.infrastructurestructure["config"].get_allowed_ip_ranges())
 
         # Tags
-        pulumi.export("tags", self.infrastructure["config"].get_tags())
+        pulumi.export("tags", self.infrastructurestructure["config"].get_tags())
 
     def validate_deployment(self):
         """Validate the deployment configuration."""
 
-        config = self.infrastructure["config"]
+        config = self.infrastructurestructure["config"]
 
         # Validate region enforcement
         if config.region != "us-east-1":
@@ -98,35 +98,35 @@ class TapStack:
 
         pulumi.log.info("Deployment validation passed")
 
-    def get_infrastructure_summary(self) -> dict:
-        """Get a summary of the deployed infrastructure."""
+    def get_infrastructurestructure_summary(self) -> dict:
+        """Get a summary of the deployed infrastructurestructure."""
 
         return {
             "lambda_function": {
-                "name": self.infrastructure["lambda_function"].name,
-                "arn": self.infrastructure["lambda_function"].arn,
-                "timeout": self.infrastructure["config"].lambda_timeout,
-                "memory": self.infrastructure["config"].lambda_memory
+                "name": self.infrastructurestructure["lambda_function"].name,
+                "arn": self.infrastructurestructure["lambda_function"].arn,
+                "timeout": self.infrastructurestructure["config"].lambda_timeout,
+                "memory": self.infrastructurestructure["config"].lambda_memory
             },
             "s3_buckets": {
                 "input": {
-                    "name": self.infrastructure["storage"]["input_bucket"].bucket,
-                    "arn": self.infrastructure["storage"]["input_bucket"].arn
+                    "name": self.infrastructurestructure["storage"]["input_bucket"].bucket,
+                    "arn": self.infrastructurestructure["storage"]["input_bucket"].arn
                 },
                 "output": {
-                    "name": self.infrastructure["storage"]["output_bucket"].bucket,
-                    "arn": self.infrastructure["storage"]["output_bucket"].arn
+                    "name": self.infrastructurestructure["storage"]["output_bucket"].bucket,
+                    "arn": self.infrastructurestructure["storage"]["output_bucket"].arn
                 }
             },
             "iam": {
-                "lambda_role": self.infrastructure["iam"]["lambda_role"].arn,
-                "s3_policy": self.infrastructure["iam"]["s3_policy"].arn,
-                "logs_policy": self.infrastructure["iam"]["logs_policy"].arn
+                "lambda_role": self.infrastructurestructure["iam"]["lambda_role"].arn,
+                "s3_policy": self.infrastructurestructure["iam"]["s3_policy"].arn,
+                "logs_policy": self.infrastructurestructure["iam"]["logs_policy"].arn
             },
             "configuration": {
-                "environment": self.infrastructure["config"].environment_suffix,
-                "region": self.infrastructure["config"].region,
-                "ip_restrictions": self.infrastructure["config"].get_allowed_ip_ranges()
+                "environment": self.infrastructurestructure["config"].environment_suffix,
+                "region": self.infrastructurestructure["config"].region,
+                "ip_restrictions": self.infrastructurestructure["config"].get_allowed_ip_ranges()
             }
         }
 
@@ -134,7 +134,7 @@ class TapStack:
 # Stack instance is created in tap.py
 ```
 
-2. infra\lambda_code\app.py
+2. infrastructure\lambda_code\app.py
 
 ```py
 #!/usr/bin/env python3
@@ -258,11 +258,11 @@ def process_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 ```
 
-3. infra\config.py
+3. infrastructure\config.py
 
 ```py
 """
-Configuration module for serverless S3-triggered Lambda infrastructure.
+Configuration module for serverless S3-triggered Lambda infrastructurestructure.
 Handles environment variables, region enforcement, and deployment settings.
 """
 
@@ -354,7 +354,7 @@ def validate_s3_bucket_name(name: str) -> bool:
 
 
 class ServerlessConfig:
-    """Configuration class for serverless S3-triggered Lambda infrastructure."""
+    """Configuration class for serverless S3-triggered Lambda infrastructurestructure."""
 
     def __init__(self):
         """Initialize configuration with environment variables and settings."""
@@ -460,7 +460,7 @@ class ServerlessConfig:
 
 ```
 
-4. infra\iam.py
+4. infrastructure\iam.py
 
 ```py
 """
@@ -730,7 +730,7 @@ def create_iam_resources(
 
 ```
 
-4. infra\lambda_function.py
+4. infrastructure\lambda_function.py
 
 ```py
 """
@@ -761,7 +761,7 @@ def create_lambda_function(
     lambda_function = aws.lambda_.Function(
         config.lambda_function_name,
         code=pulumi.AssetArchive({
-            ".": pulumi.FileArchive("./lib/infrastructure/lambda_code")
+            ".": pulumi.FileArchive("./lib/infrastructurestructure/lambda_code")
         }),
         role=lambda_role.arn,
         handler="app.lambda_handler",
@@ -926,12 +926,12 @@ def create_lambda_resources(
 
 ```
 
-5. infra\main.py
+5. infrastructure\main.py
 
 ```py
 """
-Main infrastructure orchestrator for S3-triggered Lambda processing.
-Coordinates all infrastructure components and addresses model failures.
+Main infrastructurestructure orchestrator for S3-triggered Lambda processing.
+Coordinates all infrastructurestructure components and addresses model failures.
 
 PROMPT REQUIREMENTS ALIGNMENT:
 Python 3.9 Lambda function triggered by S3 events
@@ -967,9 +967,9 @@ from .lambda_function import create_lambda_function, create_lambda_resources
 from .storage import create_s3_buckets, create_s3_lifecycle_policies
 
 
-def create_infrastructure() -> dict:
+def create_infrastructurestructure() -> dict:
     """
-    Create the complete infrastructure for S3-triggered Lambda processing.
+    Create the complete infrastructurestructure for S3-triggered Lambda processing.
     Addresses all model failures and ensures proper resource coordination.
     """
 
@@ -1071,7 +1071,7 @@ def create_lambda_function_with_iam(
 
 ```
 
-6. infra\storage.py
+6. infrastructure\storage.py
 
 ```py
 """
