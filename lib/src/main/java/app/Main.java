@@ -234,6 +234,73 @@ final class LambdaResources {
 }
 
 /**
+ * Helper class to hold all resources needed for creating CloudFormation outputs.
+ */
+final class OutputResources {
+    private final Table ticketsTable;
+    private final BucketResources buckets;
+    private final QueueResources queues;
+    private final Topic notificationTopic;
+    private final CfnIndex kendraIndex;
+    private final StateMachine stateMachine;
+    private final LambdaResources lambdas;
+    private final RestApi api;
+    private final Dashboard dashboard;
+
+    OutputResources(final Table ticketsTable, final BucketResources buckets,
+                   final QueueResources queues, final Topic notificationTopic,
+                   final CfnIndex kendraIndex, final StateMachine stateMachine,
+                   final LambdaResources lambdas, final RestApi api,
+                   final Dashboard dashboard) {
+        this.ticketsTable = ticketsTable;
+        this.buckets = buckets;
+        this.queues = queues;
+        this.notificationTopic = notificationTopic;
+        this.kendraIndex = kendraIndex;
+        this.stateMachine = stateMachine;
+        this.lambdas = lambdas;
+        this.api = api;
+        this.dashboard = dashboard;
+    }
+
+    public Table getTicketsTable() {
+        return ticketsTable;
+    }
+
+    public BucketResources getBuckets() {
+        return buckets;
+    }
+
+    public QueueResources getQueues() {
+        return queues;
+    }
+
+    public Topic getNotificationTopic() {
+        return notificationTopic;
+    }
+
+    public CfnIndex getKendraIndex() {
+        return kendraIndex;
+    }
+
+    public StateMachine getStateMachine() {
+        return stateMachine;
+    }
+
+    public LambdaResources getLambdas() {
+        return lambdas;
+    }
+
+    public RestApi getApi() {
+        return api;
+    }
+
+    public Dashboard getDashboard() {
+        return dashboard;
+    }
+}
+
+/**
  * Represents the main CDK stack for the Tap project.
  */
 class TapStack extends Stack {
@@ -259,8 +326,12 @@ class TapStack extends Stack {
         createEventBridgeRules(lambdas.getSlaCheck());
         Dashboard dashboard = createCloudWatchDashboard(ticketsTable, queues, lambdas);
         createCloudWatchAlarms(queues, lambdas);
-        createOutputs(ticketsTable, buckets, queues, notificationTopic, kendraIndex, 
-                     stateMachine, lambdas, api, dashboard);
+        
+        OutputResources outputResources = new OutputResources(
+            ticketsTable, buckets, queues, notificationTopic,
+            kendraIndex, stateMachine, lambdas, api, dashboard
+        );
+        createOutputs(outputResources);
     }
 
     private String determineEnvironmentSuffix(final TapStackProps props) {
@@ -633,7 +704,6 @@ class TapStack extends Stack {
                         .when(Condition.numberGreaterThan("$.priority", 8), escalatePath)
                         .when(Condition.stringEquals("$.sentiment", "NEGATIVE"), escalatePath)
                         .otherwise(standardPath));
-
         return StateMachine.Builder.create(this, "EscalationStateMachine" + environmentSuffix)
                 .stateMachineName("support-escalation-workflow-" + environmentSuffix)
                 .definition(escalationChain)
@@ -775,21 +845,16 @@ class TapStack extends Stack {
                 .build();
     }
 
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    private void createOutputs(final Table ticketsTable, final BucketResources buckets,
-                              final QueueResources queues, final Topic notificationTopic,
-                              final CfnIndex kendraIndex, final StateMachine stateMachine,
-                              final LambdaResources lambdas, final RestApi api,
-                              final Dashboard dashboard) {
-        createDynamoDBOutputs(ticketsTable);
-        createApiGatewayOutputs(api);
-        createQueueOutputs(queues);
-        createSNSOutputs(notificationTopic);
-        createS3Outputs(buckets);
-        createKendraOutputs(kendraIndex);
-        createStepFunctionsOutputs(stateMachine);
-        createLambdaOutputs(lambdas);
-        createDashboardOutputs(dashboard);
+    private void createOutputs(final OutputResources resources) {
+        createDynamoDBOutputs(resources.getTicketsTable());
+        createApiGatewayOutputs(resources.getApi());
+        createQueueOutputs(resources.getQueues());
+        createSNSOutputs(resources.getNotificationTopic());
+        createS3Outputs(resources.getBuckets());
+        createKendraOutputs(resources.getKendraIndex());
+        createStepFunctionsOutputs(resources.getStateMachine());
+        createLambdaOutputs(resources.getLambdas());
+        createDashboardOutputs(resources.getDashboard());
     }
 
     private void createDynamoDBOutputs(final Table table) {
