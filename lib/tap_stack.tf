@@ -847,15 +847,3 @@ output "lambda_function_arn" {
   description = "ARN of the Lambda function"
   value       = aws_lambda_function.app.arn
 }
-
-output "config_recorder_status" {
-  description = "Status of the AWS Config recorder"
-  value       = aws_config_configuration_recorder_status.main.is_enabled
-}
-
-# Optional: expose the generated DB password (kept sensitive).
-output "db_password" {
-  description = "Generated master DB password"
-  value       = random_password.db_master.result
-  sensitive   = true
-}
