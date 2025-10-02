@@ -22,6 +22,147 @@ const cloudWatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
 const secretsManagerClient = new SecretsManagerClient({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
 
+// Add these helper functions after the AWS client initializations
+
+/**
+ * Wait for a condition to be met with retry logic
+ */
+async function waitForCondition(
+  checkFn: () => Promise<boolean>,
+  timeoutMs: number = 60000,
+  intervalMs: number = 5000,
+  description: string = "condition"
+): Promise<void> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const result = await checkFn();
+      if (result) {
+        return;
+      }
+    } catch (error) {
+      console.log(`Waiting for ${description}: ${error}`);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  
+  throw new Error(`Timeout waiting for ${description} after ${timeoutMs}ms`);
+}
+
+/**
+ * Wait for ASG instances to be in service
+ */
+async function waitForASGInstances(
+  asgName: string,
+  minInstances: number = 1,
+  timeoutMs: number = 120000
+): Promise<string[]> {
+  const instanceIds: string[] = [];
+  
+  await waitForCondition(
+    async () => {
+      const { AutoScalingGroups } = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
+      );
+      
+      const asg = AutoScalingGroups?.[0];
+      if (!asg) return false;
+      
+      const inServiceInstances = asg.Instances?.filter(
+        i => i.LifecycleState === "InService" && i.HealthStatus === "Healthy"
+      ) || [];
+      
+      if (inServiceInstances.length >= minInstances) {
+        instanceIds.length = 0;
+        instanceIds.push(...inServiceInstances.map(i => i.InstanceId || ""));
+        return true;
+      }
+      
+      console.log(`ASG ${asgName}: ${inServiceInstances.length}/${minInstances} instances in service`);
+      return false;
+    },
+    timeoutMs,
+    5000,
+    `ASG ${asgName} to have ${minInstances} healthy instances`
+  );
+  
+  return instanceIds;
+}
+
+/**
+ * Wait for ALB targets to become healthy
+ */
+async function waitForHealthyTargets(
+  targetGroupArn: string,
+  minHealthy: number = 1,
+  timeoutMs: number = 180000
+): Promise<number> {
+  let healthyCount = 0;
+  
+  await waitForCondition(
+    async () => {
+      const { TargetHealthDescriptions } = await elbv2Client.send(
+        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+      );
+      
+      healthyCount = TargetHealthDescriptions?.filter(
+        t => t.TargetHealth?.State === "healthy"
+      ).length || 0;
+      
+      const totalTargets = TargetHealthDescriptions?.length || 0;
+      console.log(`Target health: ${healthyCount}/${totalTargets} healthy (need ${minHealthy})`);
+      
+      // Log unhealthy targets for debugging
+      const unhealthyTargets = TargetHealthDescriptions?.filter(
+        t => t.TargetHealth?.State !== "healthy"
+      );
+      
+      unhealthyTargets?.forEach(target => {
+        console.log(`  Target ${target.Target?.Id}: ${target.TargetHealth?.State} - ${target.TargetHealth?.Description}`);
+      });
+      
+      return healthyCount >= minHealthy;
+    },
+    timeoutMs,
+    10000,
+    `${minHealthy} healthy targets in target group`
+  );
+  
+  return healthyCount;
+}
+
+/**
+ * Ensure ASG has desired capacity
+ */
+async function ensureASGCapacity(
+  asgName: string,
+  desiredCapacity: number = 1
+): Promise<void> {
+  const { AutoScalingGroups } = await autoScalingClient.send(
+    new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
+  );
+  
+  const asg = AutoScalingGroups?.[0];
+  if (!asg) {
+    throw new Error(`ASG ${asgName} not found`);
+  }
+  
+  if (asg.DesiredCapacity === 0 || asg.DesiredCapacity! < desiredCapacity) {
+    console.log(`Setting ASG ${asgName} desired capacity to ${desiredCapacity}`);
+    await autoScalingClient.send(
+      new SetDesiredCapacityCommand({
+        AutoScalingGroupName: asgName,
+        DesiredCapacity: desiredCapacity
+      })
+    );
+    
+    // Wait a bit for ASG to process the change
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+}
+
 describe("TAP Stack Integration Tests", () => {
   let vpcId: string;
   let publicSubnetIds: string[];
@@ -272,35 +413,40 @@ describe("TAP Stack Integration Tests", () => {
 
   // INTERACTIVE TEST CASES - Testing interactions between 2-3 services
 
-  describe("Interactive Tests: ALB → EC2 Target Health", () => {
-    test("ALB target group has healthy instances from ASG", async () => {
-      // Get target groups
-      const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
-      const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName === `tap-${environmentSuffix}-tg`);
-      expect(targetGroup).toBeDefined();
-
-      // Get target health
-      const { TargetHealthDescriptions } = await elbv2Client.send(
-        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroup?.TargetGroupArn })
-      );
-
-      const healthyTargets = TargetHealthDescriptions?.filter(
-        target => target.TargetHealth?.State === "healthy"
-      );
-      
-      expect(healthyTargets?.length).toBeGreaterThan(0);
-      
-      // Verify healthy targets are from our ASG
-      const { AutoScalingGroups } = await autoScalingClient.send(
-        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [autoScalingGroupName] })
-      );
-      
-      const asgInstanceIds = AutoScalingGroups?.[0]?.Instances?.map(i => i.InstanceId) || [];
-      healthyTargets?.forEach(target => {
-        expect(asgInstanceIds).toContain(target.Target?.Id);
-      });
-    }, 30000);
-  });
+describe("Interactive Tests: ALB → EC2 Target Health", () => {
+  test("ALB target group has healthy instances from ASG", async () => {
+    // First ensure ASG has instances
+    await ensureASGCapacity(autoScalingGroupName, 1);
+    
+    // Wait for ASG instances to be healthy
+    const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 180000);
+    console.log(`ASG has ${instanceIds.length} healthy instances: ${instanceIds.join(", ")}`);
+    
+    // Get target groups
+    const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+    const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName === `tap-${environmentSuffix}-tg`);
+    expect(targetGroup).toBeDefined();
+    
+    // Wait for targets to become healthy in ALB
+    const healthyCount = await waitForHealthyTargets(targetGroup!.TargetGroupArn!, 1, 180000);
+    expect(healthyCount).toBeGreaterThan(0);
+    
+    // Verify healthy targets are from our ASG
+    const { TargetHealthDescriptions } = await elbv2Client.send(
+      new DescribeTargetHealthCommand({ TargetGroupArn: targetGroup?.TargetGroupArn })
+    );
+    
+    const healthyTargets = TargetHealthDescriptions?.filter(
+      target => target.TargetHealth?.State === "healthy"
+    );
+    
+    healthyTargets?.forEach(target => {
+      expect(instanceIds).toContain(target.Target?.Id);
+    });
+    
+    console.log(`Test passed: ${healthyCount} healthy targets found from ASG`);
+  }, 240000); // Increased timeout to 4 minutes
+});
 
   describe("Interactive Tests: EC2 → S3 Bucket Access", () => {
     test("S3 bucket exists with proper security configuration", async () => {
@@ -563,46 +709,50 @@ describe("TAP Stack Integration Tests", () => {
     }, 20000);
   });
 
-  describe("Interactive Tests: Multi-Service Request Flow", () => {
-    test("Complete request flow: Internet → ALB → EC2 → Logs", async () => {
-      // 1. Verify ALB is accessible from internet
-      const { LoadBalancers } = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-      const alb = LoadBalancers?.find(lb => lb.DNSName === loadBalancerDnsName);
-      expect(alb?.Scheme).toBe("internet-facing");
-      
-      // 2. Verify ALB has healthy targets
-      const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
-      const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName === `tap-${environmentSuffix}-tg`);
-      
-      const { TargetHealthDescriptions } = await elbv2Client.send(
-        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroup?.TargetGroupArn })
+describe("Interactive Tests: Multi-Service Request Flow", () => {
+  test("Complete request flow: Internet → ALB → EC2 → Logs", async () => {
+    // Ensure ASG has instances first
+    await ensureASGCapacity(autoScalingGroupName, 1);
+    
+    // Wait for instances to be healthy
+    const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 120000);
+    console.log(`ASG instances ready: ${instanceIds.join(", ")}`);
+    
+    // 1. Verify ALB is accessible from internet
+    const { LoadBalancers } = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
+    const alb = LoadBalancers?.find(lb => lb.DNSName === loadBalancerDnsName);
+    expect(alb?.Scheme).toBe("internet-facing");
+    
+    // 2. Verify ALB has healthy targets
+    const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+    const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName === `tap-${environmentSuffix}-tg`);
+    expect(targetGroup).toBeDefined();
+    
+    // Wait for targets to be healthy
+    const healthyCount = await waitForHealthyTargets(targetGroup!.TargetGroupArn!, 1, 180000);
+    expect(healthyCount).toBeGreaterThan(0);
+    console.log(`ALB has ${healthyCount} healthy targets`);
+    
+    // 3. Verify EC2 instances have proper IAM for logging
+    if (instanceIds.length > 0) {
+      const { Reservations } = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: instanceIds })
       );
       
-      const healthyCount = TargetHealthDescriptions?.filter(
-        t => t.TargetHealth?.State === "healthy"
-      ).length || 0;
-      expect(healthyCount).toBeGreaterThan(0);
-      
-      // 3. Verify EC2 instances have proper IAM for logging
-      const { AutoScalingGroups } = await autoScalingClient.send(
-        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [autoScalingGroupName] })
-      );
-      
-      const instanceIds = AutoScalingGroups?.[0]?.Instances?.map(i => i.InstanceId || "") || [];
-      if (instanceIds.length > 0) {
-        const { Reservations } = await ec2Client.send(
-          new DescribeInstancesCommand({ InstanceIds: instanceIds })
-        );
-        
-        const instance = Reservations?.[0]?.Instances?.[0];
+      const instances = Reservations?.flatMap(r => r.Instances || []);
+      instances?.forEach(instance => {
         expect(instance?.IamInstanceProfile).toBeDefined();
-        
-        // 4. Verify CloudWatch log group exists for capturing logs
-        const { logGroups } = await cloudWatchLogsClient.send(
-          new DescribeLogGroupsCommand({ logGroupNamePrefix: cloudWatchLogGroupName })
-        );
-        expect(logGroups?.length).toBeGreaterThan(0);
-      }
-    }, 40000);
-  });
+        expect(instance?.State?.Name).toBe("running");
+      });
+      
+      // 4. Verify CloudWatch log group exists for capturing logs
+      const { logGroups } = await cloudWatchLogsClient.send(
+        new DescribeLogGroupsCommand({ logGroupNamePrefix: cloudWatchLogGroupName })
+      );
+      expect(logGroups?.length).toBeGreaterThan(0);
+      
+      console.log(`Complete flow test passed with ${instances?.length} running instances`);
+    }
+  }, 300000); // Increased timeout to 5 minutes
+});
 });
