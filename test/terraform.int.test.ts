@@ -18,9 +18,7 @@ import {
   LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
-  DeleteMessageCommand,
   GetQueueAttributesCommand,
-  ReceiveMessageCommand,
   SQSClient,
   SendMessageCommand
 } from '@aws-sdk/client-sqs';
@@ -145,7 +143,7 @@ describe('Order Processing System Integration Tests', () => {
       expect(response.Attributes?.QueueArn).toBe(outputs.dlq_arn);
     });
 
-    test('should be able to send and receive messages', async () => {
+    test('should be able to send messages and verify processing via Lambda', async () => {
       const testMessage = {
         orderId: testOrderId,
         customerEmail: 'test@example.com',
@@ -157,7 +155,7 @@ describe('Order Processing System Integration Tests', () => {
         timestamp: new Date().toISOString()
       };
 
-      // Send message
+      // Send message to SQS queue
       const sendCommand = new SendMessageCommand({
         QueueUrl: outputs.order_queue_url,
         MessageBody: JSON.stringify(testMessage)
@@ -166,44 +164,40 @@ describe('Order Processing System Integration Tests', () => {
       const sendResponse = await sqsClient.send(sendCommand);
       expect(sendResponse.MessageId).toBeDefined();
 
-      // Receive message with retry logic
-      const receiveResponse = await retryOperation(
+      // Since Lambda processes messages automatically via event source mapping,
+      // we verify processing by checking DynamoDB for the processed order
+      const dbResponse = await retryOperation(
         async () => {
-          const response = await sqsClient.send(new ReceiveMessageCommand({
-            QueueUrl: outputs.order_queue_url,
-            MaxNumberOfMessages: 1,
-            WaitTimeSeconds: 10
+          const response = await dynamoClient.send(new GetItemCommand({
+            TableName: outputs.dynamodb_table_name,
+            Key: {
+              order_id: { S: testOrderId }
+            }
           }));
-          console.log(`SQS receive attempt: ${response.Messages?.length || 0} messages received`);
+          console.log(`DynamoDB check: Item ${response.Item ? 'found' : 'not found'}`);
           return response;
         },
-        (response) => !!(response.Messages && response.Messages.length > 0),
-        3,
-        1000
+        (response) => !!response.Item,
+        5,
+        2000
       );
 
-      if (!receiveResponse.Messages || receiveResponse.Messages.length === 0) {
-        console.error('No messages received from SQS queue after retries');
-        console.log('Queue URL:', outputs.order_queue_url);
-      }
+      // Verify that the message was processed by Lambda and stored in DynamoDB
+      expect(dbResponse.Item).toBeDefined();
+      expect(dbResponse.Item?.order_id?.S).toBe(testOrderId);
+      expect(dbResponse.Item?.status?.S).toBeDefined();
+      expect(dbResponse.Item?.customer_email?.S).toBe('test@example.com');
 
-      expect(receiveResponse.Messages).toBeDefined();
-      expect(receiveResponse.Messages?.length).toBeGreaterThan(0);
+      // Verify the queue is empty (messages were consumed by Lambda)
+      const queueAttributesCommand = new GetQueueAttributesCommand({
+        QueueUrl: outputs.order_queue_url,
+        AttributeNames: ['ApproximateNumberOfMessages']
+      });
+      const queueResponse = await sqsClient.send(queueAttributesCommand);
 
-      const receivedMessage = receiveResponse.Messages?.[0];
-      expect(receivedMessage?.Body).toBeDefined();
-
-      const parsedBody = JSON.parse(receivedMessage?.Body || '{}');
-      expect(parsedBody.orderId).toBe(testOrderId);
-
-      // Clean up - delete the message
-      if (receivedMessage?.ReceiptHandle) {
-        const deleteCommand = new DeleteMessageCommand({
-          QueueUrl: outputs.order_queue_url,
-          ReceiptHandle: receivedMessage.ReceiptHandle
-        });
-        await sqsClient.send(deleteCommand);
-      }
+      // The queue should be empty or have very few messages (depending on timing)
+      const messageCount = parseInt(queueResponse.Attributes?.ApproximateNumberOfMessages || '0');
+      expect(messageCount).toBeLessThanOrEqual(1);
     });
   });
 
