@@ -2,42 +2,40 @@
 import {
   CloudFormationClient,
   DescribeStacksCommand,
-  DescribeStackResourcesCommand,
   ListStackResourcesCommand
 } from '@aws-sdk/client-cloudformation';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-  DescribeDBParameterGroupsCommand
-} from '@aws-sdk/client-rds';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeVpcEndpointsCommand
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetPublicAccessBlockCommand
-} from '@aws-sdk/client-s3';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand
-} from '@aws-sdk/client-kms';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
-  SNSClient,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+  ListAliasesCommand
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
   GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand
+  ListSubscriptionsByTopicCommand,
+  SNSClient
 } from '@aws-sdk/client-sns';
 
 // Get stack name from environment or use default
@@ -340,12 +338,26 @@ describe('RDS PostgreSQL Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Alarms', () => {
     test('all required alarms should be created', async () => {
+      // Get stack parameters to find project name
+      const stackCommand = new DescribeStacksCommand({ StackName: STACK_NAME });
+      const stackResponse = await cfClient.send(stackCommand);
+      const stack = stackResponse.Stacks?.[0];
+
+      // Extract project name and environment from stack parameters or name
+      const projectName = stack?.Parameters?.find(p => p.ParameterKey === 'ProjectName')?.ParameterValue || 'RetailInventory';
+      const environmentSuffix = stack?.Parameters?.find(p => p.ParameterKey === 'EnvironmentSuffix')?.ParameterValue || ENVIRONMENT_SUFFIX;
+      const alarmPrefix = `${projectName}-${environmentSuffix}`;
+
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'RetailInventory-synth56382107'
+        AlarmNamePrefix: alarmPrefix
       });
       const response = await cwClient.send(command);
 
       const alarmNames = response.MetricAlarms?.map(a => a.AlarmName) || [];
+
+      // Log alarm names for debugging
+      console.log('Found alarms:', alarmNames);
+      console.log('Using alarm prefix:', alarmPrefix);
 
       expect(alarmNames.some(name => name?.includes('HighCPU'))).toBe(true);
       expect(alarmNames.some(name => name?.includes('HighConnections'))).toBe(true);
@@ -355,8 +367,18 @@ describe('RDS PostgreSQL Infrastructure Integration Tests', () => {
     });
 
     test('alarms should have SNS topic configured', async () => {
+      // Get stack parameters to find project name
+      const stackCommand = new DescribeStacksCommand({ StackName: STACK_NAME });
+      const stackResponse = await cfClient.send(stackCommand);
+      const stack = stackResponse.Stacks?.[0];
+
+      // Extract project name and environment from stack parameters or name
+      const projectName = stack?.Parameters?.find(p => p.ParameterKey === 'ProjectName')?.ParameterValue || 'RetailInventory';
+      const environmentSuffix = stack?.Parameters?.find(p => p.ParameterKey === 'EnvironmentSuffix')?.ParameterValue || ENVIRONMENT_SUFFIX;
+      const alarmPrefix = `${projectName}-${environmentSuffix}`;
+
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'RetailInventory-synth56382107'
+        AlarmNamePrefix: alarmPrefix
       });
       const response = await cwClient.send(command);
 
