@@ -41,8 +41,7 @@ class ApiStack(Construct):
                 throttling_rate_limit=10,
                 throttling_burst_limit=20,
                 metrics_enabled=True,
-                logging_level=apigateway.MethodLoggingLevel.INFO,
-                data_trace_enabled=True,
+                logging_level=apigateway.MethodLoggingLevel.OFF,
             ),
         )
 
