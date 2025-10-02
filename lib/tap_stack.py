@@ -1097,15 +1097,24 @@ def handle_delete(properties, physical_resource_id):
                 logger.info(f"Disabled GuardDuty detector: {detector_id} (not deleted to preserve findings)")
             except Exception as e:
                 logger.warning(f"Failed to disable detector: {str(e)}")
+            
+            # Always return DetectorId to maintain consistency for dependent resources
+            return {
+                'DetectorId': detector_id
+            }
         else:
             logger.info("No valid detector found to disable")
-        
-        return {}
+            # Even when no detector found, return a consistent response structure
+            return {
+                'DetectorId': physical_resource_id or 'guardduty-detector'
+            }
         
     except Exception as e:
         logger.warning(f"Failed to disable detector during delete: {str(e)}")
-        # Return success anyway since detector might not exist
-        return {}
+        # Return success anyway since detector might not exist, but maintain DetectorId
+        return {
+            'DetectorId': physical_resource_id or 'guardduty-detector'
+        }
 
 def send_response(response_url, response_body):
     '''
