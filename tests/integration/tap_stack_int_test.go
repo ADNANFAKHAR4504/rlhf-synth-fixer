@@ -5,10 +5,6 @@ package lib_test
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"strings"
-	"testing"
-	"time"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
@@ -16,6 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 // TapStackOutputs represents the structure of cfn-outputs/flat-outputs.json
