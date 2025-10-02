@@ -17,8 +17,14 @@
     "VPC",
     "Secrets Manager",
     "CloudWatch",
-    "Application Auto Scaling"
+    "Application Auto Scaling",
+    "WAF"
   ],
+  "training_quality": 8,
   "author": "jpoola-turing",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
