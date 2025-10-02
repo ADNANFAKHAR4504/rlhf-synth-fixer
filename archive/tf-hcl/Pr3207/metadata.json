@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349147",
+  "team": "4",
+  "startedAt": "2025-09-30T14:54:10.402Z",
+  "task_sub_category": "IaC-Serverless-Architecture",
+  "use_case_category": "Serverless Infrastructure",
+  "aws_services": [
+    "IAM",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "Secrets Manager",
+    "CloudWatch",
+    "Application Auto Scaling",
+    "WAF"
+  ],
+  "training_quality": 8,
+  "author": "jpoola-turing",
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
+}
