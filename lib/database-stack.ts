@@ -19,6 +19,29 @@ export class DatabaseStack extends Construct {
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id);
 
+    // Get the current region for region-specific configuration
+    const region = cdk.Stack.of(this).region;
+
+    // Define PostgreSQL version based on region support
+    // us-west-1 has limited version support, use older stable versions
+    const getPostgresVersion = (region: string): rds.PostgresEngineVersion => {
+      if (region === 'us-west-1') {
+        // us-west-1 region supports older PostgreSQL versions more reliably
+        return rds.PostgresEngineVersion.VER_11_16;
+      } else {
+        // Other regions typically support newer versions  
+        return rds.PostgresEngineVersion.VER_13_7;
+      }
+    };
+
+    const postgresVersion = getPostgresVersion(region);
+
+    // Output the selected PostgreSQL version for debugging
+    new cdk.CfnOutput(this, 'PostgreSQLVersionUsed', {
+      value: `PostgreSQL version selected for region ${region}: ${postgresVersion}`,
+      description: 'PostgreSQL version automatically selected based on region',
+    });
+
     // Create KMS key for database encryption
     const encryptionKey = new kms.Key(this, 'DatabaseEncryptionKey', {
       description: 'KMS key for RDS PostgreSQL encryption',
@@ -57,7 +80,7 @@ export class DatabaseStack extends Construct {
     this.database = new rds.DatabaseInstance(this, 'RetailDatabase', {
       instanceIdentifier: `retail-db-${props.environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_12_17,
+        version: postgresVersion,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -86,7 +109,7 @@ export class DatabaseStack extends Construct {
       databaseName: 'retaildb',
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_12_17,
+          version: postgresVersion,
         }),
         parameters: {
           log_statement: 'all',
