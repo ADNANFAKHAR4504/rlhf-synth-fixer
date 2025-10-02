@@ -80,6 +80,7 @@
         "KeyName": {
             "Type": "AWS::EC2::KeyPair::KeyName",
             "Description": "SSH Key for EC2 instances",
+            "Default": "mohit-nuke-ec2-kay-pair",
             "ConstraintDescription": "Must be an existing EC2 KeyPair"
         },
         "LatestAmiId": {
@@ -115,6 +116,7 @@
         "AlarmEmail": {
             "Type": "String",
             "Description": "Email for alarm notifications",
+            "Default": "test@gmail.com",
             "AllowedPattern": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$",
             "ConstraintDescription": "Must be a valid email address"
         }
@@ -830,9 +832,7 @@
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
+                "BucketName": "cfn-bucket-12345",
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
