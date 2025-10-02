@@ -67,6 +67,12 @@ class TapStack(Stack):
         # Apply compliance tags to all resources
         for key, value in self.compliance_tags.items():
             Tags.of(self).add(key, value)
+        
+        # Generate unique identifier for resources to prevent conflicts
+        import hashlib
+        import random
+        unique_id = hashlib.md5(f"{self.account}-{self.environment_suffix}-{random.randint(1000, 9999)}".encode()).hexdigest()[:8]
+        self.unique_suffix = f"{self.environment_suffix}-{unique_id}"
 
         # Create KMS keys for encryption
         self._create_encryption_keys()
@@ -109,8 +115,8 @@ class TapStack(Stack):
             self, "MasterKey",
             description="Master KMS key for banking zero-trust architecture",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
-            alias="alias/zero-trust-master",
+            removal_policy=RemovalPolicy.DESTROY,
+            alias=f"alias/zero-trust-master-{self.unique_suffix}",
             policy=iam.PolicyDocument(
                 statements=[
                     iam.PolicyStatement(
@@ -159,8 +165,8 @@ class TapStack(Stack):
             self, "AuditKey",
             description="KMS key for audit logs encryption",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
-            alias="alias/audit-logs"
+            removal_policy=RemovalPolicy.DESTROY,
+            alias=f"alias/audit-logs-{self.unique_suffix}"
         )
 
     def _create_network_infrastructure(self):
@@ -205,11 +211,11 @@ class TapStack(Stack):
                     destination=ec2.FlowLogDestination.to_s3(
                         s3.Bucket(
                             self, "VPCFlowLogsBucket",
-                            bucket_name=f"vpc-flow-logs-{self.environment_suffix}-{self.account}-{self.region}",
+                            bucket_name=f"vpc-flow-logs-{self.unique_suffix}-{self.account}-{self.region}",
                             encryption=s3.BucketEncryption.KMS,
                             encryption_key=self.master_key,
                             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-                            removal_policy=RemovalPolicy.RETAIN,
+                            removal_policy=RemovalPolicy.DESTROY,
                             lifecycle_rules=[
                                 s3.LifecycleRule(
                                     transitions=[
@@ -315,7 +321,7 @@ class TapStack(Stack):
             vpn_ecmp_support="enable",
             tags=[{
                 "key": "Name",
-                "value": "ZeroTrustTGW"
+                "value": f"ZeroTrustTGW-{self.unique_suffix}"
             }]
         )
 
@@ -347,7 +353,7 @@ class TapStack(Stack):
         # Create firewall policy
         firewall_policy = network_firewall.CfnFirewallPolicy(
             self, "FirewallPolicy",
-            firewall_policy_name="zero-trust-policy",
+            firewall_policy_name=f"zero-trust-policy-{self.unique_suffix}",
             firewall_policy=network_firewall.CfnFirewallPolicy.FirewallPolicyProperty(
                 stateless_default_actions=["aws:forward_to_sfe"],
                 stateless_fragment_default_actions=["aws:forward_to_sfe"],
@@ -372,7 +378,7 @@ class TapStack(Stack):
         # Create firewall
         self.firewall = network_firewall.CfnFirewall(
             self, "NetworkFirewall",
-            firewall_name="zero-trust-firewall",
+            firewall_name=f"zero-trust-firewall-{self.unique_suffix}",
             firewall_policy_arn=firewall_policy.attr_firewall_policy_arn,
             vpc_id=self.vpc.vpc_id,
             subnet_mappings=[
@@ -419,7 +425,7 @@ class TapStack(Stack):
         
         return network_firewall.CfnRuleGroup(
             self, "StatefulRules",
-            rule_group_name="banking-stateful-rules",
+            rule_group_name=f"banking-stateful-rules-{self.unique_suffix}",
             type="STATEFUL",
             capacity=100,
             rule_group=network_firewall.CfnRuleGroup.RuleGroupProperty(
@@ -506,7 +512,7 @@ class TapStack(Stack):
         # Admin role with time-based access
         self.admin_role = iam.Role(
             self, "AdminRole",
-            role_name="ZeroTrustAdminRole",
+            role_name=f"ZeroTrustAdminRole-{self.unique_suffix}",
             assumed_by=iam.CompositePrincipal(
                 iam.AccountPrincipal(self.account)
             ),
@@ -536,7 +542,7 @@ class TapStack(Stack):
         # Read-only role for auditors
         self.auditor_role = iam.Role(
             self, "AuditorRole",
-            role_name="ZeroTrustAuditorRole",
+            role_name=f"ZeroTrustAuditorRole-{self.unique_suffix}",
             assumed_by=iam.AccountPrincipal(self.account),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("SecurityAudit"),
@@ -549,7 +555,7 @@ class TapStack(Stack):
         # Incident response role
         self.incident_response_role = iam.Role(
             self, "IncidentResponseRole",
-            role_name="ZeroTrustIncidentResponseRole",
+            role_name=f"ZeroTrustIncidentResponseRole-{self.unique_suffix}",
             assumed_by=iam.CompositePrincipal(
                 iam.ServicePrincipal("lambda.amazonaws.com"),
                 iam.AccountPrincipal(self.account)
@@ -586,11 +592,11 @@ class TapStack(Stack):
         # Create S3 bucket for CloudTrail
         self.trail_bucket = s3.Bucket(
             self, "CloudTrailBucket",
-            bucket_name=f"cloudtrail-{self.environment_suffix}-{self.account}-{self.region}",
+            bucket_name=f"cloudtrail-{self.unique_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.DESTROY,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     transitions=[
@@ -609,7 +615,7 @@ class TapStack(Stack):
         # Create CloudTrail
         self.trail = cloudtrail.Trail(
             self, "CloudTrail",
-            trail_name="zero-trust-trail",
+            trail_name=f"zero-trust-trail-{self.unique_suffix}",
             bucket=self.trail_bucket,
             encryption_key=self.audit_key,
             include_global_service_events=True,
@@ -624,10 +630,10 @@ class TapStack(Stack):
         # CloudWatch Log Group for real-time monitoring
         self.log_group = logs.LogGroup(
             self, "CloudTrailLogGroup",
-            log_group_name="/aws/cloudtrail/zero-trust",
+            log_group_name=f"/aws/cloudtrail/zero-trust-{self.unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.master_key,
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # CloudTrail events already configured in trail creation above
@@ -635,11 +641,15 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection"""
         
-        # Enable GuardDuty detector
+        # Enable GuardDuty detector with unique naming
         self.guardduty_detector = guardduty.CfnDetector(
             self, "GuardDutyDetector",
             enable=True,
             finding_publishing_frequency="FIFTEEN_MINUTES",
+            tags=[{
+                "key": "Name", 
+                "value": f"ZeroTrustDetector-{self.unique_suffix}"
+            }],
             data_sources=guardduty.CfnDetector.CFNDataSourceConfigurationsProperty(
                 s3_logs=guardduty.CfnDetector.CFNS3LogsConfigurationProperty(
                     enable=True
@@ -659,7 +669,7 @@ class TapStack(Stack):
             format="TXT",
             location=f"s3://{self.trail_bucket.bucket_name}/threat-intel/bad-ips.txt",
             activate=True,
-            name="BankingThreatIntel"
+            name=f"BankingThreatIntel-{self.unique_suffix}"
         )
 
         # Create IP set for trusted IPs
@@ -669,7 +679,7 @@ class TapStack(Stack):
             format="TXT",
             location=f"s3://{self.trail_bucket.bucket_name}/trusted-ips/whitelist.txt",
             activate=True,
-            name="TrustedBankingIPs"
+            name=f"TrustedBankingIPs-{self.unique_suffix}"
         )
 
     def _create_security_hub(self):
@@ -695,7 +705,7 @@ class TapStack(Stack):
         # SNS topic for security alerts
         self.alert_topic = sns.Topic(
             self, "SecurityAlertTopic",
-            topic_name=f"zero-trust-security-alerts-{self.environment_suffix}",
+            topic_name=f"zero-trust-security-alerts-{self.unique_suffix}",
             master_key=self.master_key
         )
 
@@ -707,7 +717,7 @@ class TapStack(Stack):
         # Lambda function for automated response
         self.incident_response_lambda = lambda_.Function(
             self, "IncidentResponseFunction",
-            function_name=f"zero-trust-incident-response-{self.environment_suffix}",
+            function_name=f"zero-trust-incident-response-{self.unique_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="incident_response.handler",
             code=lambda_.Code.from_inline(self._get_incident_response_code()),
@@ -732,7 +742,7 @@ class TapStack(Stack):
         # EventBridge rule for GuardDuty findings
         guardduty_rule = events.Rule(
             self, "GuardDutyFindingsRule",
-            rule_name="zero-trust-guardduty-findings",
+            rule_name=f"zero-trust-guardduty-findings-{self.unique_suffix}",
             event_pattern=events.EventPattern(
                 source=["aws.guardduty"],
                 detail_type=["GuardDuty Finding"],
@@ -755,7 +765,7 @@ class TapStack(Stack):
         # EventBridge rule for Security Hub findings
         security_hub_rule = events.Rule(
             self, "SecurityHubFindingsRule",
-            rule_name="zero-trust-security-hub-findings",
+            rule_name=f"zero-trust-security-hub-findings-{self.unique_suffix}",
             event_pattern=events.EventPattern(
                 source=["aws.securityhub"],
                 detail_type=["Security Hub Findings - Imported"],
@@ -1054,11 +1064,11 @@ def notify_security_team(event: Dict, response: Dict):
         # Create S3 bucket for Session Manager logs
         self.session_logs_bucket = s3.Bucket(
             self, "SessionLogsBucket",
-            bucket_name=f"session-logs-{self.environment_suffix}-{self.account}-{self.region}",
+            bucket_name=f"session-logs-{self.unique_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.DESTROY,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     expiration=Duration.days(90)
@@ -1095,7 +1105,7 @@ def notify_security_team(event: Dict, response: Dict):
         # Create maintenance window for patching
         self.maintenance_window = ssm.CfnMaintenanceWindow(
             self, "PatchingMaintenanceWindow",
-            name="banking-patching-window",
+            name=f"banking-patching-window-{self.unique_suffix}",
             schedule="cron(0 2 ? * SUN *)",  # Sunday 2 AM
             duration=4,
             cutoff=1,
@@ -1106,7 +1116,7 @@ def notify_security_team(event: Dict, response: Dict):
         # Patch baseline for critical updates
         self.patch_baseline = ssm.CfnPatchBaseline(
             self, "CriticalPatchBaseline",
-            name="banking-critical-patches",
+            name=f"banking-critical-patches-{self.unique_suffix}",
             operating_system="AMAZON_LINUX_2",
             patch_groups=["banking-systems"],
             approval_rules=ssm.CfnPatchBaseline.RuleGroupProperty(
@@ -1147,7 +1157,7 @@ def notify_security_team(event: Dict, response: Dict):
         # Config bucket with environment suffix for uniqueness
         config_bucket = s3.Bucket(
             self, "ConfigBucket",
-            bucket_name=f"aws-config-{self.environment_suffix}-{self.account}-{self.region}",
+            bucket_name=f"aws-config-{self.unique_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
