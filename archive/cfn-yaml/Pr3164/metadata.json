@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_S3_STATIC_5j1k7l_8y9z3a6gST",
+  "team": "5",
+  "startedAt": "2025-09-30T17:21:55.117Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "Amazon S3",
+    "Amazon CloudFront",
+    "AWS KMS",
+    "Amazon Route 53",
+    "Amazon CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
