@@ -557,11 +557,7 @@ class TapStack(pulumi.ComponentResource):
         dashboard = cloudwatch.Dashboard(
             f"tracking-dashboard-{self.environment_suffix}",
             dashboard_name=f"logistics-tracking-{self.environment_suffix}",
-            dashboard_body=pulumi.Output.all(
-                rest_api.name,
-                tracking_lambda.name,
-                tracking_table.name
-            ).apply(lambda args: json.dumps({
+            dashboard_body=json.dumps({
                 "widgets": [
                     {
                         "type": "metric",
@@ -574,11 +570,7 @@ class TapStack(pulumi.ComponentResource):
                             "period": 300,
                             "stat": "Sum",
                             "region": aws_region,
-                            "title": "API Gateway Metrics",
-                            "dimensions": {
-                                "ApiName": args[0],
-                                "Stage": self.environment_suffix
-                            }
+                            "title": "API Gateway Metrics"
                         }
                     },
                     {
@@ -593,10 +585,7 @@ class TapStack(pulumi.ComponentResource):
                             "period": 300,
                             "stat": "Average",
                             "region": aws_region,
-                            "title": "Lambda Function Metrics",
-                            "dimensions": {
-                                "FunctionName": args[1]
-                            }
+                            "title": "Lambda Function Metrics"
                         }
                     },
                     {
@@ -611,14 +600,11 @@ class TapStack(pulumi.ComponentResource):
                             "period": 300,
                             "stat": "Sum",
                             "region": aws_region,
-                            "title": "DynamoDB Metrics",
-                            "dimensions": {
-                                "TableName": args[2]
-                            }
+                            "title": "DynamoDB Metrics"
                         }
                     }
                 ]
-            })),
+            }),
             opts=ResourceOptions(parent=self)
         )
 
