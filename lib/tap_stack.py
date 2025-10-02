@@ -522,7 +522,7 @@ class TapStack(pulumi.ComponentResource):
         # S3 Bucket - FIXED: removed deprecated inline parameters
         self.tenant_data_bucket = aws.s3.Bucket(
             f"tap-tenant-data-{self.environment_suffix}",
-            bucket=f"tap-tenant-data-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=f"tap-tenant-data-{self.environment_suffix}-{pulumi.get_stack().lower()}",
             tags={**self.tags, 'Name': f'tap-tenant-data-{self.environment_suffix}', 'Purpose': 'TenantData'},
             opts=ResourceOptions(parent=self)
         )
