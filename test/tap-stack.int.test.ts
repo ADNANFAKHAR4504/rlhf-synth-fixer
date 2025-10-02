@@ -1,6 +1,6 @@
 // Configuration - These are coming from cfn-outputs after deployment
-import fs from 'fs';
 import AWS from 'aws-sdk';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -36,7 +36,7 @@ describe('Serverless Logistics Processing System Integration Tests', () => {
         ]
       };
 
-      const result = await eventbridge.putEvents(params).promise();
+      const result: any = await eventbridge.putEvents(params).promise();
       expect(result.Entries).toHaveLength(1);
       expect(result.Entries[0].EventId).toBeDefined();
       expect(result.FailedEntryCount).toBe(0);
@@ -56,7 +56,7 @@ describe('Serverless Logistics Processing System Integration Tests', () => {
         }
       };
 
-      const result = await dynamodb.query(params).promise();
+      const result: any = await dynamodb.query(params).promise();
       expect(result.Items).toBeDefined();
       expect(result.Items.length).toBeGreaterThan(0);
 
@@ -142,7 +142,7 @@ describe('Serverless Logistics Processing System Integration Tests', () => {
         }
       };
 
-      const queryResult = await dynamodb.query(queryParams).promise();
+      const queryResult: any = await dynamodb.query(queryParams).promise();
       expect(queryResult.Items).toBeDefined();
       expect(queryResult.Items.length).toBeGreaterThan(0);
       expect(queryResult.Items[0].status).toBe('DELAYED');
@@ -229,11 +229,11 @@ describe('Serverless Logistics Processing System Integration Tests', () => {
         }
       };
 
-      const queryResult = await dynamodb.query(queryParams).promise();
+      const queryResult: any = await dynamodb.query(queryParams).promise();
       expect(queryResult.Items).toBeDefined();
       expect(queryResult.Items.length).toBe(statuses.length);
 
-      const retrievedStatuses = queryResult.Items.map(item => item.status).sort();
+      const retrievedStatuses = queryResult.Items.map((item: any) => item.status).sort();
       expect(retrievedStatuses).toEqual(statuses.sort());
     });
   });
