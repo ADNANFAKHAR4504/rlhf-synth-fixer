@@ -1,14 +1,14 @@
 ﻿import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 interface TapStackProps extends cdk.StackProps {
@@ -20,7 +20,6 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -29,7 +28,7 @@ export class TapStack extends cdk.Stack {
     // ==================== S3 BUCKETS ====================
     // Bucket for recipe images and documents
     const recipeMediaBucket = new s3.Bucket(this, 'RecipeMediaBucket', {
-      bucketName: `meal-planning-media-${this.account}-${this.region}`,
+      bucketName: `meal-planning-media-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       lifecycleRules: [
@@ -59,7 +58,7 @@ export class TapStack extends cdk.Stack {
       this,
       'MealPlanDocumentsBucket',
       {
-        bucketName: `meal-plan-documents-${this.account}-${this.region}`,
+        bucketName: `meal-plan-documents-${environmentSuffix}-${this.account}-${this.region}`,
         encryption: s3.BucketEncryption.S3_MANAGED,
         lifecycleRules: [
           {
@@ -75,7 +74,7 @@ export class TapStack extends cdk.Stack {
     // ==================== DYNAMODB TABLES ====================
     // Recipes table with GSI for dietary requirements
     const recipesTable = new dynamodb.Table(this, 'RecipesTable', {
-      tableName: 'meal-planning-recipes',
+      tableName: `meal-planning-recipes-${environmentSuffix}`,
       partitionKey: { name: 'recipeId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'version', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -108,7 +107,7 @@ export class TapStack extends cdk.Stack {
       this,
       'UserPreferencesTable',
       {
-        tableName: 'meal-planning-user-preferences',
+        tableName: `meal-planning-user-preferences-${environmentSuffix}`,
         partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         pointInTimeRecovery: true,
@@ -118,7 +117,7 @@ export class TapStack extends cdk.Stack {
 
     // Meal plans table
     const mealPlansTable = new dynamodb.Table(this, 'MealPlansTable', {
-      tableName: 'meal-planning-meal-plans',
+      tableName: `meal-planning-meal-plans-${environmentSuffix}`,
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'weekStartDate', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -129,7 +128,7 @@ export class TapStack extends cdk.Stack {
 
     // Grocery lists table
     const groceryListsTable = new dynamodb.Table(this, 'GroceryListsTable', {
-      tableName: 'meal-planning-grocery-lists',
+      tableName: `meal-planning-grocery-lists-${environmentSuffix}`,
       partitionKey: { name: 'mealPlanId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -140,7 +139,7 @@ export class TapStack extends cdk.Stack {
       this,
       'NutritionalDataTable',
       {
-        tableName: 'meal-planning-nutritional-data',
+        tableName: `meal-planning-nutritional-data-${environmentSuffix}`,
         partitionKey: { name: 'recipeId', type: dynamodb.AttributeType.STRING },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -150,7 +149,7 @@ export class TapStack extends cdk.Stack {
     // ==================== SNS TOPICS ====================
     const groceryReminderTopic = new sns.Topic(this, 'GroceryReminderTopic', {
       displayName: 'Grocery Shopping Reminders',
-      topicName: 'meal-planning-grocery-reminders',
+      topicName: `meal-planning-grocery-reminders-${environmentSuffix}`,
     });
 
     const mealPlanNotificationTopic = new sns.Topic(
@@ -158,7 +157,7 @@ export class TapStack extends cdk.Stack {
       'MealPlanNotificationTopic',
       {
         displayName: 'Meal Plan Notifications',
-        topicName: 'meal-planning-notifications',
+        topicName: `meal-planning-notifications-${environmentSuffix}`,
       }
     );
 
@@ -292,6 +291,7 @@ export class TapStack extends cdk.Stack {
       this,
       'MealPlanGeneratorFunction',
       {
+        functionName: `MealPlanGeneratorFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.generateMealPlan',
         code: lambda.Code.fromInline(`
@@ -389,6 +389,7 @@ export class TapStack extends cdk.Stack {
       this,
       'GroceryListAggregatorFunction',
       {
+        functionName: `GroceryListAggregatorFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.aggregateGroceryList',
         code: lambda.Code.fromInline(`
@@ -484,6 +485,7 @@ export class TapStack extends cdk.Stack {
       this,
       'NutritionalAnalysisFunction',
       {
+        functionName: `NutritionalAnalysisFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.analyzeNutrition',
         code: lambda.Code.fromInline(`
@@ -604,6 +606,7 @@ export class TapStack extends cdk.Stack {
       this,
       'EmailDeliveryFunction',
       {
+        functionName: `EmailDeliveryFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.sendMealPlanEmail',
         code: lambda.Code.fromInline(`
@@ -756,6 +759,7 @@ export class TapStack extends cdk.Stack {
       this,
       'RecipeManagementFunction',
       {
+        functionName: `RecipeManagementFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.manageRecipes',
         code: lambda.Code.fromInline(`
@@ -909,6 +913,7 @@ export class TapStack extends cdk.Stack {
       this,
       'UserPreferencesFunction',
       {
+        functionName: `UserPreferencesFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.manageUserPreferences',
         code: lambda.Code.fromInline(`
@@ -1033,6 +1038,7 @@ export class TapStack extends cdk.Stack {
       this,
       'BatchMealPlanGeneratorFunction',
       {
+        functionName: `BatchMealPlanGeneratorFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.batchGenerateMealPlans',
         code: lambda.Code.fromInline(`
@@ -1137,7 +1143,7 @@ export class TapStack extends cdk.Stack {
 
     // ==================== API GATEWAY ====================
     const api = new apigateway.RestApi(this, 'MealPlanningAPI', {
-      restApiName: 'Meal Planning Service',
+      restApiName: `Meal Planning Service-${environmentSuffix}`,
       description: 'API for personalized meal planning system',
       deployOptions: {
         stageName: 'prod',
@@ -1288,6 +1294,7 @@ export class TapStack extends cdk.Stack {
       this,
       'GroceryReminderFunction',
       {
+        functionName: `GroceryReminderFunction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.sendGroceryReminders',
         code: lambda.Code.fromInline(`
@@ -1362,7 +1369,7 @@ export class TapStack extends cdk.Stack {
 
     // ==================== CLOUDWATCH DASHBOARDS ====================
     const dashboard = new cloudwatch.Dashboard(this, 'MealPlanningDashboard', {
-      dashboardName: 'meal-planning-system-metrics',
+      dashboardName: `meal-planning-system-metrics-${environmentSuffix}`,
       defaultInterval: cdk.Duration.hours(6),
     });
 
@@ -1464,6 +1471,7 @@ export class TapStack extends cdk.Stack {
 
     // ==================== CLOUDWATCH ALARMS ====================
     new cloudwatch.Alarm(this, 'HighAPIErrorRate', {
+      alarmName: `HighAPIErrorRate-${environmentSuffix}`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ApiGateway',
         metricName: '4XXError',
@@ -1481,6 +1489,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cloudwatch.Alarm(this, 'LambdaHighErrorRate', {
+      alarmName: `LambdaHighErrorRate-${environmentSuffix}`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/Lambda',
         metricName: 'Errors',

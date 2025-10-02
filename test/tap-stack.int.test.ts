@@ -135,7 +135,7 @@ To run these tests:
 
     test('User Preferences Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: 'meal-planning-user-preferences',
+        TableName: `meal-planning-user-preferences-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -143,7 +143,7 @@ To run these tests:
 
     test('Meal Plans Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: 'meal-planning-meal-plans',
+        TableName: `meal-planning-meal-plans-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -151,7 +151,7 @@ To run these tests:
 
     test('Grocery Lists Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: 'meal-planning-grocery-lists',
+        TableName: `meal-planning-grocery-lists-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -159,7 +159,7 @@ To run these tests:
 
     test('Nutritional Data Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: 'meal-planning-nutritional-data',
+        TableName: `meal-planning-nutritional-data-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -168,7 +168,7 @@ To run these tests:
 
   describe('Lambda Functions', () => {
     test('Meal Plan Generator Function should exist and be active', async () => {
-      const functionName = 'MealPlanGeneratorFunction';
+      const functionName = `MealPlanGeneratorFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -176,7 +176,7 @@ To run these tests:
     });
 
     test('Grocery List Aggregator Function should exist and be active', async () => {
-      const functionName = 'GroceryListAggregatorFunction';
+      const functionName = `GroceryListAggregatorFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -184,7 +184,7 @@ To run these tests:
     });
 
     test('Nutritional Analysis Function should exist and be active', async () => {
-      const functionName = 'NutritionalAnalysisFunction';
+      const functionName = `NutritionalAnalysisFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -192,7 +192,7 @@ To run these tests:
     });
 
     test('Email Delivery Function should exist and be active', async () => {
-      const functionName = 'EmailDeliveryFunction';
+      const functionName = `EmailDeliveryFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -200,7 +200,7 @@ To run these tests:
     });
 
     test('Recipe Management Function should exist and be active', async () => {
-      const functionName = 'RecipeManagementFunction';
+      const functionName = `RecipeManagementFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -208,7 +208,7 @@ To run these tests:
     });
 
     test('User Preferences Function should exist and be active', async () => {
-      const functionName = 'UserPreferencesFunction';
+      const functionName = `UserPreferencesFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -216,7 +216,7 @@ To run these tests:
     });
 
     test('Batch Meal Plan Generator Function should exist and be active', async () => {
-      const functionName = 'BatchMealPlanGeneratorFunction';
+      const functionName = `BatchMealPlanGeneratorFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -224,7 +224,7 @@ To run these tests:
     });
 
     test('Grocery Reminder Function should exist and be active', async () => {
-      const functionName = 'GroceryReminderFunction';
+      const functionName = `GroceryReminderFunction-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.State).toBe('Active');
@@ -239,7 +239,7 @@ To run these tests:
 
       const command = new GetRestApiCommand({ restApiId: apiId });
       const response = await apiGatewayClient.send(command);
-      expect(response.name).toBe('Meal Planning Service');
+      expect(response.name).toBe(`Meal Planning Service-${environmentSuffix}`);
     });
 
     test('API should have all required resources', async () => {
@@ -265,7 +265,7 @@ To run these tests:
 
       const topicArns = response.Topics?.map(topic => topic.TopicArn) || [];
       const groceryReminderTopic = topicArns.find(
-        arn => arn?.includes('GroceryReminderTopic')
+        arn => arn?.includes(`meal-planning-grocery-reminders-${environmentSuffix}`)
       );
 
       expect(groceryReminderTopic).toBeDefined();
@@ -277,7 +277,7 @@ To run these tests:
 
       const topicArns = response.Topics?.map(topic => topic.TopicArn) || [];
       const mealPlanNotificationTopic = topicArns.find(
-        arn => arn?.includes('MealPlanNotificationTopic')
+        arn => arn?.includes(`meal-planning-notifications-${environmentSuffix}`)
       );
 
       expect(mealPlanNotificationTopic).toBeDefined();
@@ -287,20 +287,20 @@ To run these tests:
   describe('CloudWatch Alarms', () => {
     test('High API Error Rate Alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: ['HighAPIErrorRate'],
+        AlarmNames: [`HighAPIErrorRate-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe('HighAPIErrorRate');
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`HighAPIErrorRate-${environmentSuffix}`);
     });
 
     test('Lambda High Error Rate Alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: ['LambdaHighErrorRate'],
+        AlarmNames: [`LambdaHighErrorRate-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe('LambdaHighErrorRate');
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`LambdaHighErrorRate-${environmentSuffix}`);
     });
   });
 
@@ -310,7 +310,7 @@ To run these tests:
       expect(apiEndpoint).toBeDefined();
       expect(apiEndpoint).toMatch(
         new RegExp(
-          `^https://.*\\.execute-api\\.${awsRegion}\\.amazonaws\\.com/prod$`
+          `^https://.*\\.execute-api\\.${awsRegion}\\.amazonaws\\.com/prod/?$`
         )
       );
     });
@@ -372,14 +372,14 @@ To run these tests:
 
     test('All Lambda functions should have CloudWatch logs', async () => {
       const functionNames = [
-        'MealPlanGeneratorFunction',
-        'GroceryListAggregatorFunction',
-        'NutritionalAnalysisFunction',
-        'EmailDeliveryFunction',
-        'RecipeManagementFunction',
-        'UserPreferencesFunction',
-        'BatchMealPlanGeneratorFunction',
-        'GroceryReminderFunction',
+        `MealPlanGeneratorFunction-${environmentSuffix}`,
+        `GroceryListAggregatorFunction-${environmentSuffix}`,
+        `NutritionalAnalysisFunction-${environmentSuffix}`,
+        `EmailDeliveryFunction-${environmentSuffix}`,
+        `RecipeManagementFunction-${environmentSuffix}`,
+        `UserPreferencesFunction-${environmentSuffix}`,
+        `BatchMealPlanGeneratorFunction-${environmentSuffix}`,
+        `GroceryReminderFunction-${environmentSuffix}`,
       ];
 
       for (const functionName of functionNames) {

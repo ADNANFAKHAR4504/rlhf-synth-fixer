@@ -126,7 +126,7 @@ describe('TapStack - Meal Planning System', () => {
   describe('DynamoDB Tables', () => {
     test('Should create Recipes Table with GSI for dietary requirements', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-recipes',
+        TableName: 'meal-planning-recipes-dev',
         BillingMode: 'PAY_PER_REQUEST',
         GlobalSecondaryIndexes: Match.arrayWith([
           Match.objectLike({
@@ -138,7 +138,7 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create Recipes Table with GSI for meal type', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-recipes',
+        TableName: 'meal-planning-recipes-dev',
         GlobalSecondaryIndexes: Match.arrayWith([
           Match.objectLike({
             IndexName: 'MealTypeIndex',
@@ -149,7 +149,7 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create Recipes Table with point-in-time recovery', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-recipes',
+        TableName: 'meal-planning-recipes-dev',
         PointInTimeRecoverySpecification: {
           PointInTimeRecoveryEnabled: true,
         },
@@ -158,7 +158,7 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create Recipes Table with stream enabled', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-recipes',
+        TableName: 'meal-planning-recipes-dev',
         StreamSpecification: {
           StreamViewType: 'NEW_AND_OLD_IMAGES',
         },
@@ -167,7 +167,7 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create User Preferences Table', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-user-preferences',
+        TableName: 'meal-planning-user-preferences-dev',
         BillingMode: 'PAY_PER_REQUEST',
         PointInTimeRecoverySpecification: {
           PointInTimeRecoveryEnabled: true,
@@ -177,7 +177,7 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create Meal Plans Table with TTL', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-meal-plans',
+        TableName: 'meal-planning-meal-plans-dev',
         TimeToLiveSpecification: {
           AttributeName: 'ttl',
           Enabled: true,
@@ -187,14 +187,14 @@ describe('TapStack - Meal Planning System', () => {
 
     test('Should create Grocery Lists Table', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-grocery-lists',
+        TableName: 'meal-planning-grocery-lists-dev',
         BillingMode: 'PAY_PER_REQUEST',
       });
     });
 
     test('Should create Nutritional Data Table', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'meal-planning-nutritional-data',
+        TableName: 'meal-planning-nutritional-data-dev',
         BillingMode: 'PAY_PER_REQUEST',
       });
     });
@@ -204,14 +204,14 @@ describe('TapStack - Meal Planning System', () => {
     test('Should create Grocery Reminder Topic', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         DisplayName: 'Grocery Shopping Reminders',
-        TopicName: 'meal-planning-grocery-reminders',
+        TopicName: 'meal-planning-grocery-reminders-dev',
       });
     });
 
     test('Should create Meal Plan Notification Topic', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         DisplayName: 'Meal Plan Notifications',
-        TopicName: 'meal-planning-notifications',
+        TopicName: 'meal-planning-notifications-dev',
       });
     });
   });
@@ -396,7 +396,7 @@ describe('TapStack - Meal Planning System', () => {
   describe('API Gateway', () => {
     test('Should create REST API with CORS configuration', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'Meal Planning Service',
+        Name: 'Meal Planning Service-dev',
       });
     });
 
@@ -491,7 +491,7 @@ describe('TapStack - Meal Planning System', () => {
   describe('CloudWatch Resources', () => {
     test('Should create CloudWatch Dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: 'meal-planning-system-metrics',
+        DashboardName: 'meal-planning-system-metrics-dev',
       });
     });
 
