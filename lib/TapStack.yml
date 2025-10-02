@@ -18,6 +18,7 @@ Parameters:
   LoggingAccountId:
     Type: String
     Description: AWS Account ID where centralized logs will be stored
+    Default: !Ref 'AWS::AccountId'
     
   PrimaryRegion:
     Type: String
@@ -657,7 +658,7 @@ Resources:
       DBName: 'ProductionDB'
       DBSubnetGroupName: !Ref DBSubnetGroup
       Engine: 'mysql'
-      EngineVersion: '8.0.32'
+      EngineVersion: '8.0.37'
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}' ]]
       MultiAZ: true
