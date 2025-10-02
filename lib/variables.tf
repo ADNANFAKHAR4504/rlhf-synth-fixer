@@ -26,7 +26,7 @@ variable "domain_name" {
 variable "content_bucket_name" {
   description = "Name for the S3 bucket storing e-books"
   type        = string
-  default     = "tap-content-delivery-${random_id.bucket_suffix.hex}"
+  default     = ""
 }
 
 variable "cloudfront_price_class" {

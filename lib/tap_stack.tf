@@ -4,6 +4,11 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
+# Local values for dynamic naming
+locals {
+  content_bucket_name = var.content_bucket_name != "" ? var.content_bucket_name : "tap-content-delivery-${random_id.bucket_suffix.hex}"
+}
+
 # KMS Key for S3 encryption
 resource "aws_kms_key" "content_encryption" {
   description             = "KMS key for encrypting e-book content"
@@ -22,7 +27,7 @@ resource "aws_kms_alias" "content_encryption" {
 
 # S3 Bucket for e-book storage
 resource "aws_s3_bucket" "content" {
-  bucket = var.content_bucket_name
+  bucket = local.content_bucket_name
 
   tags = {
     Name = "${var.project_name}-content-${var.environment}"
@@ -243,7 +248,7 @@ resource "aws_cloudfront_response_headers_policy" "security_headers" {
 
 # S3 Bucket for CloudFront logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.content_bucket_name}-logs"
+  bucket = "${local.content_bucket_name}-logs"
 
   tags = {
     Name = "${var.project_name}-logs-${var.environment}"
