@@ -293,7 +293,7 @@ func TestEndToEndAPIWorkflow(t *testing.T) {
 		// Verify CORS headers
 		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"), "CORS header should allow all origins")
 	})
-	
+
 	t.Run("DELETE: Remove item via API -> Lambda -> DynamoDB", func(t *testing.T) {
 		// ACT - Send DELETE request
 		req, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/items?id=%s", apiEndpoint, testID), nil)
