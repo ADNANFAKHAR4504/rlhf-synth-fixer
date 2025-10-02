@@ -48,6 +48,26 @@ describe('Order Processing System Integration Tests', () => {
   const lambdaClient = new LambdaClient({ region });
   const logsClient = new CloudWatchLogsClient({ region });
 
+  // Helper function for retry logic
+  const retryOperation = async <T>(
+    operation: () => Promise<T>,
+    predicate: (result: T) => boolean,
+    maxAttempts: number = 5,
+    delayMs: number = 2000
+  ): Promise<T> => {
+    let lastResult: T;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      lastResult = await operation();
+      if (predicate(lastResult)) {
+        return lastResult;
+      }
+      if (attempt < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    return lastResult!;
+  };
+
   // Test data
   const testOrderId = `test-order-${Date.now()}`;
 
@@ -146,14 +166,27 @@ describe('Order Processing System Integration Tests', () => {
       const sendResponse = await sqsClient.send(sendCommand);
       expect(sendResponse.MessageId).toBeDefined();
 
-      // Receive message
-      const receiveCommand = new ReceiveMessageCommand({
-        QueueUrl: outputs.order_queue_url,
-        MaxNumberOfMessages: 1,
-        WaitTimeSeconds: 5
-      });
+      // Receive message with retry logic
+      const receiveResponse = await retryOperation(
+        async () => {
+          const response = await sqsClient.send(new ReceiveMessageCommand({
+            QueueUrl: outputs.order_queue_url,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 10
+          }));
+          console.log(`SQS receive attempt: ${response.Messages?.length || 0} messages received`);
+          return response;
+        },
+        (response) => response.Messages && response.Messages.length > 0,
+        3,
+        1000
+      );
 
-      const receiveResponse = await sqsClient.send(receiveCommand);
+      if (!receiveResponse.Messages || receiveResponse.Messages.length === 0) {
+        console.error('No messages received from SQS queue after retries');
+        console.log('Queue URL:', outputs.order_queue_url);
+      }
+
       expect(receiveResponse.Messages).toBeDefined();
       expect(receiveResponse.Messages?.length).toBeGreaterThan(0);
 
@@ -354,17 +387,33 @@ describe('Order Processing System Integration Tests', () => {
       const invokeResponse = await lambdaClient.send(invokeCommand);
       expect(invokeResponse.StatusCode).toBe(200);
 
-      // Step 3: Verify order status in DynamoDB
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for processing
+      // Step 3: Verify order status in DynamoDB with retry logic
+      const dbResponse = await retryOperation(
+        async () => {
+          const response = await dynamoClient.send(new GetItemCommand({
+            TableName: outputs.dynamodb_table_name,
+            Key: {
+              order_id: { S: workflowOrderId }
+            }
+          }));
+          console.log(`DynamoDB get attempt: Item ${response.Item ? 'found' : 'not found'}`);
+          return response;
+        },
+        (response) => !!response.Item,
+        5,
+        3000
+      );
 
-      const getCommand = new GetItemCommand({
-        TableName: outputs.dynamodb_table_name,
-        Key: {
-          order_id: { S: workflowOrderId }
-        }
-      });
+      if (!dbResponse.Item) {
+        console.error('Item not found in DynamoDB after retries');
+        console.log('Table name:', outputs.dynamodb_table_name);
+        console.log('Order ID:', workflowOrderId);
 
-      const dbResponse = await dynamoClient.send(getCommand);
+        // Check if the Lambda function actually processed the message
+        const functionResponse = JSON.parse(new TextDecoder().decode(invokeResponse.Payload));
+        console.log('Lambda response:', functionResponse);
+      }
+
       expect(dbResponse.Item).toBeDefined();
       expect(dbResponse.Item?.order_id?.S).toBe(workflowOrderId);
       expect(dbResponse.Item?.status?.S).toBeDefined();
