@@ -90,7 +90,7 @@ export class InfrastructureStack extends cdk.Stack {
       `AuroraCluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_07_1,
+          version: rds.AuroraMysqlEngineVersion.VER_3_08_2,
         }),
         writer: rds.ClusterInstance.serverlessV2(
           `writer-${environmentSuffix}`,
