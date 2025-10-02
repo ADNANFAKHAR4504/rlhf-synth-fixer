@@ -1,13 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -151,6 +152,19 @@ export class FoodDeliveryStack extends cdk.Stack {
     // SQS permissions for DLQ
     deadLetterQueue.grantSendMessages(lambdaRole);
 
+    // CloudWatch Log Groups for Lambda functions (explicit definition to avoid conflicts)
+    const orderProcessingLogGroup = new logs.LogGroup(this, 'OrderProcessingFunctionLogGroup', {
+      logGroupName: `/aws/lambda/food-delivery-processor-${this.stackName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const queryOrdersLogGroup = new logs.LogGroup(this, 'QueryOrdersFunctionLogGroup', {
+      logGroupName: `/aws/lambda/food-delivery-query-${this.stackName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Order Processing Lambda Function
     const orderProcessingFunction = new lambda.Function(
       this,
@@ -163,6 +177,7 @@ export class FoodDeliveryStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(30),
         memorySize: 1024,
         role: lambdaRole,
+        logGroup: orderProcessingLogGroup,
         environment: {
           TABLE_NAME: ordersTable.tableName,
           DLQ_URL: deadLetterQueue.queueUrl,
@@ -192,6 +207,7 @@ export class FoodDeliveryStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(10),
         memorySize: 512,
         role: lambdaRole,
+        logGroup: queryOrdersLogGroup,
         environment: {
           TABLE_NAME: ordersTable.tableName,
           POWERTOOLS_SERVICE_NAME: 'food-delivery-api',
