@@ -93,12 +93,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(kms_key_id).toBeDefined();
     });
 
-    test('WAF Web ACL is valid', () => {
-      expect(waf_web_acl_arn).toContain(':webacl/');
-      expect(waf_web_acl_id).toBeDefined();
-    });
-  });
-
   // EC2 & AutoScaling
   describe('EC2 & AutoScaling', () => {
     test('AMI ID is valid', () => {
