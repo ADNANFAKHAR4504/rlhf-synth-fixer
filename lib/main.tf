@@ -5,7 +5,12 @@ module "networking" {
   availability_zones   = var.availability_zones
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
-  # Other parameters
+}
+
+module "storage" {
+  source = "./modules/storage"
+  
+  bucket_name = var.s3_bucket_name
 }
 
 module "compute" {
@@ -18,7 +23,6 @@ module "compute" {
   min_size            = var.asg_min_size
   max_size            = var.asg_max_size
   desired_capacity    = var.asg_desired_capacity
-  # Other parameters
 }
 
 module "content_delivery" {
@@ -29,38 +33,32 @@ module "content_delivery" {
   domain_name        = var.domain_name
   geo_restrictions   = var.geo_restrictions
   ttl_settings       = var.ttl_settings
-  # Other parameters
-}
-
-module "storage" {
-  source = "./modules/storage"
-  
-  bucket_name        = var.s3_bucket_name
-  # Other parameters
+  regions            = var.regions
 }
 
 module "media_processing" {
   source = "./modules/media_processing"
   
-  # Parameters for MediaConvert
+  source_bucket_arn      = module.storage.bucket_arn
+  source_bucket_id       = module.storage.bucket_id
+  destination_bucket_arn = module.storage.bucket_arn
+  destination_bucket     = var.s3_bucket_name
 }
 
 module "security" {
   source = "./modules/security"
   
-  vpc_id             = module.networking.vpc_id
-  alb_arn            = module.compute.alb_arn
+  vpc_id                     = module.networking.vpc_id
+  alb_arn                    = module.compute.alb_arn
   cloudfront_distribution_id = module.content_delivery.distribution_id
-  waf_rate_limits    = var.waf_rate_limits
-  # Other parameters
+  waf_rate_limits            = var.waf_rate_limits
 }
 
 module "monitoring" {
   source = "./modules/monitoring"
   
-  vpc_id             = module.networking.vpc_id
-  alb_arn            = module.compute.alb_arn
-  asg_name           = module.compute.asg_name
+  vpc_id                     = module.networking.vpc_id
+  alb_arn                    = module.compute.alb_arn
+  asg_name                   = module.compute.asg_name
   cloudfront_distribution_id = module.content_delivery.distribution_id
-  # Other parameters
 }

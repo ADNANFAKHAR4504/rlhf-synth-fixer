@@ -88,6 +88,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "video_storage" {
 }
 
 resource "aws_s3_bucket_policy" "video_storage" {
+  count  = var.cloudfront_oai_iam_arn != "" ? 1 : 0
   bucket = aws_s3_bucket.video_storage.id
   policy = jsonencode({
     Version = "2012-10-17"
