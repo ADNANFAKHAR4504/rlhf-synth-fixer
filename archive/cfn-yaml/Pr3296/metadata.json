@@ -15,5 +15,11 @@
     "CloudWatch",
     "IAM",
     "X-Ray"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
