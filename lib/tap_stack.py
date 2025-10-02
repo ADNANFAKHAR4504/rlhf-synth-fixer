@@ -14,16 +14,14 @@ Architecture:
 
 from typing import Optional, Dict, Any
 import json
-
 import pulumi
 from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
 
-
 class TapStackArgs:
     """
     TapStackArgs defines the input arguments for the TapStack Pulumi component.
-
+    
     Args:
         environment_suffix (Optional[str]): Environment identifier (e.g., 'dev', 'prod'). Default: 'dev'
         vpc_cidr (Optional[str]): VPC CIDR block. Default: '10.18.0.0/16'
@@ -31,7 +29,7 @@ class TapStackArgs:
         region (Optional[str]): AWS region. Default: 'us-east-1'
         tags (Optional[dict]): Default tags to apply to resources.
     """
-
+    
     def __init__(
         self,
         environment_suffix: Optional[str] = None,
@@ -46,11 +44,10 @@ class TapStackArgs:
         self.region = region or 'us-east-1'
         self.tags = tags or {}
 
-
 class TapStack(pulumi.ComponentResource):
     """
     Multi-tenant SaaS infrastructure with strict tenant isolation patterns.
-
+    
     Features:
     - Database RLS for tenant data isolation
     - Host-based routing via ALB for custom domains
@@ -60,13 +57,13 @@ class TapStack(pulumi.ComponentResource):
     - CloudWatch log groups per tenant
     - Cognito user pools per tenant
     - Lambda-based automated tenant provisioning
-
+    
     Args:
         name (str): The logical name of this Pulumi component.
         args (TapStackArgs): Configuration arguments.
         opts (ResourceOptions): Pulumi options.
     """
-
+    
     def __init__(
         self,
         name: str,
@@ -74,15 +71,15 @@ class TapStack(pulumi.ComponentResource):
         opts: Optional[ResourceOptions] = None
     ):
         super().__init__('tap:stack:TapStack', name, None, opts)
-
+        
         self.environment_suffix = args.environment_suffix
         self.region = args.region
         self.tags = {**args.tags, 'Environment': self.environment_suffix}
-
+        
         # ═══════════════════════════════════════════════════════════════
         # NETWORK LAYER - VPC, Subnets, Gateways, Route Tables
         # ═══════════════════════════════════════════════════════════════
-
+        
         # VPC with DNS support enabled
         self.vpc = aws.ec2.Vpc(
             f"tap-vpc-{self.environment_suffix}",
@@ -92,7 +89,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-vpc-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Internet Gateway for public subnet internet access
         self.igw = aws.ec2.InternetGateway(
             f"tap-igw-{self.environment_suffix}",
@@ -100,7 +97,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-igw-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Public Subnets across 2 availability zones
         self.public_subnet_a = aws.ec2.Subnet(
             f"tap-public-subnet-a-{self.environment_suffix}",
@@ -111,7 +108,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-public-subnet-a-{self.environment_suffix}', 'Tier': 'Public'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         self.public_subnet_b = aws.ec2.Subnet(
             f"tap-public-subnet-b-{self.environment_suffix}",
             vpc_id=self.vpc.id,
@@ -121,7 +118,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-public-subnet-b-{self.environment_suffix}', 'Tier': 'Public'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Private Subnets across 2 availability zones
         self.private_subnet_a = aws.ec2.Subnet(
             f"tap-private-subnet-a-{self.environment_suffix}",
@@ -131,7 +128,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-private-subnet-a-{self.environment_suffix}', 'Tier': 'Private'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         self.private_subnet_b = aws.ec2.Subnet(
             f"tap-private-subnet-b-{self.environment_suffix}",
             vpc_id=self.vpc.id,
@@ -140,23 +137,22 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-private-subnet-b-{self.environment_suffix}', 'Tier': 'Private'},
             opts=ResourceOptions(parent=self)
         )
-
-        # Elastic IPs for NAT Gateways
+        
+        # Elastic IPs for NAT Gateways - FIXED: changed vpc=True to domain="vpc"
         self.eip_nat_a = aws.ec2.Eip(
             f"tap-eip-nat-a-{self.environment_suffix}",
-            domain="vpc",  # Use domain parameter instead
-            tags={**self.tags, "Name": f"tap-eip-nat-a-{self.environment_suffix}"},
+            domain="vpc",  # FIXED: was vpc=True
+            tags={**self.tags, 'Name': f'tap-eip-nat-a-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         self.eip_nat_b = aws.ec2.Eip(
             f"tap-eip-nat-b-{self.environment_suffix}",
-            domain="vpc",  # Use domain parameter instead
-            tags={**self.tags, "Name": f"tap-eip-nat-b-{self.environment_suffix}"},
+            domain="vpc",  # FIXED: was vpc=True
+            tags={**self.tags, 'Name': f'tap-eip-nat-b-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
-
+        
         # NAT Gateways for private subnet internet access (high availability)
         self.nat_gateway_a = aws.ec2.NatGateway(
             f"tap-nat-gateway-a-{self.environment_suffix}",
@@ -165,7 +161,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-nat-gateway-a-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         self.nat_gateway_b = aws.ec2.NatGateway(
             f"tap-nat-gateway-b-{self.environment_suffix}",
             subnet_id=self.public_subnet_b.id,
@@ -173,7 +169,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-nat-gateway-b-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Public Route Table with IGW route
         self.public_route_table = aws.ec2.RouteTable(
             f"tap-public-rt-{self.environment_suffix}",
@@ -187,7 +183,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-public-rt-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Associate public subnets with public route table
         aws.ec2.RouteTableAssociation(
             f"tap-public-rta-a-{self.environment_suffix}",
@@ -195,14 +191,14 @@ class TapStack(pulumi.ComponentResource):
             route_table_id=self.public_route_table.id,
             opts=ResourceOptions(parent=self)
         )
-
+        
         aws.ec2.RouteTableAssociation(
             f"tap-public-rta-b-{self.environment_suffix}",
             subnet_id=self.public_subnet_b.id,
             route_table_id=self.public_route_table.id,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Private Route Tables with NAT Gateway routes
         self.private_route_table_a = aws.ec2.RouteTable(
             f"tap-private-rt-a-{self.environment_suffix}",
@@ -216,7 +212,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-private-rt-a-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         self.private_route_table_b = aws.ec2.RouteTable(
             f"tap-private-rt-b-{self.environment_suffix}",
             vpc_id=self.vpc.id,
@@ -229,7 +225,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-private-rt-b-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Associate private subnets with private route tables
         aws.ec2.RouteTableAssociation(
             f"tap-private-rta-a-{self.environment_suffix}",
@@ -237,18 +233,18 @@ class TapStack(pulumi.ComponentResource):
             route_table_id=self.private_route_table_a.id,
             opts=ResourceOptions(parent=self)
         )
-
+        
         aws.ec2.RouteTableAssociation(
             f"tap-private-rta-b-{self.environment_suffix}",
             subnet_id=self.private_subnet_b.id,
             route_table_id=self.private_route_table_b.id,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # SECURITY GROUPS - Least Privilege Access Control
         # ═══════════════════════════════════════════════════════════════
-
+        
         # ALB Security Group - Allow HTTP/HTTPS from internet
         self.alb_sg = aws.ec2.SecurityGroup(
             f"tap-alb-sg-{self.environment_suffix}",
@@ -282,7 +278,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-alb-sg-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Application Tier Security Group - Allow traffic from ALB only
         self.app_sg = aws.ec2.SecurityGroup(
             f"tap-app-sg-{self.environment_suffix}",
@@ -309,7 +305,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-app-sg-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Aurora PostgreSQL Security Group - Allow traffic from application tier
         self.aurora_sg = aws.ec2.SecurityGroup(
             f"tap-aurora-sg-{self.environment_suffix}",
@@ -336,7 +332,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-sg-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ElastiCache Redis Security Group - Allow traffic from application tier
         self.redis_sg = aws.ec2.SecurityGroup(
             f"tap-redis-sg-{self.environment_suffix}",
@@ -363,11 +359,11 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-redis-sg-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # DATABASE LAYER - Aurora PostgreSQL with RLS for Tenant Isolation
         # ═══════════════════════════════════════════════════════════════
-
+        
         # Aurora DB Subnet Group
         self.aurora_subnet_group = aws.rds.SubnetGroup(
             f"tap-aurora-subnet-group-{self.environment_suffix}",
@@ -376,7 +372,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-subnet-group-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Aurora Cluster Parameter Group with RLS configuration
         self.aurora_cluster_param_group = aws.rds.ClusterParameterGroup(
             f"tap-aurora-cluster-params-{self.environment_suffix}",
@@ -395,7 +391,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-cluster-params-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Aurora PostgreSQL Cluster (serverless v2 compatible)
         self.aurora_cluster = aws.rds.Cluster(
             f"tap-aurora-cluster-{self.environment_suffix}",
@@ -416,7 +412,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-cluster-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Aurora Cluster Instance (primary)
         self.aurora_instance_primary = aws.rds.ClusterInstance(
             f"tap-aurora-instance-primary-{self.environment_suffix}",
@@ -427,7 +423,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-instance-primary-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Aurora Cluster Instance (replica for read scaling)
         self.aurora_instance_replica = aws.rds.ClusterInstance(
             f"tap-aurora-instance-replica-{self.environment_suffix}",
@@ -438,11 +434,11 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-aurora-instance-replica-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # CACHING LAYER - ElastiCache Redis with Tenant Class Separation
         # ═══════════════════════════════════════════════════════════════
-
+        
         # Redis Subnet Group
         self.redis_subnet_group = aws.elasticache.SubnetGroup(
             f"tap-redis-subnet-group-{self.environment_suffix}",
@@ -451,7 +447,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-redis-subnet-group-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Redis Parameter Group
         self.redis_param_group = aws.elasticache.ParameterGroup(
             f"tap-redis-params-{self.environment_suffix}",
@@ -470,12 +466,12 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-redis-params-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
-        # Premium Tier Redis Cluster (dedicated for premium tenants)
+        
+        # Premium Tier Redis Cluster - FIXED: changed replication_group_description to description
         self.redis_premium_cluster = aws.elasticache.ReplicationGroup(
             f"tap-redis-premium-{self.environment_suffix}",
             replication_group_id=f"tap-redis-premium-{self.environment_suffix}",
-            replication_group_description="Dedicated Redis cluster for premium tenants",
+            description="Dedicated Redis cluster for premium tenants",  # FIXED: was replication_group_description
             engine="redis",
             engine_version="7.0",
             node_type="cache.r6g.large",
@@ -493,12 +489,12 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-redis-premium-{self.environment_suffix}', 'TenantTier': 'Premium'},
             opts=ResourceOptions(parent=self)
         )
-
-        # Standard Tier Redis Cluster (shared with logical isolation)
+        
+        # Standard Tier Redis Cluster - FIXED: changed replication_group_description to description
         self.redis_standard_cluster = aws.elasticache.ReplicationGroup(
             f"tap-redis-standard-{self.environment_suffix}",
             replication_group_id=f"tap-redis-standard-{self.environment_suffix}",
-            replication_group_description="Shared Redis cluster for standard tenants with logical isolation",
+            description="Shared Redis cluster for standard tenants with logical isolation",  # FIXED: was replication_group_description
             engine="redis",
             engine_version="7.0",
             node_type="cache.r6g.xlarge",
@@ -516,43 +512,66 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-redis-standard-{self.environment_suffix}', 'TenantTier': 'Standard'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # STORAGE LAYER - S3 with Tenant-Specific Bucket Policies
         # ═══════════════════════════════════════════════════════════════
-
-        # S3 Bucket for multi-tenant data with tenant isolation via bucket policies
+        
+        # S3 Bucket - FIXED: removed deprecated inline parameters
         self.tenant_data_bucket = aws.s3.Bucket(
             f"tap-tenant-data-{self.environment_suffix}",
             bucket=f"tap-tenant-data-{self.environment_suffix}-{pulumi.get_stack()}",
-            acl="private",
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            tags={**self.tags, 'Name': f'tap-tenant-data-{self.environment_suffix}', 'Purpose': 'TenantData'},
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # S3 Bucket Versioning - separate resource as per v7 requirements
+        self.bucket_versioning = aws.s3.BucketVersioning(
+            f"tap-tenant-data-versioning-{self.environment_suffix}",
+            bucket=self.tenant_data_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # S3 Bucket Server Side Encryption - separate resource
+        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
+            f"tap-tenant-data-encryption-{self.environment_suffix}",
+            bucket=self.tenant_data_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
                 )
-            ),
-            lifecycle_rules=[
-                aws.s3.BucketLifecycleRuleArgs(
-                    enabled=True,
+            ],
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # S3 Bucket Lifecycle Configuration - separate resource
+        self.bucket_lifecycle = aws.s3.BucketLifecycleConfiguration(
+            f"tap-tenant-data-lifecycle-{self.environment_suffix}",
+            bucket=self.tenant_data_bucket.id,
+            rules=[
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
+                    id="transition-to-ia-and-glacier",
+                    status="Enabled",
                     transitions=[
-                        aws.s3.BucketLifecycleRuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=90,
                             storage_class="STANDARD_IA"
                         ),
-                        aws.s3.BucketLifecycleRuleTransitionArgs(
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                             days=180,
                             storage_class="GLACIER"
                         )
                     ]
                 )
             ],
-            tags={**self.tags, 'Name': f'tap-tenant-data-{self.environment_suffix}', 'Purpose': 'TenantData'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Block public access to S3 bucket
         aws.s3.BucketPublicAccessBlock(
             f"tap-tenant-data-public-access-block-{self.environment_suffix}",
@@ -563,14 +582,14 @@ class TapStack(pulumi.ComponentResource):
             restrict_public_buckets=True,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # CloudFront Origin Access Identity for secure S3 access
         self.cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
             f"tap-cloudfront-oai-{self.environment_suffix}",
             comment=f"OAI for TAP multi-tenant SaaS {self.environment_suffix}",
             opts=ResourceOptions(parent=self)
         )
-
+        
         # S3 Bucket Policy allowing CloudFront OAI access
         tenant_bucket_policy = Output.all(
             self.tenant_data_bucket.arn,
@@ -588,18 +607,18 @@ class TapStack(pulumi.ComponentResource):
                 }
             ]
         }))
-
+        
         aws.s3.BucketPolicy(
             f"tap-tenant-data-bucket-policy-{self.environment_suffix}",
             bucket=self.tenant_data_bucket.id,
             policy=tenant_bucket_policy,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # CDN LAYER - CloudFront Distribution with Custom SSL
         # ═══════════════════════════════════════════════════════════════
-
+        
         # CloudFront Distribution for multi-tenant content delivery
         self.cloudfront_distribution = aws.cloudfront.Distribution(
             f"tap-cloudfront-dist-{self.environment_suffix}",
@@ -644,12 +663,12 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-cloudfront-dist-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # DNS & CERTIFICATES - Route 53 and ACM for Custom Domains
         # ═══════════════════════════════════════════════════════════════
-
-        # Route 53 Hosted Zone for custom domain (example: tenant1.example.com)
+        
+        # Route 53 Hosted Zone for custom domain
         self.hosted_zone = aws.route53.Zone(
             f"tap-hosted-zone-{self.environment_suffix}",
             name=f"tap-saas-{self.environment_suffix}.example.com",
@@ -657,8 +676,8 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-hosted-zone-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
-        # ACM Certificate for wildcard domain (*.tap-saas-{env}.example.com)
+        
+        # ACM Certificate for wildcard domain
         self.acm_certificate = aws.acm.Certificate(
             f"tap-acm-cert-{self.environment_suffix}",
             domain_name=f"*.tap-saas-{self.environment_suffix}.example.com",
@@ -667,7 +686,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-acm-cert-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # DNS Validation Record for ACM Certificate
         self.cert_validation_record = aws.route53.Record(
             f"tap-cert-validation-{self.environment_suffix}",
@@ -678,7 +697,7 @@ class TapStack(pulumi.ComponentResource):
             ttl=60,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ACM Certificate Validation
         self.acm_cert_validation = aws.acm.CertificateValidation(
             f"tap-acm-cert-validation-{self.environment_suffix}",
@@ -686,11 +705,11 @@ class TapStack(pulumi.ComponentResource):
             validation_record_fqdns=[self.cert_validation_record.fqdn],
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # LOAD BALANCING - ALB with Host-Based Routing for Tenants
         # ═══════════════════════════════════════════════════════════════
-
+        
         # Application Load Balancer
         self.alb = aws.lb.LoadBalancer(
             f"tap-alb-{self.environment_suffix}",
@@ -704,7 +723,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-alb-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Target Group for application tier instances
         self.target_group = aws.lb.TargetGroup(
             f"tap-tg-{self.environment_suffix}",
@@ -726,7 +745,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-tg-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ALB Listener on HTTP (redirect to HTTPS in production)
         self.alb_listener_http = aws.lb.Listener(
             f"tap-alb-listener-http-{self.environment_suffix}",
@@ -741,7 +760,7 @@ class TapStack(pulumi.ComponentResource):
             ],
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ALB Listener on HTTPS with ACM certificate
         self.alb_listener_https = aws.lb.Listener(
             f"tap-alb-listener-https-{self.environment_suffix}",
@@ -758,8 +777,8 @@ class TapStack(pulumi.ComponentResource):
             ],
             opts=ResourceOptions(parent=self, depends_on=[self.acm_cert_validation])
         )
-
-        # Host-based routing rule example (tenant1.tap-saas-dev.example.com -> target group)
+        
+        # Host-based routing rule for tenant1
         self.listener_rule_tenant1 = aws.lb.ListenerRule(
             f"tap-listener-rule-tenant1-{self.environment_suffix}",
             listener_arn=self.alb_listener_https.arn,
@@ -779,11 +798,11 @@ class TapStack(pulumi.ComponentResource):
             ],
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # COMPUTE LAYER - Auto Scaling Group with m5.large Instances
         # ═══════════════════════════════════════════════════════════════
-
+        
         # IAM Role for EC2 instances
         self.ec2_role = aws.iam.Role(
             f"tap-ec2-role-{self.environment_suffix}",
@@ -800,7 +819,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-ec2-role-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Attach managed policies to EC2 role
         aws.iam.RolePolicyAttachment(
             f"tap-ec2-role-ssm-policy-{self.environment_suffix}",
@@ -808,14 +827,14 @@ class TapStack(pulumi.ComponentResource):
             policy_arn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
             opts=ResourceOptions(parent=self)
         )
-
+        
         aws.iam.RolePolicyAttachment(
             f"tap-ec2-role-cloudwatch-policy-{self.environment_suffix}",
             role=self.ec2_role.name,
             policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
             opts=ResourceOptions(parent=self)
         )
-
+        
         # EC2 Instance Profile
         self.instance_profile = aws.iam.InstanceProfile(
             f"tap-instance-profile-{self.environment_suffix}",
@@ -823,7 +842,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-instance-profile-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Get latest Amazon Linux 2 AMI
         ami = aws.ec2.get_ami(
             most_recent=True,
@@ -833,7 +852,7 @@ class TapStack(pulumi.ComponentResource):
                 aws.ec2.GetAmiFilterArgs(name="virtualization-type", values=["hvm"])
             ]
         )
-
+        
         # User data script for EC2 instances
         user_data_script = """#!/bin/bash
 yum update -y
@@ -842,7 +861,7 @@ service docker start
 usermod -a -G docker ec2-user
 # Application setup would go here
 """
-
+        
         # Launch Template for Auto Scaling Group
         self.launch_template = aws.ec2.LaunchTemplate(
             f"tap-launch-template-{self.environment_suffix}",
@@ -877,7 +896,7 @@ usermod -a -G docker ec2-user
             ],
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Auto Scaling Group
         self.asg = aws.autoscaling.Group(
             f"tap-asg-{self.environment_suffix}",
@@ -913,7 +932,7 @@ usermod -a -G docker ec2-user
             ],
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Auto Scaling Policy - Target Tracking based on CPU
         self.asg_policy = aws.autoscaling.Policy(
             f"tap-asg-policy-{self.environment_suffix}",
@@ -928,12 +947,12 @@ usermod -a -G docker ec2-user
             ),
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # AUTHENTICATION - Cognito User Pools Per Tenant
         # ═══════════════════════════════════════════════════════════════
-
-        # Cognito User Pool for Tenant 1 (example)
+        
+        # Cognito User Pool for Tenant 1
         self.cognito_user_pool_tenant1 = aws.cognito.UserPool(
             f"tap-cognito-pool-tenant1-{self.environment_suffix}",
             name=f"tap-tenant1-{self.environment_suffix}",
@@ -958,7 +977,7 @@ usermod -a -G docker ec2-user
             tags={**self.tags, 'Name': f'tap-cognito-pool-tenant1-{self.environment_suffix}', 'TenantId': 'tenant1'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Cognito User Pool Client for Tenant 1
         self.cognito_user_pool_client_tenant1 = aws.cognito.UserPoolClient(
             f"tap-cognito-client-tenant1-{self.environment_suffix}",
@@ -973,7 +992,7 @@ usermod -a -G docker ec2-user
             prevent_user_existence_errors="ENABLED",
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Cognito Identity Pool for federated identities
         self.cognito_identity_pool = aws.cognito.IdentityPool(
             f"tap-cognito-identity-pool-{self.environment_suffix}",
@@ -988,11 +1007,11 @@ usermod -a -G docker ec2-user
             tags={**self.tags, 'Name': f'tap-cognito-identity-pool-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # SERVERLESS - DynamoDB for Tenant Registry & Lambda for Provisioning
         # ═══════════════════════════════════════════════════════════════
-
+        
         # DynamoDB Table for Tenant Metadata and Configuration
         self.tenant_registry_table = aws.dynamodb.Table(
             f"tap-tenant-registry-{self.environment_suffix}",
@@ -1015,7 +1034,7 @@ usermod -a -G docker ec2-user
             tags={**self.tags, 'Name': f'tap-tenant-registry-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # IAM Role for Lambda Provisioning Function
         self.lambda_role = aws.iam.Role(
             f"tap-lambda-provisioning-role-{self.environment_suffix}",
@@ -1032,7 +1051,7 @@ usermod -a -G docker ec2-user
             tags={**self.tags, 'Name': f'tap-lambda-provisioning-role-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Lambda Policy for provisioning operations
         self.lambda_policy = aws.iam.Policy(
             f"tap-lambda-provisioning-policy-{self.environment_suffix}",
@@ -1093,7 +1112,7 @@ usermod -a -G docker ec2-user
             })),
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Attach Lambda policy to Lambda role
         aws.iam.RolePolicyAttachment(
             f"tap-lambda-policy-attachment-{self.environment_suffix}",
@@ -1101,7 +1120,7 @@ usermod -a -G docker ec2-user
             policy_arn=self.lambda_policy.arn,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Lambda Function for Tenant Provisioning Workflow
         self.tenant_provisioning_lambda = aws.lambda_.Function(
             f"tap-tenant-provisioning-{self.environment_suffix}",
@@ -1123,25 +1142,24 @@ acm = boto3.client('acm')
 TABLE_NAME = os.environ['TENANT_REGISTRY_TABLE']
 
 def handler(event, context):
-    \"\"\"
+    \"""
     Lambda function to provision new tenant infrastructure:
     1. Create Cognito user pool for tenant
     2. Add DNS record in Route 53
     3. Request ACM certificate
     4. Create ALB listener rule for host-based routing
     5. Register tenant in DynamoDB
-    \"\"\"
-
+    \"""
     tenant_id = event.get('tenantId')
     tenant_domain = event.get('tenantDomain')
     tenant_tier = event.get('tenantTier', 'standard')
-
+    
     if not tenant_id or not tenant_domain:
         return {
             'statusCode': 400,
             'body': json.dumps({'error': 'tenantId and tenantDomain required'})
         }
-
+    
     try:
         # Register tenant in DynamoDB
         table = dynamodb.Table(TABLE_NAME)
@@ -1151,7 +1169,7 @@ def handler(event, context):
             'tenantTier': tenant_tier,
             'status': 'provisioning'
         })
-
+        
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -1161,7 +1179,6 @@ def handler(event, context):
                 'tenantTier': tenant_tier
             })
         }
-
     except Exception as e:
         return {
             'statusCode': 500,
@@ -1179,7 +1196,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-tenant-provisioning-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self, depends_on=[self.lambda_policy])
         )
-
+        
         # CloudWatch Log Group for Lambda
         self.lambda_log_group = aws.cloudwatch.LogGroup(
             f"tap-lambda-log-group-{self.environment_suffix}",
@@ -1188,11 +1205,11 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-lambda-log-group-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # MONITORING - CloudWatch Log Groups Per Tenant
         # ═══════════════════════════════════════════════════════════════
-
+        
         # CloudWatch Log Group for Tenant 1 Application Logs
         self.tenant1_log_group = aws.cloudwatch.LogGroup(
             f"tap-tenant1-app-logs-{self.environment_suffix}",
@@ -1201,7 +1218,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-tenant1-app-logs-{self.environment_suffix}', 'TenantId': 'tenant1'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # CloudWatch Log Group for Tenant 1 Audit Logs
         self.tenant1_audit_log_group = aws.cloudwatch.LogGroup(
             f"tap-tenant1-audit-logs-{self.environment_suffix}",
@@ -1210,7 +1227,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-tenant1-audit-logs-{self.environment_suffix}', 'TenantId': 'tenant1'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # CloudWatch Metric Alarm for ASG CPU Utilization
         self.cpu_alarm = aws.cloudwatch.MetricAlarm(
             f"tap-asg-cpu-alarm-{self.environment_suffix}",
@@ -1228,11 +1245,11 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-asg-cpu-alarm-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # CONFIGURATION MANAGEMENT - Systems Manager Parameter Store
         # ═══════════════════════════════════════════════════════════════
-
+        
         # SSM Parameter for Aurora Endpoint
         self.ssm_aurora_endpoint = aws.ssm.Parameter(
             f"tap-ssm-aurora-endpoint-{self.environment_suffix}",
@@ -1243,7 +1260,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-ssm-aurora-endpoint-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # SSM Parameter for Premium Redis Endpoint
         self.ssm_redis_premium_endpoint = aws.ssm.Parameter(
             f"tap-ssm-redis-premium-endpoint-{self.environment_suffix}",
@@ -1254,7 +1271,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-ssm-redis-premium-endpoint-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # SSM Parameter for Standard Redis Endpoint
         self.ssm_redis_standard_endpoint = aws.ssm.Parameter(
             f"tap-ssm-redis-standard-endpoint-{self.environment_suffix}",
@@ -1265,7 +1282,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-ssm-redis-standard-endpoint-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # SSM Parameter for S3 Bucket Name
         self.ssm_s3_bucket = aws.ssm.Parameter(
             f"tap-ssm-s3-bucket-{self.environment_suffix}",
@@ -1276,11 +1293,11 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-ssm-s3-bucket-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # EVENT-DRIVEN ARCHITECTURE - EventBridge for Tenant Lifecycle
         # ═══════════════════════════════════════════════════════════════
-
+        
         # EventBridge Event Bus for tenant events
         self.event_bus = aws.cloudwatch.EventBus(
             f"tap-event-bus-{self.environment_suffix}",
@@ -1288,7 +1305,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-event-bus-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # EventBridge Rule for tenant provisioning events
         self.tenant_provision_rule = aws.cloudwatch.EventRule(
             f"tap-tenant-provision-rule-{self.environment_suffix}",
@@ -1302,7 +1319,7 @@ def handler(event, context):
             tags={**self.tags, 'Name': f'tap-tenant-provision-rule-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
-
+        
         # EventBridge Target - Lambda function for tenant provisioning
         self.event_target = aws.cloudwatch.EventTarget(
             f"tap-event-target-provisioning-{self.environment_suffix}",
@@ -1311,7 +1328,7 @@ def handler(event, context):
             arn=self.tenant_provisioning_lambda.arn,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # Lambda Permission for EventBridge to invoke
         self.lambda_eventbridge_permission = aws.lambda_.Permission(
             f"tap-lambda-eventbridge-permission-{self.environment_suffix}",
@@ -1321,11 +1338,11 @@ def handler(event, context):
             source_arn=self.tenant_provision_rule.arn,
             opts=ResourceOptions(parent=self)
         )
-
+        
         # ═══════════════════════════════════════════════════════════════
         # REGISTER OUTPUTS
         # ═══════════════════════════════════════════════════════════════
-
+        
         self.register_outputs({
             'vpc_id': self.vpc.id,
             'alb_dns_name': self.alb.dns_name,
