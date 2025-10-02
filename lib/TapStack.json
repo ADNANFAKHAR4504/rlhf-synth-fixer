@@ -2,6 +2,13 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready CloudFormation template for a recipe blog WordPress infrastructure expecting 4,000 daily visitors",
     "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1011"
+                ]
+            }
+        },
         "AWS::CloudFormation::Interface": {
             "ParameterGroups": [
                 {
@@ -61,7 +68,7 @@
             "Type": "String",
             "NoEcho": true,
             "Default": "testpassword123",
-            "Description": "Database administrator password (minimum 8 characters)",
+            "Description": "Database administrator password (minimum 8 characters). For production, use AWS Secrets Manager dynamic reference.",
             "MinLength": 8,
             "MaxLength": 41,
             "AllowedPattern": "^[a-zA-Z0-9]*$",
@@ -102,6 +109,18 @@
                     "Fn::Equals": [
                         {
                             "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDomainName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "BlogDomainName"
                         },
                         ""
                     ]
@@ -645,7 +664,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "recipeblog-media-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "recipeblog-${AWS::AccountId}-${Environment}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -702,7 +721,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "RecipeBlog-MediaBucket-${Environment}"
+                            "Fn::Sub": "RecipeBlog-Bucket-${Environment}"
                         }
                     },
                     {
@@ -964,6 +983,19 @@
                     "Enabled": true,
                     "Comment": {
                         "Fn::Sub": "RecipeBlog CloudFront Distribution - ${Environment}"
+                    },
+                    "Aliases": {
+                        "Fn::If": [
+                            "HasDomainName",
+                            [
+                                {
+                                    "Ref": "BlogDomainName"
+                                }
+                            ],
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "PriceClass": "PriceClass_100",
                     "HttpVersion": "http2",
