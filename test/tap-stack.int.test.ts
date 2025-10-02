@@ -3,6 +3,7 @@ import fs from 'fs';
 import axios from 'axios';
 import { DynamoDBClient, GetItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { APIGatewayClient, GetApiKeyCommand } from '@aws-sdk/client-api-gateway';
 
 // Skip integration tests if outputs don't exist yet
 const outputsFile = 'cfn-outputs/flat-outputs.json';
@@ -19,11 +20,33 @@ describe('Serverless API Integration Tests', () => {
   const outputs = JSON.parse(fs.readFileSync(outputsFile, 'utf8'));
   const apiEndpoint = outputs.ApiEndpoint;
   const tableName = outputs.TableName;
+  const apiKeyId = outputs.ApiKeyId;
   const region = process.env.AWS_REGION || 'us-east-1';
 
   // AWS clients
   const dynamoClient = new DynamoDBClient({ region });
   const ssmClient = new SSMClient({ region });
+  const apiGatewayClient = new APIGatewayClient({ region });
+
+  // Get API Key value
+  let apiKey: string;
+  
+  beforeAll(async () => {
+    try {
+      const getApiKeyCommand = new GetApiKeyCommand({
+        apiKey: apiKeyId,
+        includeValue: true,
+      });
+      const apiKeyResponse = await apiGatewayClient.send(getApiKeyCommand);
+      apiKey = apiKeyResponse.value || '';
+      if (!apiKey) {
+        throw new Error('API key value not found');
+      }
+    } catch (error) {
+      console.error('Failed to retrieve API key:', error);
+      throw error;
+    }
+  });
 
   // Test data
   const testPlayerId = `test-player-${Date.now()}`;
@@ -45,7 +68,10 @@ describe('Serverless API Integration Tests', () => {
           gameId: testGameId,
         },
         {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
         }
       );
 
@@ -56,7 +82,11 @@ describe('Serverless API Integration Tests', () => {
     });
 
     test('GET /scores/{playerId} - Retrieve player score', async () => {
-      const response = await axios.get(`${apiEndpoint}scores/${testPlayerId}`);
+      const response = await axios.get(`${apiEndpoint}scores/${testPlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
 
       expect(response.status).toBe(200);
       expect(response.data.data.playerId).toBe(testPlayerId);
@@ -72,7 +102,10 @@ describe('Serverless API Integration Tests', () => {
           score: newScore,
         },
         {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
         }
       );
 
@@ -82,7 +115,11 @@ describe('Serverless API Integration Tests', () => {
     });
 
     test('DELETE /scores/{playerId} - Delete player score', async () => {
-      const response = await axios.delete(`${apiEndpoint}scores/${testPlayerId}`);
+      const response = await axios.delete(`${apiEndpoint}scores/${testPlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
 
       expect(response.status).toBe(200);
       expect(response.data.message).toBe('Score deleted successfully');
@@ -90,7 +127,11 @@ describe('Serverless API Integration Tests', () => {
 
     test('GET /scores/{playerId} - Should return 404 after deletion', async () => {
       try {
-        await axios.get(`${apiEndpoint}scores/${testPlayerId}`);
+        await axios.get(`${apiEndpoint}scores/${testPlayerId}`, {
+          headers: {
+            'x-api-key': apiKey,
+          },
+        });
         fail('Should have returned 404');
       } catch (error: any) {
         expect(error.response.status).toBe(404);
@@ -107,7 +148,10 @@ describe('Serverless API Integration Tests', () => {
             // Missing score and gameId
           },
           {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
           }
         );
         fail('Should have returned 400');
@@ -190,13 +234,20 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'workflow-game',
         },
         {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
         }
       );
       expect(createResponse.status).toBe(201);
 
       // Read
-      const getResponse = await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`);
+      const getResponse = await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
       expect(getResponse.status).toBe(200);
       expect(getResponse.data.data.score).toBe(100);
 
@@ -208,24 +259,39 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'updated-game',
         },
         {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
         }
       );
       expect(updateResponse.status).toBe(200);
       expect(updateResponse.data.data.score).toBe(250);
 
       // Verify update
-      const verifyResponse = await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`);
+      const verifyResponse = await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
       expect(verifyResponse.data.data.score).toBe(250);
       expect(verifyResponse.data.data.gameId).toBe('updated-game');
 
       // Delete
-      const deleteResponse = await axios.delete(`${apiEndpoint}scores/${workflowPlayerId}`);
+      const deleteResponse = await axios.delete(`${apiEndpoint}scores/${workflowPlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
       expect(deleteResponse.status).toBe(200);
 
       // Verify deletion
       try {
-        await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`);
+        await axios.get(`${apiEndpoint}scores/${workflowPlayerId}`, {
+          headers: {
+            'x-api-key': apiKey,
+          },
+        });
         fail('Should have returned 404 after deletion');
       } catch (error: any) {
         expect(error.response.status).toBe(404);
@@ -246,7 +312,10 @@ describe('Serverless API Integration Tests', () => {
               gameId: 'concurrent-game',
             },
             {
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+              },
             }
           )
         );
@@ -261,7 +330,11 @@ describe('Serverless API Integration Tests', () => {
       const deletePromises = [];
       for (let i = 0; i < 5; i++) {
         deletePromises.push(
-          axios.delete(`${apiEndpoint}scores/concurrent-player-${i}`)
+          axios.delete(`${apiEndpoint}scores/concurrent-player-${i}`, {
+            headers: {
+              'x-api-key': apiKey,
+            },
+          })
         );
       }
       await Promise.all(deletePromises);
@@ -275,7 +348,10 @@ describe('Serverless API Integration Tests', () => {
           `${apiEndpoint}scores`,
           'invalid json',
           {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
           }
         );
         fail('Should have returned error for invalid JSON');
@@ -296,7 +372,10 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'duplicate-test',
         },
         {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
         }
       );
 
@@ -310,7 +389,10 @@ describe('Serverless API Integration Tests', () => {
             gameId: 'duplicate-test-2',
           },
           {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey,
+            },
           }
         );
         fail('Should have returned 409 for duplicate');
@@ -320,7 +402,11 @@ describe('Serverless API Integration Tests', () => {
       }
 
       // Clean up
-      await axios.delete(`${apiEndpoint}scores/${duplicatePlayerId}`);
+      await axios.delete(`${apiEndpoint}scores/${duplicatePlayerId}`, {
+        headers: {
+          'x-api-key': apiKey,
+        },
+      });
     });
   });
 });
