@@ -41,7 +41,8 @@ import {
 } from '@aws-sdk/client-sns';
 
 // Get stack name from environment or use default
-const STACK_NAME = process.env.STACK_NAME || 'TapStacksynth56382107';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const STACK_NAME = process.env.STACK_NAME || `TapStack${ENVIRONMENT_SUFFIX}`;
 const REGION = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS SDK clients
