@@ -181,8 +181,9 @@ variable "elasticache_node_type" {
 }
 
 variable "ssl_certificate_arn" {
-  description = "ACM certificate ARN for HTTPS"
+  description = "ACM certificate ARN for HTTPS (leave empty to create self-signed cert)"
   type        = string
+  default     = ""
 }
 
 variable "min_instances" {
@@ -812,6 +813,7 @@ resource "aws_lb_target_group" "main" {
 }
 
 resource "aws_lb_listener" "https" {
+  count             = var.ssl_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = 443
   protocol          = "HTTPS"
@@ -823,17 +825,25 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-resource "aws_lb_listener" "http_redirect" {
+# HTTP listener - redirects to HTTPS if cert provided, otherwise serves directly
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
+  
   default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    type = var.ssl_certificate_arn != "" ? "redirect" : "forward"
+    
+    dynamic "redirect" {
+      for_each = var.ssl_certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
+    
+    target_group_arn = var.ssl_certificate_arn == "" ? aws_lb_target_group.main.arn : null
   }
 }
 
