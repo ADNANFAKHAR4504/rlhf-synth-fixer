@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -277,12 +275,14 @@ export class TapStack extends cdk.Stack {
     // SECTION 5: STREAMING INFRASTRUCTURE
     // ============================================
 
-    // Kinesis Data Stream for real-time inference data ingestion
+    // FIXED: Remove explicit streamName to let CloudFormation auto-generate unique names
+    // OR use cdk.Fn.join to create unique names that won't conflict
     const inferenceStream = new kinesis.Stream(this, 'InferenceStream', {
-      streamName: `ml-pipeline-inference-stream-${env}`,
+      // Let CloudFormation auto-generate the stream name for uniqueness
       shardCount: 2,
       retentionPeriod: cdk.Duration.hours(24),
       encryption: kinesis.StreamEncryption.MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow destruction on rollback
     });
 
     // ============================================
