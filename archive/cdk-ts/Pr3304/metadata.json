@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "24938156",
+  "team": "synth",
+  "startedAt": "2025-10-01T23:47:51+05:30",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "AutoScaling",
+    "IAM",
+    "EC2InstanceConnect",
+    "WAFv2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
