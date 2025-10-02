@@ -98,22 +98,22 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       expect(outputs.us_east_1_vpc_id).toBeDefined();
       expect(outputs.us_west_2_vpc_id).toBeDefined();
-      expect(outputs.us_east_1_vpc_id.value).toBeTruthy();
-      expect(outputs.us_west_2_vpc_id.value).toBeTruthy();
+      expect(outputs.us_east_1_vpc_id!.value).toBeTruthy();
+      expect(outputs.us_west_2_vpc_id!.value).toBeTruthy();
     });
 
     test("VPC IDs follow AWS format (vpc-[a-f0-9]{8,17})", () => {
       if (!outputsExist) return;
 
       const vpcRegex = /^vpc-[a-f0-9]{8,17}$/;
-      expect(outputs.us_east_1_vpc_id.value).toMatch(vpcRegex);
-      expect(outputs.us_west_2_vpc_id.value).toMatch(vpcRegex);
+      expect(outputs.us_east_1_vpc_id!.value).toMatch(vpcRegex);
+      expect(outputs.us_west_2_vpc_id!.value).toMatch(vpcRegex);
     });
 
     test("VPC IDs are unique across regions", () => {
       if (!outputsExist) return;
 
-      expect(outputs.us_east_1_vpc_id.value).not.toBe(outputs.us_west_2_vpc_id.value);
+      expect(outputs.us_east_1_vpc_id!.value).not.toBe(outputs.us_west_2_vpc_id!.value);
     });
 
     test("public subnets exist in both regions (minimum 2 AZs)", () => {
@@ -247,16 +247,16 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.s3_bucket_names).toBeDefined();
-      expect(outputs.s3_bucket_names.value).toBeDefined();
-      expect(outputs.s3_bucket_names.value["us_east_1"]).toBeDefined();
-      expect(outputs.s3_bucket_names.value["us_west_2"]).toBeDefined();
+      expect(outputs.s3_bucket_names!.value).toBeDefined();
+      expect(outputs.s3_bucket_names!.value["us_east_1"]).toBeDefined();
+      expect(outputs.s3_bucket_names!.value["us_west_2"]).toBeDefined();
     });
 
     test("S3 bucket names follow AWS naming rules", () => {
       if (!outputsExist) return;
 
-      const eastBucket = outputs.s3_bucket_names.value["us_east_1"];
-      const westBucket = outputs.s3_bucket_names.value["us_west_2"];
+      const eastBucket = outputs.s3_bucket_names!.value["us_east_1"];
+      const westBucket = outputs.s3_bucket_names!.value["us_west_2"];
 
       // S3 bucket naming rules: 3-63 chars, lowercase, numbers, hyphens
       const s3NameRegex = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
@@ -271,8 +271,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("S3 bucket names are globally unique", () => {
       if (!outputsExist) return;
 
-      const eastBucket = outputs.s3_bucket_names.value["us_east_1"];
-      const westBucket = outputs.s3_bucket_names.value["us_west_2"];
+      const eastBucket = outputs.s3_bucket_names!.value["us_east_1"];
+      const westBucket = outputs.s3_bucket_names!.value["us_west_2"];
 
       expect(eastBucket).not.toBe(westBucket);
     });
@@ -280,8 +280,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("S3 bucket names include region identifiers", () => {
       if (!outputsExist) return;
 
-      const eastBucket = outputs.s3_bucket_names.value["us_east_1"];
-      const westBucket = outputs.s3_bucket_names.value["us_west_2"];
+      const eastBucket = outputs.s3_bucket_names!.value["us_east_1"];
+      const westBucket = outputs.s3_bucket_names!.value["us_west_2"];
 
       expect(eastBucket).toMatch(/east/i);
       expect(westBucket).toMatch(/west/i);
@@ -290,8 +290,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("S3 bucket names have appropriate length (3-63 chars)", () => {
       if (!outputsExist) return;
 
-      const eastBucket = outputs.s3_bucket_names.value["us_east_1"];
-      const westBucket = outputs.s3_bucket_names.value["us_west_2"];
+      const eastBucket = outputs.s3_bucket_names!.value["us_east_1"];
+      const westBucket = outputs.s3_bucket_names!.value["us_west_2"];
 
       expect(eastBucket.length).toBeGreaterThanOrEqual(3);
       expect(eastBucket.length).toBeLessThanOrEqual(63);
@@ -302,8 +302,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("S3 bucket names do not contain invalid characters", () => {
       if (!outputsExist) return;
 
-      const eastBucket = outputs.s3_bucket_names.value["us_east_1"];
-      const westBucket = outputs.s3_bucket_names.value["us_west_2"];
+      const eastBucket = outputs.s3_bucket_names!.value["us_east_1"];
+      const westBucket = outputs.s3_bucket_names!.value["us_west_2"];
 
       expect(eastBucket).not.toMatch(/[^a-z0-9-]/);
       expect(westBucket).not.toMatch(/[^a-z0-9-]/);
@@ -320,15 +320,15 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.kms_key_arns).toBeDefined();
-      expect(outputs.kms_key_arns.value).toBeDefined();
+      expect(outputs.kms_key_arns!.value).toBeDefined();
 
       const requiredServices = ["s3", "lambda", "rds", "logs"];
       const regions = ["us_east_1", "us_west_2"];
 
       regions.forEach(region => {
-        expect(outputs.kms_key_arns.value[region]).toBeDefined();
+        expect(outputs.kms_key_arns!.value[region]).toBeDefined();
         requiredServices.forEach(service => {
-          expect(outputs.kms_key_arns.value[region][service]).toBeDefined();
+          expect(outputs.kms_key_arns!.value[region][service]).toBeDefined();
         });
       });
     });
@@ -338,7 +338,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const kmsArnRegex = /^arn:aws:kms:(us-east-1|us-west-2):\d{12}:key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
-      Object.values(outputs.kms_key_arns.value).forEach(regionKeys => {
+      Object.values(outputs.kms_key_arns!.value).forEach(regionKeys => {
         Object.values(regionKeys as { [key: string]: string }).forEach(keyArn => {
           expect(keyArn).toMatch(kmsArnRegex);
         });
@@ -350,7 +350,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const allKeys = new Set<string>();
 
-      Object.values(outputs.kms_key_arns.value).forEach(regionKeys => {
+      Object.values(outputs.kms_key_arns!.value).forEach(regionKeys => {
         Object.values(regionKeys as { [key: string]: string }).forEach(keyArn => {
           expect(allKeys.has(keyArn)).toBe(false);
           allKeys.add(keyArn);
@@ -364,7 +364,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("KMS key ARNs match their respective regions", () => {
       if (!outputsExist) return;
 
-      Object.entries(outputs.kms_key_arns.value).forEach(([region, services]) => {
+      Object.entries(outputs.kms_key_arns!.value).forEach(([region, services]) => {
         Object.values(services as { [key: string]: string }).forEach(keyArn => {
           expect(keyArn).toContain(region.replaceAll("_", "-"));
         });
@@ -376,7 +376,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const accountIds = new Set<string>();
 
-      Object.values(outputs.kms_key_arns.value).forEach(regionKeys => {
+      Object.values(outputs.kms_key_arns!.value).forEach(regionKeys => {
         Object.values(regionKeys as { [key: string]: string }).forEach(keyArn => {
           const match = keyArn.match(/:(\d{12}):/);
           if (match) accountIds.add(match[1]);
@@ -395,7 +395,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       services.forEach(service => {
         const serviceKeys = new Set<string>();
         regions.forEach(region => {
-          const key = outputs.kms_key_arns.value[region][service];
+          const key = outputs.kms_key_arns!.value[region][service];
           expect(key).toBeDefined();
           serviceKeys.add(key);
         });
@@ -413,9 +413,9 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.rds_endpoints).toBeDefined();
-      expect(outputs.rds_endpoints.value).toBeDefined();
-      expect(outputs.rds_endpoints.value["us_east_1"]).toBeDefined();
-      expect(outputs.rds_endpoints.value["us_west_2"]).toBeDefined();
+      expect(outputs.rds_endpoints!.value).toBeDefined();
+      expect(outputs.rds_endpoints!.value["us_east_1"]).toBeDefined();
+      expect(outputs.rds_endpoints!.value["us_west_2"]).toBeDefined();
     });
 
     test("RDS endpoints follow AWS RDS format", () => {
@@ -423,22 +423,22 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const rdsRegex = /^[a-z0-9-]+\.[a-z0-9]+\.(us-east-1|us-west-2)\.rds\.amazonaws\.com:\d+$/;
 
-      expect(outputs.rds_endpoints.value["us_east_1"]).toMatch(rdsRegex);
-      expect(outputs.rds_endpoints.value["us_west_2"]).toMatch(rdsRegex);
+      expect(outputs.rds_endpoints!.value["us_east_1"]).toMatch(rdsRegex);
+      expect(outputs.rds_endpoints!.value["us_west_2"]).toMatch(rdsRegex);
     });
 
     test("RDS endpoints contain correct region identifiers", () => {
       if (!outputsExist) return;
 
-      expect(outputs.rds_endpoints.value["us_east_1"]).toContain("us-east-1");
-      expect(outputs.rds_endpoints.value["us_west_2"]).toContain("us-west-2");
+      expect(outputs.rds_endpoints!.value["us_east_1"]).toContain("us-east-1");
+      expect(outputs.rds_endpoints!.value["us_west_2"]).toContain("us-west-2");
     });
 
     test("RDS endpoints are unique per region", () => {
       if (!outputsExist) return;
 
-      const eastEndpoint = outputs.rds_endpoints.value["us_east_1"];
-      const westEndpoint = outputs.rds_endpoints.value["us_west_2"];
+      const eastEndpoint = outputs.rds_endpoints!.value["us_east_1"];
+      const westEndpoint = outputs.rds_endpoints!.value["us_west_2"];
 
       expect(eastEndpoint).not.toBe(westEndpoint);
     });
@@ -446,15 +446,15 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("RDS endpoints use PostgreSQL default port (5432)", () => {
       if (!outputsExist) return;
 
-      expect(outputs.rds_endpoints.value["us_east_1"]).toMatch(/:5432$/);
-      expect(outputs.rds_endpoints.value["us_west_2"]).toMatch(/:5432$/);
+      expect(outputs.rds_endpoints!.value["us_east_1"]).toMatch(/:5432$/);
+      expect(outputs.rds_endpoints!.value["us_west_2"]).toMatch(/:5432$/);
     });
 
     test("RDS endpoint hostnames are valid DNS format", () => {
       if (!outputsExist) return;
 
-      const eastHost = outputs.rds_endpoints.value["us_east_1"].split(":")[0];
-      const westHost = outputs.rds_endpoints.value["us_west_2"].split(":")[0];
+      const eastHost = outputs.rds_endpoints!.value["us_east_1"].split(":")[0];
+      const westHost = outputs.rds_endpoints!.value["us_west_2"].split(":")[0];
 
       expect(eastHost.split(".").length).toBeGreaterThanOrEqual(5);
       expect(westHost.split(".").length).toBeGreaterThanOrEqual(5);
@@ -471,9 +471,9 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.lambda_arns).toBeDefined();
-      expect(outputs.lambda_arns.value).toBeDefined();
-      expect(outputs.lambda_arns.value["us_east_1"]).toBeDefined();
-      expect(outputs.lambda_arns.value["us_west_2"]).toBeDefined();
+      expect(outputs.lambda_arns!.value).toBeDefined();
+      expect(outputs.lambda_arns!.value["us_east_1"]).toBeDefined();
+      expect(outputs.lambda_arns!.value["us_west_2"]).toBeDefined();
     });
 
     test("Lambda ARNs follow AWS Lambda format", () => {
@@ -481,22 +481,22 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const lambdaArnRegex = /^arn:aws:lambda:(us-east-1|us-west-2):\d{12}:function:[a-zA-Z0-9-_]+$/;
 
-      expect(outputs.lambda_arns.value["us_east_1"]).toMatch(lambdaArnRegex);
-      expect(outputs.lambda_arns.value["us_west_2"]).toMatch(lambdaArnRegex);
+      expect(outputs.lambda_arns!.value["us_east_1"]).toMatch(lambdaArnRegex);
+      expect(outputs.lambda_arns!.value["us_west_2"]).toMatch(lambdaArnRegex);
     });
 
     test("Lambda ARNs contain correct region", () => {
       if (!outputsExist) return;
 
-      expect(outputs.lambda_arns.value["us_east_1"]).toContain("us-east-1");
-      expect(outputs.lambda_arns.value["us_west_2"]).toContain("us-west-2");
+      expect(outputs.lambda_arns!.value["us_east_1"]).toContain("us-east-1");
+      expect(outputs.lambda_arns!.value["us_west_2"]).toContain("us-west-2");
     });
 
     test("Lambda functions have unique ARNs per region", () => {
       if (!outputsExist) return;
 
-      const eastArn = outputs.lambda_arns.value["us_east_1"];
-      const westArn = outputs.lambda_arns.value["us_west_2"];
+      const eastArn = outputs.lambda_arns!.value["us_east_1"];
+      const westArn = outputs.lambda_arns!.value["us_west_2"];
 
       expect(eastArn).not.toBe(westArn);
     });
@@ -504,8 +504,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("Lambda ARNs use same AWS account", () => {
       if (!outputsExist) return;
 
-      const eastMatch = outputs.lambda_arns.value["us_east_1"].match(/:(\d{12}):/);
-      const westMatch = outputs.lambda_arns.value["us_west_2"].match(/:(\d{12}):/);
+      const eastMatch = outputs.lambda_arns!.value["us_east_1"].match(/:(\d{12}):/);
+      const westMatch = outputs.lambda_arns!.value["us_west_2"].match(/:(\d{12}):/);
 
       expect(eastMatch).not.toBeNull();
       expect(westMatch).not.toBeNull();
@@ -517,8 +517,8 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const extractFunctionName = (arn: string) => arn.split(":function:")[1];
 
-      const eastName = extractFunctionName(outputs.lambda_arns.value["us_east_1"]);
-      const westName = extractFunctionName(outputs.lambda_arns.value["us_west_2"]);
+      const eastName = extractFunctionName(outputs.lambda_arns!.value["us_east_1"]);
+      const westName = extractFunctionName(outputs.lambda_arns!.value["us_west_2"]);
 
       expect(eastName).toMatch(/^[a-zA-Z0-9-_]+$/);
       expect(westName).toMatch(/^[a-zA-Z0-9-_]+$/);
@@ -535,9 +535,9 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.flow_log_ids).toBeDefined();
-      expect(outputs.flow_log_ids.value).toBeDefined();
-      expect(outputs.flow_log_ids.value["us_east_1"]).toBeDefined();
-      expect(outputs.flow_log_ids.value["us_west_2"]).toBeDefined();
+      expect(outputs.flow_log_ids!.value).toBeDefined();
+      expect(outputs.flow_log_ids!.value["us_east_1"]).toBeDefined();
+      expect(outputs.flow_log_ids!.value["us_west_2"]).toBeDefined();
     });
 
     test("Flow Log IDs follow AWS format (fl-[a-f0-9]+)", () => {
@@ -545,15 +545,15 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
 
       const flowLogRegex = /^fl-[a-f0-9]{8,17}$/;
 
-      expect(outputs.flow_log_ids.value["us_east_1"]).toMatch(flowLogRegex);
-      expect(outputs.flow_log_ids.value["us_west_2"]).toMatch(flowLogRegex);
+      expect(outputs.flow_log_ids!.value["us_east_1"]).toMatch(flowLogRegex);
+      expect(outputs.flow_log_ids!.value["us_west_2"]).toMatch(flowLogRegex);
     });
 
     test("Flow Log IDs are unique per region", () => {
       if (!outputsExist) return;
 
-      const eastFlowLog = outputs.flow_log_ids.value["us_east_1"];
-      const westFlowLog = outputs.flow_log_ids.value["us_west_2"];
+      const eastFlowLog = outputs.flow_log_ids!.value["us_east_1"];
+      const westFlowLog = outputs.flow_log_ids!.value["us_west_2"];
 
       expect(eastFlowLog).not.toBe(westFlowLog);
     });
@@ -567,7 +567,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       if (!outputsExist) return;
 
       expect(outputs.ec2_role_names).toBeDefined();
-      expect(outputs.ec2_role_names.value).toBeDefined();
+      expect(outputs.ec2_role_names!.value).toBeDefined();
       expect(outputs.ec2_role_names!.value["us_east_1"]).toBeDefined();
       expect(outputs.ec2_role_names!.value["us_west_2"]).toBeDefined();
     });
@@ -616,13 +616,13 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
       };
 
       // Lambda ARNs
-      Object.values(outputs.lambda_arns.value).forEach(arn => {
+      Object.values(outputs.lambda_arns!.value).forEach(arn => {
         const accountId = extractAccountId(arn as string);
         if (accountId) accountIds.add(accountId);
       });
 
       // KMS ARNs
-      Object.values(outputs.kms_key_arns.value).forEach(regionKeys => {
+      Object.values(outputs.kms_key_arns!.value).forEach(regionKeys => {
         Object.values(regionKeys as { [key: string]: string }).forEach(arn => {
           const accountId = extractAccountId(arn);
           if (accountId) accountIds.add(accountId);
@@ -782,7 +782,7 @@ describe("TAP Stack Integration Tests - Comprehensive Validation", () => {
     test("resource IDs do not contain sequential patterns (not test data)", () => {
       if (!outputsExist) return;
 
-      const vpcId = outputs.us_east_1_vpc_id.value;
+      const vpcId = outputs.us_east_1_vpc_id!.value;
 
       expect(vpcId).not.toMatch(/123456/);
       expect(vpcId).not.toMatch(/abcdef/);
