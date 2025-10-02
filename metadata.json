@@ -6,7 +6,7 @@
   "po_id": "291301",
   "team": "5",
   "startedAt": "2025-10-01T15:16:09.031Z",
-  "subtask": "Content delivery with CloudFront",
+  "subtask": "Cloud Environment Setup",
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],

@@ -95,12 +95,27 @@ describe('TapStack', () => {
 
     test('should create log bucket with correct properties', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
+        OwnershipControls: {
+          Rules: [
+            {
+              ObjectOwnership: 'BucketOwnerPreferred'
+            }
+          ]
+        },
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: false,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: false,
+          RestrictPublicBuckets: true
+        },
         LifecycleConfiguration: {
-          Rules: [{
-            Id: 'DeleteLogs',
-            Status: 'Enabled',
-            ExpirationInDays: 90
-          }]
+          Rules: [
+            {
+              Id: 'DeleteLogs',
+              Status: 'Enabled',
+              ExpirationInDays: 90
+            }
+          ]
         }
       });
     });
