@@ -53,13 +53,13 @@ export class TapStack extends cdk.Stack {
 
     const env = environmentSuffix;
     const region = 'us-east-1';
-
+    
     // Generate a unique 8-character hash for resource naming
     const uniqueId = crypto.createHash('md5')
       .update(`${this.account}-${env}-${Date.now()}`)
       .digest('hex')
       .substring(0, 8);
-
+    
     // FEATURE FLAG: Enable SageMaker resources (default: false)
     const enableSagemaker = this.node.tryGetContext('enableSagemaker') === 'true' || false;
 
@@ -89,13 +89,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // VPC Endpoints for private AWS service access
-    const s3Endpoint = vpc.addGatewayEndpoint('S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-    });
 
-    const dynamoEndpoint = vpc.addGatewayEndpoint('DynamoDBEndpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-    });
 
     // ============================================
     // SECTION 2: STORAGE & DATA MANAGEMENT
@@ -187,7 +181,7 @@ export class TapStack extends cdk.Stack {
     // ============================================
     // SECTION 4: SAGEMAKER INFRASTRUCTURE (OPTIONAL)
     // ============================================
-
+    
     let endpoint: sagemaker.CfnEndpoint | undefined;
     let sagemakerEndpoint: ec2.IInterfaceVpcEndpoint | undefined;
 
@@ -538,24 +532,6 @@ def handler(event, context):
       },
     });
 
-    const predictResource = api.root.addResource('predict');
-    const predictMethod = predictResource.addMethod(
-      'POST',
-      new apigateway.LambdaIntegration(preprocessFunction, {
-        proxy: true,
-        cacheKeyParameters: ['method.request.querystring.cacheKey'],
-      }),
-      {
-        requestParameters: {
-          'method.request.querystring.cacheKey': false,
-        },
-        methodResponses: [
-          { statusCode: '200' },
-          { statusCode: '400' },
-          { statusCode: '500' },
-        ],
-      }
-    );
 
     // ============================================
     // SECTION 8: BATCH PROCESSING INFRASTRUCTURE
@@ -572,9 +548,6 @@ def handler(event, context):
     dataBucket.grantReadWrite(batchInstanceRole);
     modelBucket.grantRead(batchInstanceRole);
 
-    const batchInstanceProfile = new iam.CfnInstanceProfile(this, 'BatchInstanceProfile', {
-      roles: [batchInstanceRole.roleName],
-    });
 
     // Batch service role
     const batchServiceRole = new iam.Role(this, 'BatchServiceRole', {
@@ -743,13 +716,6 @@ def handler(event, context):
     // ============================================
 
     // Glue database for data cataloging
-    const glueDatabase = new glue.CfnDatabase(this, 'MLPipelineDatabase', {
-      catalogId: this.account,
-      databaseInput: {
-        name: `ml_db_${env}_${uniqueId}`,
-        description: 'Database for ML pipeline analytics and prediction results',
-      },
-    });
 
     // Glue crawler role
     const glueCrawlerRole = new iam.Role(this, 'GlueCrawlerRole', {
@@ -762,20 +728,6 @@ def handler(event, context):
     dataBucket.grantRead(glueCrawlerRole);
 
     // Athena workgroup for analytics queries
-    const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
-      name: `ml-analytics-${env}-${uniqueId}`,
-      description: 'Workgroup for running analytics queries on prediction data',
-      workGroupConfiguration: {
-        resultConfiguration: {
-          outputLocation: `s3://${dataBucket.bucketName}/athena-results/`,
-          encryptionConfiguration: {
-            encryptionOption: 'SSE_S3',
-          },
-        },
-        enforceWorkGroupConfiguration: true,
-        publishCloudWatchMetricsEnabled: true,
-      },
-    });
 
     // ============================================
     // SECTION 12: MONITORING, ALERTING & OBSERVABILITY
