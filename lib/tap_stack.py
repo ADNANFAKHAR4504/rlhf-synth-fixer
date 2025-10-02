@@ -26,6 +26,7 @@ from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import custom_resources as cr
+from aws_cdk import CustomResource
 from constructs import Construct
 
 
@@ -641,31 +642,125 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection"""
         
-        # Enable GuardDuty detector with unique naming
-        self.guardduty_detector = guardduty.CfnDetector(
-            self, "GuardDutyDetector",
-            enable=True,
-            finding_publishing_frequency="FIFTEEN_MINUTES",
-            tags=[{
-                "key": "Name", 
-                "value": f"ZeroTrustDetector-{self.unique_suffix}"
-            }],
-            data_sources=guardduty.CfnDetector.CFNDataSourceConfigurationsProperty(
-                s3_logs=guardduty.CfnDetector.CFNS3LogsConfigurationProperty(
-                    enable=True
-                ),
-                kubernetes=guardduty.CfnDetector.CFNKubernetesConfigurationProperty(
-                    audit_logs=guardduty.CfnDetector.CFNKubernetesAuditLogsConfigurationProperty(
-                        enable=True
-                    )
+        # Create a custom resource to handle existing GuardDuty detector
+        guardduty_handler_role = iam.Role(
+            self, "GuardDutyHandlerRole",
+            role_name=f"GuardDutyHandler-{self.unique_suffix}",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ],
+            inline_policies={
+                "GuardDutyPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "guardduty:CreateDetector",
+                                "guardduty:ListDetectors",
+                                "guardduty:GetDetector",
+                                "guardduty:UpdateDetector",
+                                "guardduty:DeleteDetector"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
                 )
-            )
+            }
         )
+
+        guardduty_handler_function = lambda_.Function(
+            self, "GuardDutyHandlerFunction",
+            function_name=f"guardduty-handler-{self.unique_suffix}",
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            handler="index.handler",
+            role=guardduty_handler_role,
+            code=lambda_.Code.from_inline("""
+import boto3
+import json
+import cfnresponse
+
+def handler(event, context):
+    try:
+        guardduty = boto3.client('guardduty')
+        request_type = event['RequestType']
+        
+        if request_type == 'Create' or request_type == 'Update':
+            # Check if detector already exists
+            response = guardduty.list_detectors()
+            
+            if response['DetectorIds']:
+                # Use existing detector
+                detector_id = response['DetectorIds'][0]
+                print(f"Using existing GuardDuty detector: {detector_id}")
+                
+                # Update detector configuration if needed
+                guardduty.update_detector(
+                    DetectorId=detector_id,
+                    Enable=True,
+                    FindingPublishingFrequency='FIFTEEN_MINUTES',
+                    DataSources={
+                        'S3Logs': {'Enable': True},
+                        'Kubernetes': {
+                            'AuditLogs': {'Enable': True}
+                        }
+                    }
+                )
+            else:
+                # Create new detector
+                response = guardduty.create_detector(
+                    Enable=True,
+                    FindingPublishingFrequency='FIFTEEN_MINUTES',
+                    DataSources={
+                        'S3Logs': {'Enable': True},
+                        'Kubernetes': {
+                            'AuditLogs': {'Enable': True}
+                        }
+                    },
+                    Tags={
+                        'Name': event['ResourceProperties']['DetectorName']
+                    }
+                )
+                detector_id = response['DetectorId']
+                print(f"Created new GuardDuty detector: {detector_id}")
+            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                'DetectorId': detector_id
+            })
+        
+        elif request_type == 'Delete':
+            # Don't delete detector as it may be used by other resources
+            print("Skipping detector deletion to preserve existing GuardDuty configuration")
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {})
+"""),
+            timeout=Duration.minutes(5)
+        )
+
+        # Create custom resource using Lambda-backed custom resource provider
+        self.guardduty_detector_provider = cr.Provider(
+            self, "GuardDutyDetectorProvider",
+            on_event_handler=guardduty_handler_function
+        )
+
+        self.guardduty_detector_resource = CustomResource(
+            self, "GuardDutyDetectorResource",
+            service_token=self.guardduty_detector_provider.service_token,
+            properties={
+                "DetectorName": f"ZeroTrustDetector-{self.unique_suffix}"
+            }
+        )
+        
+        # Get detector ID from custom resource
+        self.guardduty_detector_id = self.guardduty_detector_resource.get_att_string("DetectorId")
 
         # Create threat intel set for known bad IPs
         self.threat_intel_set = guardduty.CfnThreatIntelSet(
             self, "ThreatIntelSet",
-            detector_id=self.guardduty_detector.ref,
+            detector_id=self.guardduty_detector_id,
             format="TXT",
             location=f"s3://{self.trail_bucket.bucket_name}/threat-intel/bad-ips.txt",
             activate=True,
@@ -675,7 +770,7 @@ class TapStack(Stack):
         # Create IP set for trusted IPs
         self.trusted_ip_set = guardduty.CfnIPSet(
             self, "TrustedIPSet",
-            detector_id=self.guardduty_detector.ref,
+            detector_id=self.guardduty_detector_id,
             format="TXT",
             location=f"s3://{self.trail_bucket.bucket_name}/trusted-ips/whitelist.txt",
             activate=True,
@@ -1205,5 +1300,5 @@ def notify_security_team(event: Dict, response: Dict):
         # Output important values
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
         CfnOutput(self, "SecurityHubArn", value=self.security_hub.attr_arn)
-        CfnOutput(self, "GuardDutyDetectorId", value=self.guardduty_detector.ref)
+        CfnOutput(self, "GuardDutyDetectorId", value=self.guardduty_detector_id)
         CfnOutput(self, "AlertTopicArn", value=self.alert_topic.topic_arn)
