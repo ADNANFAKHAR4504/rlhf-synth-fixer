@@ -10,9 +10,9 @@ terraform {
     }
   }
 
-  # Using local backend for QA testing
-  backend "local" {
-    path = "../terraform.tfstate"
+  # Using S3 backend for remote state management
+  backend "s3" {
+    # Backend configuration will be provided via terraform init -backend-config
   }
 }
 
