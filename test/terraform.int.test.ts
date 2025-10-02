@@ -118,7 +118,11 @@ describe('Terraform E2E Integration Tests', () => {
 
     // Assert CORS configuration using outputs (account-agnostic)
     expect(outputs.cors_allowed_origins).toBeDefined();
-    expect(Array.isArray(outputs.cors_allowed_origins)).toBe(true);
+    // Handle both array and string representations of CORS origins
+    const corsOrigins = Array.isArray(outputs.cors_allowed_origins)
+      ? outputs.cors_allowed_origins
+      : JSON.parse(outputs.cors_allowed_origins);
+    expect(Array.isArray(corsOrigins)).toBe(true);
   });
 
   test('Secrets Manager secret exists', async () => {

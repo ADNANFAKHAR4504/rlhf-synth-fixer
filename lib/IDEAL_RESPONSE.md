@@ -137,9 +137,9 @@ variable "aws_region" {
 # -----------------------------
 
 variable "lambda_allowed_ips" {
-  description = "List of known IP addresses allowed to access API Gateway"
+  description = "List of known IP addresses allowed to access API Gateway (in CIDR format)"
   type        = list(string)
-  default     = ["203.0.113.1", "198.51.100.2"]
+  default     = ["203.0.113.1/32", "198.51.100.2/32"]
 }
 
 variable "dynamodb_table_name" {
@@ -200,11 +200,14 @@ resource "aws_vpc" "main" {
 resource "aws_s3_bucket" "lambda_logs" {
   bucket = var.lambda_log_bucket_name
   tags   = local.common_tags
+}
 
-  versioning {
-    enabled = true
+# S3 bucket versioning configuration
+resource "aws_s3_bucket_versioning" "lambda_logs" {
+  bucket = aws_s3_bucket.lambda_logs.id
+  versioning_configuration {
+    status = "Enabled"
   }
-
 }
 
 # Recommended: S3 bucket server-side encryption configuration
@@ -732,7 +735,7 @@ output "cors_allowed_origins" {
 }
 
 output "s3_sse_algorithm" {
-  value = aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+  value = tolist(aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule)[0].apply_server_side_encryption_by_default[0].sse_algorithm
 }
 
 output "dynamodb_read_target_id" {
@@ -742,4 +745,5 @@ output "dynamodb_read_target_id" {
 output "dynamodb_write_target_id" {
   value = aws_appautoscaling_target.dynamodb_write.resource_id
 }
+
 ```
