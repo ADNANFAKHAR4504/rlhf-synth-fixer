@@ -188,6 +188,7 @@
     "@aws-sdk/client-secrets-manager": "^3.863.0",
     "@aws-sdk/client-sqs": "^3.879.0",
     "@aws-sdk/client-ssm": "^3.879.0",
+    "@aws-sdk/lib-dynamodb": "^3.901.0",
     "@cdktf/provider-aws": "21.9.1",
     "@cdktf/provider-random": "^12.0.0",
     "@inquirer/prompts": "^7.8.0",
