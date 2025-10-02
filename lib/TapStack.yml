@@ -79,9 +79,9 @@ Parameters:
       - 'prod'
 
   ImageId:
-    Type: String
-    Default: 'ami-df5de72bdb3b'
-    Description: 'AMI ID for EC2 instance (default works for us-east-1 and LocalStack)'
+    Type: AWS::EC2::Image::Id
+    Default: 'ami-ff0fea8310f3'
+    Description: 'AMI ID for EC2 instance (Amazon Linux 2023 in us-east-1, or dummy for LocalStack)'
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
@@ -187,15 +187,6 @@ Resources:
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'RecipeBlog-NAT-EIP-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: 'RecipeBlog'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
 
   # NAT Gateway for private subnet outbound traffic
   NATGateway:
@@ -371,15 +362,6 @@ Resources:
                 Resource:
                   - !GetAtt MediaBucket.Arn
                   - !Sub '${MediaBucket.Arn}/*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'RecipeBlog-EC2Role-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: 'RecipeBlog'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -486,11 +468,10 @@ Resources:
       DBInstanceIdentifier: !Sub 'recipeblog-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       AllocatedStorage: 20
-      MaxAllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true
       MultiAZ: true
@@ -528,19 +509,9 @@ Resources:
     Properties:
       Domain: vpc
       InstanceId: !Ref WordPressInstance
-      Tags:
-        - Key: Name
-          Value: !Sub 'RecipeBlog-WordPress-EIP-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: 'RecipeBlog'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
 
   WordPressInstance:
     Type: AWS::EC2::Instance
-    DependsOn: WordPressDatabase
     Properties:
       InstanceType: t3.micro
       ImageId: !Ref ImageId
@@ -664,7 +635,6 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    DependsOn: WordPressInstance
     Properties:
       DistributionConfig:
         Enabled: true
@@ -755,15 +725,6 @@ Resources:
       Subscription:
         - Endpoint: !Ref NotificationEmail
           Protocol: email
-      Tags:
-        - Key: Name
-          Value: !Sub 'RecipeBlog-AlarmTopic-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: 'RecipeBlog'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
 
   EC2CPUAlarm:
     Type: AWS::CloudWatch::Alarm
