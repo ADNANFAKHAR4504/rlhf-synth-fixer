@@ -809,15 +809,125 @@ def handler(event, context):
     def _create_security_hub(self):
         """Enable Security Hub for centralized security management"""
         
-        # Enable Security Hub
-        self.security_hub = securityhub.CfnHub(
-            self, "SecurityHub",
-            control_finding_generator="SECURITY_CONTROL",
-            enable_default_standards=False,
-            tags={
-                "Name": f"ZeroTrustSecurityHub-{self.environment_suffix}"
+        # Create a custom resource to handle existing Security Hub
+        security_hub_handler_role = iam.Role(
+            self, "SecurityHubHandlerRole",
+            role_name=f"SecurityHubHandler-{self.unique_suffix}",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ],
+            inline_policies={
+                "SecurityHubPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "securityhub:EnableSecurityHub",
+                                "securityhub:GetEnabledStandards",
+                                "securityhub:DescribeHub",
+                                "securityhub:UpdateSecurityHubConfiguration",
+                                "securityhub:DisableSecurityHub"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
+                )
             }
         )
+
+        security_hub_handler_function = lambda_.Function(
+            self, "SecurityHubHandlerFunction",
+            function_name=f"security-hub-handler-{self.unique_suffix}",
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            handler="index.handler",
+            role=security_hub_handler_role,
+            code=lambda_.Code.from_inline("""
+import boto3
+import json
+import cfnresponse
+
+def handler(event, context):
+    try:
+        securityhub = boto3.client('securityhub')
+        request_type = event['RequestType']
+        
+        if request_type == 'Create' or request_type == 'Update':
+            try:
+                # Try to describe existing Security Hub
+                response = securityhub.describe_hub()
+                hub_arn = response['HubArn']
+                print(f"Security Hub already enabled with ARN: {hub_arn}")
+                
+                # Update configuration if needed
+                securityhub.update_security_hub_configuration(
+                    AutoEnableControls=False,
+                    ControlFindingGenerator='SECURITY_CONTROL'
+                )
+                print("Updated existing Security Hub configuration")
+                
+            except securityhub.exceptions.InvalidAccessException:
+                # Security Hub is not enabled, enable it
+                print("Security Hub not enabled, enabling it...")
+                response = securityhub.enable_security_hub(
+                    Tags={
+                        'Name': event['ResourceProperties']['HubName']
+                    },
+                    EnableDefaultStandards=False,
+                    ControlFindingGenerator='SECURITY_CONTROL'
+                )
+                hub_arn = response['HubArn']
+                print(f"Enabled Security Hub with ARN: {hub_arn}")
+                
+            except Exception as e:
+                if "Account is already subscribed to Security Hub" in str(e):
+                    print("Account is already subscribed to Security Hub, proceeding without error")
+                    # Get the hub ARN for already subscribed accounts
+                    try:
+                        response = securityhub.describe_hub()
+                        hub_arn = response['HubArn']
+                    except:
+                        # Fallback ARN format if describe fails
+                        region = event['ResourceProperties']['Region']
+                        account_id = event['ResourceProperties']['AccountId']
+                        hub_arn = f"arn:aws:securityhub:{region}:{account_id}:hub/default"
+                else:
+                    raise e
+            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                'HubArn': hub_arn
+            })
+        
+        elif request_type == 'Delete':
+            # Don't disable Security Hub as it may be used by other resources
+            print("Skipping Security Hub deletion to preserve existing configuration")
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {})
+"""),
+            timeout=Duration.minutes(5)
+        )
+
+        # Create custom resource using Lambda-backed custom resource provider
+        self.security_hub_provider = cr.Provider(
+            self, "SecurityHubProvider",
+            on_event_handler=security_hub_handler_function
+        )
+
+        self.security_hub_resource = CustomResource(
+            self, "SecurityHubResource",
+            service_token=self.security_hub_provider.service_token,
+            properties={
+                "HubName": f"ZeroTrustSecurityHub-{self.environment_suffix}",
+                "Region": self.region,
+                "AccountId": self.account
+            }
+        )
+        
+        # Get Security Hub ARN from custom resource
+        self.security_hub_arn = self.security_hub_resource.get_att_string("HubArn")
 
         # Note: Security Hub standards can be enabled manually or via separate deployment
         # to avoid rate limiting and ARN format issues during initial stack creation
@@ -1574,6 +1684,6 @@ def handler(event, context):
 
         # Output important values
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
-        CfnOutput(self, "SecurityHubArn", value=self.security_hub.attr_arn)
+        CfnOutput(self, "SecurityHubArn", value=self.security_hub_arn)
         CfnOutput(self, "GuardDutyDetectorId", value=self.guardduty_detector_id)
         CfnOutput(self, "AlertTopicArn", value=self.alert_topic.topic_arn)
