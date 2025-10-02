@@ -503,8 +503,14 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
-
-  # RDS Database
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: RDS master password stored in Secrets Manager
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -515,15 +521,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-DBSubnetGroup
-  DBSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: RDS master password stored in Secrets Manager
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
-        GenerateStringKey: "password"
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\' ' 
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
