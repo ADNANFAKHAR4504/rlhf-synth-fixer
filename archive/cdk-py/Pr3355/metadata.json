@@ -10,5 +10,20 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": "lambda, api  gateway, DynamoDB, cloudwatch"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
