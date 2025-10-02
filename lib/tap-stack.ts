@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
 
-    // --- 1) S3 bucket for logging ---
+    // --- 1) 'S3' bucket for logging ---
     // We intentionally do not force a fixed bucketName so CDK synthesizes a unique name.
     // This satisfies the "unique name" constraint, while allowing easy override later.
     const logsBucket = new s3.Bucket(this, 'LoggingBucket', {
