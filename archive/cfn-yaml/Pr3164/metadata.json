@@ -10,5 +10,18 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, KMS, CloudWatch"
+  "aws_services": [
+    "Amazon S3",
+    "Amazon CloudFront",
+    "AWS KMS",
+    "Amazon Route 53",
+    "Amazon CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
