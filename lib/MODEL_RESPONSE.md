@@ -1,7 +1,7 @@
 ### Reasoning Trace
 ---
 
-Alright, I'm tasked with creating a complete and deployable Terraform script named `tap_stack.tf` for a financial firm's batch processing system. This script needs to be self-contained and include all the necessary components like variable declarations, existing values, Terraform logic, and outputs. The script should reference an `aws_region` variable that is passed from an existing `provider.tf`.
+Alright, I'm tasked with creating a complete and deployable Terraform script  for a financial firm's batch processing system. This script needs to be self-contained and include all the necessary components like variable declarations, existing values, Terraform logic, and outputs. The script should reference an `aws_region` variable that is passed from an existing `provider.tf`.
 
 The architecture requires several AWS components:
 1. AWS Batch for processing 1M transactions within a 4-hour window
