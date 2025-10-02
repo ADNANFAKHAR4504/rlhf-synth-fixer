@@ -177,7 +177,7 @@ describe('Order Processing System Integration Tests', () => {
           console.log(`SQS receive attempt: ${response.Messages?.length || 0} messages received`);
           return response;
         },
-        (response) => response.Messages && response.Messages.length > 0,
+        (response) => !!(response.Messages && response.Messages.length > 0),
         3,
         1000
       );
