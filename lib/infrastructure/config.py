@@ -114,9 +114,13 @@ class ServerlessConfig:
         # Normalize environment suffix to ensure valid bucket names
         normalized_env = normalize_s3_bucket_name(self.environment_suffix)
         
-        # Generate bucket names with normalized environment suffix
-        input_bucket_base = self.config.get("input_bucket_name") or f"clean-s3-lambda-input-{normalized_env}"
-        output_bucket_base = self.config.get("output_bucket_name") or f"clean-s3-lambda-output-{normalized_env}"
+        # Get region short name for uniqueness
+        region_short = self.region.replace("-", "")  # us-east-1 -> useast1
+        
+        # Generate bucket names with region and normalized environment suffix
+        # This ensures uniqueness within the region
+        input_bucket_base = self.config.get("input_bucket_name") or f"clean-s3-lambda-input-{region_short}-{normalized_env}"
+        output_bucket_base = self.config.get("output_bucket_name") or f"clean-s3-lambda-output-{region_short}-{normalized_env}"
         
         # Normalize the complete bucket names
         self.input_bucket_name = normalize_s3_bucket_name(input_bucket_base)
