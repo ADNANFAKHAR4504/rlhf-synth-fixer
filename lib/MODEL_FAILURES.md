@@ -277,3 +277,27 @@ After initial fixes, additional errors were discovered during terraform plan exe
 - All module variables properly declared
 - JavaScript code no longer conflicts with Terraform templatefile
 - Terraform plan should now execute successfully
+
+---
+
+### 8. Missing CloudWatch Dashboard Template
+
+**Error that occurred:**
+- `modules/monitoring/main.tf` referenced `dashboard.json` template file that didn't exist
+- Terraform templatefile function requires the file to exist at configuration time
+
+**What we fixed:**
+- Created `modules/monitoring/dashboard.json` with comprehensive CloudWatch dashboard configuration
+- Dashboard includes widgets for:
+  - Application Load Balancer metrics (response time, request count, error rates)
+  - Auto Scaling Group metrics (desired/in-service instances, min/max size)
+  - EC2 instance metrics (CPU utilization, network in/out)
+  - CloudFront distribution metrics (requests, bytes transferred, error rates)
+  - S3 storage metrics (bucket size, number of objects)
+  - Lambda function logs for MediaConvert trigger
+
+**Result:**
+- CloudWatch dashboard template now exists
+- All template variables properly configured
+- Terraform plan should now execute without errors
+- Complete monitoring solution in place
