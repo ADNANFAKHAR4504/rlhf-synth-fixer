@@ -3,20 +3,26 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('Serverless Logistics Processing Stack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template converted from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Template Structure', () => {
+    test('should have valid CloudFormation format version', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('should have a proper description', () => {
+      expect(template.Description).toBeDefined();
+      expect(template.Description).toBe(
+        'Serverless Logistics Processing System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS'
+      );
     });
   });
 
@@ -25,91 +31,112 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have required parameters', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.AlertEmail).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have EnvironmentSuffix parameter with correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBe('^[a-z0-9-]+$');
+      expect(param.ConstraintDescription).toBe(
+        'Must contain only lowercase letters, numbers, and hyphens'
+      );
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have AlertEmail parameter with correct properties', () => {
+      const param = template.Parameters.AlertEmail;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('test@test.com');
+      expect(param.AllowedPattern).toBeDefined();
+      expect(param.ConstraintDescription).toBe('Must be a valid email address');
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('should have ShipmentLogsTable resource', () => {
+      expect(template.Resources.ShipmentLogsTable).toBeDefined();
+      const table = template.Resources.ShipmentLogsTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have Lambda function resource', () => {
+      expect(template.Resources.ShipmentProcessorFunction).toBeDefined();
+      const func = template.Resources.ShipmentProcessorFunction;
+      expect(func.Type).toBe('AWS::Lambda::Function');
+      expect(func.Properties.Runtime).toBe('python3.10');
+      expect(func.Properties.Handler).toBe('index.lambda_handler');
+      expect(func.Properties.Timeout).toBe(30);
+      expect(func.Properties.MemorySize).toBe(256);
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('should have EventBridge rule resource', () => {
+      expect(template.Resources.ShipmentUpdateRule).toBeDefined();
+      const rule = template.Resources.ShipmentUpdateRule;
+      expect(rule.Type).toBe('AWS::Events::Rule');
+      expect(rule.Properties.State).toBe('ENABLED');
+      expect(rule.Properties.EventPattern.source).toContain('logistics.shipments');
+      expect(rule.Properties.EventPattern['detail-type']).toContain('Shipment Update');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have SNS topic and subscription', () => {
+      expect(template.Resources.AlertTopic).toBeDefined();
+      expect(template.Resources.AlertTopicSubscription).toBeDefined();
+      
+      const topic = template.Resources.AlertTopic;
+      const subscription = template.Resources.AlertTopicSubscription;
+      
+      expect(topic.Type).toBe('AWS::SNS::Topic');
+      expect(subscription.Type).toBe('AWS::SNS::Subscription');
+      expect(subscription.Properties.Protocol).toBe('email');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have IAM role with proper permissions', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.Policies).toBeDefined();
+      expect(role.Properties.Policies[0].PolicyDocument.Statement).toBeDefined();
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+      expect(template.Resources.LambdaThrottleAlarm).toBeDefined();
+      expect(template.Resources.LambdaDurationAlarm).toBeDefined();
+      expect(template.Resources.DynamoDBThrottleAlarm).toBeDefined();
+    });
+
+    test('should have CloudWatch dashboard', () => {
+      expect(template.Resources.LogisticsDashboard).toBeDefined();
+      const dashboard = template.Resources.LogisticsDashboard;
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+      expect(dashboard.Properties.DashboardBody).toBeDefined();
+    });
+
+    test('should have Lambda invoke permission', () => {
+      expect(template.Resources.LambdaInvokePermission).toBeDefined();
+      const permission = template.Resources.LambdaInvokePermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Principal).toBe('events.amazonaws.com');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'EventBridgeRuleName',
+        'LambdaFunctionArn',
+        'DynamoDBTableName',
+        'SNSTopicArn',
+        'DashboardURL',
+        'EventBridgeTestCommand'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,44 +144,49 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('EventBridgeRuleName output should be correct', () => {
+      const output = template.Outputs.EventBridgeRuleName;
+      expect(output.Description).toBe('Name of the EventBridge rule');
+      expect(output.Value).toEqual({ Ref: 'ShipmentUpdateRule' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-EventBridgeRule',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('LambdaFunctionArn output should be correct', () => {
+      const output = template.Outputs.LambdaFunctionArn;
+      expect(output.Description).toBe('ARN of the Lambda function');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['ShipmentProcessorFunction', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::Sub': '${AWS::StackName}-LambdaArn',
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+    test('DynamoDBTableName output should be correct', () => {
+      const output = template.Outputs.DynamoDBTableName;
+      expect(output.Description).toBe('Name of the DynamoDB table');
+      expect(output.Value).toEqual({ Ref: 'ShipmentLogsTable' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-TableName',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('SNSTopicArn output should be correct', () => {
+      const output = template.Outputs.SNSTopicArn;
+      expect(output.Description).toBe('ARN of the SNS alert topic');
+      expect(output.Value).toEqual({ Ref: 'AlertTopic' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-SNSTopicArn',
       });
+    });
+
+    test('should have dashboard URL and test command', () => {
+      expect(template.Outputs.DashboardURL).toBeDefined();
+      expect(template.Outputs.EventBridgeTestCommand).toBeDefined();
+      expect(template.Outputs.DashboardURL.Description).toBe('URL to the CloudWatch Dashboard');
+      expect(template.Outputs.EventBridgeTestCommand.Description).toBe('AWS CLI command to test the system');
     });
   });
 
@@ -172,39 +204,138 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(10); // We have many resources in logistics system
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have exactly two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(2);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have six outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(6);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('DynamoDB table should follow naming convention with environment suffix', () => {
+      const table = template.Resources.ShipmentLogsTable;
       const tableName = table.Properties.TableName;
 
       expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'shipment-logs-${EnvironmentSuffix}',
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('Lambda function should follow naming convention', () => {
+      const func = template.Resources.ShipmentProcessorFunction;
+      const funcName = func.Properties.FunctionName;
+
+      expect(funcName).toEqual({
+        'Fn::Sub': 'shipment-processor-${EnvironmentSuffix}',
       });
+    });
+
+    test('EventBridge rule should follow naming convention', () => {
+      const rule = template.Resources.ShipmentUpdateRule;
+      const ruleName = rule.Properties.Name;
+
+      expect(ruleName).toEqual({
+        'Fn::Sub': 'shipment-update-rule-${EnvironmentSuffix}',
+      });
+    });
+
+    test('SNS topic should follow naming convention', () => {
+      const topic = template.Resources.AlertTopic;
+      const topicName = topic.Properties.TopicName;
+
+      expect(topicName).toEqual({
+        'Fn::Sub': 'logistics-alerts-${EnvironmentSuffix}',
+      });
+    });
+  });
+
+  describe('DynamoDB Table Configuration', () => {
+    test('should have correct key schema', () => {
+      const table = template.Resources.ShipmentLogsTable;
+      const keySchema = table.Properties.KeySchema;
+
+      expect(keySchema).toHaveLength(2);
+      expect(keySchema[0].AttributeName).toBe('shipmentId');
+      expect(keySchema[0].KeyType).toBe('HASH');
+      expect(keySchema[1].AttributeName).toBe('timestamp');
+      expect(keySchema[1].KeyType).toBe('RANGE');
+    });
+
+    test('should have correct attribute definitions', () => {
+      const table = template.Resources.ShipmentLogsTable;
+      const attributes = table.Properties.AttributeDefinitions;
+
+      expect(attributes).toHaveLength(2);
+      expect(attributes[0].AttributeName).toBe('shipmentId');
+      expect(attributes[0].AttributeType).toBe('S');
+      expect(attributes[1].AttributeName).toBe('timestamp');
+      expect(attributes[1].AttributeType).toBe('N');
+    });
+
+    test('should have streams enabled', () => {
+      const table = template.Resources.ShipmentLogsTable;
+      expect(table.Properties.StreamSpecification).toBeDefined();
+      expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+    });
+
+    test('should have point-in-time recovery enabled', () => {
+      const table = template.Resources.ShipmentLogsTable;
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+  });
+
+  describe('Lambda Function Configuration', () => {
+    test('should have correct environment variables', () => {
+      const func = template.Resources.ShipmentProcessorFunction;
+      const envVars = func.Properties.Environment.Variables;
+
+      expect(envVars.DYNAMODB_TABLE).toEqual({ Ref: 'ShipmentLogsTable' });
+      expect(envVars.SNS_TOPIC_ARN).toEqual({ Ref: 'AlertTopic' });
+      expect(envVars.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
+    });
+
+    test('should have inline code with proper event processing', () => {
+      const func = template.Resources.ShipmentProcessorFunction;
+      const code = func.Properties.Code.ZipFile;
+
+      expect(code).toContain('import json');
+      expect(code).toContain('import boto3');
+      expect(code).toContain('lambda_handler');
+      expect(code).toContain('dynamodb');
+      expect(code).toContain('sns');
+      expect(code).toContain('cloudwatch');
+    });
+  });
+
+  describe('CloudWatch Alarms Configuration', () => {
+    test('Lambda error alarm should have correct configuration', () => {
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Properties.MetricName).toBe('Errors');
+      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Properties.Threshold).toBe(5);
+      expect(alarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('Lambda throttle alarm should have correct configuration', () => {
+      const alarm = template.Resources.LambdaThrottleAlarm;
+      expect(alarm.Properties.MetricName).toBe('Throttles');
+      expect(alarm.Properties.Threshold).toBe(1);
+    });
+
+    test('DynamoDB throttle alarm should have correct configuration', () => {
+      const alarm = template.Resources.DynamoDBThrottleAlarm;
+      expect(alarm.Properties.MetricName).toBe('UserErrors');
+      expect(alarm.Properties.Namespace).toBe('AWS/DynamoDB');
     });
   });
 });
