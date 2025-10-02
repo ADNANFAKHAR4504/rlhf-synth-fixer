@@ -90,9 +90,10 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       if (credentials.keyId && credentials.keyIdSubstring) {
         console.log('Full AWS Key ID Length:', credentials.keyId.length);
         console.log('AWS Key ID Substring (first 8 chars):', credentials.keyIdSubstring);
-        console.log('AWS Key ID Pattern:', credentials.keyId.replace(/./g, (char, index) => 
-          index < 4 || index >= credentials.keyId.length - 4 ? char : '*'
-        ));
+        console.log('AWS Key ID Pattern:', credentials.keyId.replace(/./g, (char, index) => {
+          const keyIdLength = credentials.keyId?.length || 0;
+          return index < 4 || index >= keyIdLength - 4 ? char : '*';
+        }));
         expect(credentials.keyIdSubstring).toBeDefined();
         expect(credentials.keyIdSubstring.length).toBeLessThanOrEqual(8);
       } else {
@@ -144,21 +145,23 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       
       // Log different substring lengths for AWS Key ID
       if (credentials.keyId) {
-        console.log('AWS Key ID - First 4 chars:', credentials.keyId.substring(0, 4));
-        console.log('AWS Key ID - First 6 chars:', credentials.keyId.substring(0, 6));
-        console.log('AWS Key ID - First 8 chars:', credentials.keyId.substring(0, 8));
-        console.log('AWS Key ID - Last 4 chars:', credentials.keyId.substring(credentials.keyId.length - 4));
-        console.log('AWS Key ID - Middle section:', credentials.keyId.substring(4, credentials.keyId.length - 4).replace(/./g, '*'));
+        const keyId = credentials.keyId;
+        console.log('AWS Key ID - First 4 chars:', keyId.substring(0, 4));
+        console.log('AWS Key ID - First 6 chars:', keyId.substring(0, 6));
+        console.log('AWS Key ID - First 8 chars:', keyId.substring(0, 8));
+        console.log('AWS Key ID - Last 4 chars:', keyId.substring(keyId.length - 4));
+        console.log('AWS Key ID - Middle section:', keyId.substring(4, keyId.length - 4).replace(/./g, '*'));
       }
       
       // Log safe portions of AWS Secret Key
       if (credentials.secretKey) {
-        console.log('AWS Secret Key - First 3 chars:', credentials.secretKey.substring(0, 3));
-        console.log('AWS Secret Key - First 4 chars:', credentials.secretKey.substring(0, 4));
-        console.log('AWS Secret Key - First 6 chars:', credentials.secretKey.substring(0, 6));
+        const secretKey = credentials.secretKey;
+        console.log('AWS Secret Key - First 3 chars:', secretKey.substring(0, 3));
+        console.log('AWS Secret Key - First 4 chars:', secretKey.substring(0, 4));
+        console.log('AWS Secret Key - First 6 chars:', secretKey.substring(0, 6));
         console.log('AWS Secret Key - Character pattern:', 
-          credentials.secretKey.substring(0, 2) + '***...' + 
-          credentials.secretKey.substring(credentials.secretKey.length - 2)
+          secretKey.substring(0, 2) + '***...' + 
+          secretKey.substring(secretKey.length - 2)
         );
       }
       
