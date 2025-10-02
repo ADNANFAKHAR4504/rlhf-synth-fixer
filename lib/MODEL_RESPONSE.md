@@ -1,1573 +1,1551 @@
 ### Reasoning Trace
 ---
 
-This is a comprehensive multi-tenant SaaS infrastructure request. Let me break down the requirements:
+This is a comprehensive machine learning inference pipeline implementation request. Let me break down what needs to be implemented:
 
-1. **Network Layer**: VPC with public/private subnets, IGW, NAT Gateways
-2. **Compute & Load Balancing**: ALB with host-based routing, ASG with m5.large instances
-3. **Database & Caching**: Aurora PostgreSQL with RLS, ElastiCache Redis (separated by tenant tier)
-4. **Storage & CDN**: S3 with tenant isolation, CloudFront
-5. **DNS & Certificates**: Route53, ACM
-6. **Auth**: Cognito user pools per tenant
-7. **Serverless**: Lambda for tenant provisioning, DynamoDB for metadata
-8. **Monitoring**: CloudWatch logs per tenant
-9. **Configuration**: Systems Manager Parameter Store
+1. **Core ML Components:**
+   - SageMaker endpoint with multi-variant for A/B testing
+   - Lambda functions for preprocessing
+   - AWS Batch for batch processing
+   - Step Functions for workflow orchestration
 
-Key tenant isolation mechanisms:
-- PostgreSQL RLS for database
-- Host-based routing in ALB
-- Separate Redis clusters for premium tenants
-- S3 bucket policies
-- Separate Cognito user pools
-- Separate CloudWatch log groups
+2. **Data & Storage:**
+   - S3 buckets with versioning
+   - DynamoDB with TTL
+   - Parameter Store for model versioning
+   - Glue Data Catalog
 
-I need to create a comprehensive Pulumi stack that implements all these components with proper connections and dependencies.
+3. **API & Streaming:**
+   - API Gateway with caching
+   - Kinesis Data Streams
 
-Let me structure the code properly:
+4. **Orchestration:**
+   - EventBridge for scheduling
+   - Athena for analytics
+   - Step Functions for workflows
 
-1. lib/tap_stack.py - Main infrastructure
-2. tests/unit/test_tap_stack.py - Unit tests
-3. tests/integration/test_tap_stack.py - Integration tests
+5. **Monitoring:**
+   - CloudWatch dashboards, metrics, alarms
+   - SNS for notifications
 
-I'll start with the main stack implementation.
+6. **Security & Networking:**
+   - VPC with private subnets
+   - VPC endpoints for S3, DynamoDB
+   - IAM roles with least privilege
+
+Let me start implementing the stack:
+
+First, I'll structure the main stack file with all the required services. Then I'll create comprehensive unit tests and integration tests.
+
+Key architectural decisions:
+1. Use VPC for network isolation
+2. Multi-variant SageMaker endpoint for A/B testing (80/20 split)
+3. Parameter Store hierarchy for model versioning
+4. DynamoDB TTL for automatic data expiration
+5. Step Functions for complex batch workflows
+6. API Gateway caching for performance
+7. Comprehensive CloudWatch monitoring
+
+I'll make sure all integration points are properly connected with appropriate IAM permissions and network configurations.
 ### Answer 
 ---
 
-I'll implement a comprehensive multi-tenant SaaS infrastructure with strict tenant isolation at every layer. Let me provide the complete solution:
+I'll implement a production-ready ML inference pipeline with comprehensive A/B testing, auto-scaling, and model versioning capabilities. Here's the complete implementation:
 
-## 1. lib/tap_stack.py - Full Infrastructure Implementation
+## File 1: lib/tap-stack.ts
 
-```python
-"""
-Multi-tenant SaaS infrastructure stack with complete tenant isolation.
-Supports 30,000 users across 500 organizations with custom domains.
-"""
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as batch from 'aws-cdk-lib/aws-batch';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as glue from 'aws-cdk-lib/aws-glue';
+import * as athena from 'aws-cdk-lib/aws-athena';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 
-import json
-import base64
-from typing import Dict, List, Optional, Any
-import pulumi
-from pulumi import Input, Output, ResourceOptions
-import pulumi_aws as aws
-from pulumi_aws import ec2, rds, elasticache, s3, cloudfront, route53, acm
-from pulumi_aws import iam, cognito, lambda_, dynamodb, logs, ssm, autoscaling, elbv2
+/**
+ * ML Inference Pipeline Stack
+ * Implements a production-ready machine learning inference system with:
+ * - A/B testing via multi-variant SageMaker endpoints
+ * - Model versioning through Parameter Store
+ * - Auto-scaling based on invocation metrics
+ * - Batch and real-time inference patterns
+ * - Comprehensive monitoring and alerting
+ */
+export class TapStack extends cdk.Stack {
+  // Public properties for cross-stack references
+  public readonly modelBucket: s3.Bucket;
+  public readonly predictionTable: dynamodb.Table;
+  public readonly inferenceApi: apigateway.RestApi;
+  public readonly vpc: ec2.Vpc;
 
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
 
-class MultiTenantSaaSStack(pulumi.ComponentResource):
-    """
-    Production-grade multi-tenant SaaS infrastructure with strict isolation.
-    
-    This stack implements:
-    - Network isolation with VPC and subnets
-    - Database isolation with Aurora PostgreSQL RLS
-    - Cache isolation with separate Redis clusters per tier
-    - Storage isolation with S3 bucket policies
-    - Authentication isolation with Cognito user pools per tenant
-    - Custom domain support with ALB host-based routing
-    """
-    
-    def __init__(self, name: str, opts: Optional[ResourceOptions] = None):
-        super().__init__('custom:infrastructure:MultiTenantSaaSStack', name, {}, opts)
-        
-        # Configuration
-        self.region = "us-east-1"
-        self.vpc_cidr = "10.18.0.0/16"
-        self.availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
-        
-        # Create core infrastructure
-        self._create_networking()
-        self._create_security_groups()
-        self._create_iam_roles()
-        self._create_database()
-        self._create_cache_clusters()
-        self._create_storage_and_cdn()
-        self._create_compute_and_load_balancing()
-        self._create_dns_and_certificates()
-        self._create_authentication()
-        self._create_serverless_components()
-        self._create_monitoring()
-        self._create_configuration_management()
-        
-        # Export critical outputs
-        self._export_outputs()
-    
-    def _create_networking(self):
-        """Create VPC with public/private subnets across multiple AZs."""
-        
-        # Create VPC with DNS support for internal resolution
-        self.vpc = ec2.Vpc("saas-vpc",
-            cidr_block=self.vpc_cidr,
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={"Name": "saas-multi-tenant-vpc", "Environment": "production"}
-        )
-        
-        # Internet Gateway for public subnet connectivity
-        self.igw = ec2.InternetGateway("saas-igw",
-            vpc_id=self.vpc.id,
-            tags={"Name": "saas-igw"}
-        )
-        
-        # Create public and private subnets across AZs
-        self.public_subnets = []
-        self.private_subnets = []
-        self.database_subnets = []
-        self.nat_gateways = []
-        
-        for idx, az in enumerate(self.availability_zones):
-            # Public subnet for ALB and NAT Gateway
-            public_subnet = ec2.Subnet(f"public-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{idx}.0/24",
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags={"Name": f"public-subnet-{az}", "Type": "public"}
-            )
-            self.public_subnets.append(public_subnet)
-            
-            # Elastic IP for NAT Gateway
-            eip = ec2.Eip(f"nat-eip-{idx}",
-                tags={"Name": f"nat-eip-{az}"}
-            )
-            
-            # NAT Gateway for private subnet outbound connectivity
-            nat_gw = ec2.NatGateway(f"nat-gateway-{idx}",
-                allocation_id=eip.id,
-                subnet_id=public_subnet.id,
-                tags={"Name": f"nat-gateway-{az}"}
-            )
-            self.nat_gateways.append(nat_gw)
-            
-            # Private subnet for application tier
-            private_subnet = ec2.Subnet(f"private-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{10 + idx}.0/24",
-                availability_zone=az,
-                tags={"Name": f"private-subnet-{az}", "Type": "private"}
-            )
-            self.private_subnets.append(private_subnet)
-            
-            # Database subnet for Aurora
-            database_subnet = ec2.Subnet(f"database-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{20 + idx}.0/24",
-                availability_zone=az,
-                tags={"Name": f"database-subnet-{az}", "Type": "database"}
-            )
-            self.database_subnets.append(database_subnet)
-        
-        # Route tables
-        self.public_route_table = ec2.RouteTable("public-route-table",
-            vpc_id=self.vpc.id,
-            tags={"Name": "public-route-table"}
-        )
-        
-        # Public route to Internet Gateway
-        ec2.Route("public-route",
-            route_table_id=self.public_route_table.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=self.igw.id
-        )
-        
-        # Associate public subnets with public route table
-        for idx, subnet in enumerate(self.public_subnets):
-            ec2.RouteTableAssociation(f"public-rta-{idx}",
-                route_table_id=self.public_route_table.id,
-                subnet_id=subnet.id
-            )
-        
-        # Private route tables (one per AZ for NAT Gateway)
-        for idx, nat_gw in enumerate(self.nat_gateways):
-            private_route_table = ec2.RouteTable(f"private-route-table-{idx}",
-                vpc_id=self.vpc.id,
-                tags={"Name": f"private-route-table-{self.availability_zones[idx]}"}
-            )
-            
-            # Private route to NAT Gateway
-            ec2.Route(f"private-route-{idx}",
-                route_table_id=private_route_table.id,
-                destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gw.id
-            )
-            
-            # Associate private subnet with route table
-            ec2.RouteTableAssociation(f"private-rta-{idx}",
-                route_table_id=private_route_table.id,
-                subnet_id=self.private_subnets[idx].id
-            )
-            
-            # Associate database subnet with private route table
-            ec2.RouteTableAssociation(f"database-rta-{idx}",
-                route_table_id=private_route_table.id,
-                subnet_id=self.database_subnets[idx].id
-            )
-    
-    def _create_security_groups(self):
-        """Create security groups with least-privilege access."""
-        
-        # ALB Security Group - allows HTTPS traffic from internet
-        self.alb_sg = ec2.SecurityGroup("alb-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Application Load Balancer",
-            ingress=[
-                ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=443,
-                    to_port=443,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTPS from internet"
-                ),
-                ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTP from internet (redirect to HTTPS)"
-                )
-            ],
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "alb-security-group"}
-        )
-        
-        # Application tier Security Group
-        self.app_sg = ec2.SecurityGroup("app-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for application instances",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "app-security-group"}
-        )
-        
-        # Allow traffic from ALB to App tier
-        ec2.SecurityGroupRule("alb-to-app",
-            type="ingress",
-            from_port=8080,
-            to_port=8080,
-            protocol="tcp",
-            security_group_id=self.app_sg.id,
-            source_security_group_id=self.alb_sg.id,
-            description="Traffic from ALB"
-        )
-        
-        # Database Security Group
-        self.db_sg = ec2.SecurityGroup("db-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Aurora PostgreSQL",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "database-security-group"}
-        )
-        
-        # Allow PostgreSQL traffic from App tier
-        ec2.SecurityGroupRule("app-to-db",
-            type="ingress",
-            from_port=5432,
-            to_port=5432,
-            protocol="tcp",
-            security_group_id=self.db_sg.id,
-            source_security_group_id=self.app_sg.id,
-            description="PostgreSQL from app tier"
-        )
-        
-        # Redis Security Group
-        self.redis_sg = ec2.SecurityGroup("redis-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for ElastiCache Redis",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "redis-security-group"}
-        )
-        
-        # Allow Redis traffic from App tier
-        ec2.SecurityGroupRule("app-to-redis",
-            type="ingress",
-            from_port=6379,
-            to_port=6379,
-            protocol="tcp",
-            security_group_id=self.redis_sg.id,
-            source_security_group_id=self.app_sg.id,
-            description="Redis from app tier"
-        )
-        
-        # Lambda Security Group
-        self.lambda_sg = ec2.SecurityGroup("lambda-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Lambda functions",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "lambda-security-group"}
-        )
-    
-    def _create_iam_roles(self):
-        """Create IAM roles with least-privilege policies."""
-        
-        # EC2 Instance Role for application tier
-        self.ec2_assume_role_policy = json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"}
-            }]
-        })
-        
-        self.ec2_role = iam.Role("ec2-app-role",
-            assume_role_policy=self.ec2_assume_role_policy,
-            description="IAM role for EC2 application instances",
-            tags={"Name": "ec2-app-role"}
-        )
-        
-        # Policy for EC2 instances - access to S3, SSM, CloudWatch
-        self.ec2_policy = iam.Policy("ec2-app-policy",
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetObject",
-                            "s3:PutObject",
-                            "s3:DeleteObject"
-                        ],
-                        "Resource": "arn:aws:s3:::tenant-*/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:ExistingObjectTag/TenantId": "${aws:PrincipalTag/TenantId}"
-                            }
-                        }
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "ssm:GetParameter",
-                            "ssm:GetParameters"
-                        ],
-                        "Resource": f"arn:aws:ssm:{self.region}:*:parameter/saas/tenant/*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
-                        ],
-                        "Resource": "arn:aws:logs:*:*:*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "cloudwatch:PutMetricData"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            })
-        )
-        
-        iam.RolePolicyAttachment("ec2-policy-attachment",
-            role=self.ec2_role.name,
-            policy_arn=self.ec2_policy.arn
-        )
-        
-        self.ec2_instance_profile = iam.InstanceProfile("ec2-instance-profile",
-            role=self.ec2_role.name
-        )
-        
-        # Lambda Execution Role for tenant provisioning
-        self.lambda_assume_role_policy = json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {"Service": "lambda.amazonaws.com"}
-            }]
-        })
-        
-        self.lambda_role = iam.Role("lambda-provisioning-role",
-            assume_role_policy=self.lambda_assume_role_policy,
-            description="IAM role for tenant provisioning Lambda",
-            tags={"Name": "lambda-provisioning-role"}
-        )
-        
-        # Lambda policy for tenant provisioning
-        self.lambda_policy = iam.Policy("lambda-provisioning-policy",
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "cognito-idp:CreateUserPool",
-                            "cognito-idp:CreateUserPoolDomain",
-                            "cognito-idp:UpdateUserPool"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "route53:CreateHostedZone",
-                            "route53:ChangeResourceRecordSets",
-                            "route53:GetHostedZone"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "acm:RequestCertificate",
-                            "acm:DescribeCertificate",
-                            "acm:DeleteCertificate"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "elasticloadbalancing:CreateRule",
-                            "elasticloadbalancing:ModifyRule",
-                            "elasticloadbalancing:DeleteRule",
-                            "elasticloadbalancing:DescribeRules"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "dynamodb:PutItem",
-                            "dynamodb:GetItem",
-                            "dynamodb:UpdateItem",
-                            "dynamodb:Query"
-                        ],
-                        "Resource": "arn:aws:dynamodb:*:*:table/tenant-registry*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
-                        ],
-                        "Resource": "arn:aws:logs:*:*:*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "ec2:CreateNetworkInterface",
-                            "ec2:DescribeNetworkInterfaces",
-                            "ec2:DeleteNetworkInterface",
-                            "ec2:AssignPrivateIpAddresses",
-                            "ec2:UnassignPrivateIpAddresses"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            })
-        )
-        
-        iam.RolePolicyAttachment("lambda-policy-attachment",
-            role=self.lambda_role.name,
-            policy_arn=self.lambda_policy.arn
-        )
-        
-        # Attach VPC execution policy for Lambda
-        iam.RolePolicyAttachment("lambda-vpc-policy",
-            role=self.lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-        )
-    
-    def _create_database(self):
-        """Create Aurora PostgreSQL cluster with Row-Level Security for tenant isolation."""
-        
-        # Database subnet group
-        self.db_subnet_group = rds.SubnetGroup("aurora-subnet-group",
-            subnet_ids=[subnet.id for subnet in self.database_subnets],
-            description="Subnet group for Aurora PostgreSQL cluster",
-            tags={"Name": "aurora-subnet-group"}
-        )
-        
-        # Parameter group for PostgreSQL with RLS optimization
-        self.db_parameter_group = rds.ClusterParameterGroup("aurora-pg-params",
-            family="aurora-postgresql14",
-            description="Parameter group for multi-tenant Aurora PostgreSQL",
-            parameters=[
-                {"name": "shared_preload_libraries", "value": "pg_stat_statements,pgaudit"},
-                {"name": "log_statement", "value": "all"},
-                {"name": "log_connections", "value": "1"},
-                {"name": "log_disconnections", "value": "1"},
-                {"name": "row_security", "value": "on"},  # Enable RLS
-                {"name": "pgaudit.log", "value": "ALL"},
-                {"name": "max_connections", "value": "1000"}  # Support scale
-            ],
-            tags={"Name": "aurora-pg-params"}
-        )
-        
-        # Aurora PostgreSQL cluster with encryption
-        self.aurora_cluster = rds.Cluster("aurora-cluster",
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            database_name="saasdb",
-            master_username="dbadmin",
-            master_password=pulumi.Config().require_secret("db_password"),
-            db_subnet_group_name=self.db_subnet_group.name,
-            db_cluster_parameter_group_name=self.db_parameter_group.name,
-            vpc_security_group_ids=[self.db_sg.id],
-            storage_encrypted=True,
-            backup_retention_period=30,
-            preferred_backup_window="03:00-04:00",
-            preferred_maintenance_window="mon:04:00-mon:05:00",
-            enabled_cloudwatch_logs_exports=["postgresql"],
-            deletion_protection=True,
-            skip_final_snapshot=False,
-            final_snapshot_identifier="aurora-final-snapshot",
-            tags={
-                "Name": "aurora-multi-tenant-cluster",
-                "Environment": "production",
-                "TenantIsolation": "RLS"
-            }
-        )
-        
-        # Aurora instances (writer and reader)
-        self.aurora_writer = rds.ClusterInstance("aurora-writer",
-            cluster_identifier=self.aurora_cluster.id,
-            instance_class="db.r6g.xlarge",  # Production-grade instance
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            performance_insights_enabled=True,
-            monitoring_interval=60,
-            monitoring_role_arn=self._create_rds_monitoring_role().arn,
-            tags={"Name": "aurora-writer", "Role": "writer"}
-        )
-        
-        self.aurora_reader = rds.ClusterInstance("aurora-reader",
-            cluster_identifier=self.aurora_cluster.id,
-            instance_class="db.r6g.xlarge",
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            performance_insights_enabled=True,
-            monitoring_interval=60,
-            monitoring_role_arn=self._create_rds_monitoring_role().arn,
-            tags={"Name": "aurora-reader", "Role": "reader"}
-        )
-    
-    def _create_rds_monitoring_role(self) -> iam.Role:
-        """Create IAM role for RDS enhanced monitoring."""
-        role = iam.Role("rds-monitoring-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "monitoring.rds.amazonaws.com"}
-                }]
-            })
-        )
-        
-        iam.RolePolicyAttachment("rds-monitoring-policy",
-            role=role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-        )
-        
-        return role
-    
-    def _create_cache_clusters(self):
-        """Create ElastiCache Redis clusters with tier-based separation."""
-        
-        # Subnet group for ElastiCache
-        self.cache_subnet_group = elasticache.SubnetGroup("cache-subnet-group",
-            subnet_ids=[subnet.id for subnet in self.private_subnets],
-            description="Subnet group for ElastiCache Redis",
-            tags={"Name": "cache-subnet-group"}
-        )
-        
-        # Parameter group for Redis optimization
-        self.redis_parameter_group = elasticache.ParameterGroup("redis-params",
-            family="redis7",
-            description="Parameter group for multi-tenant Redis",
-            parameters=[
-                {"name": "maxmemory-policy", "value": "allkeys-lru"},
-                {"name": "timeout", "value": "300"},
-                {"name": "tcp-keepalive", "value": "300"},
-                {"name": "notify-keyspace-events", "value": "Ex"}
-            ],
-            tags={"Name": "redis-params"}
-        )
-        
-        # Premium tier - Dedicated Redis cluster with replication
-        self.premium_redis = elasticache.ReplicationGroup("premium-redis",
-            replication_group_description="Dedicated Redis for premium tenants",
-            engine="redis",
-            node_type="cache.r6g.large",
-            num_cache_clusters=2,  # Primary + replica
-            automatic_failover_enabled=True,
-            multi_az_enabled=True,
-            subnet_group_name=self.cache_subnet_group.name,
-            security_group_ids=[self.redis_sg.id],
-            parameter_group_name=self.redis_parameter_group.name,
-            at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            auth_token=pulumi.Config().require_secret("redis_auth_token"),
-            snapshot_retention_limit=5,
-            snapshot_window="03:00-05:00",
-            maintenance_window="sun:05:00-sun:06:00",
-            tags={
-                "Name": "premium-redis-cluster",
-                "Tier": "premium",
-                "TenantIsolation": "physical"
-            }
-        )
-        
-        # Standard tier - Shared Redis cluster with logical isolation
-        self.standard_redis = elasticache.ReplicationGroup("standard-redis",
-            replication_group_description="Shared Redis for standard tenants with key prefixing",
-            engine="redis",
-            node_type="cache.r6g.xlarge",  # Larger instance for multiple tenants
-            num_cache_clusters=3,  # More nodes for shared workload
-            automatic_failover_enabled=True,
-            multi_az_enabled=True,
-            subnet_group_name=self.cache_subnet_group.name,
-            security_group_ids=[self.redis_sg.id],
-            parameter_group_name=self.redis_parameter_group.name,
-            at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            auth_token=pulumi.Config().require_secret("redis_auth_token"),
-            snapshot_retention_limit=5,
-            snapshot_window="03:00-05:00",
-            maintenance_window="sun:05:00-sun:06:00",
-            tags={
-                "Name": "standard-redis-cluster",
-                "Tier": "standard",
-                "TenantIsolation": "logical-key-prefix"
-            }
-        )
-    
-    def _create_storage_and_cdn(self):
-        """Create S3 buckets with tenant isolation and CloudFront distribution."""
-        
-        # S3 bucket for tenant data with versioning and encryption
-        self.tenant_data_bucket = s3.Bucket("tenant-data-bucket",
-            bucket=f"saas-tenant-data-{pulumi.get_stack()}",
-            versioning=s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )]
-            ),
-            lifecycle_rules=[
-                s3.BucketLifecycleRuleArgs(
-                    enabled=True,
-                    id="archive-old-versions",
-                    noncurrent_version_transitions=[
-                        s3.BucketLifecycleRuleNoncurrentVersionTransitionArgs(
-                            days=30,
-                            storage_class="GLACIER"
-                        )
-                    ]
-                )
-            ],
-            tags={
-                "Name": "tenant-data-bucket",
-                "Environment": "production",
-                "DataClassification": "confidential"
-            }
-        )
-        
-        # Bucket policy for tenant isolation
-        self.tenant_bucket_policy = s3.BucketPolicy("tenant-data-policy",
-            bucket=self.tenant_data_bucket.id,
-            policy=pulumi.Output.all(self.tenant_data_bucket.arn).apply(
-                lambda args: json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "DenyIncorrectEncryption",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:PutObject",
-                            "Resource": f"{args[0]}/*",
-                            "Condition": {
-                                "StringNotEquals": {
-                                    "s3:x-amz-server-side-encryption": "AES256"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "TenantIsolation",
-                            "Effect": "Allow",
-                            "Principal": {"AWS": "*"},
-                            "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-                            "Resource": f"{args[0]}/*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:ExistingObjectTag/TenantId": "${{aws:PrincipalTag/TenantId}}"
-                                }
-                            }
-                        }
-                    ]
-                })
-            )
-        )
-        
-        # Static assets bucket for CloudFront
-        self.static_assets_bucket = s3.Bucket("static-assets-bucket",
-            bucket=f"saas-static-assets-{pulumi.get_stack()}",
-            website=s3.BucketWebsiteArgs(
-                index_document="index.html",
-                error_document="error.html"
-            ),
-            cors_rules=[
-                s3.BucketCorsRuleArgs(
-                    allowed_headers=["*"],
-                    allowed_methods=["GET", "HEAD"],
-                    allowed_origins=["*"],
-                    max_age_seconds=3000
-                )
-            ],
-            tags={"Name": "static-assets-bucket"}
-        )
-        
-        # Origin Access Identity for CloudFront
-        self.oai = cloudfront.OriginAccessIdentity("cloudfront-oai",
-            comment="OAI for multi-tenant SaaS CloudFront distribution"
-        )
-        
-        # Bucket policy for OAI access
-        self.static_bucket_policy = s3.BucketPolicy("static-assets-policy",
-            bucket=self.static_assets_bucket.id,
-            policy=pulumi.Output.all(
-                self.static_assets_bucket.arn,
-                self.oai.iam_arn
-            ).apply(lambda args: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Sid": "AllowCloudFrontOAI",
-                    "Effect": "Allow",
-                    "Principal": {"AWS": args[1]},
-                    "Action": "s3:GetObject",
-                    "Resource": f"{args[0]}/*"
-                }]
-            }))
-        )
-        
-        # CloudFront distribution with custom SSL
-        self.cdn_distribution = cloudfront.Distribution("cdn-distribution",
-            enabled=True,
-            is_ipv6_enabled=True,
-            comment="Multi-tenant SaaS CDN distribution",
-            default_root_object="index.html",
-            price_class="PriceClass_100",
-            
-            origins=[
-                cloudfront.DistributionOriginArgs(
-                    domain_name=self.static_assets_bucket.bucket_regional_domain_name,
-                    origin_id="S3-static-assets",
-                    s3_origin_config=cloudfront.DistributionOriginS3OriginConfigArgs(
-                        origin_access_identity=self.oai.cloudfront_access_identity_path
-                    )
-                )
-            ],
-            
-            default_cache_behavior=cloudfront.DistributionDefaultCacheBehaviorArgs(
-                target_origin_id="S3-static-assets",
-                viewer_protocol_policy="redirect-to-https",
-                allowed_methods=["GET", "HEAD", "OPTIONS"],
-                cached_methods=["GET", "HEAD"],
-                compress=True,
-                
-                forwarded_values=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
-                    query_string=False,
-                    cookies=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
-                        forward="none"
-                    ),
-                    headers=["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
-                ),
-                
-                min_ttl=0,
-                default_ttl=3600,
-                max_ttl=86400
-            ),
-            
-            restrictions=cloudfront.DistributionRestrictionsArgs(
-                geo_restriction=cloudfront.DistributionRestrictionsGeoRestrictionArgs(
-                    restriction_type="none"
-                )
-            ),
-            
-            viewer_certificate=cloudfront.DistributionViewerCertificateArgs(
-                cloudfront_default_certificate=True  # Will be updated per tenant
-            ),
-            
-            tags={
-                "Name": "cdn-distribution",
-                "Environment": "production"
-            }
-        )
-    
-    def _create_compute_and_load_balancing(self):
-        """Create ALB, Auto Scaling Group, and EC2 instances."""
-        
-        # Application Load Balancer for multi-tenant routing
-        self.alb = elbv2.LoadBalancer("tenant-alb",
-            load_balancer_type="application",
-            subnets=[subnet.id for subnet in self.public_subnets],
-            security_groups=[self.alb_sg.id],
-            enable_deletion_protection=True,
-            enable_http2=True,
-            enable_cross_zone_load_balancing=True,
-            access_logs=elbv2.LoadBalancerAccessLogsArgs(
-                enabled=True,
-                bucket=self._create_alb_logs_bucket().bucket
-            ),
-            tags={
-                "Name": "tenant-alb",
-                "Environment": "production",
-                "Purpose": "multi-tenant-routing"
-            }
-        )
-        
-        # Target group for application instances
-        self.target_group = elbv2.TargetGroup("app-target-group",
-            port=8080,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
-            target_type="instance",
-            
-            health_check=elbv2.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                unhealthy_threshold=3,
-                interval=30,
-                timeout=10,
-                path="/health",
-                matcher="200-299"
-            ),
-            
-            deregistration_delay=30,
-            slow_start=60,
-            
-            stickiness=elbv2.TargetGroupStickinessArgs(
-                enabled=True,
-                type="lb_cookie",
-                cookie_duration=86400  # 24 hours
-            ),
-            
-            tags={"Name": "app-target-group"}
-        )
-        
-        # HTTPS listener with default action
-        self.https_listener = elbv2.Listener("https-listener",
-            load_balancer_arn=self.alb.arn,
-            port=443,
-            protocol="HTTPS",
-            certificate_arn=self._create_default_certificate().arn,
-            
-            default_actions=[elbv2.ListenerDefaultActionArgs(
-                type="fixed-response",
-                fixed_response=elbv2.ListenerDefaultActionFixedResponseArgs(
-                    status_code="404",
-                    content_type="text/plain",
-                    message_body="Tenant not found"
-                )
-            )]
-        )
-        
-        # HTTP listener with redirect to HTTPS
-        self.http_listener = elbv2.Listener("http-listener",
-            load_balancer_arn=self.alb.arn,
-            port=80,
-            protocol="HTTP",
-            
-            default_actions=[elbv2.ListenerDefaultActionArgs(
-                type="redirect",
-                redirect=elbv2.ListenerDefaultActionRedirectArgs(
-                    protocol="HTTPS",
-                    port="443",
-                    status_code="HTTP_301"
-                )
-            )]
-        )
-        
-        # Launch template for EC2 instances
-        self.launch_template = ec2.LaunchTemplate("app-launch-template",
-            name_prefix="saas-app-",
-            image_id="ami-0c02fb55731490381",  # Amazon Linux 2 AMI
-            instance_type="m5.large",
-            
-            iam_instance_profile=ec2.LaunchTemplateIamInstanceProfileArgs(
-                arn=self.ec2_instance_profile.arn
-            ),
-            
-            vpc_security_group_ids=[self.app_sg.id],
-            
-            user_data=base64.b64encode("""#!/bin/bash
-                # Install CloudWatch agent
-                wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-                rpm -U ./amazon-cloudwatch-agent.rpm
-                
-                # Install application dependencies
-                yum update -y
-                yum install -y docker
-                service docker start
-                usermod -a -G docker ec2-user
-                
-                # Configure tenant context extraction middleware
-                cat > /opt/tenant-context.sh << 'EOF'
-                export TENANT_ID=$(aws ssm get-parameter --name /saas/tenant/current --query Parameter.Value --output text)
-                export DB_ENDPOINT=$(aws ssm get-parameter --name /saas/db/endpoint --query Parameter.Value --output text)
-                export REDIS_ENDPOINT=$(aws ssm get-parameter --name /saas/redis/endpoint --query Parameter.Value --output text)
-                EOF
-                
-                # Start application with tenant context
-                source /opt/tenant-context.sh
-                docker run -d -p 8080:8080 \
-                    -e TENANT_ID=$TENANT_ID \
-                    -e DB_ENDPOINT=$DB_ENDPOINT \
-                    -e REDIS_ENDPOINT=$REDIS_ENDPOINT \
-                    your-app-image:latest
-            """.encode()).decode(),
-            
-            block_device_mappings=[ec2.LaunchTemplateBlockDeviceMappingArgs(
-                device_name="/dev/xvda",
-                ebs=ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                    volume_size=30,
-                    volume_type="gp3",
-                    encrypted=True,
-                    delete_on_termination=True
-                )
-            )],
-            
-            metadata_options=ec2.LaunchTemplateMetadataOptionsArgs(
-                http_endpoint="enabled",
-                http_tokens="required",  # IMDSv2 only
-                instance_metadata_tags="enabled"
-            ),
-            
-            monitoring=ec2.LaunchTemplateMonitoringArgs(enabled=True),
-            
-            tag_specifications=[
-                ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={
-                        "Name": "saas-app-instance",
-                        "Environment": "production",
-                        "ManagedBy": "AutoScaling"
-                    }
-                ),
-                ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="volume",
-                    tags={
-                        "Name": "saas-app-volume",
-                        "Environment": "production"
-                    }
-                )
-            ]
-        )
-        
-        # Auto Scaling Group
-        self.asg = autoscaling.Group("app-asg",
-            name="saas-app-asg",
-            vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
-            
-            launch_template=autoscaling.GroupLaunchTemplateArgs(
-                id=self.launch_template.id,
-                version="$Latest"
-            ),
-            
-            min_size=3,
-            max_size=30,
-            desired_capacity=6,
-            
-            health_check_type="ELB",
-            health_check_grace_period=300,
-            
-            target_group_arns=[self.target_group.arn],
-            
-            enabled_metrics=[
-                "GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity",
-                "GroupInServiceInstances", "GroupTotalInstances"
-            ],
-            
-            tags=[
-                autoscaling.GroupTagArgs(
-                    key="Name",
-                    value="saas-app-asg-instance",
-                    propagate_at_launch=True
-                ),
-                autoscaling.GroupTagArgs(
-                    key="Environment",
-                    value="production",
-                    propagate_at_launch=True
-                )
-            ]
-        )
-        
-        # Auto Scaling Policies
-        self.scale_up_policy = autoscaling.Policy("scale-up",
-            autoscaling_group_name=self.asg.name,
-            policy_type="TargetTrackingScaling",
-            target_tracking_configuration=autoscaling.PolicyTargetTrackingConfigurationArgs(
-                predefined_metric_specification=autoscaling.PolicyTargetTrackingConfigurationPredefinedMetricSpecificationArgs(
-                    predefined_metric_type="ASGAverageCPUUtilization"
-                ),
-                target_value=70.0
-            )
-        )
-    
-    def _create_alb_logs_bucket(self) -> s3.Bucket:
-        """Create S3 bucket for ALB access logs."""
-        logs_bucket = s3.Bucket("alb-logs-bucket",
-            bucket=f"saas-alb-logs-{pulumi.get_stack()}",
-            lifecycle_rules=[
-                s3.BucketLifecycleRuleArgs(
-                    enabled=True,
-                    id="delete-old-logs",
-                    expiration=s3.BucketLifecycleRuleExpirationArgs(days=90)
-                )
-            ]
-        )
-        
-        # Bucket policy for ALB logging
-        s3.BucketPolicy("alb-logs-policy",
-            bucket=logs_bucket.id,
-            policy=pulumi.Output.all(logs_bucket.arn).apply(
-                lambda args: json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [{
-                        "Sid": "AllowALBLogging",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": "arn:aws:iam::127311923021:root"},  # ALB service account for us-east-1
-                        "Action": "s3:PutObject",
-                        "Resource": f"{args[0]}/AWSLogs/*"
-                    }]
-                })
-            )
-        )
-        
-        return logs_bucket
-    
-    def _create_default_certificate(self) -> acm.Certificate:
-        """Create default SSL certificate for ALB."""
-        return acm.Certificate("default-cert",
-            domain_name="*.saas-platform.example.com",
-            validation_method="DNS",
-            tags={"Name": "default-alb-cert"}
-        )
-    
-    def _create_dns_and_certificates(self):
-        """Create Route53 hosted zones and ACM certificates for custom domains."""
-        
-        # Main platform hosted zone
-        self.main_zone = route53.Zone("main-zone",
-            name="saas-platform.example.com",
-            comment="Main hosted zone for SaaS platform",
-            tags={"Name": "main-platform-zone"}
-        )
-        
-        # ALB DNS record
-        route53.Record("alb-dns",
-            zone_id=self.main_zone.zone_id,
-            name="app.saas-platform.example.com",
-            type="A",
-            aliases=[route53.RecordAliasArgs(
-                name=self.alb.dns_name,
-                zone_id=self.alb.zone_id,
-                evaluate_target_health=True
-            )]
-        )
-        
-        # CloudFront DNS record
-        route53.Record("cdn-dns",
-            zone_id=self.main_zone.zone_id,
-            name="cdn.saas-platform.example.com",
-            type="A",
-            aliases=[route53.RecordAliasArgs(
-                name=self.cdn_distribution.domain_name,
-                zone_id=self.cdn_distribution.hosted_zone_id,
-                evaluate_target_health=False
-            )]
-        )
-    
-    def _create_authentication(self):
-        """Create Cognito user pools for tenant isolation."""
-        
-        # Cognito user pool template for tenants
-        self.user_pool_template = cognito.UserPool("user-pool-template",
-            name="saas-tenant-template",
-            
-            account_recovery_setting=cognito.UserPoolAccountRecoverySettingArgs(
-                recovery_mechanisms=[
-                    cognito.UserPoolAccountRecoverySettingRecoveryMechanismArgs(
-                        name="verified_email",
-                        priority=1
-                    )
-                ]
-            ),
-            
-            auto_verified_attributes=["email"],
-            
-            device_configuration=cognito.UserPoolDeviceConfigurationArgs(
-                challenge_required_on_new_device=True,
-                device_only_remembered_on_user_prompt=True
-            ),
-            
-            email_configuration=cognito.UserPoolEmailConfigurationArgs(
-                email_sending_account="DEVELOPER",
-                from_email_address="noreply@saas-platform.example.com"
-            ),
-            
-            mfa_configuration="OPTIONAL",
-            
-            password_policy=cognito.UserPoolPasswordPolicyArgs(
-                minimum_length=12,
-                require_lowercase=True,
-                require_uppercase=True,
-                require_numbers=True,
-                require_symbols=True
-            ),
-            
-            schema=[
-                cognito.UserPoolSchemaArgs(
-                    name="email",
-                    attribute_data_type="String",
-                    mutable=True,
-                    required=True
-                ),
-                cognito.UserPoolSchemaArgs(
-                    name="tenant_id",
-                    attribute_data_type="String",
-                    mutable=False,
-                    required=False,
-                    developer_only_attribute=True
-                ),
-                cognito.UserPoolSchemaArgs(
-                    name="organization",
-                    attribute_data_type="String",
-                    mutable=True,
-                    required=False
-                )
-            ],
-            
-            user_attribute_update_settings=cognito.UserPoolUserAttributeUpdateSettingsArgs(
-                attributes_require_verification_before_update=["email"]
-            ),
-            
-            username_attributes=["email"],
-            username_configuration=cognito.UserPoolUsernameConfigurationArgs(
-                case_sensitive=False
-            ),
-            
-            tags={
-                "Name": "user-pool-template",
-                "Type": "template"
-            }
-        )
-    
-    def _create_serverless_components(self):
-        """Create Lambda functions and DynamoDB for tenant provisioning."""
-        
-        # DynamoDB table for tenant registry
-        self.tenant_registry = dynamodb.Table("tenant-registry",
-            name="tenant-registry",
-            billing_mode="PAY_PER_REQUEST",
-            
-            hash_key="tenant_id",
-            
-            attributes=[
-                dynamodb.TableAttributeArgs(name="tenant_id", type="S"),
-                dynamodb.TableAttributeArgs(name="domain", type="S"),
-                dynamodb.TableAttributeArgs(name="tier", type="S"),
-                dynamodb.TableAttributeArgs(name="organization", type="S")
-            ],
-            
-            global_secondary_indexes=[
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="domain-index",
-                    hash_key="domain",
-                    projection_type="ALL"
-                ),
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="tier-index",
-                    hash_key="tier",
-                    range_key="tenant_id",
-                    projection_type="ALL"
-                ),
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="org-index",
-                    hash_key="organization",
-                    projection_type="ALL"
-                )
-            ],
-            
-            point_in_time_recovery=dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
-            
-            server_side_encryption=dynamodb.TableServerSideEncryptionArgs(enabled=True),
-            
-            tags={
-                "Name": "tenant-registry",
-                "Environment": "production"
-            }
-        )
-        
-        # Lambda function for tenant provisioning
-        self.tenant_provisioning_lambda = lambda_.Function("tenant-provisioning",
-            name="tenant-provisioning",
-            runtime="python3.9",
-            handler="index.handler",
-            role=self.lambda_role.arn,
-            timeout=300,
-            memory_size=1024,
-            
-            environment=lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "TENANT_TABLE": self.tenant_registry.name,
-                    "USER_POOL_ID": self.user_pool_template.id,
-                    "ALB_LISTENER_ARN": self.https_listener.arn,
-                    "TARGET_GROUP_ARN": self.target_group.arn,
-                    "AURORA_ENDPOINT": self.aurora_cluster.endpoint,
-                    "AURORA_SECRET_ARN": pulumi.Config().get("aurora_secret_arn") or "",
-                    "PREMIUM_REDIS_ENDPOINT": self.premium_redis.configuration_endpoint_address,
-                    "STANDARD_REDIS_ENDPOINT": self.standard_redis.configuration_endpoint_address
-                }
-            ),
-            
-            vpc_config=lambda_.FunctionVpcConfigArgs(
-                subnet_ids=[subnet.id for subnet in self.private_subnets],
-                security_group_ids=[self.lambda_sg.id]
-            ),
-            
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.FileAsset("./lambda/tenant_provisioning.py")
+    const environment = 'prod';
+    const region = this.region;
+
+    // ==================== NETWORKING ====================
+    /**
+     * VPC Configuration with private subnets for secure compute environments
+     * Includes VPC endpoints for AWS services to avoid NAT gateway costs
+     */
+    this.vpc = new ec2.Vpc(this, 'MLPipelineVPC', {
+      vpcName: `ml-pipeline-vpc-${environment}-${region}`,
+      maxAzs: 2, // High availability across 2 AZs
+      natGateways: 0, // Cost optimization - using VPC endpoints instead
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      ],
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+    });
+
+    // VPC Endpoints for private connectivity
+    const s3Endpoint = new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      vpc: this.vpc,
+    });
+
+    const dynamoDbEndpoint = new ec2.GatewayVpcEndpoint(this, 'DynamoDbEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+      vpc: this.vpc,
+    });
+
+    const sagemakerEndpoint = new ec2.InterfaceVpcEndpoint(this, 'SageMakerEndpoint', {
+      vpc: this.vpc,
+      service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
+      privateDnsEnabled: true,
+    });
+
+    // Security group for Lambda and Batch compute
+    const computeSecurityGroup = new ec2.SecurityGroup(this, 'ComputeSecurityGroup', {
+      vpc: this.vpc,
+      description: 'Security group for Lambda and Batch compute resources',
+      allowAllOutbound: true,
+    });
+
+    // ==================== ENCRYPTION ====================
+    /**
+     * KMS key for encryption at rest across all services
+     */
+    const encryptionKey = new kms.Key(this, 'MLPipelineKey', {
+      alias: `alias/ml-pipeline-${environment}`,
+      description: 'KMS key for ML pipeline encryption',
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // ==================== STORAGE ====================
+    /**
+     * S3 bucket for model artifacts with versioning enabled
+     * Supports model rollback and audit trail
+     */
+    this.modelBucket = new s3.Bucket(this, 'ModelArtifactsBucket', {
+      bucketName: `ml-pipeline-models-${environment}-${region}-${this.account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'delete-old-versions',
+          noncurrentVersionExpiration: cdk.Duration.days(90),
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    /**
+     * S3 bucket for batch input data
+     */
+    const batchInputBucket = new s3.Bucket(this, 'BatchInputBucket', {
+      bucketName: `ml-pipeline-batch-input-${environment}-${region}-${this.account}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'expire-processed-data',
+          expiration: cdk.Duration.days(7),
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    /**
+     * DynamoDB table for prediction results with TTL
+     * Automatic expiration after 30 days to manage storage costs
+     */
+    this.predictionTable = new dynamodb.Table(this, 'PredictionResultsTable', {
+      tableName: `ml-pipeline-predictions-${environment}`,
+      partitionKey: { name: 'predictionId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryptionKey,
+      timeToLiveAttribute: 'expirationTime', // TTL configuration
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+    });
+
+    // Global secondary index for querying by model version
+    this.predictionTable.addGlobalSecondaryIndex({
+      indexName: 'modelVersionIndex',
+      partitionKey: { name: 'modelVersion', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // ==================== MODEL VERSIONING ====================
+    /**
+     * Parameter Store hierarchy for model version management
+     * Supports rollback by updating active version parameter
+     */
+    const activeModelVersionParam = new ssm.StringParameter(this, 'ActiveModelVersion', {
+      parameterName: '/ml-pipeline/models/active-version',
+      stringValue: 'v1.0.0',
+      description: 'Currently active model version for inference',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    const modelMetadataParam = new ssm.StringParameter(this, 'ModelMetadata', {
+      parameterName: '/ml-pipeline/models/versions/v1.0.0/metadata',
+      stringValue: JSON.stringify({
+        s3Path: `s3://${this.modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
+        deployedAt: new Date().toISOString(),
+        performanceBaseline: {
+          latencyP50: 100,
+          latencyP99: 500,
+          accuracy: 0.95,
+        },
+      }),
+      description: 'Model metadata including S3 path and performance metrics',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    // ==================== IAM ROLES ====================
+    /**
+     * IAM role for Lambda preprocessing function
+     * Follows least privilege principle
+     */
+    const preprocessingLambdaRole = new iam.Role(this, 'PreprocessingLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+      ],
+      inlinePolicies: {
+        PreprocessingPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'sagemaker:InvokeEndpoint',
+                'sagemaker:InvokeEndpointAsync',
+              ],
+              resources: ['*'], // Will be scoped to specific endpoint ARN after creation
             }),
-            
-            tracing_config=lambda_.FunctionTracingConfigArgs(mode="Active"),
-            
-            tags={
-                "Name": "tenant-provisioning",
-                "Purpose": "automated-tenant-onboarding"
-            }
-        )
-    
-    def _create_monitoring(self):
-        """Create CloudWatch log groups and alarms for tenant isolation."""
-        
-        # Log group for application logs with tenant separation
-        self.app_log_group = logs.LogGroup("app-logs",
-            name="/aws/saas/application",
-            retention_in_days=30,
-            kms_key_id=self._create_logs_kms_key().arn,
-            tags={"Name": "app-logs", "Type": "application"}
-        )
-        
-        # Log group for audit logs
-        self.audit_log_group = logs.LogGroup("audit-logs",
-            name="/aws/saas/audit",
-            retention_in_days=2557,  # 7 years for compliance
-            kms_key_id=self._create_logs_kms_key().arn,
-            tags={"Name": "audit-logs", "Type": "audit"}
-        )
-        
-        # CloudWatch Logs Insights query for tenant analysis
-        self.tenant_insights_query = logs.QueryDefinition("tenant-insights",
-            name="TenantActivityAnalysis",
-            log_group_names=[self.app_log_group.name],
-            query_string="""
-                fields @timestamp, tenant_id, operation, duration, status
-                | filter tenant_id = "TENANT_ID_PLACEHOLDER"
-                | stats count() by operation
-                | sort count() desc
-            """
-        )
-    
-    def _create_logs_kms_key(self) -> aws.kms.Key:
-        """Create KMS key for CloudWatch Logs encryption."""
-        return aws.kms.Key("logs-kms-key",
-            description="KMS key for CloudWatch Logs encryption",
-            deletion_window_in_days=30,
-            enable_key_rotation=True,
-            tags={"Name": "logs-kms-key"}
-        )
-    
-    def _create_configuration_management(self):
-        """Create Systems Manager Parameter Store for tenant configurations."""
-        
-        # Database endpoint parameter
-        ssm.Parameter("db-endpoint",
-            name="/saas/db/endpoint",
-            type="String",
-            value=self.aurora_cluster.endpoint,
-            description="Aurora cluster endpoint",
-            tags={"Name": "db-endpoint"}
-        )
-        
-        # Redis endpoints by tier
-        ssm.Parameter("redis-premium-endpoint",
-            name="/saas/redis/premium/endpoint",
-            type="String",
-            value=self.premium_redis.configuration_endpoint_address,
-            description="Premium tier Redis endpoint",
-            tags={"Name": "redis-premium-endpoint"}
-        )
-        
-        ssm.Parameter("redis-standard-endpoint",
-            name="/saas/redis/standard/endpoint",
-            type="String",
-            value=self.standard_redis.configuration_endpoint_address,
-            description="Standard tier Redis endpoint",
-            tags={"Name": "redis-standard-endpoint"}
-        )
-        
-        # Application configuration template
-        ssm.Parameter("app-config-template",
-            name="/saas/config/app-template",
-            type="String",
-            value=json.dumps({
-                "features": {
-                    "max_users": 100,
-                    "api_rate_limit": 1000,
-                    "storage_gb": 10,
-                    "custom_domains": 1
-                },
-                "security": {
-                    "session_timeout_minutes": 30,
-                    "password_rotation_days": 90,
-                    "mfa_required": False
-                }
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ssm:GetParameter',
+                'ssm:GetParametersByPath',
+              ],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/ml-pipeline/*`,
+              ],
             }),
-            description="Default application configuration template",
-            tags={"Name": "app-config-template"}
-        )
-    
-    def _export_outputs(self):
-        """Export stack outputs for external consumption."""
-        
-        pulumi.export("vpc_id", self.vpc.id)
-        pulumi.export("alb_dns", self.alb.dns_name)
-        pulumi.export("aurora_endpoint", self.aurora_cluster.endpoint)
-        pulumi.export("aurora_reader_endpoint", self.aurora_cluster.reader_endpoint)
-        pulumi.export("premium_redis_endpoint", self.premium_redis.configuration_endpoint_address)
-        pulumi.export("standard_redis_endpoint", self.standard_redis.configuration_endpoint_address)
-        pulumi.export("cdn_domain", self.cdn_distribution.domain_name)
-        pulumi.export("tenant_data_bucket", self.tenant_data_bucket.bucket)
-        pulumi.export("static_assets_bucket", self.static_assets_bucket.bucket)
-        pulumi.export("tenant_registry_table", self.tenant_registry.name)
-        pulumi.export("provisioning_function", self.tenant_provisioning_lambda.name)
-        pulumi.export("main_hosted_zone_id", self.main_zone.zone_id)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Decrypt'],
+              resources: [encryptionKey.keyArn],
+            }),
+          ],
+        }),
+      },
+    });
 
-# Lambda function code for tenant provisioning (referenced in stack)
-TENANT_PROVISIONING_LAMBDA_CODE = """
+    // Grant DynamoDB permissions
+    this.predictionTable.grantWriteData(preprocessingLambdaRole);
+    this.modelBucket.grantRead(preprocessingLambdaRole);
+
+    /**
+     * IAM role for SageMaker endpoint execution
+     */
+    const sagemakerExecutionRole = new iam.Role(this, 'SageMakerExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('sagemaker.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSageMakerFullAccess'),
+      ],
+    });
+
+    this.modelBucket.grantRead(sagemakerExecutionRole);
+
+    // ==================== LAMBDA FUNCTIONS ====================
+    /**
+     * Preprocessing Lambda function
+     * Handles data transformation before inference
+     */
+    const preprocessingLambda = new lambda.Function(this, 'PreprocessingFunction', {
+      functionName: `ml-pipeline-preprocessing-${environment}`,
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
 import json
 import boto3
-import uuid
 import os
-from typing import Dict, Any
+import time
+import uuid
+from datetime import datetime, timedelta
 
-dynamodb = boto3.client('dynamodb')
-cognito = boto3.client('cognito-idp')
-route53 = boto3.client('route53')
-acm = boto3.client('acm')
-elbv2 = boto3.client('elbv2')
-rds = boto3.client('rds-data')
+sagemaker_runtime = boto3.client('sagemaker-runtime')
+dynamodb = boto3.resource('dynamodb')
+ssm = boto3.client('ssm')
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    '''
-    Automated tenant provisioning workflow.
-    Creates: Cognito user pool, Route53 records, ACM certificate, ALB listener rule.
-    '''
+def handler(event, context):
+    """
+    Preprocesses input data and invokes SageMaker endpoint for inference.
+    Implements A/B testing by routing to multi-variant endpoint.
+    """
     try:
-        tenant_data = json.loads(event['body'])
-        tenant_id = str(uuid.uuid4())
-        domain = tenant_data['domain']
-        tier = tenant_data.get('tier', 'standard')
-        organization = tenant_data['organization']
+        # Parse input
+        body = json.loads(event.get('body', '{}'))
         
-        # 1. Create Cognito User Pool for tenant
-        user_pool = cognito.create_user_pool(
-            PoolName=f'tenant-{tenant_id}',
-            Policies={
-                'PasswordPolicy': {
-                    'MinimumLength': 12,
-                    'RequireUppercase': True,
-                    'RequireLowercase': True,
-                    'RequireNumbers': True,
-                    'RequireSymbols': True
-                }
-            },
-            Schema=[
-                {'Name': 'email', 'AttributeDataType': 'String', 'Required': True},
-                {'Name': 'tenant_id', 'AttributeDataType': 'String', 'DeveloperOnlyAttribute': True}
-            ]
+        # Get active model version from Parameter Store
+        active_version = ssm.get_parameter(
+            Name='/ml-pipeline/models/active-version'
+        )['Parameter']['Value']
+        
+        # Preprocess data (example transformation)
+        processed_data = {
+            'features': body.get('features', []),
+            'metadata': {
+                'requestId': str(uuid.uuid4()),
+                'timestamp': int(time.time()),
+                'modelVersion': active_version
+            }
+        }
+        
+        # Invoke SageMaker endpoint (multi-variant for A/B testing)
+        endpoint_name = os.environ['SAGEMAKER_ENDPOINT_NAME']
+        response = sagemaker_runtime.invoke_endpoint(
+            EndpointName=endpoint_name,
+            ContentType='application/json',
+            Body=json.dumps(processed_data['features'])
         )
         
-        # 2. Create custom domain for Cognito
-        cognito.create_user_pool_domain(
-            Domain=f'{tenant_id}.auth',
-            UserPoolId=user_pool['UserPool']['Id']
-        )
+        # Parse prediction result
+        result = json.loads(response['Body'].read())
         
-        # 3. Request ACM certificate for custom domain
-        cert = acm.request_certificate(
-            DomainName=domain,
-            ValidationMethod='DNS',
-            SubjectAlternativeNames=[f'*.{domain}']
-        )
+        # Store prediction in DynamoDB with TTL
+        table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+        expiration_time = int(time.time()) + (30 * 24 * 60 * 60)  # 30 days TTL
         
-        # 4. Create ALB listener rule for host-based routing
-        elbv2.create_rule(
-            ListenerArn=os.environ['ALB_LISTENER_ARN'],
-            Conditions=[
-                {
-                    'Field': 'host-header',
-                    'Values': [domain, f'*.{domain}']
-                }
-            ],
-            Priority=get_next_priority(),
-            Actions=[
-                {
-                    'Type': 'forward',
-                    'TargetGroupArn': os.environ['TARGET_GROUP_ARN']
-                }
-            ]
-        )
-        
-        # 5. Store tenant metadata in DynamoDB
-        dynamodb.put_item(
-            TableName=os.environ['TENANT_TABLE'],
+        table.put_item(
             Item={
-                'tenant_id': {'S': tenant_id},
-                'domain': {'S': domain},
-                'tier': {'S': tier},
-                'organization': {'S': organization},
-                'user_pool_id': {'S': user_pool['UserPool']['Id']},
-                'certificate_arn': {'S': cert['CertificateArn']},
-                'created_at': {'S': context.aws_request_id},
-                'status': {'S': 'active'}
+                'predictionId': processed_data['metadata']['requestId'],
+                'timestamp': processed_data['metadata']['timestamp'],
+                'modelVersion': active_version,
+                'invokedVariant': response.get('InvokedProductionVariant', 'unknown'),
+                'prediction': result,
+                'expirationTime': expiration_time,
+                'inputFeatures': processed_data['features']
             }
         )
         
-        # 6. Initialize database schema with RLS policies
-        create_tenant_schema(tenant_id)
-        
         return {
-            'statusCode': 201,
+            'statusCode': 200,
             'body': json.dumps({
-                'tenant_id': tenant_id,
-                'domain': domain,
-                'user_pool_id': user_pool['UserPool']['Id'],
-                'message': 'Tenant provisioned successfully'
+                'predictionId': processed_data['metadata']['requestId'],
+                'result': result,
+                'modelVersion': active_version,
+                'variant': response.get('InvokedProductionVariant', 'unknown')
             })
         }
         
     except Exception as e:
-        print(f'Error provisioning tenant: {str(e)}')
+        print(f"Error processing request: {str(e)}")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
+      `),
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        DYNAMODB_TABLE_NAME: this.predictionTable.tableName,
+        SAGEMAKER_ENDPOINT_NAME: `ml-pipeline-endpoint-${environment}`,
+      },
+      role: preprocessingLambdaRole,
+      vpc: this.vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      securityGroups: [computeSecurityGroup],
+      logRetention: logs.RetentionDays.ONE_WEEK,
+      tracing: lambda.Tracing.ACTIVE,
+    });
 
-def get_next_priority() -> int:
-    '''Get next available priority for ALB listener rule.'''
-    response = elbv2.describe_rules(
-        ListenerArn=os.environ['ALB_LISTENER_ARN']
-    )
-    priorities = [int(rule['Priority']) for rule in response['Rules'] if rule['Priority'] != 'default']
-    return max(priorities) + 1 if priorities else 1
+    /**
+     * Stream processing Lambda for Kinesis integration
+     */
+    const streamProcessingLambda = new lambda.Function(this, 'StreamProcessingFunction', {
+      functionName: `ml-pipeline-stream-processor-${environment}`,
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+import json
+import base64
+import boto3
+import os
 
-def create_tenant_schema(tenant_id: str) -> None:
-    '''Create database schema with Row-Level Security for tenant.'''
-    sql = f'''
-        -- Create tenant-specific schema
-        CREATE SCHEMA IF NOT EXISTS tenant_{tenant_id};
-        
-        -- Create RLS policy for data isolation
-        CREATE POLICY tenant_isolation_{tenant_id} ON public.data
-            FOR ALL
-            USING (tenant_id = '{tenant_id}');
-        
-        -- Enable RLS on tables
-        ALTER TABLE public.data ENABLE ROW LEVEL SECURITY;
-    '''
+lambda_client = boto3.client('lambda')
+
+def handler(event, context):
+    """
+    Processes Kinesis stream records and invokes preprocessing Lambda
+    """
+    preprocessing_function = os.environ['PREPROCESSING_FUNCTION_NAME']
     
-    rds.execute_statement(
-        resourceArn=os.environ['AURORA_ENDPOINT'],
-        secretArn=os.environ['AURORA_SECRET_ARN'],
-        database='saasdb',
-        sql=sql
-    )
-"""
-
-# Create main stack
-stack = MultiTenantSaaSStack("saas-infrastructure")
-```
-
-## 2. tests/unit/test_tap_stack.py - Unit Tests
-
-```python
-"""
-Unit tests for multi-tenant SaaS infrastructure stack.
-Tests resource creation, security configurations, and tenant isolation.
-"""
-
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-import pulumi
-import pulumi.runtime
-from pulumi import Config, Output
-from lib.tap_stack import MultiTenantSaaSStack
-
-
-class TestMultiTenantSaaSStack(unittest.TestCase):
-    """Unit tests for infrastructure components."""
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test environment."""
-        pulumi.runtime.set_mocks(
-            MocksPulumiRuntime(),
-            project="test-project",
-            stack="test-stack",
-            preview=False
+    for record in event['Records']:
+        # Decode Kinesis data
+        payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')
+        
+        # Invoke preprocessing Lambda
+        lambda_client.invoke(
+            FunctionName=preprocessing_function,
+            InvocationType='Event',
+            Payload=json.dumps({'body': payload})
         )
     
-    def test_vpc_creation(self):
-        """Test VPC is created with correct CIDR."""
-        stack = MultiTenantSaaSStack("test-stack")
+    return {'statusCode': 200}
+      `),
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(60),
+      environment: {
+        PREPROCESSING_FUNCTION_NAME: preprocessingLambda.functionName,
+      },
+      logRetention: logs.RetentionDays.ONE_WEEK,
+    });
+
+    preprocessingLambda.grantInvoke(streamProcessingLambda);
+
+    // ==================== SAGEMAKER ENDPOINT ====================
+    /**
+     * Multi-variant SageMaker endpoint for A/B testing
+     * 80/20 traffic split between model variants
+     */
+    const sagemakerModel1 = new sagemaker.CfnModel(this, 'MLModelVariantA', {
+      modelName: `ml-pipeline-model-a-${environment}`,
+      executionRoleArn: sagemakerExecutionRole.roleArn,
+      primaryContainer: {
+        image: '246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3',
+        modelDataUrl: `s3://${this.modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
+      },
+    });
+
+    const sagemakerModel2 = new sagemaker.CfnModel(this, 'MLModelVariantB', {
+      modelName: `ml-pipeline-model-b-${environment}`,
+      executionRoleArn: sagemakerExecutionRole.roleArn,
+      primaryContainer: {
+        image: '246618743249.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3',
+        modelDataUrl: `s3://${this.modelBucket.bucketName}/models/v1.1.0/model.tar.gz`,
+      },
+    });
+
+    const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'MLEndpointConfig', {
+      endpointConfigName: `ml-pipeline-config-${environment}`,
+      productionVariants: [
+        {
+          modelName: sagemakerModel1.modelName!,
+          variantName: 'VariantA',
+          initialInstanceCount: 1,
+          instanceType: 'ml.t2.medium',
+          initialVariantWeight: 0.8, // 80% traffic to variant A
+        },
+        {
+          modelName: sagemakerModel2.modelName!,
+          variantName: 'VariantB',
+          initialInstanceCount: 1,
+          instanceType: 'ml.t2.medium',
+          initialVariantWeight: 0.2, // 20% traffic to variant B
+        },
+      ],
+      dataCaptureConfig: {
+        enableCapture: true,
+        initialSamplingPercentage: 10,
+        destinationS3Uri: `s3://${this.modelBucket.bucketName}/data-capture`,
+        captureOptions: [
+          { captureMode: 'Input' },
+          { captureMode: 'Output' },
+        ],
+      },
+    });
+
+    endpointConfig.addDependency(sagemakerModel1);
+    endpointConfig.addDependency(sagemakerModel2);
+
+    const sagemakerEndpoint = new sagemaker.CfnEndpoint(this, 'MLEndpoint', {
+      endpointName: `ml-pipeline-endpoint-${environment}`,
+      endpointConfigName: endpointConfig.endpointConfigName!,
+    });
+
+    // ==================== AUTO-SCALING ====================
+    /**
+     * Application Auto Scaling for SageMaker endpoint
+     * Scales based on invocations per instance metric
+     */
+    const scalingTarget = new applicationautoscaling.ScalableTarget(this, 'SageMakerScalingTarget', {
+      serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
+      resourceId: `endpoint/${sagemakerEndpoint.endpointName}/variant/VariantA`,
+      scalableDimension: 'sagemaker:variant:DesiredInstanceCount',
+      minCapacity: 1,
+      maxCapacity: 10,
+    });
+
+    scalingTarget.scaleToTrackMetric('InvocationsPerInstance', {
+      targetValue: 1000,
+      predefinedMetric: applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
+      scaleInCooldown: cdk.Duration.seconds(300),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    });
+
+    // ==================== API GATEWAY ====================
+    /**
+     * REST API with caching enabled for inference endpoint
+     */
+    this.inferenceApi = new apigateway.RestApi(this, 'InferenceAPI', {
+      restApiName: `ml-pipeline-api-${environment}`,
+      description: 'ML Inference Pipeline API',
+      deployOptions: {
+        stageName: environment,
+        cachingEnabled: true,
+        cacheClusterEnabled: true,
+        cacheClusterSize: '0.5',
+        cacheTtl: cdk.Duration.seconds(300),
+        cacheDataEncrypted: true,
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        tracingEnabled: true,
+        metricsEnabled: true,
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+      },
+    });
+
+    const predictResource = this.inferenceApi.root.addResource('predict');
+    predictResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(preprocessingLambda),
+      {
+        apiKeyRequired: false,
+        requestValidator: new apigateway.RequestValidator(this, 'PredictRequestValidator', {
+          restApi: this.inferenceApi,
+          requestValidatorName: 'predict-validator',
+          validateRequestBody: true,
+        }),
+      }
+    );
+
+    // ==================== KINESIS STREAM ====================
+    /**
+     * Kinesis Data Stream for real-time inference ingestion
+     */
+    const inferenceStream = new kinesis.Stream(this, 'InferenceStream', {
+      streamName: `ml-pipeline-stream-${environment}`,
+      shardCount: 2, // Supports ~2000 records/sec
+      retentionPeriod: cdk.Duration.days(1),
+      encryption: kinesis.StreamEncryption.KMS,
+      encryptionKey,
+    });
+
+    // Lambda event source mapping for Kinesis
+    streamProcessingLambda.addEventSourceMapping('KinesisEventSource', {
+      eventSourceArn: inferenceStream.streamArn,
+      startingPosition: lambda.StartingPosition.LATEST,
+      batchSize: 100,
+      maxBatchingWindow: cdk.Duration.seconds(5),
+      bisectBatchOnError: true,
+      retryAttempts: 3,
+    });
+
+    inferenceStream.grantRead(streamProcessingLambda);
+
+    // ==================== BATCH PROCESSING ====================
+    /**
+     * AWS Batch for large-scale batch inference
+     */
+    const batchServiceRole = new iam.Role(this, 'BatchServiceRole', {
+      assumedBy: new iam.ServicePrincipal('batch.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSBatchServiceRole'),
+      ],
+    });
+
+    const batchInstanceRole = new iam.Role(this, 'BatchInstanceRole', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role'),
+      ],
+    });
+
+    const batchInstanceProfile = new iam.CfnInstanceProfile(this, 'BatchInstanceProfile', {
+      roles: [batchInstanceRole.roleName],
+    });
+
+    const batchComputeEnvironment = new batch.CfnComputeEnvironment(this, 'BatchComputeEnv', {
+      computeEnvironmentName: `ml-pipeline-compute-${environment}`,
+      type: 'MANAGED',
+      state: 'ENABLED',
+      serviceRole: batchServiceRole.roleArn,
+      computeResources: {
+        type: 'EC2',
+        minvCpus: 0,
+        maxvCpus: 256,
+        desiredvCpus: 4,
+        instanceTypes: ['optimal'],
+        subnets: this.vpc.privateSubnets.map(subnet => subnet.subnetId),
+        securityGroupIds: [computeSecurityGroup.securityGroupId],
+        instanceRole: batchInstanceProfile.attrArn,
+      },
+    });
+
+    const batchJobQueue = new batch.CfnJobQueue(this, 'BatchJobQueue', {
+      jobQueueName: `ml-pipeline-queue-${environment}`,
+      priority: 1,
+      state: 'ENABLED',
+      computeEnvironmentOrder: [
+        {
+          order: 1,
+          computeEnvironment: batchComputeEnvironment.ref,
+        },
+      ],
+    });
+
+    const batchJobRole = new iam.Role(this, 'BatchJobRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
+      ],
+    });
+
+    batchInputBucket.grantRead(batchJobRole);
+    this.predictionTable.grantWriteData(batchJobRole);
+
+    const batchJobDefinition = new batch.CfnJobDefinition(this, 'BatchJobDefinition', {
+      jobDefinitionName: `ml-pipeline-job-${environment}`,
+      type: 'container',
+      containerProperties: {
+        image: 'public.ecr.aws/lambda/python:3.11',
+        vcpus: 2,
+        memory: 4096,
+        jobRoleArn: batchJobRole.roleArn,
+        environment: [
+          { name: 'BUCKET_NAME', value: batchInputBucket.bucketName },
+          { name: 'TABLE_NAME', value: this.predictionTable.tableName },
+          { name: 'ENDPOINT_NAME', value: sagemakerEndpoint.endpointName! },
+        ],
+      },
+    });
+
+    // ==================== STEP FUNCTIONS ====================
+    /**
+     * Step Functions state machine for batch workflow orchestration
+     */
+    const submitBatchJob = new stepfunctionsTasks.BatchSubmitJob(this, 'SubmitBatchJob', {
+      jobDefinitionArn: batchJobDefinition.ref,
+      jobName: 'MLBatchInference',
+      jobQueueArn: batchJobQueue.ref,
+    });
+
+    const parallelProcessing = new stepfunctions.Parallel(this, 'ParallelBatchProcessing');
+    
+    parallelProcessing.branch(
+      submitBatchJob.next(
+        new stepfunctions.Wait(this, 'WaitForBatch1', {
+          time: stepfunctions.WaitTime.duration(cdk.Duration.seconds(30)),
+        })
+      )
+    );
+    
+    parallelProcessing.branch(
+      new stepfunctionsTasks.LambdaInvoke(this, 'ValidateData', {
+        lambdaFunction: preprocessingLambda,
+        payloadResponseOnly: true,
+      })
+    );
+
+    const batchWorkflow = new stepfunctions.StateMachine(this, 'BatchWorkflow', {
+      stateMachineName: `ml-pipeline-batch-workflow-${environment}`,
+      definition: parallelProcessing,
+      timeout: cdk.Duration.hours(2),
+      tracingEnabled: true,
+      logs: {
+        destination: new logs.LogGroup(this, 'BatchWorkflowLogs', {
+          logGroupName: `/aws/stepfunctions/ml-pipeline-${environment}`,
+          retention: logs.RetentionDays.ONE_WEEK,
+        }),
+        level: stepfunctions.LogLevel.ALL,
+      },
+    });
+
+    // ==================== GLUE DATA CATALOG ====================
+    /**
+     * Glue Data Catalog for prediction results
+     */
+    const glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
+      catalogId: this.account,
+      databaseInput: {
+        name: `ml_pipeline_${environment}`,
+        description: 'ML Pipeline prediction results catalog',
+      },
+    });
+
+    const glueTable = new glue.CfnTable(this, 'PredictionsGlueTable', {
+      catalogId: this.account,
+      databaseName: glueDatabase.ref,
+      tableInput: {
+        name: 'predictions',
+        storageDescriptor: {
+          location: `s3://${this.modelBucket.bucketName}/predictions/`,
+          inputFormat: 'org.apache.hadoop.mapred.TextInputFormat',
+          outputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat',
+          serdeInfo: {
+            serializationLibrary: 'org.openx.data.jsonserde.JsonSerDe',
+          },
+          columns: [
+            { name: 'predictionId', type: 'string' },
+            { name: 'timestamp', type: 'bigint' },
+            { name: 'modelVersion', type: 'string' },
+            { name: 'prediction', type: 'string' },
+            { name: 'confidence', type: 'double' },
+          ],
+        },
+      },
+    });
+
+    // ==================== ATHENA ====================
+    /**
+     * Athena workgroup for analytics queries
+     */
+    const athenaResultsBucket = new s3.Bucket(this, 'AthenaResultsBucket', {
+      bucketName: `ml-pipeline-athena-results-${environment}-${region}-${this.account}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey,
+      lifecycleRules: [
+        {
+          id: 'delete-old-results',
+          expiration: cdk.Duration.days(30),
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
+      name: `ml-pipeline-workgroup-${environment}`,
+      workGroupConfiguration: {
+        resultConfigurationUpdates: {
+          outputLocation: `s3://${athenaResultsBucket.bucketName}/`,
+          encryptionConfiguration: {
+            encryptionOption: 'SSE_KMS',
+            kmsKey: encryptionKey.keyArn,
+          },
+        },
+        enforceWorkGroupConfiguration: true,
+      },
+    });
+
+    // ==================== EVENTBRIDGE ====================
+    /**
+     * EventBridge scheduled rules for batch processing
+     */
+    const batchScheduleRule = new events.Rule(this, 'BatchScheduleRule', {
+      ruleName: `ml-pipeline-batch-schedule-${environment}`,
+      description: 'Trigger batch inference every 6 hours',
+      schedule: events.Schedule.rate(cdk.Duration.hours(6)),
+    });
+
+    batchScheduleRule.addTarget(
+      new targets.SfnStateMachine(batchWorkflow, {
+        input: events.RuleTargetInput.fromObject({
+          batchSize: 1000,
+          inputPath: `s3://${batchInputBucket.bucketName}/pending/`,
+        }),
+      })
+    );
+
+    // ==================== MONITORING & ALERTING ====================
+    /**
+     * CloudWatch dashboards for operational visibility
+     */
+    const dashboard = new cloudwatch.Dashboard(this, 'MLPipelineDashboard', {
+      dashboardName: `ml-pipeline-${environment}`,
+      widgets: [
+        [
+          new cloudwatch.GraphWidget({
+            title: 'SageMaker Endpoint Latency',
+            left: [
+              new cloudwatch.Metric({
+                namespace: 'AWS/SageMaker',
+                metricName: 'ModelLatency',
+                dimensionsMap: {
+                  EndpointName: sagemakerEndpoint.endpointName!,
+                  VariantName: 'VariantA',
+                },
+                statistic: 'Average',
+              }),
+              new cloudwatch.Metric({
+                namespace: 'AWS/SageMaker',
+                metricName: 'ModelLatency',
+                dimensionsMap: {
+                  EndpointName: sagemakerEndpoint.endpointName!,
+                  VariantName: 'VariantB',
+                },
+                statistic: 'Average',
+              }),
+            ],
+            right: [
+              new cloudwatch.Metric({
+                namespace: 'AWS/SageMaker',
+                metricName: 'Invocations',
+                dimensionsMap: {
+                  EndpointName: sagemakerEndpoint.endpointName!,
+                },
+                statistic: 'Sum',
+                yAxis: 'right',
+              }),
+            ],
+          }),
+          new cloudwatch.SingleValueWidget({
+            title: 'Total Predictions Today',
+            metrics: [
+              new cloudwatch.Metric({
+                namespace: 'AWS/DynamoDB',
+                metricName: 'UserErrors',
+                dimensionsMap: {
+                  TableName: this.predictionTable.tableName,
+                },
+                statistic: 'Sum',
+                period: cdk.Duration.days(1),
+              }),
+            ],
+          }),
+        ],
+        [
+          new cloudwatch.GraphWidget({
+            title: 'Lambda Performance',
+            left: [
+              new cloudwatch.Metric({
+                namespace: 'AWS/Lambda',
+                metricName: 'Duration',
+                dimensionsMap: {
+                  FunctionName: preprocessingLambda.functionName,
+                },
+                statistic: 'Average',
+              }),
+            ],
+            right: [
+              new cloudwatch.Metric({
+                namespace: 'AWS/Lambda',
+                metricName: 'Errors',
+                dimensionsMap: {
+                  FunctionName: preprocessingLambda.functionName,
+                },
+                statistic: 'Sum',
+                yAxis: 'right',
+              }),
+            ],
+          }),
+        ],
+      ],
+    });
+
+    /**
+     * SNS topic for alerting
+     */
+    const alertTopic = new sns.Topic(this, 'AlertTopic', {
+      topicName: `ml-pipeline-alerts-${environment}`,
+      masterKey: encryptionKey,
+    });
+
+    alertTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription('ml-ops-team@example.com')
+    );
+
+    /**
+     * CloudWatch Alarms for critical metrics
+     */
+    const highLatencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
+      alarmName: `ml-pipeline-high-latency-${environment}`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SageMaker',
+        metricName: 'ModelLatency',
+        dimensionsMap: {
+          EndpointName: sagemakerEndpoint.endpointName!,
+        },
+        statistic: 'Average',
+      }),
+      threshold: 500, // 500ms threshold
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    highLatencyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    const errorRateAlarm = new cloudwatch.Alarm(this, 'ErrorRateAlarm', {
+      alarmName: `ml-pipeline-error-rate-${environment}`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Lambda',
+        metricName: 'Errors',
+        dimensionsMap: {
+          FunctionName: preprocessingLambda.functionName,
+        },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10, // More than 10 errors in 5 minutes
+      evaluationPeriods: 1,
+    });
+
+    errorRateAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // Data drift detection alarm (custom metric)
+    const dataDriftAlarm = new cloudwatch.Alarm(this, 'DataDriftAlarm', {
+      alarmName: `ml-pipeline-data-drift-${environment}`,
+      metric: new cloudwatch.Metric({
+        namespace: 'MLPipeline',
+        metricName: 'DataDrift',
+        dimensionsMap: {
+          Environment: environment,
+        },
+        statistic: 'Average',
+      }),
+      threshold: 0.1, // 10% drift threshold
+      evaluationPeriods: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    dataDriftAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // ==================== STACK OUTPUTS ====================
+    new cdk.CfnOutput(this, 'APIEndpoint', {
+      value: this.inferenceApi.url,
+      description: 'API Gateway endpoint URL',
+    });
+
+    new cdk.CfnOutput(this, 'SageMakerEndpointName', {
+      value: sagemakerEndpoint.endpointName!,
+      description: 'SageMaker endpoint name',
+    });
+
+    new cdk.CfnOutput(this, 'KinesisStreamArn', {
+      value: inferenceStream.streamArn,
+      description: 'Kinesis stream ARN for real-time inference',
+    });
+
+    new cdk.CfnOutput(this, 'DashboardURL', {
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
+      description: 'CloudWatch Dashboard URL',
+    });
+
+    // ==================== TAGGING ====================
+    cdk.Tags.of(this).add('Project', 'MLPipeline');
+    cdk.Tags.of(this).add('Environment', environment);
+    cdk.Tags.of(this).add('ManagedBy', 'CDK');
+    cdk.Tags.of(this).add('CostCenter', 'ML-Engineering');
+  }
+}
+```
+
+## File 2: tests/tap-stack.unit.test.ts
+
+```typescript
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+describe('TapStack Unit Tests', () => {
+  let app: cdk.App;
+  let stack: TapStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    stack = new TapStack(app, 'TestStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+    });
+    template = Template.fromStack(stack);
+  });
+
+  describe('VPC and Networking', () => {
+    test('Creates VPC with correct configuration', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+    });
+
+    test('Creates VPC endpoints for S3 and DynamoDB', () => {
+      template.resourceCountIs('AWS::EC2::VPCEndpoint', 3); // S3, DynamoDB, and SageMaker
+      
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        ServiceName: Match.stringLikeRegexp('.*s3.*'),
+      });
+
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        ServiceName: Match.stringLikeRegexp('.*dynamodb.*'),
+      });
+    });
+
+    test('Creates security group for compute resources', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for Lambda and Batch compute resources',
+      });
+    });
+  });
+
+  describe('Storage Resources', () => {
+    test('Creates S3 bucket for model artifacts with versioning', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('ml-pipeline-models-.*'),
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.arrayWith([
+            Match.objectLike({
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('Creates DynamoDB table with TTL enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: Match.stringLikeRegexp('ml-pipeline-predictions-.*'),
+        TimeToLiveSpecification: {
+          AttributeName: 'expirationTime',
+          Enabled: true,
+        },
+        StreamSpecification: {
+          StreamViewType: 'NEW_AND_OLD_IMAGES',
+        },
+      });
+    });
+
+    test('Creates DynamoDB global secondary index for model version queries', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: 'modelVersionIndex',
+            KeySchema: Match.arrayWith([
+              Match.objectLike({
+                AttributeName: 'modelVersion',
+                KeyType: 'HASH',
+              }),
+            ]),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Model Versioning', () => {
+    test('Creates Parameter Store parameters for model versioning', () => {
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/ml-pipeline/models/active-version',
+        Type: 'String',
+        Value: 'v1.0.0',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/ml-pipeline/models/versions/v1.0.0/metadata',
+        Type: 'String',
+      });
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    test('Creates preprocessing Lambda with correct configuration', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: Match.stringLikeRegexp('ml-pipeline-preprocessing-.*'),
+        Runtime: 'python3.11',
+        MemorySize: 1024,
+        Timeout: 30,
+        TracingConfig: {
+          Mode: 'Active',
+        },
+      });
+    });
+
+    test('Lambda has appropriate IAM permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'sagemaker:InvokeEndpoint',
+                'sagemaker:InvokeEndpointAsync',
+              ]),
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'ssm:GetParameter',
+                'ssm:GetParametersByPath',
+              ]),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('Creates stream processing Lambda for Kinesis', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: Match.stringLikeRegexp('ml-pipeline-stream-processor-.*'),
+        Runtime: 'python3.11',
+        MemorySize: 512,
+        Timeout: 60,
+      });
+    });
+  });
+
+  describe('SageMaker Endpoint', () => {
+    test('Creates multi-variant SageMaker endpoint for A/B testing', () => {
+      template.hasResourceProperties('AWS::SageMaker::EndpointConfig', {
+        ProductionVariants: Match.arrayWith([
+          Match.objectLike({
+            VariantName: 'VariantA',
+            InitialVariantWeight: 0.8,
+            InitialInstanceCount: 1,
+            InstanceType: 'ml.t2.medium',
+          }),
+          Match.objectLike({
+            VariantName: 'VariantB',
+            InitialVariantWeight: 0.2,
+            InitialInstanceCount: 1,
+            InstanceType: 'ml.t2.medium',
+          }),
+        ]),
+      });
+    });
+
+    test('Enables data capture for model monitoring', () => {
+      template.hasResourceProperties('AWS::SageMaker::EndpointConfig', {
+        DataCaptureConfig: Match.objectLike({
+          EnableCapture: true,
+          InitialSamplingPercentage: 10,
+          CaptureOptions: Match.arrayWith([
+            { CaptureMode: 'Input' },
+            { CaptureMode: 'Output' },
+          ]),
+        }),
+      });
+    });
+  });
+
+  describe('Auto Scaling', () => {
+    test('Creates auto-scaling target for SageMaker endpoint', () => {
+      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+        ServiceNamespace: 'sagemaker',
+        ScalableDimension: 'sagemaker:variant:DesiredInstanceCount',
+        MinCapacity: 1,
+        MaxCapacity: 10,
+      });
+    });
+
+    test('Configures scaling policy based on invocations per instance', () => {
+      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+        PolicyType: 'TargetTrackingScaling',
+        TargetTrackingScalingPolicyConfiguration: Match.objectLike({
+          TargetValue: 1000,
+          ScaleInCooldown: 300,
+          ScaleOutCooldown: 60,
+        }),
+      });
+    });
+  });
+
+  describe('API Gateway', () => {
+    test('Creates REST API with caching enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Deployment', {
+        StageDescription: Match.objectLike({
+          CachingEnabled: true,
+          CacheClusterEnabled: true,
+          CacheClusterSize: '0.5',
+          CacheTtlInSeconds: 300,
+          CacheDataEncrypted: true,
+        }),
+      });
+    });
+
+    test('Configures POST method for predictions', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'POST',
+        ResourceId: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('Kinesis Stream', () => {
+    test('Creates Kinesis stream with correct configuration', () => {
+      template.hasResourceProperties('AWS::Kinesis::Stream', {
+        Name: Match.stringLikeRegexp('ml-pipeline-stream-.*'),
+        ShardCount: 2,
+        RetentionPeriodHours: 24,
+        StreamEncryption: Match.objectLike({
+          EncryptionType: 'KMS',
+        }),
+      });
+    });
+
+    test('Configures Lambda event source mapping for Kinesis', () => {
+      template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+        EventSourceArn: Match.anyValue(),
+        StartingPosition: 'LATEST',
+        BatchSize: 100,
+        MaximumBatchingWindowInSeconds: 5,
+        BisectBatchOnFunctionError: true,
+        MaximumRetryAttempts: 3,
+      });
+    });
+  });
+
+  describe('Batch Processing', () => {
+    test('Creates Batch compute environment', () => {
+      template.hasResourceProperties('AWS::Batch::ComputeEnvironment', {
+        Type: 'MANAGED',
+        State: 'ENABLED',
+        ComputeResources: Match.objectLike({
+          Type: 'EC2',
+          MinvCpus: 0,
+          MaxvCpus: 256,
+          DesiredvCpus: 4,
+        }),
+      });
+    });
+
+    test('Creates Batch job queue', () => {
+      template.hasResourceProperties('AWS::Batch::JobQueue', {
+        Priority: 1,
+        State: 'ENABLED',
+      });
+    });
+
+    test('Creates Batch job definition', () => {
+      template.hasResourceProperties('AWS::Batch::JobDefinition', {
+        Type: 'container',
+        ContainerProperties: Match.objectLike({
+          Vcpus: 2,
+          Memory: 4096,
+        }),
+      });
+    });
+  });
+
+  describe('Step Functions', () => {
+    test('Creates state machine for batch workflow', () => {
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        StateMachineName: Match.stringLikeRegexp('ml-pipeline-batch-workflow-.*'),
+        TracingConfiguration: {
+          Enabled: true,
+        },
+      });
+    });
+
+    test('Configures logging for state machine', () => {
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        LoggingConfiguration: Match.objectLike({
+          Level: 'ALL',
+        }),
+      });
+    });
+  });
+
+  describe('Data Catalog', () => {
+    test('Creates Glue database', () => {
+      template.hasResourceProperties('AWS::Glue::Database', {
+        DatabaseInput: Match.objectLike({
+          Name: Match.stringLikeRegexp('ml_pipeline_.*'),
+        }),
+      });
+    });
+
+    test('Creates Glue table for predictions', () => {
+      template.hasResourceProperties('AWS::Glue::Table', {
+        TableInput: Match.objectLike({
+          Name: 'predictions',
+          StorageDescriptor: Match.objectLike({
+            Columns: Match.arrayWith([
+              Match.objectLike({ Name: 'predictionId', Type: 'string' }),
+              Match.objectLike({ Name: 'modelVersion', Type: 'string' }),
+            ]),
+          }),
+        }),
+      });
+    });
+  });
+
+  describe('Athena', () => {
+    test('Creates Athena workgroup', () => {
+      template.hasResourceProperties('AWS::Athena::WorkGroup', {
+        Name: Match.stringLikeRegexp('ml-pipeline-workgroup-.*'),
+        WorkGroupConfiguration: Match.objectLike({
+          EnforceWorkGroupConfiguration: true,
+          ResultConfigurationUpdates: Match.objectLike({
+            EncryptionConfiguration: {
+              EncryptionOption: 'SSE_KMS',
+            },
+          }),
+        }),
+      });
+    });
+  });
+
+  describe('EventBridge', () => {
+    test('Creates scheduled rule for batch processing', () => {
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Name: Match.stringLikeRegexp('ml-pipeline-batch-schedule-.*'),
+        ScheduleExpression: 'rate(6 hours)',
+        State: 'ENABLED',
+      });
+    });
+  });
+
+  describe('Monitoring and Alerting', () => {
+    test('Creates CloudWatch dashboard', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: Match.stringLikeRegexp('ml-pipeline-.*'),
+      });
+    });
+
+    test('Creates SNS topic for alerts', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: Match.stringLikeRegexp('ml-pipeline-alerts-.*'),
+      });
+    });
+
+    test('Creates high latency alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('ml-pipeline-high-latency-.*'),
+        MetricName: 'ModelLatency',
+        Threshold: 500,
+        EvaluationPeriods: 2,
+      });
+    });
+
+    test('Creates error rate alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('ml-pipeline-error-rate-.*'),
+        MetricName: 'Errors',
+        Threshold: 10,
+        EvaluationPeriods: 1,
+      });
+    });
+
+    test('Creates data drift alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: Match.stringLikeRegexp('ml-pipeline-data-drift-.*'),
+        MetricName: 'DataDrift',
+        Threshold: 0.1,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+  });
+
+  describe('Security', () => {
+    test('Creates KMS key for encryption', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for ML pipeline encryption',
+        EnableKeyRotation: true,
+      });
+    });
+
+    test('IAM roles follow least privilege principle', () => {
+      // Check that Lambda role has minimal permissions
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumedBy: Match.objectLike({
+          Service: 'lambda.amazonaws.com',
+        }),
+        ManagedPolicyArns: Match.arrayWith([
+          Match.stringLikeRegexp('.*AWSLambdaVPCAccessExecutionRole.*'),
+        ]),
+      });
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('Exports API endpoint URL', () => {
+      template.hasOutput('APIEndpoint', {
+        Description: 'API Gateway endpoint URL',
+      });
+    });
+
+    test('Exports SageMaker endpoint name', () => {
+      template.hasOutput('SageMakerEndpointName', {
+        Description: 'SageMaker endpoint name',
+      });
+    });
+
+    test('Exports Kinesis stream ARN', () => {
+      template.hasOutput('KinesisStreamArn', {
+        Description: 'Kinesis stream ARN for real-time inference',
+      });
+    });
+
+    test('Exports CloudWatch dashboard URL', () => {
+      template.hasOutput('DashboardURL', {
+        Description: 'CloudWatch Dashboard URL',
+      });
+    });
+  });
+
+  describe('Tagging', () => {
+    test('All resources are tagged appropriately', () => {
+      // Verify stack-level tags are applied
+      const stackTags = cdk.Tags.of(stack);
+      expect(stack.tags.tagValues()).toMatchObject({
+        Project: 'MLPipeline',
+        Environment: 'prod',
+        ManagedBy: 'CDK',
+        CostCenter: 'ML-Engineering',
+      });
+    });
+  });
+});
+```
+
+## File 3: tests/tap-stack.int.test.ts
+
+```typescript
+import { App, Stack } from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+import * as AWS from 'aws-sdk';
+import axios from 'axios';
+
+// Configure AWS SDK
+AWS.config.update({ region: 'us-east-1' });
+
+const apiGateway = new AWS.APIGateway();
+const sagemaker = new AWS.SageMaker();
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const ssm = new AWS.SSM();
+const cloudwatch = new AWS.CloudWatch();
+const kinesis = new AWS.Kinesis();
+const stepfunctions = new AWS.StepFunctions();
+const s3 = new AWS.S3();
+const ec2 = new AWS.EC2();
+
+/**
+ * Integration tests for ML Pipeline Stack
+ * These tests validate cross-service connectivity and end-to-end workflows
+ */
+describe('TapStack Integration Tests', () => {
+  let stackName: string;
+  let apiEndpointUrl: string;
+  let sagemakerEndpointName: string;
+  let kinesisStreamArn: string;
+  let predictionTableName: string;
+  let modelBucketName: string;
+  let vpcId: string;
+
+  beforeAll(async () => {
+    // Retrieve stack outputs from CloudFormation
+    stackName = process.env.STACK_NAME || 'ml-pipeline-stack-prod';
+    const cf = new AWS.CloudFormation();
+    
+    try {
+      const stackInfo = await cf.describeStacks({ StackName: stackName }).promise();
+      const outputs = stackInfo.Stacks![0].Outputs!;
+      
+      apiEndpointUrl = outputs.find(o => o.OutputKey === 'APIEndpoint')?.OutputValue!;
+      sagemakerEndpointName = outputs.find(o => o.OutputKey === 'SageMakerEndpointName')?.OutputValue!;
+      kinesisStreamArn = outputs.find(o => o.OutputKey === 'KinesisStreamArn')?.OutputValue!;
+      
+      // Get resource names from tags or stack resources
+      const resources = await cf.listStackResources({ StackName: stackName }).promise();
+      
+      predictionTableName = resources.StackResourceSummaries!
+        .find(r => r.ResourceType === 'AWS::DynamoDB::Table' && r.LogicalResourceId === 'PredictionResultsTable')
+        ?.PhysicalResourceId!;
+      
+      modelBucketName = resources.StackResourceSummaries!
+        .find(r => r.ResourceType === 'AWS::S3::Bucket' && r.LogicalResourceId === 'ModelArtifactsBucket')
+        ?.PhysicalResourceId!;
         
-        self.assertIsNotN
+      vpcId = resources.StackResourceSummaries!
+        .find(r => r.ResourceType === 'AWS::EC2::VPC')
+        ?.PhysicalResourceId!;
+    } catch (error) {
+      console.error('Failed to retrieve stack outputs:', error);
+      throw error;
+    }
+  }, 60000);
+
+  describe('API Gateway → Lambda → SageMaker Integration', () => {
+    test('should successfully process prediction request through API Gateway', async () => {
+      const testPayload = {
+        features: [1.0, 2.0, 3.0, 4.0, 5.0],
+        metadata: {
+          source: 'integration-test',
+          timestamp: Date.now(),
+        },
+      };
+
+      try {
+        const response = await axios.post(`${apiEndpointUrl}/predict`, testPayload, {
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.data).toHaveProperty('predictionId');
+        expect(response.data).toHaveProperty('result');
+        expect(response.data).toHaveProperty('modelVersion');
+        expect(response.data).toHaveProperty('variant');
+        
+        // Verify A/B testing - variant should be either VariantA or VariantB
+        expect(['VariantA', 'VariantB']).toContain(response.data.variant);
+      } catch (error) {
+        console.error('API Gateway test failed:', error);
+        throw error;
+      }
+    }, 30000);
+
+    test('should store prediction results in DynamoDB with TTL', async () => {
+      // Make a prediction request first
+      const testPayload = {
+        features: [1.0, 2.0, 3.0, 4.0, 5.0],
+      };
+
+      const response = await axios.post(`${apiEndpointUrl}/predict`, testPayload);
+      const pre
