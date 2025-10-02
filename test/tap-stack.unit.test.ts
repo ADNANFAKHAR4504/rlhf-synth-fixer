@@ -210,9 +210,9 @@ describe('TapStack CloudFormation Template - Charity Web Platform', () => {
     test('should have UserData for Apache installation', () => {
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
       expect(lt.UserData).toBeDefined();
-      expect(lt.UserData['Fn::Base64']['Fn::Sub']).toContain('httpd');
-      expect(lt.UserData['Fn::Base64']['Fn::Sub']).toContain('systemctl start httpd');
-      expect(lt.UserData['Fn::Base64']['Fn::Sub']).toContain('amazon-cloudwatch-agent');
+      expect(lt.UserData['Fn::Base64']).toContain('httpd');
+      expect(lt.UserData['Fn::Base64']).toContain('systemctl start httpd');
+      expect(lt.UserData['Fn::Base64']).toContain('amazon-cloudwatch-agent');
     });
 
     test('should have two EC2 instances', () => {
@@ -294,7 +294,7 @@ describe('TapStack CloudFormation Template - Charity Web Platform', () => {
     });
 
     test('CloudWatch Dashboard should include metrics', () => {
-      const dashboardBody = template.Resources.CloudWatchDashboard.Properties.DashboardBody['Fn::Sub'];
+      const dashboardBody = template.Resources.CloudWatchDashboard.Properties.DashboardBody;
       expect(dashboardBody).toContain('CPUUtilization');
       expect(dashboardBody).toContain('NetworkIn');
       expect(dashboardBody).toContain('NetworkOut');
