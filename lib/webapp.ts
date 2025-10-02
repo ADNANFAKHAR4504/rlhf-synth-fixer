@@ -3,15 +3,17 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import { Construct } from 'constructs';
 
-interface WebAppStackProps extends cdk.StackProps {
+interface WebAppStackProps {
   environmentSuffix?: string;
 }
 
-export class WebAppStack extends cdk.Stack {
+export class WebAppStack extends Construct {
   constructor(scope: Construct, id: string, props?: WebAppStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
@@ -84,6 +86,20 @@ export class WebAppStack extends cdk.Stack {
       }
     );
 
+    // Create security group for Application Load Balancer
+    const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+      vpc,
+      description: 'Security group for Application Load Balancer',
+      allowAllOutbound: true,
+    });
+
+    // Allow HTTP traffic from internet to ALB
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic from internet'
+    );
+
     // Create security group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
@@ -96,6 +112,13 @@ export class WebAppStack extends cdk.Stack {
       eiceSecurityGroup,
       ec2.Port.tcp(22),
       'Allow SSH from EC2 Instance Connect Endpoint'
+    );
+
+    // Allow ALB to access EC2 instances on port 5000 (Flask app)
+    ec2SecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(5000),
+      'Allow HTTP traffic from ALB to web application'
     );
 
     // Create IAM role for EC2 instances with least privilege
@@ -114,6 +137,21 @@ export class WebAppStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['ec2:DescribeInstances', 'ec2:DescribeTags'],
+        resources: ['*'],
+      })
+    );
+
+    // Add permissions for Systems Manager Session Manager
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ssm:UpdateInstanceInformation',
+          'ssmmessages:CreateControlChannel',
+          'ssmmessages:CreateDataChannel',
+          'ssmmessages:OpenControlChannel',
+          'ssmmessages:OpenDataChannel',
+        ],
         resources: ['*'],
       })
     );
@@ -202,6 +240,50 @@ export class WebAppStack extends cdk.Stack {
       copyTagsToSnapshot: true,
     });
 
+    // Grant EC2 role permissions to read database secret
+    database.secret!.grantRead(ec2Role);
+
+    // Create Application Load Balancer in public subnets
+    const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
+      vpc,
+      internetFacing: true,
+      vpcSubnets: {
+        subnets: [publicSubnet1, publicSubnet2],
+      },
+      securityGroup: albSecurityGroup,
+      deletionProtection: false,
+    });
+
+    // Create target group for EC2 instances
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebAppTargetGroup', {
+      vpc,
+      port: 5000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.INSTANCE,
+      healthCheck: {
+        enabled: true,
+        path: '/health',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        healthyHttpCodes: '200',
+      },
+      deregistrationDelay: cdk.Duration.seconds(30),
+    });
+
+    // Add EC2 instance to target group
+    targetGroup.addTarget(
+      new targets.InstanceTarget(instance, 5000)
+    );
+
+    // Create ALB listener on port 80
+    const listener = alb.addListener('WebAppListener', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultTargetGroups: [targetGroup],
+    });
+
     // Create CloudWatch Dashboard for monitoring
     const dashboard = new cloudwatch.Dashboard(this, 'WebAppDashboard', {
       dashboardName: `SecureWebAppFoundation-${environmentSuffix}`,
@@ -235,35 +317,131 @@ export class WebAppStack extends cdk.Stack {
       })
     );
 
-    // Outputs
-    new cdk.CfnOutput(this, 'VPCId', {
+    // Add ALB request count widget
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'ALB Request Count',
+        left: [alb.metricRequestCount()],
+        width: 12,
+      })
+    );
+
+    // Add Target Group health widget
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Target Health',
+        left: [
+          targetGroup.metricHealthyHostCount(),
+          targetGroup.metricUnhealthyHostCount(),
+        ],
+        width: 12,
+      })
+    );
+
+    // Outputs - Use parent stack for CfnOutput
+    const stack = cdk.Stack.of(this);
+
+    // Primary public access URL
+    new cdk.CfnOutput(stack, 'WebAppURL', {
+      value: `http://${alb.loadBalancerDnsName}`,
+      description: 'Public URL to access the web application',
+      exportName: `WebAppURL-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'LoadBalancerDNS', {
+      value: alb.loadBalancerDnsName,
+      description: 'Application Load Balancer DNS name',
+      exportName: `LoadBalancerDNS-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'LoadBalancerArn', {
+      value: alb.loadBalancerArn,
+      description: 'Application Load Balancer ARN',
+      exportName: `LoadBalancerArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'TargetGroupArn', {
+      value: targetGroup.targetGroupArn,
+      description: 'Target Group ARN',
+      exportName: `TargetGroupArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',
       exportName: `VPCId-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
+    new cdk.CfnOutput(stack, 'PublicSubnet1Id', {
+      value: publicSubnet1.subnetId,
+      description: 'Public Subnet 1 ID',
+      exportName: `PublicSubnet1Id-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'PublicSubnet2Id', {
+      value: publicSubnet2.subnetId,
+      description: 'Public Subnet 2 ID',
+      exportName: `PublicSubnet2Id-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'PrivateSubnetId', {
+      value: privateSubnet.subnetId,
+      description: 'Private Subnet ID',
+      exportName: `PrivateSubnetId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'EC2InstanceId', {
       value: instance.instanceId,
       description: 'EC2 Instance ID',
       exportName: `EC2InstanceId-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'InstanceConnectEndpointId', {
+    new cdk.CfnOutput(stack, 'EC2SecurityGroupId', {
+      value: ec2SecurityGroup.securityGroupId,
+      description: 'EC2 Security Group ID',
+      exportName: `EC2SecurityGroupId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'ALBSecurityGroupId', {
+      value: albSecurityGroup.securityGroupId,
+      description: 'ALB Security Group ID',
+      exportName: `ALBSecurityGroupId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'InstanceConnectEndpointId', {
       value: instanceConnectEndpoint.ref,
       description: 'EC2 Instance Connect Endpoint ID',
       exportName: `InstanceConnectEndpointId-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'RDSEndpoint', {
+    new cdk.CfnOutput(stack, 'RDSEndpoint', {
       value: database.dbInstanceEndpointAddress,
       description: 'RDS Instance Endpoint',
       exportName: `RDSEndpoint-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+    new cdk.CfnOutput(stack, 'RDSInstanceId', {
+      value: database.instanceIdentifier,
+      description: 'RDS Instance Identifier',
+      exportName: `RDSInstanceId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'RDSSecurityGroupId', {
+      value: rdsSecurityGroup.securityGroupId,
+      description: 'RDS Security Group ID',
+      exportName: `RDSSecurityGroupId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'DatabaseSecretArn', {
       value: database.secret!.secretArn,
       description: 'ARN of the secret containing database credentials',
       exportName: `DatabaseSecretArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(stack, 'CloudWatchDashboardName', {
+      value: dashboard.dashboardName,
+      description: 'CloudWatch Dashboard Name',
+      exportName: `CloudWatchDashboardName-${environmentSuffix}`,
     });
   }
 }

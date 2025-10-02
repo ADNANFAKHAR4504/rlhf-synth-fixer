@@ -19,8 +19,8 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate WebApp stack
-    new WebAppStack(scope, `WebAppStack-${environmentSuffix}`, {
+    // Instantiate WebApp stack as nested construct within this stack
+    new WebAppStack(this, `WebAppStack-${environmentSuffix}`, {
       ...props,
       environmentSuffix,
     });
