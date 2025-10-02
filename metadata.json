@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350070",
+  "team": "2",
+  "startedAt": "2025-10-02T14:31:10.170Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "VPC, Subnets, Route Tables, Internet Gateway, NAT Gateway, Security Groups, Network ACLs, EC2, Auto Scaling, Bastion Host, Application Load Balancer, RDS, S3, EBS, KMS, IAM, VPC Flow Logs, CloudFormation"
+}
