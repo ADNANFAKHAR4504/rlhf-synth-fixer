@@ -878,23 +878,18 @@ func TestAPIGatewayPerformanceAndThrottling(t *testing.T) {
 
 		// Verify method settings if available
 		if stageResp.MethodSettings != nil && len(stageResp.MethodSettings) > 0 {
-			methodSetting := stageResp.MethodSettings["*/*"]
-			if methodSetting != nil {
-				// Verify logging is enabled
+			// Use comma-ok idiom to check if key exists in map
+			if methodSetting, ok := stageResp.MethodSettings["*/*"]; ok {
+				// Verify logging is enabled (LoggingLevel is *string)
 				if methodSetting.LoggingLevel != nil {
 					assert.NotEmpty(t, *methodSetting.LoggingLevel, "Logging level should be set")
 				}
-				// Verify metrics are enabled
-				if methodSetting.MetricsEnabled != nil {
-					assert.True(t, *methodSetting.MetricsEnabled, "Metrics should be enabled")
-				}
-				// Verify throttling settings at method level
-				if methodSetting.ThrottlingRateLimit != nil {
-					assert.GreaterOrEqual(t, *methodSetting.ThrottlingRateLimit, float64(0), "Throttling rate limit should be set")
-				}
-				if methodSetting.ThrottlingBurstLimit != nil {
-					assert.GreaterOrEqual(t, *methodSetting.ThrottlingBurstLimit, int32(0), "Throttling burst limit should be set")
-				}
+				// Verify metrics are enabled (MetricsEnabled is bool, use directly)
+				assert.True(t, methodSetting.MetricsEnabled, "Metrics should be enabled")
+
+				// Verify throttling settings (both are value types, use directly)
+				assert.GreaterOrEqual(t, methodSetting.ThrottlingRateLimit, float64(0), "Throttling rate limit should be set")
+				assert.GreaterOrEqual(t, methodSetting.ThrottlingBurstLimit, int32(0), "Throttling burst limit should be set")
 			}
 		}
 	})
