@@ -10,5 +10,20 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": "EC2, RDS, S3, IAM Roles, VPC, and Application Load Balancer"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anilg-turing",
+  "dockerS3Location": ""
 }
