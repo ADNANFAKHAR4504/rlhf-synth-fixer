@@ -29,7 +29,6 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'prod']
-  UseLargeInstances: !Equals [!Ref Environment, 'prod']
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -54,8 +53,6 @@ Metadata:
         default: 'Environment'
       DataRetentionDays:
         default: 'Data Retention (Days)'
-      EMRInstanceType:
-        default: 'EMR Instance Type'
       VpcCidr:
         default: 'VPC CIDR Block'
 
@@ -187,7 +184,7 @@ Resources:
     Properties:
       VpcId: !Ref DataLakeVPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-datalake-private-subnet-1-${Environment}'
@@ -199,7 +196,7 @@ Resources:
     Properties:
       VpcId: !Ref DataLakeVPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-datalake-private-subnet-2-${Environment}'
@@ -638,8 +635,6 @@ Resources:
         Prefix: 'logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/'
         ErrorOutputPrefix: 'errors/'
         RoleARN: !GetAtt FirehoseDeliveryRole.Arn
-        ProcessingConfiguration:
-          Enabled: false
         # CloudWatch logging removed for LocalStack compatibility
 
   # =============================================================================
@@ -982,13 +977,6 @@ Outputs:
     Value: !Ref ProcessedToCuratedETLJob
     Export:
       Name: !Sub '${AWS::StackName}-ProcessedToCuratedETL-Name'
-
-  # EMR Cluster
-  EMRClusterId:
-    Description: 'EMR cluster ID'
-    Value: !Ref EMRCluster
-    Export:
-      Name: !Sub '${AWS::StackName}-EMRCluster-ID'
 
   # Kinesis Firehose
   LogIngestionFirehoseName:
