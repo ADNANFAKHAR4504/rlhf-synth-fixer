@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 const config = new pulumi.Config();
 const environment = config.get('environment') || 'dev';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || environment;
-const domainName = config.require('domainName');
+const domainName = config.get('domainName') || 'example.com';
 
 // Generate random suffix for unique bucket names
 const randomSuffix = new random.RandomString('randomSuffix', {
