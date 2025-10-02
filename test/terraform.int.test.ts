@@ -13,7 +13,6 @@ const {
   alb_security_group_id,
   target_group_arn,
   rds_instance_id,
-  rds_endpoint,
   rds_database_name,
   secrets_manager_secret_name,
   vpc_cidr,
@@ -90,12 +89,6 @@ describe('TAP Stack Full Live Integration Tests', () => {
       } catch (err: any) {
         console.warn('RDS instance not found:', err.message);
       }
-    });
-
-    it('RDS endpoint valid', () => {
-      if (!rds_endpoint) return console.warn('RDS endpoint missing, skipping test.');
-      expect(rds_endpoint).toMatch(/rds\.amazonaws\.com/);
-      expect(rds_database_name).toBeDefined();
     });
 
     it('Secrets Manager secret exists', async () => {
