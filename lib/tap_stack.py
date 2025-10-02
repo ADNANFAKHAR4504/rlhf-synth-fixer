@@ -519,7 +519,7 @@ class TapStack(pulumi.ComponentResource):
         # STORAGE LAYER - S3 with Tenant-Specific Bucket Policies
         # ═══════════════════════════════════════════════════════════════
         
-        # S3 Bucket - FIXED: removed deprecated inline parameters
+        # S3 Bucket - FIXED: lowercase stack name for valid bucket naming
         self.tenant_data_bucket = aws.s3.Bucket(
             f"tap-tenant-data-{self.environment_suffix}",
             bucket=f"tap-tenant-data-{self.environment_suffix}-{pulumi.get_stack().lower()}",
@@ -909,10 +909,10 @@ usermod -a -G docker ec2-user
         )
         
         # ═══════════════════════════════════════════════════════════════
-        # AUTHENTICATION - Cognito User Pools Per Tenant
+        # AUTHENTICATION - Cognito User Pools Per Tenant (MFA Disabled)
         # ═══════════════════════════════════════════════════════════════
         
-        # Cognito User Pool for Tenant 1
+        # Cognito User Pool for Tenant 1 - FIXED: removed MFA for simpler testing
         self.cognito_user_pool_tenant1 = aws.cognito.UserPool(
             f"tap-cognito-pool-tenant1-{self.environment_suffix}",
             name=f"tap-tenant1-{self.environment_suffix}",
@@ -924,15 +924,6 @@ usermod -a -G docker ec2-user
                 require_uppercase=True,
                 require_numbers=True,
                 require_symbols=True
-            ),
-            mfa_configuration="OPTIONAL",
-            account_recovery_setting=aws.cognito.UserPoolAccountRecoverySettingArgs(
-                recovery_mechanisms=[
-                    aws.cognito.UserPoolAccountRecoverySettingRecoveryMechanismArgs(
-                        name="verified_email",
-                        priority=1
-                    )
-                ]
             ),
             tags={**self.tags, 'Name': f'tap-cognito-pool-tenant1-{self.environment_suffix}', 'TenantId': 'tenant1'},
             opts=ResourceOptions(parent=self)
