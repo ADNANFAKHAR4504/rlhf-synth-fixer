@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410111",
+  "team": "4",
+  "startedAt": "2025-10-01T14:11:51.651Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "abubakarTuring",
+  "dockerS3Location": ""
+}
