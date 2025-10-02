@@ -32,5 +32,11 @@
     "Security Groups",
     "EventBridge"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
 }
