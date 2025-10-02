@@ -74,14 +74,14 @@ export class TapStack extends cdk.Stack {
     instanceSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(22),
-      'Allow SSH (22) from anywhere — restrict in production'
+      'Allow SSH from anywhere restrict in production'
     );
 
     // Allow HTTP
     instanceSg.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP (80) from anywhere'
+      'Allow HTTP from anywhere'
     );
 
     // --- 4) IAM Role for EC2 (least privilege) ---
