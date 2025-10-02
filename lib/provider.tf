@@ -14,11 +14,9 @@ terraform {
     }
   }
 
-  # Using local backend for testing
-  # In production, this would use S3 backend with configuration injected at terraform init time
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # S3 backend with configuration injected at terraform init time
+  # Backend config is provided via -backend-config flags during terraform init
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
