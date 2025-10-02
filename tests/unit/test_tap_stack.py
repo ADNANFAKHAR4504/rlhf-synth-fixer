@@ -103,8 +103,6 @@ class TestTapStackStructure(unittest.TestCase):
 
 class TestTapStackInstantiation(unittest.TestCase):
     """Test TapStack instantiation with comprehensive mocking."""
-
-    @unittest.skip("Skipped due to errors in paste-3.txt")
     def test_tap_stack_instantiation_with_default_args(self):
         """Test TapStack instantiation with default arguments and complete mocking."""
         # Mock all external dependencies
