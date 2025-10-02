@@ -212,7 +212,7 @@ public class MainIntegrationTest {
 
         assertThat(response.vpcs()).hasSize(1);
         assertThat(response.vpcs().get(0).cidrBlock()).isEqualTo("10.0.0.0/16");
-        assertThat(response.vpcs().get(0).state().toString()).isEqualTo("AVAILABLE");
+        assertThat(response.vpcs().get(0).state().toString()).isEqualTo("available");
     }
 
     /**
@@ -326,7 +326,7 @@ public class MainIntegrationTest {
                         .build()
         );
 
-        assertThat(response.status().toString()).isEqualTo("ENABLED");
+        assertThat(response.status().toString()).isEqualTo("Enabled");
     }
 
     /**
@@ -436,7 +436,7 @@ public class MainIntegrationTest {
 
         var config = response.configuration();
         assertThat(config.functionName()).isEqualTo("tap-processor-" + environmentSuffix);
-        assertThat(config.runtime().toString()).isEqualTo("PYTHON3_11");
+        assertThat(config.runtime().toString()).isEqualTo("python3.11");
         assertThat(config.handler()).isEqualTo("index.handler");
         assertThat(config.timeout()).isEqualTo(30);
         assertThat(config.memorySize()).isEqualTo(256);
