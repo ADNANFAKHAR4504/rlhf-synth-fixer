@@ -1,0 +1,5 @@
+encryptionsalt: v1:Y65SQYqdvwQ=:v1:9Wy43D3cnzptX1cM:vZdi8lVGm10D2ojH943HYK5XlJ3SqQ==
+config:
+  aws:region: us-east-2
+  tap:domainName: tap-synth75019482.example.com
+  tap:environment: synth75019482
