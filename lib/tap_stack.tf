@@ -8,9 +8,9 @@ variable "aws_region" {
 # -----------------------------
 
 variable "lambda_allowed_ips" {
-  description = "List of known IP addresses allowed to access API Gateway"
+  description = "List of known IP addresses allowed to access API Gateway (in CIDR format)"
   type        = list(string)
-  default     = ["203.0.113.1", "198.51.100.2"]
+  default     = ["203.0.113.1/32", "198.51.100.2/32"]
 }
 
 variable "dynamodb_table_name" {
