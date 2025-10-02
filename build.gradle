@@ -30,6 +30,8 @@ ext {
     awsCdkConstructsVersion = '10.4.2'
     hashicorpCdktfVersion = '0.21.0'
     hashicorpCdktfAwsVersion = '21.0.0'
+    hashicorpCdktfRandomVersion = '12.0.0'
+    hashicorpCdktfArchiveVersion = '11.0.0'
     guavaVersion = '33.0.0-jre'
     jacksonVersion = '2.17.1'
     awsSdkVersion = '2.25.16'
@@ -75,6 +77,9 @@ dependencies {
     implementation "com.pulumi:aws:${pulumiAwsVersion}"
     implementation "com.hashicorp:cdktf:${hashicorpCdktfVersion}"
     implementation "com.hashicorp:cdktf-provider-aws:${hashicorpCdktfAwsVersion}"
+    implementation "com.hashicorp:cdktf-provider-random:${hashicorpCdktfRandomVersion}"
+    implementation "com.hashicorp:cdktf-provider-archive:${hashicorpCdktfArchiveVersion}"
+    implementation "com.hashicorp:cdktf-provider-tls:11.0.0"
     implementation 'com.pulumi:tls:5.2.0'
 
     // AWS CDK dependencies
@@ -92,15 +97,6 @@ dependencies {
     testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
     testImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
-    
-    // AWS SDK BOM for unit tests (for real integration tests)
-    testImplementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
-    testImplementation 'software.amazon.awssdk:cloudformation'
-    testImplementation 'software.amazon.awssdk:s3'
-    testImplementation 'software.amazon.awssdk:elasticloadbalancingv2'
-    testImplementation 'software.amazon.awssdk:route53'
-    testImplementation 'software.amazon.awssdk:ec2'
-    testImplementation 'software.amazon.awssdk:auth'
     
     // SLF4J implementation for tests
     testImplementation 'org.slf4j:slf4j-simple:2.0.7'
@@ -167,13 +163,14 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:rds'
     integrationTestImplementation 'software.amazon.awssdk:lambda'
     integrationTestImplementation 'software.amazon.awssdk:apigateway'
+    integrationTestImplementation 'software.amazon.awssdk:dynamodb'
+    integrationTestImplementation 'software.amazon.awssdk:sqs'
     integrationTestImplementation 'software.amazon.awssdk:networkfirewall'
     integrationTestImplementation 'software.amazon.awssdk:config'
     integrationTestImplementation 'software.amazon.awssdk:secretsmanager'
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
-    integrationTestImplementation 'software.amazon.awssdk:route53'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
