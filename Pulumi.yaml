@@ -1,4 +1,4 @@
-name: tap
+name: TapStack
 description: Media startup static website infrastructure
 runtime: nodejs
 main: lib/index.ts
