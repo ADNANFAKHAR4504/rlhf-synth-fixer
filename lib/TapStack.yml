@@ -6,6 +6,11 @@ Parameters:
     Type: String
     Default: dev
     Description: Environment name prefix
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0254b2d5c4c472488
+    Description: Amazon Linux 2 AMI ID (default for ap-south-1)
+
 
 Resources:
 
@@ -139,7 +144,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: !Ref AWS::Region # ⚠️ Replace with a valid AMI ID per region
+      ImageId: !Ref AmiId
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
