@@ -10,5 +10,11 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms",
+    "AWS IAM"
+  ]
 }

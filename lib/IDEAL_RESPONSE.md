@@ -460,7 +460,7 @@ class ServerlessConfig:
 
 ```
 
-3. infra\iam.py
+4. infra\iam.py
 
 ```py
 """
@@ -1177,12 +1177,13 @@ def create_s3_buckets(config: ServerlessConfig) -> Dict[str, Any]:
     # These policies can block CI/CD deployment users if their IPs are not in the allowed ranges
     # To re-enable: uncomment the lines below and ensure deployment user IPs are whitelisted
     # WARNING: Enabling IP restrictions may cause deployment failures in CI/CD pipelines
-    input_bucket_policy = create_ip_restricted_bucket_policy(
-        config, input_bucket, "input"
+    # input_bucket_policy = create_ip_restricted_bucket_policy(
+    #     config, input_bucket, "input"
+    # )
 
-    output_bucket_policy = create_ip_restricted_bucket_policy(
-        config, output_bucket, "output"
-    )
+    # output_bucket_policy = create_ip_restricted_bucket_policy(
+    #     config, output_bucket, "output"
+    # )
 
     return {
         "input_bucket": input_bucket,
@@ -1192,9 +1193,9 @@ def create_s3_buckets(config: ServerlessConfig) -> Dict[str, Any]:
         "input_versioning": input_versioning,
         "output_versioning": output_versioning,
         "input_encryption": input_encryption,
-        "output_encryption": output_encryption,
-        "input_bucket_policy": input_bucket_policy,  # Disabled to prevent CI/CD deployment issues
-        "output_bucket_policy": output_bucket_policy  # Disabled to prevent CI/CD deployment issues
+        "output_encryption": output_encryption
+        # "input_bucket_policy": input_bucket_policy,  # Disabled to prevent CI/CD deployment issues
+        # "output_bucket_policy": output_bucket_policy  # Disabled to prevent CI/CD deployment issues
     }
 
 
@@ -1319,4 +1320,10 @@ def create_s3_lifecycle_policies(
         "output_lifecycle": output_lifecycle
     }
 
+```
+
+7. **init**.py
+
+```py
+# empty
 ```
