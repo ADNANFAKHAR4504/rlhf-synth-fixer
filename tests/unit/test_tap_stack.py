@@ -146,21 +146,17 @@ class TestTapStackRequirements(unittest.TestCase):
 class TestTapStackInstantiation(unittest.TestCase):
     """Test TapStack instantiation by analyzing source code."""
 
-    @patch('pulumi.runtime.is_dry_run', return_value=True)
-    @patch('pulumi.runtime.register_resource_outputs')
-    @patch('pulumi.runtime.register_resource')
-    def test_tap_stack_instantiation_default_args(self, mock_register, mock_outputs, mock_dry_run):
-        """Test TapStackArgs with default values."""
+    def test_tap_stack_instantiation_default_args(self):
+        """Test TapStackArgs instantiation with default values."""
         from lib.tap_stack import TapStackArgs
         args = TapStackArgs()
         self.assertEqual(args.environment_suffix, 'dev')
         self.assertEqual(args.region, 'us-east-1')
+        self.assertEqual(args.vpc_cidr, '10.18.0.0/16')
+        self.assertEqual(args.instance_type, 'm5.large')
 
-    @patch('pulumi.runtime.is_dry_run', return_value=True)
-    @patch('pulumi.runtime.register_resource_outputs')
-    @patch('pulumi.runtime.register_resource')
-    def test_tap_stack_instantiation_custom_args(self, mock_register, mock_outputs, mock_dry_run):
-        """Test TapStackArgs with custom values."""
+    def test_tap_stack_instantiation_custom_args(self):
+        """Test TapStackArgs instantiation with custom values."""
         from lib.tap_stack import TapStackArgs
         args = TapStackArgs(
             environment_suffix='prod',
@@ -171,6 +167,9 @@ class TestTapStackInstantiation(unittest.TestCase):
         )
         self.assertEqual(args.environment_suffix, 'prod')
         self.assertEqual(args.region, 'us-west-2')
+        self.assertEqual(args.vpc_cidr, '10.20.0.0/16')
+        self.assertEqual(args.instance_type, 'm5.xlarge')
+        self.assertIn('Environment', args.tags)
 
     def test_tap_stack_creates_vpc_resources(self):
         """Test that VPC and networking resources are in source code."""
