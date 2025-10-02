@@ -96,6 +96,7 @@ public class MainIntegrationTest {
         awsSecretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY");
         awsRegion = Optional.ofNullable(System.getenv("AWS_REGION")).orElse("us-east-1");
         environmentSuffix = Optional.ofNullable(System.getenv("ENVIRONMENT_SUFFIX")).orElse("test");
+        stackName = Optional.ofNullable(System.getenv("STACK_NAME")).orElse("TapStack" + environmentSuffix);
 
         // Validate credentials are present
         assertThat(awsAccessKeyId).isNotNull().isNotEmpty();
