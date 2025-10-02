@@ -3,28 +3,28 @@ Main infrastructure orchestrator for S3-triggered Lambda processing.
 Coordinates all infrastructure components and addresses model failures.
 
 PROMPT REQUIREMENTS ALIGNMENT:
-✅ Python 3.9 Lambda function triggered by S3 events
-✅ Lambda processes data from input bucket, outputs to output bucket  
-✅ IAM role with minimal necessary permissions (S3 + CloudWatch Logs)
-✅ CloudWatch Logs with 5-minute timeout enforcement
-✅ S3 bucket access restrictions (IP ranges - temporarily disabled for deployment)
-✅ Pulumi native packaging (AssetArchive/FileArchive)
-✅ Environment variables via Pulumi configuration
-✅ us-east-1 region enforcement (explicit provider passed to all resources)
-✅ Modular, reusable design with inline comments
-✅ Security best practices (least privilege, network restrictions)
-✅ Fully validated and ready for deployment
-✅ No raw CloudFormation templates - pure Pulumi Python
+Python 3.9 Lambda function triggered by S3 events
+Lambda processes data from input bucket, outputs to output bucket  
+IAM role with minimal necessary permissions (S3 + CloudWatch Logs)
+CloudWatch Logs with 5-minute timeout enforcement
+S3 bucket access restrictions (IP ranges - temporarily disabled for deployment)
+Pulumi native packaging (AssetArchive/FileArchive)
+Environment variables via Pulumi configuration
+us-east-1 region enforcement (explicit provider passed to all resources)
+Modular, reusable design with inline comments
+Security best practices (least privilege, network restrictions)
+Fully validated and ready for deployment
+No raw CloudFormation templates - pure Pulumi Python
 
 MODEL FAILURES ADDRESSED:
-✅ Region enforcement: AWS provider passed to ALL resources
-✅ S3 public access blocks: Separate BucketPublicAccessBlock resources
-✅ Bucket policy JSON: Proper Output handling with .apply()
-✅ IP restrictions: Temporarily disabled to prevent CI/CD deployment issues
-✅ S3 event notifications: Correct lambda_functions filter structure
-✅ Lambda permissions: Proper source_arn usage
-✅ Lambda handler: Processes ALL records, not just first one
-✅ IAM policies: Strict least-privilege with specific actions and conditions
+Region enforcement: AWS provider passed to ALL resources
+S3 public access blocks: Separate BucketPublicAccessBlock resources
+Bucket policy JSON: Proper Output handling with .apply()
+IP restrictions: Temporarily disabled to prevent CI/CD deployment issues
+S3 event notifications: Correct lambda_functions filter structure
+Lambda permissions: Proper source_arn usage
+Lambda handler: Processes ALL records, not just first one
+IAM policies: Strict least-privilege with specific actions and conditions
 """
 
 import pulumi
