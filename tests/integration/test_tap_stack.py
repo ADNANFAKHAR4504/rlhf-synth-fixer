@@ -17,8 +17,9 @@ from datetime import datetime
 # Add the parent directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-# Load the deployment outputs
-with open('/Users/mayanksethi/Projects/turing/iac-test-automations/worktree/IAC-synth-32168794/cfn-outputs/flat-outputs.json', 'r') as f:
+# Load the deployment outputs from relative path
+outputs_path = os.path.join(os.path.dirname(__file__), '../../cfn-outputs/flat-outputs.json')
+with open(outputs_path, 'r') as f:
     OUTPUTS = json.load(f)
 
 class TestTapStackIntegration(unittest.TestCase):
