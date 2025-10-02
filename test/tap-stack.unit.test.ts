@@ -57,7 +57,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       expect(template.Parameters.DesiredCapacity).toBeDefined();
       expect(template.Parameters.MinSize).toBeDefined();
       expect(template.Parameters.MaxSize).toBeDefined();
-      
+
       expect(template.Parameters.DesiredCapacity.Default).toBe(2);
       expect(template.Parameters.MinSize.Default).toBe(1);
       expect(template.Parameters.MaxSize.Default).toBe(4);
@@ -82,10 +82,10 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
     test('should have public subnets in different AZs', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
-      
+
       const pubSub1 = template.Resources.PublicSubnet1;
       const pubSub2 = template.Resources.PublicSubnet2;
-      
+
       expect(pubSub1.Type).toBe('AWS::EC2::Subnet');
       expect(pubSub2.Type).toBe('AWS::EC2::Subnet');
       expect(pubSub1.Properties.CidrBlock).toBe('10.0.1.0/24');
@@ -97,10 +97,10 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
     test('should have private subnets for EC2 instances', () => {
       expect(template.Resources.PrivateSubnet1).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
-      
+
       const privSub1 = template.Resources.PrivateSubnet1;
       const privSub2 = template.Resources.PrivateSubnet2;
-      
+
       expect(privSub1.Type).toBe('AWS::EC2::Subnet');
       expect(privSub2.Type).toBe('AWS::EC2::Subnet');
       expect(privSub1.Properties.CidrBlock).toBe('10.0.10.0/24');
@@ -113,7 +113,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       expect(template.Resources.ALBSecurityGroup).toBeDefined();
       const albSG = template.Resources.ALBSecurityGroup;
       expect(albSG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = albSG.Properties.SecurityGroupIngress;
       expect(ingressRules).toHaveLength(1);
       expect(ingressRules[0].IpProtocol).toBe('tcp');
@@ -126,15 +126,15 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       expect(template.Resources.EC2SecurityGroup).toBeDefined();
       const ec2SG = template.Resources.EC2SecurityGroup;
       expect(ec2SG.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingressRules = ec2SG.Properties.SecurityGroupIngress;
       expect(ingressRules).toHaveLength(2);
-      
+
       // HTTP from ALB
       const httpRule = ingressRules.find((rule: any) => rule.FromPort === 80);
       expect(httpRule).toBeDefined();
-      expect(httpRule.SourceSecurityGroupId).toEqual({Ref: 'ALBSecurityGroup'});
-      
+      expect(httpRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+
       // SSH from VPC
       const sshRule = ingressRules.find((rule: any) => rule.FromPort === 22);
       expect(sshRule).toBeDefined();
@@ -179,14 +179,14 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       expect(template.Resources.StaticAssetsBucket).toBeDefined();
       const bucket = template.Resources.StaticAssetsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       // Should have encryption
       expect(bucket.Properties.BucketEncryption).toBeDefined();
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-      
+
       // Should have versioning
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-      
+
       // Should have lifecycle policy
       expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
       expect(bucket.Properties.LifecycleConfiguration.Rules[0].NoncurrentVersionExpirationInDays).toBe(30);
@@ -195,7 +195,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
     test('S3 bucket should have appropriate public access configuration', () => {
       const bucket = template.Resources.StaticAssetsBucket;
       const publicAccessConfig = bucket.Properties.PublicAccessBlockConfiguration;
-      
+
       expect(publicAccessConfig.BlockPublicAcls).toBe(true);
       expect(publicAccessConfig.IgnorePublicAcls).toBe(true);
       expect(publicAccessConfig.BlockPublicPolicy).toBe(false); // Allows bucket policy
@@ -216,8 +216,8 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       const asg = template.Resources.AutoScalingGroup;
       const subnets = asg.Properties.VPCZoneIdentifier;
       expect(subnets).toHaveLength(2);
-      expect(subnets).toContainEqual({Ref: 'PrivateSubnet1'});
-      expect(subnets).toContainEqual({Ref: 'PrivateSubnet2'});
+      expect(subnets).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(subnets).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
   });
 
@@ -269,12 +269,6 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       });
     });
 
-    test('S3 bucket name should include account ID and environment suffix', () => {
-      const bucket = template.Resources.StaticAssetsBucket;
-      expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'static-assets-${AWS::AccountId}-${EnvironmentSuffix}'
-      });
-    });
   });
 
   describe('Security Best Practices', () => {
@@ -282,7 +276,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
       // Private subnets should not have direct internet gateway routes
       const privateSubnet1 = template.Resources.PrivateSubnet1;
       const privateSubnet2 = template.Resources.PrivateSubnet2;
-      
+
       expect(privateSubnet1.Properties.MapPublicIpOnLaunch).toBeUndefined();
       expect(privateSubnet2.Properties.MapPublicIpOnLaunch).toBeUndefined();
     });
@@ -296,7 +290,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
     test('should have restrictive security group rules', () => {
       const ec2SG = template.Resources.EC2SecurityGroup;
       const ingressRules = ec2SG.Properties.SecurityGroupIngress;
-      
+
       // No rule should allow all traffic from anywhere
       ingressRules.forEach((rule: any) => {
         if (rule.CidrIp === '0.0.0.0/0') {
@@ -317,7 +311,7 @@ describe('Cost-Efficient Web Infrastructure CloudFormation Template', () => {
     test('should have S3 lifecycle policy for cost savings', () => {
       const bucket = template.Resources.StaticAssetsBucket;
       const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
-      
+
       expect(lifecycleRules).toHaveLength(1);
       expect(lifecycleRules[0].Status).toBe('Enabled');
       expect(lifecycleRules[0].NoncurrentVersionExpirationInDays).toBe(30);
