@@ -391,8 +391,8 @@ class TapStack extends Stack {
                 .autoDeleteObjects(true)
                 .build();
 
-        Bucket knowledgeBaseBucket = Bucket.Builder.create(this, "KnowledgeBaseBucket" + environmentSuffix)
-                .bucketName("support-knowledge-base-" + environmentSuffix.toLowerCase() 
+        Bucket knowledgeBaseBucket = Bucket.Builder.create(this, "KnowledgeBasesBucket" + environmentSuffix)
+                .bucketName("support-knowledge-bases-" + environmentSuffix.toLowerCase() 
                            + "-" + this.getAccount())
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
