@@ -23,12 +23,12 @@ export class DatabaseStack extends Construct {
     const region = cdk.Stack.of(this).region;
 
     // Define database engine and version based on region support
-    // us-west-1 has extremely limited PostgreSQL support, may need to use MySQL
+    // us-west-1 has extremely limited database version support, use older stable versions
     const getDatabaseEngine = (region: string): rds.IInstanceEngine => {
       if (region === 'us-west-1') {
-        // us-west-1 has very limited PostgreSQL support - use MySQL as fallback
+        // us-west-1 has very limited support - use older MySQL version
         return rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_35,
+          version: rds.MysqlEngineVersion.VER_8_0_32,
         });
       } else {
         // Other regions typically support PostgreSQL
@@ -43,8 +43,9 @@ export class DatabaseStack extends Construct {
 
     // Output the selected database engine for debugging
     new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
-      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 8.0.35' : 'PostgreSQL 13.7'}`,
-      description: 'Database engine automatically selected based on region compatibility',
+      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 8.0.32' : 'PostgreSQL 13.7'}`,
+      description:
+        'Database engine automatically selected based on region compatibility',
     });
 
     // Create KMS key for database encryption
@@ -112,17 +113,19 @@ export class DatabaseStack extends Construct {
       databaseName: 'retaildb',
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
         engine: databaseEngine,
-        parameters: isMySql ? {
-          // MySQL parameters
-          general_log: '1',
-          slow_query_log: '1',
-          long_query_time: '2',
-        } : {
-          // PostgreSQL parameters
-          log_statement: 'all',
-          log_duration: 'on',
-          shared_preload_libraries: 'pg_stat_statements',
-        },
+        parameters: isMySql
+          ? {
+            // MySQL parameters
+            general_log: '1',
+            slow_query_log: '1',
+            long_query_time: '2',
+          }
+          : {
+            // PostgreSQL parameters
+            log_statement: 'all',
+            log_duration: 'on',
+            shared_preload_libraries: 'pg_stat_statements',
+          },
       }),
     });
 

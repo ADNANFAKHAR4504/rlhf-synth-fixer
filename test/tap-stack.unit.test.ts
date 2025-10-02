@@ -16,7 +16,7 @@ describe('TapStack', () => {
     beforeEach(() => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStack', {
-        environmentSuffix: testEnvironmentSuffix
+        environmentSuffix: testEnvironmentSuffix,
       });
       template = Template.fromStack(stack);
     });
@@ -90,7 +90,7 @@ describe('NetworkStack', () => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack');
     networkStack = new NetworkStack(stack, 'TestNetworkStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -102,7 +102,10 @@ describe('NetworkStack', () => {
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
         Tags: Match.arrayWith([
-          Match.objectLike({ Key: 'Name', Value: `retail-vpc-${testEnvironmentSuffix}` }),
+          Match.objectLike({
+            Key: 'Name',
+            Value: `retail-vpc-${testEnvironmentSuffix}`,
+          }),
         ]),
       });
     });
@@ -169,7 +172,9 @@ describe('NetworkStack', () => {
 
     test('should output Security Group ID', () => {
       const outputs = template.findOutputs('*');
-      const sgOutput = Object.keys(outputs).find(key => key.includes('SecurityGroupId'));
+      const sgOutput = Object.keys(outputs).find(key =>
+        key.includes('SecurityGroupId')
+      );
       expect(sgOutput).toBeDefined();
     });
   });
@@ -186,7 +191,7 @@ describe('BackupStack', () => {
     app = new cdk.App();
     stack = new cdk.Stack(app, 'TestStack');
     backupStack = new BackupStack(stack, 'TestBackupStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -268,7 +273,9 @@ describe('BackupStack', () => {
   describe('Outputs', () => {
     test('should output bucket name', () => {
       const outputs = template.findOutputs('*');
-      const bucketOutput = Object.keys(outputs).find(key => key.includes('BucketName'));
+      const bucketOutput = Object.keys(outputs).find(key =>
+        key.includes('BucketName')
+      );
       expect(bucketOutput).toBeDefined();
     });
   });
@@ -288,11 +295,11 @@ describe('DatabaseStack', () => {
     stack = new cdk.Stack(app, 'TestStack');
 
     networkStack = new NetworkStack(stack, 'TestNetworkStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
 
     backupStack = new BackupStack(stack, 'TestBackupStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
 
     databaseStack = new DatabaseStack(stack, 'TestDatabaseStack', {
@@ -421,13 +428,17 @@ describe('DatabaseStack', () => {
   describe('Outputs', () => {
     test('should output database endpoint', () => {
       const outputs = template.findOutputs('*');
-      const endpointOutput = Object.keys(outputs).find(key => key.includes('DatabaseEndpoint'));
+      const endpointOutput = Object.keys(outputs).find(key =>
+        key.includes('DatabaseEndpoint')
+      );
       expect(endpointOutput).toBeDefined();
     });
 
     test('should output database port', () => {
       const outputs = template.findOutputs('*');
-      const portOutput = Object.keys(outputs).find(key => key.includes('DatabasePort'));
+      const portOutput = Object.keys(outputs).find(key =>
+        key.includes('DatabasePort')
+      );
       expect(portOutput).toBeDefined();
     });
   });
@@ -448,11 +459,11 @@ describe('MonitoringStack', () => {
     stack = new cdk.Stack(app, 'TestStack');
 
     networkStack = new NetworkStack(stack, 'TestNetworkStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
 
     backupStack = new BackupStack(stack, 'TestBackupStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
 
     databaseStack = new DatabaseStack(stack, 'TestDatabaseStack', {
@@ -540,7 +551,9 @@ describe('MonitoringStack', () => {
   describe('Outputs', () => {
     test('should output dashboard URL', () => {
       const outputs = template.findOutputs('*');
-      const dashboardOutput = Object.keys(outputs).find(key => key.includes('DashboardURL'));
+      const dashboardOutput = Object.keys(outputs).find(key =>
+        key.includes('DashboardURL')
+      );
       expect(dashboardOutput).toBeDefined();
     });
   });
@@ -555,7 +568,7 @@ describe('Resource Tagging', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
     template = Template.fromStack(stack);
   });
@@ -576,7 +589,10 @@ describe('Resource Tagging', () => {
       if (Object.keys(resources).length > 0) {
         template.hasResourceProperties(resourceType, {
           Tags: Match.arrayWith([
-            Match.objectLike({ Key: 'Environment', Value: testEnvironmentSuffix }),
+            Match.objectLike({
+              Key: 'Environment',
+              Value: testEnvironmentSuffix,
+            }),
           ]),
         });
       }
@@ -593,7 +609,7 @@ describe('Removal Policies', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: testEnvironmentSuffix
+      environmentSuffix: testEnvironmentSuffix,
     });
     template = Template.fromStack(stack);
   });

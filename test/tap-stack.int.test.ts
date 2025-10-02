@@ -43,9 +43,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const result = await ec2.describeVpcs({
-          VpcIds: [outputs.VPCId]
-        }).promise();
+        const result = await ec2
+          .describeVpcs({
+            VpcIds: [outputs.VPCId],
+          })
+          .promise();
 
         expect(result.Vpcs).toHaveLength(1);
         const vpc = result.Vpcs![0];
@@ -53,8 +55,13 @@ describe('Retail Database Infrastructure Integration Tests', () => {
         expect(vpc.CidrBlock).toBe('10.2.0.0/16');
         // DNS settings are enabled by default in the VPC configuration
       } catch (error: any) {
-        if (error.code === 'UnauthorizedOperation' || error.code === 'AccessDenied') {
-          console.warn('Insufficient permissions to describe VPC, skipping test');
+        if (
+          error.code === 'UnauthorizedOperation' ||
+          error.code === 'AccessDenied'
+        ) {
+          console.warn(
+            'Insufficient permissions to describe VPC, skipping test'
+          );
           return;
         }
         throw error;
@@ -68,16 +75,18 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const result = await ec2.describeSecurityGroups({
-          GroupIds: [outputs.SecurityGroupId]
-        }).promise();
+        const result = await ec2
+          .describeSecurityGroups({
+            GroupIds: [outputs.SecurityGroupId],
+          })
+          .promise();
 
         expect(result.SecurityGroups).toHaveLength(1);
         const sg = result.SecurityGroups![0];
 
         // Check ingress rules
-        const postgresIngress = sg.IpPermissions?.find(rule =>
-          rule.FromPort === 5432 && rule.ToPort === 5432
+        const postgresIngress = sg.IpPermissions?.find(
+          rule => rule.FromPort === 5432 && rule.ToPort === 5432
         );
         expect(postgresIngress).toBeDefined();
         expect(postgresIngress?.IpRanges).toContainEqual(
@@ -85,13 +94,18 @@ describe('Retail Database Infrastructure Integration Tests', () => {
         );
 
         // Check egress rules
-        const httpsEgress = sg.IpPermissionsEgress?.find(rule =>
-          rule.FromPort === 443 && rule.ToPort === 443
+        const httpsEgress = sg.IpPermissionsEgress?.find(
+          rule => rule.FromPort === 443 && rule.ToPort === 443
         );
         expect(httpsEgress).toBeDefined();
       } catch (error: any) {
-        if (error.code === 'UnauthorizedOperation' || error.code === 'AccessDenied') {
-          console.warn('Insufficient permissions to describe security groups, skipping test');
+        if (
+          error.code === 'UnauthorizedOperation' ||
+          error.code === 'AccessDenied'
+        ) {
+          console.warn(
+            'Insufficient permissions to describe security groups, skipping test'
+          );
           return;
         }
         throw error;
@@ -105,20 +119,27 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const result = await ec2.describeVpcEndpoints({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] },
-            { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] }
-          ]
-        }).promise();
+        const result = await ec2
+          .describeVpcEndpoints({
+            Filters: [
+              { Name: 'vpc-id', Values: [outputs.VPCId] },
+              { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] },
+            ],
+          })
+          .promise();
 
         expect(result.VpcEndpoints).toHaveLength(1);
         const endpoint = result.VpcEndpoints![0];
         expect(endpoint.State).toBe('available');
         expect(endpoint.VpcEndpointType).toBe('Gateway');
       } catch (error: any) {
-        if (error.code === 'UnauthorizedOperation' || error.code === 'AccessDenied') {
-          console.warn('Insufficient permissions to describe VPC endpoints, skipping test');
+        if (
+          error.code === 'UnauthorizedOperation' ||
+          error.code === 'AccessDenied'
+        ) {
+          console.warn(
+            'Insufficient permissions to describe VPC endpoints, skipping test'
+          );
           return;
         }
         throw error;
@@ -132,11 +153,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const result = await ec2.describeSubnets({
-          Filters: [
-            { Name: 'vpc-id', Values: [outputs.VPCId] }
-          ]
-        }).promise();
+        const result = await ec2
+          .describeSubnets({
+            Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
+          })
+          .promise();
 
         expect(result.Subnets).toBeDefined();
         expect(result.Subnets!.length).toBeGreaterThan(0);
@@ -146,8 +167,13 @@ describe('Retail Database Infrastructure Integration Tests', () => {
           expect(subnet.MapPublicIpOnLaunch).toBe(false);
         });
       } catch (error: any) {
-        if (error.code === 'UnauthorizedOperation' || error.code === 'AccessDenied') {
-          console.warn('Insufficient permissions to describe subnets, skipping test');
+        if (
+          error.code === 'UnauthorizedOperation' ||
+          error.code === 'AccessDenied'
+        ) {
+          console.warn(
+            'Insufficient permissions to describe subnets, skipping test'
+          );
           return;
         }
         throw error;
@@ -163,9 +189,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const versioningResult = await s3.getBucketVersioning({
-          Bucket: outputs.BackupBucketName
-        }).promise();
+        const versioningResult = await s3
+          .getBucketVersioning({
+            Bucket: outputs.BackupBucketName,
+          })
+          .promise();
 
         expect(versioningResult.Status).toBe('Enabled');
       } catch (error: any) {
@@ -184,13 +212,20 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const encryptionResult = await s3.getBucketEncryption({
-          Bucket: outputs.BackupBucketName
-        }).promise();
+        const encryptionResult = await s3
+          .getBucketEncryption({
+            Bucket: outputs.BackupBucketName,
+          })
+          .promise();
 
-        expect(encryptionResult.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
-        const rule = encryptionResult.ServerSideEncryptionConfiguration!.Rules![0];
-        expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+        expect(
+          encryptionResult.ServerSideEncryptionConfiguration?.Rules
+        ).toHaveLength(1);
+        const rule =
+          encryptionResult.ServerSideEncryptionConfiguration!.Rules![0];
+        expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+          'AES256'
+        );
       } catch (error: any) {
         if (error.code === 'AccessDenied' || error.code === 'NoSuchBucket') {
           console.warn('Cannot access backup bucket encryption, skipping test');
@@ -207,9 +242,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const publicAccessResult = await s3.getPublicAccessBlock({
-          Bucket: outputs.BackupBucketName
-        }).promise();
+        const publicAccessResult = await s3
+          .getPublicAccessBlock({
+            Bucket: outputs.BackupBucketName,
+          })
+          .promise();
 
         const config = publicAccessResult.PublicAccessBlockConfiguration!;
         expect(config.BlockPublicAcls).toBe(true);
@@ -218,7 +255,9 @@ describe('Retail Database Infrastructure Integration Tests', () => {
         expect(config.RestrictPublicBuckets).toBe(true);
       } catch (error: any) {
         if (error.code === 'AccessDenied' || error.code === 'NoSuchBucket') {
-          console.warn('Cannot access backup bucket public access block, skipping test');
+          console.warn(
+            'Cannot access backup bucket public access block, skipping test'
+          );
           return;
         }
         throw error;
@@ -232,16 +271,18 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       }
 
       try {
-        const lifecycleResult = await s3.getBucketLifecycleConfiguration({
-          Bucket: outputs.BackupBucketName
-        }).promise();
+        const lifecycleResult = await s3
+          .getBucketLifecycleConfiguration({
+            Bucket: outputs.BackupBucketName,
+          })
+          .promise();
 
         expect(lifecycleResult.Rules).toBeDefined();
         expect(lifecycleResult.Rules!.length).toBeGreaterThan(0);
 
         // Check for backup archival rule
-        const archivalRule = lifecycleResult.Rules!.find(rule =>
-          rule.ID === 'DeleteOldBackups'
+        const archivalRule = lifecycleResult.Rules!.find(
+          rule => rule.ID === 'DeleteOldBackups'
         );
         expect(archivalRule).toBeDefined();
         expect(archivalRule?.Status).toBe('Enabled');
@@ -266,9 +307,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const instanceId = `retail-db-${environmentSuffix}`;
 
       try {
-        const result = await rds.describeDBInstances({
-          DBInstanceIdentifier: instanceId
-        }).promise();
+        const result = await rds
+          .describeDBInstances({
+            DBInstanceIdentifier: instanceId,
+          })
+          .promise();
 
         expect(result.DBInstances).toHaveLength(1);
         const instance = result.DBInstances![0];
@@ -279,7 +322,10 @@ describe('Retail Database Infrastructure Integration Tests', () => {
         expect(instance.AllocatedStorage).toBe(20);
         expect(instance.StorageEncrypted).toBe(true);
       } catch (error: any) {
-        if (error.code === 'DBInstanceNotFound' || error.code === 'AccessDenied') {
+        if (
+          error.code === 'DBInstanceNotFound' ||
+          error.code === 'AccessDenied'
+        ) {
           console.warn('Cannot access database instance, skipping test');
           return;
         }
@@ -296,16 +342,21 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const instanceId = `retail-db-${environmentSuffix}`;
 
       try {
-        const result = await rds.describeDBInstances({
-          DBInstanceIdentifier: instanceId
-        }).promise();
+        const result = await rds
+          .describeDBInstances({
+            DBInstanceIdentifier: instanceId,
+          })
+          .promise();
 
         const instance = result.DBInstances![0];
         expect(instance.BackupRetentionPeriod).toBe(7);
         expect(instance.PreferredBackupWindow).toBe('03:00-04:00');
         expect(instance.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
       } catch (error: any) {
-        if (error.code === 'DBInstanceNotFound' || error.code === 'AccessDenied') {
+        if (
+          error.code === 'DBInstanceNotFound' ||
+          error.code === 'AccessDenied'
+        ) {
           console.warn('Cannot access database backup config, skipping test');
           return;
         }
@@ -322,16 +373,23 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const instanceId = `retail-db-${environmentSuffix}`;
 
       try {
-        const result = await rds.describeDBInstances({
-          DBInstanceIdentifier: instanceId
-        }).promise();
+        const result = await rds
+          .describeDBInstances({
+            DBInstanceIdentifier: instanceId,
+          })
+          .promise();
 
         const instance = result.DBInstances![0];
         expect(instance.PerformanceInsightsEnabled).toBe(true);
         expect(instance.PerformanceInsightsRetentionPeriod).toBe(7);
       } catch (error: any) {
-        if (error.code === 'DBInstanceNotFound' || error.code === 'AccessDenied') {
-          console.warn('Cannot access database Performance Insights config, skipping test');
+        if (
+          error.code === 'DBInstanceNotFound' ||
+          error.code === 'AccessDenied'
+        ) {
+          console.warn(
+            'Cannot access database Performance Insights config, skipping test'
+          );
           return;
         }
         throw error;
@@ -361,16 +419,21 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const dashboardName = `retail-database-${environmentSuffix}`;
 
       try {
-        const result = await cloudwatch.getDashboard({
-          DashboardName: dashboardName
-        }).promise();
+        const result = await cloudwatch
+          .getDashboard({
+            DashboardName: dashboardName,
+          })
+          .promise();
 
         expect(result.DashboardBody).toBeDefined();
         const body = JSON.parse(result.DashboardBody!);
         expect(body.widgets).toBeDefined();
         expect(body.widgets.length).toBeGreaterThan(0);
       } catch (error: any) {
-        if (error.code === 'ResourceNotFound' || error.code === 'AccessDenied') {
+        if (
+          error.code === 'ResourceNotFound' ||
+          error.code === 'AccessDenied'
+        ) {
           console.warn('Cannot access CloudWatch dashboard, skipping test');
           return;
         }
@@ -384,9 +447,7 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       try {
         const result = await sns.listTopics().promise();
 
-        const topic = result.Topics?.find(t =>
-          t.TopicArn?.includes(topicName)
-        );
+        const topic = result.Topics?.find(t => t.TopicArn?.includes(topicName));
 
         expect(topic).toBeDefined();
       } catch (error: any) {
@@ -400,9 +461,11 @@ describe('Retail Database Infrastructure Integration Tests', () => {
 
     test('CloudWatch alarms should be configured', async () => {
       try {
-        const result = await cloudwatch.describeAlarms({
-          AlarmNamePrefix: 'TapStack'
-        }).promise();
+        const result = await cloudwatch
+          .describeAlarms({
+            AlarmNamePrefix: 'TapStack',
+          })
+          .promise();
 
         const alarms = result.MetricAlarms || [];
 
@@ -448,20 +511,27 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const keyAlias = `alias/retail-db-key-${environmentSuffix}`;
 
       try {
-        const aliasResult = await kms.describeKey({
-          KeyId: keyAlias
-        }).promise();
+        const aliasResult = await kms
+          .describeKey({
+            KeyId: keyAlias,
+          })
+          .promise();
 
         expect(aliasResult.KeyMetadata).toBeDefined();
         const keyId = aliasResult.KeyMetadata!.KeyId;
 
-        const rotationResult = await kms.getKeyRotationStatus({
-          KeyId: keyId
-        }).promise();
+        const rotationResult = await kms
+          .getKeyRotationStatus({
+            KeyId: keyId,
+          })
+          .promise();
 
         expect(rotationResult.KeyRotationEnabled).toBe(true);
       } catch (error: any) {
-        if (error.code === 'NotFoundException' || error.code === 'AccessDeniedException') {
+        if (
+          error.code === 'NotFoundException' ||
+          error.code === 'AccessDeniedException'
+        ) {
           console.warn('Cannot access KMS key, skipping test');
           return;
         }
@@ -489,7 +559,9 @@ describe('Retail Database Infrastructure Integration Tests', () => {
         return;
       }
 
-      expect(outputs.DashboardURL).toMatch(/^https:\/\/console\.aws\.amazon\.com\/cloudwatch/);
+      expect(outputs.DashboardURL).toMatch(
+        /^https:\/\/console\.aws\.amazon\.com\/cloudwatch/
+      );
       expect(outputs.DashboardURL).toContain(environmentSuffix);
     });
   });
@@ -500,7 +572,7 @@ describe('Retail Database Infrastructure Integration Tests', () => {
       const expectedTags = {
         Environment: environmentSuffix,
         Application: 'RetailDatabase',
-        ManagedBy: 'CDK'
+        ManagedBy: 'CDK',
       };
 
       // Since we cannot actually query all resources due to permissions,
