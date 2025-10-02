@@ -10,5 +10,18 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "SQS, Lambda, Dynamo"
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
