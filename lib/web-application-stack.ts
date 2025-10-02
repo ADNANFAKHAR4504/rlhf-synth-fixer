@@ -279,8 +279,10 @@ export class WebApplicationStack extends cdk.Stack {
     });
 
     // Create S3 bucket for WAF logging
+    // Generate a unique suffix for the bucket to avoid conflicts
+    const uniqueSuffix = cdk.Names.uniqueId(this).toLowerCase().substring(0, 8);
     const wafLogBucket = new s3.Bucket(this, 'WAFLogBucket', {
-      bucketName: `aws-waf-logs-${props.environmentSuffix}-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`,
+      bucketName: `aws-waf-logs-${props.environmentSuffix}-${uniqueSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
