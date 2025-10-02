@@ -86,7 +86,7 @@ describe("Provider Configuration", () => {
   });
 
   test("configures backend", () => {
-    expect(providerContent).toMatch(/backend\s+"local"\s*{/);
+    expect(providerContent).toMatch(/backend\s+"s3"\s*{/);
   });
 
   test("configures AWS provider with region", () => {

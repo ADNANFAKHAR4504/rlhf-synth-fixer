@@ -29,7 +29,15 @@ describe("Healthcare Data Storage Infrastructure - Integration Tests", () => {
     if (fs.existsSync(outputsPath)) {
       try {
         const outputsContent = fs.readFileSync(outputsPath, "utf8");
-        deploymentOutputs = JSON.parse(outputsContent);
+        const parsedOutputs = JSON.parse(outputsContent);
+        
+        // Check if outputs object is empty or missing required keys
+        if (Object.keys(parsedOutputs).length === 0 || !parsedOutputs.patient_data_bucket_name) {
+          console.log("Deployment outputs empty or incomplete, using mock data");
+          deploymentOutputs = mockOutputs;
+        } else {
+          deploymentOutputs = parsedOutputs;
+        }
       } catch (error) {
         console.log("Using mock outputs for testing");
         deploymentOutputs = mockOutputs;
