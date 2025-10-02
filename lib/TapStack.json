@@ -18,8 +18,6 @@
             "default": "Database Configuration"
           },
           "Parameters": [
-            "DBUsername",
-            "DBPassword",
             "DBAllocatedStorage",
             "DBMaxAllocatedStorage"
           ]
@@ -47,24 +45,6 @@
       "Default": "RetailInventory",
       "Description": "Project name for resource identification"
     },
-    "DBUsername": {
-      "Type": "String",
-      "Default": "dbadmin",
-      "Description": "Database master username",
-      "MinLength": "1",
-      "MaxLength": "16",
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
-      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
-    },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Database master password",
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "^[a-zA-Z0-9]*$",
-      "ConstraintDescription": "Must contain only alphanumeric characters"
-    },
     "DBAllocatedStorage": {
       "Type": "Number",
       "Default": "20",
@@ -81,6 +61,7 @@
     },
     "AlarmEmail": {
       "Type": "String",
+      "Default": "devops@example.com",
       "Description": "Email address for CloudWatch alarm notifications",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
       "ConstraintDescription": "Must be a valid email address"
@@ -371,6 +352,29 @@
         ]
       }
     },
+    "RDSMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {"Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-rds-master"},
+        "Description": "RDS master credentials for retail inventory database",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "${ProjectName}-${EnvironmentName}-RDSMasterSecret"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentName"}
+          }
+        ]
+      }
+    },
     "DBInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
@@ -380,8 +384,8 @@
         "DBInstanceClass": "db.t3.micro",
         "Engine": "postgres",
         "EngineVersion": "16.8",
-        "MasterUsername": {"Ref": "DBUsername"},
-        "MasterUserPassword": {"Ref": "DBPassword"},
+        "MasterUsername": {"Fn::Join": ["", ["{{resolve:secretsmanager:", {"Ref": "RDSMasterSecret"}, ":SecretString:username}}"]]},
+        "MasterUserPassword": {"Fn::Join": ["", ["{{resolve:secretsmanager:", {"Ref": "RDSMasterSecret"}, ":SecretString:password}}"]]},
         "AllocatedStorage": {"Ref": "DBAllocatedStorage"},
         "MaxAllocatedStorage": {"Ref": "DBMaxAllocatedStorage"},
         "StorageType": "gp3",
@@ -801,6 +805,13 @@
       "Value": {"Fn::GetAtt": ["RDSEnhancedMonitoringRole", "Arn"]},
       "Export": {
         "Name": {"Fn::Sub": "${AWS::StackName}-RDSMonitoringRoleArn"}
+      }
+    },
+    "RDSMasterSecretArn": {
+      "Description": "RDS Master Secret ARN",
+      "Value": {"Ref": "RDSMasterSecret"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-RDSMasterSecretArn"}
       }
     }
   }

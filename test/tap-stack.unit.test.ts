@@ -32,11 +32,10 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
       const expectedParams = [
         'EnvironmentName',
         'ProjectName',
-        'DBUsername',
-        'DBPassword',
         'DBAllocatedStorage',
         'DBMaxAllocatedStorage',
-        'AlarmEmail'
+        'AlarmEmail',
+        'EnvironmentSuffix'
       ];
 
       expectedParams.forEach(param => {
@@ -51,16 +50,11 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
       expect(param.AllowedValues).toEqual(['Development', 'Staging', 'Production']);
     });
 
-    test('DBPassword parameter should be NoEcho', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe('8');
-    });
-
-    test('AlarmEmail parameter should have email validation pattern', () => {
+    test('AlarmEmail parameter should have email validation pattern and default', () => {
       const param = template.Parameters.AlarmEmail;
       expect(param.AllowedPattern).toBeDefined();
       expect(param.AllowedPattern).toContain('@');
+      expect(param.Default).toBe('devops@example.com');
     });
 
     test('DBAllocatedStorage should have correct constraints', () => {
@@ -169,6 +163,17 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
   });
 
   describe('RDS Database Configuration', () => {
+    test('should have Secrets Manager secret for RDS credentials', () => {
+      expect(template.Resources.RDSMasterSecret).toBeDefined();
+      expect(template.Resources.RDSMasterSecret.Type).toBe('AWS::SecretsManager::Secret');
+      
+      const secret = template.Resources.RDSMasterSecret.Properties;
+      expect(secret.GenerateSecretString).toBeDefined();
+      expect(secret.GenerateSecretString.SecretStringTemplate).toContain('username');
+      expect(secret.GenerateSecretString.GenerateStringKey).toBe('password');
+      expect(secret.GenerateSecretString.PasswordLength).toBe(32);
+    });
+
     test('should have DB subnet group', () => {
       expect(template.Resources.DBSubnetGroup).toBeDefined();
       expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
@@ -192,6 +197,21 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
     test('should have RDS instance with correct configuration', () => {
       expect(template.Resources.DBInstance).toBeDefined();
       expect(template.Resources.DBInstance.Type).toBe('AWS::RDS::DBInstance');
+    });
+
+    test('RDS instance should use Secrets Manager dynamic references', () => {
+      const db = template.Resources.DBInstance.Properties;
+      expect(db.MasterUsername['Fn::Join']).toBeDefined();
+      const usernameJoinParts = db.MasterUsername['Fn::Join'][1];
+      expect(JSON.stringify(usernameJoinParts)).toContain('resolve:secretsmanager');
+      expect(JSON.stringify(usernameJoinParts)).toContain('RDSMasterSecret');
+      expect(JSON.stringify(usernameJoinParts)).toContain('username');
+      
+      expect(db.MasterUserPassword['Fn::Join']).toBeDefined();
+      const passwordJoinParts = db.MasterUserPassword['Fn::Join'][1];
+      expect(JSON.stringify(passwordJoinParts)).toContain('resolve:secretsmanager');
+      expect(JSON.stringify(passwordJoinParts)).toContain('RDSMasterSecret');
+      expect(JSON.stringify(passwordJoinParts)).toContain('password');
     });
 
     test('RDS instance should use db.t3.micro', () => {
@@ -422,7 +442,8 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
         'S3VPCEndpointId',
         'SNSTopicArn',
         'S3BackupRoleArn',
-        'RDSMonitoringRoleArn'
+        'RDSMonitoringRoleArn',
+        'RDSMasterSecretArn'
       ];
 
       expectedOutputs.forEach(output => {
@@ -480,7 +501,8 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
         'KMSKey',
         'RDSEnhancedMonitoringRole',
         'S3BackupRole',
-        'SNSTopic'
+        'SNSTopic',
+        'RDSMasterSecret'
       ];
 
       taggableResources.forEach(resourceName => {
