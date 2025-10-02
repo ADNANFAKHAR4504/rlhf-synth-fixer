@@ -28,7 +28,9 @@ describe('Terraform stack unit tests', () => {
 
   test('S3 bucket uses versioning and server-side encryption', () => {
     const content = readTfFile('tap_stack.tf');
-    expect(content).toMatch(/resource\s+"aws_s3_bucket"[\s\S]*versioning\s*{[\s\S]*enabled\s*=\s*true/);
+    // Check for separate versioning resource (modern Terraform approach)
+    expect(content).toMatch(/resource\s+"aws_s3_bucket_versioning"/);
+    expect(content).toMatch(/status\s*=\s*"Enabled"/);
     expect(content).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/);
     expect(content).toMatch(/sse_algorithm\s*=\s*"AES256"/);
   });
