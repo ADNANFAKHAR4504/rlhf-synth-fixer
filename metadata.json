@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410112",
+  "team": "4",
+  "startedAt": "2025-10-02T17:51:14.608Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "S3 Bucket, EC2, Lambda, CloudWatch LogGroup, VPC"
+}
