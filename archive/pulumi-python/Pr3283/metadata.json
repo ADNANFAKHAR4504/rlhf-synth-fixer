@@ -17,5 +17,11 @@
     "CloudWatch Metrics",
     "CloudWatch Alarms"
   ],
-  "subcategory": "secure-logging-infrastructure"
+  "subcategory": "secure-logging-infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
