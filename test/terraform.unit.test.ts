@@ -391,13 +391,14 @@ describe("Application Load Balancer - HTTPS & WAF", () => {
     expect(stackContent).toMatch(/certificate_arn\s*=\s*var\.ssl_certificate_arn/);
   });
 
-  test("creates HTTP to HTTPS redirect listener", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"http_redirect"/);
+  test("creates HTTP listener", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"http"/);
   });
 
-  test("HTTP listener redirects to HTTPS", () => {
-    expect(stackContent).toMatch(/type\s*=\s*"redirect"/);
-    expect(stackContent).toMatch(/protocol\s*=\s*"HTTPS"/);
+  test("HTTP listener has conditional redirect logic", () => {
+    // HTTP listener conditionally redirects to HTTPS or forwards based on ssl_certificate_arn
+    expect(stackContent).toMatch(/var\.ssl_certificate_arn\s*!=\s*""\s*\?\s*"redirect"\s*:\s*"forward"/);
+    expect(stackContent).toMatch(/dynamic\s+"redirect"/);
   });
 
   test("ALB has access logging enabled", () => {
