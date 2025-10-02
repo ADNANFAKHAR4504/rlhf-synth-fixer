@@ -175,10 +175,15 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   viewer_certificate {
-    acm_certificate_arn            = var.domain_name != "" && var.create_dns_records ? aws_acm_certificate.website[0].arn : null
+    # Use ACM certificate if custom domain is configured
+    acm_certificate_arn = var.domain_name != "" && var.create_dns_records ? aws_acm_certificate.website[0].arn : null
+    ssl_support_method  = var.domain_name != "" && var.create_dns_records ? "sni-only" : null
+
+    # Use CloudFront default certificate when no custom domain
     cloudfront_default_certificate = var.domain_name == "" || !var.create_dns_records
-    ssl_support_method             = var.domain_name != "" && var.create_dns_records ? "sni-only" : null
-    minimum_protocol_version       = var.domain_name != "" && var.create_dns_records ? "TLSv1.2_2021" : "TLSv1"
+
+    # Set minimum TLS version
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   logging_config {
