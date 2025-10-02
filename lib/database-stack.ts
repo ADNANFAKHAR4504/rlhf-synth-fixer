@@ -57,7 +57,7 @@ export class DatabaseStack extends Construct {
     this.database = new rds.DatabaseInstance(this, 'RetailDatabase', {
       instanceIdentifier: `retail-db-${props.environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_13_13,
+        version: rds.PostgresEngineVersion.VER_12_17,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -86,7 +86,7 @@ export class DatabaseStack extends Construct {
       databaseName: 'retaildb',
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_13_13,
+          version: rds.PostgresEngineVersion.VER_12_17,
         }),
         parameters: {
           log_statement: 'all',
