@@ -466,6 +466,8 @@ import { writeFileSync } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
+import archiver from 'archiver';
+import { createWriteStream } from 'fs';
 
 export interface LambdaConfig {
   functionName: string;
@@ -510,14 +512,38 @@ export class SecureLambdaFunction extends Construct {
         .update(config.inlineCode)
         .digest('hex');
       const tempDir = '.cdktf.out/lambda-functions';
-      const tempFile = join(tempDir, `${config.functionName}-${codeHash}.js`);
+      const tempJsFile = join(tempDir, `${config.functionName}-${codeHash}.js`);
+      const tempZipFile = join(
+        tempDir,
+        `${config.functionName}-${codeHash}.zip`
+      );
 
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
-      writeFileSync(tempFile, config.inlineCode);
-      functionConfig.filename = tempFile;
+      // Write the JavaScript code to a file
+      writeFileSync(tempJsFile, config.inlineCode);
+
+      // Create a ZIP file containing the JavaScript file
+      const output = createWriteStream(tempZipFile);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      archive.pipe(output);
+
+      // Add the JS file to the archive as 'index.js' since the handler is 'index.handler'
+      archive.file(tempJsFile, { name: 'index.js' });
+
+      archive.finalize();
+
+      // Wait for the ZIP file to be written
+      output.on('close', () => {
+        console.log(
+          `Lambda ZIP file created: ${tempZipFile} (${archive.pointer()} bytes)`
+        );
+      });
+
+      functionConfig.filename = tempZipFile;
     } else if (config.filename) {
       functionConfig.filename = config.filename;
     } else if (config.s3Bucket && config.s3Key) {
