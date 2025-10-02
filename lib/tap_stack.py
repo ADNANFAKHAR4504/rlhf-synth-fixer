@@ -167,7 +167,37 @@ class TapStack(Stack):
             description="KMS key for audit logs encryption",
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY,
-            alias=f"alias/audit-logs-{self.unique_suffix}"
+            alias=f"alias/audit-logs-{self.unique_suffix}",
+            policy=iam.PolicyDocument(
+                statements=[
+                    # Allow account root permissions
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.AccountRootPrincipal()],
+                        actions=["kms:*"],
+                        resources=["*"]
+                    ),
+                    # Allow CloudTrail service to use the key
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:CreateGrant",
+                            "kms:DescribeKey"
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:EncryptionContext:aws:cloudtrail:arn": f"arn:aws:cloudtrail:{self.region}:{self.account}:trail/zero-trust-trail-{self.unique_suffix}"
+                            }
+                        }
+                    )
+                ]
+            )
         )
 
     def _create_network_infrastructure(self):
