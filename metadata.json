@@ -10,5 +10,5 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": "S3, CloudFormation, Lambda, VPC, KMS, IAM, Glue, Kinesis Data Firehose, SNS"
 }
