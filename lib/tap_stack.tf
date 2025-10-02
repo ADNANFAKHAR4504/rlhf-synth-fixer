@@ -78,7 +78,7 @@ data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 
 data "aws_rds_engine_version" "postgresql" {
-  engine  = "postgres"
+  engine       = "postgres"
   default_only = true
 }
 
@@ -87,9 +87,9 @@ data "aws_rds_engine_version" "postgresql" {
 # =============================================================================
 
 locals {
-  s3_bucket_name = "secure-app-bucket-${var.unique_id}"
+  s3_bucket_name         = "secure-app-bucket-${var.unique_id}"
   cloudtrail_bucket_name = "secure-cloudtrail-logs-${var.unique_id}"
-  availability_zones = slice(data.aws_availability_zones.available.names, 0, 2)
+  availability_zones     = slice(data.aws_availability_zones.available.names, 0, 2)
   common_tags = merge(var.tags, {
     ManagedBy = "Terraform"
   })
@@ -168,7 +168,7 @@ resource "aws_subnet" "private" {
 
 # NAT Gateway (if enabled)
 resource "aws_eip" "nat" {
-  count = var.enable_nat_gateway ? 1 : 0
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
 
   tags = merge(local.common_tags, {
@@ -421,7 +421,7 @@ resource "aws_iam_policy" "s3_access" {
           "s3:ListBucket",
           "s3:PutObject"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
           "arn:aws:s3:::${local.s3_bucket_name}",
           "arn:aws:s3:::${local.s3_bucket_name}/*"
@@ -546,24 +546,24 @@ resource "aws_db_parameter_group" "postgres" {
 }
 
 resource "aws_db_instance" "postgres" {
-  allocated_storage           = 20
-  storage_type                = "gp3"
-  engine                      = "postgres"
-  engine_version              = data.aws_rds_engine_version.postgresql.version
-  instance_class              = var.db_instance_class
-  db_name                     = var.db_name
-  username                    = var.db_username
-  password                    = var.db_password
-  parameter_group_name        = aws_db_parameter_group.postgres.name
-  vpc_security_group_ids      = [aws_security_group.db.id]
-  db_subnet_group_name        = aws_db_subnet_group.default.name
-  skip_final_snapshot         = true
-  storage_encrypted           = true
-  kms_key_id                  = aws_kms_key.rds.arn
-  auto_minor_version_upgrade  = true
-  backup_retention_period     = 7
-  multi_az                    = true
-  deletion_protection         = true
+  allocated_storage            = 20
+  storage_type                 = "gp3"
+  engine                       = "postgres"
+  engine_version               = data.aws_rds_engine_version.postgresql.version
+  instance_class               = var.db_instance_class
+  db_name                      = var.db_name
+  username                     = var.db_username
+  password                     = var.db_password
+  parameter_group_name         = aws_db_parameter_group.postgres.name
+  vpc_security_group_ids       = [aws_security_group.db.id]
+  db_subnet_group_name         = aws_db_subnet_group.default.name
+  skip_final_snapshot          = true
+  storage_encrypted            = true
+  kms_key_id                   = aws_kms_key.rds.arn
+  auto_minor_version_upgrade   = true
+  backup_retention_period      = 7
+  multi_az                     = true
+  deletion_protection          = true
   performance_insights_enabled = true
 
   tags = local.common_tags
@@ -611,7 +611,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  
+
   # This would typically come from ACM and be provided as a variable
   # certificate_arn   = var.certificate_arn
 
@@ -672,7 +672,7 @@ resource "aws_autoscaling_group" "app" {
   max_size            = 4
   vpc_zone_identifier = aws_subnet.private.*.id
   health_check_type   = "ELB"
-  
+
   launch_template {
     id      = aws_launch_template.app.id
     version = "$Latest"
@@ -843,11 +843,11 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 resource "aws_api_gateway_rest_api" "app" {
   name        = "app-api"
   description = "API Gateway for web application"
-  
+
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-  
+
   tags = local.common_tags
 }
 
@@ -877,7 +877,7 @@ resource "aws_api_gateway_deployment" "app" {
   depends_on = [aws_api_gateway_integration.lambda]
 
   rest_api_id = aws_api_gateway_rest_api.app.id
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -1014,11 +1014,6 @@ output "lambda_function_name" {
 output "lambda_function_arn" {
   description = "ARN of the Lambda function"
   value       = aws_lambda_function.app.arn
-}
-
-output "api_gateway_endpoint" {
-  description = "Endpoint of the API Gateway"
-  value       = "${aws_api_gateway_rest_api.app.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_deployment.app.stage_name}"
 }
 
 output "config_recorder_status" {
