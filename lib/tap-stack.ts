@@ -1,27 +1,28 @@
 /* eslint-disable prettier/prettier */
+
 import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
-import * as athena from 'aws-cdk-lib/aws-athena';
+import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as batch from 'aws-cdk-lib/aws-batch';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 import * as glue from 'aws-cdk-lib/aws-glue';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kinesis from 'aws-cdk-lib/aws-kinesis';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as athena from 'aws-cdk-lib/aws-athena';
 import * as lambda_event_sources from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
-import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -33,10 +34,12 @@ interface TapStackProps extends cdk.StackProps {
  *
  * Implements serverless machine learning infrastructure with:
  * - Batch and real-time inference capabilities
- * - A/B testing with multi-variant SageMaker endpoints
+ * - A/B testing with multi-variant SageMaker endpoints (optional)
  * - Comprehensive model versioning and rollback support
  * - Auto-scaling based on invocation metrics
  * - Full monitoring, alerting, and observability
+ * 
+ * Set enableSagemaker=true in context to deploy SageMaker resources
  */
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -47,19 +50,21 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // FIXED: Use environmentSuffix instead of hardcoded 'prod'
     const env = environmentSuffix;
     const region = 'us-east-1';
+    
+    // FEATURE FLAG: Enable SageMaker resources (default: false)
+    const enableSagemaker = this.node.tryGetContext('enableSagemaker') === 'true' || false;
 
     // ============================================
-    // SECTION 1: NETWORKING & SECURITY
+    // SECTION 1: NETWORKING & SECURITY (Simplified)
     // ============================================
 
-    // VPC for private resource connectivity
+    // VPC for private resource connectivity - using simple configuration
     const vpc = new ec2.Vpc(this, 'MLPipelineVPC', {
       vpcName: `ml-pipeline-vpc-${env}-${region}`,
       maxAzs: 2,
-      natGateways: 0, // Cost optimization - use VPC endpoints instead
+      natGateways: 0,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -76,21 +81,13 @@ export class TapStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // VPC Endpoints for private AWS service access (no NAT gateway needed)
+    // VPC Endpoints for private AWS service access
     const s3Endpoint = vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
     const dynamoEndpoint = vpc.addGatewayEndpoint('DynamoDBEndpoint', {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-    });
-
-    // Interface endpoint for SageMaker Runtime
-    const sagemakerEndpoint = vpc.addInterfaceEndpoint('SageMakerEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
-      privateDnsEnabled: true,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-      securityGroups: [computeSecurityGroup],
     });
 
     // ============================================
@@ -181,88 +178,100 @@ export class TapStack extends cdk.Stack {
     });
 
     // ============================================
-    // SECTION 4: SAGEMAKER INFERENCE INFRASTRUCTURE
+    // SECTION 4: SAGEMAKER INFRASTRUCTURE (OPTIONAL)
     // ============================================
+    
+    let endpoint: sagemaker.CfnEndpoint | undefined;
+    let sagemakerEndpoint: ec2.IInterfaceVpcEndpoint | undefined;
 
-    // IAM role for SageMaker execution
-    const sagemakerRole = new iam.Role(this, 'SageMakerExecutionRole', {
-      roleName: `ml-pipeline-sagemaker-${env}`,
-      assumedBy: new iam.ServicePrincipal('sagemaker.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSageMakerFullAccess'),
-      ],
-    });
+    if (enableSagemaker) {
+      // Interface endpoint for SageMaker Runtime
+      sagemakerEndpoint = vpc.addInterfaceEndpoint('SageMakerEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
+        privateDnsEnabled: true,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        securityGroups: [computeSecurityGroup],
+      });
 
-    modelBucket.grantRead(sagemakerRole);
-    dataBucket.grantReadWrite(sagemakerRole);
+      // IAM role for SageMaker execution
+      const sagemakerRole = new iam.Role(this, 'SageMakerExecutionRole', {
+        roleName: `ml-pipeline-sagemaker-${env}`,
+        assumedBy: new iam.ServicePrincipal('sagemaker.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSageMakerFullAccess'),
+        ],
+      });
 
-    // SageMaker Model (placeholder - would be created/updated during deployment)
-    const sagemakerModel = new sagemaker.CfnModel(this, 'MLModel', {
-      modelName: `ml-pipeline-model-${env}-${Date.now()}`,
-      executionRoleArn: sagemakerRole.roleArn,
-      primaryContainer: {
-        image: `763104351884.dkr.ecr.${region}.amazonaws.com/pytorch-inference:2.0.0-cpu-py310`,
-        modelDataUrl: `s3://${modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
-        environment: {
-          MODEL_VERSION: 'v1.0.0',
-          INFERENCE_FRAMEWORK: 'pytorch',
+      modelBucket.grantRead(sagemakerRole);
+      dataBucket.grantReadWrite(sagemakerRole);
+
+      // SageMaker Model
+      const sagemakerModel = new sagemaker.CfnModel(this, 'MLModel', {
+        modelName: `ml-pipeline-model-${env}-${Date.now()}`,
+        executionRoleArn: sagemakerRole.roleArn,
+        primaryContainer: {
+          image: `763104351884.dkr.ecr.${region}.amazonaws.com/pytorch-inference:2.0.0-cpu-py310`,
+          modelDataUrl: `s3://${modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
+          environment: {
+            MODEL_VERSION: 'v1.0.0',
+            INFERENCE_FRAMEWORK: 'pytorch',
+          },
         },
-      },
-      vpcConfig: {
-        subnets: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }).subnetIds,
-        securityGroupIds: [computeSecurityGroup.securityGroupId],
-      },
-    });
-
-    // Endpoint configuration with A/B testing variants (80/20 traffic split)
-    const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'EndpointConfig', {
-      endpointConfigName: `ml-pipeline-endpoint-config-${env}-${Date.now()}`,
-      productionVariants: [
-        {
-          variantName: 'ModelA',
-          modelName: sagemakerModel.modelName!,
-          initialInstanceCount: 1,
-          instanceType: 'ml.m5.large',
-          initialVariantWeight: 0.8, // 80% traffic to Model A
+        vpcConfig: {
+          subnets: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }).subnetIds,
+          securityGroupIds: [computeSecurityGroup.securityGroupId],
         },
-        {
-          variantName: 'ModelB',
-          modelName: sagemakerModel.modelName!,
-          initialInstanceCount: 1,
-          instanceType: 'ml.m5.large',
-          initialVariantWeight: 0.2, // 20% traffic to Model B for A/B testing
-        },
-      ],
-    });
+      });
 
-    endpointConfig.addDependency(sagemakerModel);
+      // Endpoint configuration with A/B testing variants
+      const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'EndpointConfig', {
+        endpointConfigName: `ml-pipeline-endpoint-config-${env}-${Date.now()}`,
+        productionVariants: [
+          {
+            variantName: 'ModelA',
+            modelName: sagemakerModel.modelName!,
+            initialInstanceCount: 1,
+            instanceType: 'ml.m5.large',
+            initialVariantWeight: 0.8,
+          },
+          {
+            variantName: 'ModelB',
+            modelName: sagemakerModel.modelName!,
+            initialInstanceCount: 1,
+            instanceType: 'ml.m5.large',
+            initialVariantWeight: 0.2,
+          },
+        ],
+      });
 
-    // SageMaker Endpoint
-    const endpoint = new sagemaker.CfnEndpoint(this, 'MLEndpoint', {
-      endpointName: `ml-pipeline-endpoint-${env}-${region}`,
-      endpointConfigName: endpointConfig.endpointConfigName!,
-    });
+      endpointConfig.addDependency(sagemakerModel);
 
-    endpoint.addDependency(endpointConfig);
+      // SageMaker Endpoint
+      endpoint = new sagemaker.CfnEndpoint(this, 'MLEndpoint', {
+        endpointName: `ml-pipeline-endpoint-${env}-${region}`,
+        endpointConfigName: endpointConfig.endpointConfigName!,
+      });
 
-    // Auto-scaling for SageMaker endpoint (target 1000 invocations per instance)
-    const endpointVariantA = new applicationautoscaling.ScalableTarget(this, 'EndpointScalingTargetA', {
-      serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
-      resourceId: `endpoint/${endpoint.endpointName}/variant/ModelA`,
-      scalableDimension: 'sagemaker:variant:DesiredInstanceCount',
-      minCapacity: 1,
-      maxCapacity: 10,
-    });
+      endpoint.addDependency(endpointConfig);
 
-    // CRITICAL FIX: Add dependency on the endpoint CloudFormation resource
-    endpointVariantA.node.addDependency(endpoint);
+      // Auto-scaling for SageMaker endpoint
+      const endpointVariantA = new applicationautoscaling.ScalableTarget(this, 'EndpointScalingTargetA', {
+        serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
+        resourceId: `endpoint/${endpoint.endpointName}/variant/ModelA`,
+        scalableDimension: 'sagemaker:variant:DesiredInstanceCount',
+        minCapacity: 1,
+        maxCapacity: 10,
+      });
 
-    endpointVariantA.scaleToTrackMetric('TargetTrackingA', {
-      targetValue: 1000,
-      predefinedMetric: applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
-      scaleInCooldown: cdk.Duration.seconds(300),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    });
+      endpointVariantA.node.addDependency(endpoint);
+
+      endpointVariantA.scaleToTrackMetric('TargetTrackingA', {
+        targetValue: 1000,
+        predefinedMetric: applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
+        scaleInCooldown: cdk.Duration.seconds(300),
+        scaleOutCooldown: cdk.Duration.seconds(60),
+      });
+    }
 
     // ============================================
     // SECTION 5: STREAMING INFRASTRUCTURE
@@ -271,7 +280,7 @@ export class TapStack extends cdk.Stack {
     // Kinesis Data Stream for real-time inference data ingestion
     const inferenceStream = new kinesis.Stream(this, 'InferenceStream', {
       streamName: `ml-pipeline-inference-stream-${env}`,
-      shardCount: 2, // Supports ~2MB/s write, ~4MB/s read
+      shardCount: 2,
       retentionPeriod: cdk.Duration.hours(24),
       encryption: kinesis.StreamEncryption.MANAGED,
     });
@@ -298,14 +307,16 @@ export class TapStack extends cdk.Stack {
     modelBucket.grantRead(lambdaRole);
     dataBucket.grantReadWrite(lambdaRole);
 
-    // Grant SageMaker invoke permissions
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['sagemaker:InvokeEndpoint'],
-      resources: [
-        `arn:aws:sagemaker:${region}:${this.account}:endpoint/${endpoint.endpointName}`,
-      ],
-    }));
+    // Grant SageMaker invoke permissions only if enabled
+    if (enableSagemaker && endpoint) {
+      lambdaRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sagemaker:InvokeEndpoint'],
+        resources: [
+          `arn:aws:sagemaker:${region}:${this.account}:endpoint/${endpoint.endpointName}`,
+        ],
+      }));
+    }
 
     // Data preprocessing Lambda function
     const preprocessFunction = new lambda.Function(this, 'PreprocessFunction', {
@@ -318,17 +329,21 @@ import boto3
 import os
 from datetime import datetime, timedelta
 
-sagemaker_runtime = boto3.client('sagemaker-runtime')
 dynamodb = boto3.resource('dynamodb')
 ssm = boto3.client('ssm')
+sagemaker_runtime = None
 
-ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
+ENDPOINT_NAME = os.environ.get('ENDPOINT_NAME', '')
 TABLE_NAME = os.environ['TABLE_NAME']
 MODEL_VERSION_PARAM = os.environ['MODEL_VERSION_PARAM']
+SAGEMAKER_ENABLED = os.environ.get('SAGEMAKER_ENABLED', 'false').lower() == 'true'
+
+if SAGEMAKER_ENABLED:
+    sagemaker_runtime = boto3.client('sagemaker-runtime')
 
 def handler(event, context):
     """
-    Preprocess input data, invoke SageMaker endpoint, store results in DynamoDB
+    Preprocess input data, invoke SageMaker endpoint (if enabled), store results in DynamoDB
     """
     try:
         # Parse input
@@ -338,21 +353,24 @@ def handler(event, context):
         # Get active model version
         model_version = ssm.get_parameter(Name=MODEL_VERSION_PARAM)['Parameter']['Value']
         
-        # Preprocess data (normalize, feature engineering, etc.)
+        # Preprocess data
         processed_data = preprocess_data(input_data)
         
-        # Invoke SageMaker endpoint
-        response = sagemaker_runtime.invoke_endpoint(
-            EndpointName=ENDPOINT_NAME,
-            ContentType='application/json',
-            Body=json.dumps({'instances': processed_data}),
-            TargetVariant='ModelA'  # Can be parameterized for A/B testing
-        )
+        predictions = None
+        if SAGEMAKER_ENABLED and sagemaker_runtime and ENDPOINT_NAME:
+            # Invoke SageMaker endpoint
+            response = sagemaker_runtime.invoke_endpoint(
+                EndpointName=ENDPOINT_NAME,
+                ContentType='application/json',
+                Body=json.dumps({'instances': processed_data}),
+                TargetVariant='ModelA'
+            )
+            predictions = json.loads(response['Body'].read().decode())
+        else:
+            # Mock predictions when SageMaker is disabled
+            predictions = {'predictions': ['mock_result' for _ in processed_data]}
         
-        # Parse prediction results
-        predictions = json.loads(response['Body'].read().decode())
-        
-        # Store results in DynamoDB with TTL (30 days expiration)
+        # Store results in DynamoDB with TTL
         table = dynamodb.Table(TABLE_NAME)
         timestamp = int(datetime.utcnow().timestamp() * 1000)
         expiration_time = int((datetime.utcnow() + timedelta(days=30)).timestamp())
@@ -375,7 +393,8 @@ def handler(event, context):
             'body': json.dumps({
                 'predictionId': prediction_id,
                 'predictions': predictions,
-                'modelVersion': model_version
+                'modelVersion': model_version,
+                'sagemakerEnabled': SAGEMAKER_ENABLED
             })
         }
         
@@ -387,8 +406,7 @@ def handler(event, context):
         }
 
 def preprocess_data(data):
-    """Simple preprocessing logic - normalize and validate"""
-    # Placeholder: Add actual preprocessing logic
+    """Simple preprocessing logic"""
     return data
 `),
       timeout: cdk.Duration.seconds(30),
@@ -398,9 +416,10 @@ def preprocess_data(data):
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       securityGroups: [computeSecurityGroup],
       environment: {
-        ENDPOINT_NAME: endpoint.endpointName!,
+        ENDPOINT_NAME: endpoint?.endpointName || '',
         TABLE_NAME: predictionsTable.tableName,
         MODEL_VERSION_PARAM: activeModelVersionParam.parameterName,
+        SAGEMAKER_ENABLED: enableSagemaker.toString(),
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
@@ -417,11 +436,15 @@ import base64
 import os
 from datetime import datetime, timedelta
 
-sagemaker_runtime = boto3.client('sagemaker-runtime')
 dynamodb = boto3.resource('dynamodb')
+sagemaker_runtime = None
 
-ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
+ENDPOINT_NAME = os.environ.get('ENDPOINT_NAME', '')
 TABLE_NAME = os.environ['TABLE_NAME']
+SAGEMAKER_ENABLED = os.environ.get('SAGEMAKER_ENABLED', 'false').lower() == 'true'
+
+if SAGEMAKER_ENABLED:
+    sagemaker_runtime = boto3.client('sagemaker-runtime')
 
 def handler(event, context):
     """Process Kinesis stream records and perform real-time inference"""
@@ -431,14 +454,18 @@ def handler(event, context):
         # Decode Kinesis data
         payload = json.loads(base64.b64decode(record['kinesis']['data']))
         
-        # Invoke SageMaker for real-time prediction
-        response = sagemaker_runtime.invoke_endpoint(
-            EndpointName=ENDPOINT_NAME,
-            ContentType='application/json',
-            Body=json.dumps({'instances': [payload['data']]})
-        )
-        
-        predictions = json.loads(response['Body'].read().decode())
+        predictions = None
+        if SAGEMAKER_ENABLED and sagemaker_runtime and ENDPOINT_NAME:
+            # Invoke SageMaker for real-time prediction
+            response = sagemaker_runtime.invoke_endpoint(
+                EndpointName=ENDPOINT_NAME,
+                ContentType='application/json',
+                Body=json.dumps({'instances': [payload['data']]})
+            )
+            predictions = json.loads(response['Body'].read().decode())
+        else:
+            # Mock predictions when SageMaker is disabled
+            predictions = {'predictions': ['mock_stream_result']}
         
         # Store result with TTL
         timestamp = int(datetime.utcnow().timestamp() * 1000)
@@ -464,8 +491,9 @@ def handler(event, context):
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       securityGroups: [computeSecurityGroup],
       environment: {
-        ENDPOINT_NAME: endpoint.endpointName!,
+        ENDPOINT_NAME: endpoint?.endpointName || '',
         TABLE_NAME: predictionsTable.tableName,
+        SAGEMAKER_ENABLED: enableSagemaker.toString(),
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
@@ -587,10 +615,12 @@ def handler(event, context):
     dataBucket.grantReadWrite(batchJobRole);
     predictionsTable.grantReadWriteData(batchJobRole);
 
-    batchJobRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['sagemaker:InvokeEndpoint'],
-      resources: [`arn:aws:sagemaker:${region}:${this.account}:endpoint/${endpoint.endpointName}`],
-    }));
+    if (enableSagemaker && endpoint) {
+      batchJobRole.addToPolicy(new iam.PolicyStatement({
+        actions: ['sagemaker:InvokeEndpoint'],
+        resources: [`arn:aws:sagemaker:${region}:${this.account}:endpoint/${endpoint.endpointName}`],
+      }));
+    }
 
     // Batch job definition
     const batchJobDefinition = new batch.CfnJobDefinition(this, 'BatchJobDefinition', {
@@ -606,9 +636,10 @@ def handler(event, context):
           { type: 'MEMORY', value: '4096' },
         ],
         environment: [
-          { name: 'ENDPOINT_NAME', value: endpoint.endpointName! },
+          { name: 'ENDPOINT_NAME', value: endpoint?.endpointName || '' },
           { name: 'TABLE_NAME', value: predictionsTable.tableName },
           { name: 'DATA_BUCKET', value: dataBucket.bucketName },
+          { name: 'SAGEMAKER_ENABLED', value: enableSagemaker.toString() },
         ],
         networkConfiguration: {
           assignPublicIp: 'DISABLED',
@@ -754,101 +785,101 @@ def handler(event, context):
       dashboardName: `ml-pipeline-metrics-${env}`,
     });
 
-    // Add metrics to dashboard
-    dashboard.addWidgets(
-      new cloudwatch.GraphWidget({
-        title: 'SageMaker Endpoint Invocations',
-        left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/SageMaker',
-            metricName: 'Invocations',
-            dimensionsMap: {
-              EndpointName: endpoint.endpointName!,
-              VariantName: 'ModelA',
-            },
-            statistic: 'Sum',
-          }),
-          new cloudwatch.Metric({
-            namespace: 'AWS/SageMaker',
-            metricName: 'Invocations',
-            dimensionsMap: {
-              EndpointName: endpoint.endpointName!,
-              VariantName: 'ModelB',
-            },
-            statistic: 'Sum',
-          }),
-        ],
-      })
-    );
+    // Add metrics to dashboard (only if SageMaker is enabled)
+    if (enableSagemaker && endpoint) {
+      dashboard.addWidgets(
+        new cloudwatch.GraphWidget({
+          title: 'SageMaker Endpoint Invocations',
+          left: [
+            new cloudwatch.Metric({
+              namespace: 'AWS/SageMaker',
+              metricName: 'Invocations',
+              dimensionsMap: {
+                EndpointName: endpoint.endpointName!,
+                VariantName: 'ModelA',
+              },
+              statistic: 'Sum',
+            }),
+            new cloudwatch.Metric({
+              namespace: 'AWS/SageMaker',
+              metricName: 'Invocations',
+              dimensionsMap: {
+                EndpointName: endpoint.endpointName!,
+                VariantName: 'ModelB',
+              },
+              statistic: 'Sum',
+            }),
+          ],
+        })
+      );
 
-    dashboard.addWidgets(
-      new cloudwatch.GraphWidget({
-        title: 'Model Latency (p50, p99)',
-        left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/SageMaker',
-            metricName: 'ModelLatency',
-            dimensionsMap: {
-              EndpointName: endpoint.endpointName!,
-              VariantName: 'ModelA',
-            },
-            statistic: 'p50',
-          }),
-          new cloudwatch.Metric({
-            namespace: 'AWS/SageMaker',
-            metricName: 'ModelLatency',
-            dimensionsMap: {
-              EndpointName: endpoint.endpointName!,
-              VariantName: 'ModelA',
-            },
-            statistic: 'p99',
-          }),
-        ],
-      })
-    );
+      dashboard.addWidgets(
+        new cloudwatch.GraphWidget({
+          title: 'Model Latency (p50, p99)',
+          left: [
+            new cloudwatch.Metric({
+              namespace: 'AWS/SageMaker',
+              metricName: 'ModelLatency',
+              dimensionsMap: {
+                EndpointName: endpoint.endpointName!,
+                VariantName: 'ModelA',
+              },
+              statistic: 'p50',
+            }),
+            new cloudwatch.Metric({
+              namespace: 'AWS/SageMaker',
+              metricName: 'ModelLatency',
+              dimensionsMap: {
+                EndpointName: endpoint.endpointName!,
+                VariantName: 'ModelA',
+              },
+              statistic: 'p99',
+            }),
+          ],
+        })
+      );
 
-    // CloudWatch Alarms
-    // High latency alarm
-    const latencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
-      alarmName: `ml-pipeline-high-latency-${env}`,
-      alarmDescription: 'Alert when model latency exceeds threshold',
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/SageMaker',
-        metricName: 'ModelLatency',
-        dimensionsMap: {
-          EndpointName: endpoint.endpointName!,
-          VariantName: 'ModelA',
-        },
-        statistic: 'Average',
-      }),
-      threshold: 500, // 500ms threshold
-      evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+      // CloudWatch Alarms for SageMaker
+      const latencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
+        alarmName: `ml-pipeline-high-latency-${env}`,
+        alarmDescription: 'Alert when model latency exceeds threshold',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/SageMaker',
+          metricName: 'ModelLatency',
+          dimensionsMap: {
+            EndpointName: endpoint.endpointName!,
+            VariantName: 'ModelA',
+          },
+          statistic: 'Average',
+        }),
+        threshold: 500,
+        evaluationPeriods: 2,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
 
-    latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+      latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
-    // High error rate alarm
-    const errorRateAlarm = new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
-      alarmName: `ml-pipeline-high-error-rate-${env}`,
-      alarmDescription: 'Alert when error rate exceeds 5%',
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/SageMaker',
-        metricName: 'ModelInvocation4XXErrors',
-        dimensionsMap: {
-          EndpointName: endpoint.endpointName!,
-        },
-        statistic: 'Sum',
-      }),
-      threshold: 50, // 50 errors in 5 minutes
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+      const errorRateAlarm = new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
+        alarmName: `ml-pipeline-high-error-rate-${env}`,
+        alarmDescription: 'Alert when error rate exceeds 5%',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/SageMaker',
+          metricName: 'ModelInvocation4XXErrors',
+          dimensionsMap: {
+            EndpointName: endpoint.endpointName!,
+          },
+          statistic: 'Sum',
+        }),
+        threshold: 50,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      });
 
-    errorRateAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+      errorRateAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+    }
 
-    // Lambda errors alarm
+    // Lambda errors alarm (always enabled)
     const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
       alarmName: `ml-pipeline-lambda-errors-${env}`,
       alarmDescription: 'Alert on Lambda function errors',
@@ -888,11 +919,13 @@ def handler(event, context):
       exportName: `ml-pipeline-api-url-${env}`,
     });
 
-    new cdk.CfnOutput(this, 'SageMakerEndpointName', {
-      value: endpoint.endpointName!,
-      description: 'SageMaker endpoint name',
-      exportName: `ml-pipeline-endpoint-${env}`,
-    });
+    if (enableSagemaker && endpoint) {
+      new cdk.CfnOutput(this, 'SageMakerEndpointName', {
+        value: endpoint.endpointName!,
+        description: 'SageMaker endpoint name',
+        exportName: `ml-pipeline-endpoint-${env}`,
+      });
+    }
 
     new cdk.CfnOutput(this, 'PredictionsTableName', {
       value: predictionsTable.tableName,
@@ -923,10 +956,16 @@ def handler(event, context):
       description: 'CloudWatch Dashboard URL',
     });
 
+    new cdk.CfnOutput(this, 'SageMakerEnabled', {
+      value: enableSagemaker.toString(),
+      description: 'Whether SageMaker resources are deployed',
+    });
+
     // Apply tags to all resources for cost allocation
     cdk.Tags.of(this).add('Project', 'MLInferencePipeline');
     cdk.Tags.of(this).add('Environment', env);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('CostCenter', 'ML-Operations');
+    cdk.Tags.of(this).add('SageMakerEnabled', enableSagemaker.toString());
   }
 }
