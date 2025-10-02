@@ -92,7 +92,7 @@ describe('TAP Stack Integration Tests', () => {
       expect(kms_key_arn).toContain(':key/');
       expect(kms_key_id).toBeDefined();
     });
-
+  });
   // EC2 & AutoScaling
   describe('EC2 & AutoScaling', () => {
     test('AMI ID is valid', () => {
