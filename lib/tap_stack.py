@@ -746,6 +746,9 @@ class TapStack(Stack):
         
         # Get detector ID from custom resource
         self.guardduty_detector_id = guardduty_resource.get_att_string("DetectorId")
+        
+        # Store the custom resource for dependency management
+        self.guardduty_resource = guardduty_resource
 
         # Create threat intel set for known bad IPs
         self.threat_intel_set = guardduty.CfnThreatIntelSet(
@@ -756,6 +759,9 @@ class TapStack(Stack):
             activate=True,
             name=f"BankingThreatIntel-{self.unique_suffix}"
         )
+        
+        # Add explicit dependency on GuardDuty detector custom resource
+        self.threat_intel_set.node.add_dependency(self.guardduty_resource)
 
         # Create IP set for trusted IPs
         self.trusted_ip_set = guardduty.CfnIPSet(
@@ -766,6 +772,9 @@ class TapStack(Stack):
             activate=True,
             name=f"TrustedBankingIPs-{self.unique_suffix}"
         )
+        
+        # Add explicit dependency on GuardDuty detector custom resource
+        self.trusted_ip_set.node.add_dependency(self.guardduty_resource)
 
     def _create_security_hub(self):
         """Enable Security Hub for centralized security management"""
