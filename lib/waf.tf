@@ -93,69 +93,70 @@ resource "aws_wafv2_web_acl_association" "alb" {
   web_acl_arn  = aws_wafv2_web_acl.alb.arn
 }
 
-# WAF for CloudFront (Global)
-resource "aws_wafv2_web_acl" "cloudfront" {
-  provider = aws
-  name     = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
-  scope    = "CLOUDFRONT"
-
-  default_action {
-    allow {}
-  }
-
-  # AWS Managed Core Rule Set
-  rule {
-    name     = "AWSManagedRulesCommonRuleSet"
-    priority = 1
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # AWS Managed Amazon IP Reputation List
-  rule {
-    name     = "AWSManagedRulesAmazonIpReputationList"
-    priority = 2
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesAmazonIpReputationList"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "AWSManagedRulesAmazonIpReputationListMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
-    sampled_requests_enabled   = true
-  }
-
-  tags = {
-    Name = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
-  }
-}
+# WAF for CloudFront (Global) - Commented out due to scope limitations
+# CloudFront WAF must be created in us-east-1 region
+# resource "aws_wafv2_web_acl" "cloudfront" {
+#   provider = aws
+#   name     = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
+#   scope    = "CLOUDFRONT"
+#   
+#   default_action {
+#     allow {}
+#   }
+#   
+#   # AWS Managed Core Rule Set
+#   rule {
+#     name     = "AWSManagedRulesCommonRuleSet"
+#     priority = 1
+#     
+#     override_action {
+#       none {}
+#     }
+#     
+#     statement {
+#       managed_rule_group_statement {
+#         name        = "AWSManagedRulesCommonRuleSet"
+#         vendor_name = "AWS"
+#       }
+#     }
+#     
+#     visibility_config {
+#       cloudwatch_metrics_enabled = true
+#       metric_name                = "AWSManagedRulesCommonRuleSetMetric"
+#       sampled_requests_enabled   = true
+#     }
+#   }
+#   
+#   # AWS Managed Amazon IP Reputation List
+#   rule {
+#     name     = "AWSManagedRulesAmazonIpReputationList"
+#     priority = 2
+#     
+#     override_action {
+#       none {}
+#     }
+#     
+#     statement {
+#       managed_rule_group_statement {
+#         name        = "AWSManagedRulesAmazonIpReputationList"
+#         vendor_name = "AWS"
+#       }
+#     }
+#     
+#     visibility_config {
+#       cloudwatch_metrics_enabled = true
+#       metric_name                = "AWSManagedRulesAmazonIpReputationListMetric"
+#       sampled_requests_enabled   = true
+#     }
+#   }
+#   
+#   visibility_config {
+#     cloudwatch_metrics_enabled = true
+#     metric_name                = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
+#     sampled_requests_enabled   = true
+#   }
+#   
+#   tags = {
+#     Name = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
+#   }
+# }

@@ -60,7 +60,7 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
 
-  web_acl_id = aws_wafv2_web_acl.cloudfront.arn
+  # web_acl_id = aws_wafv2_web_acl.cloudfront.arn  # Commented out - CloudFront WAF must be in us-east-1
 
   tags = {
     Name = "${var.project_name}-${var.environment}-cf-${var.aws_region}"

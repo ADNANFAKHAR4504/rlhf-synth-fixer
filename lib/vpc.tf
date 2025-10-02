@@ -74,6 +74,8 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
+  depends_on = [aws_eip.nat]
+
   tags = {
     Name = "${var.project_name}-${var.environment}-nat-${count.index + 1}-${var.aws_region}"
   }
@@ -128,7 +130,7 @@ resource "aws_route_table_association" "database" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment}-${var.aws_region}"
+  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment}-${var.aws_region}-${formatdate("YYYYMMDD-hhmm", timestamp())}"
   retention_in_days = 30
 
   tags = {
