@@ -118,8 +118,6 @@ def create_s3_buckets(config: ServerlessConfig) -> Dict[str, Any]:
         "output_versioning": output_versioning,
         "input_encryption": input_encryption,
         "output_encryption": output_encryption
-        # "input_bucket_policy": input_bucket_policy,  # Disabled to prevent CI/CD deployment issues
-        # "output_bucket_policy": output_bucket_policy  # Disabled to prevent CI/CD deployment issues
     }
 
 

@@ -42,7 +42,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             print("AWS credentials not available, skipping integration tests")
             raise unittest.SkipTest("AWS credentials not available")
 
-    def test_lambda_function_exists_and_is_configured(self):
+    def test_lambda_function_exists_and_is_configured_correctly(self):
         """Test that Lambda function exists and is properly configured"""
         if not hasattr(self, 'lambda_client'):
             self.skipTest("Lambda client not available")
@@ -297,7 +297,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.skipTest(f"Cannot access infrastructure resources: {e}")
 
-    # SERVICE-TO-SERVICE INTEGRATION TESTS (5 tests as requested)
 
     def test_lambda_function_can_read_write_s3_bucket_permissions(self):
         """Test cross-service interaction: Lambda → S3 (read/write permissions)"""
@@ -552,7 +551,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.skipTest(f"Cannot verify resource naming conventions: {e}")
 
-    def test_s3_bucket_lifecycle_policies_are_configured(self):
+    def test_s3_bucket_lifecycle_policies_are_configured_correctly(self):
         """Test cross-service interaction: S3 → Lifecycle (bucket lifecycle policies)"""
         if not hasattr(self, 's3_client'):
             self.skipTest("S3 client not available")
