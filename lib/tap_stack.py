@@ -631,7 +631,7 @@ class TapStack(pulumi.ComponentResource):
             origins=[
                 aws.cloudfront.DistributionOriginArgs(
                     domain_name=self.tenant_data_bucket.bucket_regional_domain_name,
-                    origin_id=f"S3-{self.tenant_data_bucket.id}",
+                    origin_id="S3Origin",  # Shortened here
                     s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
                         origin_access_identity=self.cloudfront_oai.cloudfront_access_identity_path
                     )
@@ -640,7 +640,7 @@ class TapStack(pulumi.ComponentResource):
             default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
                 allowed_methods=["GET", "HEAD", "OPTIONS"],
                 cached_methods=["GET", "HEAD"],
-                target_origin_id=f"S3-{self.tenant_data_bucket.id}",
+                target_origin_id="S3Origin",  # Make sure this matches origin_id
                 forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
                     query_string=True,
                     cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
@@ -665,6 +665,7 @@ class TapStack(pulumi.ComponentResource):
             tags={**self.tags, 'Name': f'tap-cloudfront-dist-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
+
         
         # ═══════════════════════════════════════════════════════════════
         # DNS - Route 53 Private Hosted Zone (NO DOMAIN OWNERSHIP REQUIRED)
