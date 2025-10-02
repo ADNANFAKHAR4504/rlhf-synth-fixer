@@ -45,11 +45,6 @@ variable "tags" {
   }
 }
 
-variable "enable_nat_gateway" {
-  description = "Enable NAT Gateway for private subnets"
-  default     = true
-}
-
 variable "db_instance_class" {
   description = "RDS instance class"
   default     = "db.t3.micro"
@@ -138,29 +133,9 @@ resource "aws_subnet" "private" {
   tags                    = merge(local.common_tags, { Name = "private-subnet-${count.index + 1}" })
 }
 
-resource "aws_eip" "nat" {
-  count  = var.enable_nat_gateway ? 1 : 0
-  domain = "vpc"
-  tags   = merge(local.common_tags, { Name = "nat-eip" })
-}
-
-resource "aws_nat_gateway" "nat" {
-  count         = var.enable_nat_gateway ? 1 : 0
-  allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = merge(local.common_tags, { Name = "main-nat-gateway" })
-}
-
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   tags   = merge(local.common_tags, { Name = "private-route-table" })
-}
-
-resource "aws_route" "private_nat" {
-  count                  = var.enable_nat_gateway ? 1 : 0
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat[0].id
 }
 
 resource "aws_route_table_association" "private" {
@@ -179,11 +154,11 @@ resource "aws_security_group" "web" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS traffic"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "HTTPS traffic from ALB"
   }
 
   ingress {
@@ -434,7 +409,7 @@ resource "aws_db_subnet_group" "default" {
 
 resource "aws_db_parameter_group" "postgres" {
   name   = "postgres-parameters"
-  family = "postgres14"
+  family = data.aws_rds_engine_version.postgresql.parameter_group_family
 
   parameter {
     name  = "log_statement"
@@ -498,7 +473,7 @@ resource "aws_lb" "app" {
 resource "aws_lb_target_group" "app" {
   name     = "app-target-group"
   port     = 443
-  protocol = "HTTPS"
+  protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
   health_check {
@@ -506,7 +481,7 @@ resource "aws_lb_target_group" "app" {
     interval            = 30
     path                = "/health"
     port                = "traffic-port"
-    protocol            = "HTTPS"
+    protocol            = "HTTP"
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
@@ -515,12 +490,10 @@ resource "aws_lb_target_group" "app" {
   tags = local.common_tags
 }
 
-resource "aws_lb_listener" "https" {
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  # certificate_arn   = var.certificate_arn
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"
@@ -541,8 +514,23 @@ resource "aws_launch_template" "app" {
     #!/bin/bash
     yum update -y
     amazon-linux-extras install nginx1 -y
-    systemctl start nginx
+
+    rm -f /etc/nginx/conf.d/default.conf
+
+    cat <<'NGINXCONF' > /etc/nginx/conf.d/app.conf
+    server {
+      listen 443 default_server;
+      listen [::]:443 default_server;
+      server_name _;
+
+      location / {
+        return 200 'OK';
+      }
+    }
+    NGINXCONF
+
     systemctl enable nginx
+    systemctl restart nginx
   EOF
   )
 
