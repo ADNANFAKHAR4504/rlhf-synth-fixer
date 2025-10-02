@@ -34,11 +34,12 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.sqs_client = boto3.client('sqs', region_name='us-east-1')
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
 
-        cls.bucket_name = OUTPUTS['S3BucketName']
-        cls.table_name = OUTPUTS['DynamoDBTableName']
-        cls.processor_function = OUTPUTS['ProcessorFunctionName']
-        cls.summary_function = OUTPUTS['SummaryFunctionName']
-        cls.dlq_url = OUTPUTS['DLQUrl']
+        cls.bucket_name = OUTPUTS['bucket_name']
+        cls.table_name = OUTPUTS['table_name']
+        cls.processor_function = OUTPUTS['processor_function']
+        cls.summary_function = OUTPUTS['summary_function']
+        cls.dlq_url = OUTPUTS['dlq_url']
+        cls.environment_suffix = OUTPUTS['environment_suffix']
 
     def test_s3_bucket_exists(self):
         """Test that the S3 bucket was created and is accessible."""
@@ -116,7 +117,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_cloudwatch_alarm_exists(self):
         """Test that CloudWatch alarm was created for Lambda errors."""
         response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix=f'inventory-processor-error-alarm-{OUTPUTS["EnvironmentSuffix"]}'
+            AlarmNamePrefix=f'inventory-processor-error-alarm-{self.environment_suffix}'
         )
         self.assertTrue(len(response['MetricAlarms']) > 0)
 
@@ -215,7 +216,7 @@ TEST-003,75,30.00,WH-001"""
     def test_cloudwatch_dashboard_exists(self):
         """Test that CloudWatch dashboard was created."""
         response = self.cloudwatch_client.list_dashboards(
-            DashboardNamePrefix=f'inventory-processing-{OUTPUTS["EnvironmentSuffix"]}'
+            DashboardNamePrefix=f'inventory-processing-{self.environment_suffix}'
         )
         self.assertTrue(len(response['DashboardEntries']) > 0)
 
