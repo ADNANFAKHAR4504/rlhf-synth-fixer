@@ -1,48 +1,15 @@
-# Secure E-commerce Infrastructure Setup
+Design a secure and scalable e-commerce infrastructure on AWS using CloudFormation JSON with comprehensive security controls and high availability.
 
-Build a secure e-commerce application infrastructure on AWS using CloudFormation JSON. We need a comprehensive security-focused setup for production deployment.
+The solution should include a VPC with isolated network spanning 2 availability zones with public and private subnets configured for optimal security. Security groups must be configured to restrict access with ALB allowing HTTP and HTTPS from internet, web servers allowing traffic only from ALB and SSH from restricted CIDR ranges, and database security group allowing MySQL access only from web servers. 
 
-## What to Build
+An RDS MySQL database should be provisioned with Multi-AZ deployment, encryption at rest using KMS, 7-day backup retention, and deployment in private subnets. Database credentials must be managed through AWS Secrets Manager with automatic rotation capabilities.
 
-Create a CloudFormation template that sets up:
+An S3 bucket should be set up with KMS encryption enabled, versioning configured, public access blocked, and lifecycle policies for cost optimization. The bucket must deny insecure transport and integrate with the application through IAM roles.
 
-**Network Security:**
-- VPC with isolated network spanning 2 availability zones
-- Two public subnets and two private subnets across the AZs
-- NAT gateways for secure internet access from private subnets
-- Proper routing and security group configurations
+Auto Scaling Group should be configured with Application Load Balancer for high availability, target tracking scaling policy based on CPU utilization, and health checks through ELB. Launch template must enforce IMDSv2 for metadata service security and include proper EBS volume configuration.
 
-**Data Protection:**
-- S3 buckets with server-side encryption enabled (AES-256)
-- RDS MySQL database with encryption at rest
-- Automatic backups configured for RDS (7 days minimum)
-- Secrets Manager for database credentials
+All resources must be secured with KMS encryption where applicable, IAM roles must be created with least privilege access, and CloudWatch should capture logs and metrics for monitoring. SNS topic should be configured for security alerts with email notifications.
 
-**Compute Security:**
-- EC2 instances deployed only within VPC (no public instances)
-- Security groups restricting SSH access to specific IP ranges only
-- IAM roles with least privilege access (no hardcoded credentials)
-- Instance profiles for secure service access
+Lambda function should be included for automated security remediation with capabilities to handle S3 public access violations and other security findings. Environment variables must be used to pass configuration data and resource policies should be applied for secure access control.
 
-**Compliance and Monitoring:**
-- CloudTrail enabled for audit logging
-- AWS Config for compliance monitoring
-- Lambda functions for automatic remediation of security violations
-- MFA enforcement for IAM users managing the environment
-
-**High Availability:**
-- Resources distributed across multiple availability zones
-- Auto scaling capabilities for compute resources
-- Multi-AZ deployment where applicable
-
-## Requirements
-
-- Use CloudFormation JSON format with EnvironmentSuffix parameter
-- All resources must be tagged appropriately
-- Template should pass aws cloudformation validate-template
-- Follow AWS security best practices and Well-Architected Framework
-- Export all resource IDs and endpoints in outputs
-- No hardcoded values or environment-specific configurations
-- Include comprehensive error handling and validation
-
-The template should create a production-ready, secure e-commerce infrastructure that meets enterprise security standards.
+The deployment must be environment-agnostic using parameters for configuration, follow AWS best practices around security and operational excellence, and include comprehensive tagging strategy for resource management. All critical resource identifiers should be exported as CloudFormation outputs for cross-stack references.

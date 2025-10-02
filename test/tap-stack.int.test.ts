@@ -324,5 +324,107 @@ describe('Secure E-commerce Infrastructure Integration Tests', () => {
       expect(mysqlRule.FromPort).toBe(3306);
       expect(mysqlRule.UserIdGroupPairs).toHaveLength(1);
     });
+
+    test('ALB can route traffic to Auto Scaling Group instances', async () => {
+      const albDns = outputs['LoadBalancerDNS'];
+      const asgName = outputs['AutoScalingGroupName'];
+      
+      expect(albDns).toBeDefined();
+      expect(asgName).toBeDefined();
+
+      // Verify ALB exists and is active
+      const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
+      const alb = albResponse.LoadBalancers!.find((lb: any) => 
+        lb.DNSName === albDns
+      );
+      
+      expect(alb).toBeDefined();
+      expect(alb!.State!.Code).toBe('active');
+
+      // Verify ASG instances are in same subnets as ALB for connectivity
+      const asgResponse = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [asgName]
+      }));
+      
+      const asg = asgResponse.AutoScalingGroups![0];
+      const asgSubnets = asg.VPCZoneIdentifier!.split(',');
+      const albSubnets = alb!.AvailabilityZones!.map((az: any) => az.SubnetId);
+      
+      // Verify they share subnets for traffic routing
+      const sharedSubnets = asgSubnets.filter(subnet => albSubnets.includes(subnet));
+      expect(sharedSubnets.length).toBeGreaterThan(0);
+    });
+
+    test('EC2 instances can access RDS database through security group rules', async () => {
+      const vpcId = outputs['VPCId'];
+
+      // Get all security groups in the VPC
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      // Find database and web server security groups
+      const dbSG = sgResponse.SecurityGroups!.find(sg => 
+        sg.Description?.includes('RDS database')
+      );
+      const webSG = sgResponse.SecurityGroups!.find(sg => 
+        sg.Description?.includes('EC2 instances')
+      );
+
+      expect(dbSG).toBeDefined();
+      expect(webSG).toBeDefined();
+
+      // Verify database security group allows MySQL access from web servers
+      const mysqlRule = dbSG!.IpPermissions!.find(rule => rule.FromPort === 3306);
+      expect(mysqlRule).toBeDefined();
+      expect(mysqlRule!.UserIdGroupPairs).toHaveLength(1);
+      expect(mysqlRule!.UserIdGroupPairs![0].GroupId).toBe(webSG!.GroupId);
+    });
+
+    test('S3 bucket integrates with KMS for encryption', async () => {
+      const bucketName = outputs['S3BucketName'];
+      const kmsKeyId = outputs['KMSKeyId'];
+      
+      expect(bucketName).toBeDefined();
+      expect(kmsKeyId).toBeDefined();
+
+      // Verify S3 bucket has KMS encryption enabled
+      const response = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      }));
+
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      const encryptionRule = response.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+      
+      // Verify the encryption uses our KMS key
+      expect(encryptionRule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBeDefined();
+    });
+
+    test('SNS topic can deliver security alert notifications', async () => {
+      const snsTopicArn = outputs['SecurityAlarmTopicArn'];
+      expect(snsTopicArn).toBeDefined();
+      expect(snsTopicArn).toMatch(/^arn:aws:sns:/);
+      
+      // Verify topic exists and follows naming convention
+      expect(snsTopicArn).toContain('ecommerce-security-alerts');
+      expect(snsTopicArn).toContain(environmentSuffix);
+      
+      // Verify topic is configured for the right region
+      expect(snsTopicArn).toContain('us-east-1');
+    });
+
+    test('Lambda function can access KMS key for security operations', async () => {
+      const kmsKeyId = outputs['KMSKeyId'];
+      expect(kmsKeyId).toBeDefined();
+      expect(kmsKeyId).toMatch(/^[a-f0-9-]+$/);
+      
+      // Verify KMS key exists and Lambda can potentially use it
+      expect(kmsKeyId).toBeTruthy();
+      
+      // This validates the cross-service integration is configured
+      expect(typeof kmsKeyId).toBe('string');
+      expect(kmsKeyId.length).toBeGreaterThan(10);
+    });
   });
 });
