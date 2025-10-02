@@ -12,13 +12,24 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 // Read actual deployment outputs (required for integration tests)
 let outputs;
 try {
+  // Try to read from cfn-outputs/flat-outputs.json first (CI/CD format)
   outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
   console.log('✅ Loaded deployment outputs from cfn-outputs/flat-outputs.json');
 } catch (error) {
-  console.error('❌ Failed to load deployment outputs:', error.message);
-  console.error('💡 Integration tests require real deployment outputs from cfn-outputs/flat-outputs.json');
-  console.error('🚀 Deploy the stack first using: ./scripts/deploy.sh');
-  process.exit(1);
+  try {
+    // Fallback to cdk-outputs.json (local deployment format)
+    const cdkOutputs = JSON.parse(fs.readFileSync('cdk-outputs.json', 'utf8'));
+    const stackName = `TapStack${environmentSuffix}`;
+    outputs = cdkOutputs[stackName] || {};
+    console.log(`✅ Loaded deployment outputs from cdk-outputs.json (stack: ${stackName})`);
+  } catch (cdkError) {
+    console.error('❌ Failed to load deployment outputs from both sources:');
+    console.error(`  - cfn-outputs/flat-outputs.json: ${error.message}`);
+    console.error(`  - cdk-outputs.json: ${cdkError.message}`);
+    console.error('💡 Integration tests require real deployment outputs');
+    console.error('🚀 Deploy the stack first using: ./scripts/deploy.sh');
+    process.exit(1);
+  }
 }
 
 // AWS clients
@@ -69,23 +80,39 @@ const waitFor = async (condition, timeout = 30000, interval = 1000) => {
 };
 
 describe('News Website Infrastructure Integration Tests', () => {
-  const bucketName = outputs[`NewsWebsiteBucket-${environmentSuffix}`];
-  const distributionId = outputs[`NewsDistributionId-${environmentSuffix}`];
-  const distributionDomain = outputs[`NewsDistributionDomain-${environmentSuffix}`];
-  const kmsKeyId = outputs[`NewsKMSKeyId-${environmentSuffix}`];
+  // Map output keys based on CDK output names
+  const bucketName = outputs[`WebsiteBucketName${environmentSuffix}`] || outputs[`NewsWebsiteBucket-${environmentSuffix}`];
+  const distributionId = outputs[`DistributionId${environmentSuffix}`] || outputs[`NewsDistributionId-${environmentSuffix}`];
+  const distributionDomain = outputs[`DistributionDomainName${environmentSuffix}`] || outputs[`NewsDistributionDomain-${environmentSuffix}`];
+  const kmsKeyId = outputs[`KMSKeyId${environmentSuffix}`] || outputs[`NewsKMSKeyId-${environmentSuffix}`];
 
   beforeAll(() => {
+    // Debug: Show available outputs
+    console.log('🔍 Available deployment outputs:');
+    console.log(JSON.stringify(outputs, null, 2));
+    
+    console.log(`\n🔍 Looking for news website outputs (environment: ${environmentSuffix}):`);
+    console.log(`  - WebsiteBucketName${environmentSuffix} OR NewsWebsiteBucket-${environmentSuffix}`);
+    console.log(`  - DistributionId${environmentSuffix} OR NewsDistributionId-${environmentSuffix}`);
+    console.log(`  - DistributionDomainName${environmentSuffix} OR NewsDistributionDomain-${environmentSuffix}`);
+    console.log(`  - KMSKeyId${environmentSuffix} OR NewsKMSKeyId-${environmentSuffix}`);
+    
     // Validate that all required outputs are present
     if (!bucketName || !distributionId || !distributionDomain || !kmsKeyId) {
-      console.error('❌ Missing required deployment outputs:');
+      console.error('\n❌ Missing required deployment outputs for news website infrastructure:');
       console.error(`  - Bucket Name: ${bucketName || 'MISSING'}`);
       console.error(`  - Distribution ID: ${distributionId || 'MISSING'}`);
       console.error(`  - Distribution Domain: ${distributionDomain || 'MISSING'}`);
       console.error(`  - KMS Key ID: ${kmsKeyId || 'MISSING'}`);
-      throw new Error('Integration tests require all deployment outputs to be present');
+      console.error('\n💡 The current deployment appears to be a different stack (backup system).');
+      console.error('🔄 To deploy the news website infrastructure:');
+      console.error(`   1. Run: cdk deploy TapStack${environmentSuffix}`);
+      console.error('   2. Ensure the stack creates S3 bucket, CloudFront distribution, and KMS key');
+      console.error('   3. Re-run integration tests');
+      throw new Error('Integration tests require news website deployment outputs to be present');
     }
     
-    console.log('✅ All deployment outputs validated successfully');
+    console.log('\n✅ All deployment outputs validated successfully');
     console.log(`🗄️  Bucket: ${bucketName}`);
     console.log(`🌐 Distribution: ${distributionId} (${distributionDomain})`);
     console.log(`🔐 KMS Key: ${kmsKeyId}`);
