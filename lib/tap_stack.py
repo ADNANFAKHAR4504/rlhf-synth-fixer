@@ -616,6 +616,32 @@ class TapStack(Stack):
             object_lock_enabled=True  # WORM compliance
         )
 
+        # Add bucket policy to allow CloudTrail service access
+        self.trail_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSCloudTrailAclCheck",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+                actions=["s3:GetBucketAcl"],
+                resources=[self.trail_bucket.bucket_arn]
+            )
+        )
+
+        self.trail_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSCloudTrailWrite",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+                actions=["s3:PutObject"],
+                resources=[f"{self.trail_bucket.bucket_arn}/*"],
+                conditions={
+                    "StringEquals": {
+                        "s3:x-amz-acl": "bucket-owner-full-control"
+                    }
+                }
+            )
+        )
+
         # Create CloudTrail
         self.trail = cloudtrail.Trail(
             self, "CloudTrail",
