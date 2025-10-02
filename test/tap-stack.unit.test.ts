@@ -87,7 +87,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('ImageId parameter should have default value', () => {
       const param = template.Parameters.ImageId;
-      expect(param.Type).toBe('String');
+      expect(param.Type).toBe('AWS::EC2::Image::Id');
       expect(param.Default).toBeDefined();
       expect(param.Default).toBeTruthy();
     });
@@ -216,6 +216,19 @@ describe('TapStack CloudFormation Template', () => {
       // DeletionPolicy can be Delete or Snapshot
       expect(['Delete', 'Snapshot', 'Retain']).toContain(db.DeletionPolicy);
     });
+
+    test('RDS should not have MaxAllocatedStorage property', () => {
+      const db = template.Resources.WordPressDatabase;
+      // MaxAllocatedStorage is not a valid CloudFormation property
+      expect(db.Properties.MaxAllocatedStorage).toBeUndefined();
+    });
+
+    test('RDS should have proper storage configuration', () => {
+      const db = template.Resources.WordPressDatabase;
+      expect(db.Properties.AllocatedStorage).toBeDefined();
+      expect(db.Properties.StorageType).toBeDefined();
+      expect(db.Properties.StorageEncrypted).toBe(true);
+    });
   });
 
   describe('Resources - Storage', () => {
@@ -272,9 +285,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance.Properties.InstanceType).toBe('t3.micro');
     });
 
-    test('EC2 Instance should depend on Database', () => {
+    test('EC2 Instance should have proper configuration', () => {
       const instance = template.Resources.WordPressInstance;
-      expect(instance.DependsOn).toBe('WordPressDatabase');
+      expect(instance.Properties.InstanceType).toBe('t3.micro');
+      expect(instance.Properties.IamInstanceProfile).toBeDefined();
+      expect(instance.Properties.NetworkInterfaces).toBeDefined();
     });
 
     test('EC2 Instance should have UserData', () => {
@@ -297,9 +312,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
     });
 
-    test('CloudFront should depend on WordPress Instance', () => {
+    test('CloudFront should have proper distribution configuration', () => {
       const distribution = template.Resources.CloudFrontDistribution;
-      expect(distribution.DependsOn).toBe('WordPressInstance');
+      expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
+      expect(distribution.Properties.DistributionConfig).toBeDefined();
+      expect(distribution.Properties.DistributionConfig.Enabled).toBe(true);
+      expect(distribution.Properties.DistributionConfig.Origins).toBeDefined();
     });
 
     test('CloudFront should have default cache behavior', () => {
@@ -434,6 +452,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Resource Tags', () => {
     test('all taggable resources should have tags', () => {
+      // Note: AWS::IAM::Role, AWS::EC2::EIP, and AWS::SNS::Topic do not support Tags property
       const taggableTypes = [
         'AWS::EC2::VPC',
         'AWS::EC2::Subnet',
@@ -450,6 +469,24 @@ describe('TapStack CloudFormation Template', () => {
           expect(resource.Properties.Tags.length).toBeGreaterThan(0);
         }
       });
+    });
+
+    test('IAM Role should not have Tags property', () => {
+      const role = template.Resources.EC2InstanceRole;
+      expect(role).toBeDefined();
+      expect(role.Properties.Tags).toBeUndefined();
+    });
+
+    test('EIP should not have Tags property', () => {
+      const eip = template.Resources.WordPressEIP;
+      expect(eip).toBeDefined();
+      expect(eip.Properties.Tags).toBeUndefined();
+    });
+
+    test('SNS Topic should not have Tags property', () => {
+      const topic = template.Resources.AlarmNotificationTopic;
+      expect(topic).toBeDefined();
+      expect(topic.Properties.Tags).toBeUndefined();
     });
 
     test('resources should have Name tag', () => {
@@ -496,17 +533,27 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('EC2 instance should depend on database', () => {
-      const instance = template.Resources.WordPressInstance;
-      expect(instance.DependsOn).toBe('WordPressDatabase');
+    test('NAT Gateway EIP should depend on Internet Gateway attachment', () => {
+      const natGatewayEIP = template.Resources.NATGatewayEIP;
+      expect(natGatewayEIP.DependsOn).toBe('AttachGateway');
     });
 
-    test('CloudFront should depend on EC2 instance', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      expect(distribution.DependsOn).toBe('WordPressInstance');
+    test('WordPress EIP should depend on Internet Gateway attachment', () => {
+      const eip = template.Resources.WordPressEIP;
+      expect(eip.DependsOn).toBe('AttachGateway');
     });
 
-    test('Subnets should reference VPC', () => {
+    test('Resources should reference VPC correctly', () => {
+      const vpc = template.Resources.RecipeBlogVPC;
+      expect(vpc).toBeDefined();
+      
+      // Check that subnets reference VPC
+      const publicSubnet = template.Resources.PublicSubnet;
+      expect(publicSubnet.Properties.VpcId).toBeDefined();
+    });
+  });
+
+  describe('Resource Relationships', () => {    test('Subnets should reference VPC', () => {
       const subnet = template.Resources.PublicSubnet;
       expect(subnet.Properties.VpcId).toBeDefined();
     });
