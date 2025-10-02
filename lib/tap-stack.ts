@@ -1,26 +1,27 @@
+/* eslint-disable prettier/prettier */
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kinesis from 'aws-cdk-lib/aws-kinesis';
-import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
-import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as athena from 'aws-cdk-lib/aws-athena';
 import * as batch from 'aws-cdk-lib/aws-batch';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 import * as glue from 'aws-cdk-lib/aws-glue';
-import * as athena from 'aws-cdk-lib/aws-athena';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kinesis from 'aws-cdk-lib/aws-kinesis';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambda_event_sources from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -46,7 +47,8 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const env = 'prod';
+    // FIXED: Use environmentSuffix instead of hardcoded 'prod'
+    const env = environmentSuffix;
     const region = 'us-east-1';
 
     // ============================================
@@ -158,7 +160,7 @@ export class TapStack extends cdk.Stack {
 
     // SSM Parameter Store for model version tracking
     const activeModelVersionParam = new ssm.StringParameter(this, 'ActiveModelVersion', {
-      parameterName: `/ml-pipeline/models/active-version`,
+      parameterName: `/ml-pipeline/${env}/models/active-version`,
       stringValue: 'v1.0.0',
       description: 'Currently active model version for inference',
       tier: ssm.ParameterTier.STANDARD,
@@ -166,7 +168,7 @@ export class TapStack extends cdk.Stack {
 
     // Model metadata parameter
     const modelMetadataParam = new ssm.StringParameter(this, 'ModelMetadata', {
-      parameterName: `/ml-pipeline/models/metadata`,
+      parameterName: `/ml-pipeline/${env}/models/metadata`,
       stringValue: JSON.stringify({
         'v1.0.0': {
           s3Path: `s3://${modelBucket.bucketName}/models/v1.0.0/model.tar.gz`,
@@ -196,7 +198,7 @@ export class TapStack extends cdk.Stack {
 
     // SageMaker Model (placeholder - would be created/updated during deployment)
     const sagemakerModel = new sagemaker.CfnModel(this, 'MLModel', {
-      modelName: `ml-pipeline-model-${env}-${environmentSuffix}`,
+      modelName: `ml-pipeline-model-${env}-${Date.now()}`,
       executionRoleArn: sagemakerRole.roleArn,
       primaryContainer: {
         image: `763104351884.dkr.ecr.${region}.amazonaws.com/pytorch-inference:2.0.0-cpu-py310`,
@@ -244,7 +246,6 @@ export class TapStack extends cdk.Stack {
     endpoint.addDependency(endpointConfig);
 
     // Auto-scaling for SageMaker endpoint (target 1000 invocations per instance)
-    // FIXED: Added node dependency on endpoint to ensure it exists before creating auto-scaling
     const endpointVariantA = new applicationautoscaling.ScalableTarget(this, 'EndpointScalingTargetA', {
       serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
       resourceId: `endpoint/${endpoint.endpointName}/variant/ModelA`,
