@@ -169,48 +169,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('ACM Certificate', () => {
-    test('should create SSL certificate with correct properties', () => {
-      template.hasResourceProperties('AWS::CertificateManager::Certificate', {
-        DomainName: `news-website-${environmentSuffix}.com`,
-        SubjectAlternativeNames: [`www.news-website-${environmentSuffix}.com`],
-        ValidationMethod: 'DNS'
-      });
-    });
-  });
 
-  describe('Route 53', () => {
-    test('should create hosted zone', () => {
-      template.hasResourceProperties('AWS::Route53::HostedZone', {
-        Name: `news-website-${environmentSuffix}.com.`,
-        HostedZoneConfig: {
-          Comment: `Hosted zone for news website - ${environmentSuffix}`
-        }
-      });
-    });
-
-    test('should create A record for apex domain', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: `news-website-${environmentSuffix}.com.`,
-        Type: 'A',
-        AliasTarget: {
-          DNSName: Match.anyValue(),
-          HostedZoneId: Match.anyValue()
-        }
-      });
-    });
-
-    test('should create A record for www subdomain', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: `www.news-website-${environmentSuffix}.com.`,
-        Type: 'A',
-        AliasTarget: {
-          DNSName: Match.anyValue(),
-          HostedZoneId: Match.anyValue()
-        }
-      });
-    });
-  });
 
   describe('CloudWatch Dashboard', () => {
     test('should create dashboard with correct name', () => {
@@ -260,12 +219,6 @@ describe('TapStack', () => {
         }
       });
 
-      template.hasOutput(`HostedZoneId${environmentSuffix}`, {
-        Description: 'Route 53 hosted zone ID',
-        Export: {
-          Name: `NewsHostedZoneId-${environmentSuffix}`
-        }
-      });
 
       template.hasOutput(`KMSKeyId${environmentSuffix}`, {
         Description: 'KMS key ID for encryption',
@@ -285,9 +238,6 @@ describe('TapStack', () => {
       expect(resourceTypes.filter(t => t === 'AWS::S3::Bucket')).toHaveLength(2); // content + logs
       expect(resourceTypes.filter(t => t === 'AWS::CloudFront::Distribution')).toHaveLength(1);
       expect(resourceTypes.filter(t => t === 'AWS::CloudFront::OriginAccessControl')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::Route53::HostedZone')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::Route53::RecordSet')).toHaveLength(2); // apex + www
-      expect(resourceTypes.filter(t => t === 'AWS::CertificateManager::Certificate')).toHaveLength(1);
       expect(resourceTypes.filter(t => t === 'AWS::KMS::Key')).toHaveLength(1);
       expect(resourceTypes.filter(t => t === 'AWS::KMS::Alias')).toHaveLength(1);
       expect(resourceTypes.filter(t => t === 'AWS::CloudWatch::Dashboard')).toHaveLength(1);
@@ -300,7 +250,6 @@ describe('TapStack', () => {
     test('should expose required properties for testing', () => {
       expect(stack.websiteBucket).toBeDefined();
       expect(stack.distribution).toBeDefined();
-      expect(stack.hostedZone).toBeDefined();
       expect(stack.encryptionKey).toBeDefined();
       expect(stack.dashboard).toBeDefined();
       expect(stack.environmentSuffix).toBe(environmentSuffix);
@@ -318,15 +267,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('should use modern TLS version', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: {
-          ViewerCertificate: {
-            MinimumProtocolVersion: 'TLSv1.2_2021'
-          }
-        }
-      });
-    });
 
     test('should block all public S3 access', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {

@@ -3,7 +3,6 @@ import fs from 'fs';
 import https from 'https';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { Route53Client, GetHostedZoneCommand, ListResourceRecordSetsCommand } from '@aws-sdk/client-route53';
 import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import { CloudWatchClient, GetDashboardCommand, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 
@@ -15,7 +14,6 @@ const mockOutputs = {
   [`NewsWebsiteBucket-${environmentSuffix}`]: `news-website-content-${environmentSuffix}-123456789012`,
   [`NewsDistributionId-${environmentSuffix}`]: 'E1234567890ABC',
   [`NewsDistributionDomain-${environmentSuffix}`]: 'd1234567890abc.cloudfront.net',
-  [`NewsHostedZoneId-${environmentSuffix}`]: 'Z1234567890ABC',
   [`NewsKMSKeyId-${environmentSuffix}`]: '12345678-1234-1234-1234-123456789012'
 };
 
@@ -31,7 +29,6 @@ try {
 // AWS clients
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' }); // CloudFront is global
-const route53Client = new Route53Client({ region: 'us-east-1' }); // Route53 is global
 const kmsClient = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -80,9 +77,7 @@ describe('News Website Infrastructure Integration Tests', () => {
   const bucketName = outputs[`NewsWebsiteBucket-${environmentSuffix}`];
   const distributionId = outputs[`NewsDistributionId-${environmentSuffix}`];
   const distributionDomain = outputs[`NewsDistributionDomain-${environmentSuffix}`];
-  const hostedZoneId = outputs[`NewsHostedZoneId-${environmentSuffix}`];
   const kmsKeyId = outputs[`NewsKMSKeyId-${environmentSuffix}`];
-  const domainName = `news-website-${environmentSuffix}.com`;
 
   describe('S3 Bucket Operations', () => {
     test('should upload content to S3 bucket with KMS encryption', async () => {
@@ -171,7 +166,6 @@ describe('News Website Infrastructure Integration Tests', () => {
       expect(config.DefaultRootObject).toBe('index.html');
       expect(config.PriceClass).toBe('PriceClass_100');
       expect(config.ViewerCertificate.MinimumProtocolVersion).toBe('TLSv1.2_2021');
-      expect(config.Aliases.Quantity).toBeGreaterThan(0);
       expect(config.Origins.Quantity).toBe(1);
       expect(config.Origins.Items[0].DomainName).toContain('.s3.');
     }, 30000);
@@ -271,42 +265,6 @@ describe('News Website Infrastructure Integration Tests', () => {
     }, 30000);
   });
 
-  describe('Route 53 DNS Configuration', () => {
-    test('should have correct hosted zone configuration', async () => {
-      const command = new GetHostedZoneCommand({
-        Id: hostedZoneId
-      });
-
-      const response = await route53Client.send(command);
-      
-      expect(response.HostedZone.Name).toBe(`${domainName}.`);
-      expect(response.HostedZone.Config.Comment).toContain(`Hosted zone for news website - ${environmentSuffix}`);
-    }, 30000);
-
-    test('should have correct DNS records', async () => {
-      const command = new ListResourceRecordSetsCommand({
-        HostedZoneId: hostedZoneId
-      });
-
-      const response = await route53Client.send(command);
-      const records = response.ResourceRecordSets;
-
-      // Check for A record for apex domain
-      const apexRecord = records.find(r => 
-        r.Name === `${domainName}.` && r.Type === 'A'
-      );
-      expect(apexRecord).toBeDefined();
-      expect(apexRecord.AliasTarget).toBeDefined();
-      expect(apexRecord.AliasTarget.HostedZoneId).toBe('Z2FDTNDATAQYW2'); // CloudFront hosted zone
-
-      // Check for A record for www subdomain
-      const wwwRecord = records.find(r => 
-        r.Name === `www.${domainName}.` && r.Type === 'A'
-      );
-      expect(wwwRecord).toBeDefined();
-      expect(wwwRecord.AliasTarget).toBeDefined();
-    }, 30000);
-  });
 
   describe('KMS Encryption', () => {
     test('should have correct KMS key configuration', async () => {

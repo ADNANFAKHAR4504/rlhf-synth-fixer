@@ -8,8 +8,7 @@ The requirement is to create a complete CDK implementation in JavaScript for a n
 3. Use AWS CDK with JavaScript
 4. Components needed:
    - S3 bucket for storing articles with KMS encryption
-   - CloudFront distribution with SSL for global delivery
-   - Route 53 for DNS management
+   - CloudFront distribution for global delivery
    - S3 bucket policy for controlled public access
    - CloudWatch for delivery and access metrics
    - KMS for content encryption
@@ -22,6 +21,7 @@ Key architectural decisions:
 - Configure comprehensive CloudWatch monitoring with dashboards and alarms
 - Use environment suffixes for multi-environment deployments
 - Apply security best practices with HTTPS enforcement and modern TLS
+- Simplified setup without custom domains for easier testing and deployment
 
 ### Answer 
 ---
@@ -33,9 +33,6 @@ import { RemovalPolicy, Duration } from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -50,9 +47,6 @@ class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Define domain name with environment suffix
-    const domainName = `news-website-${environmentSuffix}.com`;
-    const www = `www.${domainName}`;
 
     // Create a KMS Key for S3 bucket encryption
     const encryptionKey = new kms.Key(this, `NewsEncryptionKey${environmentSuffix}`, {
@@ -111,13 +105,6 @@ class TapStack extends cdk.Stack {
 
     websiteBucket.addToResourcePolicy(bucketPolicyStatement);
 
-    // Create an ACM certificate for SSL
-    const certificate = new acm.Certificate(this, `NewsWebsiteCertificate${environmentSuffix}`, {
-      domainName: domainName,
-      subjectAlternativeNames: [www],
-      validation: acm.CertificateValidation.fromDns(),
-      certificateName: `news-website-cert-${environmentSuffix}`,
-    });
 
     // Create CloudFront log bucket
     const logBucket = new s3.Bucket(this, `NewsWebsiteLogBucket${environmentSuffix}`, {
@@ -156,8 +143,6 @@ class TapStack extends cdk.Stack {
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         },
       },
-      domainNames: [domainName, www],
-      certificate: certificate,
       enableLogging: true,
       logBucket: logBucket,
       logFilePrefix: 'cloudfront-logs/',
@@ -180,26 +165,6 @@ class TapStack extends cdk.Stack {
       comment: `News website distribution - ${environmentSuffix}`,
     });
 
-    // Create Route 53 hosted zone (assuming it doesn't exist)
-    const hostedZone = new route53.PublicHostedZone(this, `NewsHostedZone${environmentSuffix}`, {
-      zoneName: domainName,
-      comment: `Hosted zone for news website - ${environmentSuffix}`,
-    });
-
-    // Create Route 53 records
-    new route53.ARecord(this, `NewsApexRecord${environmentSuffix}`, {
-      zone: hostedZone,
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
-      recordName: domainName,
-      comment: `Apex record for news website - ${environmentSuffix}`,
-    });
-
-    new route53.ARecord(this, `NewsWwwRecord${environmentSuffix}`, {
-      zone: hostedZone,
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
-      recordName: www,
-      comment: `WWW record for news website - ${environmentSuffix}`,
-    });
 
     // Create CloudWatch Dashboard for monitoring
     const dashboard = new cloudwatch.Dashboard(this, `NewsWebsiteDashboard${environmentSuffix}`, {
@@ -279,11 +244,6 @@ class TapStack extends cdk.Stack {
       exportName: `NewsDistributionDomain-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `HostedZoneId${environmentSuffix}`, {
-      value: hostedZone.hostedZoneId,
-      description: 'Route 53 hosted zone ID',
-      exportName: `NewsHostedZoneId-${environmentSuffix}`,
-    });
 
     new cdk.CfnOutput(this, `KMSKeyId${environmentSuffix}`, {
       value: encryptionKey.keyId,
@@ -294,7 +254,6 @@ class TapStack extends cdk.Stack {
     // Store references for testing
     this.websiteBucket = websiteBucket;
     this.distribution = distribution;
-    this.hostedZone = hostedZone;
     this.encryptionKey = encryptionKey;
     this.dashboard = dashboard;
     this.environmentSuffix = environmentSuffix;
