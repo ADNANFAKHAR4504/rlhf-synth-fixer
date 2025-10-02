@@ -602,12 +602,25 @@ resource "aws_wafv2_ip_set" "allow" {
 resource "aws_wafv2_web_acl" "apigw" {
   name  = "tap-stack-apigw-acl"
   scope = "REGIONAL"
-  default_action { block {} }
+  
+  default_action {
+    block {}
+  }
+  
   rule {
     name     = "AllowKnownIPs"
     priority = 1
-    action { allow {} }
-    statement { ip_set_reference_statement { arn = aws_wafv2_ip_set.allow.arn } }
+    
+    action {
+      allow {}
+    }
+    
+    statement {
+      ip_set_reference_statement {
+        arn = aws_wafv2_ip_set.allow.arn
+      }
+    }
+    
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "AllowKnownIPs"
@@ -729,5 +742,4 @@ output "dynamodb_read_target_id" {
 output "dynamodb_write_target_id" {
   value = aws_appautoscaling_target.dynamodb_write.resource_id
 }
-
 ```
