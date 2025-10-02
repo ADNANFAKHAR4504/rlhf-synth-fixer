@@ -1,0 +1,7 @@
+I’d like you to help me build a serverless stack using AWS CDK in Python(main.py - single stack). The deployment needs to run in the us-west-2 region, and the idea is to set up a full serverless workflow that uses API Gateway, Lambda, and DynamoDB. The API Gateway should expose endpoints with proper HTTP methods and trigger Lambda functions, each of which must run with its own IAM role scoped down to the least privilege it needs.
+
+I’ll need DynamoDB to act as the data layer for storing what the Lambdas process. The Lambda functions should also share a common Lambda Layer for dependencies instead of duplicating code. To make things clean across environments, I want environment variables defined for dev, test, and prod stages so I can flip between them easily.
+
+For monitoring, I want AWS X-Ray turned on so requests can be traced from API Gateway into the Lambdas, and CloudWatch alarms should watch key Lambda metrics like errors and duration. Also, I’d like API Gateway logging enabled and flowing into CloudWatch Logs for visibility.
+
+Finally, make sure the stack defines outputs so I can easily grab the API Gateway endpoint URLs and DynamoDB table names once everything is deployed. The overall goal is a complete CDK Python implementation that I can deploy confidently into us-west-2.

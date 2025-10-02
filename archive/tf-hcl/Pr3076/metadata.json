@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348943",
+  "team": "4",
+  "startedAt": "2025-09-26T07:30:02.819Z",
+  "task_sub_category": "IaC-Cloud-Migration",
+  "use_case_category": "Environment Migration",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "EC2",
+    "RDS",
+    "CloudFront",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

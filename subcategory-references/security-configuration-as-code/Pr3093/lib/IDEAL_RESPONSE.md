@@ -1,0 +1,646 @@
+# SaaS Encryption Standards CloudFormation Template
+
+## Solution Overview
+
+I'll create a comprehensive CloudFormation template that enforces encryption standards across your AWS infrastructure. This template includes S3 encryption, EBS encryption, MFA requirements, and Config Rules for compliance monitoring.
+
+## CloudFormation Template
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SaaS Encryption Standards Enforcement Template - Compliant with cfn-nag and AWS Config'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Environment name for resource tagging
+  
+  MFAAge:
+    Type: Number
+    Default: 3600
+    Description: Maximum age in seconds for MFA authentication (default 1 hour)
+  
+  KMSKeyArn:
+    Type: String
+    Default: ''
+    Description: Optional KMS key ARN for S3 encryption (leave empty for AWS managed key)
+
+Conditions:
+  UseCustomKMS: !Not [!Equals [!Ref KMSKeyArn, '']]
+  UseDefaultKMS: !Equals [!Ref KMSKeyArn, '']
+
+Resources:
+  # ==========================================
+  # KMS Key for Encryption (if not provided)
+  # ==========================================
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Condition: UseDefaultKMS
+    Properties:
+      Description: Master key for encryption compliance
+      EnableKeyRotation: true  # cfn-nag requirement
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for encryption
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - ec2.amazonaws.com
+                - config.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: EncryptionCompliance
+
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: UseDefaultKMS
+    Properties:
+      AliasName: !Sub 'alias/encryption-compliance-${Environment}'
+      TargetKeyId: !Ref EncryptionKey
+
+  # ==========================================
+  # S3 Buckets with Mandatory Encryption
+  # ==========================================
+  
+  # Primary Application Data Bucket
+  ApplicationDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'saas-app-data-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: !If [UseCustomKMS, 'aws:kms', 'AES256']
+              KMSMasterKeyID: !If [UseCustomKMS, !Ref KMSKeyArn, !Ref AWS::NoValue]
+            BucketKeyEnabled: true  # Reduces KMS API calls
+      PublicAccessBlockConfiguration:  # cfn-nag requirement
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled  # Best practice for data protection
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: application-data/
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Encryption
+          Value: Required
+
+  # Bucket Policy to Enforce Encryption in Transit
+  ApplicationDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ApplicationDataBucket.Arn
+              - !Sub '${ApplicationDataBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${ApplicationDataBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption':
+                  - 'AES256'
+                  - 'aws:kms'
+
+  # Logging Bucket with Encryption
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'saas-logs-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Logging
+
+  # S3 Bucket Policy for Log Delivery
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3ServerAccessLogsPolicy
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref 'AWS::AccountId'
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ==========================================
+  # Enable Default EBS Encryption
+  # ==========================================
+  
+  # Lambda function to enable EBS encryption by default
+  EBSEncryptionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EnableEBSEncryption
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:EnableEbsEncryptionByDefault'
+                  - 'ec2:GetEbsEncryptionByDefault'
+                  - 'ec2:ModifyEbsDefaultKmsKeyId'
+                Resource: '*'
+
+  EBSEncryptionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'EnableEBSEncryption-${Environment}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt EBSEncryptionLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          
+          def handler(event, context):
+              ec2 = boto3.client('ec2')
+              
+              try:
+                  request_type = event['RequestType']
+                  
+                  if request_type in ['Create', 'Update']:
+                      # Enable EBS encryption by default
+                      response = ec2.enable_ebs_encryption_by_default()
+                      print(f"EBS encryption enabled: {response}")
+                      
+                      # Optionally set KMS key if provided
+                      kms_key = event['ResourceProperties'].get('KmsKeyId')
+                      if kms_key and kms_key != '':
+                          print(f"Setting custom KMS key: {kms_key}")
+                          ec2.modify_ebs_default_kms_key_id(KmsKeyId=kms_key)
+                      else:
+                          print("Using AWS managed key for EBS encryption")
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                     {'Message': 'EBS encryption enabled successfully'})
+                  elif request_type == 'Delete':
+                      # For delete operations, we typically don't disable EBS encryption
+                      # as it's a security feature that should remain enabled
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                     {'Message': 'Delete completed - EBS encryption left enabled'})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                     {'Message': 'No action taken'})
+                                     
+              except Exception as e:
+                  print(f"Error in Lambda function: {str(e)}")
+                  import traceback
+                  print(f"Traceback: {traceback.format_exc()}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED,
+                                 {'Message': f'Lambda execution failed: {str(e)}'})
+
+  EnableEBSEncryption:
+    Type: Custom::EnableEBSEncryption
+    Properties:
+      ServiceToken: !GetAtt EBSEncryptionLambda.Arn
+      KmsKeyId: !If [UseCustomKMS, !Ref KMSKeyArn, !Ref AWS::NoValue]
+
+  # ==========================================
+  # IAM MFA Enforcement Policy
+  # ==========================================
+  
+  MFAEnforcementPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'RequireMFA-${Environment}'
+      Description: Enforces MFA for all IAM users
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow users to view account information
+          - Sid: AllowViewAccountInfo
+            Effect: Allow
+            Action:
+              - 'iam:GetAccountPasswordPolicy'
+              - 'iam:ListVirtualMFADevices'
+            Resource: '*'
+          
+          # Allow users to manage their own passwords and MFA
+          - Sid: AllowManageOwnPasswordsAndMFA
+            Effect: Allow
+            Action:
+              - 'iam:ChangePassword'
+              - 'iam:GetUser'
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:DeleteVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:ListMFADevices'
+              - 'iam:ResyncMFADevice'
+              - 'iam:DeactivateMFADevice'
+            Resource:
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${!aws:username}'
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}'
+          
+          # Deny most actions without MFA
+          - Sid: DenyAllExceptListedIfNoMFA
+            Effect: Deny
+            NotAction:
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:GetUser'
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+              - 'iam:ResyncMFADevice'
+              - 'sts:GetSessionToken'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:MultiFactorAuthPresent': 'false'
+          
+          # Deny actions if MFA is too old
+          - Sid: DenyIfMFATooOld
+            Effect: Deny
+            Action: '*'
+            Resource: '*'
+            Condition:
+              NumericGreaterThan:
+                'aws:MultiFactorAuthAge': !Ref MFAAge
+
+  # ==========================================
+  # AWS Config Rules for Encryption Compliance
+  # ==========================================
+  
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub 'EncryptionComplianceRecorder-${Environment}'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub 'EncryptionComplianceChannel-${Environment}'
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref ConfigSNSTopic
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'config-bucket-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldConfigData
+            Status: Enabled
+            ExpirationInDays: 2555  # 7 years retention
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConfigAccess
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - 's3:GetBucketAcl'
+              - 's3:ListBucket'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AllowConfigPutObject
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  ConfigSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Config Compliance Notifications
+      KmsMasterKeyId: !If [UseCustomKMS, !Ref KMSKeyArn, !Ref EncryptionKey]
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ConfigServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                  - 's3:PutObject'
+                  - 'sns:Publish'
+                  - 'config:Put*'
+                  - 'config:Get*'
+                  - 'config:List*'
+                  - 'config:Describe*'
+                  - 'config:BatchGet*'
+                  - 'config:Select*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: !Sub '${ConfigBucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # Config Rules for Encryption Compliance
+  S3BucketSSLRequestsOnly:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: s3-bucket-ssl-requests-only
+      Description: Checks S3 buckets have policies requiring SSL
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SSL_REQUESTS_ONLY
+
+  S3BucketServerSideEncryption:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: s3-bucket-server-side-encryption-enabled
+      Description: Checks that S3 buckets have encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+
+  S3DefaultEncryptionKMS:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: s3-default-encryption-kms
+      Description: Checks S3 buckets have KMS encryption by default
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_DEFAULT_ENCRYPTION_KMS
+
+  EncryptedVolumes:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: encrypted-volumes
+      Description: Checks EBS volumes are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+
+  EC2EBSEncryptionByDefault:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: ec2-ebs-encryption-by-default
+      Description: Checks that EBS encryption is enabled by default
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_EBS_ENCRYPTION_BY_DEFAULT
+
+  RDSStorageEncrypted:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: rds-storage-encrypted
+      Description: Checks RDS instances have storage encryption
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+
+  EFSEncryptedCheck:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: efs-encrypted-check
+      Description: Checks EFS file systems are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: EFS_ENCRYPTED_CHECK
+
+  IAMUserMFAEnabled:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: iam-user-mfa-enabled
+      Description: Checks that IAM users have MFA enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+
+  RootAccountMFAEnabled:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigRecorder
+    Properties:
+      ConfigRuleName: root-account-mfa-enabled
+      Description: Checks that root account has MFA enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+
+  # ==========================================
+  # Conformance Pack for Additional Compliance
+  # ==========================================
+  EncryptionConformancePack:
+    Type: AWS::Config::ConformancePack
+    DependsOn: 
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConformancePackName: !Sub 'encryption-compliance-pack-${Environment}'
+      TemplateBody: |
+        Resources:
+          S3BucketPublicReadProhibited:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: s3-bucket-public-read-prohibited
+              Source:
+                Owner: AWS
+                SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+          
+          S3BucketPublicWriteProhibited:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: s3-bucket-public-write-prohibited
+              Source:
+                Owner: AWS
+                SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+          
+          CloudTrailEncryptionEnabled:
+            Type: AWS::Config::ConfigRule
+            Properties:
+              ConfigRuleName: cloud-trail-encryption-enabled
+              Source:
+                Owner: AWS
+                SourceIdentifier: CLOUD_TRAIL_ENCRYPTION_ENABLED
+
+Outputs:
+  ApplicationDataBucketName:
+    Description: Name of the encrypted application data bucket
+    Value: !Ref ApplicationDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AppBucket'
+
+  LoggingBucketName:
+    Description: Name of the logging bucket
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogBucket'
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !If [UseCustomKMS, !Ref KMSKeyArn, !Ref EncryptionKey]
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKey'
+
+  MFAPolicyArn:
+    Description: ARN of the MFA enforcement policy
+    Value: !Ref MFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAPolicy'
+
+  ConfigRecorderName:
+    Description: Name of the Config Recorder
+    Value: !Ref ConfigRecorder
+
+  ComplianceStatus:
+    Description: Check Config Rules dashboard for compliance status
+    Value: !Sub 'https://console.aws.amazon.com/config/home?region=${AWS::Region}#/rules'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+      - Label:
+          default: "Security Settings"
+        Parameters:
+          - MFAAge
+          - KMSKeyArn
+    ParameterLabels:
+      Environment:
+        default: "Environment Name"
+      MFAAge:
+        default: "MFA Token Max Age (seconds)"
+      KMSKeyArn:
+        default: "Custom KMS Key ARN (optional)"
+```
+
+## Key Features
+
+- S3 encryption enforced (AES-256/KMS), HTTPS only, public access blocked
+- EBS encryption enabled account-wide via Lambda automation  
+- MFA policy required for all IAM users
+- 9 AWS Config Rules with real-time compliance monitoring
