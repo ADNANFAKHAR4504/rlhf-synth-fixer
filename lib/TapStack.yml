@@ -143,7 +143,7 @@ Resources:
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
+      InstanceType: t2.micro
       ImageId: !Ref AmiId
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
