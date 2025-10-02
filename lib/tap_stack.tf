@@ -42,6 +42,12 @@ variable "api_key_secret_name" {
   default     = "tap_stack_api_keys"
 }
 
+variable "cors_allowed_origins" {
+  description = "Allowed origins for CORS"
+  type        = list(string)
+  default     = ["*"]
+}
+
 # -----------------------------
 # Locals
 # -----------------------------
@@ -232,6 +238,15 @@ resource "aws_lambda_function" "main" {
   tags = local.common_tags
 }
 
+# Lambda Permission for API Gateway to invoke the function
+resource "aws_lambda_permission" "apigw_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.main.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
+}
+
 # -----------------------------
 # API Gateway REST API
 # -----------------------------
@@ -263,8 +278,87 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   uri                     = aws_lambda_function.main.invoke_arn
 }
 
-resource "aws_api_gateway_deployment" "main" {
+# -----------------------------
+# CORS Configuration
+# -----------------------------
+# OPTIONS method for CORS preflight
+resource "aws_api_gateway_method" "lambda_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.lambda_resource.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "lambda_options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "lambda_options_response" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  status_code = "200"
+  response_models = { "application/json" = "Empty" }
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "lambda_options_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  status_code = aws_api_gateway_method_response.lambda_options_response.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  }
+}
+
+# POST method 200 response for CORS headers on success
+resource "aws_api_gateway_method_response" "lambda_post_200" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_method.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+  response_models = { "application/json" = "Empty" }
+}
+
+resource "aws_api_gateway_integration_response" "lambda_post_200_integration" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_method.http_method
+  status_code = aws_api_gateway_method_response.lambda_post_200.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  }
   depends_on = [aws_api_gateway_integration.lambda_integration]
+}
+
+resource "aws_api_gateway_deployment" "main" {
+  depends_on = [
+    aws_api_gateway_integration.lambda_integration,
+    aws_api_gateway_integration.lambda_options_integration,
+    aws_api_gateway_integration_response.lambda_options_integration_response,
+    aws_api_gateway_integration_response.lambda_post_200_integration
+  ]
   rest_api_id = aws_api_gateway_rest_api.main.id
 }
 
@@ -294,7 +388,7 @@ resource "aws_api_gateway_gateway_response" "cors" {
   response_type = "DEFAULT_4XX"
   status_code   = "400"
   response_parameters = {
-  "gatewayresponse.header.Access-Control-Allow-Origin"  = "'https://google.com'"
+  "gatewayresponse.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
   "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
   "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
@@ -336,24 +430,72 @@ resource "aws_security_group" "api_gw_sg" {
 }
 
 # -----------------------------
-# IAM Policy for API Gateway IP Restriction
+# API Gateway IP Restriction via Resource Policy
 # -----------------------------
-resource "aws_iam_policy" "api_gw_ip_restrict" {
-  name        = "tap_stack_api_gw_ip_restrict"
-  description = "Restrict API Gateway access to known IPs"
-  policy      = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = "execute-api:Invoke"
-      Resource = "*"
-      Condition = {
-        IpAddress = {
-          "aws:SourceIp" = var.lambda_allowed_ips
-        }
-      }
-    }]
-  })
+# Restrict invoke to known IPs at the API Gateway resource-policy layer
+data "aws_iam_policy_document" "apigw_ip_restrict" {
+  statement {
+    sid     = "AllowFromKnownIPs"
+    effect  = "Allow"
+    actions = ["execute-api:Invoke"]
+    principals { 
+      type        = "*"
+      identifiers = ["*"]
+    }
+    resources = [
+      "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
+    ]
+
+    condition {
+      test     = "IpAddress"
+      variable = "aws:SourceIp"
+      values   = var.lambda_allowed_ips
+    }
+  }
+}
+
+resource "aws_api_gateway_rest_api_policy" "main" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  policy      = data.aws_iam_policy_document.apigw_ip_restrict.json
+}
+
+# -----------------------------
+# WAF Configuration (Additional Security Layer)
+# -----------------------------
+resource "aws_wafv2_ip_set" "allow" {
+  name               = "tap-stack-allow-ips"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = var.lambda_allowed_ips
+  tags               = local.common_tags
+}
+
+resource "aws_wafv2_web_acl" "apigw" {
+  name  = "tap-stack-apigw-acl"
+  scope = "REGIONAL"
+  default_action { block {} }
+  rule {
+    name     = "AllowKnownIPs"
+    priority = 1
+    action { allow {} }
+    statement { ip_set_reference_statement { arn = aws_wafv2_ip_set.allow.arn } }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AllowKnownIPs"
+      sampled_requests_enabled   = true
+    }
+  }
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "apigw-acl"
+    sampled_requests_enabled   = true
+  }
+  tags = local.common_tags
+}
+
+resource "aws_wafv2_web_acl_association" "apigw" {
+  resource_arn = aws_api_gateway_stage.prod.arn
+  web_acl_arn  = aws_wafv2_web_acl.apigw.arn
 }
 
 # -----------------------------
@@ -428,4 +570,33 @@ output "cloudwatch_alarm_4xx_name" {
 
 output "cloudwatch_alarm_5xx_name" {
   value = aws_cloudwatch_metric_alarm.apigw_5xx.alarm_name
+}
+
+# Additional outputs for account-agnostic testing
+output "api_stage_name" {
+  value = aws_api_gateway_stage.prod.stage_name
+}
+
+output "api_resource_path" {
+  value = aws_api_gateway_resource.lambda_resource.path_part
+}
+
+output "api_execution_arn" {
+  value = aws_api_gateway_rest_api.main.execution_arn
+}
+
+output "cors_allowed_origins" {
+  value = var.cors_allowed_origins
+}
+
+output "s3_sse_algorithm" {
+  value = aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+}
+
+output "dynamodb_read_target_id" {
+  value = aws_appautoscaling_target.dynamodb_read.resource_id
+}
+
+output "dynamodb_write_target_id" {
+  value = aws_appautoscaling_target.dynamodb_write.resource_id
 }

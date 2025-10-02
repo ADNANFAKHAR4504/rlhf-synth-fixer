@@ -1,50 +1,79 @@
 # TAP Stack Infrastructure - Ideal Response
 
 ## Overview
-This infrastructure stack deploys a secure, scalable serverless application on AWS designed for handling RLHF (Reinforcement Learning from Human Feedback) task processing. The stack implements a complete end-to-end solution with proper security, monitoring, and scalability features.
+This infrastructure stack deploys a secure, production-ready serverless application on AWS designed for handling RLHF (Reinforcement Learning from Human Feedback) task processing. The TAP (Task Assignment Platform) implements a comprehensive end-to-end solution with enterprise-grade security, monitoring, scalability, and CORS support.
 
 ## Architecture Components
 
-### Core Services
-- **API Gateway REST API**: Serves as the secure entry point with IAM authentication and IP-based access control
-- **Lambda Function**: Python-based serverless compute for processing requests and business logic
-- **DynamoDB Table**: NoSQL database with auto-scaling for storing task data and metadata
-- **S3 Bucket**: Secure storage for Lambda execution logs with server-side encryption
+### Core Serverless Services
+- **API Gateway REST API**: Regional endpoint with IAM authentication, comprehensive CORS support, and multi-layered IP-based access control
+- **Lambda Function**: Python 3.8 serverless compute with least-privilege IAM permissions and proper API Gateway integration
+- **DynamoDB Table**: NoSQL database with intelligent auto-scaling (5-100 capacity units) targeting 70% utilization
+- **S3 Bucket**: Encrypted storage for Lambda execution logs with versioning and public access blocking
 
-### Security Features
-- **IAM Roles & Policies**: Least-privilege access control for all resources
-- **IP Restriction**: API Gateway access limited to specified IP addresses
-- **AWS Secrets Manager**: Secure storage and retrieval of API keys
-- **VPC Integration**: Network isolation with proper security group configurations
-- **Encryption**: S3 server-side encryption (AES256) for data at rest
+### Multi-Layer Security Architecture
+- **IAM Resource Policy**: Primary API Gateway access control using `aws:SourceIp` condition
+- **AWS WAF Integration**: Secondary defense layer with IP set allow-listing and regional scope
+- **IAM Roles & Policies**: Least-privilege access control with granular permissions for each service
+- **AWS Secrets Manager**: Secure storage and retrieval of API keys with automated rotation capabilities
+- **VPC Security Groups**: Network-level access control for ICMP, HTTP (80), and HTTPS (443) traffic
+- **S3 Encryption**: Server-side encryption (AES256) with versioning for data protection
+
+### Complete CORS Implementation
+- **Preflight Support**: Full OPTIONS method implementation with mock integration
+- **Success Response Headers**: CORS headers on successful POST responses (200 status)
+- **Error Response Headers**: CORS support for 4XX errors via gateway responses
+- **Configurable Origins**: Variable-based origin management (`cors_allowed_origins`)
+- **Comprehensive Headers**: Support for `Content-Type`, `X-Amz-Date`, `Authorization`, `X-Api-Key`, `X-Amz-Security-Token`
 
 ### Monitoring & Observability
-- **CloudWatch Alarms**: Automated monitoring for API Gateway 4XX and 5XX errors
-- **CloudWatch Logs**: Centralized logging for Lambda function execution
+- **CloudWatch Alarms**: Sensitive error detection (threshold: 1) for both 4XX and 5XX errors
+- **CloudWatch Logs**: Centralized logging with proper IAM permissions for Lambda execution
 - **S3 Audit Logs**: Detailed request/response logging for compliance and debugging
-- **API Gateway Caching**: Performance optimization with encrypted cache
+- **API Gateway Caching**: 0.5GB cache with 300-second TTL and encryption enabled
+- **WAF Metrics**: CloudWatch metrics for security monitoring and threat detection
 
-### Scalability Features
-- **DynamoDB Auto-scaling**: Automatic read/write capacity adjustment based on utilization (target: 70%)
-- **Lambda Concurrency**: Serverless auto-scaling based on demand
-- **API Gateway Throttling**: Built-in request rate limiting and quota management
+### Auto-Scaling & Performance
+- **DynamoDB Auto-scaling**: Separate read/write capacity targets with 70% utilization threshold
+- **Lambda Concurrency**: Serverless auto-scaling with proper API Gateway invoke permissions
+- **API Gateway Stage Management**: Production stage with comprehensive method settings
+- **Cache Optimization**: Encrypted caching with configurable TTL for performance optimization
 
-## Resource Configuration
+## Technical Implementation Details
 
-### Compute Layer
-- **Lambda Runtime**: Python 3.8 with optimized deployment package
-- **Environment Variables**: Secure configuration for DynamoDB table, S3 bucket, and Secrets Manager
-- **Memory/Timeout**: Configured for optimal performance-to-cost ratio
+### Lambda Configuration
+- **Runtime**: Python 3.8 with `lambda_function.lambda_handler` entry point
+- **Deployment**: `function.zip` package with proper file references
+- **Environment Variables**: 
+  - `DYNAMODB_TABLE`: Dynamic table name reference
+  - `LOG_BUCKET`: S3 bucket for audit logging
+  - `API_KEY_SECRET`: Secrets Manager integration
+- **Permissions**: Explicit API Gateway invoke permission with proper source ARN
 
-### Data Layer
-- **DynamoDB**: Provisioned billing mode with hash key 'id' for consistent performance
-- **S3**: Versioning enabled with lifecycle policies for cost optimization
-- **Secrets Manager**: Centralized API key management with rotation capabilities
+### API Gateway Architecture
+- **Resource Structure**: `/lambda` endpoint with POST and OPTIONS methods
+- **Authentication**: IAM authentication on POST method for security
+- **Integration**: AWS_PROXY integration with Lambda function
+- **Stage Configuration**: Production stage with caching and method settings
+- **Deployment Dependencies**: Proper dependency chain for all CORS resources
 
-### Network Layer
-- **VPC**: Dedicated 10.0.0.0/16 network with DNS support
-- **Security Groups**: Fine-grained network access control for HTTPS, HTTP, and ICMP traffic
-- **API Gateway Stage**: Production deployment with comprehensive method settings
+### Data & Storage Layer
+- **DynamoDB Schema**: Hash key 'id' (String type) with provisioned capacity model
+- **Auto-scaling Policies**: Target tracking policies for both read and write operations
+- **S3 Configuration**: 
+  - Versioning enabled for audit trail
+  - Server-side encryption with AES256
+  - Public access blocked for security
+- **Secrets Management**: API key storage without hardcoded values in configuration
+
+### Network & Security
+- **VPC Integration**: Dedicated 10.0.0.0/16 network with DNS support enabled
+- **Security Group Rules**: 
+  - Ingress: ICMP, HTTP (80), HTTPS (443) from allowed IP ranges
+  - Egress: All outbound traffic permitted
+- **IP Restriction Implementation**: 
+  - Primary: IAM resource policy with IP condition
+  - Secondary: WAF with IP set and web ACL association
 
 ## Operational Features
 
@@ -140,6 +169,12 @@ variable "api_key_secret_name" {
   description = "Name of the secret in AWS Secrets Manager for API keys"
   type        = string
   default     = "tap_stack_api_keys"
+}
+
+variable "cors_allowed_origins" {
+  description = "Allowed origins for CORS"
+  type        = list(string)
+  default     = ["*"]
 }
 
 # -----------------------------
@@ -332,6 +367,15 @@ resource "aws_lambda_function" "main" {
   tags = local.common_tags
 }
 
+# Lambda Permission for API Gateway to invoke the function
+resource "aws_lambda_permission" "apigw_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.main.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
+}
+
 # -----------------------------
 # API Gateway REST API
 # -----------------------------
@@ -363,8 +407,87 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   uri                     = aws_lambda_function.main.invoke_arn
 }
 
-resource "aws_api_gateway_deployment" "main" {
+# -----------------------------
+# CORS Configuration
+# -----------------------------
+# OPTIONS method for CORS preflight
+resource "aws_api_gateway_method" "lambda_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.lambda_resource.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "lambda_options_integration" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "lambda_options_response" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  status_code = "200"
+  response_models = { "application/json" = "Empty" }
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "lambda_options_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_options.http_method
+  status_code = aws_api_gateway_method_response.lambda_options_response.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  }
+}
+
+# POST method 200 response for CORS headers on success
+resource "aws_api_gateway_method_response" "lambda_post_200" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_method.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = true
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+  }
+  response_models = { "application/json" = "Empty" }
+}
+
+resource "aws_api_gateway_integration_response" "lambda_post_200_integration" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.lambda_resource.id
+  http_method = aws_api_gateway_method.lambda_method.http_method
+  status_code = aws_api_gateway_method_response.lambda_post_200.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  }
   depends_on = [aws_api_gateway_integration.lambda_integration]
+}
+
+resource "aws_api_gateway_deployment" "main" {
+  depends_on = [
+    aws_api_gateway_integration.lambda_integration,
+    aws_api_gateway_integration.lambda_options_integration,
+    aws_api_gateway_integration_response.lambda_options_integration_response,
+    aws_api_gateway_integration_response.lambda_post_200_integration
+  ]
   rest_api_id = aws_api_gateway_rest_api.main.id
 }
 
@@ -394,7 +517,7 @@ resource "aws_api_gateway_gateway_response" "cors" {
   response_type = "DEFAULT_4XX"
   status_code   = "400"
   response_parameters = {
-  "gatewayresponse.header.Access-Control-Allow-Origin"  = "'https://google.com'"
+  "gatewayresponse.header.Access-Control-Allow-Origin"  = "'${join(",", var.cors_allowed_origins)}'"
   "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
   "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
@@ -436,24 +559,72 @@ resource "aws_security_group" "api_gw_sg" {
 }
 
 # -----------------------------
-# IAM Policy for API Gateway IP Restriction
+# API Gateway IP Restriction via Resource Policy
 # -----------------------------
-resource "aws_iam_policy" "api_gw_ip_restrict" {
-  name        = "tap_stack_api_gw_ip_restrict"
-  description = "Restrict API Gateway access to known IPs"
-  policy      = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = "execute-api:Invoke"
-      Resource = "*"
-      Condition = {
-        IpAddress = {
-          "aws:SourceIp" = var.lambda_allowed_ips
-        }
-      }
-    }]
-  })
+# Restrict invoke to known IPs at the API Gateway resource-policy layer
+data "aws_iam_policy_document" "apigw_ip_restrict" {
+  statement {
+    sid     = "AllowFromKnownIPs"
+    effect  = "Allow"
+    actions = ["execute-api:Invoke"]
+    principals { 
+      type        = "*"
+      identifiers = ["*"]
+    }
+    resources = [
+      "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
+    ]
+
+    condition {
+      test     = "IpAddress"
+      variable = "aws:SourceIp"
+      values   = var.lambda_allowed_ips
+    }
+  }
+}
+
+resource "aws_api_gateway_rest_api_policy" "main" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  policy      = data.aws_iam_policy_document.apigw_ip_restrict.json
+}
+
+# -----------------------------
+# WAF Configuration (Additional Security Layer)
+# -----------------------------
+resource "aws_wafv2_ip_set" "allow" {
+  name               = "tap-stack-allow-ips"
+  scope              = "REGIONAL"
+  ip_address_version = "IPV4"
+  addresses          = var.lambda_allowed_ips
+  tags               = local.common_tags
+}
+
+resource "aws_wafv2_web_acl" "apigw" {
+  name  = "tap-stack-apigw-acl"
+  scope = "REGIONAL"
+  default_action { block {} }
+  rule {
+    name     = "AllowKnownIPs"
+    priority = 1
+    action { allow {} }
+    statement { ip_set_reference_statement { arn = aws_wafv2_ip_set.allow.arn } }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AllowKnownIPs"
+      sampled_requests_enabled   = true
+    }
+  }
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "apigw-acl"
+    sampled_requests_enabled   = true
+  }
+  tags = local.common_tags
+}
+
+resource "aws_wafv2_web_acl_association" "apigw" {
+  resource_arn = aws_api_gateway_stage.prod.arn
+  web_acl_arn  = aws_wafv2_web_acl.apigw.arn
 }
 
 # -----------------------------
@@ -529,4 +700,34 @@ output "cloudwatch_alarm_4xx_name" {
 output "cloudwatch_alarm_5xx_name" {
   value = aws_cloudwatch_metric_alarm.apigw_5xx.alarm_name
 }
+
+# Additional outputs for account-agnostic testing
+output "api_stage_name" {
+  value = aws_api_gateway_stage.prod.stage_name
+}
+
+output "api_resource_path" {
+  value = aws_api_gateway_resource.lambda_resource.path_part
+}
+
+output "api_execution_arn" {
+  value = aws_api_gateway_rest_api.main.execution_arn
+}
+
+output "cors_allowed_origins" {
+  value = var.cors_allowed_origins
+}
+
+output "s3_sse_algorithm" {
+  value = aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+}
+
+output "dynamodb_read_target_id" {
+  value = aws_appautoscaling_target.dynamodb_read.resource_id
+}
+
+output "dynamodb_write_target_id" {
+  value = aws_appautoscaling_target.dynamodb_write.resource_id
+}
+
 ```

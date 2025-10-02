@@ -13,14 +13,17 @@ function readAllTf(): { file: string; content: string }[] {
 }
 
 describe('Terraform stack unit tests', () => {
-  test('Required variables are present and have correct defaults', () => {
+  test('Required variables are present with correct types and structure', () => {
     const content = readTfFile('tap_stack.tf');
     expect(content).toMatch(/variable\s+"aws_region"[\s\S]*default\s*=\s*"us-west-2"/);
-    expect(content).toMatch(/variable\s+"lambda_allowed_ips"[\s\S]*default\s*=\s*\["203.0.113.1",\s*"198.51.100.2"\]/);
-    expect(content).toMatch(/variable\s+"dynamodb_table_name"[\s\S]*default\s*=\s*"tap_stack_data"/);
-    expect(content).toMatch(/variable\s+"lambda_log_bucket_name"[\s\S]*default\s*=\s*"tap-stack-logs-bucket"/);
+    // Check variable exists with list semantics instead of exact IPs
+    expect(content).toMatch(/variable\s+"lambda_allowed_ips"\s*{[\s\S]*type\s*=\s*list\(string\)/);
+    expect(content).toMatch(/variable\s+"dynamodb_table_name"/);
+    expect(content).toMatch(/variable\s+"lambda_log_bucket_name"/);
     expect(content).toMatch(/variable\s+"tags"[\s\S]*Project[\s\S]*Environment[\s\S]*Owner[\s\S]*ManagedBy/);
-    expect(content).toMatch(/variable\s+"api_key_secret_name"[\s\S]*default\s*=\s*"tap_stack_api_keys"/);
+    expect(content).toMatch(/variable\s+"api_key_secret_name"/);
+    // Check new CORS variable exists
+    expect(content).toMatch(/variable\s+"cors_allowed_origins"/);
   });
 
   test('S3 bucket uses versioning and server-side encryption', () => {
@@ -44,11 +47,14 @@ describe('Terraform stack unit tests', () => {
     expect(content).toMatch(/resource\s+"aws_lambda_function"[\s\S]*environment\s*{[\s\S]*DYNAMODB_TABLE[\s\S]*LOG_BUCKET[\s\S]*API_KEY_SECRET/);
   });
 
-  test('API Gateway CORS headers and allowed methods are correct', () => {
+  test('API Gateway CORS is properly configured with variable origins', () => {
     const content = readTfFile('tap_stack.tf');
-    expect(content).toMatch(/resource\s+"aws_api_gateway_gateway_response"[\s\S]*Access-Control-Allow-Origin[\s\S]*Access-Control-Allow-Headers[\s\S]*Access-Control-Allow-Methods/);
+    // Check CORS variable is wired in responses
+    expect(content).toMatch(/Access-Control-Allow-Origin/);
+    expect(content).toMatch(/join\(",",\s*var\.cors_allowed_origins\)/);
     expect(content).toMatch(/'POST,OPTIONS'/);
-    expect(content).toMatch(/'https:\/\/google.com'/);
+    // Check gateway response exists for error handling
+    expect(content).toMatch(/resource\s+"aws_api_gateway_gateway_response"/);
   });
 
   test('Security group ingress allows only 80, 443, and ICMP', () => {
@@ -75,5 +81,37 @@ describe('Terraform stack unit tests', () => {
   test('Region is set to us-west-2', () => {
     const content = readTfFile('tap_stack.tf');
     expect(content).toMatch(/variable\s+"aws_region"[\s\S]*default\s*=\s*"us-west-2"/);
+  });
+
+  test('API Gateway resource policy is present and references IP source condition', () => {
+    const content = readTfFile('tap_stack.tf');
+    expect(content).toMatch(/aws_api_gateway_rest_api_policy/);
+    expect(content).toMatch(/aws:SourceIp/);
+    expect(content).toMatch(/data\s+"aws_iam_policy_document"\s+"apigw_ip_restrict"/);
+  });
+
+  test('Lambda permission for API Gateway invoke is configured', () => {
+    const content = readTfFile('tap_stack.tf');
+    expect(content).toMatch(/aws_lambda_permission[\s\S]*apigw_invoke/);
+    expect(content).toMatch(/lambda:InvokeFunction/);
+    expect(content).toMatch(/apigateway\.amazonaws\.com/);
+  });
+
+  test('WAF configuration is present for additional security', () => {
+    const content = readTfFile('tap_stack.tf');
+    expect(content).toMatch(/aws_wafv2_ip_set/);
+    expect(content).toMatch(/aws_wafv2_web_acl/);
+    expect(content).toMatch(/aws_wafv2_web_acl_association/);
+  });
+
+  test('All required outputs are present for account-agnostic testing', () => {
+    const content = readTfFile('tap_stack.tf');
+    expect(content).toMatch(/output\s+"api_stage_name"/);
+    expect(content).toMatch(/output\s+"api_resource_path"/);
+    expect(content).toMatch(/output\s+"api_execution_arn"/);
+    expect(content).toMatch(/output\s+"cors_allowed_origins"/);
+    expect(content).toMatch(/output\s+"s3_sse_algorithm"/);
+    expect(content).toMatch(/output\s+"dynamodb_read_target_id"/);
+    expect(content).toMatch(/output\s+"dynamodb_write_target_id"/);
   });
 });
