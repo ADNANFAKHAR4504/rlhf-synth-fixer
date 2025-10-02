@@ -3,15 +3,13 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
-import * as athena from 'aws-cdk-lib/aws-athena';
 import * as batch from 'aws-cdk-lib/aws-batch';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
-import * as events_targets from 'aws-cdk-lib/aws-events-targets';
-import * as glue from 'aws-cdk-lib/aws-glue';
+import * as events_targets from 'aws-cdk-lib/aws-events-targets'; 
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -183,16 +181,8 @@ export class TapStack extends cdk.Stack {
     // ============================================
     
     let endpoint: sagemaker.CfnEndpoint | undefined;
-    let sagemakerEndpoint: ec2.IInterfaceVpcEndpoint | undefined;
 
     if (enableSagemaker) {
-      // Interface endpoint for SageMaker Runtime
-      sagemakerEndpoint = vpc.addInterfaceEndpoint('SageMakerEndpoint', {
-        service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
-        privateDnsEnabled: true,
-        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-        securityGroups: [computeSecurityGroup],
-      });
 
       // IAM role for SageMaker execution
       const sagemakerRole = new iam.Role(this, 'SageMakerExecutionRole', {
