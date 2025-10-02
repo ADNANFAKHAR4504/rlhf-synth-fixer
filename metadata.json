@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "400256",
+  "team": "1",
+  "startedAt": "2025-10-02T09:05:23.997Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "VPC, EC2, ElasticCache, Redis CLoudWatch"
+}
