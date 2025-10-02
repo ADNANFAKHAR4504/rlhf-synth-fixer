@@ -111,6 +111,11 @@ elif [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
   pipenv run test-py-unit
 
+elif [ "$LANGUAGE" = "hcl" ]; then
+  echo "✅ Terraform HCL project detected, running terraform validate..."
+  cd lib && terraform init -backend=false && terraform validate
+  echo "✅ Terraform validation passed"
+
 else
   echo "✅ Running default unit tests..."
   npm run test:unit
