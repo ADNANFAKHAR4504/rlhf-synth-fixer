@@ -80,9 +80,9 @@ final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps Props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = Props != null ? Props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -101,13 +101,13 @@ final class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(final String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(final StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
