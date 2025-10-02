@@ -174,9 +174,9 @@ describe('Media Streaming Platform Infrastructure Integration Tests', () => {
 
       const autoscaling = new AWS.AutoScaling();
       const policies = await autoscaling.describePolicies({}).promise();
-      const mediaStreamingPolicies = policies.ScalingPolicies.filter(p => 
+      const mediaStreamingPolicies = policies.ScalingPolicies?.filter(p => 
         p.AutoScalingGroupName?.includes('media-streaming')
-      );
+      ) || [];
 
       expect(mediaStreamingPolicies.length).toBeGreaterThanOrEqual(2); // CPU and custom metric
     });
@@ -311,7 +311,7 @@ describe('Media Streaming Platform Infrastructure Integration Tests', () => {
           Id: mediaStreamingDist.Id
         }).promise();
 
-        expect(distribution.Distribution?.DistributionConfig.Restrictions.GeoRestriction).toBeDefined();
+        expect(distribution.Distribution?.DistributionConfig?.Restrictions?.GeoRestriction).toBeDefined();
       }
     });
   });
