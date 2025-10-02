@@ -33,7 +33,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     results = []
     
     # Process all records in the event
-    for record in event['Records']:
+    records = event.get('Records', [])
+    for record in records:
         if 's3' in record:
             result = process_s3_record(record)
             results.append(result)
