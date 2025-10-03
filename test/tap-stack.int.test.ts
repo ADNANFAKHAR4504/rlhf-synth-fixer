@@ -95,7 +95,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('S3 bucket access error:', error);
+        // S3 bucket access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -123,7 +123,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('S3 encryption check error:', error);
+        // S3 encryption check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -172,7 +172,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudFront distribution access error:', error);
+        // CloudFront distribution access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -198,7 +198,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudFront status check error:', error);
+        // CloudFront status check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -223,7 +223,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudFront HTTPS check error:', error);
+        // CloudFront HTTPS check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -248,7 +248,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudFront OAI check error:', error);
+        // CloudFront OAI check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -277,7 +277,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('SNS topic access error:', error);
+        // SNS topic access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -298,7 +298,6 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudWatch dashboard access error:', error);
         // Dashboard might not exist yet, so we'll just log the error
         console.warn(`CloudWatch dashboard ${dashboardName} not found or accessible`);
         expect(true).toBe(true); // Skip test if dashboard not accessible
@@ -340,7 +339,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('Lambda function access error:', error);
+        // Lambda function access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -376,7 +375,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('Cross-service integration test error:', error);
+        // Cross-service integration test failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -404,7 +403,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
             expect(true).toBe(true);
             return;
           }
-          console.error('Resource monitoring validation error:', error);
+          // Resource monitoring validation failed - this is expected in CI/CD without proper credentials
           throw error;
         }
       }
@@ -476,7 +475,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('CloudFront performance check error:', error);
+        // CloudFront performance check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -561,7 +560,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('Logging bucket access error:', error);
+        // Logging bucket access failed - this is expected in CI/CD without proper credentials
         // Logging might be disabled, which is acceptable
         expect(true).toBe(true);
       }
@@ -610,7 +609,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
           expect(true).toBe(true);
           return;
         }
-        console.error('S3 lifecycle verification error:', error);
+        // S3 lifecycle verification failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
