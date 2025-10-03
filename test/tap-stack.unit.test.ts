@@ -1,5 +1,5 @@
 import { App } from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
@@ -384,6 +384,119 @@ describe('TapStack Unit Tests', () => {
           }),
         ]),
       });
+    });
+  });
+
+  describe('Environment Suffix Logic', () => {
+    test('Should use environmentSuffix from context when props not provided', () => {
+      const contextApp = new App({
+        context: {
+          environmentSuffix: 'context-env'
+        }
+      });
+      const contextStack = new TapStack(contextApp, `TapStackContext`, {
+        env: {
+          account: '123456789012',
+          region: 'us-west-1',
+        },
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+
+      // Verify resources include the context-based environment suffix
+      contextTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'startup-vpc-context-env',
+          }),
+        ]),
+      });
+    });
+
+    test('Should default to "dev" when no environmentSuffix provided', () => {
+      const defaultApp = new App();
+      const defaultStack = new TapStack(defaultApp, `TapStackDefault`, {
+        env: {
+          account: '123456789012',
+          region: 'us-west-1',
+        },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      // Verify resources include the default "dev" suffix
+      defaultTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: 'startup-vpc-dev',
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('SNS Topic Email Subscription', () => {
+    test('Should add email subscription when ALARM_EMAIL is set', () => {
+      // Set environment variable
+      const originalEmail = process.env.ALARM_EMAIL;
+      process.env.ALARM_EMAIL = 'test@example.com';
+
+      try {
+        const emailApp = new App();
+        const emailStack = new TapStack(emailApp, `TapStackEmail`, {
+          environmentSuffix: 'email-test',
+          env: {
+            account: '123456789012',
+            region: 'us-west-1',
+          },
+        });
+        const emailTemplate = Template.fromStack(emailStack);
+
+        // Verify SNS subscription is created
+        emailTemplate.hasResourceProperties('AWS::SNS::Subscription', {
+          Protocol: 'email',
+          Endpoint: 'test@example.com',
+        });
+
+        // Verify SNS topic exists
+        emailTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+
+      } finally {
+        // Restore original environment variable
+        if (originalEmail) {
+          process.env.ALARM_EMAIL = originalEmail;
+        } else {
+          delete process.env.ALARM_EMAIL;
+        }
+      }
+    });
+
+    test('Should not add email subscription when ALARM_EMAIL is not set', () => {
+      // Ensure environment variable is not set
+      const originalEmail = process.env.ALARM_EMAIL;
+      delete process.env.ALARM_EMAIL;
+
+      try {
+        const noEmailApp = new App();
+        const noEmailStack = new TapStack(noEmailApp, `TapStackNoEmail`, {
+          environmentSuffix: 'no-email-test',
+          env: {
+            account: '123456789012',
+            region: 'us-west-1',
+          },
+        });
+        const noEmailTemplate = Template.fromStack(noEmailStack);
+
+        // Verify SNS topic exists but no subscription
+        noEmailTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+        noEmailTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
+
+      } finally {
+        // Restore original environment variable
+        if (originalEmail) {
+          process.env.ALARM_EMAIL = originalEmail;
+        }
+      }
     });
   });
 });
