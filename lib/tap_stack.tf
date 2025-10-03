@@ -422,80 +422,87 @@ resource "aws_cloudtrail" "content_delivery" {
   # CloudFront management events are tracked by default in CloudTrail
   # Data-level events for CloudFront distributions are not supported
 
-  depends_on = [aws_s3_bucket_policy.logs]
+  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 }
 
-# S3 Bucket Policy for CloudTrail logs
+# S3 Bucket Policy for CloudFront logs (always needed)
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = concat(
-      # CloudFront logging permissions (always needed)
-      [
-        {
-          Sid    = "AWSCloudFrontLogsDelivery"
-          Effect = "Allow"
-          Principal = {
-            Service = "cloudfront.amazonaws.com"
-          }
-          Action   = "s3:PutObject"
-          Resource = "${aws_s3_bucket.logs.arn}/cloudfront/*"
-          Condition = {
-            StringEquals = {
-              "AWS:SourceArn" = aws_cloudfront_distribution.content.arn
-            }
-          }
-        },
-        {
-          Sid    = "AWSCloudFrontLogsDeliveryAclCheck"
-          Effect = "Allow"
-          Principal = {
-            Service = "cloudfront.amazonaws.com"
-          }
-          Action   = "s3:GetBucketAcl"
-          Resource = aws_s3_bucket.logs.arn
-          Condition = {
-            StringEquals = {
-              "AWS:SourceArn" = aws_cloudfront_distribution.content.arn
-            }
+    Statement = [
+      {
+        Sid    = "AWSCloudFrontLogsDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudfront/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.content.arn
           }
         }
-      ],
-      # CloudTrail logging permissions (conditional)
-      var.enable_cloudtrail ? [
-        {
-          Sid    = "AWSCloudTrailAclCheck"
-          Effect = "Allow"
-          Principal = {
-            Service = "cloudtrail.amazonaws.com"
-          }
-          Action   = "s3:GetBucketAcl"
-          Resource = aws_s3_bucket.logs.arn
-          Condition = {
-            StringEquals = {
-              "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
-            }
-          }
-        },
-        {
-          Sid    = "AWSCloudTrailWrite"
-          Effect = "Allow"
-          Principal = {
-            Service = "cloudtrail.amazonaws.com"
-          }
-          Action   = "s3:PutObject"
-          Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
-          Condition = {
-            StringEquals = {
-              "s3:x-amz-acl"  = "bucket-owner-full-control"
-              "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
-            }
+      },
+      {
+        Sid    = "AWSCloudFrontLogsDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.content.arn
           }
         }
-      ] : []
-    )
+      }
+    ]
+  })
+}
+
+# S3 Bucket Policy for CloudTrail logs (conditional)
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  count = var.enable_cloudtrail ? 1 : 0
+  
+  bucket = aws_s3_bucket.logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
+          }
+        }
+      }
+    ]
   })
 }
 
