@@ -117,6 +117,7 @@ class TapStack(pulumi.ComponentResource):
             f"campaign-event-processor-policy-{self.environment_suffix}",
             policy=Output.all(
                 self.main_queue.arn,
+                self.dlq.arn,
                 self.event_log_table.arn,
                 self.lambda_log_group.arn
             ).apply(lambda args: json.dumps({
@@ -127,9 +128,10 @@ class TapStack(pulumi.ComponentResource):
                         "Action": [
                             "sqs:ReceiveMessage",
                             "sqs:DeleteMessage",
+                            "sqs:SendMessage",
                             "sqs:GetQueueAttributes"
                         ],
-                        "Resource": args[0]
+                        "Resource": [args[0], args[1]]
                     },
                     {
                         "Effect": "Allow",
@@ -137,7 +139,7 @@ class TapStack(pulumi.ComponentResource):
                             "dynamodb:PutItem",
                             "dynamodb:UpdateItem"
                         ],
-                        "Resource": args[1]
+                        "Resource": args[2]
                     },
                     {
                         "Effect": "Allow",
@@ -145,7 +147,7 @@ class TapStack(pulumi.ComponentResource):
                             "logs:CreateLogStream",
                             "logs:PutLogEvents"
                         ],
-                        "Resource": f"{args[2]}:*"
+                        "Resource": f"{args[3]}:*"
                     }
                 ]
             })),
