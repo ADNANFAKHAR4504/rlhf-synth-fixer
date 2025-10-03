@@ -685,10 +685,10 @@ resource "aws_api_gateway_resource" "search" {
 }
 
 resource "aws_api_gateway_method" "search_post" {
-  rest_api_id        = aws_api_gateway_rest_api.main.id
-  resource_id        = aws_api_gateway_resource.search.id
-  http_method        = "POST"
-  authorization_type = "NONE"
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.search.id
+  http_method   = "POST"
+  authorization = "NONE"
 
   request_parameters = {
     "method.request.header.Content-Type" = true
@@ -836,31 +836,31 @@ resource "aws_wafv2_web_acl" "api" {
 
     statement {
       or_statement {
-        statements {
+        statement {
           sqli_match_statement {
             field_to_match {
               body {}
             }
-            text_transformations {
+            text_transformation {
               priority = 1
               type     = "URL_DECODE"
             }
-            text_transformations {
+            text_transformation {
               priority = 2
               type     = "HTML_ENTITY_DECODE"
             }
           }
         }
-        statements {
+        statement {
           sqli_match_statement {
             field_to_match {
               query_string {}
             }
-            text_transformations {
+            text_transformation {
               priority = 1
               type     = "URL_DECODE"
             }
-            text_transformations {
+            text_transformation {
               priority = 2
               type     = "HTML_ENTITY_DECODE"
             }
