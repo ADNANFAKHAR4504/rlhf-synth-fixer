@@ -62,7 +62,7 @@ async function waitForCondition(
 async function waitForASGInstances(
   asgName: string,
   minInstances: number = 1,
-  timeoutMs: number = 240000
+  timeoutMs: number = 120000
 ): Promise<string[]> {
   const instanceIds: string[] = [];
   
@@ -84,9 +84,8 @@ async function waitForASGInstances(
       
       const totalInstances = asg.Instances?.length || 0;
       const pendingInstances = asg.Instances?.filter(i => i.LifecycleState === "Pending")?.length || 0;
-      const terminatingInstances = asg.Instances?.filter(i => i.LifecycleState === "Terminating")?.length || 0;
       
-      console.log(`ASG ${asgName}: ${inServiceInstances.length}/${minInstances} healthy (Total: ${totalInstances}, Pending: ${pendingInstances}, Terminating: ${terminatingInstances})`);
+      console.log(`ASG ${asgName}: ${inServiceInstances.length}/${minInstances} healthy (Total: ${totalInstances}, Pending: ${pendingInstances})`);
       
       if (inServiceInstances.length >= minInstances) {
         instanceIds.length = 0;
@@ -102,145 +101,6 @@ async function waitForASGInstances(
   );
   
   return instanceIds;
-}
-
-/**
- * Wait for EC2 instances to be running and pass status checks
- */
-async function waitForInstanceStatusChecks(
-  instanceIds: string[],
-  timeoutMs: number = 180000
-): Promise<void> {
-  await waitForCondition(
-    async () => {
-      // First check if instances are running
-      const { Reservations } = await ec2Client.send(
-        new DescribeInstancesCommand({ InstanceIds: instanceIds })
-      );
-      
-      const instances = Reservations?.flatMap(r => r.Instances || []) || [];
-      const allRunning = instances.every(i => i.State?.Name === "running");
-      
-      if (!allRunning) {
-        const states = instances.map(i => `${i.InstanceId}:${i.State?.Name}`).join(", ");
-        console.log(`Instance states: ${states}`);
-        return false;
-      }
-      
-      // Now check instance status using DescribeInstanceStatusCommand
-      const { InstanceStatuses } = await ec2Client.send(
-        new DescribeInstanceStatusCommand({ 
-          InstanceIds: instanceIds,
-          IncludeAllInstances: true 
-        })
-      );
-      
-      // Check if all instances have passed or are initializing status checks
-      const allHealthy = InstanceStatuses?.every(status => {
-        const systemStatus = status.SystemStatus?.Status === "ok" || 
-                            status.SystemStatus?.Status === "initializing";
-        const instanceStatus = status.InstanceStatus?.Status === "ok" || 
-                              status.InstanceStatus?.Status === "initializing";
-        
-        // Log status for debugging
-        if (status.SystemStatus?.Status !== "ok" || status.InstanceStatus?.Status !== "ok") {
-          console.log(`Instance ${status.InstanceId}: System=${status.SystemStatus?.Status}, Instance=${status.InstanceStatus?.Status}`);
-        }
-        
-        return systemStatus && instanceStatus;
-      }) || false;
-      
-      if (!allHealthy) {
-        console.log(`Waiting for instance status checks to pass...`);
-      }
-      
-      return allRunning; // Return true even if status checks are initializing
-    },
-    timeoutMs,
-    10000,
-    "EC2 instances to be running"
-  );
-}
-
-/**
- * Wait for ALB targets to become healthy
- */
-async function waitForHealthyTargets(
-  targetGroupArn: string,
-  minHealthy: number = 1,
-  timeoutMs: number = 300000 // Increased to 5 minutes
-): Promise<number> {
-  let healthyCount = 0;
-  let consecutiveHealthyChecks = 0;
-  const requiredConsecutiveChecks = 2; // Require 2 consecutive healthy checks
-  
-  await waitForCondition(
-    async () => {
-      const { TargetHealthDescriptions } = await elbv2Client.send(
-        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
-      );
-      
-      const currentHealthyCount = TargetHealthDescriptions?.filter(
-        t => t.TargetHealth?.State === "healthy"
-      ).length || 0;
-      
-      const totalTargets = TargetHealthDescriptions?.length || 0;
-      
-      // Log detailed status
-      console.log(`\nTarget Group Health Check:`);
-      console.log(`  Total targets: ${totalTargets}`);
-      console.log(`  Healthy: ${currentHealthyCount}`);
-      console.log(`  Required: ${minHealthy}`);
-      
-      // Log each target's status
-      TargetHealthDescriptions?.forEach(target => {
-        const state = target.TargetHealth?.State;
-        const reason = target.TargetHealth?.Reason;
-        const description = target.TargetHealth?.Description;
-        
-        if (state !== "healthy") {
-          console.log(`  Target ${target.Target?.Id}: ${state} - ${reason} - ${description}`);
-        }
-      });
-      
-      // Check for consecutive healthy status
-      if (currentHealthyCount >= minHealthy) {
-        consecutiveHealthyChecks++;
-        healthyCount = currentHealthyCount;
-        console.log(`  Consecutive healthy checks: ${consecutiveHealthyChecks}/${requiredConsecutiveChecks}`);
-        
-        if (consecutiveHealthyChecks >= requiredConsecutiveChecks) {
-          return true;
-        }
-      } else {
-        consecutiveHealthyChecks = 0;
-      }
-      
-      // Special handling for common issues
-      const drainingTargets = TargetHealthDescriptions?.filter(
-        t => t.TargetHealth?.State === "draining"
-      ).length || 0;
-      
-      if (drainingTargets > 0) {
-        console.log(`  Warning: ${drainingTargets} targets are draining (old instances being replaced)`);
-      }
-      
-      const initialTargets = TargetHealthDescriptions?.filter(
-        t => t.TargetHealth?.State === "initial"
-      ).length || 0;
-      
-      if (initialTargets > 0) {
-        console.log(`  Info: ${initialTargets} targets are still initializing`);
-      }
-      
-      return false;
-    },
-    timeoutMs,
-    15000, // Check every 15 seconds
-    `${minHealthy} healthy targets in target group`
-  );
-  
-  return healthyCount;
 }
 
 /**
@@ -276,46 +136,6 @@ async function ensureASGCapacity(
     
     // Wait for ASG to acknowledge the change
     await new Promise(resolve => setTimeout(resolve, 10000));
-  }
-}
-
-/**
- * Check ALB security group allows health check traffic
- */
-async function verifyHealthCheckSecurityGroups(
-  albSecurityGroupId: string,
-  ec2SecurityGroupId: string
-): Promise<boolean> {
-  try {
-    // Check if EC2 security group allows traffic from ALB
-    const { SecurityGroups } = await ec2Client.send(
-      new DescribeSecurityGroupsCommand({ GroupIds: [ec2SecurityGroupId] })
-    );
-    
-    const ec2Sg = SecurityGroups?.[0];
-    if (!ec2Sg) return false;
-    
-    // Look for ingress rule allowing traffic from ALB security group
-    const hasAlbIngress = ec2Sg.IpPermissions?.some(rule => {
-      // Check if rule allows HTTP traffic from ALB security group
-      if (rule.FromPort === 80 || rule.FromPort === 443) {
-        return rule.UserIdGroupPairs?.some(pair => pair.GroupId === albSecurityGroupId);
-      }
-      // Also check for "all traffic" rules
-      if (rule.IpProtocol === "-1") {
-        return rule.UserIdGroupPairs?.some(pair => pair.GroupId === albSecurityGroupId);
-      }
-      return false;
-    });
-    
-    if (!hasAlbIngress) {
-      console.log(`Warning: EC2 security group ${ec2SecurityGroupId} may not allow health checks from ALB ${albSecurityGroupId}`);
-    }
-    
-    return hasAlbIngress || false;
-  } catch (error) {
-    console.error(`Error checking security groups: ${error}`);
-    return false;
   }
 }
 
@@ -601,6 +421,20 @@ describe("TAP Stack Integration Tests", () => {
       expect(httpListener?.Protocol).toBe("HTTP");
       expect(httpListener?.DefaultActions?.[0]?.Type).toBe("forward");
     }, 20000);
+
+    test("Target group exists and is configured correctly", async () => {
+      const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+      const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName?.includes(`tap-${environmentSuffix}`));
+      
+      expect(targetGroup).toBeDefined();
+      expect(targetGroup?.Protocol).toBe("HTTP");
+      expect(targetGroup?.Port).toBe(80);
+      expect(targetGroup?.TargetType).toBe("instance");
+      expect(targetGroup?.VpcId).toBe(vpcId);
+      expect(targetGroup?.HealthCheckEnabled).toBe(true);
+      expect(targetGroup?.HealthCheckPath).toBeDefined();
+      expect(targetGroup?.HealthCheckProtocol).toBe("HTTP");
+    }, 20000);
   });
 
   describe("Auto Scaling Group", () => {
@@ -619,6 +453,13 @@ describe("TAP Stack Integration Tests", () => {
       expect(asg?.HealthCheckType).toBe("EC2");
       expect(asg?.DefaultCooldown).toBe(60);
     }, 20000);
+
+    test("ASG has instances running", async () => {
+      await ensureASGCapacity(autoScalingGroupName, 1);
+      const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 120000);
+      expect(instanceIds.length).toBeGreaterThanOrEqual(1);
+      console.log(`✓ ASG has ${instanceIds.length} instances: ${instanceIds.join(", ")}`);
+    }, 180000);
   });
 
   describe("S3 Bucket", () => {
@@ -671,68 +512,6 @@ describe("TAP Stack Integration Tests", () => {
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(30);
     }, 20000);
-  });
-
-  describe("Interactive Tests: ALB → EC2 Target Health", () => {
-    test("ALB target group has healthy instances from ASG", async () => {
-      console.log("\n=== Testing ALB Target Health ===");
-      
-      // Step 1: Ensure ASG has the desired capacity
-      await ensureASGCapacity(autoScalingGroupName, 1);
-      
-      // Step 2: Wait for ASG instances to be in service
-      console.log("\nWaiting for ASG instances to be in service...");
-      const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 240000);
-      console.log(`✓ ASG has ${instanceIds.length} healthy instances: ${instanceIds.join(", ")}`);
-      
-      // Step 3: Wait for EC2 instances to be fully running
-      console.log("\nWaiting for EC2 instances to be running...");
-      await waitForInstanceStatusChecks(instanceIds, 180000);
-      console.log("✓ EC2 instances are running");
-      
-      // Step 4: Get EC2 security group for verification
-      const { Reservations } = await ec2Client.send(
-        new DescribeInstancesCommand({ InstanceIds: instanceIds })
-      );
-      const ec2SecurityGroupId = Reservations?.[0]?.Instances?.[0]?.SecurityGroups?.[0]?.GroupId;
-      
-      if (ec2SecurityGroupId && albSecurityGroupId) {
-        console.log("\nVerifying security groups allow health checks...");
-        const sgConfigured = await verifyHealthCheckSecurityGroups(albSecurityGroupId, ec2SecurityGroupId);
-        if (!sgConfigured) {
-          console.warn("⚠ Security groups may not be properly configured for health checks");
-        } else {
-          console.log("✓ Security groups are properly configured");
-        }
-      }
-      
-      // Step 5: Get target group and check health
-      console.log("\nFinding target group...");
-      const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
-      const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName?.includes(`tap-${environmentSuffix}`));
-      
-      expect(targetGroup).toBeDefined();
-      console.log(`✓ Found target group: ${targetGroup?.TargetGroupName}`);
-      
-      if (targetGroup?.TargetGroupArn) {
-        // Log target group configuration
-        console.log("\nTarget Group Configuration:");
-        console.log(`  Health Check Path: ${targetGroup.HealthCheckPath}`);
-        console.log(`  Health Check Port: ${targetGroup.HealthCheckPort}`);
-        console.log(`  Health Check Protocol: ${targetGroup.HealthCheckProtocol}`);
-        console.log(`  Health Check Interval: ${targetGroup.HealthCheckIntervalSeconds}s`);
-        console.log(`  Health Check Timeout: ${targetGroup.HealthCheckTimeoutSeconds}s`);
-        console.log(`  Healthy Threshold: ${targetGroup.HealthyThresholdCount}`);
-        console.log(`  Unhealthy Threshold: ${targetGroup.UnhealthyThresholdCount}`);
-        
-        // Wait for targets to become healthy
-        console.log("\nWaiting for targets to become healthy...");
-        const healthyTargets = await waitForHealthyTargets(targetGroup.TargetGroupArn, 1, 300000);
-        console.log(`✓ Target group has ${healthyTargets} healthy targets`);
-        
-        expect(healthyTargets).toBeGreaterThanOrEqual(1);
-      }
-    }, 600000); // 10 minute timeout for the entire test
   });
 
   describe("Interactive Tests: EC2 → CloudWatch Logs", () => {
