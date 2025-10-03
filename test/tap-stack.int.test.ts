@@ -12,7 +12,7 @@ import fs from "fs";
 import path from "path";
 
 // Load Pulumi stack outputs
-const outputsPath = path.join(__dirname, "../flat-outputs.json");
+const outputsPath = path.join(__dirname, "../cfn-outputs/flat-outputs.json");
 const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf-8"));
 
 const region = process.env.AWS_REGION || "us-east-1";
