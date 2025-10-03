@@ -8,6 +8,11 @@ import {
   DescribeAlarmsCommand
 } from "@aws-sdk/client-cloudwatch";
 import {
+  CloudWatchLogsClient,
+  DescribeLogStreamsCommand,
+  GetLogEventsCommand
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
   CloudTrailClient,
   DescribeTrailsCommand
 } from "@aws-sdk/client-cloudtrail";
@@ -36,6 +41,8 @@ import {
   GetBucketNotificationConfigurationCommand,
   GetBucketPolicyCommand,
   GetPublicAccessBlockCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
@@ -73,6 +80,10 @@ function parseIdList(raw: string | string[] | undefined): string[] {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const vpcId: string = getOutputValue("vpc_id");
 const albDnsName: string = getOutputValue("alb_dns");
 const albSecurityGroupId: string = getOutputValue("alb_security_group_id");
@@ -100,6 +111,7 @@ let ec2Client: EC2Client;
 let elbClient: ElasticLoadBalancingV2Client;
 let asgClient: AutoScalingClient;
 let cloudwatchClient: CloudWatchClient;
+let cloudwatchLogsClient: CloudWatchLogsClient;
 let s3Client: S3Client;
 let cloudtrailClient: CloudTrailClient;
 let rdsClient: RDSClient;
@@ -111,6 +123,7 @@ beforeAll(async () => {
   elbClient = new ElasticLoadBalancingV2Client({ region });
   asgClient = new AutoScalingClient({ region });
   cloudwatchClient = new CloudWatchClient({ region });
+  cloudwatchLogsClient = new CloudWatchLogsClient({ region });
   s3Client = new S3Client({ region });
   cloudtrailClient = new CloudTrailClient({ region });
   rdsClient = new RDSClient({ region });
@@ -127,6 +140,7 @@ afterAll(async () => {
     elbClient.destroy?.(),
     asgClient.destroy?.(),
     cloudwatchClient.destroy?.(),
+    cloudwatchLogsClient.destroy?.(),
     s3Client.destroy?.(),
     cloudtrailClient.destroy?.(),
     rdsClient.destroy?.(),
@@ -394,5 +408,75 @@ describe("Terraform infrastructure integration", () => {
       (config.Events ?? []).includes("s3:ObjectCreated:*")
     );
     expect(hasExpectedTrigger).toBe(true);
+  });
+
+  test("Lambda processes S3 object uploads end-to-end", async () => {
+    const objectKey = `lambda-int-${Date.now()}.txt`;
+    const numbers = [1, 2, 3, 4, 5];
+    const payload = numbers.join(",");
+    const expectedCount = numbers.length;
+    const expectedSum = numbers.reduce((total, value) => total + value, 0);
+    const expectedAvg = expectedSum / expectedCount;
+    const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
+    const timeoutMs = 180000;
+    const pollIntervalMs = 5000;
+    const startTime = Date.now();
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: appBucketName,
+      Key: objectKey,
+      Body: payload
+    }));
+
+    let found = false;
+    try {
+      while (!found && Date.now() - startTime < timeoutMs) {
+        const logStreamsResult = await cloudwatchLogsClient.send(
+          new DescribeLogStreamsCommand({
+            logGroupName,
+            orderBy: "LastEventTime",
+            descending: true,
+            limit: 10
+          })
+        );
+        const logStreams = logStreamsResult.logStreams ?? [];
+
+        for (const stream of logStreams) {
+          const logStreamName = stream.logStreamName;
+          if (!logStreamName) continue;
+
+          const eventsResult = await cloudwatchLogsClient.send(
+            new GetLogEventsCommand({
+              logGroupName,
+              logStreamName,
+              limit: 50,
+              startFromHead: false
+            })
+          );
+
+          const events = eventsResult.events ?? [];
+          const hasMatch = events.some(event => {
+            const message = event.message ?? "";
+            return message.includes(`s3://${appBucketName}/${objectKey}`) &&
+              message.includes(`count=${expectedCount}`) &&
+              message.includes(`sum=${expectedSum}`) &&
+              message.includes(`avg=${expectedAvg}`);
+          });
+
+          if (hasMatch) {
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          await sleep(pollIntervalMs);
+        }
+      }
+    } finally {
+      await s3Client.send(new DeleteObjectCommand({ Bucket: appBucketName, Key: objectKey })).catch(() => undefined);
+    }
+
+    expect(found).toBe(true);
   });
 });
