@@ -19,11 +19,11 @@ This CloudFormation template creates a production-ready, highly available web ap
 - **Single NAT Gateway**: Reduces EIP usage from 2 to 1
 - **Centralized Internet Access**: All private resources route through one NAT Gateway
 - **Cost Optimization**: Maintains functionality while reducing infrastructure costs
-- **AccountId Suffix Naming**: Prevents resource name conflicts across deployments
+- **Auto-Generated Naming**: CloudFormation generates unique resource names automatically
 
 ### 3. Security Implementation
 
-- **Security Groups**: Layered security with AccountId-unique naming
+- **Security Groups**: Layered security with auto-generated naming
 - **Encryption**: All EBS volumes and RDS storage encrypted
 - **IAM Roles**: Least privilege access with specific policies
 - **Private Instances**: EC2 instances in private subnet only
@@ -92,6 +92,9 @@ This CloudFormation template creates a production-ready, highly available web ap
       },
       "us-east-2": {
         "AMI": "ami-0c7217cdde317cfec"
+      },
+      "ap-southeast-1": {
+        "AMI": "ami-088d74defe9802f14"
       }
     }
   },
@@ -364,9 +367,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-ALB-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
@@ -401,9 +401,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
@@ -464,9 +461,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "RDSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-RDS-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for RDS database",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
@@ -494,9 +488,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-Role-${AWS::AccountId}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -560,9 +551,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-InstanceProfile-${AWS::AccountId}"
-        },
         "Roles": [{ "Ref": "EC2Role" }]
       }
     },
@@ -570,9 +558,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {
-          "Fn::Sub": "${EnvironmentName}-LaunchTemplate-${AWS::AccountId}"
-        },
         "LaunchTemplateData": {
           "ImageId": {
             "Fn::FindInMap": ["RegionAMI", { "Ref": "AWS::Region" }, "AMI"]
@@ -679,7 +664,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": { "Fn::Sub": "${EnvironmentName}-ALB-${AWS::AccountId}" },
         "Type": "application",
         "Scheme": "internet-facing",
         "SecurityGroups": [{ "Ref": "ALBSecurityGroup" }],
@@ -700,7 +684,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "ALBTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": { "Fn::Sub": "${EnvironmentName}-TG-${AWS::AccountId}" },
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": { "Ref": "VPC" },
@@ -760,9 +743,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "${EnvironmentName}-ASG-${AWS::AccountId}"
-        },
         "VPCZoneIdentifier": [{ "Ref": "PrivateSubnet1" }],
         "LaunchTemplate": {
           "LaunchTemplateId": { "Ref": "LaunchTemplate" },
@@ -830,9 +810,6 @@ This CloudFormation template creates a production-ready, highly available web ap
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "${EnvironmentName}-dbsubnetgroup-${AWS::AccountId}"
-        },
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "SubnetIds": [
           { "Ref": "DatabaseSubnet1" },
@@ -852,9 +829,6 @@ This CloudFormation template creates a production-ready, highly available web ap
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "${EnvironmentName}-mysql-db-${AWS::AccountId}"
-        },
         "DBInstanceClass": "db.t3.medium",
         "Engine": "mysql",
         "EngineVersion": "8.0.43",
@@ -997,7 +971,7 @@ This CloudFormation template creates a production-ready, highly available web ap
 
 ### Security Enhancements
 
-- **AccountId Suffix Naming**: Prevents resource name conflicts across deployments
+- **Auto-Generated Naming**: CloudFormation generates unique resource names automatically
 - **Secrets Manager Integration**: Secure database password generation
 - **Network Isolation**: Private instances with controlled internet access
 - **Security Group Restrictions**: Layered security with least privilege
@@ -1021,7 +995,7 @@ This CloudFormation template creates a production-ready, highly available web ap
 ### CloudFormation Compliance
 
 1. **Launch Template Version**: Changed from `"$Latest"` to `{ "Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"] }`
-2. **Resource Naming**: Added AccountId suffixes to prevent conflicts
+2. **Resource Naming**: Removed explicit resource names to prevent CAPABILITY_NAMED_IAM requirement
 3. **Parameter Optimization**: Removed problematic CertificateArn and DatabasePassword parameters
 4. **Secrets Manager**: Implemented secure password management
 
@@ -1055,7 +1029,7 @@ aws cloudformation validate-template --template-body file://TapStack.json
 aws cloudformation deploy \
   --template-file TapStack.json \
   --stack-name TapStack-prod \
-  --capabilities CAPABILITY_NAMED_IAM \
+  --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=prod \
     KeyPairName=my-key-pair \
