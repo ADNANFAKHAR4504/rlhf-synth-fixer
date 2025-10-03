@@ -10,7 +10,7 @@ if (fs.existsSync(outputsFile)) {
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth54729183';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'secfix54729183';
 
 describe('Hotel Booking Platform Infrastructure - Integration Tests', () => {
 

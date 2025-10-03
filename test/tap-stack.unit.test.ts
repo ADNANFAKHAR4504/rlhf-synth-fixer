@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'secfix54729183';
 
 describe('Hotel Booking Platform CloudFormation Template', () => {
   let template: any;
