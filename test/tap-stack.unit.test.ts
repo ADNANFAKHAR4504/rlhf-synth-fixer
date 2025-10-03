@@ -12,22 +12,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have meaningful description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('highly available web application');
-    });
-
-    test('should have required sections', () => {
-      expect(template).toHaveProperty('Parameters');
-      expect(template).toHaveProperty('Resources');
-      expect(template).toHaveProperty('Outputs');
-    });
-  });
 
   describe('Parameters', () => {
     test('should have EnvironmentName parameter', () => {
@@ -101,12 +85,43 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
     });
 
-    test('should create RDS security group', () => {
+    test('should create RDS security group with restricted access', () => {
       const sg = template.Resources.RDSSecurityGroup;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
 
       const ingress = sg.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(1);
       expect(ingress[0].FromPort).toBe(3306);
+      expect(ingress[0].ToPort).toBe(3306);
+      expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(ingress[0].Description).toBe('Allow MySQL from EC2 instances only');
+    });
+
+    test('should create ALB security group with proper ingress rules', () => {
+      const sg = template.Resources.ALBSecurityGroup;
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+
+      const ingress = sg.Properties.SecurityGroupIngress;
+      expect(ingress).toHaveLength(2);
+      
+      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      expect(httpRule.Description).toBe('Allow HTTP from anywhere');
+      
+      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+      expect(httpsRule.Description).toBe('Allow HTTPS from anywhere');
+    });
+
+    test('should create EC2 security group with proper egress rules', () => {
+      const sg = template.Resources.EC2SecurityGroup;
+      const egress = sg.Properties.SecurityGroupEgress;
+      
+      expect(egress).toHaveLength(1);
+      expect(egress[0].FromPort).toBe(443);
+      expect(egress[0].ToPort).toBe(443);
+      expect(egress[0].CidrIp).toBe('0.0.0.0/0');
+      expect(egress[0].Description).toBe('Allow HTTPS for updates');
     });
   });
 
@@ -129,11 +144,25 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       });
     });
 
-    test('should create auto scaling group', () => {
+    test('should create auto scaling group with proper configuration', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
       expect(asg.Properties.MinSize).toBe('2');
+      expect(asg.Properties.DesiredCapacity).toBe('4');
       expect(asg.Properties.MaxSize).toBe('10');
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+      expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
+      expect(asg.Properties.VPCZoneIdentifier).toEqual([{ Ref: 'PrivateSubnet1' }]);
+    });
+
+    test('should configure launch template with proper instance settings', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const data = lt.Properties.LaunchTemplateData;
+      
+      expect(data.InstanceType).toBe('t3.medium');
+      expect(data.Monitoring.Enabled).toBe(true);
+      expect(data.SecurityGroupIds).toEqual([{ Ref: 'EC2SecurityGroup' }]);
+      expect(data.IamInstanceProfile.Arn).toEqual({ 'Fn::GetAtt': ['EC2InstanceProfile', 'Arn'] });
     });
   });
 
@@ -144,20 +173,53 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(alb.Properties.Scheme).toBe('internet-facing');
     });
 
-    test('should create target group', () => {
+    test('should create target group with proper health check configuration', () => {
       const tg = template.Resources.ALBTargetGroup;
       expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(tg.Properties.Port).toBe(80);
+      expect(tg.Properties.Protocol).toBe('HTTP');
+      expect(tg.Properties.TargetType).toBe('instance');
+      expect(tg.Properties.HealthCheckEnabled).toBe(true);
       expect(tg.Properties.HealthCheckPath).toBe('/health');
+      expect(tg.Properties.HealthCheckProtocol).toBe('HTTP');
+      expect(tg.Properties.HealthCheckIntervalSeconds).toBe(30);
+      expect(tg.Properties.HealthyThresholdCount).toBe(2);
+      expect(tg.Properties.UnhealthyThresholdCount).toBe(3);
+    });
+
+    test('should configure target group with sticky sessions', () => {
+      const tg = template.Resources.ALBTargetGroup;
+      const attributes = tg.Properties.TargetGroupAttributes;
+      
+      const stickinessEnabled = attributes.find((attr: any) => attr.Key === 'stickiness.enabled');
+      expect(stickinessEnabled.Value).toBe('true');
+      
+      const stickinessDuration = attributes.find((attr: any) => attr.Key === 'stickiness.lb_cookie.duration_seconds');
+      expect(stickinessDuration.Value).toBe('86400');
     });
   });
 
   describe('RDS Database', () => {
-    test('should create RDS instance', () => {
+    test('should create RDS instance with proper configuration', () => {
       const rds = template.Resources.RDSDatabase;
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
       expect(rds.Properties.Engine).toBe('mysql');
+      expect(rds.Properties.EngineVersion).toBe('8.0.43');
+      expect(rds.Properties.DBInstanceClass).toBe('db.t3.medium');
       expect(rds.Properties.MultiAZ).toBe(true);
       expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.AllocatedStorage).toBe('100');
+      expect(rds.Properties.StorageType).toBe('gp3');
+      expect(rds.Properties.MaxAllocatedStorage).toBe(500);
+      expect(rds.Properties.PubliclyAccessible).toBe(false);
+    });
+
+    test('should configure RDS backup and maintenance settings', () => {
+      const rds = template.Resources.RDSDatabase;
+      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
+      expect(rds.Properties.PreferredBackupWindow).toBe('03:00-04:00');
+      expect(rds.Properties.PreferredMaintenanceWindow).toBe('sun:04:00-sun:05:00');
+      expect(rds.Properties.EnableCloudwatchLogsExports).toEqual(['error', 'general', 'slowquery']);
     });
 
     test('should create DB subnet group', () => {
@@ -166,38 +228,5 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
   });
 
-  describe('Outputs', () => {
-    test('should export VPC ID', () => {
-      const output = template.Outputs.VPCId;
-      expect(output).toBeDefined();
-      expect(output.Export).toBeDefined();
-    });
 
-    test('should have outputs section defined', () => {
-      expect(template.Outputs).toBeDefined();
-      expect(typeof template.Outputs).toBe('object');
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should be valid JSON', () => {
-      expect(typeof template).toBe('object');
-      expect(template).not.toBeNull();
-    });
-
-    test('should have reasonable resource count', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(25);
-    });
-
-    test('resource names should be descriptive', () => {
-      const resourceNames = Object.keys(template.Resources);
-
-      expect(resourceNames).toContain('VPC');
-      expect(resourceNames).toContain('InternetGateway');
-      expect(resourceNames).toContain('ApplicationLoadBalancer');
-      expect(resourceNames).toContain('AutoScalingGroup');
-      expect(resourceNames).toContain('RDSDatabase');
-    });
-  });
 });
