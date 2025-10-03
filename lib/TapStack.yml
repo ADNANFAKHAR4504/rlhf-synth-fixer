@@ -957,7 +957,7 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${CompanyName}-${Environment}-dr-backup-plan'
-        BackupPlanRules:
+        BackupPlanRule:
           - RuleName: 'DailyBackups'
             TargetBackupVault: !Ref BackupVault
             ScheduleExpression: 'cron(0 2 * * ? *)'
