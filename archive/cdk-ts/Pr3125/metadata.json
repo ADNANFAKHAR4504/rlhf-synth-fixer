@@ -23,5 +23,11 @@
     "SQS",
     "Systems Manager Parameter Store",
     "Secrets Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
