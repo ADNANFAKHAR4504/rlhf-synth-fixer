@@ -1,7 +1,64 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.environment} in ${var.region}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${var.region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "autoscaling.amazonaws.com"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${var.region}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
 
   tags = {
     Name = "${var.name_prefix}-kms-${var.region}"
@@ -60,8 +117,12 @@ resource "aws_iam_role_policy" "instance" {
       {
         Effect = "Allow"
         Action = [
+          "kms:CreateGrant",
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:DescribeKey",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlainText",
+          "kms:ReEncrypt*"
         ]
         Resource = aws_kms_key.main.arn
       },
