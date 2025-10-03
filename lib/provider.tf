@@ -10,8 +10,10 @@ terraform {
     }
   }
 
-  # Using local backend for QA testing
-  backend "local" {}
+  # Using S3 backend for state management
+  backend "s3" {
+    # Configuration will be provided via backend-config flags during init
+  }
 }
 
 # Primary AWS provider for general resources
