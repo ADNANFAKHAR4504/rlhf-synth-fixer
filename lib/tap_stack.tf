@@ -701,14 +701,22 @@ resource "aws_s3_bucket_policy" "lb_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid       = "AWSLogDeliveryWrite"
         Effect    = "Allow"
-        Principal = { AWS = data.aws_elb_service_account.main.arn }
+        Principal = { Service = "elasticloadbalancing.amazonaws.com" }
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
       },
       {
+        Sid       = "AWSLogDeliveryAclCheck"
         Effect    = "Allow"
         Principal = { Service = "elasticloadbalancing.amazonaws.com" }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.lb_logs.arn
+      },
+      {
+        Effect    = "Allow"
+        Principal = { AWS = data.aws_elb_service_account.main.arn }
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
       },
