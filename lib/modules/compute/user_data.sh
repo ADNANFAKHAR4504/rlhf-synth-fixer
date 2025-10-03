@@ -10,9 +10,36 @@ yum install -y amazon-ssm-agent
 systemctl enable amazon-ssm-agent
 systemctl start amazon-ssm-agent
 
-yum install -y docker
-systemctl enable docker
-systemctl start docker
+# Install and configure Apache web server
+yum install -y httpd
+systemctl enable httpd
+systemctl start httpd
+
+# Create a simple health check endpoint
+cat <<EOF > /var/www/html/health
+OK
+EOF
+
+# Create a simple index page
+cat <<EOF > /var/www/html/index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multi-Region App</title>
+</head>
+<body>
+    <h1>Welcome to Multi-Region Infrastructure</h1>
+    <p>Environment: ${environment}</p>
+    <p>Region: ${region}</p>
+    <p>Instance ID: \$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Status: Healthy</p>
+</body>
+</html>
+EOF
+
+# Ensure proper permissions
+chown apache:apache /var/www/html/index.html /var/www/html/health
+chmod 644 /var/www/html/index.html /var/www/html/health
 
 cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {
