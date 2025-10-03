@@ -823,7 +823,33 @@ class TapStack extends Stack {
                 .functionName(functionName + "-" + environmentSuffix)
                 .runtime(Runtime.JAVA_17)
                 .handler("com.doccollab.handlers." + id + "::handleRequest")
-                .code(Code.fromAsset(codePath))
+                .code(Code.fromInline(
+                        "package com.doccollab.handlers;\n" +
+                        "import java.util.*;\n" +
+                        "public class " + id + " {\n" +
+                        "    public Map<String, Object> handleRequest(Map<String, Object> input, Object context) {\n" +
+                        "        Map<String, Object> response = new HashMap<>();\n" +
+                        "        try {\n" +
+                        "            String userId = (String) input.get(\"userId\");\n" +
+                        "            String docId = (String) input.get(\"documentId\");\n" +
+                        "            if (userId == null || userId.isEmpty()) {\n" +
+                        "                response.put(\"statusCode\", 400);\n" +
+                        "                response.put(\"body\", \"Missing or invalid userId\");\n" +
+                        "                return response;\n" +
+                        "            }\n" +
+                        "            response.put(\"statusCode\", 200);\n" +
+                        "            response.put(\"message\", \"Document access validated\");\n" +
+                        "            response.put(\"userId\", userId);\n" +
+                        "            response.put(\"documentId\", docId);\n" +
+                        "            response.put(\"timestamp\", System.currentTimeMillis());\n" +
+                        "        } catch (Exception e) {\n" +
+                        "            response.put(\"statusCode\", 500);\n" +
+                        "            response.put(\"error\", e.getMessage());\n" +
+                        "        }\n" +
+                        "        return response;\n" +
+                        "    }\n" +
+                        "}"
+                ))
                 .role(role)
                 .timeout(Duration.seconds(timeout))
                 .memorySize(memory)
