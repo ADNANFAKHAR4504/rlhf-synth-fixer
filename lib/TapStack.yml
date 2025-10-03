@@ -9,14 +9,15 @@ Parameters:
   KeyName:
     Description: Name of an existing EC2 KeyPair for SSH access
     Type: AWS::EC2::KeyPair::KeyName
+    Default: ""
   DBUsername:
     Description: Username for MySQL database
     Type: String
+    Default: admin
     NoEcho: true
-  DBPassword:
-    Description: Password for MySQL database
-    Type: String
-    NoEcho: true
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
 
 Resources:
   #######################
@@ -231,11 +232,11 @@ Resources:
       LaunchTemplateData:
         ImageId: ami-0c55b159cbfafe1f0 # Replace with appropriate Amazon Linux 2 AMI ID
         InstanceType: t3.medium
-        KeyName: !Ref KeyName
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash -xe
             yum update -y
             yum install -y httpd php php-mysql
@@ -304,6 +305,16 @@ Resources:
   #######################
   # DATABASE & CACHING
   #######################
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Forum Database credentials
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -321,7 +332,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
