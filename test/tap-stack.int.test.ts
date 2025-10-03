@@ -56,7 +56,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
 
       // Check which outputs are available
       const availableOutputs = requiredOutputs.filter(outputKey => outputs[outputKey]);
-      
+
       if (availableOutputs.length === 0) {
         console.warn('No required outputs available - this is expected in local testing');
         expect(true).toBe(true);
@@ -221,7 +221,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   describe('Monitoring and Alerting Integration', () => {
     test('should successfully access SNS topic', async () => {
       const topicArn = outputs.SNSTopicArn;
-      
+
       if (!topicArn) {
         console.warn('SNS topic ARN not available - skipping SNS test');
         expect(true).toBe(true);
@@ -231,7 +231,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       try {
         const command = new GetTopicAttributesCommand({ TopicArn: topicArn });
         const response = await snsClient.send(command);
-        
+
         expect(response.Attributes).toBeDefined();
         expect(response.Attributes?.TopicName).toContain(`eBook-Alerts-${environment}`);
       } catch (error: any) {
@@ -411,7 +411,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
 
     test('resources should be properly tagged for cost allocation', () => {
       // This test verifies that resources are tagged for cost tracking
-      const taggedResources = Object.keys(outputs).filter(key => 
+      const taggedResources = Object.keys(outputs).filter(key =>
         outputs[key] && typeof outputs[key] === 'string'
       );
 
@@ -422,7 +422,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       }
 
       expect(taggedResources.length).toBeGreaterThan(0);
-      
+
       // Check that resources follow naming conventions (more flexible pattern)
       const environmentResources = taggedResources.filter(resourceName => {
         const resourceValue = outputs[resourceName];
@@ -449,22 +449,22 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       const hasCloudFront = !!outputs.CloudFrontDistributionId;
       const hasS3Versioning = outputs.S3BucketName?.includes('versioned') || true; // Assume versioning is enabled
       const hasMonitoring = !!outputs.SNSTopicArn;
-      
+
       if (!hasCloudFront && !hasMonitoring) {
         console.warn('No deployed resources available - skipping availability test');
         expect(true).toBe(true);
         return;
       }
-      
+
       // If resources are available, verify they provide redundancy
       if (hasCloudFront) {
         expect(hasCloudFront).toBe(true); // CloudFront provides global distribution
       }
-      
+
       if (hasMonitoring) {
         expect(hasMonitoring).toBe(true); // Monitoring ensures reliability
       }
-      
+
       // S3 provides durability by default
       if (outputs.S3BucketName) {
         expect(outputs.S3BucketName).toBeDefined();
@@ -495,18 +495,18 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       // Verify that cost monitoring resources are deployed
       const costMonitoringConfigured = !!outputs.CostMonitoringFunctionArn;
       const monitoringEnabled = !!outputs.CloudFrontDistributionId && !!outputs.SNSTopicArn;
-      
+
       if (!costMonitoringConfigured && !monitoringEnabled) {
         console.warn('No cost monitoring resources available - skipping cost monitoring test');
         expect(true).toBe(true);
         return;
       }
-      
+
       // If resources are available, verify they are configured
       if (costMonitoringConfigured) {
         expect(costMonitoringConfigured).toBe(true);
       }
-      
+
       if (monitoringEnabled) {
         expect(monitoringEnabled).toBe(true);
       }
