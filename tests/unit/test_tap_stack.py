@@ -9,6 +9,11 @@ import unittest
 from unittest.mock import patch, MagicMock, Mock
 import pulumi
 from pulumi import ResourceOptions
+import sys
+import os
+
+# Add the parent directory to the path to import tap_stack
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 
 class MyMocks(pulumi.runtime.Mocks):
@@ -31,8 +36,14 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs = {**args.inputs, "id": f"nat-{args.name}"}
         elif args.typ == "aws:ec2/routeTable:RouteTable":
             outputs = {**args.inputs, "id": f"rt-{args.name}"}
+        elif args.typ == "aws:ec2/routeTableAssociation:RouteTableAssociation":
+            outputs = {**args.inputs, "id": f"rta-{args.name}"}
+        elif args.typ == "aws:ec2/route:Route":
+            outputs = {**args.inputs, "id": f"route-{args.name}"}
         elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
             outputs = {**args.inputs, "id": f"sg-{args.name}"}
+        elif args.typ == "aws:ec2/securityGroupRule:SecurityGroupRule":
+            outputs = {**args.inputs, "id": f"sgr-{args.name}"}
         elif args.typ == "aws:rds/subnetGroup:SubnetGroup":
             outputs = {**args.inputs, "id": f"subnet-group-{args.name}", "name": f"subnet-group-{args.name}"}
         elif args.typ == "aws:rds/clusterParameterGroup:ClusterParameterGroup":
@@ -51,6 +62,12 @@ class MyMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:s3/bucket:Bucket":
             outputs = {**args.inputs, "id": f"bucket-{args.name}", "bucket": f"bucket-{args.name}", 
                       "bucket_regional_domain_name": f"bucket-{args.name}.s3.us-east-1.amazonaws.com", "arn": f"arn:aws:s3:::bucket-{args.name}"}
+        elif args.typ == "aws:s3/bucketVersioningV2:BucketVersioningV2":
+            outputs = {**args.inputs, "id": f"versioning-{args.name}"}
+        elif args.typ == "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock":
+            outputs = {**args.inputs, "id": f"publicaccess-{args.name}"}
+        elif args.typ == "aws:s3/bucketPolicy:BucketPolicy":
+            outputs = {**args.inputs, "id": f"policy-{args.name}"}
         elif args.typ == "aws:cloudfront/originAccessIdentity:OriginAccessIdentity":
             outputs = {**args.inputs, "id": f"oai-{args.name}", "iam_arn": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {args.name}",
                       "cloudfront_access_identity_path": f"origin-access-identity/cloudfront/{args.name}"}
@@ -69,6 +86,8 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs = {**args.inputs, "id": f"role-{args.name}", "name": f"role-{args.name}", "arn": f"arn:aws:iam::123456789:role/{args.name}"}
         elif args.typ == "aws:iam/policy:Policy":
             outputs = {**args.inputs, "id": f"policy-{args.name}", "arn": f"arn:aws:iam::123456789:policy/{args.name}"}
+        elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
+            outputs = {**args.inputs, "id": f"attachment-{args.name}"}
         elif args.typ == "aws:iam/instanceProfile:InstanceProfile":
             outputs = {**args.inputs, "id": f"profile-{args.name}", "arn": f"arn:aws:iam::123456789:instance-profile/{args.name}"}
         elif args.typ == "aws:ec2/launchTemplate:LaunchTemplate":
@@ -98,6 +117,10 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs = {**args.inputs, "id": f"bus-{args.name}", "name": f"bus-{args.name}"}
         elif args.typ == "aws:cloudwatch/eventRule:EventRule":
             outputs = {**args.inputs, "id": f"rule-{args.name}", "arn": f"arn:aws:events:us-east-1:123456789:rule/{args.name}"}
+        elif args.typ == "aws:cloudwatch/eventTarget:EventTarget":
+            outputs = {**args.inputs, "id": f"target-{args.name}"}
+        elif args.typ == "aws:lambda/permission:Permission":
+            outputs = {**args.inputs, "id": f"permission-{args.name}"}
         else:
             outputs = {**args.inputs, "id": f"mock-{args.name}"}
         
@@ -117,8 +140,19 @@ class MyMocks(pulumi.runtime.Mocks):
 pulumi.runtime.set_mocks(MyMocks())
 
 
-# Import after setting mocks
-from tap_stack import TapStack, TapStackArgs
+# Import after setting mocks - use try/except for different import paths
+try:
+    from lib.tap_stack import TapStack, TapStackArgs
+except ImportError:
+    try:
+        from tap_stack import TapStack, TapStackArgs
+    except ImportError:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("tap_stack", "tap_stack.py")
+        tap_stack_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tap_stack_module)
+        TapStack = tap_stack_module.TapStack
+        TapStackArgs = tap_stack_module.TapStackArgs
 
 
 class TestTapStackArgs(unittest.TestCase):
