@@ -181,8 +181,15 @@ describeTest('Survey Data Platform Integration Tests', () => {
       expect(storedItem.surveyId.S).toBe(testData.surveyId);
       expect(storedItem.respondentId.S).toBe(testData.respondentId);
       
-      // Parse and verify responses object
-      const storedResponses = JSON.parse(storedItem.responses.S!);
+      // Verify responses object - DynamoDB stores complex objects in M (Map) format, not as JSON strings
+      // So we need to access the responses as a Map and convert it back to a regular object
+      const storedResponses: any = {};
+      if (storedItem.responses?.M) {
+        // Convert DynamoDB Map format back to regular object
+        for (const [key, value] of Object.entries(storedItem.responses.M)) {
+          storedResponses[key] = (value as any).S || (value as any).N || value;
+        }
+      }
       expect(storedResponses).toEqual(testData.responses);
       
       // Verify timestamp format (ISO format)
