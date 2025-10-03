@@ -10,7 +10,8 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": "VPC, EC2, RDS, ALB, CloudWatch, S3, IAM",
+  "training_quality": 9,
+  "aws_services": ["VPC", "EC2", "RDS", "ALB", "CloudWatch", "S3", "IAM"],
   "testDependencies": [
     "@aws-sdk/client-ec2@^3.883.0",
     "@aws-sdk/client-rds@^3.883.0",
