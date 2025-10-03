@@ -89,6 +89,7 @@
     "@aws-sdk/client-cloudwatch": "^3.883.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.863.0",
     "@aws-sdk/client-codebuild": "^3.864.0",
+    "@aws-sdk/client-codecommit": "^3.864.0",
     "@aws-sdk/client-codedeploy": "^3.864.0",
     "@aws-sdk/client-codepipeline": "^3.864.0",
     "@aws-sdk/client-config-service": "^3.883.0",
