@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349419",
+  "team": "1",
+  "startedAt": "2025-09-29T02:40:51.887Z",
+  "task_sub_category": "Failure Recovery Automation",
+  "use_case_category": "Disaster Recovery",
+  "aws_services": [
+    "ec2",
+    "elasticloadbalancingv2",
+    "route53",
+    "s3",
+    "iam",
+    "cloudformation"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}
