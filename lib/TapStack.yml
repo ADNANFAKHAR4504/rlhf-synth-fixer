@@ -7,6 +7,11 @@ Parameters:
     Default: dev
     Description: Deployment environment
     
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for unique resource naming
+    
   ApiRateLimit:
     Type: Number
     Default: 1000
@@ -22,7 +27,7 @@ Resources:
   SurveyResponseTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "SurveyResponses-${Environment}"
+      TableName: !Sub "SurveyResponses-${EnvironmentSuffix}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: responseId
@@ -58,7 +63,7 @@ Resources:
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "survey-backups-${AWS::AccountId}-${Environment}"
+      BucketName: !Sub "survey-backups-${AWS::AccountId}-${EnvironmentSuffix}"
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -109,7 +114,7 @@ Resources:
   SubmissionFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "survey-submission-${Environment}"
+      FunctionName: !Sub "survey-submission-${EnvironmentSuffix}"
       Runtime: python3.10
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -175,7 +180,7 @@ Resources:
   AggregationFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "survey-aggregation-${Environment}"
+      FunctionName: !Sub "survey-aggregation-${EnvironmentSuffix}"
       Runtime: python3.10
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -282,7 +287,7 @@ Resources:
   BackupFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub "survey-backup-${Environment}"
+      FunctionName: !Sub "survey-backup-${EnvironmentSuffix}"
       Runtime: python3.10
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -356,7 +361,7 @@ Resources:
   SurveyApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub "SurveyAPI-${Environment}"
+      Name: !Sub "SurveyAPI-${EnvironmentSuffix}"
       Description: "API for survey data collection"
 
   SurveyResource:
@@ -396,11 +401,27 @@ Resources:
     DependsOn: SubmitMethod
     Properties:
       RestApiId: !Ref SurveyApi
+      Description: "Survey API Deployment"
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref SurveyApi
+      DeploymentId: !Ref ApiDeployment
       StageName: !Ref Environment
+      Description: !Sub "Survey API ${Environment} stage"
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
 
   # API Gateway Usage Plan with throttling limits
   ApiUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiStage
     Properties:
       ApiStages:
         - ApiId: !Ref SurveyApi
@@ -423,7 +444,7 @@ Resources:
   DailyAggregationRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "daily-aggregation-${Environment}"
+      Name: !Sub "daily-aggregation-${EnvironmentSuffix}"
       ScheduleExpression: "cron(0 1 * * ? *)"  # Daily at 1:00 AM UTC
       State: ENABLED
       Targets:
@@ -433,7 +454,7 @@ Resources:
   WeeklyBackupRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "weekly-backup-${Environment}"
+      Name: !Sub "weekly-backup-${EnvironmentSuffix}"
       ScheduleExpression: "cron(0 2 ? * SUN *)"  # Every Sunday at 2:00 AM UTC
       State: ENABLED
       Targets:
@@ -461,7 +482,7 @@ Resources:
   AdminNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "survey-admin-notifications-${Environment}"
+      TopicName: !Sub "survey-admin-notifications-${EnvironmentSuffix}"
       DisplayName: "Survey Admin Notifications"
 
   # Admin email subscription
@@ -476,7 +497,7 @@ Resources:
   SurveyDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub "survey-dashboard-${Environment}"
+      DashboardName: !Sub "survey-dashboard-${EnvironmentSuffix}"
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -541,7 +562,7 @@ Resources:
   ApiErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "API-Error-Alarm-${Environment}"
+      AlarmName: !Sub "API-Error-Alarm-${EnvironmentSuffix}"
       AlarmDescription: "Alarm when the API Gateway has errors"
       MetricName: 5XXError
       Namespace: AWS/ApiGateway
@@ -562,15 +583,35 @@ Outputs:
   ApiEndpoint:
     Description: "API Endpoint URL for survey submission"
     Value: !Sub "https://${SurveyApi}.execute-api.us-east-1.amazonaws.com/${Environment}/survey/submit"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+  
+  ApiGatewayId:
+    Description: "API Gateway ID"
+    Value: !Ref SurveyApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayId"
+      
+  ApiStageName:
+    Description: "API Gateway Stage Name"
+    Value: !Ref ApiStage
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiStageName"
   
   DynamoDBTableName:
     Description: "DynamoDB Table Name"
     Value: !Ref SurveyResponseTable
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTableName"
   
   BackupBucketName:
     Description: "S3 Backup Bucket Name"
     Value: !Ref BackupBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-BackupBucketName"
   
   DashboardURL:
     Description: "CloudWatch Dashboard URL"
     Value: !Sub "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${SurveyDashboard}"
+    Export:
+      Name: !Sub "${AWS::StackName}-DashboardURL"
