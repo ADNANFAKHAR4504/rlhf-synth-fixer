@@ -473,7 +473,7 @@ resource "aws_xray_sampling_rule" "fintech_api_sampling" {
 # X-Ray Encryption Configuration
 resource "aws_xray_encryption_config" "fintech_api" {
   type   = "KMS"
-  key_id = "arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alias/aws/xray"
+  key_id = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:alias/aws/xray"
 }
 
 # X-Ray Group for filtering traces
@@ -698,26 +698,32 @@ resource "aws_wafv2_web_acl" "fintech_api_waf" {
   })
 }
 
-# WAF Logging Configuration
-resource "aws_wafv2_web_acl_logging_configuration" "fintech_api_waf_logging" {
-  resource_arn            = aws_wafv2_web_acl.fintech_api_waf.arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf_logs.arn]
+# WAF Logging Configuration (commented out due to regional restrictions)
+# resource "aws_wafv2_web_acl_logging_configuration" "fintech_api_waf_logging" {
+#   resource_arn            = aws_wafv2_web_acl.fintech_api_waf.arn
+#   log_destination_configs = [aws_cloudwatch_log_group.waf_logs.arn]
 
-  redacted_fields {
-    single_header {
-      name = "authorization"
-    }
-  }
+#   redacted_fields {
+#     single_header {
+#       name = "authorization"
+#     }
+#   }
 
-  redacted_fields {
-    single_header {
-      name = "x-api-key"
-    }
-  }
-}
+#   redacted_fields {
+#     single_header {
+#       name = "x-api-key"
+#     }
+#   }
+
+#   redacted_fields {
+#     single_query_argument {
+#       name = "password"
+#     }
+#   }
+# }
 
 # Associate WAF with API Gateway
 resource "aws_wafv2_web_acl_association" "api_gateway_waf" {
-  resource_arn = "${aws_apigatewayv2_api.fintech_api.arn}/stages/${aws_apigatewayv2_stage.api_stage.name}"
+  resource_arn = aws_apigatewayv2_stage.api_stage.arn
   web_acl_arn  = aws_wafv2_web_acl.fintech_api_waf.arn
 }
