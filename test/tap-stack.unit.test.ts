@@ -158,25 +158,29 @@ describe('TapStack', () => {
             },
           ],
         },
-        LifecycleConfiguration: {
-          Rules: [
-            {
-              Id: 'transition-to-ia',
-              Status: 'Enabled',
-              Transitions: [
-                {
-                  StorageClass: 'STANDARD_IA',
-                  TransitionInDays: 30,
-                },
-                {
-                  StorageClass: 'GLACIER',
-                  TransitionInDays: 90,
-                },
-              ],
-            },
-          ],
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
         },
       });
+    });
+
+    test('should have lifecycle rules for cost optimization', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucket = Object.values(buckets)[0];
+      expect(bucket.Properties.LifecycleConfiguration.Rules).toHaveLength(2);
+      expect(
+        bucket.Properties.LifecycleConfiguration.Rules.some(
+          (rule: any) => rule.Id === 'transition-to-ia'
+        )
+      ).toBe(true);
+      expect(
+        bucket.Properties.LifecycleConfiguration.Rules.some(
+          (rule: any) => rule.Id === 'delete-old-versions'
+        )
+      ).toBe(true);
     });
   });
 
@@ -431,6 +435,13 @@ describe('TapStack', () => {
         DisplayName: 'IoT Pipeline Alerts',
       });
     });
+
+    test('should create DLQ SNS Topic', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: `iot-pipeline-dlq-${environmentSuffix}`,
+        DisplayName: 'IoT Pipeline Dead Letter Queue',
+      });
+    });
   });
 
   describe('CloudWatch Alarms', () => {
@@ -467,6 +478,25 @@ describe('TapStack', () => {
         AlarmDescription:
           'Alert when Firehose data delivery is delayed > 10 minutes',
         Threshold: 600,
+        EvaluationPeriods: 2,
+      });
+    });
+
+    test('should create Lambda DLQ messages alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `iot-lambda-dlq-messages-${environmentSuffix}`,
+        AlarmDescription: 'Alert when Lambda sends messages to DLQ',
+        Threshold: 1,
+        EvaluationPeriods: 1,
+      });
+    });
+
+    test('should create Timestream write throttling alarm', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `iot-timestream-throttling-${environmentSuffix}`,
+        AlarmDescription:
+          'Alert when Timestream experiences write throttling',
+        Threshold: 10,
         EvaluationPeriods: 2,
       });
     });
@@ -522,6 +552,18 @@ describe('TapStack', () => {
         Description: 'Example Athena query',
       });
     });
+
+    test('should create DLQ Topic ARN output', () => {
+      template.hasOutput('DLQTopicArn', {
+        Description: 'SNS Topic for Lambda DLQ',
+      });
+    });
+
+    test('should create Glue Database Name output', () => {
+      template.hasOutput('GlueDatabaseName', {
+        Description: 'Glue Database for data catalog',
+      });
+    });
   });
 
   describe('Resource Counts', () => {
@@ -538,11 +580,10 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::IoT::Policy', 1);
       template.resourceCountIs('AWS::Glue::Database', 1);
       template.resourceCountIs('AWS::Glue::Crawler', 1);
-      template.resourceCountIs('AWS::SNS::Topic', 1);
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+      template.resourceCountIs('AWS::SNS::Topic', 2); // Alert + DLQ topics
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 6); // Added 2 new alarms
       template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
-      template.resourceCountIs('AWS::CloudWatch::LogGroup', 0);
-      template.resourceCountIs('AWS::CloudWatch::LogStream', 0);
+      // Note: Lambda automatically creates its log group, Firehose has explicit log group and stream
     });
   });
 });

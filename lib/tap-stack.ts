@@ -32,6 +32,13 @@ export class TapStack extends cdk.Stack {
       'dev'
     ).toLowerCase();
 
+    // Common tags for all resources
+    cdk.Tags.of(this).add('Project', 'IoT-Sensor-Pipeline');
+    cdk.Tags.of(this).add('Environment', environmentSuffix);
+    cdk.Tags.of(this).add('ManagedBy', 'CDK');
+    cdk.Tags.of(this).add('Compliance', 'GDPR');
+    cdk.Tags.of(this).add('DataClassification', 'Sensitive');
+
     // ==================== STORAGE LAYER ====================
 
     // S3 bucket for long-term storage with lifecycle policies
@@ -39,6 +46,8 @@ export class TapStack extends cdk.Stack {
       bucketName: `iot-sensor-data-${this.account}-${this.region}-${environmentSuffix}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
       lifecycleRules: [
         {
           id: 'transition-to-ia',
@@ -52,6 +61,11 @@ export class TapStack extends cdk.Stack {
               transitionAfter: cdk.Duration.days(90),
             },
           ],
+        },
+        {
+          id: 'delete-old-versions',
+          noncurrentVersionExpiration: cdk.Duration.days(90),
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
         },
       ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -103,12 +117,13 @@ export class TapStack extends cdk.Stack {
 
     // ==================== STREAMING LAYER ====================
 
-    // Kinesis Data Stream with auto-scaling
+    // Kinesis Data Stream with auto-scaling and encryption
     const sensorDataStream = new kinesis.Stream(this, 'SensorDataStream', {
       streamName: `iot-sensor-data-stream-${environmentSuffix}`,
       shardCount: 2, // Start with 2 shards for 500k daily messages
       retentionPeriod: cdk.Duration.hours(24),
       streamMode: kinesis.StreamMode.PROVISIONED,
+      encryption: kinesis.StreamEncryption.MANAGED, // Server-side encryption with AWS managed KMS key
     });
 
     // ==================== PROCESSING LAYER ====================
@@ -476,6 +491,32 @@ def handler(event, context):
       new snsSubscriptions.EmailSubscription('iot-alerts@example.com')
     );
 
+    // Dead Letter Queue for failed Lambda invocations
+    const dlqTopic = new sns.Topic(this, 'IoTDLQTopic', {
+      topicName: `iot-pipeline-dlq-${environmentSuffix}`,
+      displayName: 'IoT Pipeline Dead Letter Queue',
+    });
+
+    dlqTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription('iot-dlq@example.com')
+    );
+
+    // Configure Lambda event invoke config for DLQ
+    new lambda.CfnEventInvokeConfig(this, 'StreamProcessorDLQConfig', {
+      functionName: streamProcessor.functionName,
+      qualifier: '$LATEST',
+      destinationConfig: {
+        onFailure: {
+          destination: dlqTopic.topicArn,
+        },
+      },
+      maximumEventAgeInSeconds: 21600, // 6 hours
+      maximumRetryAttempts: 2,
+    });
+
+    // Grant SNS publish permission to Lambda
+    dlqTopic.grantPublish(streamProcessor);
+
     // CloudWatch Alarms
 
     // 1. Kinesis Stream - High incoming records
@@ -534,6 +575,44 @@ def handler(event, context):
         'Alert when Firehose data delivery is delayed > 10 minutes',
       metric: firehoseMetric,
       threshold: 600, // 10 minutes in seconds
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // 5. Lambda - DLQ messages
+    new cloudwatch.Alarm(this, 'LambdaDLQMessages', {
+      alarmName: `iot-lambda-dlq-messages-${environmentSuffix}`,
+      alarmDescription: 'Alert when Lambda sends messages to DLQ',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/SNS',
+        metricName: 'NumberOfMessagesPublished',
+        dimensionsMap: {
+          TopicName: dlqTopic.topicName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+
+    // 6. Timestream - Write throttling
+    new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
+      alarmName: `iot-timestream-throttling-${environmentSuffix}`,
+      alarmDescription: 'Alert when Timestream experiences write throttling',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Timestream',
+        metricName: 'UserErrors',
+        dimensionsMap: {
+          DatabaseName: timestreamDatabase.databaseName!,
+          TableName: timestreamTable.tableName!,
+          Operation: 'WriteRecords',
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 10,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
@@ -597,5 +676,18 @@ def handler(event, context):
       value: `SELECT * FROM ${glueDatabase.ref}.sensor_data WHERE year='2024' LIMIT 10`,
       description: 'Example Athena query',
     });
+
+    new cdk.CfnOutput(this, 'DLQTopicArn', {
+      value: dlqTopic.topicArn,
+      description: 'SNS Topic for Lambda DLQ',
+    });
+
+    new cdk.CfnOutput(this, 'GlueDatabaseName', {
+      value: glueDatabase.ref,
+      description: 'Glue Database for data catalog',
+    });
+
+    // Stack description
+    this.templateOptions.description = `Production IoT data pipeline for processing 500k daily sensor readings - ${environmentSuffix}`;
   }
 }
