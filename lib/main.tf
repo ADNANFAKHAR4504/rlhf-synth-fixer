@@ -455,7 +455,7 @@ resource "aws_scheduler_schedule" "cleanup_old_records" {
 
 # X-Ray Sampling Rule with Adaptive Sampling
 resource "aws_xray_sampling_rule" "fintech_api_sampling" {
-  rule_name      = "fintech-api-sampling-${var.environment_suffix}"
+  rule_name      = "api-sampling-${substr(var.environment_suffix, 0, 19)}"
   priority       = 1000
   version        = 1
   reservoir_size = 1
