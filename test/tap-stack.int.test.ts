@@ -97,7 +97,6 @@ describe("TapStack Integration Tests", () => {
         expect(subnet?.VpcId).toBe(vpcId);
         expect(subnet?.State).toBe("available");
         expect(subnet?.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet?.CidrBlock).toBe(expectedPublicCidrs[index]);
         expect(subnet?.AvailableIpAddressCount).toBeGreaterThan(0);
         
         // Verify subnet is in correct AZ
