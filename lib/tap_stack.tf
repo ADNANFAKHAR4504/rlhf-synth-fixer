@@ -64,7 +64,7 @@ variable "tags" {
 
 locals {
   bucket_name = "${var.company_name}-${var.environment}-daily-backups-${data.aws_caller_identity.current.account_id}"
-  
+
   common_tags = merge(
     var.tags,
     {
@@ -73,21 +73,12 @@ locals {
       Region      = "us-west-2"
     }
   )
-  
+
   # Alarm thresholds
   alarm_thresholds = {
-    bucket_size_gb           = 500  # Alert if bucket exceeds 500GB
+    bucket_size_gb         = 500  # Alert if bucket exceeds 500GB
     daily_requests          = 10000 # Alert if requests exceed 10k/day
-    error_rate_percentage   = 5     # Alert if error rate exceeds 5%
   }
-  
-  # IAM principals for bucket access
-  backup_principals = concat(
-    var.allowed_backup_roles,
-    [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_role.backup_lambda_role.name}"
-    ]
-  )
 }
 
 # ============================================================================
@@ -106,7 +97,7 @@ resource "aws_kms_key" "backup_encryption" {
   description             = "KMS key for ${var.company_name} daily backup encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -126,7 +117,7 @@ resource "aws_kms_alias" "backup_encryption" {
 
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = local.bucket_name
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -137,7 +128,7 @@ resource "aws_s3_bucket" "backup_bucket" {
 
 resource "aws_s3_bucket_versioning" "backup_bucket" {
   bucket = aws_s3_bucket.backup_bucket.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -145,19 +136,19 @@ resource "aws_s3_bucket_versioning" "backup_bucket" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_bucket" {
   bucket = aws_s3_bucket.backup_bucket.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.backup_encryption.arn
       sse_algorithm     = "aws:kms"
     }
-    bucket_key_enabled = true # Reduces KMS API calls and costs
+    bucket_key_enabled = true
   }
 }
 
 resource "aws_s3_bucket_public_access_block" "backup_bucket" {
   bucket = aws_s3_bucket.backup_bucket.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -166,45 +157,23 @@ resource "aws_s3_bucket_public_access_block" "backup_bucket" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "backup_bucket" {
   bucket = aws_s3_bucket.backup_bucket.id
-  
+
   rule {
     id     = "delete-old-backups"
     status = "Enabled"
-    
+
     expiration {
       days = var.backup_retention_days
     }
-    
+
     noncurrent_version_expiration {
       noncurrent_days = 7
     }
-    
+
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
     }
   }
-  
-  rule {
-    id     = "transition-to-glacier"
-    status = "Enabled"
-    
-    transition {
-      days          = 7
-      storage_class = "GLACIER_IR" # Instant retrieval for recent backups
-    }
-    
-    transition {
-      days          = 14
-      storage_class = "GLACIER" # Deep archive for older backups
-    }
-  }
-}
-
-resource "aws_s3_bucket_logging" "backup_bucket" {
-  bucket = aws_s3_bucket.backup_bucket.id
-  
-  target_bucket = aws_s3_bucket.backup_logs.id
-  target_prefix = "access-logs/"
 }
 
 resource "aws_s3_bucket_metric" "backup_bucket" {
@@ -213,108 +182,67 @@ resource "aws_s3_bucket_metric" "backup_bucket" {
 }
 
 # ============================================================================
-# S3 BUCKET FOR LOGS
-# ============================================================================
-
-resource "aws_s3_bucket" "backup_logs" {
-  bucket = "${local.bucket_name}-logs"
-  
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.bucket_name}-logs"
-    }
-  )
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "backup_logs" {
-  bucket = aws_s3_bucket.backup_logs.id
-  
-  rule {
-    id     = "delete-old-logs"
-    status = "Enabled"
-    
-    expiration {
-      days = 90
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "backup_logs" {
-  bucket = aws_s3_bucket.backup_logs.id
-  
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# ============================================================================
-# S3 BUCKET POLICY
+# S3 BUCKET POLICY (restricted access + enforce encryption)
 # ============================================================================
 
 data "aws_iam_policy_document" "backup_bucket_policy" {
   statement {
     sid    = "DenyInsecureConnections"
     effect = "Deny"
-    
+
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    
+
     actions = ["s3:*"]
-    
+
     resources = [
       aws_s3_bucket.backup_bucket.arn,
       "${aws_s3_bucket.backup_bucket.arn}/*"
     ]
-    
+
     condition {
       test     = "Bool"
       variable = "aws:SecureTransport"
       values   = ["false"]
     }
   }
-  
+
   statement {
     sid    = "AllowBackupRoleAccess"
     effect = "Allow"
-    
+
     principals {
       type        = "AWS"
-      identifiers = local.backup_principals
+      identifiers = var.allowed_backup_roles
     }
-    
+
     actions = [
       "s3:PutObject",
-      "s3:PutObjectAcl",
       "s3:GetObject",
-      "s3:GetObjectVersion",
-      "s3:ListBucket",
-      "s3:ListBucketVersions",
-      "s3:GetBucketLocation"
+      "s3:ListBucket"
     ]
-    
+
     resources = [
       aws_s3_bucket.backup_bucket.arn,
       "${aws_s3_bucket.backup_bucket.arn}/*"
     ]
   }
-  
+
   statement {
     sid    = "RequireKMSEncryption"
     effect = "Deny"
-    
+
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    
+
     actions = ["s3:PutObject"]
-    
+
     resources = ["${aws_s3_bucket.backup_bucket.arn}/*"]
-    
+
     condition {
       test     = "StringNotEquals"
       variable = "s3:x-amz-server-side-encryption"
@@ -329,130 +257,24 @@ resource "aws_s3_bucket_policy" "backup_bucket" {
 }
 
 # ============================================================================
-# IAM ROLE FOR BACKUP LAMBDA
-# ============================================================================
-
-resource "aws_iam_role" "backup_lambda_role" {
-  name = "${var.company_name}-backup-lambda-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-  
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "backup_lambda_policy" {
-  name = "${var.company_name}-backup-lambda-policy"
-  role = aws_iam_role.backup_lambda_role.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.backup_bucket.arn,
-          "${aws_s3_bucket.backup_bucket.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:GenerateDataKey",
-          "kms:Decrypt"
-        ]
-        Resource = aws_kms_key.backup_encryption.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "backup_lambda_basic" {
-  role       = aws_iam_role.backup_lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# ============================================================================
-# LAMBDA FUNCTION FOR BACKUP (Placeholder)
-# ============================================================================
-
-resource "aws_lambda_function" "backup_handler" {
-  filename         = "backup_lambda.zip"
-  function_name    = "${var.company_name}-daily-backup-handler"
-  role            = aws_iam_role.backup_lambda_role.arn
-  handler         = "index.handler"
-  source_code_hash = filebase64sha256("backup_lambda.zip")
-  runtime         = "python3.11"
-  timeout         = 300
-  memory_size     = 512
-  
-  environment {
-    variables = {
-      BACKUP_BUCKET = aws_s3_bucket.backup_bucket.id
-      KMS_KEY_ID    = aws_kms_key.backup_encryption.id
-    }
-  }
-  
-  tags = local.common_tags
-}
-
-# ============================================================================
-# EVENTBRIDGE SCHEDULING
+# EVENTBRIDGE SCHEDULING (for backup orchestration triggers)
 # ============================================================================
 
 resource "aws_cloudwatch_event_rule" "backup_schedule" {
   name                = "${var.company_name}-daily-backup-schedule"
-  description         = "Trigger daily backup at specified time"
+  description         = "Daily backup schedule"
   schedule_expression = var.backup_schedule
-  
+
   tags = local.common_tags
 }
 
-resource "aws_cloudwatch_event_target" "backup_lambda" {
-  rule      = aws_cloudwatch_event_rule.backup_schedule.name
-  target_id = "BackupLambdaTarget"
-  arn       = aws_lambda_function.backup_handler.arn
-}
-
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.backup_handler.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.backup_schedule.arn
-}
-
 # ============================================================================
-# CLOUDWATCH ALARMS
+# CLOUDWATCH ALARMS + SNS
 # ============================================================================
 
 resource "aws_sns_topic" "backup_alerts" {
   name = "${var.company_name}-backup-alerts"
-  
+
   tags = local.common_tags
 }
 
@@ -470,15 +292,15 @@ resource "aws_cloudwatch_metric_alarm" "bucket_size" {
   namespace           = "AWS/S3"
   period              = 86400
   statistic           = "Average"
-  threshold           = local.alarm_thresholds.bucket_size_gb * 1073741824 # Convert GB to bytes
+  threshold           = local.alarm_thresholds.bucket_size_gb * 1073741824
   alarm_description   = "Alert when backup bucket exceeds ${local.alarm_thresholds.bucket_size_gb}GB"
   alarm_actions       = [aws_sns_topic.backup_alerts.arn]
-  
+
   dimensions = {
     BucketName  = aws_s3_bucket.backup_bucket.id
     StorageType = "StandardStorage"
   }
-  
+
   tags = local.common_tags
 }
 
@@ -491,66 +313,15 @@ resource "aws_cloudwatch_metric_alarm" "bucket_requests" {
   period              = 3600
   statistic           = "Sum"
   threshold           = local.alarm_thresholds.daily_requests / 24
-  alarm_description   = "Alert when request rate is abnormally high"
+  alarm_description   = "Alert when request rate is unusually high"
   alarm_actions       = [aws_sns_topic.backup_alerts.arn]
-  
+
   dimensions = {
     BucketName = aws_s3_bucket.backup_bucket.id
   }
-  
+
   treat_missing_data = "notBreaching"
   tags              = local.common_tags
-}
-
-resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  alarm_name          = "${var.company_name}-backup-lambda-errors"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "Errors"
-  namespace           = "AWS/Lambda"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 3
-  alarm_description   = "Alert when backup Lambda function has errors"
-  alarm_actions       = [aws_sns_topic.backup_alerts.arn]
-  
-  dimensions = {
-    FunctionName = aws_lambda_function.backup_handler.function_name
-  }
-  
-  treat_missing_data = "notBreaching"
-  tags              = local.common_tags
-}
-
-resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
-  alarm_name          = "${var.company_name}-backup-lambda-duration"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "Duration"
-  namespace           = "AWS/Lambda"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 240000 # 4 minutes in milliseconds
-  alarm_description   = "Alert when backup Lambda takes too long"
-  alarm_actions       = [aws_sns_topic.backup_alerts.arn]
-  
-  dimensions = {
-    FunctionName = aws_lambda_function.backup_handler.function_name
-  }
-  
-  treat_missing_data = "notBreaching"
-  tags              = local.common_tags
-}
-
-# ============================================================================
-# CLOUDWATCH LOG GROUP
-# ============================================================================
-
-resource "aws_cloudwatch_log_group" "backup_lambda_logs" {
-  name              = "/aws/lambda/${aws_lambda_function.backup_handler.function_name}"
-  retention_in_days = 7
-  
-  tags = local.common_tags
 }
 
 # ============================================================================
@@ -567,24 +338,9 @@ output "backup_bucket_arn" {
   value       = aws_s3_bucket.backup_bucket.arn
 }
 
-output "kms_key_id" {
-  description = "ID of the KMS key used for encryption"
-  value       = aws_kms_key.backup_encryption.id
-}
-
 output "kms_key_arn" {
   description = "ARN of the KMS key used for encryption"
   value       = aws_kms_key.backup_encryption.arn
-}
-
-output "lambda_function_arn" {
-  description = "ARN of the backup Lambda function"
-  value       = aws_lambda_function.backup_handler.arn
-}
-
-output "lambda_function_name" {
-  description = "Name of the backup Lambda function"
-  value       = aws_lambda_function.backup_handler.function_name
 }
 
 output "eventbridge_rule_arn" {
@@ -598,12 +354,10 @@ output "sns_topic_arn" {
 }
 
 output "cloudwatch_alarms" {
-  description = "Map of CloudWatch alarm names and ARNs"
+  description = "Map of CloudWatch alarm ARNs"
   value = {
     bucket_size     = aws_cloudwatch_metric_alarm.bucket_size.arn
     bucket_requests = aws_cloudwatch_metric_alarm.bucket_requests.arn
-    lambda_errors   = aws_cloudwatch_metric_alarm.lambda_errors.arn
-    lambda_duration = aws_cloudwatch_metric_alarm.lambda_duration.arn
   }
 }
 
@@ -615,9 +369,4 @@ output "backup_schedule" {
 output "retention_days" {
   description = "Number of days backups are retained"
   value       = var.backup_retention_days
-}
-
-output "iam_role_arn" {
-  description = "ARN of the IAM role for backup operations"
-  value       = aws_iam_role.backup_lambda_role.arn
 }
