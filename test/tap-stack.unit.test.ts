@@ -121,7 +121,7 @@ describe('SaaS Staging Environment CloudFormation Template', () => {
       const dbSG = template.Resources.DBSecurityGroup;
       expect(dbSG.Type).toBe('AWS::EC2::SecurityGroup');
       
-      const vpnRule = dbSG.Properties.SecurityGroupIngress.find(rule => 
+      const vpnRule = dbSG.Properties.SecurityGroupIngress.find((rule: any) => 
         rule.CidrIp && rule.CidrIp.Ref === 'VPNCidr'
       );
       expect(vpnRule).toBeDefined();
@@ -139,7 +139,7 @@ describe('SaaS Staging Environment CloudFormation Template', () => {
       const cacheSG = template.Resources.ElastiCacheSecurityGroup;
       expect(cacheSG.Type).toBe('AWS::EC2::SecurityGroup');
       
-      const redisRule = cacheSG.Properties.SecurityGroupIngress.find(rule => 
+      const redisRule = cacheSG.Properties.SecurityGroupIngress.find((rule: any) => 
         rule.FromPort === 6379
       );
       expect(redisRule).toBeDefined();
@@ -382,8 +382,8 @@ describe('SaaS Staging Environment CloudFormation Template', () => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
         
-        const envTag = resource.Properties.Tags.find(tag => tag.Key === 'Environment');
-        const suffixTag = resource.Properties.Tags.find(tag => tag.Key === 'EnvironmentSuffix');
+        const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+        const suffixTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'EnvironmentSuffix');
         
         expect(envTag).toBeDefined();
         expect(envTag.Value).toBe('staging');
@@ -429,7 +429,7 @@ describe('SaaS Staging Environment CloudFormation Template', () => {
     test('should use parameter references for configurable values', () => {
       // Check VPN CIDR is parameterized
       const vpnIngress = template.Resources.DBSecurityGroup.Properties.SecurityGroupIngress.find(
-        rule => rule.CidrIp && rule.CidrIp.Ref === 'VPNCidr'
+        (rule: any) => rule.CidrIp && rule.CidrIp.Ref === 'VPNCidr'
       );
       expect(vpnIngress).toBeDefined();
 
