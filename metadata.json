@@ -7,8 +7,6 @@
   "team": "1",
   "startedAt": "2025-10-03T08:20:23.988Z",
   "subtask": "Serverless Infrastructure (Functions as Code)",
-  "subject_labels": [
-    "Application Deployment"
-  ],
+  "subject_labels": "Application Deployment",
   "aws_services": "dynamo db, cloudwatch, api gateway,  lambda"
 }
