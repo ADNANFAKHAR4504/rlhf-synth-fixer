@@ -7,6 +7,6 @@
   "team": "1",
   "startedAt": "2025-10-02T20:51:07.852Z",
   "subtask": "Serverless Infrastructure (Functions as Code)",
-  "subject_labels": [ "Application Deployment" ],
+  "subject_labels": ["Application Deployment"],
   "aws_services": ", API Gateway, DynamoDB, Eventbridge, SNS, Cognito, CloudWatch, IAM roles"
 }
