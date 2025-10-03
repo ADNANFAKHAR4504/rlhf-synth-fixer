@@ -60,6 +60,18 @@ Parameters:
     Default: 'cache.t3.micro'
     AllowedValues: ['cache.t3.micro', 'cache.t3.small', 'cache.t3.medium']
 
+  CreateConfigDeliveryChannel:
+    Type: String
+    Description: Whether to create AWS Config delivery channel (set to false if one already exists in account)
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+Conditions:
+  ShouldCreateConfigDeliveryChannel:
+    Fn::Equals:
+      - Ref: CreateConfigDeliveryChannel
+      - 'true'
+
 Resources:
   # ========================================================================
   # NETWORK CONFIGURATION
@@ -1006,6 +1018,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateConfigDeliveryChannel
     Properties:
       Name: !Sub 'staging-config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref ConfigBucket
