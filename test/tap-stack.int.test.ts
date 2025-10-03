@@ -18,8 +18,7 @@ import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
 import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
 import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
 
-const outputsPath = path.join(__dirname, "cfn-outputs/fla-outputs.json");
-const outputs = JSON.parse(readFileSync(outputsPath, "utf-8"));
+const outputs = JSON.parse(readFileSync('cfn-outputs/flat-outputs.json', "utf-8"));
 
 // Create AWS SDK clients
 const ec2Client = new EC2Client({});
