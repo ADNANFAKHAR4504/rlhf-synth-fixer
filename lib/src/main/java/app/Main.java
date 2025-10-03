@@ -685,7 +685,7 @@ class TapStack extends Stack {
     private SearchResources createSearchResources() {
         Domain openSearchDomain = new Domain(this, "DocumentSearchDomain" + environmentSuffix,
                 DomainProps.builder()
-                        .domainName("document-collab-search-" + environmentSuffix)
+                        .domainName("doc-search-" + environmentSuffix)
                         .version(EngineVersion.OPENSEARCH_2_5)
                         .capacity(CapacityConfig.builder()
                                 .dataNodeInstanceType("t3.small.search")
