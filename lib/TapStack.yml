@@ -350,7 +350,7 @@ Parameters:
     Description: Environment name prefix
   AmiId:
     Type: AWS::EC2::Image::Id
-    Default: ami-0b967c22fe917319b
+    Default: ami-0254b2d5c4c472488
     Description: Amazon Linux 2 AMI ID
   EnvironmentSuffix:
     Type: String
