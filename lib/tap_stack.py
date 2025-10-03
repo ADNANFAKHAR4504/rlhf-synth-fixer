@@ -714,7 +714,7 @@ class TapStack(Stack):
             self, "GuardDutyDetectorLambda",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="index.handler",
-            code=lambda_.Code.from_inline("""
+            code=lambda_.Code.from_inline(f"""
 import boto3
 import json
 import urllib3
@@ -722,12 +722,46 @@ import urllib3
 def handler(event, context):
     try:
         client = boto3.client('guardduty')
+        s3_client = boto3.client('s3')
         
         if event['RequestType'] == 'Delete':
-            # Don't delete existing detectors on stack deletion
-            return send_response(event, context, 'SUCCESS', {
-                'DetectorId': event.get('PhysicalResourceId', 'not-found')
-            })
+            # Clean up ThreatIntelSet and IPSet if we created them
+            detector_id = event.get('PhysicalResourceId', 'not-found')
+            if detector_id != 'not-found':
+                try:
+                    # List and delete ThreatIntelSets
+                    threat_intel_response = client.list_threat_intel_sets(DetectorId=detector_id)
+                    for threat_intel_id in threat_intel_response.get('ThreatIntelSetIds', []):
+                        threat_intel_details = client.get_threat_intel_set(
+                            DetectorId=detector_id, 
+                            ThreatIntelSetId=threat_intel_id
+                        )
+                        if threat_intel_details['Name'].startswith('BankingThreatIntel-{self.unique_suffix}'):
+                            client.delete_threat_intel_set(
+                                DetectorId=detector_id,
+                                ThreatIntelSetId=threat_intel_id
+                            )
+                    
+                    # List and delete IPSets
+                    ip_set_response = client.list_ip_sets(DetectorId=detector_id)
+                    for ip_set_id in ip_set_response.get('IpSetIds', []):
+                        ip_set_details = client.get_ip_set(
+                            DetectorId=detector_id,
+                            IpSetId=ip_set_id
+                        )
+                        if ip_set_details['Name'].startswith('TrustedBankingIPs-{self.unique_suffix}'):
+                            client.delete_ip_set(
+                                DetectorId=detector_id,
+                                IpSetId=ip_set_id
+                            )
+                except Exception as e:
+                    print(f"Warning: Could not clean up GuardDuty resources: {{e}}")
+            
+            return send_response(event, context, 'SUCCESS', {{
+                'DetectorId': detector_id,
+                'ThreatIntelSetId': 'deleted',
+                'IPSetId': 'deleted'
+            }})
         
         # List existing detectors
         response = client.list_detectors()
@@ -744,53 +778,108 @@ def handler(event, context):
                     FindingPublishingFrequency='FIFTEEN_MINUTES'
                 )
             except Exception as e:
-                print(f"Warning: Could not update detector settings: {e}")
+                print(f"Warning: Could not update detector settings: {{e}}")
             
-            return send_response(event, context, 'SUCCESS', {
-                'DetectorId': detector_id,
-                'Mode': 'existing'
-            }, detector_id)
+            mode = 'existing'
         else:
             # Create new detector
             response = client.create_detector(
                 Enable=True,
                 FindingPublishingFrequency='FIFTEEN_MINUTES',
-                Tags={
+                Tags={{
                     'Name': f'ZeroTrust-AutoCreated',
                     'Environment': 'production',
                     'ManagedBy': 'CDK-AutoDetection'
-                }
+                }}
             )
             
-            return send_response(event, context, 'SUCCESS', {
-                'DetectorId': response['DetectorId'],
-                'Mode': 'new'
-            }, response['DetectorId'])
+            detector_id = response['DetectorId']
+            mode = 'new'
+        
+        # Ensure S3 files exist for ThreatIntelSet and IPSet
+        bucket_name = '{self.trail_bucket.bucket_name}'
+        
+        # Create threat intel file if it doesn't exist
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key='threat-intel/bad-ips.txt')
+        except s3_client.exceptions.NoSuchKey:
+            # Create a basic threat intel file
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key='threat-intel/bad-ips.txt',
+                Body='# Threat Intelligence IP List\\n# Add malicious IPs here (one per line)\\n# Example: 1.2.3.4\\n',
+                ContentType='text/plain'
+            )
+        
+        # Create trusted IPs file if it doesn't exist
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key='trusted-ips/whitelist.txt')
+        except s3_client.exceptions.NoSuchKey:
+            # Create a basic trusted IPs file
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key='trusted-ips/whitelist.txt',
+                Body='# Trusted IP List\\n# Add trusted IPs here (one per line)\\n# Example: 10.0.0.0/8\\n',
+                ContentType='text/plain'
+            )
+        
+        # Create ThreatIntelSet
+        threat_intel_response = client.create_threat_intel_set(
+            DetectorId=detector_id,
+            Name=f'BankingThreatIntel-{self.unique_suffix}',
+            Format='TXT',
+            Location=f's3://{{bucket_name}}/threat-intel/bad-ips.txt',
+            Activate=True,
+            Tags={{
+                'Name': f'BankingThreatIntel-{self.unique_suffix}',
+                'ManagedBy': 'ZeroTrust-CDK'
+            }}
+        )
+        
+        # Create IPSet for trusted IPs
+        ip_set_response = client.create_ip_set(
+            DetectorId=detector_id,
+            Name=f'TrustedBankingIPs-{self.unique_suffix}',
+            Format='TXT',
+            Location=f's3://{{bucket_name}}/trusted-ips/whitelist.txt',
+            Activate=True,
+            Tags={{
+                'Name': f'TrustedBankingIPs-{self.unique_suffix}',
+                'ManagedBy': 'ZeroTrust-CDK'
+            }}
+        )
+        
+        return send_response(event, context, 'SUCCESS', {{
+            'DetectorId': detector_id,
+            'Mode': mode,
+            'ThreatIntelSetId': threat_intel_response['ThreatIntelSetId'],
+            'IPSetId': ip_set_response['IpSetId']
+        }}, detector_id)
             
     except Exception as e:
-        print(f"Error: {str(e)}")
-        return send_response(event, context, 'FAILED', {'Error': str(e)})
+        print(f"Error: {{str(e)}}")
+        return send_response(event, context, 'FAILED', {{'Error': str(e)}})
 
 def send_response(event, context, status, data, physical_id=None):
-    response_body = json.dumps({
+    response_body = json.dumps({{
         'Status': status,
-        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',
+        'Reason': f'See CloudWatch Log Stream: {{context.log_stream_name}}',
         'PhysicalResourceId': physical_id or context.log_stream_name,
         'StackId': event['StackId'],
         'RequestId': event['RequestId'],
         'LogicalResourceId': event['LogicalResourceId'],
         'Data': data
-    })
+    }})
     
     http = urllib3.PoolManager()
     try:
         response = http.request('PUT', event['ResponseURL'], body=response_body,
-                              headers={'Content-Type': 'application/json'})
-        print(f"Response status: {response.status}")
+                              headers={{'Content-Type': 'application/json'}})
+        print(f"Response status: {{response.status}}")
     except Exception as e:
-        print(f"Failed to send response: {e}")
+        print(f"Failed to send response: {{e}}")
     
-    return {'statusCode': 200, 'body': 'Complete'}
+    return {{'statusCode': 200, 'body': 'Complete'}}
 """),
             timeout=Duration.minutes(5),
             role=iam.Role(
@@ -818,9 +907,19 @@ def send_response(event, context, status, data, physical_id=None):
                                     "guardduty:GetIPSet",
                                     "guardduty:DeleteThreatIntelSet",
                                     "guardduty:DeleteIPSet",
-                                    "s3:GetObject"
+                                    "guardduty:ListThreatIntelSets",
+                                    "guardduty:ListIPSets"
                                 ],
                                 resources=["*"]
+                            ),
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
+                                    "s3:GetObject",
+                                    "s3:PutObject",
+                                    "s3:HeadObject"
+                                ],
+                                resources=[f"{self.trail_bucket.bucket_arn}/*"]
                             )
                         ]
                     )
@@ -834,9 +933,11 @@ def send_response(event, context, status, data, physical_id=None):
             service_token=guardduty_detector_lambda.function_arn
         )
         
-        # Get detector ID from custom resource
+        # Get detector ID and other resources from custom resource
         self.guardduty_detector_id = guardduty_resource.get_att("DetectorId").to_string()
         self.guardduty_mode = guardduty_resource.get_att("Mode").to_string()
+        self.threat_intel_set_id = guardduty_resource.get_att("ThreatIntelSetId").to_string()
+        self.ip_set_id = guardduty_resource.get_att("IPSetId").to_string()
         
         # Store reference for dependency management
         self.guardduty_resource = guardduty_resource
@@ -853,34 +954,21 @@ def send_response(event, context, status, data, physical_id=None):
             value=self.guardduty_mode,
             description="Whether using existing detector or created new one"
         )
-
-        # Create threat intel set for known bad IPs
-        # Works with both existing and new detectors
-        self.threat_intel_set = guardduty.CfnThreatIntelSet(
-            self, "ThreatIntelSet",
-            detector_id=self.guardduty_detector_id,
-            format="TXT",
-            location=f"s3://{self.trail_bucket.bucket_name}/threat-intel/bad-ips.txt",
-            activate=True,
-            name=f"BankingThreatIntel-{self.unique_suffix}"
+        
+        CfnOutput(
+            self, "GuardDutyThreatIntelSetId", 
+            value=self.threat_intel_set_id,
+            description="GuardDuty ThreatIntelSet ID for bad IP detection"
         )
         
-        # Add explicit dependency to ensure proper creation order
-        self.threat_intel_set.node.add_dependency(self.guardduty_resource)
-
-        # Create IP set for trusted IPs
-        # Works with both existing and new detectors
-        self.trusted_ip_set = guardduty.CfnIPSet(
-            self, "TrustedIPSet",
-            detector_id=self.guardduty_detector_id,
-            format="TXT",
-            location=f"s3://{self.trail_bucket.bucket_name}/trusted-ips/whitelist.txt",
-            activate=True,
-            name=f"TrustedBankingIPs-{self.unique_suffix}"
+        CfnOutput(
+            self, "GuardDutyIPSetId", 
+            value=self.ip_set_id,
+            description="GuardDuty IPSet ID for trusted IP allowlisting"
         )
-        
-        # Add explicit dependency to ensure proper creation order
-        self.trusted_ip_set.node.add_dependency(self.guardduty_resource)
+
+        # Note: ThreatIntelSet and IPSet are now created by the Lambda function above
+        # This resolves the authorization error since the Lambda has proper GuardDuty permissions
 
     def _create_security_hub(self):
         """Enable Security Hub for centralized security management"""
