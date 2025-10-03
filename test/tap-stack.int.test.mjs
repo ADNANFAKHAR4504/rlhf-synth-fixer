@@ -55,6 +55,7 @@ const getOutputValue = (key, defaultValue) => {
 };
 
 const sourceBucketName = getOutputValue('SourceBucketName', `tapstack${environmentSuffix}-sourcebucket`);
+const pipelineName = `healthcare-pipeline-${environmentSuffix}`;
 const applicationName = `healthcare-app-${environmentSuffix}`;
 const deploymentGroupName = `healthcare-deployment-${environmentSuffix}`;
 const dashboardName = `healthcare-pipeline-${environmentSuffix}`;
@@ -226,7 +227,7 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
       expect(stageNames).toContain('Deploy');
     }, 30000);
 
-    test('Source stage should use CodeCommit', async () => {
+    test('Source stage should use S3', async () => {
       const command = new GetPipelineCommand({
         name: pipelineName,
       });
@@ -235,9 +236,8 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
       const sourceStage = response.pipeline.stages.find(s => s.name === 'Source');
       
       expect(sourceStage).toBeDefined();
-      expect(sourceStage.actions[0].actionTypeId.provider).toBe('CodeCommit');
-      expect(sourceStage.actions[0].configuration.RepositoryName).toBe(repositoryName);
-      expect(sourceStage.actions[0].configuration.BranchName).toBe('main');
+      expect(sourceStage.actions[0].actionTypeId.provider).toBe('S3');
+      expect(sourceStage.actions[0].configuration.S3ObjectKey).toBe('source.zip');
     }, 30000);
 
     test('BuildAndTest stage should use CodeBuild', async () => {
