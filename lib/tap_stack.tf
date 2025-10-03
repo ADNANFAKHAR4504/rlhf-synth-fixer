@@ -76,8 +76,8 @@ locals {
 
   # Alarm thresholds
   alarm_thresholds = {
-    bucket_size_gb         = 500  # Alert if bucket exceeds 500GB
-    daily_requests          = 10000 # Alert if requests exceed 10k/day
+    bucket_size_gb = 500    # Alert if bucket exceeds 500GB
+    daily_requests = 10000  # Alert if requests exceed 10k/day
   }
 }
 
@@ -86,7 +86,6 @@ locals {
 # ============================================================================
 
 data "aws_caller_identity" "current" {}
-
 data "aws_region" "current" {}
 
 # ============================================================================
@@ -98,12 +97,7 @@ resource "aws_kms_key" "backup_encryption" {
   deletion_window_in_days = 30
   enable_key_rotation     = true
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${var.company_name}-backup-encryption-key"
-    }
-  )
+  tags = merge(local.common_tags, { Name = "${var.company_name}-backup-encryption-key" })
 }
 
 resource "aws_kms_alias" "backup_encryption" {
@@ -118,12 +112,7 @@ resource "aws_kms_alias" "backup_encryption" {
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = local.bucket_name
 
-  tags = merge(
-    local.common_tags,
-    {
-      Name = local.bucket_name
-    }
-  )
+  tags = merge(local.common_tags, { Name = local.bucket_name })
 }
 
 resource "aws_s3_bucket_versioning" "backup_bucket" {
@@ -182,10 +171,11 @@ resource "aws_s3_bucket_metric" "backup_bucket" {
 }
 
 # ============================================================================
-# S3 BUCKET POLICY (restricted access + enforce encryption)
+# S3 BUCKET POLICY (dynamic IAM principal)
 # ============================================================================
 
 data "aws_iam_policy_document" "backup_bucket_policy" {
+  # Always deny insecure transport
   statement {
     sid    = "DenyInsecureConnections"
     effect = "Deny"
@@ -195,12 +185,8 @@ data "aws_iam_policy_document" "backup_bucket_policy" {
       identifiers = ["*"]
     }
 
-    actions = ["s3:*"]
-
-    resources = [
-      aws_s3_bucket.backup_bucket.arn,
-      "${aws_s3_bucket.backup_bucket.arn}/*"
-    ]
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.backup_bucket.arn, "${aws_s3_bucket.backup_bucket.arn}/*"]
 
     condition {
       test     = "Bool"
@@ -209,27 +195,32 @@ data "aws_iam_policy_document" "backup_bucket_policy" {
     }
   }
 
-  statement {
-    sid    = "AllowBackupRoleAccess"
-    effect = "Allow"
+  # Only include IAM role access if roles are provided
+  dynamic "statement" {
+    for_each = length(var.allowed_backup_roles) > 0 ? [1] : []
+    content {
+      sid    = "AllowBackupRoleAccess"
+      effect = "Allow"
 
-    principals {
-      type        = "AWS"
-      identifiers = var.allowed_backup_roles
+      principals {
+        type        = "AWS"
+        identifiers = var.allowed_backup_roles
+      }
+
+      actions = [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket"
+      ]
+
+      resources = [
+        aws_s3_bucket.backup_bucket.arn,
+        "${aws_s3_bucket.backup_bucket.arn}/*"
+      ]
     }
-
-    actions = [
-      "s3:PutObject",
-      "s3:GetObject",
-      "s3:ListBucket"
-    ]
-
-    resources = [
-      aws_s3_bucket.backup_bucket.arn,
-      "${aws_s3_bucket.backup_bucket.arn}/*"
-    ]
   }
 
+  # Always enforce KMS encryption
   statement {
     sid    = "RequireKMSEncryption"
     effect = "Deny"
@@ -239,8 +230,7 @@ data "aws_iam_policy_document" "backup_bucket_policy" {
       identifiers = ["*"]
     }
 
-    actions = ["s3:PutObject"]
-
+    actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.backup_bucket.arn}/*"]
 
     condition {
@@ -257,7 +247,7 @@ resource "aws_s3_bucket_policy" "backup_bucket" {
 }
 
 # ============================================================================
-# EVENTBRIDGE SCHEDULING (for backup orchestration triggers)
+# EVENTBRIDGE SCHEDULING
 # ============================================================================
 
 resource "aws_cloudwatch_event_rule" "backup_schedule" {
@@ -274,7 +264,6 @@ resource "aws_cloudwatch_event_rule" "backup_schedule" {
 
 resource "aws_sns_topic" "backup_alerts" {
   name = "${var.company_name}-backup-alerts"
-
   tags = local.common_tags
 }
 
@@ -370,3 +359,4 @@ output "retention_days" {
   description = "Number of days backups are retained"
   value       = var.backup_retention_days
 }
+
