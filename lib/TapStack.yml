@@ -793,8 +793,8 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        PasswordLength: 16
+        ExcludeCharacters: ' "@/\'
       Tags:
         - Key: Name
           Value: !Sub 'BookingPlatform-DB-Password-${EnvironmentSuffix}'
@@ -835,6 +835,7 @@ Resources:
 
   AuroraDBCluster:
     Type: AWS::RDS::DBCluster
+    DependsOn: DBMasterPasswordSecret
     Properties:
       DBClusterIdentifier: !Sub 'bookingplatform-aurora-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql

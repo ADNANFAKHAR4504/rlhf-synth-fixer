@@ -1305,8 +1305,8 @@
         "GenerateSecretString": {
           "SecretStringTemplate": "{\"username\": \"admin\"}",
           "GenerateStringKey": "password",
-          "PasswordLength": 32,
-          "ExcludeCharacters": "\"@/\\"
+          "PasswordLength": 16,
+          "ExcludeCharacters": " \"@/'"
         },
         "Tags": [
           {
@@ -1379,6 +1379,7 @@
     },
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
+      "DependsOn": "DBMasterPasswordSecret",
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "bookingplatform-aurora-cluster-${EnvironmentSuffix}"
