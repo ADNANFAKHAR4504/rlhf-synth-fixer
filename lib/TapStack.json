@@ -805,9 +805,7 @@
         "FitnessAssetsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-fitness-assets-${AWS::AccountId}"
-                },
+                "BucketName": "fitness-assets-cfn",
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -1470,7 +1468,7 @@
                     "Fn::Sub": "${AWS::StackName}-FitnessMetrics"
                 },
                 "DashboardBody": {
-                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"FitnessTracker\", \"ActiveUsers\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Active Users\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Errors\", {\"stat\": \"Sum\", \"dimensions\": {\"FunctionName\": \"${WorkoutProcessingFunction}\"}}],\n          [\".\", \"Duration\", {\"stat\": \"Average\", \"dimensions\": {\"FunctionName\": \"${WorkoutProcessingFunction}\"}}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\", \"dimensions\": {\"TableName\": \"${WorkoutHistoryTable}\"}}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\", \"dimensions\": {\"TableName\": \"${WorkoutHistoryTable}\"}}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Usage\"\n      }\n    }\n  ]\n}\n"
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"FitnessTracker\", \"ActiveUsers\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Active Users\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${WorkoutProcessingFunction}\", {\"stat\": \"Sum\"}],\n          [\"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${WorkoutProcessingFunction}\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${WorkoutHistoryTable}\", {\"stat\": \"Sum\"}],\n          [\"AWS/DynamoDB\", \"ConsumedWriteCapacityUnits\", \"TableName\", \"${WorkoutHistoryTable}\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Usage\"\n      }\n    }\n  ]\n}\n"
                 }
             }
         },

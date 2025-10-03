@@ -1,4 +1,4 @@
-I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking backend in `us-west-2`**. Please generate **only the YAML template** (no explanations).
+I need an AWS CloudFormation template in YAML to deploy a fitness tracking backend in `us-east-2`. Please generate only the YAML template (no explanations).
 
 ## Requirements
 
@@ -11,7 +11,7 @@ I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking
 - DynamoDB table for:
   - User profiles
   - Workout history
-  - Must support **efficient querying** (partition + sort keys, secondary indexes as needed)
+  - Must support efficient querying (partition + sort keys, secondary indexes as needed)
 - Amazon S3 bucket for:
   - Achievement badges
   - User-uploaded images
@@ -29,7 +29,7 @@ I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking
 
 ### Caching & Real-Time Leaderboards
 - Amazon ElastiCache Redis cluster
-  - Used for **real-time leaderboards**
+  - Used for real-time leaderboards
   - Security Group restricts access to Lambda functions only
 
 ### Monitoring
@@ -39,7 +39,7 @@ I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking
   - Alarms for Lambda errors and DynamoDB throttling
 
 ### Security
-- IAM Roles with **least-privilege permissions** for:
+- IAM Roles with least-privilege permissions for:
   - Lambda (access DynamoDB, ElastiCache, SNS, S3, CloudWatch)
   - API Gateway invoke permissions
   - Cognito integration
@@ -47,11 +47,11 @@ I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking
 - VPC configuration for ElastiCache Redis (private subnet, SG rules)
 
 ### Constraints
-- Store **workout history** in DynamoDB with efficient querying
-- Implement **real-time leaderboards** with ElastiCache Redis
-- Use **Cognito** for user authentication and social features
-- Send **achievement notifications** via SNS
-- Monitor **active users** in CloudWatch with custom metrics
+- Store workout history in DynamoDB with efficient querying
+- Implement real-time leaderboards with ElastiCache Redis
+- Use Cognito for user authentication and social features
+- Send achievement notifications via SNS
+- Monitor active users in CloudWatch with custom metrics
 
 ### Tags
 - `Environment: fitness-dev`
@@ -76,7 +76,7 @@ I need an **AWS CloudFormation template in YAML** to deploy a **fitness tracking
   - CloudWatch Dashboard name
 
 ### Formatting
-- Must be valid CloudFormation **YAML**
+- Must be valid CloudFormation YAML
 - Use intrinsic functions (`Ref`, `Fn::GetAtt`) correctly
 - Start template with:
   ```yaml
