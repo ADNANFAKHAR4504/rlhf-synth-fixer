@@ -419,14 +419,8 @@ resource "aws_cloudtrail" "content_delivery" {
     }
   }
 
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-    data_resource {
-      type   = "AWS::CloudFront::Distribution"
-      values = [aws_cloudfront_distribution.content.arn]
-    }
-  }
+  # CloudFront management events are tracked by default in CloudTrail
+  # Data-level events for CloudFront distributions are not supported
 
   depends_on = [aws_s3_bucket_policy.logs]
 }

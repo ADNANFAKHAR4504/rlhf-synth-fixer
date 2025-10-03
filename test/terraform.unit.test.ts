@@ -205,7 +205,7 @@ describe("Secure Content Delivery System - Unit Tests", () => {
     test("CloudTrail event selectors are configured", () => {
       expect(stackContent).toMatch(/event_selector/);
       expect(stackContent).toMatch(/AWS::S3::Object/);
-      expect(stackContent).toMatch(/AWS::CloudFront::Distribution/);
+      expect(stackContent).toMatch(/CloudFront management events are tracked by default/);
     });
   });
 
