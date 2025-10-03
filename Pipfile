@@ -25,7 +25,7 @@ requests = "*"
 pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
-
+black = "*"
 
 [requires]
 python_version = "3.12.11"
