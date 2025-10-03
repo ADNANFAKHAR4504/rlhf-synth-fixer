@@ -722,8 +722,9 @@ resource "aws_wafv2_web_acl" "fintech_api_waf" {
 #   }
 # }
 
-# Associate WAF with API Gateway
-resource "aws_wafv2_web_acl_association" "api_gateway_waf" {
-  resource_arn = aws_apigatewayv2_stage.api_stage.arn
-  web_acl_arn  = aws_wafv2_web_acl.fintech_api_waf.arn
-}
+# WAF Association with HTTP API (API Gateway v2) is not supported
+# Only REST APIs support WAF integration according to AWS documentation
+# resource "aws_wafv2_web_acl_association" "api_gateway_waf" {
+#   resource_arn = "arn:aws:apigateway:${data.aws_region.current.id}::/apis/${aws_apigatewayv2_api.fintech_api.id}/stages/${aws_apigatewayv2_stage.api_stage.name}"
+#   web_acl_arn  = aws_wafv2_web_acl.fintech_api_waf.arn
+# }
