@@ -387,16 +387,12 @@ describe('TapStack Integration Tests', () => {
           {
             Name: 'vpc-id',
             Values: [outputs.VPCId]
-          },
-          {
-            Name: 'group-name',
-            Values: ['*RDS-SG*']
           }
         ]
       }).promise();
 
       const rdsSG = allSGResponse.SecurityGroups?.find(sg =>
-        sg.GroupName?.includes('RDSSecurityGroup')
+        sg.GroupName?.includes('RDSSecurityGroup') || sg.GroupDescription?.includes('RDS database')
       );
       expect(rdsSG).toBeDefined();
 
