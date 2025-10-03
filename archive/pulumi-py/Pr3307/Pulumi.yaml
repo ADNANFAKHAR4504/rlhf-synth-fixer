@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Event-driven inventory processing system infrastructure
+main: tap.py

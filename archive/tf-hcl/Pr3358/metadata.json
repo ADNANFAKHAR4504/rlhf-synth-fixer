@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "24920516",
+  "team": "1",
+  "startedAt": "2025-10-02T13:23:34.689Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, Glue, Glue DataBrew, Lake Formation, Step Functions, Athena, QuickSight, DynamoDB, Macie, CloudTrail, CloudWatch, CloudWatch LogGroup, SNS, SES, Secrets Manager, KMS, Config, EventBridge, IAM, VPC",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

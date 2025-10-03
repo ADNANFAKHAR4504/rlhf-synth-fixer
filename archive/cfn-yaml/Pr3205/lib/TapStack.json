@@ -1,0 +1,437 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Simple, cost-efficient order processing system with SQS, Lambda, DynamoDB, and CloudWatch monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    }
+  },
+  "Resources": {
+    "OrderDLQ": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "${AWS::StackName}-order-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DeadLetterQueue"
+          }
+        ]
+      }
+    },
+    "OrderQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "${AWS::StackName}-order-queue-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 180,
+        "MessageRetentionPeriod": 345600,
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": ["OrderDLQ", "Arn"]
+          },
+          "maxReceiveCount": 3
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "OrderProcessing"
+          }
+        ]
+      }
+    },
+    "OrderTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${AWS::StackName}-orders-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "orderId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "processedAt",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "orderId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "StatusIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "status",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "processedAt",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "OrderTracking"
+          }
+        ]
+      }
+    },
+    "OrderProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "OrderProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["OrderQueue", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["OrderTable", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${OrderTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "OrderProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-order-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["OrderProcessorRole", "Arn"]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "ORDER_TABLE_NAME": {
+              "Ref": "OrderTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');\nconst { DynamoDBDocumentClient, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');\n\nconst client = new DynamoDBClient({});\nconst docClient = DynamoDBDocumentClient.from(client);\nconst tableName = process.env.ORDER_TABLE_NAME;\n\nexports.handler = async (event) => {\n  console.log('Processing batch:', JSON.stringify(event, null, 2));\n  \n  const results = {\n    successful: [],\n    failed: []\n  };\n  \n  // Process each SQS record\n  for (const record of event.Records) {\n    try {\n      const messageBody = JSON.parse(record.body);\n      const orderId = messageBody.orderId || `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n      \n      console.log(`Processing order: ${orderId}`);\n      \n      // Validate order data\n      if (!messageBody.orderId) {\n        throw new Error('Missing required field: orderId');\n      }\n      \n      // Simulate order processing logic\n      const processedOrder = {\n        orderId: orderId,\n        status: 'PROCESSED',\n        originalMessage: messageBody,\n        processedAt: Date.now(),\n        processingTimestamp: new Date().toISOString(),\n        sqsMessageId: record.messageId,\n        receiptHandle: record.receiptHandle,\n        metadata: {\n          customerName: messageBody.customerName || 'Unknown',\n          orderTotal: messageBody.orderTotal || 0,\n          items: messageBody.items || []\n        }\n      };\n      \n      // Store in DynamoDB\n      await docClient.send(new PutCommand({\n        TableName: tableName,\n        Item: processedOrder,\n        ConditionExpression: 'attribute_not_exists(orderId)'\n      }));\n      \n      console.log(`Successfully processed order: ${orderId}`);\n      results.successful.push(orderId);\n      \n    } catch (error) {\n      console.error('Error processing record:', error);\n      console.error('Failed record:', JSON.stringify(record, null, 2));\n      \n      // Log failed order to DynamoDB with error details\n      try {\n        const failedOrderId = JSON.parse(record.body).orderId || `failed-${Date.now()}`;\n        await docClient.send(new PutCommand({\n          TableName: tableName,\n          Item: {\n            orderId: failedOrderId,\n            status: 'FAILED',\n            error: error.message,\n            errorStack: error.stack,\n            originalMessage: record.body,\n            processedAt: Date.now(),\n            processingTimestamp: new Date().toISOString(),\n            sqsMessageId: record.messageId\n          }\n        }));\n      } catch (dbError) {\n        console.error('Failed to log error to DynamoDB:', dbError);\n      }\n      \n      results.failed.push({\n        messageId: record.messageId,\n        error: error.message\n      });\n      \n      // Throw error to move message to DLQ after retries\n      throw error;\n    }\n  }\n  \n  console.log('Processing summary:', JSON.stringify(results, null, 2));\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify({\n      message: 'Batch processing completed',\n      results: results\n    })\n  };\n};"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "OrderProcessing"
+          }
+        ]
+      }
+    },
+    "OrderProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${OrderProcessorFunction}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "OrderProcessorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": ["OrderQueue", "Arn"]
+        },
+        "FunctionName": {
+          "Ref": "OrderProcessorFunction"
+        },
+        "BatchSize": 10,
+        "MaximumBatchingWindowInSeconds": 5,
+        "Enabled": true,
+        "FunctionResponseTypes": ["ReportBatchItemFailures"]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-order-processor-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function experiences errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "OrderProcessorFunction"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DLQMessageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-dlq-messages-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when messages appear in Dead Letter Queue",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Namespace": "AWS/SQS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": ["OrderDLQ", "QueueName"]
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-order-processor-duration-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda execution approaches timeout",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 25000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "OrderProcessorFunction"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "OrderProcessingDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "${AWS::StackName}-order-processing-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", {\"stat\": \"Average\", \"label\": \"Messages in Queue\"}],\n          [\".\", \"NumberOfMessagesSent\", {\"stat\": \"Sum\", \"label\": \"Messages Sent\"}],\n          [\".\", \"NumberOfMessagesDeleted\", {\"stat\": \"Sum\", \"label\": \"Messages Processed\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"SQS Queue Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"QueueName\": \"${OrderQueue.QueueName}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration (ms)\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Function Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${OrderProcessorFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", {\"stat\": \"Average\", \"label\": \"Messages in DLQ\"}]\n        ],\n        \"view\": \"singleValue\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Dead Letter Queue\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"QueueName\": \"${OrderDLQ.QueueName}\"\n        }\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/lambda/${OrderProcessorFunction}'\\n| fields @timestamp, @message\\n| filter @message like /Error/\\n| sort @timestamp desc\\n| limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Errors\",\n        \"stacked\": false\n      }\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "OrderQueueURL": {
+      "Description": "URL of the Order Queue",
+      "Value": {
+        "Ref": "OrderQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderQueueURL"
+        }
+      }
+    },
+    "OrderQueueARN": {
+      "Description": "ARN of the Order Queue",
+      "Value": {
+        "Fn::GetAtt": ["OrderQueue", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderQueueARN"
+        }
+      }
+    },
+    "OrderDLQURL": {
+      "Description": "URL of the Dead Letter Queue",
+      "Value": {
+        "Ref": "OrderDLQ"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderDLQURL"
+        }
+      }
+    },
+    "OrderTableName": {
+      "Description": "Name of the DynamoDB Orders Table",
+      "Value": {
+        "Ref": "OrderTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderTableName"
+        }
+      }
+    },
+    "OrderProcessorFunctionName": {
+      "Description": "Name of the Lambda Function",
+      "Value": {
+        "Ref": "OrderProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderProcessorFunctionName"
+        }
+      }
+    },
+    "OrderProcessorFunctionARN": {
+      "Description": "ARN of the Lambda Function",
+      "Value": {
+        "Fn::GetAtt": ["OrderProcessorFunction", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrderProcessorFunctionARN"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${OrderProcessingDashboard}"
+      }
+    },
+    "TestCommand": {
+      "Description": "AWS CLI command to send a test message",
+      "Value": {
+        "Fn::Sub": "aws sqs send-message --queue-url ${OrderQueue} --message-body '{\"orderId\":\"test-001\",\"customerName\":\"John Doe\",\"orderTotal\":99.99,\"items\":[{\"productId\":\"P123\",\"quantity\":2}]}'"
+      }
+    }
+  }
+}
