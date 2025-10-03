@@ -166,9 +166,9 @@ resource "aws_lb_target_group" "main" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 3
-    unhealthy_threshold = 5
-    timeout             = 10
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    timeout             = 15
     interval            = 30
     path                = "/health"
     matcher             = "200"
@@ -269,7 +269,7 @@ resource "aws_autoscaling_group" "main" {
   min_size                  = var.min_size
   max_size                  = var.max_size
   desired_capacity          = var.desired_capacity
-  health_check_grace_period = 900
+  health_check_grace_period = 1200
   health_check_type         = "ELB"
   force_delete              = true
 

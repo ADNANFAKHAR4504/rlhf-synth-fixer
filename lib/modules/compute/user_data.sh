@@ -36,7 +36,16 @@ systemctl start httpd
 
 # Create a simple health check endpoint
 cat <<EOF > /var/www/html/health
-OK
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health Check</title>
+</head>
+<body>
+    <h1>OK</h1>
+    <p>Service is healthy</p>
+</body>
+</html>
 EOF
 
 # Create a simple index page
