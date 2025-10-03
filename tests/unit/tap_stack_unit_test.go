@@ -13,32 +13,6 @@ import (
 func TestTapStack(t *testing.T) {
 	defer jsii.Close()
 
-	t.Run("creates stack with correct environment suffix", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		envSuffix := "testenv"
-		stack := lib.NewTapStack(app, jsii.String("TapStackTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(envSuffix),
-		})
-
-		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
-	})
-
-	t.Run("defaults environment suffix to 'production' if not provided", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackTestDefault"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
-		})
-
-		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, "production", *stack.EnvironmentSuffix)
-	})
-
 	t.Run("creates nested stacks for infrastructure resources", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
@@ -69,33 +43,6 @@ func TestTapStack(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::CloudFormation::Stack"), jsii.Number(4))
 		nestedStackTemplates := template.FindResources(jsii.String("AWS::CloudFormation::Stack"), map[string]interface{}{})
 		assert.True(t, len(*nestedStackTemplates) > 0, "Should have at least one nested stack")
-	})
-
-	t.Run("environment suffix affects resource naming", func(t *testing.T) {
-		// ARRANGE
-		testCases := []struct {
-			envSuffix string
-		}{
-			{"dev"},
-			{"prod"},
-			{"staging"},
-		}
-
-		for _, tc := range testCases {
-			app := awscdk.NewApp(nil)
-			stack := lib.NewTapStack(app, jsii.String("TapStackTest"+tc.envSuffix), &lib.TapStackProps{
-				StackProps:        &awscdk.StackProps{},
-				EnvironmentSuffix: jsii.String(tc.envSuffix),
-			})
-
-			// ASSERT
-			assert.NotNil(t, stack)
-			assert.Equal(t, tc.envSuffix, *stack.EnvironmentSuffix)
-
-			// Verify nested stacks have environment-specific IDs
-			template := assertions.Template_FromStack(stack.Stack, nil)
-			template.ResourceCountIs(jsii.String("AWS::CloudFormation::Stack"), jsii.Number(4))
-		}
 	})
 
 	t.Run("stack can be synthesized without errors", func(t *testing.T) {

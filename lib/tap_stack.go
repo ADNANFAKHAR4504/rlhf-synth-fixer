@@ -184,7 +184,7 @@ func NewSecurityNestedStack(scope constructs.Construct, id *string, environmentS
 	awscdk.Tags_Of(kmsKey).Add(jsii.String("Purpose"), jsii.String("RDS-Encryption"), nil)
 
 	// Create S3 bucket for CloudTrail logs with complete public access block
-	bucketName := fmt.Sprintf("tap-cloudtrail-logs-%s-%s", environmentSuffix, *awscdk.Aws_ACCOUNT_ID())
+	bucketName := fmt.Sprintf("tap-cloudtrail-logs-env-%s-%s", environmentSuffix, *awscdk.Aws_ACCOUNT_ID())
 	loggingBucket := awss3.NewBucket(nestedStack, jsii.String("CloudTrailLogsBucket"), &awss3.BucketProps{
 		BucketName:    jsii.String(bucketName),
 		Versioned:     jsii.Bool(true),
