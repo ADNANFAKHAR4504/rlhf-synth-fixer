@@ -207,10 +207,10 @@ export class TapStack extends cdk.Stack {
         backupRetention: cdk.Duration.days(7),
         preferredBackupWindow: '03:00-04:00',
         preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
-        deletionProtection: false, // Set to false for QA testing - resources must be destroyable
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Set to DESTROY for QA testing
+        deletionProtection: false, // Disabled for development environments
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Configured for clean stack deletion
         parameterGroup: parameterGroup,
-        enablePerformanceInsights: false, // Disabled for db.t3.micro in us-west-1
+        enablePerformanceInsights: false, // Disabled for micro instances
         // performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
         // performanceInsightEncryptionKey: rdsKmsKey,
         monitoringInterval: cdk.Duration.seconds(60),
@@ -481,7 +481,7 @@ export class TapStack extends cdk.Stack {
       storageEncryptionKey: rdsKmsKey,
       autoMinorVersionUpgrade: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      enablePerformanceInsights: false, // Disabled for db.t3.micro in us-west-1
+      enablePerformanceInsights: false, // Disabled for micro instances
       // performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
       // performanceInsightEncryptionKey: rdsKmsKey,
       monitoringInterval: cdk.Duration.seconds(60),
@@ -677,23 +677,6 @@ npx cdk synth --context environmentSuffix=dev
 npx cdk destroy --context environmentSuffix=dev
 ```
 
-## Testing Strategy
-
-### Unit Tests (36 tests)
-- VPC and networking validation
-- RDS instance configuration verification
-- Security group rule validation
-- KMS key and encryption setup
-- Backup plan and vault configuration
-- IAM roles and policies testing
-- Stack outputs verification
-
-### Integration Tests (12 tests)
-- Deployment output validation
-- Resource naming consistency
-- System capabilities verification
-- Account and region consistency
-- Deployment completeness checks
 
 ## Stack Outputs
 
