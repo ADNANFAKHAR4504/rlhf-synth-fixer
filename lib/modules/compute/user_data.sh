@@ -1,6 +1,25 @@
 #!/bin/bash
 set -e
 
+# Log everything to help debug
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+echo "Starting user data script at $(date)"
+
+# Wait for network connectivity
+echo "Waiting for network connectivity..."
+for i in {1..30}; do
+    if ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+        echo "Network connectivity established"
+        break
+    fi
+    echo "Attempt $i: Waiting for network..."
+    sleep 10
+done
+
+# Update system
+echo "Updating system packages..."
 yum update -y
 
 wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
@@ -40,6 +59,12 @@ EOF
 # Ensure proper permissions
 chown apache:apache /var/www/html/index.html /var/www/html/health
 chmod 644 /var/www/html/index.html /var/www/html/health
+
+# Test the health endpoint
+echo "Testing health endpoint..."
+curl -f http://localhost/health || echo "Health endpoint test failed"
+
+echo "User data script completed at $(date)"
 
 cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {

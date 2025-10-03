@@ -124,8 +124,22 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
-        Action   = "s3:PutObject"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
         Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.alb_logs.arn
       }
     ]
   })
@@ -196,6 +210,9 @@ resource "aws_launch_template" "main" {
     delete_on_termination       = true
     security_groups             = [aws_security_group.app.id]
   }
+
+  # Ensure instances can reach the internet for package installation
+  vpc_security_group_ids = [aws_security_group.app.id]
 
   block_device_mappings {
     device_name = "/dev/xvda"
