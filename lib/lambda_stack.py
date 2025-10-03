@@ -3,14 +3,12 @@ This module defines the Lambda function stack for processing reviews.
 """
 
 from typing import Optional
+
+from aws_cdk import CfnOutput, Duration
+from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
 from constructs import Construct
-from aws_cdk import (
-    aws_lambda as lambda_,
-    aws_iam as iam,
-    aws_dynamodb as dynamodb,
-    Duration,
-    CfnOutput,
-)
 
 
 class LambdaStackProps:
@@ -153,7 +151,8 @@ def handler(event, context):
             role=lambda_role,
             memory_size=256,
             timeout=Duration.seconds(30),
-            reserved_concurrent_executions=50,
+            # Reduce concurrent executions for PR environments to avoid throttling
+            reserved_concurrent_executions=(10 if suffix.startswith("pr") else 50),
             tracing=lambda_.Tracing.ACTIVE,
             environment={
                 "TABLE_NAME": (
