@@ -477,7 +477,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
         Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
         Principal = {
-          Service = "cloudtrail.amazonaws.com"
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs.arn
@@ -491,13 +491,27 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
         Sid    = "AWSCloudTrailWrite"
         Effect = "Allow"
         Principal = {
-          Service = "cloudtrail.amazonaws.com"
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
+        Resource = "${aws_s3_bucket.logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWriteDigest"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/CloudTrail-Digest/${var.aws_region}/*/*"
+        Condition = {
+          StringEquals = {
             "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail-${var.environment}"
           }
         }
