@@ -38,6 +38,9 @@ export class PriceMonitorStack extends TerraformStack {
     const awsRegion = props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
+    // Add unique suffix to avoid resource conflicts
+    const resourceSuffix = 'primary-1';
+
     // Configure providers
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -74,7 +77,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // DynamoDB Table with Streams and PITR
     const priceTable = new DynamodbTable(this, 'price-table', {
-      name: `price-monitor-${environmentSuffix}`,
+      name: `price-monitor-${environmentSuffix}-${resourceSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'product_id',
       rangeKey: 'timestamp',
@@ -117,7 +120,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // SQS Queues
     const deadLetterQueue = new SqsQueue(this, 'scraping-dlq', {
-      name: `price-monitor-dlq-${environmentSuffix}`,
+      name: `price-monitor-dlq-${environmentSuffix}-${resourceSuffix}`,
       messageRetentionSeconds: 1209600, // 14 days
       tags: {
         Name: 'Price Monitor DLQ',
@@ -126,7 +129,7 @@ export class PriceMonitorStack extends TerraformStack {
     });
 
     const scrapingQueue = new SqsQueue(this, 'scraping-queue', {
-      name: `price-monitor-scraping-${environmentSuffix}`,
+      name: `price-monitor-scraping-${environmentSuffix}-${resourceSuffix}`,
       visibilityTimeoutSeconds: 300, // 5 minutes
       messageRetentionSeconds: 86400, // 1 day
       receiveWaitTimeSeconds: 20, // Long polling
@@ -142,7 +145,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // SNS Topic for notifications
     const notificationTopic = new SnsTopic(this, 'notification-topic', {
-      name: `price-monitor-notifications-${environmentSuffix}`,
+      name: `price-monitor-notifications-${environmentSuffix}-${resourceSuffix}`,
       displayName: 'Price Drop Notifications',
       tags: {
         Name: 'Price Monitor Notifications',
@@ -152,7 +155,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // CloudWatch Log Groups
     const scraperLogGroup = new CloudwatchLogGroup(this, 'scraper-logs', {
-      name: `/aws/lambda/price-scraper-${environmentSuffix}`,
+      name: `/aws/lambda/price-scraper-${environmentSuffix}-${resourceSuffix}`,
       retentionInDays: 7,
     });
 
@@ -160,7 +163,7 @@ export class PriceMonitorStack extends TerraformStack {
       this,
       'stream-processor-logs',
       {
-        name: `/aws/lambda/stream-processor-${environmentSuffix}`,
+        name: `/aws/lambda/stream-processor-${environmentSuffix}-${resourceSuffix}`,
         retentionInDays: 7,
       }
     );
@@ -185,17 +188,17 @@ export class PriceMonitorStack extends TerraformStack {
     );
 
     const scraperRole = new IamRole(this, 'scraper-role', {
-      name: `price-scraper-role-${environmentSuffix}`,
+      name: `price-scraper-role-${environmentSuffix}-${resourceSuffix}`,
       assumeRolePolicy: lambdaAssumeRole.json,
     });
 
     const streamProcessorRole = new IamRole(this, 'stream-processor-role', {
-      name: `stream-processor-role-${environmentSuffix}`,
+      name: `stream-processor-role-${environmentSuffix}-${resourceSuffix}`,
       assumeRolePolicy: lambdaAssumeRole.json,
     });
 
     const scraperPolicy = new IamPolicy(this, 'scraper-policy', {
-      name: `price-scraper-policy-${environmentSuffix}`,
+      name: `price-scraper-policy-${environmentSuffix}-${resourceSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -246,7 +249,7 @@ export class PriceMonitorStack extends TerraformStack {
       this,
       'stream-processor-policy',
       {
-        name: `stream-processor-policy-${environmentSuffix}`,
+        name: `stream-processor-policy-${environmentSuffix}-${resourceSuffix}`,
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -313,7 +316,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // Lambda Functions
     const scraperFunction = new LambdaFunction(this, 'scraper-function', {
-      functionName: `price-scraper-${environmentSuffix}`,
+      functionName: `price-scraper-${environmentSuffix}-${resourceSuffix}`,
       role: scraperRole.arn,
       handler: 'index.handler',
       runtime: 'python3.10',
@@ -339,7 +342,7 @@ export class PriceMonitorStack extends TerraformStack {
       this,
       'stream-processor-function',
       {
-        functionName: `stream-processor-${environmentSuffix}`,
+        functionName: `stream-processor-${environmentSuffix}-${resourceSuffix}`,
         role: streamProcessorRole.arn,
         handler: 'index.handler',
         runtime: 'python3.10',
@@ -379,7 +382,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // EventBridge Scheduler
     const schedulerGroup = new SchedulerScheduleGroup(this, 'scheduler-group', {
-      name: `price-monitor-${environmentSuffix}`,
+      name: `price-monitor-${environmentSuffix}-${resourceSuffix}`,
       tags: {
         Name: 'Price Monitor Scheduler Group',
         Environment: environmentSuffix,
@@ -387,7 +390,7 @@ export class PriceMonitorStack extends TerraformStack {
     });
 
     const schedulerRole = new IamRole(this, 'scheduler-role', {
-      name: `price-scheduler-role-${environmentSuffix}`,
+      name: `price-scheduler-role-${environmentSuffix}-${resourceSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -438,7 +441,7 @@ export class PriceMonitorStack extends TerraformStack {
 
     // CloudWatch Alarms
     new CloudwatchMetricAlarm(this, 'scraper-error-alarm', {
-      alarmName: `price-scraper-errors-${environmentSuffix}`,
+      alarmName: `price-scraper-errors-${environmentSuffix}-${resourceSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
       metricName: 'Errors',
@@ -454,7 +457,7 @@ export class PriceMonitorStack extends TerraformStack {
     });
 
     new CloudwatchMetricAlarm(this, 'dlq-alarm', {
-      alarmName: `price-monitor-dlq-${environmentSuffix}`,
+      alarmName: `price-monitor-dlq-${environmentSuffix}-${resourceSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 1,
       metricName: 'ApproximateNumberOfMessagesVisible',
