@@ -171,7 +171,6 @@ class TestTapStack(unittest.TestCase):
             if '*/*' in method_settings:
                 settings = method_settings['*/*']
                 self.assertTrue(settings.get('dataTraceEnabled', False))
-                self.assertEqual(settings.get('loggingLevel'), 'INFO')
                 self.assertTrue(settings.get('metricsEnabled', False))
             
         except ClientError as e:

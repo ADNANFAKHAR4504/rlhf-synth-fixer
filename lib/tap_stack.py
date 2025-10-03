@@ -157,7 +157,6 @@ class TapStack(cdk.Stack):
             description="API Gateway for managing items",
             deploy_options=apigateway.StageOptions(
                 stage_name="v1",
-                logging_level=apigateway.MethodLoggingLevel.INFO,
                 data_trace_enabled=True,
                 metrics_enabled=True,
                 tracing_enabled=True,

@@ -107,7 +107,6 @@ class TestTapStack(unittest.TestCase):
                 {
                     "DataTraceEnabled": True,
                     "HttpMethod": "*",
-                    "LoggingLevel": "INFO",
                     "MetricsEnabled": True,
                     "ResourcePath": "/*"
                 }
