@@ -955,23 +955,55 @@ class TapStack extends Stack {
     }
 
     private AppSyncResources createAppSyncApi(final AuthResources auth) {
-        GraphqlApi api = new GraphqlApi(this, "DocumentCollabAPI" + environmentSuffix,
-                GraphqlApiProps.builder()
-                        .name("DocumentCollabGraphQLAPI-" + environmentSuffix)
-                        .schema(SchemaFile.fromAsset("schema/schema.graphql"))
-                        .authorizationConfig(AuthorizationConfig.builder()
-                                .defaultAuthorization(AuthorizationMode.builder()
-                                        .authorizationType(AuthorizationType.USER_POOL)
-                                        .userPoolConfig(UserPoolConfig.builder()
-                                                .userPool(auth.getUserPool())
-                                                .build())
-                                        .build())
-                                .build())
-                        .xrayEnabled(true)
-                        .build());
+    String inlineSchema = 
+            "type Query {\n" +
+            "  getDocument(documentId: ID!): Document\n" +
+            "  listDocuments(limit: Int, nextToken: String): DocumentConnection\n" +
+            "}\n\n" +
+            "type Mutation {\n" +
+            "  createDocument(input: CreateDocumentInput!): Document\n" +
+            "  updateDocument(input: UpdateDocumentInput!): Document\n" +
+            "  deleteDocument(documentId: ID!): Document\n" +
+            "}\n\n" +
+            "type Document {\n" +
+            "  documentId: ID!\n" +
+            "  title: String!\n" +
+            "  content: String!\n" +
+            "  createdAt: AWSDateTime!\n" +
+            "  updatedAt: AWSDateTime!\n" +
+            "  owner: String!\n" +
+            "}\n\n" +
+            "type DocumentConnection {\n" +
+            "  items: [Document!]!\n" +
+            "  nextToken: String\n" +
+            "}\n\n" +
+            "input CreateDocumentInput {\n" +
+            "  title: String!\n" +
+            "  content: String!\n" +
+            "}\n\n" +
+            "input UpdateDocumentInput {\n" +
+            "  documentId: ID!\n" +
+            "  title: String\n" +
+            "  content: String\n" +
+            "}\n";
+    
+    GraphqlApi api = new GraphqlApi(this, "DocumentCollabAPI" + environmentSuffix,
+            GraphqlApiProps.builder()
+                    .name("DocumentCollabGraphQLAPI-" + environmentSuffix)
+                    .definition(software.amazon.awscdk.services.appsync.Definition.fromString(inlineSchema))
+                    .authorizationConfig(AuthorizationConfig.builder()
+                            .defaultAuthorization(AuthorizationMode.builder()
+                                    .authorizationType(AuthorizationType.USER_POOL)
+                                    .userPoolConfig(UserPoolConfig.builder()
+                                            .userPool(auth.getUserPool())
+                                            .build())
+                                    .build())
+                            .build())
+                    .xrayEnabled(true)
+                    .build());
 
-        return new AppSyncResources(api);
-    }
+    return new AppSyncResources(api);
+}
 
     private StateMachine createStepFunctionsWorkflow(final LambdaResources lambdas,
                                                      final DocumentDataResources data) {
