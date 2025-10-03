@@ -204,7 +204,7 @@ class TestProductReviewsIntegration(unittest.TestCase):
             ]
 
             # Check for expected widget titles
-            expected_titles = ["API Requests", "Lambda Invocations", "DynamoDB Read Capacity"]
+            expected_titles = ["API Request Count", "Lambda Invocations", "DynamoDB Read Capacity"]
             for title in expected_titles:
                 self.assertTrue(
                     any(title in widget_title for widget_title in widget_titles),
