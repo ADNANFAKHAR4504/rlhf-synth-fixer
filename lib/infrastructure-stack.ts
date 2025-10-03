@@ -163,13 +163,9 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     // Create SNS topic for alarms
-    this.alarmTopic = new sns.Topic(
-      this,
-      `DbAlarmTopic-${environmentSuffix}`,
-      {
-        displayName: `Aurora Database Alarms - ${environmentSuffix}`,
-      }
-    );
+    this.alarmTopic = new sns.Topic(this, `DbAlarmTopic-${environmentSuffix}`, {
+      displayName: `Aurora Database Alarms - ${environmentSuffix}`,
+    });
 
     // Create CloudWatch alarms for monitoring
     const capacityAlarm = new cloudwatch.Alarm(
@@ -183,7 +179,9 @@ export class InfrastructureStack extends cdk.Stack {
           'Alert when serverless database capacity is approaching maximum',
       }
     );
-    capacityAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
+    capacityAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
+    );
 
     const acuUtilizationAlarm = new cloudwatch.Alarm(
       this,

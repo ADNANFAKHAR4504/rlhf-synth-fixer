@@ -19,10 +19,14 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Instantiate the Infrastructure Stack
-    const infrastructureStack = new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {
-      environmentSuffix,
-      env: props?.env,
-    });
+    const infrastructureStack = new InfrastructureStack(
+      this,
+      `InfrastructureStack-${environmentSuffix}`,
+      {
+        environmentSuffix,
+        env: props?.env,
+      }
+    );
 
     // Bubble up Aurora outputs to the main TapStack so integration tests can find them
     new cdk.CfnOutput(this, 'VpcId', {
