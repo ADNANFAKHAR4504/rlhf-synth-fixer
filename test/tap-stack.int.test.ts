@@ -88,13 +88,21 @@ describe("Live Integration Tests - CloudFormation Stack", () => {
     expect(asgName).toBeDefined();
 
     const res = await ec2.send(new DescribeInstancesCommand({}));
-    const instances = res.Reservations?.flatMap((r) => r.Instances ?? []);
+
+    // Flatten reservations safely
+    const instances =
+      res.Reservations?.flatMap((r) => r.Instances ?? []) ?? [];
+
     // Simple check: there should be EC2s tagged with ASG name
     const filtered = instances.filter((i) =>
-      i.Tags?.some((t) => t.Key === "aws:autoscaling:groupName" && t.Value === asgName)
+      i.Tags?.some(
+        (t) => t.Key === "aws:autoscaling:groupName" && t.Value === asgName
+      )
     );
+
     expect(filtered.length).toBeGreaterThan(0);
   });
+
 
   test("Security Group should allow ALB -> EC2 traffic", async () => {
     const albSgId = outputs.ALBSecurityGroupId;
