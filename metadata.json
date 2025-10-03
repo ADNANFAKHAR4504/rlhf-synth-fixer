@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10293847",
+  "team": "1",
+  "startedAt": "2025-10-02T19:14:42.601Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "S3, CloudWatch, Load Balancer, VPC"
+}
