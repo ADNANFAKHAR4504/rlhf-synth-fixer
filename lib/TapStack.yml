@@ -1128,7 +1128,7 @@ Resources:
       AutoScalingGroupName: !Sub '${CompanyName}-${Environment}-asg'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: '$Latest'
+        Version: '1'
       MinSize: !If [IsProduction, 2, 1]
       MaxSize: !If [IsProduction, 10, 3]
       DesiredCapacity: !If [IsProduction, 2, 1]
