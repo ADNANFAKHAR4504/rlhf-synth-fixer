@@ -25,17 +25,52 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load the deployment outputs
-const cdkOutputsPath = path.join(__dirname, '../cdk-outputs.json');
-let outputs: any = {};
-
-if (fs.existsSync(cdkOutputsPath)) {
-  const cdkOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, 'utf-8'));
-  const stackKeys = Object.keys(cdkOutputs);
-  if (stackKeys.length > 0) {
-    outputs = cdkOutputs[stackKeys[0]];
+// Load the deployment outputs based on environment
+function loadOutputsForEnvironment(): any {
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  const expectedStackName = `TapStack${environmentSuffix}`;
+  
+  // Try to load from cdk-outputs.json first
+  const cdkOutputsPath = path.join(__dirname, '../cdk-outputs.json');
+  if (fs.existsSync(cdkOutputsPath)) {
+    const cdkOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, 'utf-8'));
+    
+    // Try to find the exact stack for this environment
+    if (cdkOutputs[expectedStackName]) {
+      console.log(`Found outputs for stack: ${expectedStackName}`);
+      return cdkOutputs[expectedStackName];
+    }
+    
+    // If exact match not found, try to find any stack containing the environment suffix
+    const matchingStackKey = Object.keys(cdkOutputs).find(key => 
+      key.includes(environmentSuffix) || key.includes(`Stack${environmentSuffix}`)
+    );
+    
+    if (matchingStackKey) {
+      console.log(`Found outputs for matching stack: ${matchingStackKey}`);
+      return cdkOutputs[matchingStackKey];
+    }
+    
+    // Fallback to first available stack (backwards compatibility)
+    const stackKeys = Object.keys(cdkOutputs);
+    if (stackKeys.length > 0) {
+      console.log(`Using fallback stack: ${stackKeys[0]} (expected: ${expectedStackName})`);
+      return cdkOutputs[stackKeys[0]];
+    }
   }
+  
+  // Try to load from cfn-outputs as fallback
+  const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+  if (fs.existsSync(cfnOutputsPath)) {
+    console.log('Loading outputs from cfn-outputs/flat-outputs.json');
+    return JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf-8'));
+  }
+  
+  console.warn(`No outputs found for environment: ${environmentSuffix}`);
+  return {};
 }
+
+let outputs: any = loadOutputsForEnvironment();
 
 // Determine the correct region from the outputs (e.g., from Aurora cluster endpoint or SNS ARN)
 function detectRegionFromOutputs(outputs: any): string {
