@@ -172,7 +172,7 @@ describe('Recommendation System Integration Tests', () => {
       const response = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
       
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(response.ServerSideEncryptionConfiguration.Rules).toBeDefined();
+      expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
     });
 
     test('bucket should have lifecycle configuration', async () => {
@@ -182,7 +182,7 @@ describe('Recommendation System Integration Tests', () => {
       const response = await s3.getBucketLifecycleConfiguration({ Bucket: bucketName }).promise();
       
       expect(response.Rules).toBeDefined();
-      expect(response.Rules.length).toBeGreaterThan(0);
+      expect(response.Rules?.length).toBeGreaterThan(0);
     });
   });
 
