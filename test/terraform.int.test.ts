@@ -3,7 +3,7 @@ describe('Terraform Quiz Processing Infrastructure Integration Tests', () => {
     test('Infrastructure components should be properly integrated', async () => {
       // This is a placeholder for actual integration tests
       // In a real scenario, this would test deployed infrastructure
-      
+
       // For now, we'll just check that the test framework is working
       expect(true).toBe(true);
     });
