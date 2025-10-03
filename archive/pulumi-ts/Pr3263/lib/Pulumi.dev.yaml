@@ -1,3 +1,0 @@
-config:
-  tap:domainName: media-startup-dev.example.com
-  tap:environment: dev
