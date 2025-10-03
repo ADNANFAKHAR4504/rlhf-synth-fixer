@@ -428,9 +428,6 @@
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-ALB-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
           "Ref": "VPC"
@@ -470,9 +467,6 @@
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
           "Ref": "VPC"
@@ -546,9 +540,6 @@
     "RDSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${EnvironmentName}-RDS-SG-${AWS::AccountId}"
-        },
         "GroupDescription": "Security group for RDS database",
         "VpcId": {
           "Ref": "VPC"
@@ -583,9 +574,6 @@
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-Role-${AWS::AccountId}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -657,9 +645,6 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${EnvironmentName}-EC2-InstanceProfile-${AWS::AccountId}"
-        },
         "Roles": [
           {
             "Ref": "EC2Role"
@@ -670,9 +655,6 @@
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {
-          "Fn::Sub": "${EnvironmentName}-LaunchTemplate-${AWS::AccountId}"
-        },
         "LaunchTemplateData": {
           "ImageId": {
             "Fn::FindInMap": [
@@ -803,9 +785,6 @@
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {
-          "Fn::Sub": "${EnvironmentName}-ALB-${AWS::AccountId}"
-        },
         "Type": "application",
         "Scheme": "internet-facing",
         "SecurityGroups": [
@@ -838,9 +817,6 @@
     "ALBTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {
-          "Fn::Sub": "${EnvironmentName}-TG-${AWS::AccountId}"
-        },
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {
@@ -906,9 +882,6 @@
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "${EnvironmentName}-ASG-${AWS::AccountId}"
-        },
         "VPCZoneIdentifier": [
           {
             "Ref": "PrivateSubnet1"
@@ -996,9 +969,6 @@
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "${EnvironmentName}-dbsubnetgroup-${AWS::AccountId}"
-        },
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "SubnetIds": [
           {
@@ -1023,9 +993,6 @@
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "${EnvironmentName}-mysql-db-${AWS::AccountId}"
-        },
         "DBInstanceClass": "db.t3.medium",
         "Engine": "mysql",
         "EngineVersion": "8.0.43",
