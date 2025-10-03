@@ -360,6 +360,41 @@ describe('TapStack GPS Tracking System', () => {
         },
       });
     });
+
+    test('should create Kinesis permissions for Firehose role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'firehose.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
+        Policies: [
+          {
+            PolicyName: 'KinesisReadPolicy',
+            PolicyDocument: {
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'kinesis:DescribeStream',
+                    'kinesis:GetShardIterator',
+                    'kinesis:GetRecords',
+                    'kinesis:ListShards',
+                  ],
+                  Resource: Match.anyValue(),
+                },
+              ],
+            },
+          },
+        ],
+      });
+    });
   });
 
   describe('CloudWatch Log Group', () => {
@@ -396,7 +431,7 @@ describe('TapStack GPS Tracking System', () => {
   });
 
   describe('Resource Count Validation', () => {
-    test('should create expected number of resources', () => {
+    test('should create expected number of key resources', () => {
       const resources = template.toJSON().Resources;
       const resourceTypes = Object.values(resources).map((r: any) => r.Type);
 
@@ -412,7 +447,7 @@ describe('TapStack GPS Tracking System', () => {
       ).toHaveLength(1);
       expect(
         resourceTypes.filter(t => t === 'AWS::Lambda::Function')
-      ).toHaveLength(3);
+      ).toHaveLength(4); // GPS Processor, Alert Handler, Analytics, Manifest Deployment
       expect(resourceTypes.filter(t => t === 'AWS::SNS::Topic')).toHaveLength(
         1
       );

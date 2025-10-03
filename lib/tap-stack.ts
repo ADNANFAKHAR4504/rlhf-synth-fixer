@@ -95,10 +95,25 @@ export class TapStack extends cdk.Stack {
     // IAM Role for Kinesis Firehose
     const firehoseRole = new iam.Role(this, 'FirehoseRole', {
       assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
+      inlinePolicies: {
+        KinesisReadPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kinesis:DescribeStream',
+                'kinesis:GetShardIterator',
+                'kinesis:GetRecords',
+                'kinesis:ListShards',
+              ],
+              resources: [gpsDataStream.streamArn],
+            }),
+          ],
+        }),
+      },
     });
 
     archiveBucket.grantWrite(firehoseRole);
-    gpsDataStream.grantRead(firehoseRole);
 
     // Kinesis Firehose for archiving to S3 (automatically configured)
     new kinesisfirehose.CfnDeliveryStream(this, 'GpsArchiveDeliveryStream', {
