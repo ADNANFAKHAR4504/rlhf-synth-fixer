@@ -46,7 +46,7 @@ describe('TapStack Terraform Unit Tests', () => {
   describe('EventBridge & CloudWatch', () => {
     test('should define EventBridge rule for daily backup', () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_event_rule"/);
-      expect(tfContent).toMatch(/schedule_expression\s+=\s+"cron/);
+      expect(tfContent).toMatch(/schedule_expression\s+=\s+(var\.)?backup_schedule/);
     });
 
     test('should define CloudWatch alarms for bucket size', () => {
