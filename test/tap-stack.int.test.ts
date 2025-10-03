@@ -1,26 +1,27 @@
-import fs from 'fs';
-import path from 'path';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  S3Client,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
+import fs from 'fs';
+import path from 'path';
 
 const region = process.env.AWS_REGION || 'ap-south-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr3382';
@@ -58,8 +59,24 @@ describe('TapStack Integration Tests', () => {
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
+
+      // Check DNS support attribute
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: deploymentOutputs.VPCId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+
+      // Check DNS hostnames attribute
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: deploymentOutputs.VPCId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('should have 6 subnets across 3 AZs', async () => {
@@ -80,11 +97,11 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(response.Subnets).toHaveLength(6);
-      
-      const publicSubnets = response.Subnets!.filter(subnet => 
+
+      const publicSubnets = response.Subnets!.filter(subnet =>
         subnet.MapPublicIpOnLaunch === true
       );
-      const privateSubnets = response.Subnets!.filter(subnet => 
+      const privateSubnets = response.Subnets!.filter(subnet =>
         subnet.MapPublicIpOnLaunch === false
       );
 
@@ -118,7 +135,7 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(response.NatGateways).toHaveLength(3);
-      
+
       // Each NAT Gateway should have an Elastic IP
       response.NatGateways!.forEach(nat => {
         expect(nat.NatGatewayAddresses).toHaveLength(1);
@@ -146,17 +163,17 @@ describe('TapStack Integration Tests', () => {
       );
 
       // Should have at least 4 custom security groups (ALB, Bastion, WebServer, Database)
-      const customSGs = response.SecurityGroups!.filter(sg => 
+      const customSGs = response.SecurityGroups!.filter(sg =>
         sg.GroupName !== 'default'
       );
       expect(customSGs.length).toBeGreaterThanOrEqual(4);
 
       // Find Database security group - should only allow from web servers
-      const dbSG = customSGs.find(sg => 
+      const dbSG = customSGs.find(sg =>
         sg.GroupName?.includes('Database') || sg.GroupName?.includes('RDS')
       );
       if (dbSG) {
-        const mysqlRule = dbSG.IpPermissions?.find(rule => 
+        const mysqlRule = dbSG.IpPermissions?.find(rule =>
           rule.FromPort === 3306
         );
         expect(mysqlRule).toBeDefined();
@@ -207,7 +224,7 @@ describe('TapStack Integration Tests', () => {
 
       if (response.LoadBalancers && response.LoadBalancers.length > 0) {
         const alb = response.LoadBalancers[0];
-        
+
         expect(alb.Scheme).toBe('internet-facing');
         expect(alb.AvailabilityZones).toHaveLength(3);
         expect(alb.State?.Code).toBe('active');
@@ -220,7 +237,7 @@ describe('TapStack Integration Tests', () => {
         new DescribeTargetGroupsCommand({})
       );
 
-      const targetGroup = response.TargetGroups?.find(tg => 
+      const targetGroup = response.TargetGroups?.find(tg =>
         tg.TargetGroupName?.includes(environmentSuffix)
       );
 
@@ -260,7 +277,7 @@ describe('TapStack Integration Tests', () => {
             Bucket: deploymentOutputs.VPCFlowLogsBucket,
           })
         );
-        
+
         expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
         const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
         expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
@@ -271,7 +288,7 @@ describe('TapStack Integration Tests', () => {
             Bucket: deploymentOutputs.VPCFlowLogsBucket,
           })
         );
-        
+
         expect(versioningResponse.Status).toBe('Enabled');
       } catch (error: any) {
         // If bucket doesn't exist or we don't have permissions, that's okay for integration test
@@ -322,7 +339,7 @@ describe('TapStack Integration Tests', () => {
         })
       );
 
-      const privateSubnets = subnetsResponse.Subnets!.filter(subnet => 
+      const privateSubnets = subnetsResponse.Subnets!.filter(subnet =>
         !subnet.MapPublicIpOnLaunch
       );
 
