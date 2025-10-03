@@ -392,7 +392,7 @@ describe('TapStack Integration Tests', () => {
       }).promise();
 
       const rdsSG = allSGResponse.SecurityGroups?.find(sg =>
-        sg.GroupName?.includes('RDSSecurityGroup') || sg.GroupDescription?.includes('RDS database')
+        sg.GroupName?.includes('RDSSecurityGroup') || sg.Description?.includes('RDS database')
       );
       expect(rdsSG).toBeDefined();
 
