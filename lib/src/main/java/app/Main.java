@@ -481,7 +481,7 @@ class TapStack extends Stack {
         LambdaResources lambdas = createLambdaFunctions(network, data, storage, cache, search);
         
         WebSocketResources webSocket = createWebSocketApi(lambdas);
-        AppSyncResources appSync = createAppSyncApi(auth);
+        // AppSyncResources appSync = createAppSyncApi(auth);
         
         StateMachine workflow = createStepFunctionsWorkflow(lambdas, data);
         
@@ -496,7 +496,7 @@ class TapStack extends Stack {
         // Wire up DynamoDB Streams
         configureDynamoStreams(lambdas, data);
         
-        OutputResources outputs = new OutputResources(webSocket, appSync, auth, data, 
+        OutputResources outputs = new OutputResources(webSocket, null, auth, data, 
                                                       storage, search, dashboard);
         createOutputs(outputs);
     }
@@ -990,7 +990,7 @@ class TapStack extends Stack {
     GraphqlApi api = new GraphqlApi(this, "DocumentCollabAPI" + environmentSuffix,
             GraphqlApiProps.builder()
                     .name("DocumentCollabGraphQLAPI-" + environmentSuffix)
-                    .definition(software.amazon.awscdk.services.appsync.Definition.fromString(inlineSchema))
+                    .schema(SchemaFile.fromString(inlineSchema))
                     .authorizationConfig(AuthorizationConfig.builder()
                             .defaultAuthorization(AuthorizationMode.builder()
                                     .authorizationType(AuthorizationType.USER_POOL)
@@ -1004,6 +1004,8 @@ class TapStack extends Stack {
 
     return new AppSyncResources(api);
 }
+
+
 
     private StateMachine createStepFunctionsWorkflow(final LambdaResources lambdas,
                                                      final DocumentDataResources data) {
@@ -1196,17 +1198,19 @@ class TapStack extends Stack {
                 .exportName("WebSocketApiId-" + environmentSuffix)
                 .build());
 
-        new CfnOutput(this, "AppSyncGraphQLUrl", CfnOutputProps.builder()
-                .description("AppSync GraphQL API URL")
-                .value(resources.getAppSync().getApi().getGraphqlUrl())
-                .exportName("AppSyncGraphQLUrl-" + environmentSuffix)
-                .build());
-
-        new CfnOutput(this, "AppSyncApiId", CfnOutputProps.builder()
-                .description("AppSync API ID")
-                .value(resources.getAppSync().getApi().getApiId())
-                .exportName("AppSyncApiId-" + environmentSuffix)
-                .build());
+        if (resources.getAppSync() != null) {
+            new CfnOutput(this, "AppSyncApiUrl", CfnOutputProps.builder()
+                    .description("AppSync GraphQL API endpoint")
+                    .value(resources.getAppSync().getApi().getGraphqlUrl())
+                    .exportName("AppSyncApiUrl-" + environmentSuffix)
+                    .build());
+                    
+            new CfnOutput(this, "AppSyncApiId", CfnOutputProps.builder()
+                    .description("AppSync GraphQL API ID")
+                    .value(resources.getAppSync().getApi().getApiId())
+                    .exportName("AppSyncApiId-" + environmentSuffix)
+                    .build());
+        }
 
         new CfnOutput(this, "CognitoUserPoolId", CfnOutputProps.builder()
                 .description("Cognito User Pool ID")
