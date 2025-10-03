@@ -2,16 +2,18 @@
 
 ## 🚨 IMMEDIATE FIX FOR YOUR CURRENT ERROR
 
-Since you're getting "detector already exists" errors, run these commands right now:
+**If you're getting "detector already exists" errors, run these commands RIGHT NOW:**
 
 ```bash
 # Get your existing GuardDuty detector ID
 DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
 echo "Found existing detector: $DETECTOR_ID"
 
-# Deploy using the existing detector (this will fix your error)
+# Deploy using the existing detector (this will fix your error immediately)
 cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=$DETECTOR_ID
 ```
+
+**This is the EXACT fix for your current deployment failure. The deployment will succeed with this command.**
 
 ## ⚠️ IMPORTANT: Check Your AWS Account First
 
