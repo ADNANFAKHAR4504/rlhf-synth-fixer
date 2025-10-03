@@ -35,7 +35,8 @@ if (fs.existsSync(outputsPath)) {
 }
 
 const region = process.env.AWS_REGION || 'us-east-2';
-const stackName = process.env.STACK_NAME || 'TapStacksynth71934682v3';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
 
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region });
