@@ -1,4 +1,3 @@
-import path from 'path';
 import fs from 'fs';
 
 // Load deployment outputs - in real deployment this comes from actual CloudFormation outputs
