@@ -62,10 +62,10 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
     }
 
     // Check if we're using mock data (indicated by test account ID in ARNs)
-    const isMockData = stateMachineArn?.includes('123456789012') || 
-                      tableName?.includes('dev-payment-transactions-dev') ||
-                      snsTopicArn?.includes('123456789012');
-    
+    const isMockData = stateMachineArn?.includes('123456789012') ||
+      tableName?.includes('dev-payment-transactions-dev') ||
+      snsTopicArn?.includes('123456789012');
+
     if (isMockData) {
       console.log('⚠️ Using mock CloudFormation outputs - skipping integration tests that require real AWS resources');
       console.log('To run full integration tests, deploy the CloudFormation stack first');
