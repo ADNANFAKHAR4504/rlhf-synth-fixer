@@ -12,7 +12,7 @@ Create AWS infrastructure with:
 - CloudWatch monitoring for database performance metrics
 - S3 bucket for automated database backups with lifecycle policies
 - Database backup retention period of 7 days
-- Deploy to us-west-1 region
+- Deploy to us-east-2 region
 
 ## Enhanced Features
 

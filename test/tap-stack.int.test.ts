@@ -14,7 +14,7 @@ function getOutputs() {
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth74150629';
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-2';
 
 // Configure AWS SDK
 AWS.config.update({ region });
