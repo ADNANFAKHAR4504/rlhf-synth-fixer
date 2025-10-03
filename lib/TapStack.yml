@@ -621,7 +621,7 @@ Resources:
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      ResourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ApplicationLoadBalancer}'
+      ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WAFWebACL.Arn
 
   ALBTargetGroup:

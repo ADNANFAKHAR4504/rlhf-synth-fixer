@@ -1097,7 +1097,7 @@
       "Type": "AWS::WAFv2::WebACLAssociation",
       "Properties": {
         "ResourceArn": {
-          "Fn::Sub": "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ApplicationLoadBalancer}"
+          "Ref": "ApplicationLoadBalancer"
         },
         "WebACLArn": {
           "Fn::GetAtt": [
