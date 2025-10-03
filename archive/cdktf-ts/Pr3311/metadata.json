@@ -10,5 +10,19 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "(VPC, EC2, RDS, S3, Secrets Manager, CloudWatch, IAM)"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
