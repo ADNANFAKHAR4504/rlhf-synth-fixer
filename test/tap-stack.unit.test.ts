@@ -189,7 +189,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of resources for disaster recovery infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(54);
+      expect(resourceCount).toBe(55);
     });
 
     test('should have expected number of parameters', () => {

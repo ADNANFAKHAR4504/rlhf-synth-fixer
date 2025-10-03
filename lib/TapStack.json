@@ -201,6 +201,21 @@
                 }
             }
         },
+        "DatabasePasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${Environment}-db-password"
+                },
+                "Description": "Database master password for RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
         "PrimaryVPC": {
             "Type": "AWS::EC2::VPC",
             "Condition": "IsPrimaryRegion",
@@ -713,7 +728,7 @@
                     "Ref": "DatabaseMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${CompanyName}-${Environment}-db-password:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString:password}}"
                 },
                 "DBName": "tradingapp",
                 "AllocatedStorage": 20,
@@ -1644,7 +1659,7 @@
                     "LaunchTemplateId": {
                         "Ref": "LaunchTemplate"
                     },
-                    "Version": "$Latest"
+                    "Version": "1"
                 },
                 "MinSize": {
                     "Fn::If": [
