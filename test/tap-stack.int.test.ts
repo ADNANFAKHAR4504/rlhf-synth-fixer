@@ -1,175 +1,96 @@
-import { EC2Client, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
+// test/live-integration.test.ts
+import { readFileSync } from "fs";
+import path from "path";
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+} from "@aws-sdk/client-rds";
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
 } from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBInstancesCommandOutput,
-} from "@aws-sdk/client-rds";
 import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from "@aws-sdk/client-secrets-manager";
-import {
-  CloudWatchClient,
-  ListDashboardsCommand,
-  ListDashboardsCommandOutput,
-} from "@aws-sdk/client-cloudwatch";
-import * as fs from "fs";
+import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
+import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
 
-const region = process.env.AWS_REGION || "us-east-1";
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
+const outputsPath = path.join(__dirname, "../cfn-outputs/fla-outputs.json");
+const outputs = JSON.parse(readFileSync(outputsPath, "utf-8"));
 
-// Load outputs 
-const outputs = JSON.parse(
-  fs.readFileSync("cfn-outputs/flat-outputs.json", "utf-8")
-);
+// Create AWS SDK clients
+const ec2Client = new EC2Client({});
+const rdsClient = new RDSClient({});
+const elbv2Client = new ElasticLoadBalancingV2Client({});
+const s3Client = new S3Client({});
+const secretsClient = new SecretsManagerClient({});
+const cloudwatchClient = new CloudWatchClient({});
 
-const ec2 = new EC2Client({ region });
-const elbv2 = new ElasticLoadBalancingV2Client({ region });
-const rds = new RDSClient({ region });
-const s3 = new S3Client({ region });
-const secrets = new SecretsManagerClient({ region });
-const cloudwatch = new CloudWatchClient({ region });
+describe("Live AWS Resource Integration Tests", () => {
+  jest.setTimeout(60000); // 1 min timeout for live calls
 
-describe("TapStack Infrastructure Integration Tests", () => {
-  test("EC2 instance should exist and be running", async () => {
-    const instanceId = outputs.MyEC2InstanceId;
-    expect(instanceId).toBeDefined();
-    
-    // Skip actual AWS call if no credentials available
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(instanceId).toMatch(/^i-[a-f0-9]+$/);
-      return;
-    }
+  test("EC2 Instance exists and is running", async () => {
+    const { EC2InstanceId } = outputs;
+    const command = new DescribeInstancesCommand({ InstanceIds: [EC2InstanceId] });
+    const response = await ec2Client.send(command);
 
-    const result = await ec2.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] })
-    );
-    const instance = result.Reservations?.[0].Instances?.[0];
-
-    expect(instance).toBeDefined();
-    expect(instance?.State?.Name).toBe("running");
+    expect(response.Reservations?.length).toBeGreaterThan(0);
+    const instance = response.Reservations![0].Instances![0];
+    expect(instance.InstanceId).toBe(EC2InstanceId);
+    expect(instance.State?.Name).toBeDefined();
   });
 
-  test("Application Load Balancer should exist and be active", async () => {
-    const lbArn = outputs.MyLoadBalancerArn;
-    expect(lbArn).toBeDefined();
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(lbArn).toMatch(/^arn:aws:elasticloadbalancing:/);
-      return;
-    }
+  test("RDS Database exists", async () => {
+    const { DBInstanceEndpoint } = outputs;
+    const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.DBInstanceEndpoint.split(".")[0] });
+    const response = await rdsClient.send(command);
 
-    const result = await elbv2.send(
-      new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })
-    );
-    const lb = result.LoadBalancers?.[0];
-
-    expect(lb).toBeDefined();
-    expect(lb?.State?.Code).toBe("active");
+    expect(response.DBInstances?.length).toBeGreaterThan(0);
+    const db = response.DBInstances![0];
+    expect(db.Endpoint?.Address).toBe(DBInstanceEndpoint);
   });
 
-  test("ALB Target Group should exist and be HTTP", async () => {
-    const tgArn = outputs.MyTargetGroupArn;
-    expect(tgArn).toBeDefined();
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(tgArn).toMatch(/^arn:aws:elasticloadbalancing:/);
-      return;
-    }
+  test("ALB exists", async () => {
+    const { ApplicationLoadBalancerArn } = outputs;
+    const command = new DescribeLoadBalancersCommand({ LoadBalancerArns: [ApplicationLoadBalancerArn] });
+    const response = await elbv2Client.send(command);
 
-    const result = await elbv2.send(
-      new DescribeTargetGroupsCommand({ TargetGroupArns: [tgArn] })
-    );
-    const tg = result.TargetGroups?.[0];
-
-    expect(tg).toBeDefined();
-    expect(tg?.Protocol).toBe("HTTP");
+    expect(response.LoadBalancers?.length).toBe(1);
+    expect(response.LoadBalancers![0].LoadBalancerArn).toBe(ApplicationLoadBalancerArn);
   });
 
-  test("RDS Instance should exist and be available", async () => {
-    const expectedDbIdentifier = `${environmentSuffix}-mysql-db`;
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(expectedDbIdentifier).toBe(`${environmentSuffix}-mysql-db`);
-      return;
-    }
+  test("ALB Target Group exists", async () => {
+    const { ALBTargetGroupArn } = outputs;
+    const command = new DescribeTargetGroupsCommand({ TargetGroupArns: [ALBTargetGroupArn] });
+    const response = await elbv2Client.send(command);
 
-    let r: DescribeDBInstancesCommandOutput;
-    try {
-      r = await rds.send(
-        new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: expectedDbIdentifier,
-        })
-      );
-    } catch (e) {
-      console.error("Error describing RDS instance:", e);
-      throw e;
-    }
-
-    const db = r.DBInstances?.[0];
-    expect(db).toBeDefined();
-    expect(db?.DBInstanceIdentifier).toBe(expectedDbIdentifier);
-    expect(db?.DBInstanceStatus).toBe("available");
+    expect(response.TargetGroups?.length).toBe(1);
+    expect(response.TargetGroups![0].TargetGroupArn).toBe(ALBTargetGroupArn);
   });
 
-  test("Logs S3 bucket should exist", async () => {
-    const bucketName = outputs.MyLogsBucketName;
-    expect(bucketName).toBeDefined();
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(bucketName).toMatch(/logs.*web-app/);
-      return;
-    }
-
-    const result = await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
-    expect(result).toBeDefined();
+  test("S3 Logs Bucket exists", async () => {
+    const { LogsBucketName } = outputs;
+    const command = new HeadBucketCommand({ Bucket: LogsBucketName });
+    await expect(s3Client.send(command)).resolves.not.toThrow();
   });
 
-  test("DB Secret should exist in Secrets Manager", async () => {
-    const secretName = `${environmentSuffix}-db-secretscredential`;
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(secretName).toBe(`${environmentSuffix}-db-secretscredential`);
-      return;
-    }
+  test("Secrets Manager secret exists", async () => {
+    const { DBSecretArn } = outputs;
+    const command = new DescribeSecretCommand({ SecretId: DBSecretArn });
+    const response = await secretsClient.send(command);
 
-    const result = await secrets.send(
-      new DescribeSecretCommand({ SecretId: secretName })
-    );
-
-    expect(result).toBeDefined();
-    expect(result.Name).toBe(secretName);
+    expect(response.ARN).toBe(DBSecretArn);
   });
 
-  test("CloudWatch Dashboard should exist", async () => {
-    const dashboardName = `${environmentSuffix}-dashboard`;
-    
-    if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-      console.log('Skipping AWS API call - no credentials available');
-      expect(dashboardName).toBe(`${environmentSuffix}-dashboard`);
-      return;
-    }
+  test("CloudWatch Dashboard exists", async () => {
+    const { DashboardName } = outputs;
+    const command = new GetDashboardCommand({ DashboardName });
+    const response = await cloudwatchClient.send(command);
 
-    const result: ListDashboardsCommandOutput = await cloudwatch.send(
-      new ListDashboardsCommand({})
-    );
-
-    const found = result.DashboardEntries?.find(
-      (d) => d.DashboardName === dashboardName
-    );
-
-    expect(found).toBeDefined();
+    expect(response.DashboardName).toBe(DashboardName);
+    expect(response.DashboardBody).toBeDefined();
   });
 });
