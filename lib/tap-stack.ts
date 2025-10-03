@@ -17,7 +17,7 @@ export class TapStack extends cdk.Stack {
       process.env.ENVIRONMENT_SUFFIX ||
       'dev';
 
-    const domainName = 'example.com';
+    const domainName = 'mydemosite.dev';
     const subDomain = 'portfolio';
 
     // Check if we're in us-east-1 (for WAF and Certificate requirements)
