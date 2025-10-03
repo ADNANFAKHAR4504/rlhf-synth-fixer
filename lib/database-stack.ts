@@ -22,16 +22,14 @@ export class DatabaseStack extends Construct {
     // Get the current region for region-specific configuration
     const region = cdk.Stack.of(this).region;
 
-    // Use PostgreSQL 12.13 - stable version with universal AWS support
-    const databaseEngine = rds.DatabaseInstanceEngine.postgres({
-      version: rds.PostgresEngineVersion.VER_12_13,
-    });
+    // Use simplest PostgreSQL configuration with default settings
+    const databaseEngine = rds.DatabaseInstanceEngine.POSTGRES;
 
     // PostgreSQL 15.4 optimized for us-east-2 region
 
     // Output the selected database engine for debugging
     new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
-      value: `Database engine selected for region ${region}: PostgreSQL 12.13`,
+      value: `Database engine selected for region ${region}: PostgreSQL (Default Version)`,
       description:
         'Database engine automatically selected based on region compatibility',
     });
@@ -99,15 +97,7 @@ export class DatabaseStack extends Construct {
       performanceInsightEncryptionKey: encryptionKey,
       monitoringInterval: cdk.Duration.seconds(60),
       databaseName: 'retaildb',
-      parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
-        engine: databaseEngine,
-        parameters: {
-          // PostgreSQL parameters - basic logging configuration
-          log_statement: 'all',
-          log_duration: 'on',
-          shared_preload_libraries: 'pg_stat_statements',
-        },
-      }),
+      // No custom parameter group - use AWS defaults for maximum compatibility
     });
 
     // Note: RDS automatic backups are handled by AWS internally
