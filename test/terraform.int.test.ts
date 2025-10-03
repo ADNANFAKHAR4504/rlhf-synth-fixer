@@ -226,7 +226,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("alarms have both alarm and ok actions configured", () => {
       const alarmBlocks = tfContent.match(/resource\s+"aws_cloudwatch_metric_alarm"[\s\S]*?(?=\nresource\s+|# -+\n)/g);
-      
+
       if (alarmBlocks) {
         alarmBlocks.forEach((alarm) => {
           expect(alarm).toMatch(/alarm_actions\s*=/);
@@ -356,7 +356,7 @@ describe("Integration Tests - Full Stack Validation", () => {
     test("no default values for sensitive variables", () => {
       const dbPasswordVar = tfContent.match(/variable\s+"db_password"[\s\S]*?(?=\nvariable|# -+\n\nvariable|$)/);
       expect(dbPasswordVar).toBeTruthy();
-      
+
       // Should not have a default value for sensitive password
       if (dbPasswordVar![0].includes("default")) {
         // If it has a default, fail the test
@@ -367,7 +367,7 @@ describe("Integration Tests - Full Stack Validation", () => {
     test("resource names follow naming conventions and avoid conflicts", () => {
       const resourceNames = tfContent.match(/resource\s+"aws_\w+"\s+"(\w+)"/g);
       const names = new Set();
-      
+
       if (resourceNames) {
         resourceNames.forEach((resource) => {
           const match = resource.match(/"(\w+)"$/);
@@ -383,7 +383,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("handles missing optional variables with sensible defaults", () => {
       const optionalVars = ["environment", "owner", "project", "db_instance_class"];
-      
+
       optionalVars.forEach((varName) => {
         const varBlock = tfContent.match(new RegExp(`variable\\s+"${varName}"[\\s\\S]*?(?=\\nvariable|# -+\\n\\nvariable|$)`));
         if (varBlock) {
@@ -396,7 +396,7 @@ describe("Integration Tests - Full Stack Validation", () => {
   describe("Variable Validation", () => {
     test("numeric variables have appropriate types", () => {
       const numericVars = ["db_allocated_storage", "db_backup_retention_period"];
-      
+
       numericVars.forEach((varName) => {
         const varBlock = tfContent.match(new RegExp(`variable\\s+"${varName}"[\\s\\S]*?type\\s*=\\s*(\\w+)`));
         expect(varBlock).toBeTruthy();
@@ -406,7 +406,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("list variables have appropriate types", () => {
       const listVars = ["allowed_cidr_blocks", "sns_email_endpoints"];
-      
+
       listVars.forEach((varName) => {
         const varBlock = tfContent.match(new RegExp(`variable\\s+"${varName}"[\\s\\S]*?type\\s*=\\s*list`));
         expect(varBlock).toBeTruthy();
@@ -415,7 +415,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("variables have descriptions", () => {
       const variables = tfContent.match(/variable\s+"\w+"[\s\S]*?(?=\nvariable|# -+\n\nvariable|$)/g);
-      
+
       if (variables) {
         variables.forEach((varBlock) => {
           expect(varBlock).toMatch(/description\s*=/);
@@ -427,7 +427,7 @@ describe("Integration Tests - Full Stack Validation", () => {
   describe("Network Architecture Validation (Self-Contained)", () => {
     test("if VPC exists, it has proper DNS settings", () => {
       const vpcBlock = tfContent.match(/resource\s+"aws_vpc"[\s\S]*?(?=\nresource\s+|# -+\n)/);
-      
+
       if (vpcBlock) {
         expect(vpcBlock[0]).toMatch(/enable_dns_hostnames\s*=\s*true/);
         expect(vpcBlock[0]).toMatch(/enable_dns_support\s*=\s*true/);
@@ -436,7 +436,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("private subnets are properly configured for RDS", () => {
       const privateSubnets = tfContent.match(/resource\s+"aws_subnet"\s+"private_subnet/g);
-      
+
       if (privateSubnets) {
         expect(privateSubnets.length).toBeGreaterThanOrEqual(2); // Multi-AZ requires 2+
       }
@@ -444,10 +444,10 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("NAT Gateways are configured for HA if present", () => {
       const natGateways = tfContent.match(/resource\s+"aws_nat_gateway"/g);
-      
+
       if (natGateways) {
         expect(natGateways.length).toBeGreaterThanOrEqual(2); // HA requires 2+
-        
+
         // Check for EIPs
         const eips = tfContent.match(/resource\s+"aws_eip"/g);
         expect(eips).toBeTruthy();
@@ -457,7 +457,7 @@ describe("Integration Tests - Full Stack Validation", () => {
 
     test("route tables are properly associated with subnets", () => {
       const routeTableAssocs = tfContent.match(/resource\s+"aws_route_table_association"/g);
-      
+
       if (routeTableAssocs) {
         expect(routeTableAssocs.length).toBeGreaterThanOrEqual(2);
       }
@@ -467,7 +467,7 @@ describe("Integration Tests - Full Stack Validation", () => {
   describe("Performance and Optimization", () => {
     test("RDS uses appropriate storage type", () => {
       const rdsBlock = tfContent.match(/resource\s+"aws_db_instance"[\s\S]*?storage_type\s*=\s*"(\w+)"/);
-      
+
       if (rdsBlock) {
         const storageType = rdsBlock[1];
         expect(["gp2", "gp3", "io1"]).toContain(storageType);

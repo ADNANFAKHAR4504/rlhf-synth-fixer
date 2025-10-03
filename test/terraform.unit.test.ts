@@ -200,7 +200,7 @@ describe("Security Groups - Network Security", () => {
     const sgMatch = tfContent.match(
       /resource\s+"aws_security_group"\s+"[^"]+"\s*{[\s\S]*?(?=\n\s*resource\s+"|# -+\n|$)/
     );
-    
+
     if (sgMatch) {
       const sgBlock = sgMatch[0];
       // Check that there's no egress block with 0.0.0.0/0
@@ -662,14 +662,14 @@ describe("Code Quality & Standards", () => {
   test("file is properly formatted with consistent indentation", () => {
     const lines = tfContent.split("\n");
     let hasConsistentIndentation = true;
-    
+
     lines.forEach((line) => {
       // Check that indentation uses spaces (not tabs mixed with spaces)
       if (line.match(/^\t/)) {
         hasConsistentIndentation = false;
       }
     });
-    
+
     expect(hasConsistentIndentation).toBe(true);
   });
 });
@@ -683,7 +683,7 @@ describe("Critical Fixes Validation", () => {
     const sgMatch = tfContent.match(
       /resource\s+"aws_security_group"\s+"[^"]+"\s*{[\s\S]*?(?=\n\s*resource\s+"|# -+\n|$)/
     );
-    
+
     if (sgMatch) {
       const sgBlock = sgMatch[0];
       const hasPermissiveEgress = sgBlock.match(
@@ -697,7 +697,7 @@ describe("Critical Fixes Validation", () => {
     const storageAlarmMatch = tfContent.match(
       /metric_name\s*=\s*"FreeStorageSpace"[\s\S]*?threshold\s*=\s*(\d+)/
     );
-    
+
     if (storageAlarmMatch) {
       const threshold = parseInt(storageAlarmMatch[1]);
       // Should be in bytes (>1GB), not MB
