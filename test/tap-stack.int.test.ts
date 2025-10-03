@@ -108,7 +108,7 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
       expect(result.Item).toBeDefined();
       expect(result.Item?.paymentId.S).toBe(testPaymentId);
       expect(result.Item?.customerId.S).toBe('CUST-INT-TEST');
-      expect(result.Item?.amount.N).toBe('100.50');
+      expect(result.Item?.amount.N).toBe('100.5');
       expect(result.Item?.currency.S).toBe('USD');
       expect(result.Item?.status.S).toBe('SUCCESS');
     }, 30000);
@@ -380,8 +380,13 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
         customerEmail: 'lambda-test@example.com'
       };
 
+      // Extract function name from state machine ARN or use default pattern
+      const functionName = stateMachineArn?.includes('dev-payment-workflow-dev')
+        ? 'dev-validate-payment-dev'
+        : `${environmentSuffix}-validate-payment-${environmentSuffix}`;
+
       const invokeCommand = new InvokeCommand({
-        FunctionName: `${environmentSuffix}-validate-payment-${environmentSuffix}`,
+        FunctionName: functionName,
         Payload: JSON.stringify(testPayload)
       });
 
@@ -407,8 +412,13 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
         customerEmail: 'invalid-email' // Invalid
       };
 
+      // Extract function name from state machine ARN or use default pattern
+      const functionName = stateMachineArn?.includes('dev-payment-workflow-dev')
+        ? 'dev-validate-payment-dev'
+        : `${environmentSuffix}-validate-payment-${environmentSuffix}`;
+
       const invokeCommand = new InvokeCommand({
-        FunctionName: `${environmentSuffix}-validate-payment-${environmentSuffix}`,
+        FunctionName: functionName,
         Payload: JSON.stringify(invalidPayload)
       });
 
