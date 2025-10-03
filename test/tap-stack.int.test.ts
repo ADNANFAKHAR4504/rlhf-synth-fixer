@@ -69,6 +69,7 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
     if (isMockData) {
       console.log('⚠️ Using mock CloudFormation outputs - skipping integration tests that require real AWS resources');
       console.log('To run full integration tests, deploy the CloudFormation stack first');
+      console.log('Mock data detected - stateMachineArn:', stateMachineArn);
     }
   });
 
