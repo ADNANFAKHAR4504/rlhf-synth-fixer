@@ -25,6 +25,11 @@ Metadata:
           default: 'Performance Configuration'
         Parameters:
           - ElastiCacheNodeType
+      - Label:
+          default: 'AWS Config Configuration'
+        Parameters:
+          - CreateConfigDeliveryChannel
+          - CreateConfigRecorder
 
 Parameters:
   EnvironmentSuffix:
@@ -66,10 +71,21 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+  CreateConfigRecorder:
+    Type: String
+    Description: Whether to create AWS Config configuration recorder (set to false if one already exists in account)
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   ShouldCreateConfigDeliveryChannel:
     Fn::Equals:
       - Ref: CreateConfigDeliveryChannel
+      - 'true'
+
+  ShouldCreateConfigRecorder:
+    Fn::Equals:
+      - Ref: CreateConfigRecorder
       - 'true'
 
 Resources:
@@ -996,6 +1012,7 @@ Resources:
   # ========================================================================
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateConfigRecorder
     Properties:
       Name: !Sub 'staging-config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1056,6 +1073,7 @@ Resources:
   # Security Config Rules
   RDSEncryptionRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateConfigRecorder
     DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 'rds-storage-encrypted-${EnvironmentSuffix}'
@@ -1066,6 +1084,7 @@ Resources:
 
   S3EncryptionRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateConfigRecorder
     DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 's3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}'
@@ -1076,6 +1095,7 @@ Resources:
 
   SecurityGroupRestrictiveRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateConfigRecorder
     DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 'ec2-security-group-attached-to-eni-${EnvironmentSuffix}'
