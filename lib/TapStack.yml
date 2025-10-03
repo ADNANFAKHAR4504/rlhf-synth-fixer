@@ -104,7 +104,7 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       BucketName: !Sub 
-        - '${AccountId}-centralized-logs'
+        - '${AccountId}-centralized-logging'
         - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
       # Security: All buckets private by default
       PublicAccessBlockConfiguration:
