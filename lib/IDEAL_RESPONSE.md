@@ -1,7 +1,7 @@
-#TapStack.yml
-```
+yaml```
+# AWSTemplate
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Example Infrastructure with EC2, ALB, RDS, and Secrets Manager
+Description: Example Infrastructure with EC2, ALB, RDS, and Secrets Manager (HTTP only, no SSL)
 
 Parameters:
   EnvironmentName:
@@ -11,8 +11,11 @@ Parameters:
   AmiId:
     Type: AWS::EC2::Image::Id
     Default: ami-0254b2d5c4c472488
-    Description: Amazon Linux 2 AMI ID (default for ap-south-1)
-
+    Description: Amazon Linux 2 AMI ID
+  EnvironmentSuffix:
+    Type: String
+    Default: ""
+    Description: Suffix to add to resource names to avoid conflicts
 
 Resources:
 
@@ -25,7 +28,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-vpc
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-vpc
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -36,6 +39,7 @@ Resources:
       VpcId: !Ref MyVPC
       InternetGatewayId: !Ref InternetGateway
 
+  # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -43,6 +47,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -51,11 +58,39 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-public-subnet-2
 
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-private-subnet-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-private-subnet-2
+
+  # Public Route Table
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -77,21 +112,81 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
+  # NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-eip
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-gateway
+
+  # Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-private-rt
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
   ### Security Groups ###
-  EC2SecurityGroup:
+  ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH and HTTP
+      GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref MyVPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-alb-sg
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access from ALB only
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-ec2-sg
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -103,14 +198,15 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-rds-sg
 
   ### Logs Bucket ###
   LogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub ${EnvironmentName}-logs-${AWS::AccountId}-web-app
+      BucketName: !Sub ${EnvironmentName}${EnvironmentSuffix}-logs-${AWS::AccountId}-websapp
 
   ### IAM Role for EC2 ###
   EC2InstanceRole:
@@ -142,41 +238,79 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  ### EC2 Instance ###
-  MyEC2Instance:
-    Type: AWS::EC2::Instance
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      InstanceType: t2.micro
-      ImageId: !Ref AmiId
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SecurityGroupIds:
-        - !Ref EC2SecurityGroup
-      SubnetId: !Ref PublicSubnet1
+      LaunchTemplateName: !Sub ${EnvironmentName}${EnvironmentSuffix}-launch-template
+      LaunchTemplateData:
+        ImageId: !Ref AmiId
+        InstanceType: t2.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello from ${EnvironmentName}${EnvironmentSuffix}</h1>" > /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-ec2-asg
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${EnvironmentName}${EnvironmentSuffix}-asg
+      MinSize: 2
+      MaxSize: 5
+      DesiredCapacity: 2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-ec2
+          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-asg
+          PropagateAtLaunch: false
 
   ### ALB ###
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub ${EnvironmentName}-alb
+      Name: !Sub ${EnvironmentName}${EnvironmentSuffix}-alb
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       SecurityGroups:
-        - !Ref EC2SecurityGroup
+        - !Ref ALBSecurityGroup
       Scheme: internet-facing
       Type: application
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: !Sub ${EnvironmentName}${EnvironmentSuffix}-tg
       VpcId: !Ref MyVPC
       Port: 80
       Protocol: HTTP
       TargetType: instance
       HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -191,10 +325,8 @@ Resources:
   ### Secrets Manager ###
   DBSecret:
     Type: AWS::SecretsManager::Secret
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      Name: !Sub ${EnvironmentName}-db-secretscredential
+      Name: !Sub ${EnvironmentName}${EnvironmentSuffix}-rds-secret
       Description: RDS Master user and password
       GenerateSecretString:
         SecretStringTemplate: '{"username":"admin"}'
@@ -208,16 +340,14 @@ Resources:
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS
       SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
   ### RDS Database ###
   RDSDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub ${EnvironmentName}-mysql-db
+      DBInstanceIdentifier: !Sub ${EnvironmentName}${EnvironmentSuffix}-mysql-db
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: mysql
@@ -234,39 +364,10 @@ Resources:
   MyDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub ${EnvironmentName}-dashboard
-      DashboardBody: !Sub |
+      DashboardName: !Sub ${EnvironmentName}${EnvironmentSuffix}-dashboard
+      DashboardBody: |
         {
-          "widgets": [
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/EC2", "CPUUtilization", "InstanceId", "${MyEC2Instance}" ]
-                ],
-                "title": "EC2 CPU Utilization",
-                "region": "${AWS::Region}"
-              }
-            },
-            {
-              "type": "metric",
-              "x": 12,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${EnvironmentName}-mysql-db" ]
-                ],
-                "title": "RDS CPU Utilization",
-                "region": "${AWS::Region}"
-              }
-            }
-          ]
+          "widgets": []
         }
 
 Outputs:
@@ -290,6 +391,18 @@ Outputs:
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
 
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+
+  ALBSecurityGroupId:
+    Description: Security Group ID for ALB
+    Value: !Ref ALBSecurityGroup
+
   EC2SecurityGroupId:
     Description: Security Group ID for EC2
     Value: !Ref EC2SecurityGroup
@@ -302,17 +415,13 @@ Outputs:
     Description: S3 Bucket for Logs
     Value: !Ref LogsBucket
 
-  EC2InstanceId:
-    Description: EC2 Instance ID
-    Value: !Ref MyEC2Instance
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
 
-  EC2InstancePublicIP:
-    Description: EC2 Instance Public IP
-    Value: !GetAtt MyEC2Instance.PublicIp
-
-  EC2InstancePrivateIP:
-    Description: EC2 Instance Private IP
-    Value: !GetAtt MyEC2Instance.PrivateIp
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
 
   ApplicationLoadBalancerDNS:
     Description: ALB DNS Name
@@ -342,4 +451,7 @@ Outputs:
     Description: CloudWatch Dashboard Name
     Value: !Ref MyDashboard
 
+  # NATGatewayId:
+  #   Description: NAT Gateway ID
+  #   Value: !Ref NATGateway
 ```
