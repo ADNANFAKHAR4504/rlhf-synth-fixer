@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "26390815",
+  "team": "synth",
+  "startedAt": "2025-10-01T12:45:30+00:00",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless API Development",
+    "Database Management",
+    "Performance Optimization",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Resource Scaling",
+    "Error Handling",
+    "API Gateway Configuration"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "X-Ray",
+    "Systems Manager Parameter Store",
+    "SQS",
+    "SNS",
+    "IAM",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

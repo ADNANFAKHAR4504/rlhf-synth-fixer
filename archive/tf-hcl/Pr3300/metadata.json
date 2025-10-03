@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348812",
+  "team": "4",
+  "startedAt": "2025-10-02T06:03:05.214Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "EC2",
+    "Auto Scaling",
+    "S3",
+    "RDS",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "GuardDuty",
+    "AWS Config",
+    "WAF",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

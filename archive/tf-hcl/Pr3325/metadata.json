@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "400256",
+  "team": "1",
+  "startedAt": "2025-10-02T09:05:23.997Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer (ALB)",
+    "ElastiCache (Redis)",
+    "RDS (MySQL)",
+    "CloudWatch",
+    "X-Ray",
+    "WAF",
+    "GuardDuty",
+    "KMS",
+    "S3",
+    "IAM",
+    "SNS",
+    "Secrets Manager",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
