@@ -42,7 +42,7 @@ describe("Live AWS Resource Integration Tests", () => {
     expect(instance.State?.Name).toBeDefined();
   });
 
-  test("RDS Database exists", async () => {
+  test("RDS Database exists and healthy", async () => {
     const { DBInstanceEndpoint } = outputs;
     const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.DBInstanceEndpoint.split(".")[0] });
     const response = await rdsClient.send(command);
@@ -52,7 +52,7 @@ describe("Live AWS Resource Integration Tests", () => {
     expect(db.Endpoint?.Address).toBe(DBInstanceEndpoint);
   });
 
-  test("ALB exists", async () => {
+  test("ALB exists and reachale", async () => {
     const { ApplicationLoadBalancerArn } = outputs;
     const command = new DescribeLoadBalancersCommand({ LoadBalancerArns: [ApplicationLoadBalancerArn] });
     const response = await elbv2Client.send(command);
@@ -61,7 +61,7 @@ describe("Live AWS Resource Integration Tests", () => {
     expect(response.LoadBalancers![0].LoadBalancerArn).toBe(ApplicationLoadBalancerArn);
   });
 
-  test("ALB Target Group exists", async () => {
+  test("ALB Target Group exists and have some target", async () => {
     const { ALBTargetGroupArn } = outputs;
     const command = new DescribeTargetGroupsCommand({ TargetGroupArns: [ALBTargetGroupArn] });
     const response = await elbv2Client.send(command);
