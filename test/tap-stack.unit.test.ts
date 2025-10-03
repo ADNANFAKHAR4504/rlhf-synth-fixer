@@ -486,7 +486,7 @@ describe('Payment Workflow Orchestration CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(8); // 4 new + 4 legacy
+      expect(outputCount).toBe(16); // 4 original + 4 legacy + 8 Lambda function outputs
     });
   });
 

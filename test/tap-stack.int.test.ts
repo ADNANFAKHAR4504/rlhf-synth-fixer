@@ -376,7 +376,7 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
         console.log('Available outputs:', Object.keys(outputs));
         return;
       }
-      
+
       const testPayload = {
         paymentId: `PAY-LAMBDA-TEST-${Date.now()}`,
         customerId: 'CUST-LAMBDA-TEST',
@@ -415,7 +415,7 @@ describe('Payment Workflow Orchestration Integration Tests', () => {
         console.log('⏭️ Skipping Lambda validation test - Lambda function name not available in outputs');
         return;
       }
-      
+
       const invalidPayload = {
         paymentId: '', // Invalid
         customerId: 'CUST-INVALID',
