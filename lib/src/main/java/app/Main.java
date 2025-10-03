@@ -690,6 +690,7 @@ class TapStack extends Stack {
                         .capacity(CapacityConfig.builder()
                                 .dataNodeInstanceType("t3.small.search")
                                 .dataNodes(1)
+                                .multiAzWithStandbyEnabled(false)
                                 .build())
                         .ebs(software.amazon.awscdk.services.opensearchservice.EbsOptions.builder()
                                 .enabled(true)
