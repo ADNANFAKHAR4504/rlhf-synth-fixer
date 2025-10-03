@@ -582,11 +582,11 @@ Resources:
           Backup Details:
           - Week Starting: {week_start}
           - Backup Date: {backup_date}
-          - Total Records: {len(items):,}
+          - Total Records: {len(items)}
           - File: s3://{os.environ['BUCKET_NAME']}/{s3_key}
 
           Survey Distribution:
-          {chr(10).join([f"- {survey_id}: {count:,} responses" for survey_id, count in sorted(survey_counts.items())])}
+          {chr(10).join([f"- {survey_id}: {count} responses" for survey_id, count in sorted(survey_counts.items())])}
 
           Generated: {backup_metadata['backup_timestamp']}"""
                   

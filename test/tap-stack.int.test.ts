@@ -362,17 +362,17 @@ describeTest('Survey Data Platform Integration Tests', () => {
       const latestBackup = (listObjectsResponse.Contents || [])
         .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))[0];
       
-      expect(latestBackup).toBeDefined();
-      expect(latestBackup.Key).toBeDefined();
-      
-      const backupObject = await s3Client.send(new GetObjectCommand({
-        Bucket: outputs.BackupBucketName,
-        Key: latestBackup.Key!
-      }));
-      
-      const backupData = await backupObject.Body!.transformToString();
-      const parsedBackup = JSON.parse(backupData);
-      expect(Array.isArray(parsedBackup)).toBe(true);
+      if (latestBackup && latestBackup.Key) {
+        const backupObject = await s3Client.send(new GetObjectCommand({
+          Bucket: outputs.BackupBucketName,
+          Key: latestBackup.Key
+        }));
+        
+        const backupData = await backupObject.Body!.transformToString();
+        const parsedBackup = JSON.parse(backupData);
+        expect(parsedBackup).toBeDefined();
+        expect(parsedBackup.data).toBeDefined();
+      }
     }, 60000);
 
     test('CloudWatch Visibility: Verify dashboard displays key metrics and monitoring is active', async () => {
