@@ -699,11 +699,10 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection with native CDK resources"""
         
-        # SOLUTION: Use a data source/lookup approach with native CDK
-        # Since we must use native CDK resources only, the proper approach is:
-        # 1. Create detector with unique name/properties to avoid conflicts
-        # 2. Use conditional creation based on stack parameters
-        # 3. Provide clear instructions for handling existing detectors
+        # Enhanced solution for handling existing GuardDuty detectors:
+        # 1. Check for context parameters to use existing detector
+        # 2. Create new detector with globally unique naming to avoid conflicts
+        # 3. Provide clear error guidance when conflicts occur
         
         # Check if we should use an existing detector via CDK context
         use_existing_detector = self.node.try_get_context("use_existing_guardduty_detector")
@@ -718,13 +717,29 @@ class TapStack(Stack):
             CfnOutput(
                 self, "ExistingGuardDutyDetectorUsed", 
                 value=existing_detector_id,
-                description="Using existing GuardDuty detector"
+                description="Using existing GuardDuty detector - no new resources created"
+            )
+            
+            # Add informational output for troubleshooting
+            CfnOutput(
+                self, "GuardDutyDeploymentMode", 
+                value="existing-detector",
+                description="Deployment mode: using existing detector"
             )
         else:
-            # Create new GuardDuty detector with unique naming to avoid conflicts
-            # Adding timestamp or unique suffix helps avoid name collisions
+            # Create new GuardDuty detector with globally unique naming
+            # This approach minimizes chances of conflicts even in shared accounts
             import time
-            timestamp_suffix = str(int(time.time() % 10000))  # Last 4 digits of timestamp
+            import hashlib
+            
+            # Create a more unique identifier to avoid any possible conflicts
+            unique_identifier = hashlib.md5(
+                f"{self.account}-{self.region}-{self.environment_suffix}-{int(time.time())}".encode()
+            ).hexdigest()[:12]
+            
+            # WARNING: If this fails with "detector already exists", you need to:
+            # 1. List existing detectors: aws guardduty list-detectors --region <region>
+            # 2. Redeploy with: cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=<detector-id>
             
             self.guardduty_detector = guardduty.CfnDetector(
                 self, "GuardDutyDetector",
@@ -733,7 +748,7 @@ class TapStack(Stack):
                 tags=[
                     {
                         "key": "Name", 
-                        "value": f"ZeroTrustDetector-{self.unique_suffix}-{timestamp_suffix}"
+                        "value": f"ZeroTrust-{unique_identifier}"
                     },
                     {
                         "key": "Environment", 
@@ -746,16 +761,33 @@ class TapStack(Stack):
                     {
                         "key": "CreatedBy",
                         "value": "ZeroTrustStack"
+                    },
+                    {
+                        "key": "UniqueId",
+                        "value": unique_identifier
                     }
                 ]
             )
             
-            # Set deletion policy to retain the detector to avoid accidental deletion
+            # Set deletion policy to retain to prevent accidental deletion
             self.guardduty_detector.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
             self.guardduty_detector.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
             
             # Get detector ID from native resource
             self.guardduty_detector_id = self.guardduty_detector.ref
+            
+            # Add informational output for troubleshooting  
+            CfnOutput(
+                self, "GuardDutyDeploymentMode", 
+                value="new-detector",
+                description="Deployment mode: created new detector"
+            )
+            
+            CfnOutput(
+                self, "GuardDutyDetectorUniqueId", 
+                value=unique_identifier,
+                description="Unique identifier for this detector deployment"
+            )
 
         # Create threat intel set for known bad IPs
         # Works with both existing and new detectors
@@ -1266,7 +1298,7 @@ def notify_security_team(event: Dict, response: Dict):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Check if we should use existing Config recorder via CDK context
+        # Enhanced solution for handling existing Config recorders
         use_existing_config = self.node.try_get_context("use_existing_config_recorder")
         existing_config_name = self.node.try_get_context("existing_config_recorder_name")
         
@@ -1281,13 +1313,30 @@ def notify_security_team(event: Dict, response: Dict):
             CfnOutput(
                 self, "ExistingConfigRecorderUsed", 
                 value=existing_config_name,
-                description="Using existing Config recorder"
+                description="Using existing Config recorder - no new resources created"
+            )
+            
+            CfnOutput(
+                self, "ConfigDeploymentMode", 
+                value="existing-recorder",
+                description="Deployment mode: using existing Config recorder"
             )
         else:
-            # Create Config recorder with unique naming to avoid conflicts
+            # Create Config recorder with globally unique naming
+            # This minimizes conflicts even in accounts with multiple deployments
             import time
-            timestamp_suffix = str(int(time.time() % 10000))  # Last 4 digits of timestamp
-            recorder_name = f"ConfigRecorder-{self.unique_suffix}-{timestamp_suffix}"
+            import hashlib
+            
+            # Create a more unique identifier 
+            config_unique_id = hashlib.md5(
+                f"config-{self.account}-{self.region}-{self.environment_suffix}-{int(time.time())}".encode()
+            ).hexdigest()[:12]
+            
+            recorder_name = f"ZeroTrustConfig-{config_unique_id}"
+            
+            # WARNING: If this fails with "MaxNumberOfConfigurationRecordersExceededException":
+            # 1. List existing recorders: aws configservice describe-configuration-recorders --region <region>  
+            # 2. Redeploy with: cdk deploy -c use_existing_config_recorder=true -c existing_config_recorder_name=<recorder-name>
             
             self.config_recorder = config.CfnConfigurationRecorder(
                 self, "ConfigurationRecorder",
@@ -1304,7 +1353,7 @@ def notify_security_team(event: Dict, response: Dict):
             self.config_recorder.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
 
             # Create Config delivery channel with unique naming
-            channel_name = f"zero-trust-delivery-channel-{self.unique_suffix}-{timestamp_suffix}"
+            channel_name = f"ZeroTrustDelivery-{config_unique_id}"
             self.config_delivery_channel = config.CfnDeliveryChannel(
                 self, "ConfigDeliveryChannel",
                 s3_bucket_name=config_bucket.bucket_name,
@@ -1321,6 +1370,18 @@ def notify_security_team(event: Dict, response: Dict):
             # Store references for outputs
             self.config_recorder_arn = f"arn:aws:config:{self.region}:{self.account}:configuration-recorder/{self.config_recorder.name}"
             self.config_recorder_name = self.config_recorder.name
+            
+            CfnOutput(
+                self, "ConfigDeploymentMode", 
+                value="new-recorder",
+                description="Deployment mode: created new Config recorder"
+            )
+            
+            CfnOutput(
+                self, "ConfigRecorderUniqueId", 
+                value=config_unique_id,
+                description="Unique identifier for this Config recorder deployment"
+            )
 
         # Compliance rules
         compliance_rules = [
