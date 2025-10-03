@@ -134,6 +134,18 @@ Resources:
       AliasName: !Sub 'alias/${CompanyName}-${Environment}-primary-dr-key'
       TargetKeyId: !Ref PrimaryKMSKey
 
+  # Database Password Secret
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${CompanyName}-${Environment}-db-password'
+      Description: 'Database master password for RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
   # VPC Infrastructure
   PrimaryVPC:
     Type: AWS::EC2::VPC
@@ -410,7 +422,7 @@ Resources:
       Engine: 'postgres'
       EngineVersion: '13.22'
       MasterUsername: !Ref DatabaseMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${CompanyName}-${Environment}-db-password:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString:password}}'
       DBName: 'tradingapp'
       AllocatedStorage: 20
       StorageType: 'gp2'
