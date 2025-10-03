@@ -47,8 +47,10 @@ export class PriceMonitorStack extends TerraformStack {
     new ArchiveProvider(this, 'archive');
 
     // S3 Bucket for historical data
+    // Add timestamp to make bucket name unique and avoid conflicts
+    const bucketSuffix = Date.now().toString().slice(-8);
     const historicalDataBucket = new S3Bucket(this, 'historical-data-bucket', {
-      bucket: `price-monitor-historical-${environmentSuffix}`,
+      bucket: `price-monitor-historical-${environmentSuffix}-${bucketSuffix}`,
       tags: {
         Name: 'Price Monitor Historical Data',
         Environment: environmentSuffix,
