@@ -33,41 +33,41 @@ import * as path from 'path';
 async function loadOutputsForEnvironment(): Promise<any> {
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   const expectedStackName = `TapStack${environmentSuffix}`;
-  
+
   // Try to load from cdk-outputs.json first
   const cdkOutputsPath = path.join(__dirname, '../cdk-outputs.json');
   if (fs.existsSync(cdkOutputsPath)) {
     const cdkOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, 'utf-8'));
-    
+
     // Try to find the exact stack for this environment
     if (cdkOutputs[expectedStackName]) {
       console.log(`Found outputs for stack: ${expectedStackName}`);
       return cdkOutputs[expectedStackName];
     }
-    
+
     // If exact match not found, try to find any stack containing the environment suffix
-    const matchingStackKey = Object.keys(cdkOutputs).find(key => 
+    const matchingStackKey = Object.keys(cdkOutputs).find(key =>
       key.includes(environmentSuffix) || key.includes(`Stack${environmentSuffix}`)
     );
-    
+
     if (matchingStackKey) {
       console.log(`Found outputs for matching stack: ${matchingStackKey}`);
       return cdkOutputs[matchingStackKey];
     }
   }
-  
+
   // If cdk-outputs.json doesn't have the right environment, try to fetch from CloudFormation
   console.log(`Attempting to fetch outputs from CloudFormation for environment: ${environmentSuffix}`);
-  
+
   try {
     const region = process.env.AWS_REGION || 'us-east-1';
     const cfnClient = new CloudFormationClient({ region });
-    
+
     try {
       const response = await cfnClient.send(new DescribeStacksCommand({
         StackName: expectedStackName
       }));
-      
+
       const stack = response.Stacks?.[0];
       if (stack?.Outputs) {
         console.log(`Fetched outputs from CloudFormation stack: ${expectedStackName}`);
@@ -82,18 +82,18 @@ async function loadOutputsForEnvironment(): Promise<any> {
     } catch (cfnError: any) {
       console.warn(`CloudFormation stack ${expectedStackName} not found:`, cfnError.message);
     }
-    
+
     // Fallback to try get-outputs script results
     const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     if (fs.existsSync(cfnOutputsPath)) {
       console.log('Loading outputs from cfn-outputs/flat-outputs.json');
       return JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf-8'));
     }
-    
+
   } catch (cfnClientError) {
     console.warn('CloudFormation API error:', cfnClientError);
   }
-  
+
   // Final fallback to first available stack (backwards compatibility)
   if (fs.existsSync(cdkOutputsPath)) {
     const cdkOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, 'utf-8'));
@@ -103,7 +103,7 @@ async function loadOutputsForEnvironment(): Promise<any> {
       return cdkOutputs[stackKeys[0]];
     }
   }
-  
+
   console.warn(`No outputs found for environment: ${environmentSuffix}`);
   return {};
 }
@@ -155,7 +155,7 @@ describe('Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     // Load outputs asynchronously
     outputs = await loadOutputsForEnvironment();
-    
+
     hasCredentials = await checkAwsCredentials(region);
     if (!hasCredentials) {
       console.warn('AWS credentials not available - some tests will be skipped');
