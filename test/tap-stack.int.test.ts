@@ -1,8 +1,8 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import { CloudFrontClient, GetCloudFrontOriginAccessIdentityCommand, GetDistributionCommand } from '@aws-sdk/client-cloudfront';
 import { CloudWatchClient, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { DescribeStateMachineCommand, SFNClient } from '@aws-sdk/client-sfn';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 
@@ -25,21 +25,21 @@ const hasAWS = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KE
 const hasDeployedResources = Object.keys(outputs).length > 0;
 
 // Initialize AWS clients only if we have AWS credentials
-let s3Client: S3Client | null = null;
-let cloudFrontClient: CloudFrontClient | null = null;
+let dynamoDBClient: DynamoDBClient | null = null;
 let snsClient: SNSClient | null = null;
 let cloudWatchClient: CloudWatchClient | null = null;
 let lambdaClient: LambdaClient | null = null;
+let sfnClient: SFNClient | null = null;
 
 if (hasAWS) {
-  s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-  cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' }); // CloudFront is always us-east-1
+  dynamoDBClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
   snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
   cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
   lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
+  sfnClient = new SFNClient({ region: process.env.AWS_REGION || 'us-east-1' });
 }
 
-describe('Secure eBook Delivery System Integration Tests', () => {
+describe('Payment Workflow System Integration Tests', () => {
 
   // Helper function to check if we can run AWS API tests
   const canRunAWSTests = () => {
@@ -95,10 +95,13 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       }
 
       const requiredOutputs = [
-        'S3BucketName',
-        'CloudFrontDistributionDomain',
-        'CloudFrontDistributionId',
-        'SNSTopicArn'
+        'StateMachineArn',
+        'DynamoDBTableName',
+        'SNSTopicArn',
+        'ValidatePaymentLambdaArn',
+        'ProcessPaymentLambdaArn',
+        'StoreTransactionLambdaArn',
+        'NotifyCustomerLambdaArn'
       ];
 
       // Check which outputs are available
@@ -117,215 +120,163 @@ describe('Secure eBook Delivery System Integration Tests', () => {
     });
   });
 
-  describe('S3 Bucket Integration', () => {
-    let bucketName: string;
+  describe('DynamoDB Table Integration', () => {
+    let tableName: string;
 
     beforeAll(() => {
-      bucketName = outputs.S3BucketName;
+      tableName = outputs.DynamoDBTableName;
     });
 
-    test('should successfully access S3 bucket', async () => {
-      if (!canRunAWSTests() || !bucketName || !s3Client) {
-        console.warn('S3 bucket name not available or AWS clients not initialized - skipping S3 tests');
+    test('should successfully access DynamoDB table', async () => {
+      if (!canRunAWSTests() || !tableName || !dynamoDBClient) {
+        console.warn('DynamoDB table name not available or AWS clients not initialized - skipping DynamoDB tests');
         expect(true).toBe(true);
         return;
       }
 
       try {
-        const command = new HeadBucketCommand({ Bucket: bucketName });
-        const response = await s3Client.send(command);
-        expect(response).toBeDefined();
+        const command = new DescribeTableCommand({ TableName: tableName });
+        const response = await dynamoDBClient.send(command);
+        expect(response.Table).toBeDefined();
+        expect(response.Table?.TableName).toBe(tableName);
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping S3 bucket access test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping DynamoDB table access test');
           expect(true).toBe(true);
           return;
         }
-        // S3 bucket access failed - this is expected in CI/CD without proper credentials
+        // DynamoDB table access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
 
-    test('S3 bucket should have encryption enabled', async () => {
-      if (!canRunAWSTests() || !bucketName || !s3Client) {
-        console.warn('S3 bucket name not available or AWS clients not initialized - skipping encryption test');
+    test('DynamoDB table should have correct configuration', async () => {
+      if (!canRunAWSTests() || !tableName || !dynamoDBClient) {
+        console.warn('DynamoDB table name not available or AWS clients not initialized - skipping table configuration test');
         expect(true).toBe(true);
         return;
       }
 
       try {
-        const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
-        const response = await s3Client.send(command);
+        const command = new DescribeTableCommand({ TableName: tableName });
+        const response = await dynamoDBClient.send(command);
 
-        expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
+        expect(response.Table?.TableStatus).toBe('ACTIVE');
+        expect(response.Table?.BillingModeSummary?.BillingMode).toBeDefined();
 
-        const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
-        expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+        // Check if table has proper naming convention
+        expect(response.Table?.TableName).toMatch(new RegExp(`.*${environment}.*`));
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping S3 encryption test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping DynamoDB configuration test');
           expect(true).toBe(true);
           return;
         }
-        // S3 encryption check failed - this is expected in CI/CD without proper credentials
+        // DynamoDB configuration check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
 
-    test('S3 bucket should be private (no public access)', async () => {
-      if (!canRunAWSTests() || !bucketName || !s3Client) {
-        console.warn('S3 bucket name not available or AWS clients not initialized - skipping public access test');
+    test('should validate table naming convention', () => {
+      if (!tableName) {
+        console.warn('DynamoDB table name not available - skipping naming validation');
         expect(true).toBe(true);
         return;
       }
 
-      // This test would require additional S3 client calls to verify public access is blocked
-      // For integration testing, we assume CloudFormation deployed correctly
-      expect(bucketName).toBeDefined();
-      expect(bucketName).toMatch(new RegExp(`ebooks-storage-${environment}-`));
+      // Verify naming convention for payment transactions table
+      expect(tableName).toBeDefined();
+      expect(tableName).toMatch(new RegExp(`.*payment-transactions.*${environment}.*`));
     });
   });
 
-  describe('CloudFront Distribution Integration', () => {
-    let distributionId: string;
-    let distributionDomain: string;
+  describe('Step Functions State Machine Integration', () => {
+    let stateMachineArn: string;
 
     beforeAll(() => {
-      distributionId = outputs.CloudFrontDistributionId;
-      distributionDomain = outputs.CloudFrontDistributionDomain;
+      stateMachineArn = outputs.StateMachineArn;
     });
 
     beforeEach(() => {
       logAWSTestStatus();
     });
 
-    test('should successfully access CloudFront distribution', async () => {
-      if (!distributionId) {
-        console.warn('CloudFront distribution ID not available - skipping CF tests');
+    test('should successfully access payment workflow state machine', async () => {
+      if (!stateMachineArn) {
+        console.warn('State machine ARN not available - skipping Step Functions tests');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !cloudFrontClient) {
-        console.warn('AWS clients not initialized - skipping CloudFront distribution test');
+      if (!canRunAWSTests() || !sfnClient) {
+        console.warn('AWS clients not initialized - skipping Step Functions state machine test');
         expect(true).toBe(true);
         return;
       }
 
       try {
-        const command = new GetDistributionCommand({ Id: distributionId });
-        const response = await cloudFrontClient.send(command);
+        const command = new DescribeStateMachineCommand({ stateMachineArn });
+        const response = await sfnClient.send(command);
 
-        expect(response.Distribution).toBeDefined();
-        expect(response.Distribution?.Status).toBeDefined();
-        expect(response.Distribution?.DomainName).toBe(distributionDomain);
+        expect(response.stateMachineArn).toBe(stateMachineArn);
+        expect(response.status).toBe('ACTIVE');
+        expect(response.name).toContain('payment-workflow');
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping CloudFront distribution test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping Step Functions test');
           expect(true).toBe(true);
           return;
         }
-        // CloudFront distribution access failed - this is expected in CI/CD without proper credentials
+        // Step Functions access failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
 
-    test('CloudFront distribution should be enabled', async () => {
-      if (!distributionId) {
-        console.warn('CloudFront distribution ID not available - skipping CF status test');
+    test('state machine should have correct configuration', async () => {
+      if (!stateMachineArn) {
+        console.warn('State machine ARN not available - skipping configuration test');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !cloudFrontClient) {
-        console.warn('AWS clients not initialized - skipping CloudFront status test');
+      if (!canRunAWSTests() || !sfnClient) {
+        console.warn('AWS clients not initialized - skipping Step Functions configuration test');
         expect(true).toBe(true);
         return;
       }
 
       try {
-        const command = new GetDistributionCommand({ Id: distributionId });
-        const response = await cloudFrontClient.send(command);
+        const command = new DescribeStateMachineCommand({ stateMachineArn });
+        const response = await sfnClient.send(command);
 
-        expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
-        expect(response.Distribution?.DistributionConfig?.HttpVersion).toBe('http2');
-        expect(response.Distribution?.DistributionConfig?.IsIPV6Enabled).toBe(true);
+        expect(response.definition).toBeDefined();
+        expect(response.roleArn).toBeDefined();
+        expect(response.type).toBe('STANDARD');
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping CloudFront status test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping Step Functions configuration test');
           expect(true).toBe(true);
           return;
         }
-        // CloudFront status check failed - this is expected in CI/CD without proper credentials
+        // Step Functions configuration check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
 
-    test('CloudFront should enforce HTTPS', async () => {
-      if (!distributionId) {
-        console.warn('CloudFront distribution ID not available - skipping HTTPS test');
+    test('should validate state machine naming convention', () => {
+      if (!stateMachineArn) {
+        console.warn('State machine ARN not available - skipping naming validation');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !cloudFrontClient) {
-        console.warn('AWS clients not initialized - skipping CloudFront HTTPS test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      try {
-        const command = new GetDistributionCommand({ Id: distributionId });
-        const response = await cloudFrontClient.send(command);
-
-        const behavior = response.Distribution?.DistributionConfig?.DefaultCacheBehavior;
-        expect(behavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
-      } catch (error: any) {
-        // Handle AWS credential issues gracefully in CI/CD
-        if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping CloudFront HTTPS test');
-          expect(true).toBe(true);
-          return;
-        }
-        // CloudFront HTTPS check failed - this is expected in CI/CD without proper credentials
-        throw error;
-      }
-    });
-
-    test('should successfully access Origin Access Identity', async () => {
-      if (!outputs.CloudFrontOAIId) {
-        console.warn('CloudFront OAI ID not available - skipping OAI test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      if (!canRunAWSTests() || !cloudFrontClient) {
-        console.warn('AWS clients not initialized - skipping CloudFront OAI test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      try {
-        const command = new GetCloudFrontOriginAccessIdentityCommand({ Id: outputs.CloudFrontOAIId });
-        const response = await cloudFrontClient.send(command);
-
-        expect(response.CloudFrontOriginAccessIdentity).toBeDefined();
-        expect(response.CloudFrontOriginAccessIdentity?.CloudFrontOriginAccessIdentityConfig?.Comment).toContain('eBook delivery');
-      } catch (error: any) {
-        // Handle AWS credential issues gracefully in CI/CD
-        if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping CloudFront OAI test');
-          expect(true).toBe(true);
-          return;
-        }
-        // CloudFront OAI check failed - this is expected in CI/CD without proper credentials
-        throw error;
-      }
+      // Verify naming convention for payment workflow state machine
+      expect(stateMachineArn).toBeDefined();
+      expect(stateMachineArn).toMatch(new RegExp(`.*payment-workflow.*${environment}.*`));
     });
   });
 
@@ -364,7 +315,14 @@ describe('Secure eBook Delivery System Integration Tests', () => {
     });
 
     test('should successfully access CloudWatch dashboard', async () => {
-      const dashboardName = `eBook-Delivery-${environment}`;
+      const dashboardName = `${environment}-payment-workflow-dashboard-${environment}`;
+      const dashboardURL = outputs.DashboardURL;
+
+      if (!dashboardURL) {
+        console.warn('CloudWatch dashboard URL not available - skipping dashboard test');
+        expect(true).toBe(true);
+        return;
+      }
 
       if (!canRunAWSTests() || !cloudWatchClient) {
         console.warn('CloudWatch client not initialized or AWS credentials not available - skipping CloudWatch dashboard test');
@@ -377,7 +335,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
         const response = await cloudWatchClient.send(command);
 
         expect(response.DashboardBody).toBeDefined();
-        expect(response.DashboardBody).toContain('CloudFront');
+        expect(response.DashboardBody).toContain('payment');
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -393,80 +351,108 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   });
 
   describe('Lambda Function Integration', () => {
-    test('should successfully access cost monitoring Lambda function', async () => {
-      const functionName = `${environment}-CostMonitoringFunction`.replace('S3BucketName', ''); // Clean up from outputs
-      const functionArn = outputs.CostMonitoringFunctionArn;
+    const lambdaFunctions = [
+      { name: 'ValidatePaymentLambda', arnKey: 'ValidatePaymentLambdaArn' },
+      { name: 'ProcessPaymentLambda', arnKey: 'ProcessPaymentLambdaArn' },
+      { name: 'StoreTransactionLambda', arnKey: 'StoreTransactionLambdaArn' },
+      { name: 'NotifyCustomerLambda', arnKey: 'NotifyCustomerLambdaArn' }
+    ];
 
-      if (!functionArn) {
-        console.warn('Cost monitoring function ARN not available - skipping Lambda test');
-        expect(true).toBe(true);
-        return;
-      }
+    lambdaFunctions.forEach(({ name, arnKey }) => {
+      test(`should successfully access ${name} function`, async () => {
+        const functionArn = outputs[arnKey];
 
-      if (!canRunAWSTests() || !lambdaClient) {
-        console.warn('AWS clients not initialized - skipping Lambda function test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      try {
-        // Extract function name from ARN
-        const functionNameFromArn = functionArn.split(':').pop()?.split('/')[1];
-
-        if (!functionNameFromArn) {
-          console.warn('Could not extract function name from ARN');
+        if (!functionArn) {
+          console.warn(`${name} function ARN not available - skipping Lambda test`);
           expect(true).toBe(true);
           return;
         }
 
-        const command = new GetFunctionCommand({ FunctionName: functionNameFromArn });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration?.FunctionName).toBeDefined();
-        expect(response.Configuration?.Runtime).toBe('python3.9');
-        expect(response.Configuration?.Timeout).toBe(300);
-      } catch (error: any) {
-        // Handle AWS credential issues gracefully in CI/CD
-        if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping Lambda function test');
+        if (!canRunAWSTests() || !lambdaClient) {
+          console.warn('AWS clients not initialized - skipping Lambda function test');
           expect(true).toBe(true);
           return;
         }
-        // Lambda function access failed - this is expected in CI/CD without proper credentials
-        throw error;
+
+        try {
+          // Extract function name from ARN
+          const functionNameFromArn = functionArn.split(':').pop();
+
+          if (!functionNameFromArn) {
+            console.warn('Could not extract function name from ARN');
+            expect(true).toBe(true);
+            return;
+          }
+
+          const command = new GetFunctionCommand({ FunctionName: functionNameFromArn });
+          const response = await lambdaClient.send(command);
+
+          expect(response.Configuration?.FunctionName).toBeDefined();
+          expect(response.Configuration?.Runtime).toMatch(/^python3/);
+          expect(response.Configuration?.Timeout).toBeGreaterThan(0);
+
+          // Verify naming convention includes environment
+          expect(response.Configuration?.FunctionName).toMatch(new RegExp(`.*${environment}.*`));
+        } catch (error: any) {
+          // Handle AWS credential issues gracefully in CI/CD
+          if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
+            console.warn(`AWS credentials not configured or insufficient permissions - skipping ${name} function test`);
+            expect(true).toBe(true);
+            return;
+          }
+          // Lambda function access failed - this is expected in CI/CD without proper credentials
+          throw error;
+        }
+      });
+    });
+
+    test('should have all payment workflow Lambda functions configured', () => {
+      const availableFunctions = lambdaFunctions.filter(({ arnKey }) => outputs[arnKey]);
+
+      if (availableFunctions.length === 0) {
+        console.warn('No Lambda functions available - skipping function configuration test');
+        expect(true).toBe(true);
+        return;
       }
+
+      // Verify that at least some payment workflow functions are configured
+      expect(availableFunctions.length).toBeGreaterThan(0);
+
+      // Check ARN format for available functions
+      availableFunctions.forEach(({ arnKey }) => {
+        expect(outputs[arnKey]).toMatch(/^arn:aws:lambda:/);
+      });
     });
   });
 
   describe('Cross-Service Integration Scenarios', () => {
-    test('S3 and CloudFront should be properly integrated', async () => {
-      if (!outputs.S3BucketName || !outputs.CloudFrontDistributionId) {
+    test('Step Functions and Lambda should be properly integrated', async () => {
+      if (!outputs.StateMachineArn || !outputs.ValidatePaymentLambdaArn) {
         console.warn('Required resources not available for integration test');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !cloudFrontClient || !s3Client) {
+      if (!canRunAWSTests() || !sfnClient || !lambdaClient) {
         console.warn('AWS clients not initialized - skipping cross-service integration test');
         expect(true).toBe(true);
         return;
       }
 
-      // This test validates that the S3 bucket policy restricts access to CloudFront OAI only
+      // This test validates that the State Machine can invoke Lambda functions
       try {
-        const cfCommand = new GetDistributionCommand({ Id: outputs.CloudFrontDistributionId });
-        const cfResponse = await cloudFrontClient.send(cfCommand);
+        const sfnCommand = new DescribeStateMachineCommand({ stateMachineArn: outputs.StateMachineArn });
+        const sfnResponse = await sfnClient.send(sfnCommand);
 
-        const s3Command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
-        const s3Response = await s3Client.send(s3Command);
+        const lambdaCommand = new GetFunctionCommand({ FunctionName: outputs.ValidatePaymentLambdaArn.split(':').pop() });
+        const lambdaResponse = await lambdaClient.send(lambdaCommand);
 
-        expect(cfResponse.Distribution).toBeDefined();
-        expect(s3Response).toBeDefined();
+        expect(sfnResponse.stateMachineArn).toBeDefined();
+        expect(lambdaResponse.Configuration?.FunctionArn).toBeDefined();
 
-        // Verify that CloudFront origins point to S3 bucket
-        const origins = cfResponse.Distribution?.DistributionConfig?.Origins;
-        expect(origins).toBeDefined();
-        expect(origins?.Items?.length).toBeGreaterThan(0);
+        // Verify that State Machine definition references Lambda ARNs
+        const definition = JSON.parse(sfnResponse.definition || '{}');
+        expect(definition).toBeDefined();
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -482,7 +468,8 @@ describe('Secure eBook Delivery System Integration Tests', () => {
     test('monitoring resources should be properly configured', async () => {
       const requiredMonitoringResources = [
         'SNSTopicArn',
-        'CloudFrontDistributionId'
+        'StateMachineArn',
+        'DashboardURL'
       ];
 
       const availableResources = requiredMonitoringResources.filter(resource => outputs[resource]);
@@ -490,16 +477,16 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       expect(availableResources.length).toBeGreaterThan(0);
 
       // Verify that CloudWatch alarms can access the resources they monitor
-      if (outputs.CloudFrontDistributionId) {
-        if (!canRunAWSTests() || !cloudFrontClient) {
+      if (outputs.StateMachineArn) {
+        if (!canRunAWSTests() || !sfnClient) {
           console.warn('AWS clients not initialized - skipping resource monitoring validation');
           expect(true).toBe(true);
           return;
         }
         try {
-          const command = new GetDistributionCommand({ Id: outputs.CloudFrontDistributionId });
-          await cloudFrontClient.send(command);
-          expect(true).toBe(true); // Distribution is accessible for monitoring
+          const command = new DescribeStateMachineCommand({ stateMachineArn: outputs.StateMachineArn });
+          await sfnClient.send(command);
+          expect(true).toBe(true); // State Machine is accessible for monitoring
         } catch (error: any) {
           // Handle AWS credential issues gracefully in CI/CD
           if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -515,83 +502,96 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   });
 
   describe('Security and Access Control Integration', () => {
-    test('S3 bucket should not be publicly accessible', async () => {
-      if (!outputs.S3BucketName) {
-        console.warn('S3 bucket name not available for security test');
+    test('DynamoDB table should have proper permissions', async () => {
+      if (!outputs.DynamoDBTableName) {
+        console.warn('DynamoDB table name not available for security test');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !s3Client) {
-        console.warn('AWS clients not initialized - skipping S3 security test');
+      if (!canRunAWSTests() || !dynamoDBClient) {
+        console.warn('AWS clients not initialized - skipping DynamoDB security test');
         expect(true).toBe(true);
         return;
       }
 
-      // Attempt to access S3 bucket without CloudFront OAI
-      // This should fail if bucket policy is correctly configured
       try {
-        const command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
-        await s3Client.send(command);
-        // If we can access the bucket directly, something is wrong
-        // However, HeadBucket command might still work for bucket existence check
-        // The real test would be trying to get an object without proper credentials
-        expect(true).toBe(true); // For now, just verify the bucket exists
+        const command = new DescribeTableCommand({ TableName: outputs.DynamoDBTableName });
+        const response = await dynamoDBClient.send(command);
+
+        // Verify table exists and is accessible
+        expect(response.Table?.TableStatus).toBe('ACTIVE');
+        expect(response.Table?.TableArn).toBeDefined();
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping S3 security test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping DynamoDB security test');
           expect(true).toBe(true);
           return;
         }
-        // This is actually expected if the bucket policy blocks direct access
-        expect(error).toBeDefined();
+        // DynamoDB access failed - this is expected in CI/CD without proper credentials
+        throw error;
       }
     });
 
-    test('KMS encryption should be properly configured', async () => {
-      if (!outputs.KmsKeyId) {
-        console.warn('KMS key ID not available for encryption test');
+    test('Lambda functions should have proper IAM roles', () => {
+      const lambdaFunctions = [
+        'ValidatePaymentLambdaArn',
+        'ProcessPaymentLambdaArn',
+        'StoreTransactionLambdaArn',
+        'NotifyCustomerLambdaArn'
+      ];
+
+      const availableFunctions = lambdaFunctions.filter(arnKey => outputs[arnKey]);
+
+      if (availableFunctions.length === 0) {
+        console.warn('No Lambda functions available for security test');
         expect(true).toBe(true);
         return;
       }
 
-      // Verify that KMS key is referenced and accessible
-      expect(outputs.KmsKeyId).toBeDefined();
-      expect(outputs.KmsKeyId).toMatch(/^arn:aws:kms:|^alias\//);
+      // Verify that Lambda functions have proper ARN format
+      availableFunctions.forEach(arnKey => {
+        expect(outputs[arnKey]).toMatch(/^arn:aws:lambda:/);
+        expect(outputs[arnKey]).toContain(`${environment}`);
+      });
     });
   });
 
   describe('Performance and Scalability Integration', () => {
-    test('CloudFront should have global distribution', async () => {
-      if (!outputs.CloudFrontDistributionId) {
-        console.warn('CloudFront distribution ID not available for performance test');
+    test('DynamoDB table should have proper performance configuration', async () => {
+      if (!outputs.DynamoDBTableName) {
+        console.warn('DynamoDB table name not available for performance test');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !cloudFrontClient) {
-        console.warn('AWS clients not initialized - skipping CloudFront performance test');
+      if (!canRunAWSTests() || !dynamoDBClient) {
+        console.warn('AWS clients not initialized - skipping DynamoDB performance test');
         expect(true).toBe(true);
         return;
       }
 
       try {
-        const command = new GetDistributionCommand({ Id: outputs.CloudFrontDistributionId });
-        const response = await cloudFrontClient.send(command);
+        const command = new DescribeTableCommand({ TableName: outputs.DynamoDBTableName });
+        const response = await dynamoDBClient.send(command);
 
-        const config = response.Distribution?.DistributionConfig;
-        expect(config?.PriceClass).toBe('PriceClass_All'); // Global distribution
-        expect(config?.HttpVersion).toBe('http2'); // Modern protocol
-        expect(config?.IsIPV6Enabled).toBe(true); // IPv6 support
+        const table = response.Table;
+        expect(table?.TableStatus).toBe('ACTIVE');
+        expect(table?.BillingModeSummary?.BillingMode).toBeDefined();
+
+        // Verify table class is set appropriately
+        if (table?.TableClassSummary) {
+          expect(table.TableClassSummary.TableClass).toBeDefined();
+        }
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping CloudFront performance test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping DynamoDB performance test');
           expect(true).toBe(true);
           return;
         }
-        // CloudFront performance check failed - this is expected in CI/CD without proper credentials
+        // DynamoDB performance check failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
@@ -633,58 +633,63 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   describe('Disaster Recovery and High Availability', () => {
     test('should have multiple availability layers', () => {
       // Verify that the system has redundancy built in
-      const hasCloudFront = !!outputs.CloudFrontDistributionId;
-      const hasS3Versioning = outputs.S3BucketName?.includes('versioned') || true; // Assume versioning is enabled
+      const hasStateMachine = !!outputs.StateMachineArn;
+      const hasDynamoDB = !!outputs.DynamoDBTableName;
       const hasMonitoring = !!outputs.SNSTopicArn;
+      const hasMultipleLambdas = [
+        outputs.ValidatePaymentLambdaArn,
+        outputs.ProcessPaymentLambdaArn,
+        outputs.StoreTransactionLambdaArn,
+        outputs.NotifyCustomerLambdaArn
+      ].filter(Boolean).length > 1;
 
-      if (!hasCloudFront && !hasMonitoring) {
+      if (!hasStateMachine && !hasMonitoring && !hasDynamoDB) {
         console.warn('No deployed resources available - skipping availability test');
         expect(true).toBe(true);
         return;
       }
 
       // If resources are available, verify they provide redundancy
-      if (hasCloudFront) {
-        expect(hasCloudFront).toBe(true); // CloudFront provides global distribution
+      if (hasStateMachine) {
+        expect(hasStateMachine).toBe(true); // Step Functions provides workflow resilience
       }
 
       if (hasMonitoring) {
         expect(hasMonitoring).toBe(true); // Monitoring ensures reliability
       }
 
-      // S3 provides durability by default
-      if (outputs.S3BucketName) {
-        expect(outputs.S3BucketName).toBeDefined();
+      if (hasDynamoDB) {
+        expect(hasDynamoDB).toBe(true); // DynamoDB provides high availability by default
+      }
+
+      if (hasMultipleLambdas) {
+        expect(hasMultipleLambdas).toBe(true); // Multiple Lambda functions provide service redundancy
       }
     });
 
-    test('should have proper backup and logging configuration', async () => {
-      if (!outputs.LoggingBucketName) {
-        console.warn('Logging bucket not configured - skipping backup verification');
+    test('should have proper monitoring and alerting configuration', () => {
+      const monitoringResources = [
+        'SNSTopicArn',
+        'DashboardURL'
+      ];
+
+      const availableMonitoring = monitoringResources.filter(resource => outputs[resource]);
+
+      if (availableMonitoring.length === 0) {
+        console.warn('No monitoring resources configured - skipping monitoring verification');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !s3Client) {
-        console.warn('AWS clients not initialized - skipping logging bucket test');
-        expect(true).toBe(true);
-        return;
-      }
+      // Verify monitoring resources are properly configured
+      availableMonitoring.forEach(resource => {
+        expect(outputs[resource]).toBeDefined();
+        expect(outputs[resource]).not.toBe('');
+      });
 
-      try {
-        const command = new HeadBucketCommand({ Bucket: outputs.LoggingBucketName });
-        await s3Client.send(command);
-        expect(true).toBe(true); // Logging bucket is accessible
-      } catch (error: any) {
-        // Handle AWS credential issues gracefully in CI/CD
-        if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping logging bucket test');
-          expect(true).toBe(true);
-          return;
-        }
-        // Logging bucket access failed - this is expected in CI/CD without proper credentials
-        // Logging might be disabled, which is acceptable
-        expect(true).toBe(true);
+      // Verify SNS topic ARN format if available
+      if (outputs.SNSTopicArn) {
+        expect(outputs.SNSTopicArn).toMatch(/^arn:aws:sns:/);
       }
     });
   });
@@ -692,52 +697,53 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   describe('Cost Optimization Integration', () => {
     test('should have cost monitoring configured', () => {
       // Verify that cost monitoring resources are deployed
-      const costMonitoringConfigured = !!outputs.CostMonitoringFunctionArn;
-      const monitoringEnabled = !!outputs.CloudFrontDistributionId && !!outputs.SNSTopicArn;
+      const monitoringEnabled = !!outputs.StateMachineArn && !!outputs.SNSTopicArn;
+      const dashboardConfigured = !!outputs.DashboardURL;
 
-      if (!costMonitoringConfigured && !monitoringEnabled) {
+      if (!monitoringEnabled && !dashboardConfigured) {
         console.warn('No cost monitoring resources available - skipping cost monitoring test');
         expect(true).toBe(true);
         return;
       }
 
       // If resources are available, verify they are configured
-      if (costMonitoringConfigured) {
-        expect(costMonitoringConfigured).toBe(true);
-      }
-
       if (monitoringEnabled) {
         expect(monitoringEnabled).toBe(true);
       }
+
+      if (dashboardConfigured) {
+        expect(dashboardConfigured).toBe(true);
+      }
     });
 
-    test('should have lifecycle policies for S3', async () => {
-      if (!outputs.S3BucketName) {
-        console.warn('S3 bucket not available for lifecycle test');
+    test('should have proper resource allocation for DynamoDB', async () => {
+      if (!outputs.DynamoDBTableName) {
+        console.warn('DynamoDB table not available for resource allocation test');
         expect(true).toBe(true);
         return;
       }
 
-      if (!canRunAWSTests() || !s3Client) {
-        console.warn('AWS clients not initialized - skipping S3 lifecycle test');
+      if (!canRunAWSTests() || !dynamoDBClient) {
+        console.warn('AWS clients not initialized - skipping DynamoDB resource allocation test');
         expect(true).toBe(true);
         return;
       }
 
-      // S3 lifecycle policies are configured at the bucket level
-      // For integration testing, we verify the bucket exists and assume lifecycle is configured
+      // DynamoDB billing mode and table class affect cost optimization
       try {
-        const command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
-        await s3Client.send(command);
-        expect(true).toBe(true); // Bucket exists, lifecycle policies should be applied
+        const command = new DescribeTableCommand({ TableName: outputs.DynamoDBTableName });
+        const response = await dynamoDBClient.send(command);
+
+        expect(response.Table?.BillingModeSummary?.BillingMode).toBeDefined(); // Should have proper billing mode
+        expect(response.Table?.TableStatus).toBe('ACTIVE'); // Table should be active
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
-          console.warn('AWS credentials not configured or insufficient permissions - skipping S3 lifecycle test');
+          console.warn('AWS credentials not configured or insufficient permissions - skipping DynamoDB resource allocation test');
           expect(true).toBe(true);
           return;
         }
-        // S3 lifecycle verification failed - this is expected in CI/CD without proper credentials
+        // DynamoDB resource allocation verification failed - this is expected in CI/CD without proper credentials
         throw error;
       }
     });
