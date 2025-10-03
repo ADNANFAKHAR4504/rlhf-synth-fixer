@@ -890,6 +890,7 @@ Resources:
   # CloudWatch Log Metric Filter for Root Account Usage
   RootAccountUsageMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
+    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }'
@@ -902,9 +903,10 @@ Resources:
   # CloudWatch Log Metric Filter for Unauthorized API Calls
   UnauthorizedAPICallsMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
+    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+      FilterPattern: '{ ($.errorCode = "UnauthorizedOperation") || ($.errorCode = "AccessDenied") }'
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'UnauthorizedAPICall'
@@ -916,7 +918,7 @@ Resources:
     Type: 'AWS::Logs::MetricFilter'
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}'
+      FilterPattern: '      FilterPattern: '{ ($.eventName = "DeleteGroupPolicy") || ($.eventName = "DeleteRolePolicy") || ($.eventName = "DeleteUserPolicy") || ($.eventName = "PutGroupPolicy") || ($.eventName = "PutRolePolicy") || ($.eventName = "PutUserPolicy") || ($.eventName = "CreatePolicy") || ($.eventName = "DeletePolicy") || ($.eventName = "CreatePolicyVersion") || ($.eventName = "DeletePolicyVersion") || ($.eventName = "AttachRolePolicy") || ($.eventName = "DetachRolePolicy") || ($.eventName = "AttachUserPolicy") || ($.eventName = "DetachUserPolicy") || ($.eventName = "AttachGroupPolicy") || ($.eventName = "DetachGroupPolicy") }''
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'IAMPolicyChange'
@@ -928,7 +930,7 @@ Resources:
     Type: 'AWS::Logs::MetricFilter'
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.eventName = ConsoleLogin) && ($.errorMessage EXISTS) }'
+      FilterPattern: '      FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.errorMessage EXISTS) }''
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'ConsoleSigninFailure'
