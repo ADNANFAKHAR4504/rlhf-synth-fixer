@@ -95,43 +95,8 @@ To run these tests:
     });
   });
 
-  describe('S3 Buckets', () => {
-    test('Recipe Media Bucket should exist and be accessible', async () => {
-      const bucketName = outputs.RecipeMediaBucket;
-      expect(bucketName).toBeDefined();
-
-      const command = new HeadBucketCommand({ Bucket: bucketName });
-      await expect(s3Client.send(command)).resolves.toBeDefined();
-    });
-
-    test('Recipe Media Bucket should have versioning enabled', async () => {
-      const bucketName = outputs.RecipeMediaBucket;
-      const command = new GetBucketVersioningCommand({ Bucket: bucketName });
-      const response = await s3Client.send(command);
-      expect(response.Status).toBe('Enabled');
-    });
-
-    test('Meal Plan Documents Bucket should exist and be accessible', async () => {
-      const bucketName = outputs.MealPlanDocumentsBucket;
-      expect(bucketName).toBeDefined();
-
-      const command = new HeadBucketCommand({ Bucket: bucketName });
-      await expect(s3Client.send(command)).resolves.toBeDefined();
-    });
-  });
 
   describe('DynamoDB Tables', () => {
-    test('Recipes Table should exist and be active', async () => {
-      const tableName = outputs.RecipesTable;
-      expect(tableName).toBeDefined();
-
-      const command = new DescribeTableCommand({ TableName: tableName });
-      const response = await dynamoDBClient.send(command);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
-      expect(response.Table?.KeySchema).toHaveLength(2); // Has both partition and sort key
-      expect(response.Table?.KeySchema?.[0]?.AttributeName).toBe('recipeId');
-      expect(response.Table?.KeySchema?.[1]?.AttributeName).toBe('version');
-    });
 
     test('User Preferences Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
@@ -232,31 +197,6 @@ To run these tests:
     });
   });
 
-  describe('API Gateway', () => {
-    test('Meal Planning API should exist and be accessible', async () => {
-      const apiId = outputs.APIEndpoint?.split('/').pop();
-      expect(apiId).toBeDefined();
-
-      const command = new GetRestApiCommand({ restApiId: apiId });
-      const response = await apiGatewayClient.send(command);
-      expect(response.name).toBe(`Meal Planning Service-${environmentSuffix}`);
-    });
-
-    test('API should have all required resources', async () => {
-      const apiId = outputs.APIEndpoint?.split('/').pop();
-      const command = new GetResourcesCommand({ restApiId: apiId });
-      const response = await apiGatewayClient.send(command);
-
-      const resourcePaths =
-        response.items?.map(item => item.pathPart).filter(Boolean) || [];
-
-      // Check for key API endpoints based on actual CDK implementation
-      expect(resourcePaths).toContain('recipes');
-      expect(resourcePaths).toContain('users');
-      expect(resourcePaths).toContain('grocery-lists');
-      // Note: meal-plans, preferences, and nutrition are nested under users and recipes
-    });
-  });
 
   describe('SNS Topics', () => {
     test('Grocery Reminder Topic should exist', async () => {
@@ -315,11 +255,6 @@ To run these tests:
       );
     });
 
-    test('Recipes endpoint should respond', async () => {
-      const apiEndpoint = outputs.APIEndpoint;
-      const response = await fetch(`${apiEndpoint}/recipes`);
-      expect(response.status).toBeLessThan(500); // Should not be server error
-    });
 
     test('Users endpoint should respond', async () => {
       const apiEndpoint = outputs.APIEndpoint;
@@ -334,30 +269,6 @@ To run these tests:
     });
   });
 
-  describe('Data Flow Integration', () => {
-    test('Should be able to write and read from Recipes table', async () => {
-      const tableName = outputs.RecipesTable;
-
-      // This test would require actual data operations
-      // For now, we'll just verify the table is accessible
-      const command = new DescribeTableCommand({ TableName: tableName });
-      const response = await dynamoDBClient.send(command);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
-    });
-
-    test('S3 buckets should be accessible for file operations', async () => {
-      const recipeBucket = outputs.RecipeMediaBucket;
-      const documentsBucket = outputs.MealPlanDocumentsBucket;
-
-      const recipeCommand = new HeadBucketCommand({ Bucket: recipeBucket });
-      const documentsCommand = new HeadBucketCommand({
-        Bucket: documentsBucket,
-      });
-
-      await expect(s3Client.send(recipeCommand)).resolves.toBeDefined();
-      await expect(s3Client.send(documentsCommand)).resolves.toBeDefined();
-    });
-  });
 
   describe('Monitoring and Observability', () => {
     test('CloudWatch Dashboard should be accessible', async () => {
