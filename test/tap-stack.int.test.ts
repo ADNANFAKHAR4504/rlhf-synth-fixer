@@ -49,10 +49,7 @@ if (fs.existsSync(outputsPath)) {
 describe('TapStack Integration Tests', () => {
   describe('VPC Infrastructure', () => {
     test('VPC should exist and be configured correctly', async () => {
-      if (!deploymentOutputs.VPC) {
-        console.log('Skipping test - no VPC ID in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPC).toBeDefined();
 
       const response = await ec2Client.send(
         new DescribeVpcsCommand({
@@ -84,10 +81,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have 6 subnets across 3 AZs', async () => {
-      if (!deploymentOutputs.VPC) {
-        console.log('Skipping test - no VPC ID in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPC).toBeDefined();
 
       const response = await ec2Client.send(
         new DescribeSubnetsCommand({
@@ -118,10 +112,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have 3 NAT Gateways in public subnets', async () => {
-      if (!deploymentOutputs.VPC) {
-        console.log('Skipping test - no VPC ID in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPC).toBeDefined();
 
       const response = await ec2Client.send(
         new DescribeNatGatewaysCommand({
@@ -150,10 +141,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('security groups should be configured with proper rules', async () => {
-      if (!deploymentOutputs.VPC) {
-        console.log('Skipping test - no VPC ID in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPC).toBeDefined();
 
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
@@ -188,10 +176,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('RDS Database', () => {
     test('RDS instance should be Multi-AZ and encrypted', async () => {
-      if (!deploymentOutputs.RDSEndpoint) {
-        console.log('Skipping test - no RDS endpoint in outputs');
-        return;
-      }
+      expect(deploymentOutputs.RDSEndpoint).toBeDefined();
 
       // Extract DB instance identifier from endpoint
       const dbIdentifier = deploymentOutputs.RDSEndpoint.split('.')[0];
@@ -215,10 +200,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     test('ALB should be internet-facing and span multiple AZs', async () => {
-      if (!deploymentOutputs.ALBDNSName) {
-        console.log('Skipping test - no ALB DNS in outputs');
-        return;
-      }
+      expect(deploymentOutputs.ALBDNSName).toBeDefined();
 
       // Find ALB by DNS name instead of name
       const response = await elbClient.send(
@@ -229,14 +211,11 @@ describe('TapStack Integration Tests', () => {
         lb => lb.DNSName === deploymentOutputs.ALBDNSName
       );
 
-      if (alb) {
-        expect(alb.Scheme).toBe('internet-facing');
-        expect(alb.AvailabilityZones).toHaveLength(3);
-        expect(alb.State?.Code).toBe('active');
-        expect(alb.Type).toBe('application');
-      } else {
-        throw new Error(`ALB with DNS ${deploymentOutputs.ALBDNSName} not found`);
-      }
+      expect(alb).toBeDefined();
+      expect(alb!.Scheme).toBe('internet-facing');
+      expect(alb!.AvailabilityZones).toHaveLength(3);
+      expect(alb!.State?.Code).toBe('active');
+      expect(alb!.Type).toBe('application');
     });
 
     test('ALB should have target group configured', async () => {
@@ -259,10 +238,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Bastion Host', () => {
     test('Bastion Host should be accessible and in public subnet', async () => {
-      if (!deploymentOutputs.BastionHostPublicIP) {
-        console.log('Skipping test - no Bastion Host IP in outputs');
-        return;
-      }
+      expect(deploymentOutputs.BastionHostPublicIP).toBeDefined();
 
       // Verify the IP is a valid IPv4 address
       const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -272,10 +248,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('VPC Flow Logs', () => {
     test('S3 bucket should exist with encryption and versioning', async () => {
-      if (!deploymentOutputs.VPCFlowLogsBucket) {
-        console.log('Skipping test - no Flow Logs bucket in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPCFlowLogsBucket).toBeDefined();
 
       try {
         // Check encryption
@@ -308,11 +281,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('Stack Outputs Validation', () => {
     test('all expected outputs should be present', () => {
-      if (Object.keys(deploymentOutputs).length === 0) {
-        console.log('Skipping test - no deployment outputs available');
-        return;
-      }
-
       const expectedOutputs = [
         'VPC',
         'ALBDNSName',
@@ -329,10 +297,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Resource Connectivity', () => {
     test('resources should be properly connected', async () => {
-      if (!deploymentOutputs.VPC) {
-        console.log('Skipping test - no VPC ID in outputs');
-        return;
-      }
+      expect(deploymentOutputs.VPC).toBeDefined();
 
       // Verify subnet connectivity
       const subnetsResponse = await ec2Client.send(
@@ -360,10 +325,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('E2E Tests', () => {
     test('ALB should be accessible via HTTP', async () => {
-      if (!deploymentOutputs.ALBDNSName) {
-        console.log('Skipping test - no ALB DNS in outputs');
-        return;
-      }
+      expect(deploymentOutputs.ALBDNSName).toBeDefined();
 
       await new Promise<void>((resolve, reject) => {
         const req = http.request(
@@ -391,10 +353,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Public subnets should match output values', () => {
-      if (!deploymentOutputs.PublicSubnets) {
-        console.log('Skipping test - no public subnets in outputs');
-        return;
-      }
+      expect(deploymentOutputs.PublicSubnets).toBeDefined();
 
       const publicSubnetIds = deploymentOutputs.PublicSubnets.split(',');
       expect(publicSubnetIds).toHaveLength(3);
@@ -405,10 +364,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Private subnets should match output values', () => {
-      if (!deploymentOutputs.PrivateSubnets) {
-        console.log('Skipping test - no private subnets in outputs');
-        return;
-      }
+      expect(deploymentOutputs.PrivateSubnets).toBeDefined();
 
       const privateSubnetIds = deploymentOutputs.PrivateSubnets.split(',');
       expect(privateSubnetIds).toHaveLength(3);
@@ -419,10 +375,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('RDS endpoint should be resolvable', async () => {
-      if (!deploymentOutputs.RDSEndpoint) {
-        console.log('Skipping test - no RDS endpoint in outputs');
-        return;
-      }
+      expect(deploymentOutputs.RDSEndpoint).toBeDefined();
 
       const resolve4 = promisify(dns.resolve4);
       const hostname = deploymentOutputs.RDSEndpoint.split(':')[0];
@@ -447,10 +400,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Bastion Host IP should be reachable', async () => {
-      if (!deploymentOutputs.BastionHostPublicIP) {
-        console.log('Skipping test - no Bastion Host IP in outputs');
-        return;
-      }
+      expect(deploymentOutputs.BastionHostPublicIP).toBeDefined();
 
       // Try to connect to port 22 (SSH) with a short timeout
       await new Promise<void>((resolve) => {
