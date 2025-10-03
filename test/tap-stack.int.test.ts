@@ -39,7 +39,7 @@ const s3Client = new S3Client({ region });
 
 // Load deployment outputs
 let deploymentOutputs: any = {};
-const outputsPath = path.join(__dirname, './flat-outputs.json');
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 
 if (fs.existsSync(outputsPath)) {
   const outputsContent = fs.readFileSync(outputsPath, 'utf8');
