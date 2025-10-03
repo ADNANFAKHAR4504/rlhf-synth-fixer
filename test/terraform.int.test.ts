@@ -74,7 +74,6 @@ interface KmsKeys {
 }
 
 let outputs: TerraformOutputs = {};
-let outputsExist = false;
 let regionInfrastructure: RegionInfrastructure = {};
 let kmsKeys: KmsKeys = {};
 
@@ -82,44 +81,39 @@ let kmsKeys: KmsKeys = {};
 const awsClients: { [region: string]: any } = {};
 
 beforeAll(() => {
-  if (fs.existsSync(outputsPath)) {
-    const rawData = fs.readFileSync(outputsPath, "utf8");
-    outputs = JSON.parse(rawData);
-    outputsExist = true;
-    console.log("✓ Loaded outputs from:", outputsPath);
+  const rawData = fs.readFileSync(outputsPath, "utf8");
+  outputs = JSON.parse(rawData);
+  console.log("✓ Loaded outputs from:", outputsPath);
 
-    // Parse JSON strings within outputs
-    if (outputs.region_infrastructure?.value) {
-      regionInfrastructure = JSON.parse(outputs.region_infrastructure.value);
-    }
-    if (outputs.kms_keys?.value) {
-      kmsKeys = JSON.parse(outputs.kms_keys.value);
-    }
-
-    // Initialize AWS clients for each region
-    Object.keys(regionInfrastructure).forEach((region) => {
-      awsClients[region] = {
-        ec2: new EC2Client({ region }),
-        elbv2: new ELBv2Client({ region }),
-        rds: new RDSClient({ region }),
-        dynamodb: new DynamoDBClient({ region }),
-        s3: new S3Client({ region }),
-        cloudwatch: new CloudWatchClient({ region }),
-        sns: new SNSClient({ region }),
-        cloudtrail: new CloudTrailClient({ region }),
-        kms: new KMSClient({ region })
-      };
-    });
-  } else {
-    console.warn("⚠ Outputs file not found. Run terraform apply first.");
-    console.warn("  Expected:", outputsPath);
+  // Parse JSON strings within outputs
+  if (outputs.region_infrastructure?.value) {
+    regionInfrastructure = JSON.parse(outputs.region_infrastructure.value);
   }
+  if (outputs.kms_keys?.value) {
+    kmsKeys = JSON.parse(outputs.kms_keys.value);
+  }
+
+  // Initialize AWS clients for each region
+  Object.keys(regionInfrastructure).forEach((region) => {
+    awsClients[region] = {
+      ec2: new EC2Client({ region }),
+      elbv2: new ELBv2Client({ region }),
+      rds: new RDSClient({ region }),
+      dynamodb: new DynamoDBClient({ region }),
+      s3: new S3Client({ region }),
+      cloudwatch: new CloudWatchClient({ region }),
+      sns: new SNSClient({ region }),
+      cloudtrail: new CloudTrailClient({ region }),
+      kms: new KMSClient({ region })
+    };
+  });
 });
 
 describe("Multi-Region Infrastructure - Integration Tests", () => {
   describe("Outputs File Validation", () => {
     test("outputs JSON file exists", () => {
-      expect(outputsExist).toBe(true);
+      expect(outputs).toBeDefined();
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
     });
 
     test("outputs contains valid JSON", () => {
@@ -143,14 +137,12 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("region_infrastructure is valid JSON string", () => {
-      if (!outputsExist) return;
       expect(() => {
         JSON.parse(outputs.region_infrastructure?.value || "{}");
       }).not.toThrow();
     });
 
     test("region_infrastructure contains expected regions", () => {
-      if (!outputsExist) return;
       const regions = Object.keys(regionInfrastructure);
       expect(regions.length).toBeGreaterThan(0);
       // Validate that all regions follow AWS region naming convention
@@ -160,7 +152,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("each region has required infrastructure components", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.vpc_id).toBeDefined();
         expect(infra.alb_dns).toBeDefined();
@@ -172,32 +163,21 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("VPC Configuration", () => {
     test("VPC IDs are valid", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.vpc_id).toMatch(/^vpc-[a-f0-9]{8,17}$/);
       });
     });
 
     test("VPC IDs are unique across regions", () => {
-      if (!outputsExist) return;
       const vpcIds = Object.values(regionInfrastructure).map((infra) => infra.vpc_id);
       const uniqueVpcIds = [...new Set(vpcIds)];
       expect(uniqueVpcIds.length).toBe(vpcIds.length);
     });
 
-    test("VPC IDs follow AWS naming convention", () => {
-      if (!outputsExist) return;
-      Object.values(regionInfrastructure).forEach((infra) => {
-        expect(infra.vpc_id).toMatch(/^vpc-[a-f0-9]{8,17}$/);
-        expect(infra.vpc_id.length).toBeGreaterThanOrEqual(11);
-        expect(infra.vpc_id.length).toBeLessThanOrEqual(21);
-      });
-    });
   });
 
   describe("Application Load Balancer (ALB)", () => {
     test("ALB DNS names exist", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.alb_dns).toBeDefined();
         expect(infra.alb_dns.length).toBeGreaterThan(0);
@@ -205,37 +185,27 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("ALB DNS names follow ELB naming convention", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.alb_dns).toMatch(/^[a-z0-9-]+\.elb\.amazonaws\.com$/);
       });
     });
 
     test("ALB DNS names are unique across regions", () => {
-      if (!outputsExist) return;
       const albDnsNames = Object.values(regionInfrastructure).map((infra) => infra.alb_dns);
       const uniqueAlbDns = [...new Set(albDnsNames)];
       expect(uniqueAlbDns.length).toBe(albDnsNames.length);
     });
 
     test("ALB DNS names contain region information", () => {
-      if (!outputsExist) return;
       Object.entries(regionInfrastructure).forEach(([region, infra]) => {
         expect(infra.alb_dns).toContain(region);
       });
     });
 
-    test("ALB DNS names are accessible", () => {
-      if (!outputsExist) return;
-      Object.values(regionInfrastructure).forEach((infra) => {
-        expect(infra.alb_dns).toMatch(/^[a-z0-9-]+\.elb\.amazonaws\.com$/);
-      });
-    });
   });
 
   describe("RDS Database Configuration", () => {
     test("RDS endpoints exist", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.rds_endpoint).toBeDefined();
         expect(infra.rds_endpoint.length).toBeGreaterThan(0);
@@ -243,35 +213,30 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("RDS endpoints follow Amazon RDS naming convention", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.rds_endpoint).toMatch(/^[a-z0-9-]+\.rds\.amazonaws\.com:\d+$/);
       });
     });
 
     test("RDS endpoints are unique across regions", () => {
-      if (!outputsExist) return;
       const rdsEndpoints = Object.values(regionInfrastructure).map((infra) => infra.rds_endpoint);
       const uniqueRdsEndpoints = [...new Set(rdsEndpoints)];
       expect(uniqueRdsEndpoints.length).toBe(rdsEndpoints.length);
     });
 
     test("RDS endpoints contain region information", () => {
-      if (!outputsExist) return;
       Object.entries(regionInfrastructure).forEach(([region, infra]) => {
         expect(infra.rds_endpoint).toContain(region);
       });
     });
 
     test("RDS endpoints use standard MySQL port", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.rds_endpoint).toMatch(/:3306$/);
       });
     });
 
     test("RDS endpoints have valid hostname format", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         const [hostname] = infra.rds_endpoint.split(":");
         expect(hostname).toMatch(/^[a-z0-9-]+$/);
@@ -283,7 +248,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("DynamoDB Configuration", () => {
     test("DynamoDB table names exist", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.dynamodb_table_name).toBeDefined();
         expect(infra.dynamodb_table_name.length).toBeGreaterThan(0);
@@ -291,28 +255,24 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("DynamoDB table names follow naming convention", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.dynamodb_table_name).toMatch(/^prod-[a-z0-9]+-table-[a-z0-9-]+$/);
       });
     });
 
     test("DynamoDB table names are unique across regions", () => {
-      if (!outputsExist) return;
       const tableNames = Object.values(regionInfrastructure).map((infra) => infra.dynamodb_table_name);
       const uniqueTableNames = [...new Set(tableNames)];
       expect(uniqueTableNames.length).toBe(tableNames.length);
     });
 
     test("DynamoDB table names contain region information", () => {
-      if (!outputsExist) return;
       Object.entries(regionInfrastructure).forEach(([region, infra]) => {
         expect(infra.dynamodb_table_name).toContain(region);
       });
     });
 
     test("DynamoDB table names have valid characters", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.dynamodb_table_name).toMatch(/^[a-zA-Z0-9_.-]+$/);
         expect(infra.dynamodb_table_name).not.toMatch(/^[^a-zA-Z]/);
@@ -321,7 +281,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("DynamoDB table names within length limits", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.dynamodb_table_name.length).toBeGreaterThanOrEqual(3);
         expect(infra.dynamodb_table_name.length).toBeLessThanOrEqual(255);
@@ -335,14 +294,12 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("kms_keys is valid JSON string", () => {
-      if (!outputsExist) return;
       expect(() => {
         JSON.parse(outputs.kms_keys?.value || "{}");
       }).not.toThrow();
     });
 
     test("KMS keys exist for each region", () => {
-      if (!outputsExist) return;
       const regions = Object.keys(regionInfrastructure);
       regions.forEach((region) => {
         expect(kmsKeys).toHaveProperty(region);
@@ -350,21 +307,18 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("KMS key ARNs are valid", () => {
-      if (!outputsExist) return;
       Object.values(kmsKeys).forEach((keyArn) => {
         expect(keyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]{36}$/);
       });
     });
 
     test("KMS key ARNs contain correct regions", () => {
-      if (!outputsExist) return;
       Object.entries(kmsKeys).forEach(([region, keyArn]) => {
         expect(keyArn).toContain(region);
       });
     });
 
     test("KMS key IDs are valid UUIDs", () => {
-      if (!outputsExist) return;
       Object.values(kmsKeys).forEach((keyArn) => {
         const keyId = keyArn.split("/").pop() || "";
         expect(keyId).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
@@ -372,7 +326,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("KMS key ARNs are unique", () => {
-      if (!outputsExist) return;
       const keyArns = Object.values(kmsKeys);
       const uniqueKeyArns = [...new Set(keyArns)];
       expect(uniqueKeyArns.length).toBe(keyArns.length);
@@ -381,7 +334,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("CloudTrail Configuration", () => {
     test("CloudTrail bucket outputs exist (if enabled)", () => {
-      if (!outputsExist) return;
       // CloudTrail may be disabled, so this test is conditional
       Object.values(regionInfrastructure).forEach((infra) => {
         if (infra.cloudtrail_bucket) {
@@ -392,7 +344,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("CloudTrail bucket names follow naming convention (if present)", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         if (infra.cloudtrail_bucket) {
           expect(infra.cloudtrail_bucket).toMatch(/^prod-[a-z0-9]+-cloudtrail-[a-z0-9-]+$/);
@@ -403,7 +354,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("Multi-Region Consistency", () => {
     test("consistent naming patterns across regions", () => {
-      if (!outputsExist) return;
       const regions = Object.keys(regionInfrastructure);
       if (regions.length > 1) {
         const firstRegion = regions[0];
@@ -421,7 +371,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("consistent infrastructure components across regions", () => {
-      if (!outputsExist) return;
       const regions = Object.keys(regionInfrastructure);
       if (regions.length > 1) {
         const firstInfra = Object.values(regionInfrastructure)[0];
@@ -435,7 +384,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("no duplicate resource identifiers", () => {
-      if (!outputsExist) return;
       const allVpcIds = Object.values(regionInfrastructure).map((infra) => infra.vpc_id);
       const allAlbDns = Object.values(regionInfrastructure).map((infra) => infra.alb_dns);
       const allRdsEndpoints = Object.values(regionInfrastructure).map((infra) => infra.rds_endpoint);
@@ -450,7 +398,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("Security Validation", () => {
     test("no sensitive data in outputs", () => {
-      if (!outputsExist) return;
       const str = JSON.stringify(outputs);
       expect(str).not.toMatch(/AKIA[0-9A-Z]{16}/); // AWS Access Keys
       expect(str).not.toMatch(/password/i);
@@ -459,14 +406,12 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("KMS key ARNs use correct partition", () => {
-      if (!outputsExist) return;
       Object.values(kmsKeys).forEach((keyArn) => {
         expect(keyArn).toMatch(/^arn:(aws|aws-cn|aws-us-gov):kms:/);
       });
     });
 
     test("all ARNs in same AWS account", () => {
-      if (!outputsExist) return;
       const accountIds = new Set<string>();
 
       // Extract account IDs from KMS ARNs
@@ -481,7 +426,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("Integration: Cross-Reference Validation", () => {
     test("region consistency between infrastructure and KMS keys", () => {
-      if (!outputsExist) return;
       const infraRegions = Object.keys(regionInfrastructure);
       const kmsRegions = Object.keys(kmsKeys);
 
@@ -489,7 +433,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("account ID consistent across all resources", () => {
-      if (!outputsExist) return;
       const accountIds = new Set<string>();
 
       // Extract account IDs from KMS ARNs
@@ -506,7 +449,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("naming convention consistency", () => {
-      if (!outputsExist) return;
       Object.entries(regionInfrastructure).forEach(([region, infra]) => {
         // Extract common prefix from DynamoDB table name
         const tableParts = infra.dynamodb_table_name.split("-");
@@ -523,7 +465,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
   describe("Deployment Readiness", () => {
     test("critical outputs for application integration", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.vpc_id).toBeTruthy();
         expect(infra.alb_dns).toBeTruthy();
@@ -533,14 +474,12 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("ALB DNS names valid for application configuration", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.alb_dns).toMatch(/^[a-z0-9-]+\.elb\.amazonaws\.com$/);
       });
     });
 
     test("RDS endpoints valid for database connections", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.rds_endpoint).toMatch(/^[a-z0-9-]+\.rds\.amazonaws\.com:\d+$/);
         expect(infra.rds_endpoint).toMatch(/:3306$/); // MySQL port
@@ -548,7 +487,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("DynamoDB table names valid for SDK usage", () => {
-      if (!outputsExist) return;
       Object.values(regionInfrastructure).forEach((infra) => {
         expect(infra.dynamodb_table_name).toMatch(/^[a-zA-Z0-9_.-]+$/);
         expect(infra.dynamodb_table_name.length).toBeGreaterThan(3);
@@ -557,37 +495,20 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("KMS key ARNs valid for encryption operations", () => {
-      if (!outputsExist) return;
       Object.values(kmsKeys).forEach((keyArn) => {
         expect(keyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]{36}$/);
       });
     });
 
-    test("sufficient information for deployment", () => {
-      if (!outputsExist) return;
-      const regions = Object.keys(regionInfrastructure);
-      expect(regions.length).toBeGreaterThanOrEqual(1);
-
-      regions.forEach((region) => {
-        const infra = regionInfrastructure[region];
-        expect(infra.vpc_id).toBeTruthy();
-        expect(infra.alb_dns).toBeTruthy();
-        expect(infra.rds_endpoint).toBeTruthy();
-        expect(infra.dynamodb_table_name).toBeTruthy();
-        expect(kmsKeys[region]).toBeTruthy();
-      });
-    });
   });
 
   describe("Completeness Tests", () => {
     test("all required outputs present", () => {
-      if (!outputsExist) return;
       const required = ["kms_keys", "region_infrastructure"];
       required.forEach((key) => expect(outputs).toHaveProperty(key));
     });
 
     test("no null or undefined values in outputs", () => {
-      if (!outputsExist) return;
       Object.values(outputs).forEach((output) => {
         expect(output).toBeDefined();
         expect(output?.value).toBeDefined();
@@ -596,7 +517,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("no empty string values", () => {
-      if (!outputsExist) return;
       Object.entries(outputs).forEach(([key, output]) => {
         if (typeof output?.value === "string") {
           expect(output.value.length).toBeGreaterThan(0);
@@ -605,7 +525,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("region infrastructure contains expected number of regions", () => {
-      if (!outputsExist) return;
       const regions = Object.keys(regionInfrastructure);
       expect(regions.length).toBeGreaterThanOrEqual(1);
       // Validate that we have at least one region deployed
@@ -613,7 +532,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     });
 
     test("each region has complete infrastructure", () => {
-      if (!outputsExist) return;
       Object.entries(regionInfrastructure).forEach(([region, infra]) => {
         expect(infra.vpc_id).toBeDefined();
         expect(infra.alb_dns).toBeDefined();
@@ -630,7 +548,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
   describe("Interactive Integration Tests", () => {
     describe("VPC and Networking Validation", () => {
       test("VPC exists and is properly configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].ec2;
@@ -651,7 +568,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
       }, 30000);
 
       test("Security groups are properly configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].ec2;
@@ -679,7 +595,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("Load Balancer Validation", () => {
       test("Application Load Balancer exists and is healthy", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].elbv2;
@@ -720,7 +635,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
       }, 45000);
 
       test("ALB health checks are working", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].elbv2;
@@ -748,7 +662,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("Auto Scaling Group Validation", () => {
       test("Auto Scaling Groups are properly configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].ec2;
@@ -778,7 +691,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("RDS Database Validation", () => {
       test("RDS instances exist and are available", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].rds;
@@ -808,7 +720,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("DynamoDB Validation", () => {
       test("DynamoDB tables exist and are active", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].dynamodb;
@@ -832,7 +743,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
       }, 30000);
 
       test("DynamoDB table operations work correctly", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].dynamodb;
@@ -880,7 +790,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("S3 Storage Validation", () => {
       test("S3 buckets exist and are properly configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].s3;
@@ -926,7 +835,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("KMS Encryption Validation", () => {
       test("KMS keys exist and are properly configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region, keyArn] of Object.entries(kmsKeys)) {
           const client = awsClients[region].kms;
@@ -956,7 +864,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("CloudWatch Monitoring Validation", () => {
       test("CloudWatch alarms are configured", async () => {
-        if (!outputsExist) return;
 
         for (const [region] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].cloudwatch;
@@ -985,7 +892,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("SNS Notifications Validation", () => {
       test("SNS topics are configured for alerts", async () => {
-        if (!outputsExist) return;
 
         for (const [region] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].sns;
@@ -1018,7 +924,6 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
     describe("CloudTrail Logging Validation", () => {
       test("CloudTrail is configured and logging", async () => {
-        if (!outputsExist) return;
 
         for (const [region] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].cloudtrail;
@@ -1032,53 +937,43 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
             trail.Name?.includes("trail")
           ) || [];
 
-          if (ourTrails.length > 0) {
-            for (const trail of ourTrails) {
-              expect(trail.Name).toBeDefined();
-              expect(trail.IsLogging).toBe(true);
-              expect(trail.IncludeGlobalServiceEvents).toBe(true);
+          for (const trail of ourTrails) {
+            expect(trail.Name).toBeDefined();
+            expect(trail.IsLogging).toBe(true);
+            expect(trail.IncludeGlobalServiceEvents).toBe(true);
 
-              console.log(`✓ CloudTrail ${trail.Name} in ${region} is logging`);
-              console.log(`  S3 bucket: ${trail.S3BucketName || "N/A"}`);
-              console.log(`  Log file validation: ${trail.LogFileValidationEnabled ? "Enabled" : "Disabled"}`);
-            }
-          } else {
-            console.log(`⚠ No CloudTrail trails found in ${region} (may be disabled)`);
+            console.log(`✓ CloudTrail ${trail.Name} in ${region} is logging`);
+            console.log(`  S3 bucket: ${trail.S3BucketName || "N/A"}`);
+            console.log(`  Log file validation: ${trail.LogFileValidationEnabled ? "Enabled" : "Disabled"}`);
           }
         }
       }, 30000);
     });
 
-    describe("End-to-End Integration Tests", () => {
+    describe("Interactive Integration Tests", () => {
       test("Complete infrastructure pipeline is functional", async () => {
-        if (!outputsExist) return;
 
         for (const [region, infra] of Object.entries(regionInfrastructure)) {
           console.log(`\n=== Testing complete pipeline in ${region} ===`);
 
           // 1. Verify ALB is accessible
-          try {
-            const fetch = (await import('node-fetch')).default;
-            const response = await fetch(`http://${infra.alb_dns}/health`, {
-              timeout: 10000
-            });
+          const fetch = (await import('node-fetch')).default;
+          const response = await fetch(`http://${infra.alb_dns}/health`, {
+            timeout: 10000
+          });
 
-            expect(response.status).toBe(200);
-            console.log(`✓ ALB health check passed in ${region}`);
-          } catch (error) {
-            console.log(`⚠ ALB health check failed in ${region}: ${error}`);
-            // Don't fail the test as ALB might not be responding yet
-          }
+          expect(response.status).toBe(200);
+          console.log(`✓ ALB health check passed in ${region}`);
 
           // 2. Verify DynamoDB operations work
           const dynamoClient = awsClients[region].dynamodb;
-          const testId = `e2e-test-${Date.now()}`;
+          const testId = `interactive-test-${Date.now()}`;
 
           await dynamoClient.send(new PutItemCommand({
             TableName: infra.dynamodb_table_name,
             Item: {
               id: { S: testId },
-              testType: { S: "end-to-end" },
+              testType: { S: "interactive" },
               region: { S: region },
               timestamp: { N: Date.now().toString() }
             }
