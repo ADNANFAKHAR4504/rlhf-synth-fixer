@@ -18,23 +18,27 @@ describe('TapStack GPS Tracking System', () => {
   describe('Environment Suffix Configuration', () => {
     test('should use props.environmentSuffix when provided', () => {
       const testApp = new cdk.App();
-      const testStack = new TapStack(testApp, 'TestStack1', { environmentSuffix: 'prod' });
+      const testStack = new TapStack(testApp, 'TestStack1', {
+        environmentSuffix: 'prod',
+      });
       const testTemplate = Template.fromStack(testStack);
-      
+
       // Verify that resources use the provided environment suffix
       testTemplate.hasResourceProperties('AWS::Kinesis::Stream', {
-        Name: 'vehicle-gps-stream-prod'
+        Name: 'vehicle-gps-stream-prod',
       });
     });
 
     test('should use context environmentSuffix when props not provided', () => {
-      const testApp = new cdk.App({ context: { environmentSuffix: 'staging' } });
+      const testApp = new cdk.App({
+        context: { environmentSuffix: 'staging' },
+      });
       const testStack = new TapStack(testApp, 'TestStack2');
       const testTemplate = Template.fromStack(testStack);
-      
+
       // Verify that resources use the context environment suffix
       testTemplate.hasResourceProperties('AWS::Kinesis::Stream', {
-        Name: 'vehicle-gps-stream-staging'
+        Name: 'vehicle-gps-stream-staging',
       });
     });
 
@@ -42,10 +46,10 @@ describe('TapStack GPS Tracking System', () => {
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStack3');
       const testTemplate = Template.fromStack(testStack);
-      
+
       // Verify that resources use the default environment suffix
       testTemplate.hasResourceProperties('AWS::Kinesis::Stream', {
-        Name: 'vehicle-gps-stream-dev'
+        Name: 'vehicle-gps-stream-dev',
       });
     });
   });
@@ -55,37 +59,41 @@ describe('TapStack GPS Tracking System', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.anyValue(),
         VersioningConfiguration: {
-          Status: 'Enabled'
+          Status: 'Enabled',
         },
         BucketEncryption: {
-          ServerSideEncryptionConfiguration: [{
-            ServerSideEncryptionByDefault: {
-              SSEAlgorithm: 'AES256'
-            }
-          }]
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
         },
         LifecycleConfiguration: {
-          Rules: [{
-            Id: 'archive-old-data',
-            Status: 'Enabled',
-            Transitions: [
-              {
-                StorageClass: 'STANDARD_IA',
-                TransitionInDays: 30
-              },
-              {
-                StorageClass: 'GLACIER',
-                TransitionInDays: 90
-              }
-            ]
-          }]
+          Rules: [
+            {
+              Id: 'archive-old-data',
+              Status: 'Enabled',
+              Transitions: [
+                {
+                  StorageClass: 'STANDARD_IA',
+                  TransitionInDays: 30,
+                },
+                {
+                  StorageClass: 'GLACIER',
+                  TransitionInDays: 90,
+                },
+              ],
+            },
+          ],
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
   });
@@ -97,58 +105,60 @@ describe('TapStack GPS Tracking System', () => {
         AttributeDefinitions: [
           {
             AttributeName: 'vehicleId',
-            AttributeType: 'S'
+            AttributeType: 'S',
           },
           {
             AttributeName: 'timestamp',
-            AttributeType: 'N'
+            AttributeType: 'N',
           },
           {
             AttributeName: 'deliveryStatus',
-            AttributeType: 'S'
+            AttributeType: 'S',
           },
           {
             AttributeName: 'expectedDeliveryTime',
-            AttributeType: 'N'
-          }
+            AttributeType: 'N',
+          },
         ],
         KeySchema: [
           {
             AttributeName: 'vehicleId',
-            KeyType: 'HASH'
+            KeyType: 'HASH',
           },
           {
             AttributeName: 'timestamp',
-            KeyType: 'RANGE'
-          }
+            KeyType: 'RANGE',
+          },
         ],
         BillingMode: 'PAY_PER_REQUEST',
         PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: true
+          PointInTimeRecoveryEnabled: true,
         },
         StreamSpecification: {
-          StreamViewType: 'NEW_AND_OLD_IMAGES'
+          StreamViewType: 'NEW_AND_OLD_IMAGES',
         },
         TimeToLiveSpecification: {
           AttributeName: 'ttl',
-          Enabled: true
+          Enabled: true,
         },
-        GlobalSecondaryIndexes: [{
-          IndexName: 'delivery-status-index',
-          KeySchema: [
-            {
-              AttributeName: 'deliveryStatus',
-              KeyType: 'HASH'
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'delivery-status-index',
+            KeySchema: [
+              {
+                AttributeName: 'deliveryStatus',
+                KeyType: 'HASH',
+              },
+              {
+                AttributeName: 'expectedDeliveryTime',
+                KeyType: 'RANGE',
+              },
+            ],
+            Projection: {
+              ProjectionType: 'ALL',
             },
-            {
-              AttributeName: 'expectedDeliveryTime',
-              KeyType: 'RANGE'
-            }
-          ],
-          Projection: {
-            ProjectionType: 'ALL'
-          }
-        }]
+          },
+        ],
       });
     });
   });
@@ -158,7 +168,7 @@ describe('TapStack GPS Tracking System', () => {
       template.hasResourceProperties('AWS::Kinesis::Stream', {
         Name: `vehicle-gps-stream-${environmentSuffix}`,
         ShardCount: 2,
-        RetentionPeriodHours: 168
+        RetentionPeriodHours: 168,
       });
     });
   });
@@ -173,9 +183,9 @@ describe('TapStack GPS Tracking System', () => {
         ReservedConcurrentExecutions: 100,
         Environment: {
           Variables: Match.objectLike({
-            TABLE_NAME: Match.anyValue()
-          })
-        }
+            TABLE_NAME: Match.anyValue(),
+          }),
+        },
       });
     });
 
@@ -186,9 +196,9 @@ describe('TapStack GPS Tracking System', () => {
         Timeout: 30,
         Environment: {
           Variables: Match.objectLike({
-            TOPIC_ARN: Match.anyValue()
-          })
-        }
+            TOPIC_ARN: Match.anyValue(),
+          }),
+        },
       });
     });
 
@@ -201,9 +211,9 @@ describe('TapStack GPS Tracking System', () => {
         Environment: {
           Variables: Match.objectLike({
             TABLE_NAME: Match.anyValue(),
-            BUCKET_NAME: Match.anyValue()
-          })
-        }
+            BUCKET_NAME: Match.anyValue(),
+          }),
+        },
       });
     });
   });
@@ -216,7 +226,7 @@ describe('TapStack GPS Tracking System', () => {
         StartingPosition: 'TRIM_HORIZON',
         BatchSize: 100,
         MaximumBatchingWindowInSeconds: 5,
-        ParallelizationFactor: 10
+        ParallelizationFactor: 10,
       });
     });
   });
@@ -225,7 +235,7 @@ describe('TapStack GPS Tracking System', () => {
     test('should create SNS topic for delivery delay alerts', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: `delivery-delay-alerts-${environmentSuffix}`,
-        DisplayName: 'Delivery Delay Notifications'
+        DisplayName: 'Delivery Delay Notifications',
       });
     });
   });
@@ -236,8 +246,8 @@ describe('TapStack GPS Tracking System', () => {
         Name: `delivery-delay-rule-${environmentSuffix}`,
         EventPattern: {
           source: ['logistics.gps.tracking'],
-          'detail-type': ['DeliveryDelayDetected']
-        }
+          'detail-type': ['DeliveryDelayDetected'],
+        },
       });
     });
   });
@@ -248,14 +258,15 @@ describe('TapStack GPS Tracking System', () => {
         DeliveryStreamName: `gps-archive-stream-${environmentSuffix}`,
         DeliveryStreamType: 'KinesisStreamAsSource',
         S3DestinationConfiguration: {
-          Prefix: 'raw-gps-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+          Prefix:
+            'raw-gps-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
           ErrorOutputPrefix: 'error/',
           BufferingHints: {
             IntervalInSeconds: 60,
-            SizeInMBs: 128
+            SizeInMBs: 128,
           },
-          CompressionFormat: 'GZIP'
-        }
+          CompressionFormat: 'GZIP',
+        },
       });
     });
   });
@@ -263,7 +274,7 @@ describe('TapStack GPS Tracking System', () => {
   describe('CloudWatch Dashboard', () => {
     test('should create CloudWatch dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `logistics-gps-tracking-${environmentSuffix}`
+        DashboardName: `logistics-gps-tracking-${environmentSuffix}`,
       });
     });
   });
@@ -276,7 +287,7 @@ describe('TapStack GPS Tracking System', () => {
         Statistic: 'Sum',
         Threshold: 10,
         EvaluationPeriods: 2,
-        TreatMissingData: 'notBreaching'
+        TreatMissingData: 'notBreaching',
       });
     });
 
@@ -287,7 +298,7 @@ describe('TapStack GPS Tracking System', () => {
         Statistic: 'Sum',
         Threshold: 10,
         EvaluationPeriods: 2,
-        TreatMissingData: 'notBreaching'
+        TreatMissingData: 'notBreaching',
       });
     });
   });
@@ -297,7 +308,7 @@ describe('TapStack GPS Tracking System', () => {
       template.hasResourceProperties('AWS::QuickSight::DataSource', {
         DataSourceId: `gps-tracking-datasource-${environmentSuffix}`,
         Name: 'GPS Tracking Data Source',
-        Type: 'S3'
+        Type: 'S3',
       });
     });
   });
@@ -307,40 +318,46 @@ describe('TapStack GPS Tracking System', () => {
       // GPS Processor Lambda Role
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
-          Statement: [{
-            Effect: 'Allow',
-            Principal: {
-              Service: 'lambda.amazonaws.com'
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
             },
-            Action: 'sts:AssumeRole'
-          }]
+          ],
         },
-        ManagedPolicyArns: Match.anyValue()
+        ManagedPolicyArns: Match.anyValue(),
       });
 
       // Firehose Role
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
-          Statement: [{
-            Effect: 'Allow',
-            Principal: {
-              Service: 'firehose.amazonaws.com'
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'firehose.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
             },
-            Action: 'sts:AssumeRole'
-          }]
-        }
+          ],
+        },
       });
     });
 
     test('should create EventBridge permissions for GPS processor Lambda', () => {
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
-          Statement: Match.arrayWith([{
-            Effect: 'Allow',
-            Action: 'events:PutEvents',
-            Resource: Match.anyValue()
-          }])
-        }
+          Statement: Match.arrayWith([
+            {
+              Effect: 'Allow',
+              Action: 'events:PutEvents',
+              Resource: Match.anyValue(),
+            },
+          ]),
+        },
       });
     });
   });
@@ -349,7 +366,7 @@ describe('TapStack GPS Tracking System', () => {
     test('should create CloudWatch log group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: `/aws/lambda/gps-processing-${environmentSuffix}`,
-        RetentionInDays: 30
+        RetentionInDays: 30,
       });
     });
   });
@@ -357,23 +374,23 @@ describe('TapStack GPS Tracking System', () => {
   describe('Stack Outputs', () => {
     test('should create all required stack outputs', () => {
       template.hasOutput('StreamName', {
-        Description: 'Kinesis Stream Name for GPS Data'
+        Description: 'Kinesis Stream Name for GPS Data',
       });
 
       template.hasOutput('TableName', {
-        Description: 'DynamoDB Table Name'
+        Description: 'DynamoDB Table Name',
       });
 
       template.hasOutput('ArchiveBucketName', {
-        Description: 'S3 Bucket for Archive'
+        Description: 'S3 Bucket for Archive',
       });
 
       template.hasOutput('DashboardURL', {
-        Description: 'CloudWatch Dashboard URL'
+        Description: 'CloudWatch Dashboard URL',
       });
 
       template.hasOutput('AlertTopicArn', {
-        Description: 'SNS Topic ARN for Alerts'
+        Description: 'SNS Topic ARN for Alerts',
       });
     });
   });
@@ -382,16 +399,32 @@ describe('TapStack GPS Tracking System', () => {
     test('should create expected number of resources', () => {
       const resources = template.toJSON().Resources;
       const resourceTypes = Object.values(resources).map((r: any) => r.Type);
-      
+
       // Count key resource types
-      expect(resourceTypes.filter(t => t === 'AWS::S3::Bucket')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::DynamoDB::Table')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::Kinesis::Stream')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::Lambda::Function')).toHaveLength(3);
-      expect(resourceTypes.filter(t => t === 'AWS::SNS::Topic')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::Events::Rule')).toHaveLength(2);
-      expect(resourceTypes.filter(t => t === 'AWS::CloudWatch::Dashboard')).toHaveLength(1);
-      expect(resourceTypes.filter(t => t === 'AWS::CloudWatch::Alarm')).toHaveLength(2);
+      expect(resourceTypes.filter(t => t === 'AWS::S3::Bucket')).toHaveLength(
+        1
+      );
+      expect(
+        resourceTypes.filter(t => t === 'AWS::DynamoDB::Table')
+      ).toHaveLength(1);
+      expect(
+        resourceTypes.filter(t => t === 'AWS::Kinesis::Stream')
+      ).toHaveLength(1);
+      expect(
+        resourceTypes.filter(t => t === 'AWS::Lambda::Function')
+      ).toHaveLength(3);
+      expect(resourceTypes.filter(t => t === 'AWS::SNS::Topic')).toHaveLength(
+        1
+      );
+      expect(resourceTypes.filter(t => t === 'AWS::Events::Rule')).toHaveLength(
+        2
+      );
+      expect(
+        resourceTypes.filter(t => t === 'AWS::CloudWatch::Dashboard')
+      ).toHaveLength(1);
+      expect(
+        resourceTypes.filter(t => t === 'AWS::CloudWatch::Alarm')
+      ).toHaveLength(2);
     });
   });
 });

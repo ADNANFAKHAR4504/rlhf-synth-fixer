@@ -20,12 +20,21 @@ import {
   GetBucketLifecycleConfigurationCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { SNSClient, GetTopicAttributesCommand, PublishCommand } from '@aws-sdk/client-sns';
-import { CloudWatchClient, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
+import {
+  SNSClient,
+  GetTopicAttributesCommand,
+  PublishCommand,
+} from '@aws-sdk/client-sns';
+import {
+  CloudWatchClient,
+  GetMetricStatisticsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
-const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -44,37 +53,45 @@ const bucketName = outputs.ArchiveBucketName;
 const topicArn = outputs.AlertTopicArn;
 
 // Track test data for cleanup
-const testDataToCleanup: Array<{ type: string; key: string; timestamp?: number }> = [];
+const testDataToCleanup: Array<{
+  type: string;
+  key: string;
+  timestamp?: number;
+}> = [];
 
 describe('GPS Tracking System Integration Tests', () => {
   // Cleanup after all tests
   afterAll(async () => {
     console.log('🧹 Cleaning up test data...');
-    
+
     // Clean up DynamoDB items
     for (const item of testDataToCleanup) {
       try {
         if (item.type === 'dynamodb' && item.timestamp) {
-          await dynamodbClient.send(new DeleteItemCommand({
-            TableName: tableName,
-            Key: {
-              vehicleId: { S: item.key },
-              timestamp: { N: String(item.timestamp) },
-            },
-          }));
+          await dynamodbClient.send(
+            new DeleteItemCommand({
+              TableName: tableName,
+              Key: {
+                vehicleId: { S: item.key },
+                timestamp: { N: String(item.timestamp) },
+              },
+            })
+          );
           console.log(`  ✅ Deleted DynamoDB item: ${item.key}`);
         } else if (item.type === 's3') {
-          await s3Client.send(new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: item.key,
-          }));
+          await s3Client.send(
+            new DeleteObjectCommand({
+              Bucket: bucketName,
+              Key: item.key,
+            })
+          );
           console.log(`  ✅ Deleted S3 object: ${item.key}`);
         }
       } catch (error) {
         console.log(`  ⚠️ Failed to cleanup ${item.type} ${item.key}:`, error);
       }
     }
-    
+
     console.log('✅ Cleanup completed');
   });
   describe('Kinesis Stream Operations', () => {
@@ -83,7 +100,7 @@ describe('GPS Tracking System Integration Tests', () => {
         StreamName: streamName,
       });
       const response = await kinesisClient.send(command);
-      
+
       expect(response.StreamDescription).toBeDefined();
       expect(response.StreamDescription!.StreamStatus).toBe('ACTIVE');
       expect(response.StreamDescription!.StreamName).toBe(streamName);
@@ -115,17 +132,19 @@ describe('GPS Tracking System Integration Tests', () => {
 
     test('should successfully put batch of GPS records to Kinesis', async () => {
       const records = Array.from({ length: 5 }, (_, i) => ({
-        Data: Buffer.from(JSON.stringify({
-          vehicleId: `VEHICLE-${String(i).padStart(3, '0')}`,
-          timestamp: Date.now(),
-          latitude: 37.7749 + i * 0.01,
-          longitude: -122.4194 + i * 0.01,
-          speed: 50 + i,
-          heading: 180,
-          deliveryId: `DELIVERY-${String(i).padStart(3, '0')}`,
-          expectedDeliveryTime: Date.now() + 3600000,
-          deliveryStatus: 'IN_TRANSIT',
-        })),
+        Data: Buffer.from(
+          JSON.stringify({
+            vehicleId: `VEHICLE-${String(i).padStart(3, '0')}`,
+            timestamp: Date.now(),
+            latitude: 37.7749 + i * 0.01,
+            longitude: -122.4194 + i * 0.01,
+            speed: 50 + i,
+            heading: 180,
+            deliveryId: `DELIVERY-${String(i).padStart(3, '0')}`,
+            expectedDeliveryTime: Date.now() + 3600000,
+            deliveryStatus: 'IN_TRANSIT',
+          })
+        ),
         PartitionKey: `VEHICLE-${String(i).padStart(3, '0')}`,
       }));
 
@@ -146,13 +165,19 @@ describe('GPS Tracking System Integration Tests', () => {
         TableName: tableName,
       });
       const response = await dynamodbClient.send(command);
-      
+
       expect(response.Table).toBeDefined();
       expect(response.Table!.TableStatus).toBe('ACTIVE');
       expect(response.Table!.KeySchema).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ AttributeName: 'vehicleId', KeyType: 'HASH' }),
-          expect.objectContaining({ AttributeName: 'timestamp', KeyType: 'RANGE' }),
+          expect.objectContaining({
+            AttributeName: 'vehicleId',
+            KeyType: 'HASH',
+          }),
+          expect.objectContaining({
+            AttributeName: 'timestamp',
+            KeyType: 'RANGE',
+          }),
         ])
       );
     }, 30000);
@@ -191,7 +216,7 @@ describe('GPS Tracking System Integration Tests', () => {
         },
       });
       const response = await dynamodbClient.send(getCommand);
-      
+
       expect(response.Item).toBeDefined();
       expect(response.Item!.vehicleId.S).toBe(vehicleId);
       expect(response.Item!.deliveryStatus.S).toBe('IN_TRANSIT');
@@ -219,7 +244,7 @@ describe('GPS Tracking System Integration Tests', () => {
       const command = new HeadBucketCommand({
         Bucket: bucketName,
       });
-      
+
       await expect(s3Client.send(command)).resolves.not.toThrow();
     }, 30000);
 
@@ -250,7 +275,7 @@ describe('GPS Tracking System Integration Tests', () => {
         Key: key,
       });
       const response = await s3Client.send(getCommand);
-      
+
       expect(response.Body).toBeDefined();
       const body = await response.Body!.transformToString();
       const parsedData = JSON.parse(body);
@@ -261,12 +286,14 @@ describe('GPS Tracking System Integration Tests', () => {
       const command = new GetBucketLifecycleConfigurationCommand({
         Bucket: bucketName,
       });
-      
+
       const response = await s3Client.send(command);
       expect(response.Rules).toBeDefined();
       expect(response.Rules!.length).toBeGreaterThan(0);
-      
-      const archiveRule = response.Rules!.find(rule => rule.ID === 'archive-old-data');
+
+      const archiveRule = response.Rules!.find(
+        rule => rule.ID === 'archive-old-data'
+      );
       expect(archiveRule).toBeDefined();
       expect(archiveRule!.Transitions).toBeDefined();
       expect(archiveRule!.Transitions!.length).toBe(2);
@@ -278,7 +305,7 @@ describe('GPS Tracking System Integration Tests', () => {
       const command = new GetTopicAttributesCommand({
         TopicArn: topicArn,
       });
-      
+
       const response = await snsClient.send(command);
       expect(response.Attributes).toBeDefined();
       expect(response.Attributes!.TopicArn).toBe(topicArn);
@@ -294,7 +321,7 @@ describe('GPS Tracking System Integration Tests', () => {
         }),
         Subject: 'Integration Test Alert',
       });
-      
+
       const response = await snsClient.send(command);
       expect(response.MessageId).toBeDefined();
     }, 30000);
@@ -304,7 +331,7 @@ describe('GPS Tracking System Integration Tests', () => {
     test('should process GPS data through complete pipeline', async () => {
       const vehicleId = 'E2E-VEHICLE-001';
       const timestamp = Date.now();
-      
+
       // 1. Put GPS data to Kinesis
       const gpsData = {
         vehicleId,
@@ -336,7 +363,7 @@ describe('GPS Tracking System Integration Tests', () => {
           timestamp: { N: String(timestamp) },
         },
       });
-      
+
       const response = await dynamodbClient.send(getItemCommand);
       expect(response.Item).toBeDefined();
       expect(response.Item!.vehicleId.S).toBe(vehicleId);
@@ -346,17 +373,19 @@ describe('GPS Tracking System Integration Tests', () => {
     test('should handle high volume GPS data ingestion', async () => {
       const batchSize = 25;
       const records = Array.from({ length: batchSize }, (_, i) => ({
-        Data: Buffer.from(JSON.stringify({
-          vehicleId: `BULK-VEHICLE-${String(i).padStart(3, '0')}`,
-          timestamp: Date.now() + i,
-          latitude: 37.7749 + i * 0.001,
-          longitude: -122.4194 + i * 0.001,
-          speed: 50 + (i % 20),
-          heading: (i * 15) % 360,
-          deliveryId: `BULK-DELIVERY-${String(i).padStart(3, '0')}`,
-          expectedDeliveryTime: Date.now() + 3600000,
-          deliveryStatus: 'IN_TRANSIT',
-        })),
+        Data: Buffer.from(
+          JSON.stringify({
+            vehicleId: `BULK-VEHICLE-${String(i).padStart(3, '0')}`,
+            timestamp: Date.now() + i,
+            latitude: 37.7749 + i * 0.001,
+            longitude: -122.4194 + i * 0.001,
+            speed: 50 + (i % 20),
+            heading: (i * 15) % 360,
+            deliveryId: `BULK-DELIVERY-${String(i).padStart(3, '0')}`,
+            expectedDeliveryTime: Date.now() + 3600000,
+            deliveryStatus: 'IN_TRANSIT',
+          })
+        ),
         PartitionKey: `BULK-VEHICLE-${String(i).padStart(3, '0')}`,
       }));
 

@@ -380,7 +380,97 @@ exports.handler = async (event) => {
 
     archiveBucket.grantRead(quicksightDataSourceRole);
 
-    new quicksight.CfnDataSource(this, 'GpsDataSource', {
+    // Create a manifest file in S3 for QuickSight
+    const manifestContent = {
+      fileLocations: [
+        {
+          URIPrefixes: [`s3://${archiveBucket.bucketName}/raw-gps-data/`],
+        },
+      ],
+      globalUploadSettings: {
+        format: 'JSON',
+        delimiter: ',',
+        textqualifier: '"',
+        containsHeader: 'true',
+      },
+    };
+
+    // Deploy the manifest file using a custom resource
+    const manifestDeployment = new cdk.CustomResource(
+      this,
+      'ManifestDeployment',
+      {
+        serviceToken: new lambda.Function(this, 'ManifestDeploymentFunction', {
+          runtime: lambda.Runtime.NODEJS_18_X,
+          handler: 'index.handler',
+          code: lambda.Code.fromInline(`
+const AWS = require('aws-sdk');
+const s3 = new AWS.S3();
+const response = require('cfn-response');
+
+exports.handler = async (event, context) => {
+  console.log('Event:', JSON.stringify(event, null, 2));
+  
+  try {
+    if (event.RequestType === 'Create' || event.RequestType === 'Update') {
+      const params = {
+        Bucket: event.ResourceProperties.BucketName,
+        Key: 'manifest.json',
+        Body: event.ResourceProperties.ManifestContent,
+        ContentType: 'application/json'
+      };
+      
+      await s3.putObject(params).promise();
+      console.log('Manifest file created successfully');
+    } else if (event.RequestType === 'Delete') {
+      const params = {
+        Bucket: event.ResourceProperties.BucketName,
+        Key: 'manifest.json'
+      };
+      
+      try {
+        await s3.deleteObject(params).promise();
+        console.log('Manifest file deleted successfully');
+      } catch (err) {
+        console.log('Error deleting manifest file (may not exist):', err);
+      }
+    }
+    
+    await response.send(event, context, response.SUCCESS, {});
+  } catch (error) {
+    console.error('Error:', error);
+    await response.send(event, context, response.FAILED, {});
+  }
+};
+        `),
+          timeout: cdk.Duration.seconds(60),
+          role: new iam.Role(this, 'ManifestDeploymentRole', {
+            assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+            managedPolicies: [
+              iam.ManagedPolicy.fromAwsManagedPolicyName(
+                'service-role/AWSLambdaBasicExecutionRole'
+              ),
+            ],
+            inlinePolicies: {
+              S3Access: new iam.PolicyDocument({
+                statements: [
+                  new iam.PolicyStatement({
+                    actions: ['s3:PutObject', 's3:DeleteObject'],
+                    resources: [`${archiveBucket.bucketArn}/*`],
+                  }),
+                ],
+              }),
+            },
+          }),
+        }).functionArn,
+        properties: {
+          BucketName: archiveBucket.bucketName,
+          ManifestContent: JSON.stringify(manifestContent),
+        },
+      }
+    );
+
+    const gpsDataSource = new quicksight.CfnDataSource(this, 'GpsDataSource', {
       awsAccountId: this.account,
       dataSourceId: `gps-tracking-datasource-${environmentSuffix}`,
       name: 'GPS Tracking Data Source',
@@ -407,6 +497,9 @@ exports.handler = async (event) => {
         },
       ],
     });
+
+    // Ensure the DataSource is created after the manifest file
+    gpsDataSource.node.addDependency(manifestDeployment);
 
     // CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'GpsTrackingDashboard', {
