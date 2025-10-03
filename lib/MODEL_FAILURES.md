@@ -79,32 +79,6 @@ provider "aws" {
 
 ## 2. VARIABLE CONFIGURATION FAILURES
 
-### Incorrect Default Regions
-**Issue:**
-```hcl
-variable "aws_region" {
-  default = "us-east-1"
-}
-
-variable "peer_region" {
-  default = "us-west-2"
-}
-```
-
-**Fix:**
-```hcl
-variable "aws_region" {
-  default = "eu-west-1"
-}
-
-variable "peer_region" {
-  default = "eu-central-1"
-}
-```
-
-**Issues:**
-- Wrong default regions (us-east-1/us-west-2 vs eu-west-1/eu-central-1)
-
 ### Unnecessary Variable
 **Issue:**
 ```hcl
