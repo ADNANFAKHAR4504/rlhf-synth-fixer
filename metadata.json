@@ -1,0 +1,20 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "82194573",
+  "team": "synth",
+  "startedAt": "2025-10-03T22:23:21+05:30",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "S3 Express One Zone",
+    "Lambda",
+    "EventBridge",
+    "DynamoDB",
+    "CodeArtifact",
+    "CloudWatch",
+    "IAM"
+  ]
+}
