@@ -916,9 +916,10 @@ Resources:
   # CloudWatch Log Metric Filter for IAM Policy Changes
   IAMPolicyChangesMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
+    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '      FilterPattern: '{ ($.eventName = "DeleteGroupPolicy") || ($.eventName = "DeleteRolePolicy") || ($.eventName = "DeleteUserPolicy") || ($.eventName = "PutGroupPolicy") || ($.eventName = "PutRolePolicy") || ($.eventName = "PutUserPolicy") || ($.eventName = "CreatePolicy") || ($.eventName = "DeletePolicy") || ($.eventName = "CreatePolicyVersion") || ($.eventName = "DeletePolicyVersion") || ($.eventName = "AttachRolePolicy") || ($.eventName = "DetachRolePolicy") || ($.eventName = "AttachUserPolicy") || ($.eventName = "DetachUserPolicy") || ($.eventName = "AttachGroupPolicy") || ($.eventName = "DetachGroupPolicy") }''
+      FilterPattern: '{ ($.eventName = "DeleteGroupPolicy") || ($.eventName = "DeleteRolePolicy") || ($.eventName = "DeleteUserPolicy") || ($.eventName = "PutGroupPolicy") || ($.eventName = "PutRolePolicy") || ($.eventName = "PutUserPolicy") || ($.eventName = "CreatePolicy") || ($.eventName = "DeletePolicy") || ($.eventName = "CreatePolicyVersion") || ($.eventName = "DeletePolicyVersion") || ($.eventName = "AttachRolePolicy") || ($.eventName = "DetachRolePolicy") || ($.eventName = "AttachUserPolicy") || ($.eventName = "DetachUserPolicy") || ($.eventName = "AttachGroupPolicy") || ($.eventName = "DetachGroupPolicy") }''
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'IAMPolicyChange'
@@ -928,9 +929,10 @@ Resources:
   # CloudWatch Log Metric Filter for Console Sign-in Failures
   ConsoleSigninFailureMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
+    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '      FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.errorMessage EXISTS) }''
+      FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.errorMessage EXISTS) }''
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'ConsoleSigninFailure'
