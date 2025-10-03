@@ -22,28 +22,16 @@ export class DatabaseStack extends Construct {
     // Get the current region for region-specific configuration
     const region = cdk.Stack.of(this).region;
 
-    // Define database engine and version based on region support
-    // us-east-1 has full PostgreSQL support with modern versions available
-    const getDatabaseEngine = (region: string): rds.IInstanceEngine => {
-      if (region === 'us-east-1') {
-        // us-east-1 has full PostgreSQL support
-        return rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_4,
-        });
-      } else {
-        // Other regions may have limited support, use stable PostgreSQL version
-        return rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_13_7,
-        });
-      }
-    };
+    // Use PostgreSQL 12.15 which has the widest regional support
+    const databaseEngine = rds.DatabaseInstanceEngine.postgres({
+      version: rds.PostgresEngineVersion.VER_12_15,
+    });
 
-    const databaseEngine = getDatabaseEngine(region);
-    const isPostgres = true; // Use PostgreSQL for all regions now
+    // PostgreSQL 12.15 is used for maximum compatibility
 
     // Output the selected database engine for debugging
     new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
-      value: `Database engine selected for region ${region}: PostgreSQL ${region === 'us-east-1' ? '15.4' : '13.7'}`,
+      value: `Database engine selected for region ${region}: PostgreSQL 12.15`,
       description:
         'Database engine automatically selected based on region compatibility',
     });
