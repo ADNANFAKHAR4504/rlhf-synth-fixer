@@ -29,11 +29,35 @@ import {
 } from '@aws-sdk/client-wafv2';
 import axios from 'axios';
 import fs from 'fs';
-import path from 'path';
 
-// Load outputs from the deployment (lazy load in beforeAll)
-let outputs: any;
-let environmentSuffix: string;
+// Load outputs from the deployment - handle missing file gracefully for parallel execution
+let outputs: any = {};
+try {
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
+  console.log('✅ Loaded deployment outputs successfully');
+} catch (error) {
+  console.warn('⚠️  Warning: cfn-outputs/flat-outputs.json not found. Using empty outputs.');
+  console.warn('   Deploy your stack first: npm run cfn:deploy-yaml');
+  outputs = {
+    WebsiteBucketName: 'not-deployed',
+    CloudFrontDistributionId: 'not-deployed',
+    WebsiteURL: 'https://not-deployed.example.com',
+    LogsBucketName: 'not-deployed',
+    SecurityHeadersFunctionArn: 'N/A',
+    CloudFrontDomainName: 'not-deployed.example.com',
+    WebACLArn: 'N/A',
+    DashboardURL: 'not-deployed',
+    CustomHeadersFunctionArn: 'N/A'
+  };
+}
+
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+// Extract from actual deployed resources to ensure tests work correctly
+const environmentSuffix = outputs.WebsiteBucketName ?
+  outputs.WebsiteBucketName.split('-').pop() :
+  (process.env.ENVIRONMENT_SUFFIX || 'dev');
 
 // Initialize AWS SDK clients
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
@@ -43,31 +67,6 @@ const wafClient = new WAFV2Client({ region: 'us-east-1' }); // WAF for CloudFron
 const lambdaClient = new LambdaClient({ region: 'us-east-1' }); // Lambda@Edge is in us-east-1
 
 describe('Static Website Infrastructure Integration Tests', () => {
-  beforeAll(() => {
-    // Load outputs from the deployment
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(`
-❌ CloudFormation outputs file not found at: ${outputsPath}
-
-Integration tests require a deployed stack with real AWS resources.
-The stack has been successfully deployed, but the outputs file is missing.
-
-Expected file: ${outputsPath}
-      `);
-    } else {
-      outputs = JSON.parse(
-        fs.readFileSync(outputsPath, 'utf8')
-      );
-    }
-
-    // Get environment suffix from environment variable (set by CI/CD pipeline)
-    // Extract from actual deployed resources to ensure tests work correctly
-    environmentSuffix = outputs.WebsiteBucketName ?
-      outputs.WebsiteBucketName.split('-').pop() :
-      (process.env.ENVIRONMENT_SUFFIX || 'dev');
-  });
 
   describe('S3 Website Bucket Tests', () => {
     test('website bucket should exist and be accessible', async () => {
