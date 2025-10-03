@@ -603,12 +603,42 @@ export class TapStack extends TerraformStack {
             type: 'metric',
             properties: {
               metrics: [
-                ['AWS/Lambda', 'Invocations', 'FunctionName', rewardCalcLambda.functionName],
-                ['AWS/Lambda', 'Errors', 'FunctionName', rewardCalcLambda.functionName],
-                ['AWS/Lambda', 'Duration', 'FunctionName', rewardCalcLambda.functionName],
-                ['AWS/Lambda', 'Invocations', 'FunctionName', payoutLambda.functionName],
-                ['AWS/Lambda', 'Errors', 'FunctionName', payoutLambda.functionName],
-                ['AWS/Lambda', 'Duration', 'FunctionName', payoutLambda.functionName],
+                [
+                  'AWS/Lambda',
+                  'Invocations',
+                  'FunctionName',
+                  rewardCalcLambda.functionName,
+                ],
+                [
+                  'AWS/Lambda',
+                  'Errors',
+                  'FunctionName',
+                  rewardCalcLambda.functionName,
+                ],
+                [
+                  'AWS/Lambda',
+                  'Duration',
+                  'FunctionName',
+                  rewardCalcLambda.functionName,
+                ],
+                [
+                  'AWS/Lambda',
+                  'Invocations',
+                  'FunctionName',
+                  payoutLambda.functionName,
+                ],
+                [
+                  'AWS/Lambda',
+                  'Errors',
+                  'FunctionName',
+                  payoutLambda.functionName,
+                ],
+                [
+                  'AWS/Lambda',
+                  'Duration',
+                  'FunctionName',
+                  payoutLambda.functionName,
+                ],
               ],
               period: 300,
               stat: 'Sum',
@@ -620,10 +650,25 @@ export class TapStack extends TerraformStack {
             type: 'metric',
             properties: {
               metrics: [
-                ['AWS/DynamoDB', 'ConsumedReadCapacityUnits', 'TableName', referralTable.name],
-                ['AWS/DynamoDB', 'ConsumedWriteCapacityUnits', 'TableName', referralTable.name],
+                [
+                  'AWS/DynamoDB',
+                  'ConsumedReadCapacityUnits',
+                  'TableName',
+                  referralTable.name,
+                ],
+                [
+                  'AWS/DynamoDB',
+                  'ConsumedWriteCapacityUnits',
+                  'TableName',
+                  referralTable.name,
+                ],
                 ['AWS/DynamoDB', 'UserErrors', 'TableName', referralTable.name],
-                ['AWS/DynamoDB', 'SystemErrors', 'TableName', referralTable.name],
+                [
+                  'AWS/DynamoDB',
+                  'SystemErrors',
+                  'TableName',
+                  referralTable.name,
+                ],
               ],
               period: 300,
               stat: 'Sum',
