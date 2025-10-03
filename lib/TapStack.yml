@@ -157,7 +157,6 @@ Resources:
   CentralizedLoggingBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Condition: IsPrimaryRegion
-    DependsOn: CentralizedLoggingBucket
     Properties:
       Bucket: !Ref CentralizedLoggingBucket
       PolicyDocument:
@@ -248,7 +247,6 @@ Resources:
   CloudTrailS3Policy:
     Type: 'AWS::IAM::Policy'
     Condition: IsPrimaryRegion
-    DependsOn: CentralizedLoggingBucket
     Properties:
       PolicyName: CloudTrailS3Policy
       Roles:
@@ -344,8 +342,7 @@ Resources:
   # IAM policy for Config to access centralized S3 bucket
   ConfigS3Policy:
     Type: 'AWS::IAM::Policy'
-    Condition: IsPrimaryRegion
-    DependsOn: CentralizedLoggingBucket
+    Condition: CreateLoggingBucket
     Properties:
       PolicyName: ConfigS3DeliveryPolicy
       Roles:
@@ -814,9 +811,7 @@ Resources:
   
   ConfigDeliveryChannel:
     Type: 'AWS::Config::DeliveryChannel'
-    DependsOn: 
-      - CentralizedLoggingBucket
-      - ConfigS3Policy
+    DependsOn: ConfigS3Policy
     Condition: IsPrimaryRegion
     Properties:
       ConfigSnapshotDeliveryProperties:
@@ -841,8 +836,7 @@ Resources:
   CloudTrailToS3:
     Type: 'AWS::CloudTrail::Trail'
     Condition: IsPrimaryRegion
-    DependsOn: 
-      - CentralizedLoggingBucket
+    DependsOn:
       - CentralizedLoggingBucketPolicy
       - CloudTrailS3Policy
     Properties:
@@ -890,7 +884,6 @@ Resources:
   # CloudWatch Log Metric Filter for Root Account Usage
   RootAccountUsageMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: 'Root'
@@ -903,7 +896,6 @@ Resources:
   # CloudWatch Log Metric Filter for Unauthorized API Calls
   UnauthorizedAPICallsMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: 'UnauthorizedOperation AccessDenied'
@@ -916,7 +908,6 @@ Resources:
   # CloudWatch Log Metric Filter for IAM Policy Changes
   IAMPolicyChangesMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: 'Policy'
@@ -929,7 +920,6 @@ Resources:
   # CloudWatch Log Metric Filter for Console Sign-in Failures
   ConsoleSigninFailureMetricFilter:
     Type: 'AWS::Logs::MetricFilter'
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: 'ConsoleLogin'
@@ -1166,9 +1156,6 @@ Resources:
   WebACLAssociation:
     Type: 'AWS::WAFv2::WebACLAssociation'
     Condition: WAFSupported
-    DependsOn:
-      - WebACL
-      - ALB
     Properties:
       WebACLArn: !GetAtt WebACL.Arn
       ResourceArn: !GetAtt ALB.LoadBalancerArn
