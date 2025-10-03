@@ -9,6 +9,9 @@ terraform {
       version = "~> 5.0"
     }
   }
+  
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 # Configure AWS Provider with default tags

@@ -148,7 +148,7 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
 
   test("SSH access is restricted to allowed CIDR", () => {
     const content = fs.readFileSync(stackPath, "utf8");
-    const webSgMatch = content.match(/resource\s+"aws_security_group"\s+"web"[\s\S]*?(?=resource\s+"|$)/);
+    const webSgMatch = content.match(/resource\s+"aws_security_group"\s+"web"[\s\S]*?(?=resource\s+"|# ====)/);
     expect(webSgMatch).toBeTruthy();
     if (webSgMatch) {
       expect(webSgMatch[0]).toMatch(/var\.my_allowed_cidr/);
