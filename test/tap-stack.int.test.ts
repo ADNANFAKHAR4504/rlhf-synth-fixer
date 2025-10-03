@@ -47,11 +47,6 @@ function detectRegionFromOutputs(outputs: any): string {
     if (match) return match[1];
   }
   
-  // Try to extract region from S3 bucket names (though S3 is global, buckets often have region indicators)
-  if (outputs.BackupBucketName && outputs.BackupBucketName.includes('us-east-1')) {
-    return 'us-east-1';
-  }
-  
   // Fallback to environment variable or default
   return process.env.AWS_REGION || 'us-west-2';
 }
@@ -121,7 +116,6 @@ describe('Infrastructure Integration Tests', () => {
           expect(true).toBe(true); // Pass the test but log the issue
         } else {
           console.warn(`S3 access error: ${error.name} - ${error.message}`);
-          // For signature/auth errors, we'll still pass but log the issue
           expect(true).toBe(true);
         }
       }
@@ -229,7 +223,6 @@ describe('Infrastructure Integration Tests', () => {
           expect(true).toBe(true); // Pass the test but log the issue
         } else {
           console.warn(`SQS access error: ${error.name} - ${error.message}`);
-          // For signature/auth errors, we'll still pass but log the issue
           expect(true).toBe(true);
         }
       }
@@ -254,7 +247,7 @@ describe('Infrastructure Integration Tests', () => {
         if (error.name === 'NotFound' || 
             error.name === 'InvalidParameter' ||
             error.message?.includes('does not exist')) {
-          console.warn(`Topic ${outputs.NotificationTopicArn} not found - may have been cleaned up`);
+          console.warn(`SNS topic ${outputs.NotificationTopicArn} not found - may have been cleaned up`);
           expect(true).toBe(true); // Pass the test but log the issue
         } else {
           console.warn(`SNS access error: ${error.name} - ${error.message}`);
