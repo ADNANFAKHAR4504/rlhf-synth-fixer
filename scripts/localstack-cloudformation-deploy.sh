@@ -188,7 +188,20 @@ except Exception as e:
     
     # Check for completion
     if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]]; then
-        echo -e "${GREEN}✅ Stack deployment completed successfully!${NC}"
+        # Check if any resources failed even though stack completed
+        FAILED_COUNT=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+            --query 'length(StackEvents[?ResourceStatus==`CREATE_FAILED`])' --output text 2>/dev/null || echo "0")
+        
+        if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo -e "${YELLOW}⚠️  Stack completed with $FAILED_COUNT failed resources${NC}"
+            echo -e "${YELLOW}📋 Failed resources:${NC}"
+            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
+                --output table --max-items 10 2>/dev/null || true
+            echo -e "${YELLOW}⚠️  Deployment completed with warnings - some resources failed${NC}"
+        else
+            echo -e "${GREEN}✅ Stack deployment completed successfully!${NC}"
+        fi
         break
     elif [[ "$STACK_STATUS" =~ ^(CREATE_FAILED|ROLLBACK_COMPLETE|ROLLBACK_FAILED)$ ]]; then
         echo -e "${RED}❌ Stack deployment failed with status: $STACK_STATUS${NC}"
@@ -236,17 +249,7 @@ TOTAL_RESOURCES=$(awslocal cloudformation list-stack-resources --stack-name $STA
 
 echo -e "${GREEN}✅ Successfully deployed resources: $TOTAL_RESOURCES${NC}"
 
-# Check for any failed resources but successful stack
-FAILED_COUNT=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-    --query 'length(StackEvents[?ResourceStatus==`CREATE_FAILED`])' --output text 2>/dev/null || echo "0")
 
-if [ "$FAILED_COUNT" -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Note: $FAILED_COUNT resources failed but stack completed successfully${NC}"
-    echo -e "${YELLOW}📋 Failed resources (non-critical):${NC}"
-    awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
-        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
-        --output table --max-items 5 2>/dev/null || true
-fi
 
 # Generate outputs
 echo -e "${YELLOW}📊 Generating stack outputs...${NC}"
@@ -293,4 +296,12 @@ echo -e "${BLUE}  • Resources: $TOTAL_RESOURCES deployed${NC}"
 echo -e "${BLUE}  • Duration: ${DEPLOYMENT_DURATION}s${NC}"
 echo -e "${BLUE}  • LocalStack: http://localhost:4566${NC}"
 
-echo -e "${GREEN}🎉 CloudFormation deployment to LocalStack completed!${NC}"
+# Final completion message based on overall success
+FINAL_FAILED_COUNT=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+    --query 'length(StackEvents[?ResourceStatus==`CREATE_FAILED`])' --output text 2>/dev/null || echo "0")
+
+if [ "$FINAL_FAILED_COUNT" -gt 0 ]; then
+    echo -e "${YELLOW}⚠️  CloudFormation deployment completed with $FINAL_FAILED_COUNT failed resources${NC}"
+else
+    echo -e "${GREEN}🎉 CloudFormation deployment to LocalStack completed successfully!${NC}"
+fi
