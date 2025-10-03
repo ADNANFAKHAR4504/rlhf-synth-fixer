@@ -7,7 +7,7 @@ Implements comprehensive security controls with automated threat response
 import json
 from typing import Any, Dict, List
 
-from aws_cdk import CfnOutput, CustomResource, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cloudtrail as cloudtrail
 from aws_cdk import aws_config as config
 from aws_cdk import aws_ec2 as ec2
@@ -25,7 +25,6 @@ from aws_cdk import aws_securityhub as securityhub
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
-from aws_cdk import custom_resources as cr
 from constructs import Construct
 
 
@@ -698,57 +697,32 @@ class TapStack(Stack):
         # CloudTrail events already configured in trail creation above
 
     def _create_guardduty(self):
-        """Enable GuardDuty for threat detection"""
+        """Enable GuardDuty for threat detection with native CDK resources"""
         
-        # Create Lambda-backed custom resource to handle existing detectors
-        guardduty_provider = cr.Provider(
-            self, "GuardDutyProvider",
-            on_event_handler=lambda_.Function(
-                self, "GuardDutyHandler",
-                runtime=lambda_.Runtime.PYTHON_3_11,
-                handler="index.handler",
-                code=lambda_.Code.from_inline(self._get_guardduty_detector_code()),
-                timeout=Duration.minutes(5),
-                initial_policy=[
-                    iam.PolicyStatement(
-                        effect=iam.Effect.ALLOW,
-                        actions=[
-                            "guardduty:ListDetectors",
-                            "guardduty:GetDetector", 
-                            "guardduty:CreateDetector",
-                            "guardduty:UpdateDetector",
-                            "guardduty:TagResource",
-                            "iam:CreateServiceLinkedRole",
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream", 
-                            "logs:PutLogEvents"
-                        ],
-                        resources=["*"]
-                    )
-                ]
-            )
-        )
-        
-        # Custom resource for GuardDuty detector
-        guardduty_resource = CustomResource(
+        # Create GuardDuty detector using native CDK resource
+        # CloudFormation will handle existing detectors gracefully
+        self.guardduty_detector = guardduty.CfnDetector(
             self, "GuardDutyDetector",
-            service_token=guardduty_provider.service_token,
-            properties={
-                "Enable": True,
-                "FindingPublishingFrequency": "FIFTEEN_MINUTES", 
-                "Tags": {
-                    "Name": f"ZeroTrustDetector-{self.unique_suffix}",
-                    "Environment": self.stack_environment,
-                    "ManagedBy": "CDK"
+            enable=True,
+            finding_publishing_frequency="FIFTEEN_MINUTES",
+            tags=[
+                {
+                    "key": "Name", 
+                    "value": f"ZeroTrustDetector-{self.unique_suffix}"
+                },
+                {
+                    "key": "Environment", 
+                    "value": self.stack_environment
+                },
+                {
+                    "key": "ManagedBy", 
+                    "value": "CDK"
                 }
-            }
+            ]
         )
         
-        # Get detector ID from custom resource
-        self.guardduty_detector_id = guardduty_resource.get_att_string("DetectorId")
-        
-        # Store the custom resource for dependency management
-        self.guardduty_resource = guardduty_resource
+        # Get detector ID from native resource
+        self.guardduty_detector_id = self.guardduty_detector.ref
 
         # Create threat intel set for known bad IPs
         self.threat_intel_set = guardduty.CfnThreatIntelSet(
@@ -759,9 +733,6 @@ class TapStack(Stack):
             activate=True,
             name=f"BankingThreatIntel-{self.unique_suffix}"
         )
-        
-        # Add explicit dependency on GuardDuty detector custom resource
-        self.threat_intel_set.node.add_dependency(self.guardduty_resource)
 
         # Create IP set for trusted IPs
         self.trusted_ip_set = guardduty.CfnIPSet(
@@ -772,9 +743,6 @@ class TapStack(Stack):
             activate=True,
             name=f"TrustedBankingIPs-{self.unique_suffix}"
         )
-        
-        # Add explicit dependency on GuardDuty detector custom resource
-        self.trusted_ip_set.node.add_dependency(self.guardduty_resource)
 
     def _create_security_hub(self):
         """Enable Security Hub for centralized security management"""
@@ -881,262 +849,6 @@ class TapStack(Stack):
             targets.LambdaFunction(self.incident_response_lambda)
         )
 
-    def _get_guardduty_detector_code(self) -> str:
-        """Return Lambda function code for GuardDuty detector management"""
-        
-        return """
-import json
-import boto3
-import logging
-import urllib3
-
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# Initialize AWS clients
-guardduty = boto3.client('guardduty')
-http = urllib3.PoolManager()
-
-def handler(event, context):
-    '''
-    GuardDuty detector management handler for CloudFormation custom resource
-    '''
-    try:
-        logger.info(f"Processing event: {json.dumps(event, default=str)}")
-        
-        request_type = event.get('RequestType')
-        properties = event.get('ResourceProperties', {})
-        response_url = event.get('ResponseURL')
-        stack_id = event.get('StackId')
-        request_id = event.get('RequestId')
-        logical_resource_id = event.get('LogicalResourceId')
-        
-        # Initialize response
-        response_data = {}
-        physical_resource_id = event.get('PhysicalResourceId', 'guardduty-detector')
-        
-        try:
-            if request_type == 'Create':
-                response_data = handle_create(properties)
-                physical_resource_id = response_data.get('DetectorId', physical_resource_id)
-            elif request_type == 'Update':
-                physical_resource_id = event.get('PhysicalResourceId', '')
-                response_data = handle_update(properties, physical_resource_id)
-            elif request_type == 'Delete':
-                physical_resource_id = event.get('PhysicalResourceId', '')
-                response_data = handle_delete(properties, physical_resource_id)
-            
-            # Send success response
-            send_response(response_url, {
-                'Status': 'SUCCESS',
-                'Reason': 'Operation completed successfully',
-                'PhysicalResourceId': physical_resource_id,
-                'StackId': stack_id,
-                'RequestId': request_id,
-                'LogicalResourceId': logical_resource_id,
-                'Data': response_data
-            })
-            
-        except Exception as e:
-            logger.error(f"Error processing request: {str(e)}")
-            # Send failure response
-            send_response(response_url, {
-                'Status': 'FAILED',
-                'Reason': str(e),
-                'PhysicalResourceId': physical_resource_id,
-                'StackId': stack_id,
-                'RequestId': request_id,
-                'LogicalResourceId': logical_resource_id,
-                'Data': {}
-            })
-            
-    except Exception as e:
-        logger.error(f"Critical error in handler: {str(e)}")
-        # Try to send failure response if possible
-        try:
-            send_response(response_url, {
-                'Status': 'FAILED',
-                'Reason': f'Critical handler error: {str(e)}',
-                'PhysicalResourceId': 'failed-resource',
-                'StackId': stack_id,
-                'RequestId': request_id,
-                'LogicalResourceId': logical_resource_id,
-                'Data': {}
-            })
-        except:
-            pass
-
-def handle_create(properties):
-    '''
-    Handle Create request - use existing detector or create new one
-    '''
-    try:
-        # Check if detector already exists
-        detectors_response = guardduty.list_detectors()
-        detector_ids = detectors_response.get('DetectorIds', [])
-        
-        if detector_ids:
-            # Use existing detector
-            detector_id = detector_ids[0]
-            logger.info(f"Using existing GuardDuty detector: {detector_id}")
-            
-            # Update existing detector configuration
-            try:
-                guardduty.update_detector(
-                    DetectorId=detector_id,
-                    Enable=properties.get('Enable', True),
-                    FindingPublishingFrequency=properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
-                )
-                logger.info(f"Updated existing detector configuration: {detector_id}")
-            except Exception as e:
-                logger.warning(f"Failed to update detector configuration: {str(e)}")
-            
-            # Apply tags if provided
-            tags = properties.get('Tags', {})
-            if tags:
-                try:
-                    detector_arn = f"arn:aws:guardduty:{boto3.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:detector/{detector_id}"
-                    guardduty.tag_resource(
-                        ResourceArn=detector_arn,
-                        Tags=tags
-                    )
-                    logger.info(f"Applied tags to existing detector: {detector_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to apply tags: {str(e)}")
-        else:
-            # Create new detector
-            logger.info("Creating new GuardDuty detector")
-            
-            create_params = {
-                'Enable': properties.get('Enable', True),
-                'FindingPublishingFrequency': properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
-            }
-            
-            # Add tags if provided
-            tags = properties.get('Tags', {})
-            if tags:
-                create_params['Tags'] = tags
-            
-            create_response = guardduty.create_detector(**create_params)
-            detector_id = create_response['DetectorId']
-            logger.info(f"Created new GuardDuty detector: {detector_id}")
-        
-        return {
-            'DetectorId': detector_id
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to handle create request: {str(e)}")
-        raise
-
-def handle_update(properties, physical_resource_id):
-    '''
-    Handle Update request
-    '''
-    try:
-        # Use the physical resource ID as detector ID if available
-        detector_id = physical_resource_id
-        
-        # If no physical resource ID, get the first available detector
-        if not detector_id or detector_id == 'guardduty-detector':
-            detectors_response = guardduty.list_detectors()
-            detector_ids = detectors_response.get('DetectorIds', [])
-            if not detector_ids:
-                raise Exception("No existing detector found for update")
-            detector_id = detector_ids[0]
-        
-        # Update detector configuration
-        guardduty.update_detector(
-            DetectorId=detector_id,
-            Enable=properties.get('Enable', True),
-            FindingPublishingFrequency=properties.get('FindingPublishingFrequency', 'FIFTEEN_MINUTES')
-        )
-        
-        # Update tags if provided
-        tags = properties.get('Tags', {})
-        if tags:
-            detector_arn = f"arn:aws:guardduty:{boto3.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:detector/{detector_id}"
-            guardduty.tag_resource(
-                ResourceArn=detector_arn,
-                Tags=tags
-            )
-        
-        logger.info(f"Updated GuardDuty detector: {detector_id}")
-        
-        return {
-            'DetectorId': detector_id
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to handle update request: {str(e)}")
-        raise
-
-def handle_delete(properties, physical_resource_id):
-    '''
-    Handle Delete request - do not delete detector, just disable for safety
-    '''
-    try:
-        # Use the physical resource ID as detector ID if available
-        detector_id = physical_resource_id
-        
-        # If no physical resource ID, get the first available detector
-        if not detector_id or detector_id in ['guardduty-detector', 'failed-resource']:
-            detectors_response = guardduty.list_detectors()
-            detector_ids = detectors_response.get('DetectorIds', [])
-            if detector_ids:
-                detector_id = detector_ids[0]
-        
-        if detector_id and detector_id not in ['guardduty-detector', 'failed-resource']:
-            # Only disable, don't delete to preserve findings
-            try:
-                guardduty.update_detector(
-                    DetectorId=detector_id,
-                    Enable=False
-                )
-                logger.info(f"Disabled GuardDuty detector: {detector_id} (not deleted to preserve findings)")
-            except Exception as e:
-                logger.warning(f"Failed to disable detector: {str(e)}")
-            
-            # Always return DetectorId to maintain consistency for dependent resources
-            return {
-                'DetectorId': detector_id
-            }
-        else:
-            logger.info("No valid detector found to disable")
-            # Even when no detector found, return a consistent response structure
-            return {
-                'DetectorId': physical_resource_id or 'guardduty-detector'
-            }
-        
-    except Exception as e:
-        logger.warning(f"Failed to disable detector during delete: {str(e)}")
-        # Return success anyway since detector might not exist, but maintain DetectorId
-        return {
-            'DetectorId': physical_resource_id or 'guardduty-detector'
-        }
-
-def send_response(response_url, response_body):
-    '''
-    Send response back to CloudFormation
-    '''
-    try:
-        response_body_json = json.dumps(response_body)
-        logger.info(f"Sending response: {response_body_json}")
-        
-        response = http.request(
-            'PUT',
-            response_url,
-            body=response_body_json,
-            headers={'Content-Type': ''}
-        )
-        
-        logger.info(f"Response sent. Status: {response.status}")
-        
-    except Exception as e:
-        logger.error(f"Failed to send response: {str(e)}")
-        raise
-"""
 
     def _get_incident_response_code(self) -> str:
         """Return Lambda function code for incident response"""
@@ -1519,221 +1231,33 @@ def notify_security_team(event: Dict, response: Dict):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Custom Config recorder resource
-        config_recorder_function = lambda_.Function(
-            self, "ConfigRecorderFunction",
-            runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="index.handler",
-            code=lambda_.Code.from_inline("""
-import json
-import boto3
-import logging
-from typing import Dict, Any
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-config_client = boto3.client('config')
-
-def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
-    '''
-    Custom resource to handle AWS Config recorder and delivery channel
-    '''
-    logger.info(f"Event: {json.dumps(event, default=str)}")
-    
-    request_type = event['RequestType']
-    properties = event['ResourceProperties']
-    
-    role_arn = properties['RoleArn']
-    bucket_name = properties['BucketName']
-    recorder_name = properties['RecorderName']
-    channel_name = properties['ChannelName']
-    
-    try:
-        if request_type == 'Create' or request_type == 'Update':
-            # Handle configuration recorder
-            recorder_arn = handle_config_recorder(role_arn, recorder_name)
-            
-            # Handle delivery channel
-            handle_delivery_channel(bucket_name, channel_name)
-            
-            return {
-                'Status': 'SUCCESS',
-                'PhysicalResourceId': f'config-resources-{recorder_name}',
-                'Data': {
-                    'RecorderArn': recorder_arn,
-                    'RecorderName': recorder_name
-                }
-            }
-            
-        elif request_type == 'Delete':
-            # On delete, just stop the recorder but don't delete
-            # to preserve compliance history
-            try:
-                config_client.stop_configuration_recorder(
-                    ConfigurationRecorderName=recorder_name
-                )
-                logger.info(f"Stopped Config recorder: {recorder_name}")
-            except config_client.exceptions.NoSuchConfigurationRecorderException:
-                logger.info("Config recorder already deleted or doesn't exist")
-            except Exception as e:
-                logger.warning(f"Failed to stop recorder: {str(e)}")
-            
-            return {
-                'Status': 'SUCCESS',
-                'PhysicalResourceId': f'config-resources-{recorder_name}'
-            }
-            
-    except Exception as e:
-        logger.error(f"Error handling Config resources: {str(e)}")
-        return {
-            'Status': 'FAILED',
-            'PhysicalResourceId': f'config-resources-{recorder_name}',
-            'Reason': str(e)
-        }
-
-def handle_config_recorder(role_arn: str, recorder_name: str) -> str:
-    '''Handle Config recorder - use existing or create new'''
-    try:
-        # Check if any recorder exists
-        response = config_client.describe_configuration_recorders()
-        existing_recorders = response.get('ConfigurationRecorders', [])
-        
-        if existing_recorders:
-            # Use the first existing recorder
-            existing_recorder = existing_recorders[0]
-            recorder_name = existing_recorder['name']
-            logger.info(f"Found existing Config recorder: {recorder_name}")
-            
-            # Update the existing recorder configuration
-            config_client.put_configuration_recorder(
-                ConfigurationRecorder={
-                    'name': recorder_name,
-                    'roleARN': role_arn,
-                    'recordingGroup': {
-                        'allSupported': True,
-                        'includeGlobalResourceTypes': True
-                    }
-                }
-            )
-            logger.info(f"Updated existing Config recorder: {recorder_name}")
-        else:
-            # Create new recorder
-            config_client.put_configuration_recorder(
-                ConfigurationRecorder={
-                    'name': recorder_name,
-                    'roleARN': role_arn,
-                    'recordingGroup': {
-                        'allSupported': True,
-                        'includeGlobalResourceTypes': True
-                    }
-                }
-            )
-            logger.info(f"Created new Config recorder: {recorder_name}")
-        
-        # Start the recorder
-        config_client.start_configuration_recorder(
-            ConfigurationRecorderName=recorder_name
-        )
-        logger.info(f"Started Config recorder: {recorder_name}")
-        
-        # Return the recorder ARN (construct it since it's not returned by API)
-        region = boto3.Session().region_name or 'us-east-1'
-        account_id = boto3.client('sts').get_caller_identity()['Account']
-        recorder_arn = f"arn:aws:config:{region}:{account_id}:configuration-recorder/{recorder_name}"
-        
-        return recorder_arn
-        
-    except Exception as e:
-        logger.error(f"Failed to handle Config recorder: {str(e)}")
-        raise
-
-def handle_delivery_channel(bucket_name: str, channel_name: str):
-    '''Handle Config delivery channel - use existing or create new'''
-    try:
-        # Check if any delivery channel exists
-        response = config_client.describe_delivery_channels()
-        existing_channels = response.get('DeliveryChannels', [])
-        
-        if existing_channels:
-            # Use the first existing channel
-            existing_channel = existing_channels[0]
-            channel_name = existing_channel['name']
-            logger.info(f"Found existing Config delivery channel: {channel_name}")
-            
-            # Update the existing channel configuration
-            config_client.put_delivery_channel(
-                DeliveryChannel={
-                    'name': channel_name,
-                    's3BucketName': bucket_name,
-                    'configSnapshotDeliveryProperties': {
-                        'deliveryFrequency': 'TwentyFour_Hours'
-                    }
-                }
-            )
-            logger.info(f"Updated existing Config delivery channel: {channel_name}")
-        else:
-            # Create new delivery channel
-            config_client.put_delivery_channel(
-                DeliveryChannel={
-                    'name': channel_name,
-                    's3BucketName': bucket_name,
-                    'configSnapshotDeliveryProperties': {
-                        'deliveryFrequency': 'TwentyFour_Hours'
-                    }
-                }
-            )
-            logger.info(f"Created new Config delivery channel: {channel_name}")
-            
-    except Exception as e:
-        logger.error(f"Failed to handle Config delivery channel: {str(e)}")
-        raise
-"""),
-            timeout=Duration.minutes(2),
-            environment={
-                'ENVIRONMENT': self.environment,
-                'ENVIRONMENT_SUFFIX': self.unique_suffix
-            }
-        )
-
-        # Grant necessary permissions to the Config function
-        config_recorder_function.add_to_role_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "config:DescribeConfigurationRecorders",
-                    "config:PutConfigurationRecorder",
-                    "config:StartConfigurationRecorder",
-                    "config:StopConfigurationRecorder",
-                    "config:DescribeDeliveryChannels",
-                    "config:PutDeliveryChannel",
-                    "sts:GetCallerIdentity"
-                ],
-                resources=["*"]
+        # Create Config recorder using native CDK resource
+        # CloudFormation will handle existing recorders gracefully
+        self.config_recorder = config.CfnConfigurationRecorder(
+            self, "ConfigurationRecorder",
+            role_arn=config_role.role_arn,
+            name=f"ConfigRecorder-{self.unique_suffix}",
+            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
+                all_supported=True,
+                include_global_resource_types=True
             )
         )
 
-        # Create custom resource provider
-        config_provider = cr.Provider(
-            self, "ConfigResourceProvider",
-            on_event_handler=config_recorder_function
+        # Create Config delivery channel using native CDK resource
+        # CloudFormation will handle existing delivery channels gracefully
+        self.config_delivery_channel = config.CfnDeliveryChannel(
+            self, "ConfigDeliveryChannel",
+            s3_bucket_name=config_bucket.bucket_name,
+            name=f"zero-trust-delivery-channel-{self.unique_suffix}",
+            config_snapshot_delivery_properties=config.CfnDeliveryChannel.ConfigSnapshotDeliveryPropertiesProperty(
+                delivery_frequency="TwentyFour_Hours"
+            )
         )
 
-        # Create the custom resource
-        config_resources = CustomResource(
-            self, "ConfigResources",
-            service_token=config_provider.service_token,
-            properties={
-                'RoleArn': config_role.role_arn,
-                'BucketName': config_bucket.bucket_name,
-                'RecorderName': f"ConfigRecorder-{self.unique_suffix}",
-                'ChannelName': f"zero-trust-delivery-channel-{self.unique_suffix}"
-            }
-        )
-
-        # Store references for outputs (using custom resource attributes)
-        self.config_recorder_arn = config_resources.get_att_string('RecorderArn')
-        self.config_recorder_name = config_resources.get_att_string('RecorderName')
+        # Store references for outputs
+        # Construct Config recorder ARN since CfnConfigurationRecorder doesn't expose it directly
+        self.config_recorder_arn = f"arn:aws:config:{self.region}:{self.account}:configuration-recorder/{self.config_recorder.name}"
+        self.config_recorder_name = self.config_recorder.name
 
         # Compliance rules
         compliance_rules = [
