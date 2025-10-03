@@ -73,6 +73,21 @@ elif [ "$LANGUAGE" = "js" ]; then
 
 else
   echo "✅ Running default integration tests..."
+  
+  # For CDK TypeScript projects, ensure we have current deployment outputs
+  if [ "$PLATFORM" = "cdk" ] && [ "$LANGUAGE" = "ts" ]; then
+    echo "📊 Generating current deployment outputs for integration tests..."
+    
+    # First try to get outputs using CDK
+    if npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX} --outputs-file cdk-outputs.json --no-rollback; then
+      echo "✅ CDK outputs file generated successfully"
+    else
+      echo "⚠️ CDK deploy failed, trying to get existing outputs..."
+      # Fallback to get-outputs script
+      ./scripts/get-outputs.sh || echo "⚠️ Could not retrieve outputs, proceeding with existing files"
+    fi
+  fi
+  
   npm run test:integration
 fi
 
