@@ -1101,7 +1101,7 @@ export class TapStack extends TerraformStack {
 
 ## **Key Features Implemented:**
 
-### 🔐 **Security Best Practices:**
+###  **Security Best Practices:**
 - Private subnets for compute and database resources
 - Security groups with principle of least privilege
 - Encrypted EBS volumes and RDS instances
@@ -1109,26 +1109,26 @@ export class TapStack extends TerraformStack {
 - Session Manager support for secure SSH access
 - S3 bucket encryption and public access blocking
 
-### 🚀 **High Availability & Scalability:**
+###  **High Availability & Scalability:**
 - Multi-AZ deployment across 2 availability zones
 - Auto Scaling Group with rolling updates
 - Application Load Balancer for traffic distribution
 - Launch template versioning for zero-downtime deployments
 - Instance refresh strategy for AMI updates
 
-### 📊 **Monitoring & Observability:**
+###  **Monitoring & Observability:**
 - CloudWatch alarms for critical metrics
 - Log aggregation to CloudWatch Logs
 - Custom metrics from EC2 instances
 - SNS notifications for alarm states
 
-### 💾 **Data Protection:**
+###  **Data Protection:**
 - Automated EBS snapshots using DLM
 - RDS automated backups with 7-day retention
 - S3 versioning for log files
 - Lifecycle policies for cost optimization
 
-### 🏷️ **Resource Management:**
+###  **Resource Management:**
 - Consistent tagging strategy
 - Modular architecture for reusability
 - Clear separation of concerns

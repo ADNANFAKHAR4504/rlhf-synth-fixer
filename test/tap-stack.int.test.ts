@@ -514,7 +514,7 @@ describe("TAP Stack Integration Tests", () => {
     }, 20000);
   });
 
-  describe("Interactive Tests: EC2 → CloudWatch Logs", () => {
+  describe(" EC2 → CloudWatch Logs", () => {
     test("EC2 instances can write to CloudWatch Logs via IAM role", async () => {
       // Get IAM role for EC2
       const roleName = `tap-${environmentSuffix}-ec2-role`;
