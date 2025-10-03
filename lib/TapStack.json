@@ -192,7 +192,7 @@
                     "s3:GetObjectVersion"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}/*"
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}/*"
                   }
                 },
                 {
@@ -302,11 +302,8 @@
           }
         ]
       },
-      "DependsOn": [
-        "ImageProcessorRole",
-        "ProcessedBucket",
-        "ErrorNotificationTopic"
-      ]
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
     },
     "ImageProcessorFunctionLogGroup": {
       "Type": "AWS::Logs::LogGroup",
@@ -327,7 +324,9 @@
             "Value": "Lambda function logs"
           }
         ]
-      }
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
     },
     "S3InvokePermission": {
       "Type": "AWS::Lambda::Permission",
@@ -341,12 +340,9 @@
           "Ref": "AWS::AccountId"
         },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
+          "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
         }
-      },
-      "DependsOn": [
-        "ImageProcessorFunction"
-      ]
+      }
     },
     "UploadBucketNotification": {
       "Type": "Custom::S3BucketNotification",
@@ -419,11 +415,7 @@
             }
           }
         ]
-      },
-      "DependsOn": [
-        "S3InvokePermission",
-        "S3NotificationFunction"
-      ]
+      }
     },
     "S3NotificationFunction": {
       "Type": "AWS::Lambda::Function",
@@ -476,7 +468,7 @@
                     "s3:GetBucketNotification"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
                   }
                 }
               ]
