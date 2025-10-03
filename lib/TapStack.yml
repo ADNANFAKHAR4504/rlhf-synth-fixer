@@ -87,6 +87,8 @@ Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
   # Check if LoggingAccountId is provided, otherwise use current account
   UseCurrentAccountForLogs: !Equals [!Ref LoggingAccountId, '']
+  # WAF is supported in most regions, but not all
+  WAFSupported: !Not [!Equals [!Ref 'AWS::Region', 'ap-northeast-3']]
 
 # ====================================
 # RESOURCES
@@ -1113,6 +1115,7 @@ Resources:
   # AWS WAF WebACL
   WebACL:
     Type: 'AWS::WAFv2::WebACL'
+    Condition: WAFSupported
     Properties:
       Name: !Sub '${AWS::StackName}-webacl'
       Scope: REGIONAL
@@ -1123,30 +1126,30 @@ Resources:
         CloudWatchMetricsEnabled: true
         MetricName: !Sub '${AWS::StackName}-webacl-metric'
       Rules:
-        - Name: AWSManagedRulesSQLiRuleSet
-          Priority: 0
-          OverrideAction:
-            None: {}
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesSQLiRuleSetMetric
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-        - Name: AWSManagedRulesXSSRuleSet
+        - Name: AWSManagedRulesCommonRuleSet
           Priority: 1
           OverrideAction:
             None: {}
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: AWSManagedRulesXSSRuleSetMetric
+            MetricName: AWSManagedRulesCommonRuleSetMetric
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
-              Name: AWSManagedRulesXSSRuleSet
+              Name: AWSManagedRulesCommonRuleSet
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSetMetric
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
       Tags:
         - Key: 'cost-center'
           Value: !Ref CostCenterTag
@@ -1158,6 +1161,10 @@ Resources:
   # Associate WAF WebACL with ALB
   WebACLAssociation:
     Type: 'AWS::WAFv2::WebACLAssociation'
+    Condition: WAFSupported
+    DependsOn:
+      - WebACL
+      - ALB
     Properties:
       WebACLArn: !GetAtt WebACL.Arn
       ResourceArn: !GetAtt ALB.LoadBalancerArn
