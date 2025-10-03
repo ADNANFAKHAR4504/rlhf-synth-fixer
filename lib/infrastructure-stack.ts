@@ -13,13 +13,18 @@ export interface InfrastructureStackProps extends cdk.StackProps {
 }
 
 export class InfrastructureStack extends cdk.Stack {
+  public readonly vpc: ec2.Vpc;
+  public readonly dbCluster: rds.DatabaseCluster;
+  public readonly backupBucket: s3.Bucket;
+  public readonly alarmTopic: sns.Topic;
+
   constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {
     super(scope, id, props);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Create a VPC with only private isolated subnets (no NAT Gateway)
-    const vpc = new ec2.Vpc(this, `AuroraVpc-${environmentSuffix}`, {
+    this.vpc = new ec2.Vpc(this, `AuroraVpc-${environmentSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr('10.30.0.0/16'),
       maxAzs: 2, // Use 2 AZs for high availability
       enableDnsHostnames: true,
@@ -57,7 +62,7 @@ export class InfrastructureStack extends cdk.Stack {
       this,
       `AuroraSecurityGroup-${environmentSuffix}`,
       {
-        vpc,
+        vpc: this.vpc,
         description: 'Security group for Aurora MySQL database',
         allowAllOutbound: false,
       }
@@ -65,7 +70,7 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Allow MySQL traffic only from within the VPC
     dbSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(3306),
       'Allow MySQL traffic from VPC'
     );
@@ -75,7 +80,7 @@ export class InfrastructureStack extends cdk.Stack {
       this,
       `AuroraSubnetGroup-${environmentSuffix}`,
       {
-        vpc,
+        vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
@@ -85,7 +90,7 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     // Create Aurora MySQL Serverless v2 cluster
-    const dbCluster = new rds.DatabaseCluster(
+    this.dbCluster = new rds.DatabaseCluster(
       this,
       `AuroraCluster-${environmentSuffix}`,
       {
@@ -112,7 +117,7 @@ export class InfrastructureStack extends cdk.Stack {
         ],
         serverlessV2MinCapacity: 0.5,
         serverlessV2MaxCapacity: 2,
-        vpc,
+        vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
@@ -138,7 +143,7 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     // Create S3 bucket for backup storage (for export tasks)
-    const backupBucket = new s3.Bucket(
+    this.backupBucket = new s3.Bucket(
       this,
       `DatabaseBackupBucket-${environmentSuffix}`,
       {
@@ -157,8 +162,8 @@ export class InfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Create SNS topic for database alarms
-    const alarmTopic = new sns.Topic(
+    // Create SNS topic for alarms
+    this.alarmTopic = new sns.Topic(
       this,
       `DbAlarmTopic-${environmentSuffix}`,
       {
@@ -171,83 +176,83 @@ export class InfrastructureStack extends cdk.Stack {
       this,
       `ServerlessCapacityAlarm-${environmentSuffix}`,
       {
-        metric: dbCluster.metricServerlessDatabaseCapacity(),
+        metric: this.dbCluster.metricServerlessDatabaseCapacity(),
         threshold: 1.5,
         evaluationPeriods: 2,
         alarmDescription:
           'Alert when serverless database capacity is approaching maximum',
       }
     );
-    capacityAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+    capacityAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
 
     const acuUtilizationAlarm = new cloudwatch.Alarm(
       this,
       `ACUUtilizationAlarm-${environmentSuffix}`,
       {
-        metric: dbCluster.metricACUUtilization(),
+        metric: this.dbCluster.metricACUUtilization(),
         threshold: 80,
         evaluationPeriods: 2,
         alarmDescription: 'Alert when ACU utilization exceeds 80%',
       }
     );
     acuUtilizationAlarm.addAlarmAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
 
     const connectionsAlarm = new cloudwatch.Alarm(
       this,
       `DatabaseConnectionsAlarm-${environmentSuffix}`,
       {
-        metric: dbCluster.metricDatabaseConnections(),
+        metric: this.dbCluster.metricDatabaseConnections(),
         threshold: 100,
         evaluationPeriods: 2,
         alarmDescription: 'Alert when database connections exceed 100',
       }
     );
     connectionsAlarm.addAlarmAction(
-      new cloudwatch_actions.SnsAction(alarmTopic)
+      new cloudwatch_actions.SnsAction(this.alarmTopic)
     );
 
     const cpuAlarm = new cloudwatch.Alarm(
       this,
       `CPUUtilizationAlarm-${environmentSuffix}`,
       {
-        metric: dbCluster.metricCPUUtilization(),
+        metric: this.dbCluster.metricCPUUtilization(),
         threshold: 75,
         evaluationPeriods: 2,
         alarmDescription: 'Alert when CPU utilization exceeds 75%',
       }
     );
-    cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+    cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
 
     // Outputs
     new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
+      value: this.vpc.vpcId,
       description: 'VPC ID',
     });
 
     new cdk.CfnOutput(this, 'ClusterEndpoint', {
-      value: dbCluster.clusterEndpoint.socketAddress,
+      value: this.dbCluster.clusterEndpoint.socketAddress,
       description: 'Aurora cluster endpoint',
     });
 
     new cdk.CfnOutput(this, 'ClusterReadEndpoint', {
-      value: dbCluster.clusterReadEndpoint.socketAddress,
+      value: this.dbCluster.clusterReadEndpoint.socketAddress,
       description: 'Aurora cluster read endpoint',
     });
 
     new cdk.CfnOutput(this, 'SecretArn', {
-      value: dbCluster.secret!.secretArn,
+      value: this.dbCluster.secret!.secretArn,
       description: 'Secret ARN for database credentials',
     });
 
     new cdk.CfnOutput(this, 'BackupBucketName', {
-      value: backupBucket.bucketName,
+      value: this.backupBucket.bucketName,
       description: 'S3 bucket for database backups',
     });
 
     new cdk.CfnOutput(this, 'AlarmTopicArn', {
-      value: alarmTopic.topicArn,
+      value: this.alarmTopic.topicArn,
       description: 'SNS topic for database alarms',
     });
   }
