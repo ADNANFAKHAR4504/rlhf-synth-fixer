@@ -7,7 +7,7 @@ output "region_infrastructure" {
         alb_dns             = module.compute_r0[0].alb_dns
         rds_endpoint        = module.database_r0[0].rds_endpoint
         dynamodb_table_name = module.database_r0[0].dynamodb_table_name
-        cloudtrail_bucket   = module.monitoring_r0[0].cloudtrail_bucket
+        # cloudtrail_bucket   = module.monitoring_r0[0].cloudtrail_bucket  # Disabled
       }
     } : {},
     local.region1 != null ? {
@@ -16,7 +16,7 @@ output "region_infrastructure" {
         alb_dns             = module.compute_r1[0].alb_dns
         rds_endpoint        = module.database_r1[0].rds_endpoint
         dynamodb_table_name = module.database_r1[0].dynamodb_table_name
-        cloudtrail_bucket   = module.monitoring_r1[0].cloudtrail_bucket
+        # cloudtrail_bucket   = module.monitoring_r1[0].cloudtrail_bucket  # Disabled
       }
     } : {}
   )
