@@ -322,65 +322,10 @@ Resources:
           SES_CONFIG_SET: !Sub "${EnvironmentSuffix}-ses-config-set"
       Code:
         ZipFile: |
-          import json
-          import boto3
-          import os
-          import uuid
-          from datetime import datetime, timedelta
-          import logging
-
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-
-          ses = boto3.client('ses')
-          dynamodb = boto3.resource('dynamodb')
-          cloudwatch = boto3.client('cloudwatch')
-
+          # Lambda function code is in external file: lambda/send_order_email.py
+          # This is a placeholder - the actual code should be deployed separately
           def lambda_handler(event, context):
-              """Process SNS order confirmation events and send emails via SES"""
-              try:
-                  # Parse SNS message
-                  for record in event.get('Records', []):
-                      if record.get('EventSource') == 'aws:sns':
-                          message = json.loads(record['Sns']['Message'])
-                          process_order_confirmation(message)
-                  
-                  return {'statusCode': 200, 'body': json.dumps('Success')}
-              
-              except Exception as e:
-                  logger.error(f"Error processing order confirmation: {str(e)}")
-                  raise
-
-          def process_order_confirmation(order_data):
-              """Process individual order confirmation"""
-              # Extract order information
-              order_id = order_data.get('orderId')
-              customer_email = order_data.get('customerEmail') 
-              customer_name = order_data.get('customerName')
-              
-              # Validate required fields
-              if not all([order_id, customer_email, customer_name]):
-                  raise ValueError("Missing required fields in order data")
-              
-              # Check for duplicate processing
-              table = dynamodb.Table(os.environ['EMAIL_DELIVERIES_TABLE'])
-              message_id = str(uuid.uuid4())
-              
-              # Send email via SES
-              send_order_confirmation_email(order_data, message_id)
-              
-              # Record in DynamoDB
-              record_email_delivery(table, order_id, message_id, customer_email, order_data)
-
-          def send_order_confirmation_email(order_data, message_id):
-              """Send email via SES"""
-              # Implementation details...
-              pass
-
-          def record_email_delivery(table, order_id, message_id, email, order_data):
-              """Record email delivery in DynamoDB"""
-              # Implementation details...
-              pass
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
       Tags:
         - Key: "iac-rlhf-amazon"
           Value: "true"
@@ -401,35 +346,10 @@ Resources:
           EMAIL_DELIVERIES_TABLE: !Ref EmailDeliveriesTable
       Code:
         ZipFile: |
-          import json
-          import boto3
-          import os
-          import logging
-          from datetime import datetime
-
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-
-          dynamodb = boto3.resource('dynamodb')
-          cloudwatch = boto3.client('cloudwatch')
-
+          # Lambda function code is in external file: lambda/ses_feedback_processor.py
+          # This is a placeholder - the actual code should be deployed separately
           def lambda_handler(event, context):
-              """Process SES feedback events (delivery, bounce, complaint)"""
-              try:
-                  for record in event.get('Records', []):
-                      if record.get('EventSource') == 'aws:sns':
-                          process_ses_feedback(json.loads(record['Sns']['Message']))
-                  
-                  return {'statusCode': 200, 'body': json.dumps('Success')}
-              
-              except Exception as e:
-                  logger.error(f"Error processing SES feedback: {str(e)}")
-                  raise
-
-          def process_ses_feedback(feedback_data):
-              """Process SES feedback and update DynamoDB"""
-              # Implementation details...
-              pass
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
       Tags:
         - Key: "iac-rlhf-amazon"
           Value: "true"
@@ -449,9 +369,10 @@ Resources:
           SNS_TOPIC_ARN: !Ref SNSTopicOrderConfirmations
       Code:
         ZipFile: |
-          # Cost monitoring Lambda code will be deployed separately
+          # Lambda function code is in external file: lambda/cost-monitoring.py
+          # This is a placeholder - the actual code should be deployed separately
           def lambda_handler(event, context):
-              return {'statusCode': 200, 'body': 'Cost monitoring placeholder'}
+              return {'statusCode': 200, 'body': 'Lambda function placeholder - deploy actual code separately'}
       Tags:
         - Key: "iac-rlhf-amazon"
           Value: "true"
