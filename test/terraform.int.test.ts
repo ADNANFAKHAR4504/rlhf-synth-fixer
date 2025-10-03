@@ -4,6 +4,10 @@ import {
   DescribePoliciesCommand
 } from "@aws-sdk/client-auto-scaling";
 import {
+  CloudTrailClient,
+  DescribeTrailsCommand
+} from "@aws-sdk/client-cloudtrail";
+import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from "@aws-sdk/client-cloudwatch";
@@ -12,10 +16,6 @@ import {
   DescribeLogStreamsCommand,
   GetLogEventsCommand
 } from "@aws-sdk/client-cloudwatch-logs";
-import {
-  CloudTrailClient,
-  DescribeTrailsCommand
-} from "@aws-sdk/client-cloudtrail";
 import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
@@ -37,12 +37,12 @@ import {
   RDSClient
 } from "@aws-sdk/client-rds";
 import {
+  DeleteObjectCommand,
   GetBucketEncryptionCommand,
   GetBucketNotificationConfigurationCommand,
   GetBucketPolicyCommand,
   GetPublicAccessBlockCommand,
   PutObjectCommand,
-  DeleteObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
@@ -457,6 +457,7 @@ describe("Terraform infrastructure integration", () => {
           const events = eventsResult.events ?? [];
           const hasMatch = events.some(event => {
             const message = event.message ?? "";
+            console.log("message", message);
             return message.includes(`s3://${appBucketName}/${objectKey}`) &&
               message.includes(`count=${expectedCount}`) &&
               message.includes(`sum=${expectedSum}`) &&
