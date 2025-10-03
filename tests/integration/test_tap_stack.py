@@ -307,30 +307,96 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         }
 
         try:
-            self.sqs_client.send_message(
+            # Send test message to SQS
+            print(f"Sending test message to queue: {queue_url}")
+            print(f"Test message: {json.dumps(test_message)}")
+            
+            send_response = self.sqs_client.send_message(
                 QueueUrl=queue_url,
                 MessageBody=json.dumps(test_message)
             )
+            print(f"Message sent successfully. MessageId: {send_response.get('MessageId')}")
 
-            # Wait for processing (Lambda should process within a few seconds)
-            time.sleep(10)
-
-            # Check DynamoDB for processed record
+            # Check Lambda CloudWatch logs for processing
+            print(f"Waiting for Lambda processing...")
+            
+            # Wait longer and check multiple times
+            max_wait_time = 30  # seconds
+            check_interval = 5  # seconds
+            checks = max_wait_time // check_interval
+            
             dynamodb_resource = boto3.resource('dynamodb', region_name=self.aws_region)
             table = dynamodb_resource.Table(self.table_name)
+            
+            items = []
+            for i in range(checks):
+                time.sleep(check_interval)
+                print(f"Check {i+1}/{checks}: Looking for event {test_message['event_id']} in DynamoDB...")
+                
+                # Query for the test event
+                response = table.query(
+                    KeyConditionExpression='event_id = :event_id',
+                    ExpressionAttributeValues={
+                        ':event_id': test_message['event_id']
+                    }
+                )
+                
+                items = response.get('Items', [])
+                if items:
+                    print(f"Found {len(items)} records in DynamoDB")
+                    break
+                else:
+                    print("No records found yet, continuing to wait...")
+                    
+            # If still no items, check SQS queue for any remaining messages
+            if not items:
+                print("Checking if message is still in SQS queue...")
+                queue_attrs = self.sqs_client.get_queue_attributes(
+                    QueueUrl=queue_url,
+                    AttributeNames=['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible']
+                )
+                visible_msgs = queue_attrs['Attributes'].get('ApproximateNumberOfMessages', '0')
+                invisible_msgs = queue_attrs['Attributes'].get('ApproximateNumberOfMessagesNotVisible', '0')
+                print(f"Queue status - Visible messages: {visible_msgs}, Processing messages: {invisible_msgs}")
+                
+                # Check CloudWatch logs for Lambda errors
+                print("Checking CloudWatch logs for Lambda execution...")
+                try:
+                    log_group = f"/aws/lambda/{self.lambda_function_name}"
+                    logs_response = self.logs_client.describe_log_streams(
+                        logGroupName=log_group,
+                        orderBy='LastEventTime',
+                        descending=True,
+                        limit=5
+                    )
+                    
+                    if logs_response.get('logStreams'):
+                        latest_stream = logs_response['logStreams'][0]
+                        print(f"Latest log stream: {latest_stream.get('logStreamName')}")
+                        
+                        # Get recent log events
+                        events_response = self.logs_client.get_log_events(
+                            logGroupName=log_group,
+                            logStreamName=latest_stream['logStreamName'],
+                            startTime=int((time.time() - 600) * 1000)  # Last 10 minutes
+                        )
+                        
+                        recent_events = events_response.get('events', [])[-10:]  # Last 10 events
+                        if recent_events:
+                            print("Recent Lambda log events:")
+                            for event in recent_events:
+                                print(f"  {event.get('message', '').strip()}")
+                        else:
+                            print("No recent log events found")
+                    else:
+                        print("No log streams found")
+                        
+                except Exception as log_error:
+                    print(f"Could not check CloudWatch logs: {log_error}")
 
-            # Query for the test event
-            response = table.query(
-                KeyConditionExpression='event_id = :event_id',
-                ExpressionAttributeValues={
-                    ':event_id': test_message['event_id']
-                }
-            )
-
-            items = response.get('Items', [])
             self.assertGreater(
                 len(items), 0,
-                f"Test event {test_message['event_id']} was not processed and stored in DynamoDB"
+                f"Test event {test_message['event_id']} was not processed and stored in DynamoDB after {max_wait_time} seconds"
             )
 
             # Verify the processed record
