@@ -1379,7 +1379,6 @@
     },
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "DBMasterPasswordSecret",
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "bookingplatform-aurora-cluster-${EnvironmentSuffix}"

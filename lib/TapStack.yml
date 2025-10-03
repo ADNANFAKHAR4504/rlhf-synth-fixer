@@ -835,7 +835,6 @@ Resources:
 
   AuroraDBCluster:
     Type: AWS::RDS::DBCluster
-    DependsOn: DBMasterPasswordSecret
     Properties:
       DBClusterIdentifier: !Sub 'bookingplatform-aurora-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
