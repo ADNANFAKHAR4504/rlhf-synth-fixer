@@ -24,7 +24,7 @@ import * as fs from "fs";
 const region = process.env.AWS_REGION || "us-east-1";
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
-// Load outputs
+// Load outputs 
 const outputs = JSON.parse(
   fs.readFileSync("cfn-outputs/flat-outputs.json", "utf-8")
 );
