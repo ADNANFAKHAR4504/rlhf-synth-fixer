@@ -196,17 +196,23 @@ def handler(event, context):
                 raise ValueError('Missing campaign_id in message')
 
             # Log successful processing to DynamoDB
-            table.put_item(
-                Item={
-                    'event_id': event_id,
-                    'timestamp': timestamp,
-                    'status': 'SUCCESS',
-                    'message_body': json.dumps(message_body),
-                    'message_id': message_id,
-                    'campaign_id': message_body.get('campaign_id'),
-                    'processed_at': timestamp
-                }
-            )
+            item = {
+                'event_id': event_id,
+                'timestamp': timestamp,
+                'status': 'SUCCESS',
+                'message_body': json.dumps(message_body),
+                'message_id': message_id,
+                'campaign_id': message_body.get('campaign_id'),
+                'processed_at': timestamp
+            }
+            
+            # Include additional fields from message if present
+            if 'user_id' in message_body:
+                item['user_id'] = message_body['user_id']
+            if 'action_type' in message_body:
+                item['action_type'] = message_body['action_type']
+                
+            table.put_item(Item=item)
 
             batch_results['successful'] += 1
             batch_results['records'].append({
