@@ -893,7 +893,7 @@ Resources:
     DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }'
+      FilterPattern: 'Root'
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'RootAccountUsage'
@@ -906,7 +906,7 @@ Resources:
     DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.errorCode = "UnauthorizedOperation") || ($.errorCode = "AccessDenied") }'
+      FilterPattern: 'UnauthorizedOperation AccessDenied'
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'UnauthorizedAPICall'
@@ -919,7 +919,7 @@ Resources:
     DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.eventName = "DeleteGroupPolicy") || ($.eventName = "DeleteRolePolicy") || ($.eventName = "DeleteUserPolicy") || ($.eventName = "PutGroupPolicy") || ($.eventName = "PutRolePolicy") || ($.eventName = "PutUserPolicy") || ($.eventName = "CreatePolicy") || ($.eventName = "DeletePolicy") || ($.eventName = "CreatePolicyVersion") || ($.eventName = "DeletePolicyVersion") || ($.eventName = "AttachRolePolicy") || ($.eventName = "DetachRolePolicy") || ($.eventName = "AttachUserPolicy") || ($.eventName = "DetachUserPolicy") || ($.eventName = "AttachGroupPolicy") || ($.eventName = "DetachGroupPolicy") }''
+      FilterPattern: 'Policy'
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'IAMPolicyChange'
@@ -932,7 +932,7 @@ Resources:
     DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.errorMessage EXISTS) }''
+      FilterPattern: 'ConsoleLogin'
       MetricTransformations:
         - MetricNamespace: 'CloudTrailMetrics'
           MetricName: 'ConsoleSigninFailure'
