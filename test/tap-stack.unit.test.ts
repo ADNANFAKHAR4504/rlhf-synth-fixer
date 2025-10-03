@@ -165,7 +165,7 @@ describe('Hotel Booking Platform CloudFormation Template', () => {
       const alb = template.Resources.ApplicationLoadBalancer.Properties;
       expect(alb.Type).toBe('application');
       expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.Name['Fn::Sub']).toBe('BookingPlatform-ALB-${EnvironmentSuffix}');
+      expect(alb.Name['Fn::Sub']).toBe('BP-ALB-${EnvironmentSuffix}');
     });
 
     test('should have target group with sticky sessions', () => {
@@ -471,7 +471,7 @@ describe('Hotel Booking Platform CloudFormation Template', () => {
       expect(template.Resources.WAFAssociation).toBeDefined();
       expect(template.Resources.WAFAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
       const association = template.Resources.WAFAssociation.Properties;
-      expect(association.ResourceArn['Fn::Sub']).toContain('loadbalancer/app');
+      expect(association.ResourceArn.Ref).toBe('ApplicationLoadBalancer');
     });
   });
 
