@@ -710,8 +710,8 @@ class TapStack(Stack):
         should_create_detector_condition = CfnCondition(
             self, "ShouldCreateGuardDutyDetector",
             expression=Fn.condition_equals(
-                Fn.ref("AWS::NoValue"), 
-                use_existing_detector or False
+                str(use_existing_detector or "false"), 
+                "false"
             )
         )
         
