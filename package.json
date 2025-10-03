@@ -142,7 +142,7 @@
     "aws-sdk": "^2.1692.0",
     "aws-sdk-client-mock": "^4.1.0",
     "aws4": "^1.13.2",
-    "axios": "^1.11.0",
+    "axios": "^1.12.2",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^8.57.0",
     "eslint-config-airbnb-base": "15.0.0",
