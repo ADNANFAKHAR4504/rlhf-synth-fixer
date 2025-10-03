@@ -99,7 +99,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
 
-        const rule = response.ServerSideEncryptionConfiguration?.Rules[0];
+        const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
         expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
       } catch (error) {
         console.error('S3 encryption check error:', error);
@@ -163,7 +163,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
 
         expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
         expect(response.Distribution?.DistributionConfig?.HttpVersion).toBe('http2');
-        expect(response.Distribution?.DistributionConfig?.IPV6Enabled).toBe(true);
+        expect(response.Distribution?.DistributionConfig?.IsIPV6Enabled).toBe(true);
       } catch (error) {
         console.error('CloudFront status check error:', error);
         throw error;
@@ -294,10 +294,10 @@ describe('Secure eBook Delivery System Integration Tests', () => {
       // This test validates that the S3 bucket policy restricts access to CloudFront OAI only
       try {
         const cfCommand = new GetDistributionCommand({ Id: outputs.CloudFrontDistributionId });
-        const cfResponse = await cloudFrontClient.send(command);
+        const cfResponse = await cloudFrontClient.send(cfCommand);
 
         const s3Command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
-        const s3Response = await s3Client.send(command);
+        const s3Response = await s3Client.send(s3Command);
 
         expect(cfResponse.Distribution).toBeDefined();
         expect(s3Response).toBeDefined();
@@ -387,7 +387,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
         const config = response.Distribution?.DistributionConfig;
         expect(config?.PriceClass).toBe('PriceClass_All'); // Global distribution
         expect(config?.HttpVersion).toBe('http2'); // Modern protocol
-        expect(config?.IPV6Enabled).toBe(true); // IPv6 support
+        expect(config?.IsIPV6Enabled).toBe(true); // IPv6 support
       } catch (error) {
         console.error('CloudFront performance check error:', error);
         throw error;

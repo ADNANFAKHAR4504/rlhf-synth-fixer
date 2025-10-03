@@ -122,14 +122,6 @@
                 "true"
             ]
         },
-        "IsProd": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "prod"
-            ]
-        },
         "HasCustomDomain": {
             "Fn::Not": [
                 {
@@ -281,7 +273,13 @@
                         }
                     ]
                 },
-                "AccessControl": "LogDeliveryWrite",
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -936,7 +934,8 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "cloudfront:GetDistributionMetrics"
+                                        "cloudfront:GetDistribution",
+                                        "cloudfront:ListDistributions"
                                     ],
                                     "Resource": "*"
                                 },
@@ -995,22 +994,6 @@
                                 "Arn"
                             ]
                         }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Purpose",
-                        "Value": "Scheduled-monitoring"
-                    },
-                    {
-                        "Key": "iac-rlhf-amazon",
-                        "Value": "true"
                     }
                 ]
             }

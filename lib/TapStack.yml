@@ -75,7 +75,6 @@ Conditions:
   EnableLoggingCondition: !Equals [!Ref EnableLogging, "true"]
   EnableWAFCondition: !Equals [!Ref EnableWAF, "true"]
   EnableLifecycleCondition: !Equals [!Ref EnableLifecyclePolicies, "true"]
-  IsProd: !Equals [!Ref Environment, "prod"]
   HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
   HasHostedZone: !Not [!Equals [!Ref HostedZoneId, ""]]
 
@@ -145,7 +144,9 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      AccessControl: LogDeliveryWrite
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -632,7 +633,8 @@ Resources:
                   - !Sub "${EbooksS3Bucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - cloudfront:GetDistributionMetrics
+                  - cloudfront:GetDistribution
+                  - cloudfront:ListDistributions
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -658,13 +660,6 @@ Resources:
         - Arn: !GetAtt CostMonitoringFunction.Arn
           Id: CostMonitoringTarget
           RoleArn: !GetAtt CostMonitoringRole.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Purpose
-          Value: Scheduled-monitoring
-        - Key: iac-rlhf-amazon
-          Value: "true"
 
   # Lambda Permission for EventBridge
   CostMonitoringPermission:

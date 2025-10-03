@@ -94,7 +94,6 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
         'EnableLoggingCondition',
         'EnableWAFCondition',
         'EnableLifecycleCondition',
-        'IsProd',
         'HasCustomDomain',
         'HasHostedZone'
       ];
@@ -111,11 +110,10 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       });
     });
 
-    test('IsProd condition should compare Environment with prod', () => {
-      const condition = template.Conditions.IsProd;
-      expect(condition).toEqual({
-        'Fn::Equals': [{ Ref: 'Environment' }, 'prod']
-      });
+    test('HasCustomDomain condition should check for domain name', () => {
+      const condition = template.Conditions.HasCustomDomain;
+      expect(condition).toBeDefined();
+      expect(condition['Fn::Not']).toBeDefined();
     });
   });
 
@@ -198,7 +196,7 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       expect(policy.Statement).toHaveLength(2);
 
       // Check CloudFront decrypt permission
-      const cfStatement = policy.Statement.find(stmt => stmt.Sid === 'Allow CloudFront to decrypt');
+      const cfStatement = policy.Statement.find((stmt: any) => stmt.Sid === 'Allow CloudFront to decrypt');
       expect(cfStatement).toBeDefined();
       expect(cfStatement.Effect).toBe('Allow');
       expect(cfStatement.Principal.Service).toBe('cloudfront.amazonaws.com');
@@ -208,7 +206,7 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       const policy = template.Resources.EbooksS3BucketPolicy;
       const policyDoc = policy.Properties.PolicyDocument;
 
-      const denyStatement = policyDoc.Statement.find(stmt => stmt.Sid === 'DenyDirectAccess');
+      const denyStatement = policyDoc.Statement.find((stmt: any) => stmt.Sid === 'DenyDirectAccess');
       expect(denyStatement).toBeDefined();
       expect(denyStatement.Effect).toBe('Deny');
       expect(denyStatement.Principal).toBe('*');
@@ -311,12 +309,12 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
           const tags = resource.Properties.Tags;
 
           // Check for iac-rlhf-amazon tag
-          const iacTag = tags.find(tag => tag.Key === 'iac-rlhf-amazon');
+          const iacTag = tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
           expect(iacTag).toBeDefined();
           expect(iacTag.Value).toBe('true');
 
           // Check for Environment tag
-          const envTag = tags.find(tag => tag.Key === 'Environment');
+          const envTag = tags.find((tag: any) => tag.Key === 'Environment');
           expect(envTag).toBeDefined();
         }
       });
@@ -326,7 +324,7 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       const bucket = template.Resources.EbooksS3Bucket;
       const tags = bucket.Properties.Tags;
 
-      const purposeTag = tags.find(tag => tag.Key === 'Purpose');
+      const purposeTag = tags.find((tag: any) => tag.Key === 'Purpose');
       expect(purposeTag.Value).toBe('eBook-storage');
     });
 
@@ -334,7 +332,7 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       const distribution = template.Resources.EbooksCloudFrontDistribution;
       const tags = distribution.Properties.Tags;
 
-      const purposeTag = tags.find(tag => tag.Key === 'Purpose');
+      const purposeTag = tags.find((tag: any) => tag.Key === 'Purpose');
       expect(purposeTag.Value).toBe('eBook-delivery');
     });
   });
@@ -449,8 +447,8 @@ describe('Secure eBook Delivery System CloudFormation Template', () => {
       const distribution = template.Resources.EbooksCloudFrontDistribution;
       const behavior = distribution.Properties.DistributionConfig.DefaultCacheBehavior;
 
-      expect(behavior.AllowedMethods.Sort()).toEqual(['GET', 'HEAD', 'OPTIONS'].sort());
-      expect(behavior.CachedMethods.Sort()).toEqual(['GET', 'HEAD'].sort());
+      expect(behavior.AllowedMethods.sort()).toEqual(['GET', 'HEAD', 'OPTIONS'].sort());
+      expect(behavior.CachedMethods.sort()).toEqual(['GET', 'HEAD'].sort());
     });
   });
 
