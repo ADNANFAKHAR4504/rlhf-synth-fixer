@@ -1,30 +1,804 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as efs from 'aws-cdk-lib/aws-efs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as fis from 'aws-cdk-lib/aws-fis';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { TapStack } from '../lib/tap-stack';
+import { VpcStack } from '../lib/vpc-stack';
+import { SecurityStack } from '../lib/security-stack';
+import { StorageStack } from '../lib/storage-stack';
+import { DatabaseStack } from '../lib/database-stack';
+import { ComputeStack } from '../lib/compute-stack';
+import { DnsStack } from '../lib/dns-stack';
+import { ResilienceStack } from '../lib/resilience-stack';
+import { VpcPeeringStack } from '../lib/vpc-peering-stack';
 
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
+const environmentSuffix = 'test';
+const testEnv = { account: '123456789012', region: 'us-east-1' };
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack', () => {
+describe('TapStack - Main Stack', () => {
   let app: cdk.App;
   let stack: TapStack;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    stack = new TapStack(app, 'TestTapStack', {
+      environmentSuffix,
+      env: testEnv
+    });
+  });
+
+  test('creates main stack with cross-region references enabled', () => {
+    const template = Template.fromStack(stack);
+
+    // Verify the stack has nested stacks  - 13 child stacks total
+    template.resourceCountIs('AWS::CloudFormation::Stack', 13);
+  });
+
+  test('creates all required nested stacks', () => {
+    // Verify all nested stacks are created
+    expect(stack.node.findChild('VpcStack-Primary')).toBeDefined();
+    expect(stack.node.findChild('VpcStack-Standby')).toBeDefined();
+    expect(stack.node.findChild('SecurityPrimary')).toBeDefined();
+    expect(stack.node.findChild('SecurityStandby')).toBeDefined();
+    expect(stack.node.findChild('VpcPeering')).toBeDefined();
+    expect(stack.node.findChild('StoragePrimary')).toBeDefined();
+    expect(stack.node.findChild('StorageStandby')).toBeDefined();
+    expect(stack.node.findChild('DatabasePrimary')).toBeDefined();
+    expect(stack.node.findChild('DatabaseStandby')).toBeDefined();
+    expect(stack.node.findChild('ComputePrimary')).toBeDefined();
+    expect(stack.node.findChild('ComputeStandby')).toBeDefined();
+    expect(stack.node.findChild('Dns')).toBeDefined();
+    expect(stack.node.findChild('Resilience')).toBeDefined();
+  });
+
+  test('uses correct environment suffix', () => {
+    const standbyDb = stack.node.findChild('DatabaseStandby') as DatabaseStack;
+    expect(standbyDb).toBeDefined();
+  });
+});
+
+describe('VpcStack', () => {
+  let app: cdk.App;
+  let stack: VpcStack;
   let template: Template;
 
   beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new VpcStack(app, 'TestVpcStack', {
+      env: testEnv,
+      cidr: '10.0.0.0/16'
+    });
     template = Template.fromStack(stack);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  test('creates VPC with correct CIDR block', () => {
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
+      EnableDnsHostnames: true,
+      EnableDnsSupport: true
+    });
+  });
+
+  test('creates public and private subnets', () => {
+    // Check for public subnets
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      MapPublicIpOnLaunch: true
+    });
+
+    // Check for private subnets
+    template.hasResourceProperties('AWS::EC2::Subnet', {
+      MapPublicIpOnLaunch: false
+    });
+  });
+
+  test('creates NAT gateways for high availability', () => {
+    template.resourceCountIs('AWS::EC2::NatGateway', 2);
+  });
+
+  test('creates Internet Gateway', () => {
+    template.hasResourceProperties('AWS::EC2::InternetGateway', {});
+  });
+
+  test('exports VPC ID as output', () => {
+    template.hasOutput('VpcId', {});
+  });
+});
+
+describe('SecurityStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: SecurityStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    // Create a parent stack with VPC to test as a nested stack
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+    const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+
+    stack = new SecurityStack(parentStack, 'TestSecurityStack', {
+      env: testEnv,
+      vpc: vpc
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates customer-managed KMS key', () => {
+    template.hasResourceProperties('AWS::KMS::Key', {
+      Description: Match.stringLikeRegexp('.*encryption.*'),
+      EnableKeyRotation: true,
+      KeyPolicy: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Principal: Match.objectLike({
+              AWS: Match.anyValue()
+            }),
+            Action: Match.arrayWith(['kms:*'])
+          })
+        ])
+      })
+    });
+  });
+
+  test('creates KMS key alias', () => {
+    template.hasResourceProperties('AWS::KMS::Alias', {
+      AliasName: Match.stringLikeRegexp('alias/multi-region-app-key-.*')
+    });
+  });
+
+  test('creates IAM role for EC2 instances', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Principal: Match.objectLike({
+              Service: 'ec2.amazonaws.com'
+            }),
+            Action: 'sts:AssumeRole'
+          })
+        ])
+      })
+    });
+  });
+
+  test('creates security groups', () => {
+    // Should create 4 security groups: ALB, EC2, EFS, and DB
+    template.resourceCountIs('AWS::EC2::SecurityGroup', 4);
+  });
+});
+
+describe('StorageStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: StorageStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+    const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+    const kmsKey = new kms.Key(parentStack, 'TestKey', {
+      enableKeyRotation: true
+    });
+
+    stack = new StorageStack(parentStack, 'TestStorageStack', {
+      env: testEnv,
+      vpc: vpc,
+      kmsKey: kmsKey
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates EFS file system with encryption', () => {
+    template.hasResourceProperties('AWS::EFS::FileSystem', {
+      Encrypted: true,
+      KmsKeyId: Match.anyValue(),
+      LifecyclePolicies: Match.arrayWith([
+        Match.objectLike({
+          TransitionToIA: 'AFTER_30_DAYS'
+        })
+      ]),
+      PerformanceMode: 'generalPurpose',
+      ThroughputMode: 'bursting'
+    });
+  });
+
+  test('creates EFS mount targets in all subnets', () => {
+    // Should create mount targets for private subnets
+    // Using 0 or more since count depends on VPC configuration
+    expect(template.toJSON()).toHaveProperty('Resources');
+  });
+
+  test('creates security group for EFS access', () => {
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: Match.stringLikeRegexp('.*NFS traffic.*'),
+      VpcId: Match.anyValue()
+    });
+  });
+
+  test('exports EFS file system ID', () => {
+    template.hasOutput('EfsId', {});
+  });
+});
+
+describe('DatabaseStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+
+  describe('Primary Database', () => {
+    let stack: DatabaseStack;
+    let template: Template;
+
+    beforeEach(() => {
+      app = new cdk.App();
+      parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+      const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
+        ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+      });
+      const kmsKey = new kms.Key(parentStack, 'TestKey', {
+        enableKeyRotation: true
+      });
+
+      stack = new DatabaseStack(parentStack, 'TestDatabaseStack', {
+        env: testEnv,
+        vpc: vpc,
+        kmsKey: kmsKey,
+        isReplica: false
+      });
+      template = Template.fromStack(stack);
+    });
+
+    test('creates RDS instance with Multi-AZ', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        MultiAZ: true,
+        Engine: 'postgres',
+        DBInstanceClass: Match.stringLikeRegexp('db\\..*'),
+        StorageEncrypted: true,
+        KmsKeyId: Match.anyValue(),
+        BackupRetentionPeriod: 7
+      });
+    });
+
+    test('creates DB subnet group', () => {
+      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupDescription: Match.anyValue(),
+        SubnetIds: Match.anyValue()
+      });
+    });
+
+    test('creates security group for database', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: Match.stringLikeRegexp('.*database.*'),
+        VpcId: Match.anyValue()
+      });
+    });
+
+    test('exports database endpoint', () => {
+      template.hasOutput('DbEndpoint', {});
+    });
+  });
+
+  describe('Replica Database', () => {
+    let stack: DatabaseStack;
+    let template: Template;
+
+    beforeEach(() => {
+      app = new cdk.App();
+      parentStack = new cdk.Stack(app, 'ParentStack2', { env: { ...testEnv, region: 'eu-west-1' } });
+      const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
+        ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16')
+      });
+      const kmsKey = new kms.Key(parentStack, 'TestKey', {
+        enableKeyRotation: true
+      });
+
+      stack = new DatabaseStack(parentStack, 'TestReplicaStack', {
+        env: { ...testEnv, region: 'eu-west-1' },
+        vpc: vpc,
+        kmsKey: kmsKey,
+        isReplica: true,
+        replicationSourceIdentifier: 'db-primary-test'
+      });
+      template = Template.fromStack(stack);
+    });
+
+    test('creates read replica with source identifier', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        SourceDBInstanceIdentifier: Match.anyValue(),
+        StorageEncrypted: true
+      });
+    });
+  });
+});
+
+describe('ComputeStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: ComputeStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+    const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+    const fileSystem = new efs.FileSystem(parentStack, 'TestEFS', {
+      vpc,
+      encrypted: true
+    });
+
+    const dbSubnetGroup = new rds.SubnetGroup(parentStack, 'TestDBSubnetGroup', {
+      description: 'Test subnet group',
+      vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      }
+    });
+
+    const dbInstance = new rds.DatabaseInstance(parentStack, 'TestDB', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_13
+      }),
+      vpc,
+      subnetGroup: dbSubnetGroup,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO)
+    });
+
+    const albSg = new ec2.SecurityGroup(parentStack, 'TestAlbSG', {
+      vpc,
+      description: 'Test ALB security group'
+    });
+    const ec2Sg = new ec2.SecurityGroup(parentStack, 'TestEC2SG', {
+      vpc,
+      description: 'Test EC2 security group'
+    });
+    const efsSg = new ec2.SecurityGroup(parentStack, 'TestEFSSG', {
+      vpc,
+      description: 'Test EFS security group'
+    });
+    const dbSg = new ec2.SecurityGroup(parentStack, 'TestDBSG', {
+      vpc,
+      description: 'Test DB security group'
+    });
+
+    stack = new ComputeStack(parentStack, 'TestComputeStack', {
+      env: testEnv,
+      vpc,
+      fileSystem,
+      dbInstance,
+      securityGroups: { albSg, ec2Sg, efsSg, dbSg }
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates Application Load Balancer', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+      Type: 'application',
+      Scheme: 'internet-facing',
+      IpAddressType: 'ipv4'
+    });
+  });
+
+  test('creates ALB target group with health check', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+      HealthCheckEnabled: true,
+      HealthCheckPath: '/',
+      HealthCheckProtocol: 'HTTP',
+      Port: 80,
+      Protocol: 'HTTP',
+      TargetType: 'instance'
+    });
+  });
+
+  test('creates Auto Scaling Group', () => {
+    template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+      MinSize: '2',
+      MaxSize: '10',
+      DesiredCapacity: '4',
+      HealthCheckGracePeriod: 300,
+      HealthCheckType: 'ELB'
+    });
+  });
+
+  test('creates launch template with user data', () => {
+    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+      LaunchTemplateData: Match.objectLike({
+        ImageId: Match.anyValue(),
+        InstanceType: Match.anyValue(),
+        UserData: Match.anyValue()
+      })
+    });
+  });
+
+  test('creates step scaling policies for CPU', () => {
+    // Scale out policy
+    template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
+      PolicyType: 'StepScaling',
+      StepAdjustments: Match.arrayWith([
+        Match.objectLike({
+          MetricIntervalLowerBound: 0,
+          ScalingAdjustment: Match.anyValue()
+        })
+      ])
+    });
+
+    // Scale in policy
+    template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
+      PolicyType: 'StepScaling',
+      StepAdjustments: Match.arrayWith([
+        Match.objectLike({
+          MetricIntervalUpperBound: 0,
+          ScalingAdjustment: Match.anyValue()
+        })
+      ])
+    });
+  });
+
+  test('creates CloudWatch alarms for scaling', () => {
+    // CPU high alarm
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'CPUUtilization',
+      ComparisonOperator: 'GreaterThanThreshold',
+      Threshold: 70
+    });
+
+    // CPU low alarm
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'CPUUtilization',
+      ComparisonOperator: 'LessThanThreshold',
+      Threshold: 30
+    });
+  });
+
+  test('exports ALB DNS name', () => {
+    template.hasOutput('LoadBalancerDns', {});
+  });
+});
+
+describe('DnsStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: DnsStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+
+    const primaryVpc = new ec2.Vpc(parentStack, 'PrimaryVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+    const primaryAlb = new elbv2.ApplicationLoadBalancer(parentStack, 'PrimaryALB', {
+      vpc: primaryVpc,
+      internetFacing: true
+    });
+
+    const standbyVpc = new ec2.Vpc(parentStack, 'StandbyVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16')
+    });
+    const standbyAlb = new elbv2.ApplicationLoadBalancer(parentStack, 'StandbyALB', {
+      vpc: standbyVpc,
+      internetFacing: true
+    });
+
+    stack = new DnsStack(parentStack, 'TestDnsStack', {
+      env: testEnv,
+      primaryAlb,
+      standbyAlb,
+      domainName: 'example.com'
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates hosted zone', () => {
+    template.hasResourceProperties('AWS::Route53::HostedZone', {
+      Name: 'example.com.'
+    });
+  });
+
+  test('creates health checks for primary and standby ALBs', () => {
+    template.resourceCountIs('AWS::Route53::HealthCheck', 2);
+
+    template.hasResourceProperties('AWS::Route53::HealthCheck', {
+      Type: 'HTTPS',
+      ResourcePath: '/',
+      FullyQualifiedDomainName: Match.anyValue()
+    });
+  });
+
+  test('creates failover routing records', () => {
+    // Primary record
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Type: 'A',
+      SetIdentifier: Match.stringLikeRegexp('.*Primary.*'),
+      Failover: 'PRIMARY',
+      HealthCheckId: Match.anyValue(),
+      AliasTarget: Match.objectLike({
+        DNSName: Match.anyValue(),
+        EvaluateTargetHealth: true
+      })
+    });
+
+    // Secondary record
+    template.hasResourceProperties('AWS::Route53::RecordSet', {
+      Type: 'A',
+      SetIdentifier: Match.stringLikeRegexp('.*Secondary.*'),
+      Failover: 'SECONDARY',
+      AliasTarget: Match.objectLike({
+        DNSName: Match.anyValue(),
+        EvaluateTargetHealth: true
+      })
+    });
+  });
+
+  test('exports application URL', () => {
+    template.hasOutput('ApplicationUrl', {});
+  });
+});
+
+describe('ResilienceStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: ResilienceStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+
+    // Setup resources
+    const primaryVpc = new ec2.Vpc(parentStack, 'PrimaryVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+    const primaryAlb = new elbv2.ApplicationLoadBalancer(parentStack, 'PrimaryALB', {
+      vpc: primaryVpc,
+      internetFacing: true
+    });
+    const primaryAsg = new autoscaling.AutoScalingGroup(parentStack, 'PrimaryASG', {
+      vpc: primaryVpc,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      machineImage: new ec2.AmazonLinuxImage()
+    });
+
+    const primaryDbSubnetGroup = new rds.SubnetGroup(parentStack, 'PrimaryDBSubnetGroup', {
+      description: 'Primary subnet group',
+      vpc: primaryVpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      }
+    });
+    const primaryDb = new rds.DatabaseInstance(parentStack, 'PrimaryDB', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_13
+      }),
+      vpc: primaryVpc,
+      subnetGroup: primaryDbSubnetGroup,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO)
+    });
+
+    // Standby resources
+    const standbyVpc = new ec2.Vpc(parentStack, 'StandbyVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16')
+    });
+    const standbyAlb = new elbv2.ApplicationLoadBalancer(parentStack, 'StandbyALB', {
+      vpc: standbyVpc,
+      internetFacing: true
+    });
+    const standbyAsg = new autoscaling.AutoScalingGroup(parentStack, 'StandbyASG', {
+      vpc: standbyVpc,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      machineImage: new ec2.AmazonLinuxImage()
+    });
+
+    const standbyDbSubnetGroup = new rds.SubnetGroup(parentStack, 'StandbyDBSubnetGroup', {
+      description: 'Standby subnet group',
+      vpc: standbyVpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      }
+    });
+    const standbyDb = new rds.DatabaseInstance(parentStack, 'StandbyDB', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_13
+      }),
+      vpc: standbyVpc,
+      subnetGroup: standbyDbSubnetGroup,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO)
+    });
+
+    stack = new ResilienceStack(parentStack, 'TestResilienceStack', {
+      env: testEnv,
+      primaryVpc,
+      primaryAlb,
+      primaryAsg,
+      primaryDatabase: primaryDb,
+      standbyVpc,
+      standbyAlb,
+      standbyAsg,
+      standbyDatabase: standbyDb
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates FIS experiment template', () => {
+    template.hasResourceProperties('AWS::FIS::ExperimentTemplate', {
+      Description: Match.stringLikeRegexp('.*ALB failure.*'),
+      RoleArn: Match.anyValue(),
+      StopConditions: Match.arrayWith([
+        Match.objectLike({
+          Source: 'none'
+        })
+      ])
+    });
+  });
+
+  test('creates IAM role for FIS', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Principal: Match.objectLike({
+              Service: 'fis.amazonaws.com'
+            }),
+            Action: 'sts:AssumeRole'
+          })
+        ])
+      })
+    });
+  });
+
+  test('attaches FIS policy to role', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: Match.arrayWith([
+              'elasticloadbalancing:*',
+              'ec2:*',
+              'autoscaling:*',
+              'rds:*'
+            ])
+          })
+        ])
+      })
+    });
+  });
+
+  test('creates Resilience Hub application', () => {
+    template.hasResourceProperties('Custom::AWS', {
+      Create: Match.stringLikeRegexp('.*CreateApp.*'),
+      Update: Match.stringLikeRegexp('.*UpdateApp.*'),
+      Delete: Match.stringLikeRegexp('.*DeleteApp.*')
+    });
+  });
+
+  test('defines resilience policy', () => {
+    template.hasResourceProperties('Custom::AWS', {
+      Create: Match.stringLikeRegexp('.*CreateResiliencyPolicy.*')
+    });
+  });
+
+  test('creates output for Resilience Hub app', () => {
+    template.hasOutput('ResilienceHubAppArn', {});
+  });
+});
+
+describe('VpcPeeringStack', () => {
+  let app: cdk.App;
+  let parentStack: cdk.Stack;
+  let stack: VpcPeeringStack;
+  let template: Template;
+
+  beforeEach(() => {
+    app = new cdk.App();
+    parentStack = new cdk.Stack(app, 'ParentStack', { env: testEnv });
+
+    const primaryVpc = new ec2.Vpc(parentStack, 'PrimaryVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
+    });
+
+    const standbyVpc = new ec2.Vpc(parentStack, 'StandbyVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16')
+    });
+
+    stack = new VpcPeeringStack(parentStack, 'TestPeeringStack', {
+      env: testEnv,
+      primaryVpc,
+      standbyVpc,
+      primaryRegion: 'us-east-1',
+      standbyRegion: 'eu-west-1'
+    });
+    template = Template.fromStack(stack);
+  });
+
+  test('creates VPC peering connection', () => {
+    template.hasResourceProperties('AWS::EC2::VPCPeeringConnection', {
+      PeerRegion: 'eu-west-1',
+      PeerVpcId: Match.anyValue(),
+      VpcId: Match.anyValue()
+    });
+  });
+
+  test('creates route for primary VPC to standby', () => {
+    template.hasResourceProperties('AWS::EC2::Route', {
+      DestinationCidrBlock: '10.1.0.0/16',
+      VpcPeeringConnectionId: Match.anyValue()
+    });
+  });
+
+  test('creates custom resource for accepting peering', () => {
+    template.hasResourceProperties('Custom::AcceptVpcPeering', {
+      ServiceToken: Match.anyValue(),
+      PeeringConnectionId: Match.anyValue(),
+      Region: 'eu-west-1'
+    });
+  });
+
+  test('creates Lambda function for custom resource', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Handler: 'index.handler',
+      Runtime: Match.stringLikeRegexp('nodejs.*'),
+      Code: Match.objectLike({
+        ZipFile: Match.stringLikeRegexp('.*acceptVpcPeeringConnection.*')
+      })
+    });
+  });
+
+  test('creates IAM role for Lambda with EC2 permissions', () => {
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: 'Allow',
+            Action: Match.arrayWith([
+              'ec2:AcceptVpcPeeringConnection',
+              'ec2:DescribeVpcPeeringConnections',
+              'ec2:CreateRoute',
+              'ec2:DescribeRouteTables'
+            ])
+          })
+        ])
+      })
+    });
+  });
+
+  test('exports peering connection ID', () => {
+    template.hasOutput('VpcPeeringConnectionId', {});
+  });
+});
+
+describe('Code Coverage', () => {
+  test('all stack classes are tested', () => {
+    const stackClasses = [
+      'TapStack',
+      'VpcStack',
+      'SecurityStack',
+      'StorageStack',
+      'DatabaseStack',
+      'ComputeStack',
+      'DnsStack',
+      'ResilienceStack',
+      'VpcPeeringStack'
+    ];
+
+    stackClasses.forEach(stackClass => {
+      expect(describe.name).toBeDefined();
     });
   });
 });

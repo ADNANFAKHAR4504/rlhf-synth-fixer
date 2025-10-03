@@ -19,7 +19,7 @@ I'll start by creating the necessary CDK project structure, then implement each 
 
 First, I'll outline the main files we'll need:
 
-1. `bin/multi-region-app.ts` - Entry point for the CDK app
+1. `lib/multi-region-app.ts` - Entry point for the CDK app
 2. `lib/multi-region-stack.ts` - Main stack definition
 3. `lib/vpc-stack.ts` - VPC and networking infrastructure
 4. `lib/compute-stack.ts` - ALB, ASG, and EC2 setup
@@ -31,7 +31,7 @@ First, I'll outline the main files we'll need:
 
 Let's implement each of these files in order:
 
-1. `bin/multi-region-app.ts`:
+1. `lib/multi-region-app.ts`:
 
 ```typescript
 #!/usr/bin/env node

@@ -1,0 +1,125 @@
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as kms from 'aws-cdk-lib/aws-kms';
+
+interface DatabaseStackProps extends cdk.StackProps {
+  vpc: ec2.Vpc;
+  kmsKey: kms.Key;
+  isReplica: boolean;
+  replicationSourceIdentifier?: string;
+}
+
+export class DatabaseStack extends cdk.Stack {
+  public readonly dbInstance: rds.DatabaseInstance | rds.DatabaseInstanceReadReplica;
+
+  constructor(scope: Construct, id: string, props: DatabaseStackProps) {
+    super(scope, id, props);
+
+    // Create a security group for the RDS instance
+    const dbSg = new ec2.SecurityGroup(this, 'DbSecurityGroup', {
+      vpc: props.vpc,
+      description: 'Allow database access from EC2 instances',
+      allowAllOutbound: false,
+    });
+
+    // Allow MySQL/PostgreSQL traffic from EC2 instances in the VPC
+    dbSg.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(5432), // Assuming PostgreSQL
+      'Allow database traffic from within the VPC'
+    );
+
+    // Create a parameter group
+    const parameterGroup = new rds.ParameterGroup(this, 'DbParameterGroup', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_13_4,
+      }),
+      description: 'Parameter group for PostgreSQL 13.4',
+      parameters: {
+        log_statement: 'all', // Log all SQL statements for debugging
+        log_min_duration_statement: '1000', // Log statements running longer than 1s
+      },
+    });
+
+    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+
+    if (props.isReplica && props.replicationSourceIdentifier) {
+      // Create a read replica in the standby region
+      this.dbInstance = new rds.DatabaseInstanceReadReplica(
+        this,
+        'DbReadReplica',
+        {
+          sourceDatabaseInstance:
+            rds.DatabaseInstance.fromDatabaseInstanceAttributes(
+              this,
+              'SourceDb',
+              {
+                instanceIdentifier: props.replicationSourceIdentifier,
+                instanceEndpointAddress: 'dummy-address', // This is actually not used in the construct but required
+                port: 5432,
+                securityGroups: [],
+              }
+            ),
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.BURSTABLE3,
+            ec2.InstanceSize.MEDIUM
+          ),
+          vpc: props.vpc,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          },
+          securityGroups: [dbSg],
+          parameterGroup,
+          storageEncrypted: true,
+          storageEncryptionKey: props.kmsKey,
+          backupRetention: cdk.Duration.days(7),
+          deleteAutomatedBackups: false,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+          instanceIdentifier: `db-replica-${environmentSuffix}`,
+        }
+      );
+    } else {
+      // Create the primary database instance
+      this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_13_4,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.BURSTABLE3,
+          ec2.InstanceSize.MEDIUM
+        ),
+        vpc: props.vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+        securityGroups: [dbSg],
+        parameterGroup,
+        storageEncrypted: true,
+        storageEncryptionKey: props.kmsKey,
+        multiAz: true,
+        backupRetention: cdk.Duration.days(7),
+        deleteAutomatedBackups: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        databaseName: 'appdb',
+        credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
+        instanceIdentifier: `db-primary-${environmentSuffix}`,
+      });
+    }
+
+    // Output the database endpoint
+    new cdk.CfnOutput(this, 'DbEndpoint', {
+      value: this.dbInstance.instanceEndpoint.hostname,
+      description: 'The endpoint of the database',
+    });
+
+    // Output the database credentials secret ARN
+    if (!props.isReplica && this.dbInstance instanceof rds.DatabaseInstance) {
+      new cdk.CfnOutput(this, 'DbCredentialsSecret', {
+        value: this.dbInstance.secret?.secretArn || 'No secret available',
+        description: 'The ARN of the secret containing database credentials',
+      });
+    }
+  }
+}

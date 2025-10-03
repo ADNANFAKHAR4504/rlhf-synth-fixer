@@ -10,5 +10,21 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "EFS",
+    "Route 53",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "FIS",
+    "Resilience Hub",
+    "Custom Resources",
+    "VPC Peering"
+  ],
+  "training_quality": 8
 }
