@@ -29,8 +29,8 @@ import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboar
 import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
-import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
+import { DataArchiveFile } from '../.gen/providers/archive/data-archive-file';
+import { ArchiveProvider } from '../.gen/providers/archive/provider';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -603,78 +603,12 @@ export class TapStack extends TerraformStack {
             type: 'metric',
             properties: {
               metrics: [
-                [
-                  'AWS/Lambda',
-                  'Invocations',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: rewardCalcLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/Lambda',
-                  'Errors',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: rewardCalcLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/Lambda',
-                  'Duration',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: rewardCalcLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/Lambda',
-                  'Invocations',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: payoutLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/Lambda',
-                  'Errors',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: payoutLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/Lambda',
-                  'Duration',
-                  {
-                    Dimensions: [
-                      {
-                        Name: 'FunctionName',
-                        Value: payoutLambda.functionName,
-                      },
-                    ],
-                  },
-                ],
+                ['AWS/Lambda', 'Invocations', 'FunctionName', rewardCalcLambda.functionName],
+                ['AWS/Lambda', 'Errors', 'FunctionName', rewardCalcLambda.functionName],
+                ['AWS/Lambda', 'Duration', 'FunctionName', rewardCalcLambda.functionName],
+                ['AWS/Lambda', 'Invocations', 'FunctionName', payoutLambda.functionName],
+                ['AWS/Lambda', 'Errors', 'FunctionName', payoutLambda.functionName],
+                ['AWS/Lambda', 'Duration', 'FunctionName', payoutLambda.functionName],
               ],
               period: 300,
               stat: 'Sum',
@@ -686,42 +620,10 @@ export class TapStack extends TerraformStack {
             type: 'metric',
             properties: {
               metrics: [
-                [
-                  'AWS/DynamoDB',
-                  'ConsumedReadCapacityUnits',
-                  {
-                    Dimensions: [
-                      { Name: 'TableName', Value: referralTable.name },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/DynamoDB',
-                  'ConsumedWriteCapacityUnits',
-                  {
-                    Dimensions: [
-                      { Name: 'TableName', Value: referralTable.name },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/DynamoDB',
-                  'UserErrors',
-                  {
-                    Dimensions: [
-                      { Name: 'TableName', Value: referralTable.name },
-                    ],
-                  },
-                ],
-                [
-                  'AWS/DynamoDB',
-                  'SystemErrors',
-                  {
-                    Dimensions: [
-                      { Name: 'TableName', Value: referralTable.name },
-                    ],
-                  },
-                ],
+                ['AWS/DynamoDB', 'ConsumedReadCapacityUnits', 'TableName', referralTable.name],
+                ['AWS/DynamoDB', 'ConsumedWriteCapacityUnits', 'TableName', referralTable.name],
+                ['AWS/DynamoDB', 'UserErrors', 'TableName', referralTable.name],
+                ['AWS/DynamoDB', 'SystemErrors', 'TableName', referralTable.name],
               ],
               period: 300,
               stat: 'Sum',
