@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Enhanced SaaS staging environment mirroring production in us-west-1 region with advanced monitoring, security, and performance optimizations'
+Description: 'Enhanced SaaS staging environment mirroring production with advanced monitoring, security, and performance optimizations'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -82,7 +82,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [0, !GetAZs us-west-1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.25.10.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -97,7 +97,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [1, !GetAZs us-west-1]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.25.20.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -135,7 +135,7 @@ Resources:
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
-      ServiceName: com.amazonaws.us-west-1.s3
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
       VpcId: !Ref StagingVPC
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -439,7 +439,7 @@ Resources:
         SelectionName: StagingDatabaseBackup
         IamRoleArn: !GetAtt BackupRole.Arn
         Resources:
-          - !Sub 'arn:aws:rds:us-west-1:${AWS::AccountId}:cluster:${AuroraDBCluster}'
+          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}'
         ListOfTags:
           - ConditionType: STRINGEQUALS
             ConditionKey: Environment
@@ -544,7 +544,7 @@ Resources:
                 Action:
                   - elasticache:DescribeReplicationGroups
                   - elasticache:ModifyReplicationGroup
-                Resource: !Sub 'arn:aws:elasticache:us-west-1:${AWS::AccountId}:replicationgroup:${ElastiCacheCluster}'
+                Resource: !Sub 'arn:aws:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:${ElastiCacheCluster}'
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -1119,7 +1119,7 @@ Resources:
                 ],
                 "period": 300,
                 "stat": "Average",
-                "region": "us-west-1",
+                "region": "${AWS::Region}",
                 "title": "RDS Performance Metrics"
               }
             },
@@ -1139,7 +1139,7 @@ Resources:
                 ],
                 "period": 300,
                 "stat": "Average",
-                "region": "us-west-1",
+                "region": "${AWS::Region}",
                 "title": "ElastiCache Performance Metrics"
               }
             },
@@ -1158,7 +1158,7 @@ Resources:
                 ],
                 "period": 300,
                 "stat": "Sum",
-                "region": "us-west-1",
+                "region": "${AWS::Region}",
                 "title": "Data Masking Metrics"
               }
             },
@@ -1175,7 +1175,7 @@ Resources:
                 ],
                 "period": 86400,
                 "stat": "Average",
-                "region": "us-west-1",
+                "region": "${AWS::Region}",
                 "title": "S3 Storage Metrics"
               }
             }
@@ -1395,7 +1395,7 @@ Outputs:
 
   MonitoringDashboardURL:
     Description: CloudWatch Dashboard URL
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=us-west-1#dashboards:name=${MonitoringDashboard}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}'
     Export:
       Name: !Sub '${AWS::StackName}-MonitoringDashboardURL'
 
