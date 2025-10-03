@@ -8,7 +8,6 @@ regions = [
 environment = "prod"
 
 vpc_cidrs = {
-  "us-east-1"      = "10.0.0.0/16"
   "eu-west-1"      = "10.1.0.0/16"
   "ap-southeast-1" = "10.2.0.0/16"
 }
