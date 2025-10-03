@@ -14,9 +14,131 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Template Transformation', () => {
+    test('should handle CloudFormation intrinsic functions correctly', () => {
+      const tableName = template.Resources.TurnAroundPromptTable.Properties.TableName;
+      expect(tableName).toHaveProperty('Fn::Sub');
+      expect(tableName['Fn::Sub']).toBe('TurnAroundPromptTable${EnvironmentSuffix}');
+    });
+
+    test('should use correct deletion policies for data safety', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBe('Delete');
+      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+    });
+
+    test('should have consistent export naming patterns', () => {
+      const expectedPattern = /^\$\{AWS::StackName\}-\w+$/;
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const exportName = template.Outputs[outputKey].Export.Name['Fn::Sub'];
+        expect(exportName).toMatch(expectedPattern);
+      });
+    });
+  });
+
+  describe('Security and Compliance', () => {
+    test('should not have hardcoded sensitive values', () => {
+      const templateString = JSON.stringify(template);
+      // Exclude CloudFormation key schema and key type which are legitimate
+      const sensitivePattern = /password|secret(?!Manager)|token/i;
+      expect(templateString).not.toMatch(sensitivePattern);
+    });
+
+    test('should use parameter references instead of hardcoded values', () => {
+      const tableName = template.Resources.TurnAroundPromptTable.Properties.TableName;
+      expect(tableName).toHaveProperty('Fn::Sub');
+      expect(tableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should enable proper resource cleanup', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+    });
+  });
+
+  describe('Cost Optimization', () => {
+    test('should use pay-per-request billing for cost efficiency', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('should not have provisioned capacity configured', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.ProvisionedThroughput).toBeUndefined();
+    });
+  });
+
+  describe('Infrastructure Resilience', () => {
+    test('should have proper table configuration for availability', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('should support environment-specific deployments', () => {
+      const parameter = template.Parameters.EnvironmentSuffix;
+      expect(parameter.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(parameter.Default).toBe('dev');
+    });
+
+    test('should handle parameter constraint validation', () => {
+      const parameter = template.Parameters.EnvironmentSuffix;
+      expect(parameter.ConstraintDescription).toBe('Must contain only alphanumeric characters');
+      expect(parameter.Type).toBe('String');
+    });
+  });
+
+  describe('CloudFormation Best Practices', () => {
+    test('should have proper metadata for AWS Console interface', () => {
+      const metadata = template.Metadata;
+      expect(metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(1);
+    });
+
+    test('should group parameters logically in metadata', () => {
+      const parameterGroups = template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
+      expect(parameterGroups[0].Label.default).toBe('Environment Configuration');
+      expect(parameterGroups[0].Parameters).toContain('EnvironmentSuffix');
+    });
+
+    test('should have comprehensive stack outputs for integration', () => {
+      const outputs = template.Outputs;
+      expect(Object.keys(outputs)).toEqual(
+        expect.arrayContaining(['TurnAroundPromptTableName', 'TurnAroundPromptTableArn', 'StackName', 'EnvironmentSuffix'])
+      );
+    });
+
+    test('should follow CloudFormation intrinsic function patterns', () => {
+      const tableArn = template.Outputs.TurnAroundPromptTableArn.Value;
+      expect(tableArn).toHaveProperty('Fn::GetAtt');
+      expect(tableArn['Fn::GetAtt']).toEqual(['TurnAroundPromptTable', 'Arn']);
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle empty or minimal valid parameters', () => {
+      const parameter = template.Parameters.EnvironmentSuffix;
+      expect(parameter.AllowedPattern).toBe('^[a-zA-Z0-9]+$'); // At least one character required
+    });
+
+    test('should validate all required template sections exist', () => {
+      expect(template.AWSTemplateFormatVersion).toBeDefined();
+      expect(template.Description).toBeDefined();
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+      expect(template.Metadata).toBeDefined();
+    });
+
+    test('should handle attribute type consistency', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const keySchema = table.Properties.KeySchema[0];
+      const attributeDefinitions = table.Properties.AttributeDefinitions[0];
+      
+      expect(keySchema.AttributeName).toBe(attributeDefinitions.AttributeName);
+      expect(attributeDefinitions.AttributeType).toBe('S'); // String type
     });
   });
 
