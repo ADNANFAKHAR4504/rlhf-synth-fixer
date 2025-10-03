@@ -1,7 +1,12 @@
 import {
   AutoScalingClient,
-  DescribeAutoScalingGroupsCommand
+  DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand
 } from "@aws-sdk/client-auto-scaling";
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand
+} from "@aws-sdk/client-cloudwatch";
 import {
   CloudTrailClient,
   DescribeTrailsCommand
@@ -94,6 +99,7 @@ let stsClient: STSClient;
 let ec2Client: EC2Client;
 let elbClient: ElasticLoadBalancingV2Client;
 let asgClient: AutoScalingClient;
+let cloudwatchClient: CloudWatchClient;
 let s3Client: S3Client;
 let cloudtrailClient: CloudTrailClient;
 let rdsClient: RDSClient;
@@ -104,6 +110,7 @@ beforeAll(async () => {
   ec2Client = new EC2Client({ region });
   elbClient = new ElasticLoadBalancingV2Client({ region });
   asgClient = new AutoScalingClient({ region });
+  cloudwatchClient = new CloudWatchClient({ region });
   s3Client = new S3Client({ region });
   cloudtrailClient = new CloudTrailClient({ region });
   rdsClient = new RDSClient({ region });
@@ -119,6 +126,7 @@ afterAll(async () => {
     ec2Client.destroy?.(),
     elbClient.destroy?.(),
     asgClient.destroy?.(),
+    cloudwatchClient.destroy?.(),
     s3Client.destroy?.(),
     cloudtrailClient.destroy?.(),
     rdsClient.destroy?.(),
@@ -234,6 +242,57 @@ describe("Terraform infrastructure integration", () => {
     privateSubnetIds.forEach(subnetId => {
       expect(asgSubnetIds).toContain(subnetId);
     });
+  });
+
+  test("CloudWatch alarms trigger scaling policies on CPU thresholds", async () => {
+    const policiesResult = await asgClient.send(new DescribePoliciesCommand({
+      AutoScalingGroupName: asgName,
+      PolicyNames: ["scale-up", "scale-down"]
+    }));
+    const scalingPolicies = policiesResult.ScalingPolicies ?? [];
+    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName === "scale-up");
+    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName === "scale-down");
+    const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
+    const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
+    expect(scaleUpPolicyArn).not.toBe("");
+    expect(scaleDownPolicyArn).not.toBe("");
+
+    const alarmsResult = await cloudwatchClient.send(new DescribeAlarmsCommand({
+      AlarmNames: ["high-cpu-utilization", "low-cpu-utilization"]
+    }));
+    const alarms = alarmsResult.MetricAlarms ?? [];
+    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === "high-cpu-utilization");
+    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === "low-cpu-utilization");
+    expect(highCpuAlarm).toBeDefined();
+    expect(lowCpuAlarm).toBeDefined();
+
+    expect(highCpuAlarm?.Namespace).toBe("AWS/EC2");
+    expect(lowCpuAlarm?.Namespace).toBe("AWS/EC2");
+    expect(highCpuAlarm?.MetricName).toBe("CPUUtilization");
+    expect(lowCpuAlarm?.MetricName).toBe("CPUUtilization");
+    expect(highCpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
+    expect(lowCpuAlarm?.ComparisonOperator).toBe("LessThanThreshold");
+    expect(highCpuAlarm?.Threshold).toBe(80);
+    expect(lowCpuAlarm?.Threshold).toBe(20);
+    expect(highCpuAlarm?.EvaluationPeriods).toBe(2);
+    expect(lowCpuAlarm?.EvaluationPeriods).toBe(2);
+    expect(highCpuAlarm?.Period).toBe(120);
+    expect(lowCpuAlarm?.Period).toBe(120);
+    expect(highCpuAlarm?.Statistic).toBe("Average");
+    expect(lowCpuAlarm?.Statistic).toBe("Average");
+
+    const highAlarmActions = highCpuAlarm?.AlarmActions ?? [];
+    const lowAlarmActions = lowCpuAlarm?.AlarmActions ?? [];
+    expect(highAlarmActions).toContain(scaleUpPolicyArn);
+    expect(lowAlarmActions).toContain(scaleDownPolicyArn);
+
+    const highAsgDimension = highCpuAlarm?.Dimensions?.find(dim => dim.Name === "AutoScalingGroupName")?.Value;
+    const lowAsgDimension = lowCpuAlarm?.Dimensions?.find(dim => dim.Name === "AutoScalingGroupName")?.Value;
+    expect(highAsgDimension).toBe(asgName);
+    expect(lowAsgDimension).toBe(asgName);
+
+    expect(highCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
+    expect(lowCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
   });
 
   test("S3 buckets enforce encryption and public access blocks", async () => {
