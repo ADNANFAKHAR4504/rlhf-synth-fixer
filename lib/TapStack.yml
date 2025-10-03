@@ -884,7 +884,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["FitnessTracker", "ActiveUsers", { "stat": "Sum" }]
+                  ["FitnessTracker", "ActiveUsers", {"stat": "Sum"}]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -897,10 +897,11 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Errors", { "FunctionName": "${WorkoutProcessingFunction}" }, { "stat": "Sum" }],
-                  [".", "Duration", { "FunctionName": "${WorkoutProcessingFunction}" }, { "stat": "Average" }]
+                  ["AWS/Lambda", "Errors", "FunctionName", "${WorkoutProcessingFunction}", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${WorkoutProcessingFunction}", {"stat": "Average"}]
                 ],
                 "period": 300,
+                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Lambda Performance"
               }
@@ -909,16 +910,18 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { "TableName": "${WorkoutHistoryTable}" }, { "stat": "Sum" }],
-                  [".", "ConsumedWriteCapacityUnits", { "TableName": "${WorkoutHistoryTable}" }, { "stat": "Sum" }]
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${WorkoutHistoryTable}", {"stat": "Sum"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${WorkoutHistoryTable}", {"stat": "Sum"}]
                 ],
                 "period": 300,
+                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "DynamoDB Usage"
               }
             }
           ]
         }
+
   # CloudWatch Alarms
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
