@@ -631,8 +631,8 @@
         },
         "AppDataBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "prod-app-data-${AWS::AccountId}-${EnvironmentSuffix}"
@@ -1276,7 +1276,7 @@
                 },
                 "RecordingGroup": {
                     "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
+                    "IncludeGlobalResources": true
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [

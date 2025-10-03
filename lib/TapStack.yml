@@ -357,8 +357,8 @@ Resources:
   # S3 Bucket for Application Data (Encrypted)
   AppDataBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'prod-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
@@ -717,7 +717,7 @@ Resources:
       Name: !Sub 'prod-config-recorder-${EnvironmentSuffix}'
       RecordingGroup:
         AllSupported: true
-        IncludeGlobalResourceTypes: true
+        IncludeGlobalResources: true
       RoleARN: !GetAtt ConfigRole.Arn
 
   ConfigDeliveryChannel:
