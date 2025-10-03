@@ -428,7 +428,7 @@ export class PriceMonitorStack extends TerraformStack {
         roleArn: schedulerRole.arn,
         input: JSON.stringify({
           action: 'scrape_all_products',
-          timestamp: '${time}',
+          // Timestamp will be added by the Lambda function when processing
         }),
       },
       state: 'ENABLED',

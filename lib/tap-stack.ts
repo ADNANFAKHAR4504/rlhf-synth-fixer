@@ -37,13 +37,14 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
-    // Configure S3 Backend with native state locking
+    // Configure S3 Backend for state storage
+    // Note: DynamoDB table for state locking must be created externally
+    // to avoid circular dependency
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
-      dynamodbTable: 'terraform-state-locks',
     });
 
     // Instantiate Price Monitor Stack
