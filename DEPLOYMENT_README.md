@@ -1,18 +1,12 @@
 # Zero Trust Infrastructure Deployment Guide
 
-## ⚠️ IMPORTANT: Handling Existing AWS Resources
+## 🚨 CRITICAL: Avoiding "Detector Already Exists" Error
 
-This CDK stack uses **native CDK resources only** and has been designed to handle existing AWS resources gracefully. However, you **must** follow the deployment instructions below to avoid "resource already exists" errors.
+If you're getting the error **"The request is rejected because a detector already exists for the current account"**, follow the **Existing AWS Account** deployment steps below.
 
-## Quick Start
+## ⚠️ IMPORTANT: Check Your AWS Account First
 
-### For New AWS Accounts (No existing GuardDuty/Config):
-```bash
-cdk deploy
-```
-
-### For Existing AWS Accounts:
-**First, check what resources already exist:**
+**Always run this check before deploying:**
 ```bash
 # Check for existing GuardDuty detector
 aws guardduty list-detectors --region us-east-1
@@ -21,7 +15,50 @@ aws guardduty list-detectors --region us-east-1
 aws configservice describe-configuration-recorders --region us-east-1
 ```
 
-Then use the appropriate deployment command from the sections below.
+If either command returns results, you **MUST** use the "Existing AWS Account" deployment method below.
+
+## Quick Start
+
+### For New AWS Accounts (No existing GuardDuty/Config):
+**Only use if the check commands above return empty results**
+```bash
+cdk deploy
+```
+
+### For Existing AWS Accounts:
+**Use this method if you have existing GuardDuty detectors or Config recorders**
+
+**Step 1: Get existing resource identifiers:**
+```bash
+# Get existing GuardDuty detector ID (if any)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+
+# Get existing Config recorder name (if any)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+
+echo "Existing GuardDuty Detector: $DETECTOR_ID"
+echo "Existing Config Recorder: $RECORDER_NAME"
+```
+
+**Step 2: Deploy using appropriate context flags:**
+```bash
+# If BOTH GuardDuty and Config exist:
+cdk deploy \
+  -c use_existing_guardduty_detector=true \
+  -c existing_guardduty_detector_id=$DETECTOR_ID \
+  -c use_existing_config_recorder=true \
+  -c existing_config_recorder_name="$RECORDER_NAME"
+
+# If ONLY GuardDuty exists:
+cdk deploy \
+  -c use_existing_guardduty_detector=true \
+  -c existing_guardduty_detector_id=$DETECTOR_ID
+
+# If ONLY Config exists:
+cdk deploy \
+  -c use_existing_config_recorder=true \
+  -c existing_config_recorder_name="$RECORDER_NAME"
+```
 
 ### GuardDuty Detector
 

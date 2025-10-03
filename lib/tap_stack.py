@@ -699,14 +699,21 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection with native CDK resources"""
         
-        # Enhanced solution for handling existing GuardDuty detectors:
-        # 1. Check for context parameters to use existing detector
-        # 2. Create new detector with globally unique naming to avoid conflicts
-        # 3. Provide clear error guidance when conflicts occur
+        # Enhanced solution for handling existing GuardDuty detectors using CloudFormation Conditions
+        # This ensures the detector resource is only created when no existing detector is specified
         
         # Check if we should use an existing detector via CDK context
         use_existing_detector = self.node.try_get_context("use_existing_guardduty_detector")
         existing_detector_id = self.node.try_get_context("existing_guardduty_detector_id")
+        
+        # Create CloudFormation condition for conditional resource creation
+        should_create_detector_condition = CfnCondition(
+            self, "ShouldCreateGuardDutyDetector",
+            expression=Fn.condition_equals(
+                Fn.ref("AWS::NoValue"), 
+                use_existing_detector or False
+            )
+        )
         
         if use_existing_detector and existing_detector_id:
             # Use existing detector ID - no resource creation needed
@@ -727,8 +734,7 @@ class TapStack(Stack):
                 description="Deployment mode: using existing detector"
             )
         else:
-            # Create new GuardDuty detector with globally unique naming
-            # This approach minimizes chances of conflicts even in shared accounts
+            # Create new GuardDuty detector with globally unique naming, but only if not using existing
             import time
             import hashlib
             
@@ -737,10 +743,13 @@ class TapStack(Stack):
                 f"{self.account}-{self.region}-{self.environment_suffix}-{int(time.time())}".encode()
             ).hexdigest()[:12]
             
-            # WARNING: If this fails with "detector already exists", you need to:
-            # 1. List existing detectors: aws guardduty list-detectors --region <region>
-            # 2. Redeploy with: cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=<detector-id>
+            # IMPORTANT: If this fails with "detector already exists", you need to:
+            # Step 1: Find your existing detector ID
+            #   aws guardduty list-detectors --region us-east-1
+            # Step 2: Redeploy with context parameters
+            #   cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=<detector-id>
             
+            # Only create the detector if we're not using an existing one
             self.guardduty_detector = guardduty.CfnDetector(
                 self, "GuardDutyDetector",
                 enable=True,
@@ -787,6 +796,13 @@ class TapStack(Stack):
                 self, "GuardDutyDetectorUniqueId", 
                 value=unique_identifier,
                 description="Unique identifier for this detector deployment"
+            )
+            
+            # Output helpful instructions for error recovery
+            CfnOutput(
+                self, "GuardDutyErrorRecovery",
+                value="If deployment fails with 'detector already exists', run: aws guardduty list-detectors --region $(aws configure get region) and redeploy with -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=<detector-id>",
+                description="Commands to resolve 'detector already exists' errors"
             )
 
         # Create threat intel set for known bad IPs
