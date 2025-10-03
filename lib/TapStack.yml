@@ -432,7 +432,7 @@ Resources:
   FitnessAssetsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'fitness-assets-cfn'
+      BucketName: 'fitness-assets-cfn'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -884,7 +884,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["FitnessTracker", "ActiveUsers", {"stat": "Sum"}]
+                  ["FitnessTracker", "ActiveUsers", { "stat": "Sum" }]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -897,11 +897,10 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Errors", {"stat": "Sum", "dimensions": {"FunctionName": "${WorkoutProcessingFunction}"}}],
-                  [".", "Duration", {"stat": "Average", "dimensions": {"FunctionName": "${WorkoutProcessingFunction}"}}]
+                  ["AWS/Lambda", "Errors", { "FunctionName": "${WorkoutProcessingFunction}" }, { "stat": "Sum" }],
+                  [".", "Duration", { "FunctionName": "${WorkoutProcessingFunction}" }, { "stat": "Average" }]
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Lambda Performance"
               }
@@ -910,18 +909,16 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum", "dimensions": {"TableName": "${WorkoutHistoryTable}"}}],
-                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum", "dimensions": {"TableName": "${WorkoutHistoryTable}"}}]
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { "TableName": "${WorkoutHistoryTable}" }, { "stat": "Sum" }],
+                  [".", "ConsumedWriteCapacityUnits", { "TableName": "${WorkoutHistoryTable}" }, { "stat": "Sum" }]
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "DynamoDB Usage"
               }
             }
           ]
         }
-
   # CloudWatch Alarms
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
