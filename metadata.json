@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350041",
+  "team": "2",
+  "startedAt": "2025-10-03T10:39:59.339Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": "S3, RDS, CloudTrail, EC2, VPC, IAM, AWS Config, EBS, AWS Budgets, SNS, CloudWatch, CloudFormation"
+}

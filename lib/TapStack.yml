@@ -1,0 +1,780 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Comprehensive AWS Security and Compliance Infrastructure Template implementing 10 core security configurations'
+
+# ========================================
+# Parameters for Template Customization
+# ========================================
+Parameters:
+  SSHAllowedIPRange:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR IP range allowed for SSH access to EC2 instances (Requirement 4)'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(1[6-9]|2[0-8])$'
+    
+  BudgetAlertEmail:
+    Type: String
+    Description: 'Email address for AWS Budget alert notifications (Requirement 9)'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    
+  DatabaseMasterUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Master username for RDS database'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    
+  DatabaseMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: 'Master password for RDS database'
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+
+Resources:
+  # ========================================
+  # VPC and Networking Resources
+  # ========================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: SecureVPC
+          
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+          
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+          
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.3.0/24'
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: PublicSubnet
+
+  # ========================================
+  # Requirement 1: S3 Bucket with Encryption
+  # ========================================
+  SecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-secure-data-bucket-${AWS::StackName}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      Tags:
+        - Key: Purpose
+          Value: SecureDataStorage
+          
+  # CloudTrail and Config S3 Bucket with Encryption
+  AuditS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-audit-logs-${AWS::StackName}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+            
+  AuditS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AuditS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt AuditS3Bucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${AuditS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt AuditS3Bucket.Arn
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt AuditS3Bucket.Arn
+          - Sid: AWSConfigBucketWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${AuditS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ========================================
+  # Requirement 2: RDS with PubliclyAccessible=false
+  # ========================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: SecureDBSubnetGroup
+          
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: DatabaseSecurityGroup
+          
+  SecureRDSDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-secure-db'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.37'
+      MasterUsername: !Ref DatabaseMasterUsername
+      MasterUserPassword: !Ref DatabaseMasterPassword
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true  # Encryption at rest for RDS
+      PubliclyAccessible: false  # Requirement 2: No public access
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: false
+      Tags:
+        - Key: Compliance
+          Value: SecureConfiguration
+
+  # ========================================
+  # Requirement 3: Global CloudTrail Logging
+  # ========================================
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
+      RetentionInDays: 90
+      
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+                
+  GlobalCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: AuditS3BucketPolicy
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-global-trail'
+      S3BucketName: !Ref AuditS3Bucket
+      IsMultiRegionTrail: true  # Requirement 3: Multi-region trail
+      EnableLogFileValidation: true
+      EventSelectors:
+        - IncludeManagementEvents: true
+          ReadWriteType: All
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${SecureS3Bucket.Arn}/'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      IsLogging: true
+      Tags:
+        - Key: Purpose
+          Value: GlobalAuditing
+
+  # ========================================
+  # Requirement 4: EC2 with Least-Privilege Security Group
+  # ========================================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-ec2-sg'
+      GroupDescription: 'Security group with least-privilege access - SSH only from specific IP range'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # Requirement 4: Only allow SSH from designated IP range
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAllowedIPRange
+          Description: 'SSH access from trusted IP range only'
+      SecurityGroupEgress:
+        # Minimal egress for updates and AWS service communication
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS for AWS service APIs and updates'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP for package updates'
+      Tags:
+        - Key: Name
+          Value: LeastPrivilegeEC2SecurityGroup
+
+  # ========================================
+  # Requirement 8: EC2 with Encrypted EBS Volume
+  # ========================================
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: EC2MinimalRole
+          
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+        
+  SecureEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      InstanceType: t3.micro
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true  # Requirement 8: EBS encryption
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          # Install CloudWatch agent for monitoring
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -U ./amazon-cloudwatch-agent.rpm
+      Tags:
+        - Key: Name
+          Value: SecureEC2Instance
+        - Key: Compliance
+          Value: EncryptedStorage
+
+  # ========================================
+  # Requirement 5: IAM with Least-Privilege Policies
+  # ========================================
+  S3ReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-s3-readonly-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3SpecificBucketReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Requirement 5: Specific permissions without wildcards where possible
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${SecureS3Bucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt SecureS3Bucket.Arn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Purpose
+          Value: LeastPrivilegeExample
+
+  # ========================================
+  # Requirement 6: AWS Config Monitoring
+  # ========================================
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
+      Policies:
+        - PolicyName: S3AccessForConfig
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource: !GetAtt AuditS3Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${AuditS3Bucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': bucket-owner-full-control
+                    
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${AWS::StackName}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+        
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub '${AWS::StackName}-config-delivery'
+      S3BucketName: !Ref AuditS3Bucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+        
+  # Requirement 6: Sample Config Rule - S3 bucket public read prohibited
+  S3PublicReadProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
+    Properties:
+      ConfigRuleName: s3-bucket-public-read-prohibited
+      Description: 'Checks that S3 buckets do not allow public read access'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+  # Start Config Recording
+  ConfigRecorderStatus:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - ConfigDeliveryChannel
+      - ConfigRecorder
+    Properties:
+      ServiceToken: !GetAtt ConfigRecorderStatusFunction.Arn
+      
+  ConfigRecorderStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-config-recorder-status'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt ConfigRecorderStatusRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  config = boto3.client('config')
+                  recorder_name = event['ResourceProperties'].get('RecorderName', 'default')
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      config.start_configuration_recorder(
+                          ConfigurationRecorderName=recorder_name
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif event['RequestType'] == 'Delete':
+                      config.stop_configuration_recorder(
+                          ConfigurationRecorderName=recorder_name
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                  
+  ConfigRecorderStatusRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigRecorderControl
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                Resource: '*'
+
+  # ========================================
+  # Requirement 7: IAM Group with MFA Policy
+  # ========================================
+  MFARequiredGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-mfa-required-group'
+      Policies:
+        - PolicyName: EnforceMFAPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow users to manage their own MFA devices
+              - Sid: AllowManageOwnVirtualMFADevice
+                Effect: Allow
+                Action:
+                  - iam:CreateVirtualMFADevice
+                  - iam:DeleteVirtualMFADevice
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${aws:username}'
+              - Sid: AllowManageOwnUserMFA
+                Effect: Allow
+                Action:
+                  - iam:DeactivateMFADevice
+                  - iam:EnableMFADevice
+                  - iam:GetUser
+                  - iam:ListMFADevices
+                  - iam:ResyncMFADevice
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+              - Sid: AllowListActions
+                Effect: Allow
+                Action:
+                  - iam:ListVirtualMFADevices
+                  - iam:ListUsers
+                Resource: '*'
+              # Deny all actions except MFA management if MFA is not present
+              - Sid: DenyAllExceptListedIfNoMFA
+                Effect: Deny
+                NotAction:
+                  - iam:CreateVirtualMFADevice
+                  - iam:EnableMFADevice
+                  - iam:GetUser
+                  - iam:ListMFADevices
+                  - iam:ListVirtualMFADevices
+                  - iam:ResyncMFADevice
+                  - sts:GetSessionToken
+                Resource: '*'
+                Condition:
+                  BoolIfExists:
+                    'aws:MultiFactorAuthPresent': 'false'
+
+  # Sample IAM User for MFA Group
+  SampleMFAUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub '${AWS::StackName}-mfa-user'
+      Groups:
+        - !Ref MFARequiredGroup
+      Tags:
+        - Key: Purpose
+          Value: MFAEnforcementDemo
+
+  # ========================================
+  # Requirement 9: AWS Budget with Alert
+  # ========================================
+  BudgetSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-budget-alerts'
+      DisplayName: 'AWS Budget Alert Notifications'
+      Subscription:
+        - Endpoint: !Ref BudgetAlertEmail
+          Protocol: email
+          
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${AWS::StackName}-monthly-budget'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: 10000
+          Unit: USD
+        CostTypes:
+          IncludeTax: true
+          IncludeSubscription: true
+          UseBlended: false
+          IncludeRefund: false
+          IncludeCredit: false
+          IncludeUpfront: true
+          IncludeRecurring: true
+          IncludeOtherSubscription: true
+          IncludeSupport: true
+          IncludeDiscount: true
+          UseAmortized: false
+      NotificationsWithSubscribers:
+        # Alert when actual costs exceed $10,000
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetSNSTopic
+        # Alert when forecasted costs exceed $10,000
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetSNSTopic
+        # Early warning at 80% of budget
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref BudgetSNSTopic
+
+  # ========================================
+  # Requirement 10: CloudWatch IAM Auditing
+  # ========================================
+  IAMAuditLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/iam-audit/${AWS::StackName}'
+      RetentionInDays: 365
+      
+  IAMAuditMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: IAMPolicyChanges
+      FilterPattern: '{ ($.eventSource = iam.amazonaws.com) && (($.eventName = PutUserPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = CreatePolicyVersion) || ($.eventName = DeletePolicyVersion) || ($.eventName = AttachUserPolicy) || ($.eventName = DetachUserPolicy) || ($.eventName = AttachGroupPolicy) || ($.eventName = DetachGroupPolicy) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy)) }'
+      LogGroupName: !Ref CloudTrailLogGroup
+      MetricTransformations:
+        - MetricName: IAMPolicyChanges
+          MetricNamespace: CloudTrailMetrics
+          MetricValue: '1'
+          DefaultValue: 0
+          
+  IAMPolicyChangeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-iam-policy-changes'
+      AlarmDescription: 'Alert on IAM policy changes for security auditing'
+      MetricName: IAMPolicyChanges
+      Namespace: CloudTrailMetrics
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref BudgetSNSTopic
+      TreatMissingData: notBreaching
+      
+  # Additional metric filter for IAM user activity
+  IAMUserActivityMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterName: IAMUserActivity
+      FilterPattern: '{ ($.eventSource = iam.amazonaws.com) && (($.eventName = CreateUser) || ($.eventName = DeleteUser) || ($.eventName = UpdateUser) || ($.eventName = CreateAccessKey) || ($.eventName = DeleteAccessKey) || ($.eventName = UpdateAccessKey)) }'
+      LogGroupName: !Ref CloudTrailLogGroup
+      MetricTransformations:
+        - MetricName: IAMUserActivity
+          MetricNamespace: CloudTrailMetrics
+          MetricValue: '1'
+          DefaultValue: 0
+          
+  # CloudWatch Dashboard for IAM Auditing
+  IAMAuditDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${AWS::StackName}-iam-audit-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["CloudTrailMetrics", "IAMPolicyChanges", {"stat": "Sum", "label": "IAM Policy Changes"}],
+                  [".", "IAMUserActivity", {"stat": "Sum", "label": "IAM User Activity"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "IAM Security Activity",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '${CloudTrailLogGroup}' | fields @timestamp, userIdentity.principalId, eventName, errorCode | filter eventSource='iam.amazonaws.com' | sort @timestamp desc | limit 20",
+                "region": "${AWS::Region}",
+                "stacked": false,
+                "title": "Recent IAM API Calls",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
+# ========================================
+# Outputs
+# ========================================
+Outputs:
+  VPCId:
+    Description: 'ID of the secure VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+      
+  SecureS3BucketName:
+    Description: 'Name of the encrypted S3 bucket'
+    Value: !Ref SecureS3Bucket
+    
+  AuditS3BucketName:
+    Description: 'Name of the audit logs S3 bucket'
+    Value: !Ref AuditS3Bucket
+    
+  RDSEndpoint:
+    Description: 'RDS Database endpoint (private access only)'
+    Value: !GetAtt SecureRDSDatabase.Endpoint.Address
+    
+  CloudTrailName:
+    Description: 'Name of the multi-region CloudTrail'
+    Value: !Ref GlobalCloudTrail
+    
+  EC2InstanceId:
+    Description: 'ID of the secure EC2 instance'
+    Value: !Ref SecureEC2Instance
+    
+  MFAGroupName:
+    Description: 'Name of the IAM group requiring MFA'
+    Value: !Ref MFARequiredGroup
+    
+  BudgetSNSTopicArn:
+    Description: 'ARN of the SNS topic for budget alerts'
+    Value: !Ref BudgetSNSTopic
+    
+  IAMAuditDashboardURL:
+    Description: 'URL to CloudWatch Dashboard for IAM auditing'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-iam-audit-dashboard'
+    
+  ConfigRecorderName:
+    Description: 'Name of the AWS Config recorder'
+    Value: !Ref ConfigRecorder
