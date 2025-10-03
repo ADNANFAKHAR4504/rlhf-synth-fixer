@@ -452,24 +452,24 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # NAT Gateway
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-eip
+  # # NAT Gateway
+  # NATGatewayEIP:
+  #   Type: AWS::EC2::EIP
+  #   DependsOn: VPCGatewayAttachment
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-eip
 
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-gateway
+  # NATGateway:
+  #   Type: AWS::EC2::NatGateway
+  #   Properties:
+  #     AllocationId: !GetAtt NATGatewayEIP.AllocationId
+  #     SubnetId: !Ref PublicSubnet1
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-nat-gateway
 
   # Private Route Table
   PrivateRouteTable:
@@ -480,12 +480,12 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}${EnvironmentSuffix}-private-rt
 
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
+  # PrivateRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref NATGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -791,6 +791,6 @@ Outputs:
     Description: CloudWatch Dashboard Name
     Value: !Ref MyDashboard
 
-  NATGatewayId:
-    Description: NAT Gateway ID
-    Value: !Ref NATGateway
+  # NATGatewayId:
+  #   Description: NAT Gateway ID
+  #   Value: !Ref NATGateway
