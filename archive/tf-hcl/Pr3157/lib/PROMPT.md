@@ -1,0 +1,1 @@
+Deploy a scalable API using Terraform with API Gateway for REST endpoints, Lambda functions for search processing, ElastiCache Redis for caching, DynamoDB for search data, CloudWatch for performance metrics, X-Ray for tracing, EventBridge for provider notifications, and IAM roles for secure access in us-east-1
