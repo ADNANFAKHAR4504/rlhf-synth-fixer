@@ -1,0 +1,636 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Survey Data Collection and Analysis System",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Deployment environment"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for unique resource naming"
+        },
+        "ApiRateLimit": {
+            "Type": "Number",
+            "Default": 1000,
+            "Description": "API Gateway throttling limit per second"
+        },
+        "AdminEmail": {
+            "Type": "String",
+            "Default": "govardhan.y@turing.com",
+            "Description": "Admin email address for notifications"
+        }
+    },
+    "Resources": {
+        "SurveyResponseTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "SurveyResponses-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "responseId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "surveyId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "respondentId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "responseId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "SurveyIdIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "surveyId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "RespondentIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "respondentId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ]
+            }
+        },
+        "BackupBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "survey-backups-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToInfrequentAccess",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SurveyDataAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SurveyResponseTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${SurveyResponseTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${BackupBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AdminNotificationTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "SubmissionFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "survey-submission-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "SurveyResponseTable"
+                        },
+                        "REGION": "us-east-1"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport uuid\nimport os\nimport datetime\n\n# Initialize DynamoDB client\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        # Parse request body\n        body = json.loads(event['body'])\n        \n        # Validate required fields\n        if 'surveyId' not in body or 'responses' not in body:\n            return {\n                'statusCode': 400,\n                'body': json.dumps({'error': 'Missing required fields'})\n            }\n        \n        # Generate unique ID and timestamp\n        response_id = str(uuid.uuid4())\n        timestamp = datetime.datetime.now().isoformat()\n        \n        # Create item for DynamoDB\n        item = {\n            'responseId': response_id,\n            'surveyId': body['surveyId'],\n            'timestamp': timestamp,\n            'responses': body['responses']\n        }\n        \n        # Add optional fields if present\n        if 'respondentId' in body:\n            item['respondentId'] = body['respondentId']\n        \n        # Save to DynamoDB\n        table.put_item(Item=item)\n        \n        return {\n            'statusCode': 201,\n            'body': json.dumps({'responseId': response_id})\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+                }
+            }
+        },
+        "AggregationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "survey-aggregation-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 120,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "SurveyResponseTable"
+                        },
+                        "BUCKET_NAME": {
+                            "Ref": "BackupBucket"
+                        },
+                        "TOPIC_ARN": {
+                            "Ref": "AdminNotificationTopic"
+                        },
+                        "REGION": "us-east-1"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport datetime\nfrom boto3.dynamodb.conditions import Key\n\n# Initialize clients\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ns3 = boto3.client('s3', region_name=os.environ['REGION'])\nsns = boto3.client('sns', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        # Get yesterday's date for aggregation\n        yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')\n        \n        # Get all survey responses from yesterday\n        surveys = {}\n        \n        # Simplified example - would need pagination for production\n        scan_response = table.scan(\n            FilterExpression=Key('timestamp').begins_with(yesterday)\n        )\n        \n        # Group by survey ID\n        for item in scan_response.get('Items', []):\n            survey_id = item['surveyId']\n            if survey_id not in surveys:\n                surveys[survey_id] = []\n            surveys[survey_id].append(item)\n        \n        # Process aggregations for each survey\n        aggregation_results = {}\n        for survey_id, responses in surveys.items():\n            # Simple count aggregation - real implementation would be more complex\n            question_counts = {}\n            \n            for response in responses:\n                for question, answer in response.get('responses', {}).items():\n                    if question not in question_counts:\n                        question_counts[question] = {}\n                    \n                    if answer not in question_counts[question]:\n                        question_counts[question][answer] = 0\n                        \n                    question_counts[question][answer] += 1\n            \n            aggregation_results[survey_id] = {\n                'responseCount': len(responses),\n                'questionCounts': question_counts\n            }\n        \n        # Save aggregation to S3\n        s3_key = f\"aggregations/{yesterday}.json\"\n        s3.put_object(\n            Bucket=os.environ['BUCKET_NAME'],\n            Key=s3_key,\n            Body=json.dumps(aggregation_results),\n            ContentType='application/json'\n        )\n        \n        # Send notification\n        sns.publish(\n            TopicArn=os.environ['TOPIC_ARN'],\n            Subject=f\"Survey Aggregation Complete - {yesterday}\",\n            Message=f\"Daily survey aggregation for {yesterday} is complete. \" +\n                    f\"Processed {len(surveys)} surveys with a total of {sum([len(r) for r in surveys.values()])} responses. \" +\n                    f\"Results stored at s3://{os.environ['BUCKET_NAME']}/{s3_key}\"\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({'message': 'Aggregation complete'})\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        \n        # Send error notification\n        sns.publish(\n            TopicArn=os.environ['TOPIC_ARN'],\n            Subject=\"Error: Survey Aggregation Failed\",\n            Message=f\"An error occurred during survey aggregation: {str(e)}\"\n        )\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Aggregation failed'})\n        }\n"
+                }
+            }
+        },
+        "BackupFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "survey-backup-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "SurveyResponseTable"
+                        },
+                        "BUCKET_NAME": {
+                            "Ref": "BackupBucket"
+                        },
+                        "TOPIC_ARN": {
+                            "Ref": "AdminNotificationTopic"
+                        },
+                        "REGION": "us-east-1"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport datetime\n\n# Initialize clients\ndynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])\ns3 = boto3.client('s3', region_name=os.environ['REGION'])\nsns = boto3.client('sns', region_name=os.environ['REGION'])\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\n\ndef handler(event, context):\n    try:\n        # Get today's date for backup filename\n        today = datetime.datetime.now().strftime('%Y-%m-%d')\n        \n        # Fetch all items from DynamoDB (would use pagination in production)\n        response = table.scan()\n        items = response.get('Items', [])\n        \n        # Save to S3\n        s3_key = f\"backups/full-backup-{today}.json\"\n        s3.put_object(\n            Bucket=os.environ['BUCKET_NAME'],\n            Key=s3_key,\n            Body=json.dumps(items),\n            ContentType='application/json'\n        )\n        \n        # Send notification\n        sns.publish(\n            TopicArn=os.environ['TOPIC_ARN'],\n            Subject=f\"Survey Data Backup Complete - {today}\",\n            Message=f\"Full survey data backup is complete. \" +\n                    f\"Backed up {len(items)} records. \" +\n                    f\"Backup stored at s3://{os.environ['BUCKET_NAME']}/{s3_key}\"\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({'message': 'Backup complete'})\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        \n        # Send error notification\n        sns.publish(\n            TopicArn=os.environ['TOPIC_ARN'],\n            Subject=\"Error: Survey Backup Failed\",\n            Message=f\"An error occurred during survey backup: {str(e)}\"\n        )\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Backup failed'})\n        }\n"
+                }
+            }
+        },
+        "SurveyApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "SurveyAPI-${EnvironmentSuffix}"
+                },
+                "Description": "API for survey data collection"
+            }
+        },
+        "SurveyResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "SurveyApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "SurveyApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "survey"
+            }
+        },
+        "SubmitResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "SurveyApi"
+                },
+                "ParentId": {
+                    "Ref": "SurveyResource"
+                },
+                "PathPart": "submit"
+            }
+        },
+        "SubmitMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "SurveyApi"
+                },
+                "ResourceId": {
+                    "Ref": "SubmitResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${SubmissionFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200"
+                    },
+                    {
+                        "StatusCode": "201"
+                    },
+                    {
+                        "StatusCode": "400"
+                    },
+                    {
+                        "StatusCode": "500"
+                    }
+                ]
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "SubmitMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "SurveyApi"
+                },
+                "Description": "Survey API Deployment"
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "SurveyApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "Description": {
+                    "Fn::Sub": "Survey API ${Environment} stage"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true
+                    }
+                ]
+            }
+        },
+        "ApiUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "DependsOn": "ApiStage",
+            "Properties": {
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "SurveyApi"
+                        },
+                        "Stage": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Description": "Usage plan for survey API with throttling",
+                "Throttle": {
+                    "BurstLimit": {
+                        "Ref": "ApiRateLimit"
+                    },
+                    "RateLimit": {
+                        "Ref": "ApiRateLimit"
+                    }
+                }
+            }
+        },
+        "SubmissionFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "SubmissionFunction"
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${SurveyApi}/*/*/*"
+                }
+            }
+        },
+        "DailyAggregationRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "daily-aggregation-${EnvironmentSuffix}"
+                },
+                "ScheduleExpression": "cron(0 1 * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "DailyAggregationTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "AggregationFunction",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "WeeklyBackupRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "weekly-backup-${EnvironmentSuffix}"
+                },
+                "ScheduleExpression": "cron(0 2 ? * SUN *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "WeeklyBackupTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "BackupFunction",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "AggregationFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "AggregationFunction"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "DailyAggregationRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "BackupFunctionPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "BackupFunction"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "WeeklyBackupRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AdminNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "survey-admin-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Survey Admin Notifications"
+            }
+        },
+        "AdminEmailSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "AdminNotificationTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AdminEmail"
+                }
+            }
+        },
+        "SurveyDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "survey-dashboard-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"Count\", \"ApiName\", \"${SurveyApi}\", \"Stage\", \"${Environment}\", \"Resource\", \"/survey/submit\", \"Method\", \"POST\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"us-east-1\",\n        \"title\": \"API Submissions\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"4XXError\", \"ApiName\", \"${SurveyApi}\", \"Stage\", \"${Environment}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/ApiGateway\", \"5XXError\", \"ApiName\", \"${SurveyApi}\", \"Stage\", \"${Environment}\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"us-east-1\",\n        \"title\": \"API Errors\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${SubmissionFunction}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${SubmissionFunction}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${AggregationFunction}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${AggregationFunction}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${BackupFunction}\", { \"stat\": \"Sum\" } ],\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${BackupFunction}\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"us-east-1\",\n        \"title\": \"Lambda Functions\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "ApiErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "API-Error-Alarm-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when the API Gateway has errors",
+                "MetricName": "5XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "SurveyApi"
+                        }
+                    },
+                    {
+                        "Name": "Stage",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AdminNotificationTopic"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpoint": {
+            "Description": "API Endpoint URL for survey submission",
+            "Value": {
+                "Fn::Sub": "https://${SurveyApi}.execute-api.us-east-1.amazonaws.com/${Environment}/survey/submit"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+                }
+            }
+        },
+        "ApiGatewayId": {
+            "Description": "API Gateway ID",
+            "Value": {
+                "Ref": "SurveyApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayId"
+                }
+            }
+        },
+        "ApiStageName": {
+            "Description": "API Gateway Stage Name",
+            "Value": {
+                "Ref": "ApiStage"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiStageName"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Table Name",
+            "Value": {
+                "Ref": "SurveyResponseTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "BackupBucketName": {
+            "Description": "S3 Backup Bucket Name",
+            "Value": {
+                "Ref": "BackupBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupBucketName"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${SurveyDashboard}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DashboardURL"
+                }
+            }
+        }
+    }
+}
