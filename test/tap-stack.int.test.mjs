@@ -1,8 +1,7 @@
 import fs from 'fs';
 import {
-  CodeCommitClient,
-  GetRepositoryCommand,
-} from '@aws-sdk/client-codecommit';
+  ListBucketsCommand,
+} from '@aws-sdk/client-s3';
 import {
   CodePipelineClient,
   GetPipelineCommand,
@@ -36,7 +35,6 @@ import {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 
-const codecommitClient = new CodeCommitClient({ region });
 const codepipelineClient = new CodePipelineClient({ region });
 const codebuildClient = new CodeBuildClient({ region });
 const codedeployClient = new CodeDeployClient({ region });
@@ -56,38 +54,39 @@ const getOutputValue = (key, defaultValue) => {
   return outputs[`TapStack${environmentSuffix}.${key}`] || defaultValue;
 };
 
-const repositoryName = `healthcare-application-${environmentSuffix}`;
-const pipelineName = `healthcare-pipeline-${environmentSuffix}`;
+const sourceBucketName = getOutputValue('SourceBucketName', `tapstack${environmentSuffix}-sourcebucket`);
 const applicationName = `healthcare-app-${environmentSuffix}`;
 const deploymentGroupName = `healthcare-deployment-${environmentSuffix}`;
 const dashboardName = `healthcare-pipeline-${environmentSuffix}`;
 
 describe('Healthcare CI/CD Pipeline Integration Tests', () => {
-  describe('CodeCommit Repository', () => {
-    test('should have accessible CodeCommit repository', async () => {
-      const command = new GetRepositoryCommand({
-        repositoryName,
+  describe('S3 Source Bucket', () => {
+    test('should have accessible S3 source bucket', async () => {
+      const command = new HeadBucketCommand({
+        Bucket: sourceBucketName,
       });
 
-      const response = await codecommitClient.send(command);
-
-      expect(response.repositoryMetadata).toBeDefined();
-      expect(response.repositoryMetadata.repositoryName).toBe(repositoryName);
-      expect(response.repositoryMetadata.repositoryDescription).toContain('healthcare');
-      expect(response.repositoryMetadata.cloneUrlHttp).toBeDefined();
-      expect(response.repositoryMetadata.Arn).toBeDefined();
+      const response = await s3Client.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
     }, 30000);
 
-    test('repository should have valid ARN format', async () => {
-      const command = new GetRepositoryCommand({
-        repositoryName,
+    test('source bucket should have versioning enabled', async () => {
+      const command = new GetBucketVersioningCommand({
+        Bucket: sourceBucketName,
       });
 
-      const response = await codecommitClient.send(command);
-      const arn = response.repositoryMetadata.Arn;
+      const response = await s3Client.send(command);
+      expect(response.Status).toBe('Enabled');
+    }, 30000);
 
-      expect(arn).toMatch(/^arn:aws:codecommit:/);
-      expect(arn).toContain(repositoryName);
+    test('source bucket should have encryption enabled', async () => {
+      const command = new GetBucketEncryptionCommand({
+        Bucket: sourceBucketName,
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(response.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
     }, 30000);
   });
 

@@ -26,8 +26,8 @@ describe('TapStack', () => {
       const customStack = new TapStack(customApp, 'CustomStack', { environmentSuffix: 'prod' });
       const customTemplate = Template.fromStack(customStack);
       
-      customTemplate.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: 'healthcare-application-prod',
+      customTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'healthcare-pipeline-prod',
       });
     });
 
@@ -36,22 +36,29 @@ describe('TapStack', () => {
       const defaultStack = new TapStack(defaultApp, 'DefaultStack', {});
       const defaultTemplate = Template.fromStack(defaultStack);
       
-      defaultTemplate.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: Match.stringLikeRegexp('healthcare-application-.*'),
+      defaultTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: Match.stringLikeRegexp('healthcare-pipeline-.*'),
       });
     });
   });
 
-  describe('CodeCommit Repository', () => {
-    test('should create CodeCommit repository with correct properties', () => {
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: `healthcare-application-${environmentSuffix}`,
-        RepositoryDescription: 'Repository for healthcare application',
+  describe('Source Bucket', () => {
+    test('should create S3 source bucket with encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
       });
     });
 
-    test('should create exactly one CodeCommit repository', () => {
-      template.resourceCountIs('AWS::CodeCommit::Repository', 1);
+    test('should create exactly two S3 buckets', () => {
+      template.resourceCountIs('AWS::S3::Bucket', 2);
     });
   });
 
@@ -89,8 +96,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create exactly one S3 bucket for artifacts', () => {
-      template.resourceCountIs('AWS::S3::Bucket', 1);
+    test('should have versioning enabled on buckets', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucketConfigs = Object.values(buckets);
+      expect(bucketConfigs.length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -271,7 +280,7 @@ describe('TapStack', () => {
       });
     });
 
-    test('should configure Source stage with CodeCommit', () => {
+    test('should configure Source stage with S3', () => {
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
         Stages: Match.arrayWith([
           Match.objectLike({
@@ -280,7 +289,7 @@ describe('TapStack', () => {
               Match.objectLike({
                 ActionTypeId: Match.objectLike({
                   Category: 'Source',
-                  Provider: 'CodeCommit',
+                  Provider: 'S3',
                 }),
                 Name: 'Source',
               }),
@@ -443,9 +452,9 @@ describe('TapStack', () => {
   });
 
   describe('Stack Outputs', () => {
-    test('should export CodeCommit repository URL', () => {
-      template.hasOutput('RepositoryCloneUrlHttp', {
-        Description: 'CodeCommit repository clone URL',
+    test('should export source bucket name', () => {
+      template.hasOutput('SourceBucketName', {
+        Description: 'S3 source bucket name (upload source.zip here)',
       });
     });
 
