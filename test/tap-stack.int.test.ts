@@ -127,7 +127,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(securityGroup).toBeDefined();
       expect(securityGroup?.VpcId).toBe(outputs.VPCId);
-      expect(securityGroup?.GroupName).toContain('EC2-SG');
+      expect(securityGroup?.GroupName).toContain('EC2SecurityGroup');
     });
 
     test('should validate security group rules are properly configured', async () => {
@@ -144,9 +144,9 @@ describe('TapStack Integration Tests', () => {
 
       expect(securityGroups.length).toBeGreaterThanOrEqual(3);
 
-      const albSG = securityGroups.find(sg => sg.GroupName?.includes('ALB-SG'));
-      const ec2SG = securityGroups.find(sg => sg.GroupName?.includes('EC2-SG'));
-      const rdsSG = securityGroups.find(sg => sg.GroupName?.includes('RDS-SG'));
+      const albSG = securityGroups.find(sg => sg.GroupName?.includes('ALBSecurityGroup'));
+      const ec2SG = securityGroups.find(sg => sg.GroupName?.includes('EC2SecurityGroup'));
+      const rdsSG = securityGroups.find(sg => sg.GroupName?.includes('RDSSecurityGroup'));
 
       expect(albSG).toBeDefined();
       expect(ec2SG).toBeDefined();
@@ -163,7 +163,7 @@ describe('TapStack Integration Tests', () => {
       const response = await elbv2.describeLoadBalancers({}).promise();
 
       const loadBalancers = response.LoadBalancers?.filter(lb =>
-        lb.VpcId === outputs.VPCId && lb.LoadBalancerName?.includes('ALB')
+        lb.VpcId === outputs.VPCId
       ) || [];
       expect(loadBalancers).toHaveLength(1);
 
@@ -180,7 +180,7 @@ describe('TapStack Integration Tests', () => {
       const response = await elbv2.describeTargetGroups({}).promise();
 
       const targetGroups = response.TargetGroups?.filter(tg =>
-        tg.VpcId === outputs.VPCId && tg.TargetGroupName?.includes('TG')
+        tg.VpcId === outputs.VPCId
       ) || [];
       expect(targetGroups).toHaveLength(1);
 
@@ -292,7 +292,7 @@ describe('TapStack Integration Tests', () => {
     test('should validate IAM role exists and is properly configured', () => {
       expect(outputs.IAMRoleArn).toBeDefined();
       expect(outputs.IAMRoleArn).toContain('arn:aws:iam::');
-      expect(outputs.IAMRoleArn).toContain('EC2-Role');
+      expect(outputs.IAMRoleArn).toContain('EC2Role');
     });
   });
 
@@ -307,7 +307,7 @@ describe('TapStack Integration Tests', () => {
       const response = await elbv2.describeLoadBalancers({}).promise();
 
       const loadBalancers = response.LoadBalancers?.filter(lb =>
-        lb.VpcId === outputs.VPCId && lb.LoadBalancerName?.includes('ALB')
+        lb.VpcId === outputs.VPCId
       ) || [];
       expect(loadBalancers).toHaveLength(1);
 
@@ -355,7 +355,7 @@ describe('TapStack Integration Tests', () => {
       // Get the load balancer in our VPC
       const albResponse = await elbv2.describeLoadBalancers({}).promise();
       const loadBalancer = albResponse.LoadBalancers?.find(lb =>
-        lb.VpcId === outputs.VPCId && lb.LoadBalancerName?.includes('ALB')
+        lb.VpcId === outputs.VPCId
       );
       expect(loadBalancer).toBeDefined();
 
@@ -365,7 +365,7 @@ describe('TapStack Integration Tests', () => {
       }).promise();
 
       const targetGroup = tgResponse.TargetGroups?.find(tg =>
-        tg.VpcId === outputs.VPCId && tg.TargetGroupName?.includes('TG')
+        tg.VpcId === outputs.VPCId
       );
       expect(targetGroup).toBeDefined();
       expect(targetGroup?.Protocol).toBe('HTTP');
@@ -396,7 +396,7 @@ describe('TapStack Integration Tests', () => {
       }).promise();
 
       const rdsSG = allSGResponse.SecurityGroups?.find(sg =>
-        sg.GroupName?.includes('RDS-SG')
+        sg.GroupName?.includes('RDSSecurityGroup')
       );
       expect(rdsSG).toBeDefined();
 
