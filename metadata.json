@@ -10,5 +10,6 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, S3, IAM, RDS, MFA, CloudWatch"
+  "aws_services": ["VPC", "EC2", "RDS", "Lambda", "IAM", "S3", "SecretsManager", "CloudWatch", "SNS"],
+  "training_quality": 7
 }
