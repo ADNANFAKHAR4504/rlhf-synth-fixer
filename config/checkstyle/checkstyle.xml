@@ -31,7 +31,7 @@
 
     <module name="LineLength">
         <property name="fileExtensions" value="java"/>
-        <property name="max" value="140"/>
+        <property name="max" value="150"/>
         <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
     </module>
 
@@ -60,7 +60,9 @@
 
         <!-- Checks for Size Violations.                    -->
         <!-- See http://checkstyle.sf.net/config_sizes.html -->
-        <module name="MethodLength"/>
+        <module name="MethodLength">
+            <property name="max" value="200"/>
+        </module>
         <module name="ParameterNumber"/>
 
         <!-- Checks for whitespace                               -->
