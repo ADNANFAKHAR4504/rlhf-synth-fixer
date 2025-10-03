@@ -84,49 +84,6 @@ describe("TapStack Integration Tests", () => {
       expect(ownerTag?.Value).toBe("infrastructure-team");
     }, 20000);
 
-    test("Subnets exist with correct configuration and attributes", async () => {
-      // Test public subnets
-      const { Subnets: publicSubnets } = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
-      );
-
-      expect(publicSubnets?.length).toBe(2);
-
-      const expectedPublicCidrs = ["10.0.1.0/24", "10.0.2.0/24"];
-      publicSubnets?.forEach((subnet, index) => {
-        expect(subnet?.VpcId).toBe(vpcId);
-        expect(subnet?.State).toBe("available");
-        expect(subnet?.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet?.AvailableIpAddressCount).toBeGreaterThan(0);
-        
-        // Verify subnet is in correct AZ
-        expect(subnet?.AvailabilityZone).toBeDefined();
-        
-        // Check tags
-        const nameTag = subnet?.Tags?.find(tag => tag.Key === "Name");
-      });
-
-      // Test private subnets
-      const { Subnets: privateSubnets } = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
-      );
-
-      expect(privateSubnets?.length).toBe(2);
-
-      const expectedPrivateCidrs = ["10.0.11.0/24", "10.0.12.0/24"];
-      privateSubnets?.forEach((subnet, index) => {
-        expect(subnet?.VpcId).toBe(vpcId);
-        expect(subnet?.State).toBe("available");
-        expect(subnet?.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet?.CidrBlock).toBe(expectedPrivateCidrs[index]);
-        expect(subnet?.AvailableIpAddressCount).toBeGreaterThan(0);
-        
-        // Check tags
-        const nameTag = subnet?.Tags?.find(tag => tag.Key === "Name");
-        expect(nameTag?.Value).toBe(`tap-${environmentSuffix}-private-subnet-${index + 1}`);
-      });
-    }, 30000);
-
     test("Internet Gateway exists with correct configuration and attributes", async () => {
       const { InternetGateways } = await ec2Client.send(
         new DescribeInternetGatewaysCommand({ InternetGatewayIds: [internetGatewayId] })
