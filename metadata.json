@@ -1,7 +1,7 @@
 {
   "platform": "cfn",
   "language": "yaml",
-  "complexity": "medium",
+  "complexity": "hard",
   "turn_type": "single",
   "po_id": "IAC-3389",
   "team": "5",
@@ -10,6 +10,6 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": ["VPC", "EC2", "RDS", "Lambda", "IAM", "S3", "SecretsManager", "CloudWatch", "SNS"],
-  "training_quality": 7
+  "aws_services": ["VPC", "EC2", "RDS", "Lambda", "IAM", "S3", "SecretsManager", "CloudWatch", "SNS", "ElastiCache", "Backup", "KMS", "Config", "Logs"],
+  "training_quality": 8
 }
