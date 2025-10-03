@@ -291,7 +291,7 @@
                     "Fn::Sub": "survey-submission-${EnvironmentSuffix}"
                 },
                 "Runtime": "python3.10",
-                "Handler": "submission_handler.handler",
+                "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
@@ -319,7 +319,7 @@
                     "Fn::Sub": "survey-aggregation-${EnvironmentSuffix}"
                 },
                 "Runtime": "python3.10",
-                "Handler": "aggregation_handler.handler",
+                "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
@@ -353,7 +353,7 @@
                     "Fn::Sub": "survey-backup-${EnvironmentSuffix}"
                 },
                 "Runtime": "python3.10",
-                "Handler": "backup_handler.handler",
+                "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",

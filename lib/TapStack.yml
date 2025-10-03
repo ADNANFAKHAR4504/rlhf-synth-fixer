@@ -176,7 +176,7 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-submission-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: submission_handler.handler
+      Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       Environment:
@@ -295,7 +295,7 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-aggregation-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: aggregation_handler.handler
+      Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 120
       Environment:
@@ -469,7 +469,7 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-backup-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: backup_handler.handler
+      Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       Environment:

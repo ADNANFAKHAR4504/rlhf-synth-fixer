@@ -256,7 +256,7 @@ describe('Survey Data Platform CloudFormation Template', () => {
         'Fn::Sub': 'survey-submission-${EnvironmentSuffix}',
       });
       expect(func.Properties.Runtime).toBe('python3.10');
-      expect(func.Properties.Handler).toBe('submission_handler.handler');
+      expect(func.Properties.Handler).toBe('index.handler');
     });
 
     test('SubmissionFunction should have correct environment variables', () => {
