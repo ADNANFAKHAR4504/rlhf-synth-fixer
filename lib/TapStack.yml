@@ -604,7 +604,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'BookingPlatform-ALB-${EnvironmentSuffix}'
+      Name: !Sub 'BP-ALB-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -627,7 +627,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'BookingPlatform-TG-${EnvironmentSuffix}'
+      Name: !Sub 'BP-TG-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC

@@ -1064,7 +1064,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "BookingPlatform-ALB-${EnvironmentSuffix}"
+          "Fn::Sub": "BP-ALB-${EnvironmentSuffix}"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -1111,7 +1111,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "BookingPlatform-TG-${EnvironmentSuffix}"
+          "Fn::Sub": "BP-TG-${EnvironmentSuffix}"
         },
         "Port": 80,
         "Protocol": "HTTP",
