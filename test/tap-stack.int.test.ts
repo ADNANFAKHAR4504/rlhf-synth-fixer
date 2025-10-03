@@ -4,7 +4,7 @@ import { CloudWatchClient, GetDashboardCommand } from '@aws-sdk/client-cloudwatc
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
-import fs from 'fs';
+import * as fs from 'fs';
 
 // Load outputs if available
 let outputs: any = {};
@@ -44,14 +44,25 @@ describe('Secure eBook Delivery System Integration Tests', () => {
   // Helper function to check if we can run AWS API tests
   const canRunAWSTests = () => {
     if (!hasAWS) {
-      console.warn('AWS credentials not available - skipping AWS API tests');
       return false;
     }
     if (!hasDeployedResources) {
-      console.warn('No deployed resources available - skipping AWS API tests');
       return false;
     }
     return true;
+  };
+
+  // Log warnings once at the beginning
+  let awsStatusLogged = false;
+  const logAWSTestStatus = () => {
+    if (awsStatusLogged) return;
+
+    if (!hasAWS) {
+      console.warn('AWS credentials not available - skipping AWS API tests');
+    } else if (!hasDeployedResources) {
+      console.warn('No deployed resources available - skipping AWS API tests');
+    }
+    awsStatusLogged = true;
   };
 
   // Global setup for CI/CD environment
@@ -188,9 +199,7 @@ describe('Secure eBook Delivery System Integration Tests', () => {
     });
 
     beforeEach(() => {
-      if (!canRunAWSTests()) {
-        console.warn('Skipping CloudFront tests - AWS credentials or deployed resources not available');
-      }
+      logAWSTestStatus();
     });
 
     test('should successfully access CloudFront distribution', async () => {
