@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410120",
+  "team": "4",
+  "startedAt": "2025-10-03T08:10:24.463Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "EventBridge",
+    "CloudWatch",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
