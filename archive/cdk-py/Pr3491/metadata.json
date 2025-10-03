@@ -10,5 +10,18 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "lambda, s3, api-gateway, dynamodb"
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
