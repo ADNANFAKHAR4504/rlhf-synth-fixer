@@ -1246,38 +1246,38 @@ Outputs:
   # VPC Outputs
   PrimaryVPCId:
     Description: 'Primary VPC ID'
-    Value: !If [IsPrimaryRegion, !Ref PrimaryVPC, '']
+    Value: !Ref PrimaryVPC
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryVPCId'
 
   PrimaryPrivateSubnet1Id:
     Description: 'Primary Private Subnet 1 ID'
-    Value: !If [IsPrimaryRegion, !Ref PrimaryPrivateSubnet1, '']
+    Value: !Ref PrimaryPrivateSubnet1
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryPrivateSubnet1Id'
 
   PrimaryPrivateSubnet2Id:
     Description: 'Primary Private Subnet 2 ID'
-    Value: !If [IsPrimaryRegion, !Ref PrimaryPrivateSubnet2, '']
+    Value: !Ref PrimaryPrivateSubnet2
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryPrivateSubnet2Id'
 
   # Database Outputs
   PrimaryDatabaseIdentifier:
     Description: 'Primary Database Instance Identifier'
-    Value: !If [IsPrimaryRegion, !Ref PrimaryDatabase, '']
+    Value: !Ref PrimaryDatabase
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryDatabaseIdentifier'
 
   PrimaryDatabaseEndpoint:
     Description: 'Primary Database Endpoint'
-    Value: !If [IsPrimaryRegion, !GetAtt PrimaryDatabase.Endpoint.Address, '']
+    Value: !GetAtt PrimaryDatabase.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryDatabaseEndpoint'
 
   PrimaryDatabasePort:
     Description: 'Primary Database Port'
-    Value: !If [IsPrimaryRegion, !GetAtt PrimaryDatabase.Endpoint.Port, '']
+    Value: !GetAtt PrimaryDatabase.Endpoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryDatabasePort'
 
@@ -1324,26 +1324,26 @@ Outputs:
   # Load Balancer Outputs
   ApplicationLoadBalancerDNSName:
     Description: 'Application Load Balancer DNS Name'
-    Value: !If [IsPrimaryRegion, !GetAtt ApplicationLoadBalancer.DNSName, '']
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerDNSName'
 
   ApplicationLoadBalancerArn:
     Description: 'Application Load Balancer ARN'
-    Value: !If [IsPrimaryRegion, !Ref ApplicationLoadBalancer, '']
+    Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerArn'
 
   # KMS Outputs
   PrimaryKMSKeyId:
     Description: 'Primary KMS Key ID'
-    Value: !If [IsPrimaryRegion, !Ref PrimaryKMSKey, '']
+    Value: !Ref PrimaryKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryKMSKeyId'
 
   PrimaryKMSKeyArn:
     Description: 'Primary KMS Key ARN'
-    Value: !If [IsPrimaryRegion, !GetAtt PrimaryKMSKey.Arn, '']
+    Value: !GetAtt PrimaryKMSKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryKMSKeyArn'
 
@@ -1359,13 +1359,6 @@ Outputs:
     Value: !Ref BackupVault
     Export:
       Name: !Sub '${AWS::StackName}-BackupVaultName'
-
-  # Health Check Outputs
-  ApplicationHealthCheckId:
-    Description: 'Application Health Check ID'
-    Value: !If [IsPrimaryRegion, !Ref ApplicationHealthCheck, '']
-    Export:
-      Name: !Sub '${AWS::StackName}-ApplicationHealthCheckId'
 
   # Systems Manager Outputs
   DRRunbookDocumentName:
