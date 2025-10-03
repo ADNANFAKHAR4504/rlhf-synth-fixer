@@ -6,6 +6,7 @@
 variable "aws_region" {
   description = "AWS region (passed from provider.tf)"
   type        = string
+  default     = "us-east-1"
 }
 
 variable "domain_name" {

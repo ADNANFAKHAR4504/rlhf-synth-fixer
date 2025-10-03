@@ -29,14 +29,14 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
-  test("aws_region variable does NOT have a default value", () => {
+  test("aws_region variable has a default value for ease of deployment", () => {
     const content = fs.readFileSync(stackPath, "utf8");
     const awsRegionVarBlock = content.match(
       /variable\s+"aws_region"\s*{[^}]*}/s
     );
     expect(awsRegionVarBlock).toBeTruthy();
-    // Should not contain 'default =' in the aws_region variable block
-    expect(awsRegionVarBlock![0]).not.toMatch(/default\s*=/);
+    // Should contain a default value for practical deployment
+    expect(awsRegionVarBlock![0]).toMatch(/default\s*=\s*"us-east-1"/);
   });
 
   // --- S3 Bucket Tests ---
