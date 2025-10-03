@@ -171,9 +171,6 @@
             },
             "TOPIC_ARN": {
               "Ref": "AppointmentReminderTopic"
-            },
-            "AWS_REGION": {
-              "Ref": "AWS::Region"
             }
           }
         },
