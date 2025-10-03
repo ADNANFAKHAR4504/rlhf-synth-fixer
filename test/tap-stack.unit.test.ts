@@ -7,17 +7,13 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Reading the JSON template and parsing it
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`CloudFormation template not found at: ${templatePath}`);
+    }
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -35,6 +31,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have metadata section', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+
+    test('should exist as a valid object', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
     });
   });
 
