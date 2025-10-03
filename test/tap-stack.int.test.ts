@@ -32,16 +32,9 @@ import {
 } from '@aws-sdk/client-lambda';
 import axios from 'axios';
 
-// Load outputs from the deployment
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-// Extract from actual deployed resources to ensure tests work correctly
-const environmentSuffix = outputs.WebsiteBucketName ?
-  outputs.WebsiteBucketName.split('-').pop() :
-  (process.env.ENVIRONMENT_SUFFIX || 'dev');
+// Load outputs from the deployment (lazy load in beforeAll)
+let outputs: any;
+let environmentSuffix: string;
 
 // Initialize AWS SDK clients
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
@@ -51,16 +44,28 @@ const wafClient = new WAFV2Client({ region: 'us-east-1' }); // WAF for CloudFron
 const lambdaClient = new LambdaClient({ region: 'us-east-1' }); // Lambda@Edge is in us-east-1
 
 describe('Static Website Infrastructure Integration Tests', () => {
+  beforeAll(() => {
+    // Load outputs from the deployment
+    outputs = JSON.parse(
+      fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+    );
+
+    // Get environment suffix from environment variable (set by CI/CD pipeline)
+    // Extract from actual deployed resources to ensure tests work correctly
+    environmentSuffix = outputs.WebsiteBucketName ?
+      outputs.WebsiteBucketName.split('-').pop() :
+      (process.env.ENVIRONMENT_SUFFIX || 'dev');
+  });
 
   describe('S3 Website Bucket Tests', () => {
-    const bucketName = outputs.WebsiteBucketName;
-
     test('website bucket should exist and be accessible', async () => {
+      const bucketName = outputs.WebsiteBucketName;
       const command = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(command)).resolves.toBeDefined();
     });
 
     test('website bucket should have website configuration', async () => {
+      const bucketName = outputs.WebsiteBucketName;
       const command = new GetBucketWebsiteCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -69,6 +74,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('website bucket should allow public read access', async () => {
+      const bucketName = outputs.WebsiteBucketName;
       const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -77,6 +83,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('website bucket should have bucket policy', async () => {
+      const bucketName = outputs.WebsiteBucketName;
       const command = new GetBucketPolicyCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -101,6 +108,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('should be able to upload and retrieve objects from website bucket', async () => {
+      const bucketName = outputs.WebsiteBucketName;
       const testKey = 'test-file.html';
       const testContent = '<html><body><h1>Test Page</h1></body></html>';
 
@@ -134,14 +142,14 @@ describe('Static Website Infrastructure Integration Tests', () => {
   });
 
   describe('S3 Logs Bucket Tests', () => {
-    const bucketName = outputs.LogsBucketName;
-
     test('logs bucket should exist and be accessible', async () => {
+      const bucketName = outputs.LogsBucketName;
       const command = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(command)).resolves.toBeDefined();
     });
 
     test('logs bucket should have lifecycle configuration', async () => {
+      const bucketName = outputs.LogsBucketName;
       const command = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -154,6 +162,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('logs bucket should have restricted public access', async () => {
+      const bucketName = outputs.LogsBucketName;
       const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
       const response = await s3Client.send(command);
 
@@ -163,10 +172,9 @@ describe('Static Website Infrastructure Integration Tests', () => {
   });
 
   describe('CloudFront Distribution Tests', () => {
-    const distributionId = outputs.CloudFrontDistributionId;
-    const domainName = outputs.CloudFrontDomainName;
-
     test('CloudFront distribution should exist and be deployed', async () => {
+      const distributionId = outputs.CloudFrontDistributionId;
+      const domainName = outputs.CloudFrontDomainName;
       const command = new GetDistributionCommand({ Id: distributionId });
       const response = await cloudFrontClient.send(command);
 
@@ -176,6 +184,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('CloudFront distribution should have correct configuration', async () => {
+      const distributionId = outputs.CloudFrontDistributionId;
       const command = new GetDistributionConfigCommand({ Id: distributionId });
       const response = await cloudFrontClient.send(command);
       const config = response.DistributionConfig;
@@ -209,6 +218,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('CloudFront distribution should redirect HTTP to HTTPS', async () => {
+      const domainName = outputs.CloudFrontDomainName;
       const httpUrl = `http://${domainName}`;
 
       try {
@@ -305,10 +315,9 @@ describe('Static Website Infrastructure Integration Tests', () => {
   });
 
   describe('End-to-End Website Workflow Tests', () => {
-    const websiteBucket = outputs.WebsiteBucketName;
-    const websiteUrl = outputs.WebsiteURL;
-
     test('should be able to deploy a simple website and access it via CloudFront', async () => {
+      const websiteBucket = outputs.WebsiteBucketName;
+      const websiteUrl = outputs.WebsiteURL;
       // Create a simple index.html
       const indexContent = `
         <!DOCTYPE html>
@@ -353,6 +362,8 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('should serve error page for missing resources', async () => {
+      const websiteBucket = outputs.WebsiteBucketName;
+      const websiteUrl = outputs.WebsiteURL;
       // Create an error.html page
       const errorContent = `
         <!DOCTYPE html>
