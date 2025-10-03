@@ -21,7 +21,8 @@ import {
 import { 
   APIGatewayClient, 
   GetRestApiCommand, 
-  GetStageCommand 
+  GetStageCommand,
+  GetApiKeyCommand 
 } from '@aws-sdk/client-api-gateway';
 import { 
   CloudWatchClient, 
@@ -49,7 +50,10 @@ try {
     ApiStageName: 'dev',
     DynamoDBTableName: 'SurveyResponses-dev',
     BackupBucketName: 'survey-backups-123456789012-dev',
-    DashboardURL: 'https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=survey-dashboard-dev'
+    DashboardURL: 'https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=survey-dashboard-dev',
+    ApiKeyId: 'mock-api-key-id',
+    KmsKeyId: 'mock-kms-key-id',
+    WebACLArn: 'arn:aws:wafv2:us-east-1:123456789012:regional/webacl/mock-waf/mock-id'
   };
 }
 
@@ -64,6 +68,39 @@ const lambdaClient = new LambdaClient({ region });
 const apiGatewayClient = new APIGatewayClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
 const snsClient = new SNSClient({ region });
+
+// Helper function to get API key value for authentication
+const getApiKeyValue = async (): Promise<string | null> => {
+  if (!outputs.ApiKeyId || outputs.ApiKeyId === 'mock-api-key-id') {
+    return null; // For mock testing or when API key is not available
+  }
+  
+  try {
+    const command = new GetApiKeyCommand({
+      apiKey: outputs.ApiKeyId,
+      includeValue: true
+    });
+    const response = await apiGatewayClient.send(command);
+    return response.value || null;
+  } catch (error) {
+    console.warn('Failed to retrieve API key value:', error);
+    return null;
+  }
+};
+
+// Helper function to create authenticated HTTP headers
+const createAuthenticatedHeaders = async () => {
+  const headers: any = {
+    'Content-Type': 'application/json'
+  };
+  
+  const apiKeyValue = await getApiKeyValue();
+  if (apiKeyValue) {
+    headers['x-api-key'] = apiKeyValue;
+  }
+  
+  return headers;
+};
 
 // Helper function to generate test data
 const generateTestSurveyResponse = (surveyId: string, respondentId?: string) => ({
@@ -105,10 +142,9 @@ describeTest('Survey Data Platform Integration Tests', () => {
       const testData = generateTestSurveyResponse('survey-123');
       
       // Submit survey response via API Gateway
+      const headers = await createAuthenticatedHeaders();
       const response = await axios.post(outputs.ApiEndpoint, testData, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         timeout: 10000
       });
       
@@ -137,7 +173,8 @@ describeTest('Survey Data Platform Integration Tests', () => {
       const testData = generateTestSurveyResponse(surveyId);
       
       // Submit test response
-      const response = await axios.post(outputs.ApiEndpoint, testData);
+      const headers = await createAuthenticatedHeaders();
+      const response = await axios.post(outputs.ApiEndpoint, testData, { headers });
       const responseId = response.data.responseId;
       testResponseIds.push(responseId);
       
@@ -163,7 +200,8 @@ describeTest('Survey Data Platform Integration Tests', () => {
       const testData = generateTestSurveyResponse('survey-integrity-test', 'respondent-integrity');
       
       // Submit survey response
-      const response = await axios.post(outputs.ApiEndpoint, testData);
+      const headers = await createAuthenticatedHeaders();
+      const response = await axios.post(outputs.ApiEndpoint, testData, { headers });
       const responseId = response.data.responseId;
       testResponseIds.push(responseId);
       
@@ -205,7 +243,8 @@ describeTest('Survey Data Platform Integration Tests', () => {
       };
       
       try {
-        await axios.post(outputs.ApiEndpoint, invalidPayload);
+        const headers = await createAuthenticatedHeaders();
+        await axios.post(outputs.ApiEndpoint, invalidPayload, { headers });
         fail('Expected request to fail with 400 error');
       } catch (error: any) {
         expect(error.response.status).toBe(400);
@@ -216,11 +255,12 @@ describeTest('Survey Data Platform Integration Tests', () => {
 
     test('API Throttling Enforcement: Execute burst of requests to verify 429 throttling', async () => {
       const testData = generateTestSurveyResponse('throttle-test');
+      const headers = await createAuthenticatedHeaders();
       const requests = [];
       
       // Create a burst of requests (more than the rate limit)
       for (let i = 0; i < 50; i++) {
-        requests.push(axios.post(outputs.ApiEndpoint, testData, { timeout: 5000 }));
+        requests.push(axios.post(outputs.ApiEndpoint, testData, { headers, timeout: 5000 }));
       }
       
       const results = await Promise.allSettled(requests);
@@ -248,8 +288,9 @@ describeTest('Survey Data Platform Integration Tests', () => {
       const malformedPayload = '{ "surveyId": "test", "responses": invalid-json }';
       
       try {
+        const headers = await createAuthenticatedHeaders();
         await axios.post(outputs.ApiEndpoint, malformedPayload, {
-          headers: { 'Content-Type': 'application/json' }
+          headers
         });
         fail('Expected request to fail with 500 error');
       } catch (error: any) {
@@ -264,7 +305,8 @@ describeTest('Survey Data Platform Integration Tests', () => {
     test('Daily Aggregation Success: Manually trigger aggregation Lambda and verify S3 output', async () => {
       // First, ensure we have some test data in the system
       const testData = generateTestSurveyResponse(`aggregation-test-${Date.now()}`);
-      const response = await axios.post(outputs.ApiEndpoint, testData);
+      const headers = await createAuthenticatedHeaders();
+      const response = await axios.post(outputs.ApiEndpoint, testData, { headers });
       testResponseIds.push(response.data.responseId);
       
       // Wait for data to be available
@@ -451,7 +493,8 @@ describeTest('Survey Data Platform Integration Tests', () => {
           `workflow-respondent-${i}`
         );
         
-        const response = await axios.post(outputs.ApiEndpoint, testData);
+        const headers = await createAuthenticatedHeaders();
+        const response = await axios.post(outputs.ApiEndpoint, testData, { headers });
         expect(response.status).toBe(201);
         testResponses.push(response.data.responseId);
       }

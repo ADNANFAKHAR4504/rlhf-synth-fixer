@@ -21,14 +21,57 @@ Parameters:
     Type: String
     Default: govardhan.y@turing.com
     Description: Admin email address for notifications
+    
+  ApiKeyName:
+    Type: String
+    Default: survey-api-key
+    Description: Name for the API Gateway API key
+    
+  KmsKeyRotation:
+    Type: String
+    Default: "true"
+    Description: Enable automatic KMS key rotation
+    AllowedValues: ["true", "false"]
 
 Resources:
+  # KMS Key for encryption
+  SurveyDataKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Survey Data Platform encryption
+      EnableKeyRotation: !Ref KmsKeyRotation
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow Lambda functions to use the key
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt LambdaExecutionRole.Arn
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+            Resource: "*"
+
+  SurveyDataKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/survey-data-${EnvironmentSuffix}"
+      TargetKeyId: !Ref SurveyDataKmsKey
+
   # DynamoDB Table with GSI for efficient querying
   SurveyResponseTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub "SurveyResponses-${EnvironmentSuffix}"
       BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        KMSMasterKeyId: !Ref SurveyDataKmsKey
       AttributeDefinitions:
         - AttributeName: responseId
           AttributeType: S
@@ -66,6 +109,17 @@ Resources:
       BucketName: !Sub "survey-backups-${AWS::AccountId}-${EnvironmentSuffix}"
       VersioningConfiguration:
         Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SurveyDataKmsKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
           - Id: TransitionToInfrequentAccess
@@ -109,6 +163,11 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref AdminNotificationTopic
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt SurveyDataKmsKey.Arn
 
   # Survey Submission Lambda
   SubmissionFunction:
@@ -116,19 +175,25 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-submission-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: index.handler
+      Handler: submission_handler.handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
       Environment:
         Variables:
           TABLE_NAME: !Ref SurveyResponseTable
           REGION: us-east-1
       Code:
-        ZipFile: |
+        ZipFile: !Sub |
           import json
           import boto3
           import uuid
           import os
           import datetime
+          import logging
+          
+          # Initialize logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
           
           # Initialize DynamoDB client
           dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
@@ -136,14 +201,33 @@ Resources:
           
           def handler(event, context):
               try:
+                  logger.info(f"Received event: {json.dumps(event, default=str)}")
+                  
                   # Parse request body
                   body = json.loads(event['body'])
                   
                   # Validate required fields
                   if 'surveyId' not in body or 'responses' not in body:
+                      logger.warning("Missing required fields in request")
                       return {
                           'statusCode': 400,
-                          'body': json.dumps({'error': 'Missing required fields'})
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Missing required fields: surveyId and responses are required'})
+                      }
+                  
+                  # Validate data types
+                  if not isinstance(body['responses'], dict):
+                      logger.warning("Invalid responses format - must be an object")
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Responses must be an object/dictionary'})
                       }
                   
                   # Generate unique ID and timestamp
@@ -155,7 +239,9 @@ Resources:
                       'responseId': response_id,
                       'surveyId': body['surveyId'],
                       'timestamp': timestamp,
-                      'responses': body['responses']
+                      'responses': body['responses'],
+                      'createdAt': timestamp,
+                      'source': 'api'
                   }
                   
                   # Add optional fields if present
@@ -165,14 +251,40 @@ Resources:
                   # Save to DynamoDB
                   table.put_item(Item=item)
                   
+                  logger.info(f"Successfully stored response with ID: {response_id}")
+                  
                   return {
                       'statusCode': 201,
-                      'body': json.dumps({'responseId': response_id})
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'responseId': response_id,
+                          'message': 'Survey response submitted successfully',
+                          'timestamp': timestamp
+                      })
                   }
+                  
+              except json.JSONDecodeError as e:
+                  logger.error(f"JSON decode error: {str(e)}")
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': 'Invalid JSON format in request body'})
+                  }
+                  
               except Exception as e:
-                  print(f"Error: {str(e)}")
+                  logger.error(f"Unexpected error: {str(e)}")
                   return {
                       'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
                       'body': json.dumps({'error': 'Internal server error'})
                   }
 
@@ -182,7 +294,7 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-aggregation-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: index.handler
+      Handler: aggregation_handler.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 120
       Environment:
@@ -192,12 +304,18 @@ Resources:
           TOPIC_ARN: !Ref AdminNotificationTopic
           REGION: us-east-1
       Code:
-        ZipFile: |
+        ZipFile: !Sub |
           import json
           import boto3
           import os
           import datetime
+          import logging
           from boto3.dynamodb.conditions import Key
+          from decimal import Decimal
+          
+          # Initialize logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
           
           # Initialize clients
           dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
@@ -205,78 +323,139 @@ Resources:
           sns = boto3.client('sns', region_name=os.environ['REGION'])
           table = dynamodb.Table(os.environ['TABLE_NAME'])
           
+          # Custom JSON encoder to handle Decimal types
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return int(obj) if obj % 1 == 0 else float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+          
           def handler(event, context):
               try:
+                  logger.info("Starting daily aggregation process")
+                  
                   # Get yesterday's date for aggregation
                   yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
                   
-                  # Get all survey responses from yesterday
+                  logger.info(f"Aggregating data for date: {yesterday}")
+                  
+                  # Get all survey responses with pagination
                   surveys = {}
+                  total_items_processed = 0
                   
-                  # Simplified example - would need pagination for production
-                  scan_response = table.scan(
-                      FilterExpression=Key('timestamp').begins_with(yesterday)
-                  )
+                  scan_kwargs = {
+                      'FilterExpression': Key('timestamp').begins_with(yesterday)
+                  }
                   
-                  # Group by survey ID
-                  for item in scan_response.get('Items', []):
-                      survey_id = item['surveyId']
-                      if survey_id not in surveys:
-                          surveys[survey_id] = []
-                      surveys[survey_id].append(item)
+                  while True:
+                      response = table.scan(**scan_kwargs)
+                      
+                      for item in response.get('Items', []):
+                          survey_id = item['surveyId']
+                          if survey_id not in surveys:
+                              surveys[survey_id] = []
+                          surveys[survey_id].append(item)
+                          total_items_processed += 1
+                      
+                      if 'LastEvaluatedKey' not in response:
+                          break
+                      scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+                  
+                  logger.info(f"Processed {total_items_processed} items across {len(surveys)} surveys")
                   
                   # Process aggregations for each survey
-                  aggregation_results = {}
+                  aggregation_results = {
+                      'date': yesterday,
+                      'generated_at': datetime.datetime.now().isoformat(),
+                      'total_surveys': len(surveys),
+                      'total_responses': total_items_processed,
+                      'survey_data': {}
+                  }
+                  
                   for survey_id, responses in surveys.items():
-                      # Simple count aggregation - real implementation would be more complex
                       question_counts = {}
+                      response_times = []
+                      respondent_ids = set()
                       
                       for response in responses:
+                          if 'respondentId' in response:
+                              respondent_ids.add(response['respondentId'])
+                          
+                          response_times.append(response['timestamp'])
+                          
                           for question, answer in response.get('responses', {}).items():
                               if question not in question_counts:
-                                  question_counts[question] = {}
+                                  question_counts[question] = {
+                                      'total_responses': 0,
+                                      'answer_distribution': {}
+                                  }
                               
-                              if answer not in question_counts[question]:
-                                  question_counts[question][answer] = 0
-                                  
-                              question_counts[question][answer] += 1
+                              question_counts[question]['total_responses'] += 1
+                              answer_str = str(answer)
+                              if answer_str not in question_counts[question]['answer_distribution']:
+                                  question_counts[question]['answer_distribution'][answer_str] = 0
+                              
+                              question_counts[question]['answer_distribution'][answer_str] += 1
                       
-                      aggregation_results[survey_id] = {
-                          'responseCount': len(responses),
-                          'questionCounts': question_counts
+                      aggregation_results['survey_data'][survey_id] = {
+                          'total_responses': len(responses),
+                          'unique_respondents': len(respondent_ids),
+                          'first_response': min(response_times) if response_times else None,
+                          'last_response': max(response_times) if response_times else None,
+                          'questions': question_counts
                       }
                   
                   # Save aggregation to S3
-                  s3_key = f"aggregations/{yesterday}.json"
+                  s3_key = f"aggregations/daily/{yesterday}-aggregation.json"
+                  
                   s3.put_object(
                       Bucket=os.environ['BUCKET_NAME'],
                       Key=s3_key,
-                      Body=json.dumps(aggregation_results),
+                      Body=json.dumps(aggregation_results, cls=DecimalEncoder, indent=2),
                       ContentType='application/json'
                   )
                   
-                  # Send notification
+                  logger.info(f"Aggregation saved to S3: {s3_key}")
+                  
+                  # Send success notification
+                  message = f"""Daily survey aggregation for {yesterday} completed successfully.
+
+          Summary:
+          - Date: {yesterday}
+          - Total Surveys: {len(surveys)}
+          - Total Responses: {total_items_processed}
+          - File: s3://{os.environ['BUCKET_NAME']}/{s3_key}
+
+          Generated: {aggregation_results['generated_at']}"""
+                  
                   sns.publish(
                       TopicArn=os.environ['TOPIC_ARN'],
                       Subject=f"Survey Aggregation Complete - {yesterday}",
-                      Message=f"Daily survey aggregation for {yesterday} is complete. " +
-                              f"Processed {len(surveys)} surveys with a total of {sum([len(r) for r in surveys.values()])} responses. " +
-                              f"Results stored at s3://{os.environ['BUCKET_NAME']}/{s3_key}"
+                      Message=message
                   )
                   
                   return {
                       'statusCode': 200,
-                      'body': json.dumps({'message': 'Aggregation complete'})
+                      'body': json.dumps({
+                          'message': 'Aggregation completed successfully',
+                          'date': yesterday,
+                          'total_surveys': len(surveys),
+                          'total_responses': total_items_processed
+                      })
                   }
-              except Exception as e:
-                  print(f"Error: {str(e)}")
                   
-                  # Send error notification
-                  sns.publish(
-                      TopicArn=os.environ['TOPIC_ARN'],
-                      Subject="Error: Survey Aggregation Failed",
-                      Message=f"An error occurred during survey aggregation: {str(e)}"
-                  )
+              except Exception as e:
+                  error_msg = f"Error during aggregation: {str(e)}"
+                  logger.error(error_msg)
+                  
+                  try:
+                      sns.publish(
+                          TopicArn=os.environ['TOPIC_ARN'],
+                          Subject="Error: Survey Aggregation Failed",
+                          Message=error_msg
+                      )
+                  except Exception as sns_error:
+                      logger.error(f"Failed to send error notification: {str(sns_error)}")
                   
                   return {
                       'statusCode': 500,
@@ -289,7 +468,7 @@ Resources:
     Properties:
       FunctionName: !Sub "survey-backup-${EnvironmentSuffix}"
       Runtime: python3.10
-      Handler: index.handler
+      Handler: backup_handler.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       Environment:
@@ -299,11 +478,17 @@ Resources:
           TOPIC_ARN: !Ref AdminNotificationTopic
           REGION: us-east-1
       Code:
-        ZipFile: |
+        ZipFile: !Sub |
           import json
           import boto3
           import os
           import datetime
+          import logging
+          from decimal import Decimal
+          
+          # Initialize logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
           
           # Initialize clients
           dynamodb = boto3.resource('dynamodb', region_name=os.environ['REGION'])
@@ -311,46 +496,130 @@ Resources:
           sns = boto3.client('sns', region_name=os.environ['REGION'])
           table = dynamodb.Table(os.environ['TABLE_NAME'])
           
+          # Custom JSON encoder to handle Decimal types
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return int(obj) if obj % 1 == 0 else float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+          
           def handler(event, context):
               try:
-                  # Get today's date for backup filename
-                  today = datetime.datetime.now().strftime('%Y-%m-%d')
+                  logger.info("Starting weekly backup process")
                   
-                  # Fetch all items from DynamoDB (would use pagination in production)
-                  response = table.scan()
-                  items = response.get('Items', [])
+                  # Get current date for backup filename
+                  today = datetime.datetime.now()
+                  backup_date = today.strftime('%Y-%m-%d')
+                  week_start = (today - datetime.timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+                  
+                  logger.info(f"Creating backup for week starting: {week_start}")
+                  
+                  # Fetch all items from DynamoDB with pagination
+                  items = []
+                  scan_kwargs = {}
+                  items_processed = 0
+                  
+                  while True:
+                      response = table.scan(**scan_kwargs)
+                      
+                      batch_items = response.get('Items', [])
+                      items.extend(batch_items)
+                      items_processed += len(batch_items)
+                      
+                      logger.info(f"Processed {items_processed} items so far...")
+                      
+                      if 'LastEvaluatedKey' not in response:
+                          break
+                      scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+                  
+                  logger.info(f"Total items retrieved: {len(items)}")
+                  
+                  # Create backup metadata
+                  backup_metadata = {
+                      'backup_date': backup_date,
+                      'backup_timestamp': today.isoformat(),
+                      'week_start': week_start,
+                      'total_records': len(items),
+                      'table_name': os.environ['TABLE_NAME'],
+                      'backup_type': 'weekly_full',
+                      'generated_by': 'survey-backup-lambda'
+                  }
+                  
+                  # Organize data by date for better structure
+                  backup_data = {
+                      'metadata': backup_metadata,
+                      'data': items
+                  }
                   
                   # Save to S3
-                  s3_key = f"backups/full-backup-{today}.json"
+                  s3_key = f"backups/weekly/week-{week_start}-backup.json"
+                  
                   s3.put_object(
                       Bucket=os.environ['BUCKET_NAME'],
                       Key=s3_key,
-                      Body=json.dumps(items),
-                      ContentType='application/json'
+                      Body=json.dumps(backup_data, cls=DecimalEncoder, indent=2),
+                      ContentType='application/json',
+                      Metadata={
+                          'backup-date': backup_date,
+                          'week-start': week_start,
+                          'record-count': str(len(items)),
+                          'backup-type': 'weekly-full'
+                      }
                   )
                   
-                  # Send notification
+                  # Calculate survey statistics
+                  survey_counts = {}
+                  for item in items:
+                      survey_id = item.get('surveyId', 'unknown')
+                      survey_counts[survey_id] = survey_counts.get(survey_id, 0) + 1
+                  
+                  logger.info(f"Backup saved to S3: {s3_key}")
+                  
+                  # Send success notification
+                  message = f"""Weekly survey data backup completed successfully.
+
+          Backup Details:
+          - Week Starting: {week_start}
+          - Backup Date: {backup_date}
+          - Total Records: {len(items):,}
+          - File: s3://{os.environ['BUCKET_NAME']}/{s3_key}
+
+          Survey Distribution:
+          {chr(10).join([f"- {survey_id}: {count:,} responses" for survey_id, count in sorted(survey_counts.items())])}
+
+          Generated: {backup_metadata['backup_timestamp']}"""
+                  
                   sns.publish(
                       TopicArn=os.environ['TOPIC_ARN'],
-                      Subject=f"Survey Data Backup Complete - {today}",
-                      Message=f"Full survey data backup is complete. " +
-                              f"Backed up {len(items)} records. " +
-                              f"Backup stored at s3://{os.environ['BUCKET_NAME']}/{s3_key}"
+                      Subject=f"Survey Data Backup Complete - Week of {week_start}",
+                      Message=message
                   )
+                  
+                  logger.info("Success notification sent")
                   
                   return {
                       'statusCode': 200,
-                      'body': json.dumps({'message': 'Backup complete'})
+                      'body': json.dumps({
+                          'message': 'Backup completed successfully',
+                          'backup_date': backup_date,
+                          'week_start': week_start,
+                          'total_records': len(items),
+                          'backup_location': f"s3://{os.environ['BUCKET_NAME']}/{s3_key}"
+                      })
                   }
-              except Exception as e:
-                  print(f"Error: {str(e)}")
                   
-                  # Send error notification
-                  sns.publish(
-                      TopicArn=os.environ['TOPIC_ARN'],
-                      Subject="Error: Survey Backup Failed",
-                      Message=f"An error occurred during survey backup: {str(e)}"
-                  )
+              except Exception as e:
+                  error_msg = f"Error during backup: {str(e)}"
+                  logger.error(error_msg)
+                  
+                  try:
+                      sns.publish(
+                          TopicArn=os.environ['TOPIC_ARN'],
+                          Subject="Error: Survey Data Backup Failed",
+                          Message=error_msg
+                      )
+                  except Exception as sns_error:
+                      logger.error(f"Failed to send error notification: {str(sns_error)}")
                   
                   return {
                       'statusCode': 500,
@@ -385,6 +654,7 @@ Resources:
       ResourceId: !Ref SubmitResource
       HttpMethod: POST
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -418,6 +688,14 @@ Resources:
           DataTraceEnabled: true
           MetricsEnabled: true
 
+  # API Key for authentication
+  SurveyApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub "${ApiKeyName}-${EnvironmentSuffix}"
+      Description: "API Key for Survey Data Platform"
+      Enabled: true
+
   # API Gateway Usage Plan with throttling limits
   ApiUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
@@ -430,6 +708,73 @@ Resources:
       Throttle:
         BurstLimit: !Ref ApiRateLimit
         RateLimit: !Ref ApiRateLimit
+
+  # Link API Key to Usage Plan
+  ApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref SurveyApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiUsagePlan
+
+  # WAF Web ACL for API protection
+  SurveyApiWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "survey-api-waf-${EnvironmentSuffix}"
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Description: "WAF for Survey API protection"
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: KnownBadInputsRuleSetMetric
+        - Name: RateLimitRule
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRuleMetric
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "survey-api-waf-${EnvironmentSuffix}"
+
+  # Associate WAF with API Gateway Stage
+  ApiWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ApiStage
+    Properties:
+      ResourceArn: !Sub "arn:aws:apigateway:us-east-1::/restapis/${SurveyApi}/stages/${Environment}"
+      WebACLArn: !GetAtt SurveyApiWebACL.Arn
 
   # Lambda permissions for API Gateway
   SubmissionFunctionPermission:
@@ -615,3 +960,21 @@ Outputs:
     Value: !Sub "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${SurveyDashboard}"
     Export:
       Name: !Sub "${AWS::StackName}-DashboardURL"
+      
+  ApiKeyId:
+    Description: "API Gateway API Key ID"
+    Value: !Ref SurveyApiKey
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiKeyId"
+      
+  KmsKeyId:
+    Description: "KMS Key ID for encryption"
+    Value: !Ref SurveyDataKmsKey
+    Export:
+      Name: !Sub "${AWS::StackName}-KmsKeyId"
+      
+  WebACLArn:
+    Description: "WAF Web ACL ARN"
+    Value: !GetAtt SurveyApiWebACL.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebACLArn"

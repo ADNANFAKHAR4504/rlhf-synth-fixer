@@ -21,9 +21,69 @@
             "Type": "String",
             "Default": "govardhan.y@turing.com",
             "Description": "Admin email address for notifications"
+        },
+        "ApiKeyName": {
+            "Type": "String",
+            "Default": "survey-api-key",
+            "Description": "Name for the API Gateway API key"
+        },
+        "KmsKeyRotation": {
+            "Type": "String",
+            "Default": "true",
+            "Description": "Enable automatic KMS key rotation",
+            "AllowedValues": ["true", "false"]
         }
     },
     "Resources": {
+        "SurveyDataKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for Survey Data Platform encryption",
+                "EnableKeyRotation": {
+                    "Ref": "KmsKeyRotation"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Lambda functions to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "SurveyDataKmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/survey-data-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "SurveyDataKmsKey"
+                }
+            }
+        },
         "SurveyResponseTable": {
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
@@ -88,7 +148,13 @@
                             "ProjectionType": "ALL"
                         }
                     }
-                ]
+                ],
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "KMSMasterKeyId": {
+                        "Ref": "SurveyDataKmsKey"
+                    }
+                }
             }
         },
         "BackupBucket": {
@@ -99,6 +165,25 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "SurveyDataKmsKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
                 },
                 "LifecycleConfiguration": {
                     "Rules": [
@@ -326,6 +411,7 @@
                 },
                 "HttpMethod": "POST",
                 "AuthorizationType": "NONE",
+                "ApiKeyRequired": true,
                 "Integration": {
                     "Type": "AWS_PROXY",
                     "IntegrationHttpMethod": "POST",
@@ -629,6 +715,42 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-DashboardURL"
+                }
+            }
+        },
+        "ApiKeyId": {
+            "Description": "API Gateway API Key ID",
+            "Value": {
+                "Ref": "SurveyApiKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiKeyId"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Ref": "SurveyDataKmsKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyId"
+                }
+            }
+        },
+        "WebACLArn": {
+            "Description": "WAF Web ACL ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SurveyApiWebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebACLArn"
                 }
             }
         }

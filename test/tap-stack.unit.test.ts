@@ -67,9 +67,28 @@ describe('Survey Data Platform CloudFormation Template', () => {
       );
     });
 
-    test('should have exactly 4 parameters', () => {
+    test('should have ApiKeyName parameter', () => {
+      expect(template.Parameters.ApiKeyName).toBeDefined();
+      expect(template.Parameters.ApiKeyName.Type).toBe('String');
+      expect(template.Parameters.ApiKeyName.Default).toBe('survey-api-key');
+      expect(template.Parameters.ApiKeyName.Description).toBe(
+        'Name for the API Gateway API key'
+      );
+    });
+
+    test('should have KmsKeyRotation parameter', () => {
+      expect(template.Parameters.KmsKeyRotation).toBeDefined();
+      expect(template.Parameters.KmsKeyRotation.Type).toBe('String');
+      expect(template.Parameters.KmsKeyRotation.Default).toBe('true');
+      expect(template.Parameters.KmsKeyRotation.Description).toBe(
+        'Enable automatic KMS key rotation'
+      );
+      expect(template.Parameters.KmsKeyRotation.AllowedValues).toEqual(['true', 'false']);
+    });
+
+    test('should have exactly 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(6);
     });
   });
 
@@ -423,17 +442,17 @@ describe('Survey Data Platform CloudFormation Template', () => {
 
     test('should have correct number of resources for survey platform', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(22); // All survey platform resources
+      expect(resourceCount).toBe(28); // All survey platform resources including security improvements
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(6);
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(6);
+      expect(outputCount).toBe(9);
     });
   });
 
@@ -485,6 +504,76 @@ describe('Survey Data Platform CloudFormation Template', () => {
           'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
         });
       });
+    });
+  });
+
+  describe('Security Resources', () => {
+    test('should have SurveyDataKmsKey resource', () => {
+      expect(template.Resources.SurveyDataKmsKey).toBeDefined();
+      expect(template.Resources.SurveyDataKmsKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.SurveyDataKmsKey.Properties.Description).toBe(
+        'KMS key for Survey Data Platform encryption'
+      );
+      expect(template.Resources.SurveyDataKmsKey.Properties.EnableKeyRotation).toEqual({
+        Ref: 'KmsKeyRotation'
+      });
+    });
+
+    test('should have SurveyDataKmsKeyAlias resource', () => {
+      expect(template.Resources.SurveyDataKmsKeyAlias).toBeDefined();
+      expect(template.Resources.SurveyDataKmsKeyAlias.Type).toBe('AWS::KMS::Alias');
+      expect(template.Resources.SurveyDataKmsKeyAlias.Properties.AliasName).toEqual({
+        'Fn::Sub': 'alias/survey-data-${EnvironmentSuffix}'
+      });
+    });
+
+    test('should have SurveyApiKey resource', () => {
+      expect(template.Resources.SurveyApiKey).toBeDefined();
+      expect(template.Resources.SurveyApiKey.Type).toBe('AWS::ApiGateway::ApiKey');
+      expect(template.Resources.SurveyApiKey.Properties.Name).toEqual({
+        'Fn::Sub': '${ApiKeyName}-${EnvironmentSuffix}'
+      });
+      expect(template.Resources.SurveyApiKey.Properties.Enabled).toBe(true);
+    });
+
+    test('should have ApiUsagePlanKey resource', () => {
+      expect(template.Resources.ApiUsagePlanKey).toBeDefined();
+      expect(template.Resources.ApiUsagePlanKey.Type).toBe('AWS::ApiGateway::UsagePlanKey');
+      expect(template.Resources.ApiUsagePlanKey.Properties.KeyType).toBe('API_KEY');
+    });
+
+    test('should have SurveyApiWebACL resource', () => {
+      expect(template.Resources.SurveyApiWebACL).toBeDefined();
+      expect(template.Resources.SurveyApiWebACL.Type).toBe('AWS::WAFv2::WebACL');
+      expect(template.Resources.SurveyApiWebACL.Properties.Scope).toBe('REGIONAL');
+      expect(template.Resources.SurveyApiWebACL.Properties.Rules).toHaveLength(3);
+    });
+
+    test('should have ApiWebACLAssociation resource', () => {
+      expect(template.Resources.ApiWebACLAssociation).toBeDefined();
+      expect(template.Resources.ApiWebACLAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
+    });
+
+    test('DynamoDB table should have encryption enabled', () => {
+      const table = template.Resources.SurveyResponseTable;
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.Properties.SSESpecification.KMSMasterKeyId).toEqual({
+        Ref: 'SurveyDataKmsKey'
+      });
+    });
+
+    test('S3 bucket should have encryption and security configuration', () => {
+      const bucket = template.Resources.BackupBucket;
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
+      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    });
+
+    test('API Gateway method should require API key', () => {
+      const method = template.Resources.SubmitMethod;
+      expect(method.Properties.ApiKeyRequired).toBe(true);
     });
   });
 
