@@ -473,7 +473,7 @@ resource "aws_xray_sampling_rule" "fintech_api_sampling" {
 # X-Ray Encryption Configuration
 resource "aws_xray_encryption_config" "fintech_api" {
   type   = "KMS"
-  key_id = "alias/aws/xray"
+  key_id = "arn:aws:kms:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alias/aws/xray"
 }
 
 # X-Ray Group for filtering traces
