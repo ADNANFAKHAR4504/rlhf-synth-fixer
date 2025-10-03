@@ -9,7 +9,7 @@ Restated requirements:
 - **RDS (PostgreSQL)**: Create a PostgreSQL instance using the **latest available engine version**, enable **automatic minor version upgrades**, and enforce **encryption at rest with AWS KMS-managed keys**. Place RDS in private subnets with appropriate SG rules.
 - **CloudTrail**: Enable organization/account activity auditing with CloudTrail and deliver logs to a secure, encrypted S3 bucket with least-privilege access.
 - **Lambda**: Deploy a Lambda function using the **latest runtime** and trigger it via **S3 event notifications** (e.g., object create). Ensure the Lambda role/policy is least-privilege, and logs are shipped to CloudWatch.
-- **Additional services to include**: ALB, Auto Scaling, CloudWatch (metrics/logs/alarms as appropriate), API Gateway, and AWS Config.
+- **Additional services to include**: ALB, Auto Scaling, CloudWatch (metrics/logs/alarms as appropriate), API Gateway.
 - **Tagging**: Apply tags to **all** resources—`Environment`, `Department`, and `Project`.
 - **Parameterization**: Do **not** hardcode values like account IDs, ARNs, or regions. Use Terraform variables, `.tfvars`, environment variables, or external configuration.
 - **Best practices**: Follow AWS security, compliance, and scalability best practices throughout (principle of least privilege, encryption at rest/in transit, minimal SG ingress, proper IAM role separation).
@@ -20,8 +20,8 @@ Restated requirements:
 - `lib/main.tf`
   - Declare **all variables** (including `aws_region`, unique suffix/ID for S3 names, CIDRs, SSH allowed CIDR, tagging map, toggle flags).
   - Define **locals** for resource naming conventions, tags, CIDR blocks, toggles, and IP ranges.
-  - **Implement resources**: VPC, public/private subnets, route tables, IGW/NAT, security groups, IAM roles/policies, ALB, Auto Scaling (Launch Template, ASG), EC2 instances (t3.micro), RDS (PostgreSQL) with KMS and auto minor upgrades, CloudWatch (logs/alarms), S3 (application bucket + CloudTrail logs bucket), API Gateway, AWS Config (recorder/delivery channel/rules), CloudTrail (trail + delivery to secure S3), and Lambda (latest runtime) triggered by S3 events.
-  - **Outputs**: Expose IDs/ARNs/hosts/endpoints for all key resources (VPC ID, subnet IDs, SG IDs, ALB DNS, ASG name, EC2 IAM role, RDS endpoint/ARN, S3 bucket names, CloudTrail trail name/ARN, Lambda function name/ARN, API Gateway endpoint, AWS Config recorder status).
+  - **Implement resources**: VPC, public/private subnets, route tables, IGW/NAT, security groups, IAM roles/policies, ALB, Auto Scaling (Launch Template, ASG), EC2 instances (t3.micro), RDS (PostgreSQL) with KMS and auto minor upgrades, CloudWatch (logs/alarms), S3 (application bucket + CloudTrail logs bucket), API Gateway, CloudTrail (trail + delivery to secure S3), and Lambda (latest runtime) triggered by S3 events.
+  - **Outputs**: Expose IDs/ARNs/hosts/endpoints for all key resources (VPC ID, subnet IDs, SG IDs, ALB DNS, ASG name, EC2 IAM role, RDS endpoint/ARN, S3 bucket names, CloudTrail trail name/ARN, Lambda function name/ARN, API Gateway endpoint).
 
 Instructions:
 - Use Terraform HCL and ensure every configurable value is driven by variables (with sane defaults where appropriate).
