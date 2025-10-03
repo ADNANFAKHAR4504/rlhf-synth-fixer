@@ -20,12 +20,12 @@ import {
   GetBucketVersioningCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import fs from 'fs';
-import path from 'path';
-import http from 'http';
 import dns from 'dns';
-import { promisify } from 'util';
+import fs from 'fs';
+import http from 'http';
 import net from 'net';
+import path from 'path';
+import { promisify } from 'util';
 
 const region = process.env.AWS_REGION || 'ap-south-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr3382';
@@ -440,6 +440,8 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Stack name should match environment suffix', () => {
+      expect(deploymentOutputs.StackName).toBeDefined();
+      expect(deploymentOutputs.EnvironmentSuffix).toBeDefined();
       expect(deploymentOutputs.StackName).toBe(`TapStack${environmentSuffix}`);
       expect(deploymentOutputs.EnvironmentSuffix).toBe(environmentSuffix);
     });
