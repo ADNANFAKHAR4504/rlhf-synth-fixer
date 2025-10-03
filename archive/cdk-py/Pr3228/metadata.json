@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349938",
+  "team": "3",
+  "startedAt": "2025-10-01T11:41:36.333Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "apigateway",
+    "lambda",
+    "dynamodb",
+    "iam",
+    "logs",
+    "cloudwatch",
+    "xray"
+  ],
+  "training_quality": 6,
+  "training_quality_justification": "Moderate training value. The conversation demonstrates good serverless infrastructure patterns with API Gateway, Lambda, and DynamoDB integration, along with important security improvements (IAM least privilege, X-Ray tracing). The MODEL_FAILURES.md documents substantial fixes in security, performance, and maintainability. However, training quality is reduced due to: (1) IDEAL_RESPONSE.md is improperly formatted and less comprehensive than MODEL_RESPONSE.md, (2) some fixes mentioned in MODEL_FAILURES.md (pagination, caching, on-demand capacity) are not actually implemented in the IDEAL_RESPONSE, (3) missing integration tests to validate the solution, and (4) the solution removes helpful examples and documentation that were in MODEL_RESPONSE. The data provides value for learning serverless CDK patterns and security best practices, but the incomplete nature and format issues limit its effectiveness for model retraining.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
