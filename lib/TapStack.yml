@@ -835,3 +835,52 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  # Lambda Function Outputs
+  ValidatePaymentLambdaName:
+    Description: "Name of the Validate Payment Lambda function"
+    Value: !Ref ValidatePaymentLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidatePaymentLambdaName"
+
+  ValidatePaymentLambdaArn:
+    Description: "ARN of the Validate Payment Lambda function"
+    Value: !GetAtt ValidatePaymentLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ValidatePaymentLambdaArn"
+
+  ProcessPaymentLambdaName:
+    Description: "Name of the Process Payment Lambda function"
+    Value: !Ref ProcessPaymentLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessPaymentLambdaName"
+
+  ProcessPaymentLambdaArn:
+    Description: "ARN of the Process Payment Lambda function"
+    Value: !GetAtt ProcessPaymentLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessPaymentLambdaArn"
+
+  StoreTransactionLambdaName:
+    Description: "Name of the Store Transaction Lambda function"
+    Value: !Ref StoreTransactionLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-StoreTransactionLambdaName"
+
+  StoreTransactionLambdaArn:
+    Description: "ARN of the Store Transaction Lambda function"
+    Value: !GetAtt StoreTransactionLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StoreTransactionLambdaArn"
+
+  NotifyCustomerLambdaName:
+    Description: "Name of the Notify Customer Lambda function"
+    Value: !Ref NotifyCustomerLambda
+    Export:
+      Name: !Sub "${AWS::StackName}-NotifyCustomerLambdaName"
+
+  NotifyCustomerLambdaArn:
+    Description: "ARN of the Notify Customer Lambda function"
+    Value: !GetAtt NotifyCustomerLambda.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-NotifyCustomerLambdaArn"
