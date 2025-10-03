@@ -4,10 +4,11 @@ This module defines the Lambda function stack for processing reviews.
 
 from typing import Optional
 
-from aws_cdk import CfnOutput, Duration
+from aws_cdk import CfnOutput, Duration, RemovalPolicy
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
 from constructs import Construct
 
 
@@ -31,10 +32,20 @@ class LambdaStack(Construct):
 
         suffix = props.environment_suffix if props else "dev"
 
+        # Create CloudWatch Log Group explicitly to prevent conflicts
+        # This prevents "AlreadyExists" errors when redeploying after failed stacks
+        log_group = logs.LogGroup(
+            self,
+            f"ReviewProcessorLogGroup{suffix}",
+            log_group_name=f"/aws/lambda/ReviewProcessorV2-{suffix}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         # Create Lambda execution role
         lambda_role = iam.Role(
             self,
-            f"ReviewProcessorRole{suffix}",
+            f"ReviewProcessorV2Role{suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -46,11 +57,12 @@ class LambdaStack(Construct):
             ],
         )
 
-        # Create Lambda function
+        # Create Lambda function with explicit log group dependency
         self.function = lambda_.Function(
             self,
-            f"ReviewProcessor{suffix}",
-            function_name=f"ReviewProcessor-{suffix}",
+            f"ReviewProcessorV2{suffix}",
+            function_name=f"ReviewProcessorV2-{suffix}",
+            log_group=log_group,  # Use explicit log group to prevent conflicts
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="index.handler",
             code=lambda_.Code.from_inline(
