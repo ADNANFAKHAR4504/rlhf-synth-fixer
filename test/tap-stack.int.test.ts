@@ -285,7 +285,9 @@ describe('DynamoDB Table Integration Tests', () => {
       
       // Expected Result: Pay-per-request billing reduces costs
       expect(tableInfo.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(tableInfo.Table?.ProvisionedThroughput).toBeUndefined();
+      // For PAY_PER_REQUEST tables, AWS returns ProvisionedThroughput with capacity units set to 0
+      expect(tableInfo.Table?.ProvisionedThroughput?.ReadCapacityUnits).toBe(0);
+      expect(tableInfo.Table?.ProvisionedThroughput?.WriteCapacityUnits).toBe(0);
     });
 
     test('should validate table supports monitoring capabilities', async () => {
