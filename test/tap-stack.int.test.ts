@@ -63,23 +63,40 @@ async function waitForCommandCompletion(
 ): Promise<string> {
   const startTime = Date.now();
   while (Date.now() - startTime < maxWaitTime) {
-    const response = await ssmClient.send(
-      new GetCommandInvocationCommand({
-        CommandId: commandId,
-        InstanceId: instanceId,
-      })
-    );
-
-    if (response.Status === 'Success') {
-      return response.StandardOutputContent || '';
-    } else if (
-      response.Status === 'Failed' ||
-      response.Status === 'Cancelled' ||
-      response.Status === 'TimedOut'
-    ) {
-      throw new Error(
-        `Command failed with status ${response.Status}: ${response.StandardErrorContent}`
+    try {
+      const response = await ssmClient.send(
+        new GetCommandInvocationCommand({
+          CommandId: commandId,
+          InstanceId: instanceId,
+        })
       );
+
+      if (response.Status === 'Success') {
+        return response.StandardOutputContent || '';
+      } else if (
+        response.Status === 'Failed' ||
+        response.Status === 'Cancelled' ||
+        response.Status === 'TimedOut'
+      ) {
+        throw new Error(
+          `Command failed with status ${response.Status}: ${response.StandardErrorContent}`
+        );
+      }
+    } catch (error: any) {
+      // Handle InvocationDoesNotExist error - command is still being processed
+      // This happens when SSM command is sent but invocation record not yet created (eventual consistency)
+      const isInvocationNotFound =
+        error.name === 'InvocationDoesNotExist' ||
+        error.Code === 'InvocationDoesNotExist' ||
+        error.__type === 'InvocationDoesNotExist';
+
+      if (isInvocationNotFound) {
+        // Continue waiting - command hasn't been processed yet
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        continue;
+      }
+      // Re-throw other errors
+      throw error;
     }
 
     // Wait 5 seconds before checking again
