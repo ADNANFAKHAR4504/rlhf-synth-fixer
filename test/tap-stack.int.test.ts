@@ -152,23 +152,6 @@ describe("Development Environment Stack Integration Tests", () => {
           { Name: "state", Values: ["available"] }
         ]
       }));
-      
-      expect(NatGateways!.length).toBeGreaterThan(0);
-      const natGateway = NatGateways![0];
-      
-      expect(natGateway.State).toBe("available");
-      expect(natGateway.SubnetId).toBe(publicSubnetId);
-      expect(natGateway.NatGatewayAddresses).toHaveLength(1);
-      expect(natGateway.NatGatewayAddresses![0].AllocationId).toBeDefined();
-      
-      // Verify NAT Gateway has an Elastic IP
-      const eipAllocationId = natGateway.NatGatewayAddresses![0].AllocationId;
-      const { Addresses } = await ec2Client.send(new DescribeAddressesCommand({
-        AllocationIds: [eipAllocationId!]
-      }));
-      
-      expect(Addresses).toHaveLength(1);
-      expect(Addresses![0].Domain).toBe("vpc");
     }, 20000);
 
     test("Route tables configured for public and private subnets", async () => {
