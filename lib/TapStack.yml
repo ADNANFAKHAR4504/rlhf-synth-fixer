@@ -77,6 +77,14 @@ Parameters:
     Default: 7
     Description: RDS backup retention period in days (minimum 7)
     MinValue: 7
+  
+  EnableShieldAdvanced:
+    Type: String
+    Default: 'false'
+    Description: 'Enable AWS Shield Advanced protection (requires paid subscription)'
+    AllowedValues:
+      - 'true'
+      - 'false'
 
 # ====================================
 # CONDITIONS - Logic for multi-region deployment
@@ -89,6 +97,8 @@ Conditions:
   UseCurrentAccountForLogs: !Equals [!Ref LoggingAccountId, '']
   # WAF is supported in most regions, but not all
   WAFSupported: !Not [!Equals [!Ref 'AWS::Region', 'ap-northeast-3']]
+  # Shield Advanced is enabled and we're in primary region
+  CreateShieldProtection: !And [!Equals [!Ref EnableShieldAdvanced, 'true'], !Condition IsPrimaryRegion]
 
 # ====================================
 # RESOURCES
@@ -104,7 +114,7 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       BucketName: !Sub 
-        - '${AccountId}-centralized-logging-bucket'
+        - '${AccountId}-centralized-logging-bucket2'
         - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
       # Security: All buckets private by default
       PublicAccessBlockConfiguration:
@@ -1042,10 +1052,10 @@ Resources:
   # AWS Shield Advanced
   ShieldProtection:
     Type: 'AWS::Shield::Protection'
+    Condition: CreateShieldProtection
     Properties:
       Name: !Sub '${AWS::StackName}-shield-protection'
       ResourceArn: !GetAtt ALB.LoadBalancerArn
-    Condition: IsPrimaryRegion
   
   # AWS WAF WebACL
   WebACL:
