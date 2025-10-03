@@ -7,7 +7,7 @@ Implements comprehensive security controls with automated threat response
 import json
 from typing import Any, Dict, List
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags, CfnCondition, Fn, CfnDeletionPolicy
 from aws_cdk import aws_cloudtrail as cloudtrail
 from aws_cdk import aws_config as config
 from aws_cdk import aws_ec2 as ec2
@@ -699,32 +699,66 @@ class TapStack(Stack):
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection with native CDK resources"""
         
-        # Create GuardDuty detector using native CDK resource
-        # CloudFormation will handle existing detectors gracefully
-        self.guardduty_detector = guardduty.CfnDetector(
-            self, "GuardDutyDetector",
-            enable=True,
-            finding_publishing_frequency="FIFTEEN_MINUTES",
-            tags=[
-                {
-                    "key": "Name", 
-                    "value": f"ZeroTrustDetector-{self.unique_suffix}"
-                },
-                {
-                    "key": "Environment", 
-                    "value": self.stack_environment
-                },
-                {
-                    "key": "ManagedBy", 
-                    "value": "CDK"
-                }
-            ]
-        )
+        # SOLUTION: Use a data source/lookup approach with native CDK
+        # Since we must use native CDK resources only, the proper approach is:
+        # 1. Create detector with unique name/properties to avoid conflicts
+        # 2. Use conditional creation based on stack parameters
+        # 3. Provide clear instructions for handling existing detectors
         
-        # Get detector ID from native resource
-        self.guardduty_detector_id = self.guardduty_detector.ref
+        # Check if we should use an existing detector via CDK context
+        use_existing_detector = self.node.try_get_context("use_existing_guardduty_detector")
+        existing_detector_id = self.node.try_get_context("existing_guardduty_detector_id")
+        
+        if use_existing_detector and existing_detector_id:
+            # Use existing detector ID - no resource creation needed
+            self.guardduty_detector_id = existing_detector_id
+            self.guardduty_detector = None
+            
+            # Create outputs to reference the existing detector
+            CfnOutput(
+                self, "ExistingGuardDutyDetectorUsed", 
+                value=existing_detector_id,
+                description="Using existing GuardDuty detector"
+            )
+        else:
+            # Create new GuardDuty detector with unique naming to avoid conflicts
+            # Adding timestamp or unique suffix helps avoid name collisions
+            import time
+            timestamp_suffix = str(int(time.time() % 10000))  # Last 4 digits of timestamp
+            
+            self.guardduty_detector = guardduty.CfnDetector(
+                self, "GuardDutyDetector",
+                enable=True,
+                finding_publishing_frequency="FIFTEEN_MINUTES",
+                tags=[
+                    {
+                        "key": "Name", 
+                        "value": f"ZeroTrustDetector-{self.unique_suffix}-{timestamp_suffix}"
+                    },
+                    {
+                        "key": "Environment", 
+                        "value": self.stack_environment
+                    },
+                    {
+                        "key": "ManagedBy", 
+                        "value": "CDK"
+                    },
+                    {
+                        "key": "CreatedBy",
+                        "value": "ZeroTrustStack"
+                    }
+                ]
+            )
+            
+            # Set deletion policy to retain the detector to avoid accidental deletion
+            self.guardduty_detector.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
+            self.guardduty_detector.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
+            
+            # Get detector ID from native resource
+            self.guardduty_detector_id = self.guardduty_detector.ref
 
         # Create threat intel set for known bad IPs
+        # Works with both existing and new detectors
         self.threat_intel_set = guardduty.CfnThreatIntelSet(
             self, "ThreatIntelSet",
             detector_id=self.guardduty_detector_id,
@@ -735,6 +769,7 @@ class TapStack(Stack):
         )
 
         # Create IP set for trusted IPs
+        # Works with both existing and new detectors
         self.trusted_ip_set = guardduty.CfnIPSet(
             self, "TrustedIPSet",
             detector_id=self.guardduty_detector_id,
@@ -1231,33 +1266,61 @@ def notify_security_team(event: Dict, response: Dict):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Create Config recorder using native CDK resource
-        # CloudFormation will handle existing recorders gracefully
-        self.config_recorder = config.CfnConfigurationRecorder(
-            self, "ConfigurationRecorder",
-            role_arn=config_role.role_arn,
-            name=f"ConfigRecorder-{self.unique_suffix}",
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True
+        # Check if we should use existing Config recorder via CDK context
+        use_existing_config = self.node.try_get_context("use_existing_config_recorder")
+        existing_config_name = self.node.try_get_context("existing_config_recorder_name")
+        
+        if use_existing_config and existing_config_name:
+            # Use existing Config recorder - no resource creation needed
+            self.config_recorder_name = existing_config_name
+            self.config_recorder_arn = f"arn:aws:config:{self.region}:{self.account}:configuration-recorder/{existing_config_name}"
+            self.config_recorder = None
+            self.config_delivery_channel = None
+            
+            # Create outputs to reference the existing recorder
+            CfnOutput(
+                self, "ExistingConfigRecorderUsed", 
+                value=existing_config_name,
+                description="Using existing Config recorder"
             )
-        )
-
-        # Create Config delivery channel using native CDK resource
-        # CloudFormation will handle existing delivery channels gracefully
-        self.config_delivery_channel = config.CfnDeliveryChannel(
-            self, "ConfigDeliveryChannel",
-            s3_bucket_name=config_bucket.bucket_name,
-            name=f"zero-trust-delivery-channel-{self.unique_suffix}",
-            config_snapshot_delivery_properties=config.CfnDeliveryChannel.ConfigSnapshotDeliveryPropertiesProperty(
-                delivery_frequency="TwentyFour_Hours"
+        else:
+            # Create Config recorder with unique naming to avoid conflicts
+            import time
+            timestamp_suffix = str(int(time.time() % 10000))  # Last 4 digits of timestamp
+            recorder_name = f"ConfigRecorder-{self.unique_suffix}-{timestamp_suffix}"
+            
+            self.config_recorder = config.CfnConfigurationRecorder(
+                self, "ConfigurationRecorder",
+                role_arn=config_role.role_arn,
+                name=recorder_name,
+                recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
+                    all_supported=True,
+                    include_global_resource_types=True
+                )
             )
-        )
+            
+            # Set deletion policy to retain the recorder
+            self.config_recorder.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
+            self.config_recorder.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
 
-        # Store references for outputs
-        # Construct Config recorder ARN since CfnConfigurationRecorder doesn't expose it directly
-        self.config_recorder_arn = f"arn:aws:config:{self.region}:{self.account}:configuration-recorder/{self.config_recorder.name}"
-        self.config_recorder_name = self.config_recorder.name
+            # Create Config delivery channel with unique naming
+            channel_name = f"zero-trust-delivery-channel-{self.unique_suffix}-{timestamp_suffix}"
+            self.config_delivery_channel = config.CfnDeliveryChannel(
+                self, "ConfigDeliveryChannel",
+                s3_bucket_name=config_bucket.bucket_name,
+                name=channel_name,
+                config_snapshot_delivery_properties=config.CfnDeliveryChannel.ConfigSnapshotDeliveryPropertiesProperty(
+                    delivery_frequency="TwentyFour_Hours"
+                )
+            )
+            
+            # Set deletion policy to retain the delivery channel
+            self.config_delivery_channel.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
+            self.config_delivery_channel.cfn_options.update_replace_policy = CfnDeletionPolicy.RETAIN
+            
+            # Store references for outputs
+            self.config_recorder_arn = f"arn:aws:config:{self.region}:{self.account}:configuration-recorder/{self.config_recorder.name}"
+            self.config_recorder_name = self.config_recorder.name
 
         # Compliance rules
         compliance_rules = [
