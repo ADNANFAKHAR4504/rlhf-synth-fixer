@@ -202,11 +202,30 @@ Resources:
               - !Sub 
                 - 'arn:aws:s3:::${BucketName}/config/*'
                 - BucketName: !Ref CentralizedLoggingBucket
-          # Deny all public access except for AWS services
-          - Sid: 'DenyPublicAccess'
+          # Allow CloudFormation and IAM users to manage bucket policy
+          - Sid: 'AllowCloudFormationOperations'
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:user/iac-test-automation-pipeline'
+            Action:
+              - 's3:GetBucketPolicy'
+              - 's3:PutBucketPolicy'
+              - 's3:DeleteBucketPolicy'
+              - 's3:GetBucketLocation'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
+          # Deny public read access but allow proper AWS operations and account users
+          - Sid: 'DenyPublicReadAccess'
             Effect: Deny
             Principal: '*'
-            Action: 's3:*'
+            Action: 
+              - 's3:GetObject'
+              - 's3:ListBucket'
             Resource:
               - !Sub 
                 - 'arn:aws:s3:::${BucketName}'
@@ -215,10 +234,9 @@ Resources:
                 - 'arn:aws:s3:::${BucketName}/*'
                 - BucketName: !Ref CentralizedLoggingBucket
             Condition:
-              StringNotEquals:
-                'aws:PrincipalServiceName':
-                  - 'cloudtrail.amazonaws.com'
-                  - 'config.amazonaws.com'
+              StringNotLike:
+                'aws:PrincipalArn':
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:*'
 
   # ====================================
   # IAM ROLES & POLICIES
