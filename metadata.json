@@ -1,0 +1,11 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "67521904",
+  "team": "synth",
+  "startedAt": "2025-10-03T13:50:36+05:30",
+  "training_quality": 8,
+  "aws_services": ["S3", "CloudFront", "CloudWatch", "CertificateManager", "Route53"]
+}
