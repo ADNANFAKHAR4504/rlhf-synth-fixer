@@ -7,7 +7,7 @@ import { AutoScalingClient, DescribeAutoScalingGroupsCommand, SetDesiredCapacity
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeLogStreamsCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { IAMClient, GetRoleCommand, GetInstanceProfileCommand, SimulatePrincipalPolicyCommand } from "@aws-sdk/client-iam";
+import { IAMClient, GetRoleCommand, GetInstanceProfileCommand, SimulatePrincipalPolicyCommand, ListAttachedRolePoliciesCommand, GetRolePolicyCommand, ListRolePoliciesCommand, GetPolicyCommand, GetPolicyVersionCommand } from "@aws-sdk/client-iam";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -160,6 +160,60 @@ async function ensureASGCapacity(
     
     // Wait a bit for ASG to process the change
     await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+}
+
+/**
+ * Check if IAM role has specific CloudWatch Logs permissions
+ */
+async function checkRoleHasCloudWatchLogsPermissions(roleName: string): Promise<boolean> {
+  try {
+    // Get attached managed policies
+    const { AttachedPolicies } = await iamClient.send(
+      new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+    );
+    
+    // Check for AWS managed CloudWatch Logs policies
+    const hasCloudWatchPolicy = AttachedPolicies?.some(policy => 
+      policy.PolicyName?.includes("CloudWatchAgent") ||
+      policy.PolicyName?.includes("CloudWatchLogs")
+    );
+    
+    if (hasCloudWatchPolicy) return true;
+    
+    // Get inline policies
+    const { PolicyNames } = await iamClient.send(
+      new ListRolePoliciesCommand({ RoleName: roleName })
+    );
+    
+    // Check inline policies for CloudWatch Logs permissions
+    for (const policyName of PolicyNames || []) {
+      const { PolicyDocument } = await iamClient.send(
+        new GetRolePolicyCommand({ 
+          RoleName: roleName, 
+          PolicyName: policyName 
+        })
+      );
+      
+      if (PolicyDocument) {
+        const policy = JSON.parse(decodeURIComponent(PolicyDocument));
+        const hasLogsPermissions = policy.Statement?.some((statement: any) => {
+          const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+          return actions.some((action: string) => 
+            action.includes("logs:CreateLogStream") ||
+            action.includes("logs:PutLogEvents") ||
+            action.includes("logs:*")
+          );
+        });
+        
+        if (hasLogsPermissions) return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`Error checking CloudWatch Logs permissions for role ${roleName}:`, error);
+    return false;
   }
 }
 
@@ -338,17 +392,17 @@ describe("TAP Stack Integration Tests", () => {
       expect(db?.DBInstanceIdentifier).toBe(rdsIdentifier);
       expect(db?.DBInstanceStatus).toBe("available");
       expect(db?.Engine).toBe("mysql");
-      expect(db?.DBInstanceClass).toBe("db.t3.micro"); // Non-production setting
+      expect(db?.DBInstanceClass).toBe("db.t3.micro");
       expect(db?.AllocatedStorage).toBe(20);
       expect(db?.StorageType).toBe("gp3");
       expect(db?.StorageEncrypted).toBe(true);
-      expect(db?.BackupRetentionPeriod).toBe(7); // Non-production setting
+      expect(db?.BackupRetentionPeriod).toBe(7);
       expect(db?.PubliclyAccessible).toBe(false);
-      expect(db?.MultiAZ).toBe(false); // Non-production setting
+      expect(db?.MultiAZ).toBe(false);
       expect(db?.DBName).toBe("tapdb");
       expect(db?.MasterUsername).toBe("dbadmin");
       expect(db?.Endpoint?.Port).toBe(3306);
-      expect(db?.MonitoringInterval).toBe(0); // Non-production setting
+      expect(db?.MonitoringInterval).toBe(0);
     }, 30000);
 
     test("RDS subnet group is correctly configured", async () => {
@@ -411,17 +465,11 @@ describe("TAP Stack Integration Tests", () => {
     }, 20000);
   });
 
-  // INTERACTIVE TEST CASES - Testing interactions between 2-3 services
-
-describe("Interactive Tests: ALB → EC2 Target Health", () => {
-  test("ALB target group has healthy instances from ASG", async () => {
-    // First ensure ASG has instances
-    await ensureASGCapacity(autoScalingGroupName, 1);
-    
-    // Wait for ASG instances to be healthy
-    const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 180000);
-    console.log(`ASG has ${instanceIds.length} healthy instances: ${instanceIds.join(", ")}`);
-    
+  describe("S3 Bucket", () => {
+    test("S3 bucket exists with proper versioning and access controls", async () => {
+      // Check bucket exists
+      await s3Client.send(new HeadBucketCommand({ Bucket: s3BucketName }));
+      
       // Check versioning is enabled
       const { Status } = await s3Client.send(
         new GetBucketVersioningCommand({ Bucket: s3BucketName })
@@ -457,7 +505,7 @@ describe("Interactive Tests: ALB → EC2 Target Health", () => {
     }, 30000);
   });
 
-  describe("Interactive Tests: EC2 → CloudWatch Logs", () => {
+  describe("CloudWatch Logs", () => {
     test("CloudWatch log group exists and is configured", async () => {
       const { logGroups } = await cloudWatchLogsClient.send(
         new DescribeLogGroupsCommand({ logGroupNamePrefix: cloudWatchLogGroupName })
@@ -467,14 +515,39 @@ describe("Interactive Tests: ALB → EC2 Target Health", () => {
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(30);
     }, 20000);
+  });
 
+  // INTERACTIVE TEST CASES - Testing interactions between 2-3 services
+
+  describe("Interactive Tests: ALB → EC2 Target Health", () => {
+    test("ALB target group has healthy instances from ASG", async () => {
+      // First ensure ASG has instances
+      await ensureASGCapacity(autoScalingGroupName, 1);
+      
+      // Wait for ASG instances to be healthy
+      const instanceIds = await waitForASGInstances(autoScalingGroupName, 1, 180000);
+      console.log(`ASG has ${instanceIds.length} healthy instances: ${instanceIds.join(", ")}`);
+      
+      // Get target group ARN
+      const { TargetGroups } = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+      const targetGroup = TargetGroups?.find(tg => tg.TargetGroupName?.includes(`tap-${environmentSuffix}`));
+      
+      if (targetGroup?.TargetGroupArn) {
+        const healthyTargets = await waitForHealthyTargets(targetGroup.TargetGroupArn, 1, 180000);
+        expect(healthyTargets).toBeGreaterThanOrEqual(1);
+      }
+    }, 300000);
+  });
+
+  describe("Interactive Tests: EC2 → CloudWatch Logs", () => {
     test("EC2 instances can write to CloudWatch Logs via IAM role", async () => {
       // Get IAM role for EC2
+      const roleName = `tap-${environmentSuffix}-ec2-role`;
       const { Role } = await iamClient.send(
-        new GetRoleCommand({ RoleName: `tap-${environmentSuffix}-ec2-role` })
+        new GetRoleCommand({ RoleName: roleName })
       );
       
-      expect(Role?.RoleName).toBe(`tap-${environmentSuffix}-ec2-role`);
+      expect(Role?.RoleName).toBe(roleName);
       
       // Verify instance profile exists
       const { InstanceProfile } = await iamClient.send(
@@ -482,8 +555,12 @@ describe("Interactive Tests: ALB → EC2 Target Health", () => {
       );
       
       expect(InstanceProfile?.Roles?.length).toBe(1);
-      expect(InstanceProfile?.Roles?.[0]?.RoleName).toBe(`tap-${environmentSuffix}-ec2-role`);
-    }, 20000);
+      expect(InstanceProfile?.Roles?.[0]?.RoleName).toBe(roleName);
+      
+      // Check if the role has CloudWatch Logs permissions
+      const hasCloudWatchLogsPermissions = await checkRoleHasCloudWatchLogsPermissions(roleName);
+      expect(hasCloudWatchLogsPermissions).toBe(true);
+    }, 30000);
   });
 
   describe("Interactive Tests: VPC → Internet Connectivity", () => {
@@ -678,4 +755,3 @@ describe("Interactive Tests: ALB → EC2 Target Health", () => {
     }, 20000);
   });
 });
-
