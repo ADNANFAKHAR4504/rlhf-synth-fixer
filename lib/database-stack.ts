@@ -114,12 +114,10 @@ export class DatabaseStack extends Construct {
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
         engine: databaseEngine,
         parameters: {
-          // PostgreSQL parameters - optimized for us-east-1
+          // PostgreSQL parameters - basic logging configuration
           log_statement: 'all',
           log_duration: 'on',
           shared_preload_libraries: 'pg_stat_statements',
-          max_connections: '100',
-          shared_buffers: '256MB',
         },
       }),
     });
