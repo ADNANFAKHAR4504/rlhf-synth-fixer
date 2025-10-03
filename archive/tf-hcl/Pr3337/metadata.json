@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "400257",
+  "team": "1",
+  "startedAt": "2025-10-02T10:30:35.394Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

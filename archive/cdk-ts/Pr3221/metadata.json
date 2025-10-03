@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348899",
+  "team": "4",
+  "startedAt": "2025-10-01T13:18:53.846Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anilg-turing",
+  "dockerS3Location": ""
+}
