@@ -26,9 +26,9 @@ export class DatabaseStack extends Construct {
     // us-west-1 has extremely limited database version support, use older stable versions
     const getDatabaseEngine = (region: string): rds.IInstanceEngine => {
       if (region === 'us-west-1') {
-        // us-west-1 has very limited support - use MySQL 5.7 (most universal)
+        // us-west-1 has very limited support - use oldest MySQL 5.7 version
         return rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_5_7_44,
+          version: rds.MysqlEngineVersion.VER_5_7_38,
         });
       } else {
         // Other regions typically support PostgreSQL
@@ -43,7 +43,7 @@ export class DatabaseStack extends Construct {
 
     // Output the selected database engine for debugging
     new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
-      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 5.7.44' : 'PostgreSQL 13.7'}`,
+      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 5.7.38' : 'PostgreSQL 13.7'}`,
       description:
         'Database engine automatically selected based on region compatibility',
     });
