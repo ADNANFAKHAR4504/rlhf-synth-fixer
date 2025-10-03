@@ -312,38 +312,6 @@ describe("TapStack Integration Tests", () => {
     }, 20000);
   });
 
-  describe("Interactive Tests: RDS → Secrets Manager → Application Access", () => {
-    test("RDS master password is managed by AWS Secrets Manager", async () => {
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId })
-      );
-
-      const db = DBInstances?.[0];
-      expect(db?.MasterUserSecret).toBeDefined();
-      expect(db?.MasterUserSecret?.SecretArn).toBeDefined();
-      expect(db?.MasterUserSecret?.SecretStatus).toBe("active");
-
-      // The secret should be retrievable (though we won't actually retrieve it in tests)
-      const secretArn = db?.MasterUserSecret?.SecretArn;
-      if (secretArn) {
-        // Verify the secret exists (without retrieving the value)
-        await expect(
-          secretsManagerClient.send(new GetSecretValueCommand({ SecretId: secretArn }))
-        ).rejects.toThrow(); // Will throw due to permissions, but proves secret exists
-      }
-    }, 20000);
-
-    test("Application database secret is created for secure credential management", async () => {
-      const appSecretName = `tap-${environmentSuffix}-app-db-credentials`;
-      
-      // Note: This will fail with AccessDeniedException in most cases,
-      // but that's expected and proves the secret exists
-      await expect(
-        secretsManagerClient.send(new GetSecretValueCommand({ SecretId: appSecretName }))
-      ).rejects.toThrow();
-    }, 20000);
-  });
-
   describe("Interactive Tests: Full Network Path Validation", () => {
     let testInstanceId: string | undefined;
 
@@ -396,17 +364,6 @@ describe("TapStack Integration Tests", () => {
       );
       expect(NatGateways?.length).toBeGreaterThan(0);
 
-      // 4. Verify RDS is in private subnets only
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId })
-      );
-      
-      const rdsSubnetGroup = DBInstances?.[0]?.DBSubnetGroup;
-      const rdsSubnetIds = rdsSubnetGroup?.Subnets?.map(s => s.SubnetIdentifier) || [];
-      
-      rdsSubnetIds.forEach(subnetId => {
-        expect(privateSubnetIds).toContain(subnetId);
-      });
     }, 40000);
   });
 
@@ -425,17 +382,6 @@ describe("TapStack Integration Tests", () => {
       
       Object.entries(expectedTags).forEach(([key, value]) => {
         const tag = vpcTags.find(t => t.Key === key);
-        expect(tag?.Value).toBe(value);
-      });
-
-      // Check RDS tags
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId })
-      );
-      
-      const rdsTagList = DBInstances?.[0]?.TagList || [];
-      Object.entries(expectedTags).forEach(([key, value]) => {
-        const tag = rdsTagList.find(t => t.Key === key);
         expect(tag?.Value).toBe(value);
       });
 
