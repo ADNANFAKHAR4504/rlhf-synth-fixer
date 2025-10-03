@@ -60,7 +60,6 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 30
-      AccessControl: LogDeliveryWrite
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerPreferred
@@ -72,6 +71,31 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${LogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !GetAtt LogsBucket.Arn
 
   # Origin Access Identity for CloudFront
   OriginAccessIdentity:

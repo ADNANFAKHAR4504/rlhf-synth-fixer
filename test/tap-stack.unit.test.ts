@@ -126,9 +126,24 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(30);
       expect(bucket.LifecycleConfiguration.Rules[0].Status).toBe('Enabled');
 
-      // Check ACL settings for CloudFront logs
-      expect(bucket.AccessControl).toBe('LogDeliveryWrite');
+      // Check ownership controls
       expect(bucket.OwnershipControls).toBeDefined();
+    });
+
+    test('should have LogsBucketPolicy resource with correct permissions', () => {
+      const policy = template.Resources.LogsBucketPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+
+      // Check that the policy grants permissions to logging service
+      const statements = policy.Properties.PolicyDocument.Statement;
+      expect(statements).toBeDefined();
+      expect(statements.length).toBeGreaterThan(0);
+
+      // Verify write permission exists
+      const writeStatement = statements.find((s: any) => s.Sid === 'AWSLogDeliveryWrite');
+      expect(writeStatement).toBeDefined();
+      expect(writeStatement.Principal.Service).toBe('logging.s3.amazonaws.com');
     });
 
     test('should have WebsiteBucketPolicy resource', () => {
@@ -384,6 +399,7 @@ describe('TapStack CloudFormation Template', () => {
       const expectedResources = [
         'WebsiteBucket',
         'LogsBucket',
+        'LogsBucketPolicy',
         'WebsiteBucketPolicy',
         'OriginAccessIdentity',
         'CloudFrontDistribution',
