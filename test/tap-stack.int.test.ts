@@ -48,18 +48,14 @@ describe('Static Website Infrastructure Integration Tests', () => {
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 
     if (!fs.existsSync(outputsPath)) {
-      // Set default values for development/testing
-      outputs = {
-        WebsiteBucketName: `example.com-website-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`,
-        LogsBucketName: `example.com-logs-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`,
-        CloudFrontDistributionId: 'E1234567890ABC',
-        CloudFrontDomainName: 'd1234567890abc.cloudfront.net',
-        WebsiteURL: 'https://d1234567890abc.cloudfront.net',
-        DashboardURL: 'https://console.aws.amazon.com/cloudwatch/test',
-        WebACLArn: 'N/A',
-        SecurityHeadersFunctionArn: 'N/A',
-        CustomHeadersFunctionArn: 'N/A'
-      };
+      throw new Error(`
+❌ CloudFormation outputs file not found at: ${outputsPath}
+
+Integration tests require a deployed stack with real AWS resources.
+The stack has been successfully deployed, but the outputs file is missing.
+
+Expected file: ${outputsPath}
+      `);
     } else {
       outputs = JSON.parse(
         fs.readFileSync(outputsPath, 'utf8')
