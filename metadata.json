@@ -10,5 +10,20 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, EC2, Auto Scaling, Elastic Load Balancing (ALB), CloudFront, S3, MediaConvert, Lambda@Edge, Route 53, WAF, Shield Standard, CloudWatch, Systems Manager (SSM)"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing (ALB)",
+    "CloudFront",
+    "S3",
+    "MediaConvert",
+    "Lambda@Edge",
+    "Route 53",
+    "WAF",
+    "Shield Standard",
+    "CloudWatch",
+    "Systems Manager (SSM)"
+  ],
+  "training_quality": 9
 }
