@@ -135,7 +135,7 @@ Resources:
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
-      ServiceName: !Sub com.amazonaws.us-west-1.s3
+      ServiceName: com.amazonaws.us-west-1.s3
       VpcId: !Ref StagingVPC
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -235,7 +235,7 @@ Resources:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
       ReplicationGroupId: !Sub 'staging-redis-${EnvironmentSuffix}'
-      Description: 'Redis cluster for application performance caching'
+      ReplicationGroupDescription: 'Redis cluster for application performance caching'
       Engine: redis
       EngineVersion: 7.0
       CacheNodeType: !Ref ElastiCacheNodeType
@@ -296,7 +296,7 @@ Resources:
     Properties:
       Engine: aurora-mysql
       EngineMode: provisioned
-      EngineVersion: 8.0.mysql_aurora.3.03.1
+      EngineVersion: 8.0.mysql_aurora.3.04.4
       DBClusterIdentifier: !Sub 'staging-aurora-cluster-${EnvironmentSuffix}'
       MasterUsername:
         !Join [
@@ -344,8 +344,6 @@ Resources:
       PubliclyAccessible: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      PerformanceInsightsEnabled: true
-      PerformanceInsightsRetentionPeriod: 7
       Tags:
         - Key: Name
           Value: !Sub 'staging-aurora-instance1-${EnvironmentSuffix}'
@@ -408,10 +406,12 @@ Resources:
             ScheduleExpression: cron(0 4 ? * * *)
             StartWindowMinutes: 60
             CompletionWindowMinutes: 120
-            DeleteAfterDays: 30
+            Lifecycle:
+              DeleteAfterDays: 30
             CopyActions:
               - DestinationBackupVaultArn: !Sub 'arn:aws:backup:us-east-1:${AWS::AccountId}:backup-vault:staging-backup-vault-${EnvironmentSuffix}-cross-region'
-                DeleteAfterDays: 30
+                Lifecycle:
+                  DeleteAfterDays: 30
             RecoveryPointTags:
               Environment: staging
               EnvironmentSuffix: !Ref EnvironmentSuffix
@@ -440,9 +440,10 @@ Resources:
         IamRoleArn: !GetAtt BackupRole.Arn
         Resources:
           - !Sub 'arn:aws:rds:us-west-1:${AWS::AccountId}:cluster:${AuroraDBCluster}'
-        Conditions:
-          StringEquals:
-            'aws:ResourceTag/Environment': 'staging'
+        ListOfTags:
+          - ConditionType: STRINGEQUALS
+            ConditionKey: Environment
+            ConditionValue: staging
 
   # ========================================================================
   # STORAGE CONFIGURATION
@@ -467,11 +468,7 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: INTELLIGENT_TIERING
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
+      # CloudWatch configurations removed as they're not supported in NotificationConfiguration
       Tags:
         - Key: Name
           Value: !Sub 'staging-test-data-${EnvironmentSuffix}'
@@ -1328,13 +1325,13 @@ Outputs:
   # Cache Outputs
   ElastiCacheEndpoint:
     Description: ElastiCache Redis Endpoint
-    Value: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+    Value: !GetAtt ElastiCacheCluster.PrimaryEndPoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-ElastiCacheEndpoint'
 
   ElastiCachePort:
     Description: ElastiCache Redis Port
-    Value: !GetAtt ElastiCacheCluster.RedisEndpoint.Port
+    Value: !GetAtt ElastiCacheCluster.PrimaryEndPoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-ElastiCachePort'
 
