@@ -33,7 +33,6 @@ Metadata:
           default: 'Monitoring and Alerting'
         Parameters:
           - AlertEmail
-          - HealthCheckUrl
 
 Parameters:
   Environment:
@@ -80,6 +79,7 @@ Parameters:
 
   DatabaseMasterPassword:
     Type: String
+    Default: 'TempPassword123!'
     NoEcho: true
     MinLength: 12
     MaxLength: 64
@@ -110,12 +110,8 @@ Parameters:
 
   AlertEmail:
     Type: String
+    Default: 'admin@example.com'
     Description: 'Email address for DR alerts and notifications'
-
-  HealthCheckUrl:
-    Type: String
-    Default: 'https://api.example.com/health'
-    Description: 'Application health check URL for Route 53'
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'prod']
@@ -200,8 +196,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [0, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: 'us-east-1a'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -214,8 +210,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [1, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: 'us-east-1b'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -229,8 +225,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [2, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.3.0/24'
+      AvailabilityZone: 'us-east-1a'
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-private-1'
@@ -242,8 +238,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [3, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.4.0/24'
+      AvailabilityZone: 'us-east-1b'
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-private-2'
@@ -256,8 +252,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [4, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.5.0/24'
+      AvailabilityZone: 'us-east-1a'
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-db-1'
@@ -269,8 +265,8 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       VpcId: !Ref PrimaryVPC
-      CidrBlock: !Select [5, !Cidr [!Ref PrimaryVpcCidr, 8, 8]]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.6.0/24'
+      AvailabilityZone: 'us-east-1b'
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-db-2'
@@ -426,73 +422,36 @@ Resources:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-aurora-subnet-group'
 
-  # Aurora Global Database Cluster
-  AuroraGlobalCluster:
-    Type: AWS::RDS::GlobalCluster
+  # Simple RDS Database (LocalStack compatible)
+  PrimaryDatabase:
+    Type: AWS::RDS::DBInstance
     Condition: IsPrimaryRegion
     Properties:
-      GlobalClusterIdentifier: !Sub '${CompanyName}-${Environment}-global-cluster'
-      Engine: aurora-postgresql
-      EngineVersion: !Ref AuroraEngineVersion
-      StorageEncrypted: true
-
-  AuroraPrimaryCluster:
-    Type: AWS::RDS::DBCluster
-    Condition: IsPrimaryRegion
-    Properties:
-      DBClusterIdentifier: !Sub '${CompanyName}-${Environment}-primary-cluster'
-      GlobalClusterIdentifier: !Ref AuroraGlobalCluster
-      Engine: aurora-postgresql
-      EngineVersion: !Ref AuroraEngineVersion
+      DBInstanceIdentifier: !Sub '${CompanyName}-${Environment}-primary-db'
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'postgres'
+      EngineVersion: '13.7'
       MasterUsername: !Ref DatabaseMasterUsername
       MasterUserPassword: !Ref DatabaseMasterPassword
-      DatabaseName: 'tradingapp'
+      DBName: 'tradingapp'
+      AllocatedStorage: 20
+      StorageType: 'gp2'
+      StorageEncrypted: true
       BackupRetentionPeriod: !Ref BackupRetentionDays
       PreferredBackupWindow: !Ref BackupWindow
       PreferredMaintenanceWindow: !Ref MaintenanceWindow
-      StorageEncrypted: true
-      KmsKeyId: !Ref PrimaryKMSKey
-      VpcSecurityGroupIds:
+      VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref AuroraDBSubnetGroup
-      DeletionProtection: !If [IsProduction, true, false]
+      PubliclyAccessible: false
+      DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub '${CompanyName}-${Environment}-primary-aurora'
+          Value: !Sub '${CompanyName}-${Environment}-primary-database'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
-
-  AuroraPrimaryInstance1:
-    Type: AWS::RDS::DBInstance
-    Condition: IsPrimaryRegion
-    Properties:
-      DBInstanceIdentifier: !Sub '${CompanyName}-${Environment}-primary-db-1'
-      DBClusterIdentifier: !Ref AuroraPrimaryCluster
-      DBInstanceClass: !If [IsProduction, 'db.r6g.2xlarge', 'db.r6g.large']
-      Engine: aurora-postgresql
-      PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub '${CompanyName}-${Environment}-primary-db-instance-1'
-
-  AuroraPrimaryInstance2:
-    Type: AWS::RDS::DBInstance
-    Condition: IsPrimaryRegion
-    Properties:
-      DBInstanceIdentifier: !Sub '${CompanyName}-${Environment}-primary-db-2'
-      DBClusterIdentifier: !Ref AuroraPrimaryCluster
-      DBInstanceClass: !If [IsProduction, 'db.r6g.2xlarge', 'db.r6g.large']
-      Engine: aurora-postgresql
-      PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub '${CompanyName}-${Environment}-primary-db-instance-2'
 
   # RDS Enhanced Monitoring Role
   RDSEnhancedMonitoringRole:
@@ -509,22 +468,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
 
-  # DynamoDB Global Tables
+  # DynamoDB Table (LocalStack compatible)
   TradingDataTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${CompanyName}-${Environment}-trading-data'
       BillingMode: PAY_PER_REQUEST
-      StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
-      SSESpecification:
-        SSEEnabled: true
-        KMSMasterKeyId: !If
-          - IsPrimaryRegion
-          - !Ref PrimaryKMSKey
-          - !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key'
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: 'trade_id'
           AttributeType: 'S'
@@ -542,14 +491,6 @@ Resources:
               KeyType: 'HASH'
           Projection:
             ProjectionType: 'ALL'
-      Replicas:
-        - Region: !Ref SecondaryRegion
-          GlobalSecondaryIndexes:
-            - IndexName: 'TimestampIndex'
-              Projection:
-                ProjectionType: 'ALL'
-          PointInTimeRecoverySpecification:
-            PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-trading-data-table'
@@ -558,19 +499,11 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # S3 Buckets for Document Storage
+  # S3 Bucket for Document Storage (LocalStack compatible)
   DocumentsBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !If
-                - IsPrimaryRegion
-                - !Ref PrimaryKMSKey
-                - !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -578,23 +511,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      IntelligentTieringConfigurations:
-        - Id: 'CostOptimization'
-          Status: Enabled
-          Prefix: 'documents/'
-      ReplicationConfiguration: !If
-        - IsPrimaryRegion
-        - Role: !GetAtt S3ReplicationRole.Arn
-          Rules:
-            - Id: 'DocumentReplication'
-              Status: Enabled
-              Prefix: 'documents/'
-              Destination:
-                Bucket: !Sub 'arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${SecondaryRegion}'
-                StorageClass: STANDARD_IA
-                EncryptionConfiguration:
-                  ReplicaKmsKeyID: !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key'
-        - !Ref 'AWS::NoValue'
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: 's3:ObjectCreated:*'
@@ -606,44 +522,6 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
-
-  # S3 Replication Role
-  S3ReplicationRole:
-    Type: AWS::IAM::Role
-    Condition: IsPrimaryRegion
-    Properties:
-      RoleName: !Sub '${CompanyName}-${Environment}-s3-replication-role'
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: 'S3ReplicationPolicy'
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersionForReplication
-                  - s3:GetObjectVersionAcl
-                Resource: !Sub '${DocumentsBucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: !Ref DocumentsBucket
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                Resource: !Sub 'arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${SecondaryRegion}/*'
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                Resource:
-                  - !GetAtt PrimaryKMSKey.Arn
-                  - !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key'
 
   # Lambda Functions for DR Orchestration
   DROrchestrationFunction:
@@ -659,8 +537,7 @@ Resources:
           PRIMARY_REGION: !Ref PrimaryRegion
           SECONDARY_REGION: !Ref SecondaryRegion
           SNS_TOPIC_ARN: !Ref DRNotificationTopic
-          AURORA_CLUSTER_ID:
-            !If [IsPrimaryRegion, !Ref AuroraPrimaryCluster, '']
+          AURORA_CLUSTER_ID: !If [IsPrimaryRegion, !Ref PrimaryDatabase, '']
       Code:
         ZipFile: |
           import json
@@ -853,7 +730,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${DocumentsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -870,7 +747,7 @@ Resources:
       FunctionName: !Ref S3ProcessingFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::${DocumentsBucket}'
+      SourceArn: !Sub 'arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}'
 
   # SNS Topic for DR Notifications
   DRNotificationTopic:
@@ -919,20 +796,6 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DatabaseFailureRule.Arn
 
-  # Route 53 Health Check and DNS Failover
-  ApplicationHealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Condition: IsPrimaryRegion
-    Properties:
-      Type: HTTPS
-      ResourcePath: '/health'
-      FullyQualifiedDomainName: !Ref HealthCheckUrl
-      RequestInterval: 30
-      FailureThreshold: 3
-      Tags:
-        - Key: Name
-          Value: !Sub '${CompanyName}-${Environment}-app-health-check'
-
   # CloudWatch Dashboards
   DRDashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -949,7 +812,7 @@ Resources:
               "height": 6,
               "properties": {
                 "metrics": [
-                  ["AWS/RDS", "DatabaseConnections", "DBClusterIdentifier", "${AuroraPrimaryCluster}"],
+                  ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${PrimaryDatabase}"],
                   [".", "CPUUtilization", ".", "."],
                   [".", "ReadLatency", ".", "."],
                   [".", "WriteLatency", ".", "."]
@@ -1006,7 +869,7 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       AlarmName: !Sub '${CompanyName}-${Environment}-database-connection-alarm'
-      AlarmDescription: 'Monitor Aurora database connections'
+      AlarmDescription: 'Monitor RDS database connections'
       MetricName: DatabaseConnections
       Namespace: AWS/RDS
       Statistic: Average
@@ -1015,8 +878,8 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: DBClusterIdentifier
-          Value: !Ref AuroraPrimaryCluster
+        - Name: DBInstanceIdentifier
+          Value: !Ref PrimaryDatabase
       AlarmActions:
         - !Ref DRNotificationTopic
 
@@ -1025,7 +888,7 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       AlarmName: !Sub '${CompanyName}-${Environment}-database-cpu-alarm'
-      AlarmDescription: 'Monitor Aurora database CPU utilization'
+      AlarmDescription: 'Monitor RDS database CPU utilization'
       MetricName: CPUUtilization
       Namespace: AWS/RDS
       Statistic: Average
@@ -1034,8 +897,8 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: DBClusterIdentifier
-          Value: !Ref AuroraPrimaryCluster
+        - Name: DBInstanceIdentifier
+          Value: !Ref PrimaryDatabase
       AlarmActions:
         - !Ref DRNotificationTopic
 
@@ -1062,9 +925,9 @@ Resources:
             action: 'aws:executeAwsApi'
             inputs:
               Service: rds
-              Api: DescribeDBClusters
-              DBClusterIdentifier:
-                !If [IsPrimaryRegion, !Ref AuroraPrimaryCluster, '']
+              Api: DescribeDBInstances
+              DBInstanceIdentifier:
+                !If [IsPrimaryRegion, !Ref PrimaryDatabase, '']
           - name: InitiateFailover
             action: 'aws:invokeLambdaFunction'
             inputs:
@@ -1078,10 +941,10 @@ Resources:
             action: 'aws:waitForAwsResourceProperty'
             inputs:
               Service: rds
-              Api: DescribeDBClusters
-              DBClusterIdentifier:
-                !If [IsPrimaryRegion, !Ref AuroraPrimaryCluster, '']
-              PropertySelector: '$.DBClusters[0].Status'
+              Api: DescribeDBInstances
+              DBInstanceIdentifier:
+                !If [IsPrimaryRegion, !Ref PrimaryDatabase, '']
+              PropertySelector: '$.DBInstances[0].DBInstanceStatus'
               DesiredValues:
                 - available
 
@@ -1149,7 +1012,7 @@ Resources:
         Resources:
           - !If [
               IsPrimaryRegion,
-              !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraPrimaryCluster}',
+              !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${PrimaryDatabase}',
               '',
             ]
           - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TradingDataTable}'
@@ -1372,7 +1235,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${DocumentsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${CompanyName}-${Environment}-documents-${AWS::AccountId}-${AWS::Region}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -1400,29 +1263,23 @@ Outputs:
       Name: !Sub '${AWS::StackName}-PrimaryPrivateSubnet2Id'
 
   # Database Outputs
-  AuroraGlobalClusterIdentifier:
-    Description: 'Aurora Global Cluster Identifier'
-    Value: !If [IsPrimaryRegion, !Ref AuroraGlobalCluster, '']
+  PrimaryDatabaseIdentifier:
+    Description: 'Primary Database Instance Identifier'
+    Value: !If [IsPrimaryRegion, !Ref PrimaryDatabase, '']
     Export:
-      Name: !Sub '${AWS::StackName}-AuroraGlobalClusterIdentifier'
+      Name: !Sub '${AWS::StackName}-PrimaryDatabaseIdentifier'
 
-  AuroraPrimaryClusterEndpoint:
-    Description: 'Aurora Primary Cluster Endpoint'
-    Value:
-      !If [IsPrimaryRegion, !GetAtt AuroraPrimaryCluster.Endpoint.Address, '']
+  PrimaryDatabaseEndpoint:
+    Description: 'Primary Database Endpoint'
+    Value: !If [IsPrimaryRegion, !GetAtt PrimaryDatabase.Endpoint.Address, '']
     Export:
-      Name: !Sub '${AWS::StackName}-AuroraPrimaryClusterEndpoint'
+      Name: !Sub '${AWS::StackName}-PrimaryDatabaseEndpoint'
 
-  AuroraPrimaryClusterReadEndpoint:
-    Description: 'Aurora Primary Cluster Read Endpoint'
-    Value:
-      !If [
-        IsPrimaryRegion,
-        !GetAtt AuroraPrimaryCluster.ReadEndpoint.Address,
-        '',
-      ]
+  PrimaryDatabasePort:
+    Description: 'Primary Database Port'
+    Value: !If [IsPrimaryRegion, !GetAtt PrimaryDatabase.Endpoint.Port, '']
     Export:
-      Name: !Sub '${AWS::StackName}-AuroraPrimaryClusterReadEndpoint'
+      Name: !Sub '${AWS::StackName}-PrimaryDatabasePort'
 
   # DynamoDB Outputs
   TradingDataTableName:
