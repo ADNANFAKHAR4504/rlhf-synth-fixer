@@ -1,12 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface StaticWebsiteStackProps extends cdk.StackProps {
@@ -70,7 +70,7 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     // Route 53 hosted zone
     this.hostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName: `${props.environmentSuffix}.${props.domainName}`,
+      zoneName: siteDomain,
     });
 
     // If certificate is not provided, create one locally (for non us-east-1 regions)
