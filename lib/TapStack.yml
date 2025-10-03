@@ -16,13 +16,10 @@ Metadata:
           - PrimaryRegion
           - SecondaryRegion
           - PrimaryVpcCidr
-          - SecondaryVpcCidr
       - Label:
           default: 'Database Configuration'
         Parameters:
           - DatabaseMasterUsername
-          - DatabaseMasterPassword
-          - AuroraEngineVersion
       - Label:
           default: 'Backup and Recovery'
         Parameters:
@@ -66,30 +63,11 @@ Parameters:
     Default: '10.0.0.0/16'
     Description: 'CIDR block for primary VPC'
 
-  SecondaryVpcCidr:
-    Type: String
-    Default: '10.1.0.0/16'
-    Description: 'CIDR block for secondary VPC'
-
   DatabaseMasterUsername:
     Type: String
     Default: 'dbadmin'
     NoEcho: true
     Description: 'Master username for Aurora database'
-
-  DatabaseMasterPassword:
-    Type: String
-    Default: 'TempPassword123!'
-    NoEcho: true
-    MinLength: 12
-    MaxLength: 64
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]*'
-    Description: 'Master password for Aurora database (12-64 characters)'
-
-  AuroraEngineVersion:
-    Type: String
-    Default: '13.7'
-    Description: 'Aurora PostgreSQL engine version'
 
   BackupRetentionDays:
     Type: Number
@@ -197,7 +175,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -211,7 +189,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -226,7 +204,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.3.0/24'
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-private-1'
@@ -239,7 +217,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.4.0/24'
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-private-2'
@@ -253,7 +231,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.5.0/24'
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-db-1'
@@ -266,7 +244,7 @@ Resources:
     Properties:
       VpcId: !Ref PrimaryVPC
       CidrBlock: '10.0.6.0/24'
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub '${CompanyName}-${Environment}-primary-db-2'
@@ -428,11 +406,11 @@ Resources:
     Condition: IsPrimaryRegion
     Properties:
       DBInstanceIdentifier: !Sub '${CompanyName}-${Environment}-primary-db'
-      DBInstanceClass: 'db.t3.micro'
+      DBInstanceClass: 'db.t3.medium'
       Engine: 'postgres'
-      EngineVersion: '13.7'
+      EngineVersion: '13.22'
       MasterUsername: !Ref DatabaseMasterUsername
-      MasterUserPassword: !Ref DatabaseMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${CompanyName}-${Environment}-db-password:SecretString:password}}'
       DBName: 'tradingapp'
       AllocatedStorage: 20
       StorageType: 'gp2'
@@ -799,6 +777,7 @@ Resources:
   # CloudWatch Dashboards
   DRDashboard:
     Type: AWS::CloudWatch::Dashboard
+    Condition: IsPrimaryRegion
     Properties:
       DashboardName: !Sub '${CompanyName}-${Environment}-dr-dashboard'
       DashboardBody: !Sub |
@@ -978,19 +957,19 @@ Resources:
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${CompanyName}-${Environment}-dr-backup-plan'
-        Rules:
+        BackupPlanRule:
           - RuleName: 'DailyBackups'
-            TargetBackupVaultName: !Ref BackupVault
+            TargetBackupVault: !Ref BackupVault
             ScheduleExpression: 'cron(0 2 * * ? *)'
             StartWindowMinutes: 60
             CompletionWindowMinutes: 120
             Lifecycle:
-              DeleteAfterDays: 35
+              DeleteAfterDays: 120
               MoveToColdStorageAfterDays: 30
             CopyActions:
               - DestinationBackupVaultArn: !Sub 'arn:aws:backup:${SecondaryRegion}:${AWS::AccountId}:backup-vault:${CompanyName}-${Environment}-dr-backup-vault-${SecondaryRegion}'
                 Lifecycle:
-                  DeleteAfterDays: 35
+                  DeleteAfterDays: 120
                   MoveToColdStorageAfterDays: 30
 
   BackupVault:
@@ -1072,12 +1051,7 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId:
-                !If [
-                  IsPrimaryRegion,
-                  !Ref PrimaryKMSKey,
-                  !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key',
-                ]
+              KmsKeyId: !Ref PrimaryKMSKey
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -1245,18 +1219,21 @@ Resources:
 Outputs:
   # VPC Outputs
   PrimaryVPCId:
+    Condition: IsPrimaryRegion
     Description: 'Primary VPC ID'
     Value: !Ref PrimaryVPC
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryVPCId'
 
   PrimaryPrivateSubnet1Id:
+    Condition: IsPrimaryRegion
     Description: 'Primary Private Subnet 1 ID'
     Value: !Ref PrimaryPrivateSubnet1
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryPrivateSubnet1Id'
 
   PrimaryPrivateSubnet2Id:
+    Condition: IsPrimaryRegion
     Description: 'Primary Private Subnet 2 ID'
     Value: !Ref PrimaryPrivateSubnet2
     Export:
@@ -1264,18 +1241,21 @@ Outputs:
 
   # Database Outputs
   PrimaryDatabaseIdentifier:
+    Condition: IsPrimaryRegion
     Description: 'Primary Database Instance Identifier'
     Value: !Ref PrimaryDatabase
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryDatabaseIdentifier'
 
   PrimaryDatabaseEndpoint:
+    Condition: IsPrimaryRegion
     Description: 'Primary Database Endpoint'
     Value: !GetAtt PrimaryDatabase.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryDatabaseEndpoint'
 
   PrimaryDatabasePort:
+    Condition: IsPrimaryRegion
     Description: 'Primary Database Port'
     Value: !GetAtt PrimaryDatabase.Endpoint.Port
     Export:
@@ -1323,12 +1303,14 @@ Outputs:
 
   # Load Balancer Outputs
   ApplicationLoadBalancerDNSName:
+    Condition: IsPrimaryRegion
     Description: 'Application Load Balancer DNS Name'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLoadBalancerDNSName'
 
   ApplicationLoadBalancerArn:
+    Condition: IsPrimaryRegion
     Description: 'Application Load Balancer ARN'
     Value: !Ref ApplicationLoadBalancer
     Export:
@@ -1336,12 +1318,14 @@ Outputs:
 
   # KMS Outputs
   PrimaryKMSKeyId:
+    Condition: IsPrimaryRegion
     Description: 'Primary KMS Key ID'
     Value: !Ref PrimaryKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-PrimaryKMSKeyId'
 
   PrimaryKMSKeyArn:
+    Condition: IsPrimaryRegion
     Description: 'Primary KMS Key ARN'
     Value: !GetAtt PrimaryKMSKey.Arn
     Export:
