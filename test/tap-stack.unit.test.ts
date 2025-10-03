@@ -46,6 +46,23 @@ describe('TapStack', () => {
       const awsProvider = Object.values(synthesized.provider.aws)[0] as any;
       expect(awsProvider.region).toBe('us-east-2');
     });
+
+    test('should accept default tags', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackWithTags', {
+        defaultTags: {
+          tags: {
+            Environment: 'test',
+            Project: 'referral-program',
+          },
+        },
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      const awsProvider = Object.values(synthesized.provider.aws)[0] as any;
+      expect(awsProvider.default_tags).toBeDefined();
+      expect(awsProvider.default_tags).toHaveLength(1);
+    });
   });
 
   describe('DynamoDB Resources', () => {

@@ -27,7 +27,6 @@ import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucke
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
 import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
-import * as fs from 'fs';
 import * as path from 'path';
 import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
@@ -47,7 +46,7 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
+    const awsRegion = AWS_REGION_OVERRIDE; // Always override to us-east-2
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -271,11 +270,8 @@ export class TapStack extends TerraformStack {
         'arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy',
     });
 
-    // Create Lambda function code
+    // Create Lambda function code archives
     const lambdaDir = path.join(__dirname, 'lambda');
-    if (!fs.existsSync(lambdaDir)) {
-      fs.mkdirSync(lambdaDir, { recursive: true });
-    }
 
     // Create archive for Lambda
     const rewardCalcArchive = new DataArchiveFile(this, 'reward-calc-archive', {
