@@ -29,8 +29,8 @@ import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboar
 import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DataArchiveFile } from '../.gen/providers/archive/data-archive-file';
-import { ArchiveProvider } from '../.gen/providers/archive/provider';
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 
 interface TapStackProps {
   environmentSuffix?: string;
