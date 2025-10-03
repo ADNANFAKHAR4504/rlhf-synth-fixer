@@ -10,5 +10,18 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "Lambda, DynamoDB, API Gateway,"
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
