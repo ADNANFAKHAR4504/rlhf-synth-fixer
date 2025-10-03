@@ -101,12 +101,18 @@ class TestProductReviewsIntegration(unittest.TestCase):
         gsi_names = [gsi["IndexName"] for gsi in table.get("GlobalSecondaryIndexes", [])]
         self.assertIn("ReviewerIdIndex", gsi_names)
 
-        # Verify Point-in-Time Recovery is enabled
+        # Verify Point-in-Time Recovery status (depends on environment)
+        environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
         pitr_response = self.dynamodb.describe_continuous_backups(TableName=table_name)
         pitr_status = pitr_response["ContinuousBackupsDescription"][
             "PointInTimeRecoveryDescription"
         ]["PointInTimeRecoveryStatus"]
-        self.assertEqual(pitr_status, "ENABLED")
+        
+        # PITR is disabled for dev and PR environments to speed up deployment
+        if environment_suffix == "dev" or environment_suffix.startswith("pr"):
+            self.assertEqual(pitr_status, "DISABLED")
+        else:
+            self.assertEqual(pitr_status, "ENABLED")
 
     @mark.it("verifies end-to-end review submission workflow")
     def test_review_submission_workflow(self):
@@ -184,7 +190,7 @@ class TestProductReviewsIntegration(unittest.TestCase):
     def test_cloudwatch_dashboard_exists(self):
         """Test that CloudWatch dashboard is created"""
         environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
-        dashboard_name = f"ProductReviews-Dashboard-{environment_suffix}"
+        dashboard_name = f"ProductReviews-{environment_suffix}"
 
         try:
             response = self.cloudwatch.get_dashboard(DashboardName=dashboard_name)

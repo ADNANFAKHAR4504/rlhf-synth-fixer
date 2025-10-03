@@ -1,16 +1,17 @@
 """Unit tests for CDK infrastructure stacks"""
 import unittest
 from unittest.mock import MagicMock, patch
+
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
+from aws_cdk.assertions import Match, Template
 from pytest import mark
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.api_stack import ApiStack, ApiStackProps
 from lib.dynamodb_stack import DynamoDBStack, DynamoDBStackProps
 from lib.lambda_stack import LambdaStack, LambdaStackProps
-from lib.api_stack import ApiStack, ApiStackProps
 from lib.monitoring_stack import MonitoringStack, MonitoringStackProps
 from lib.ssm_stack import SSMStack, SSMStackProps
+from lib.tap_stack import TapStack, TapStackProps
 
 
 @mark.describe("TapStack")
@@ -150,7 +151,7 @@ class TestLambdaStack(unittest.TestCase):
         template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"ReviewProcessor-{env_suffix}",
+                "FunctionName": f"ReviewProcessorV2-{env_suffix}",
                 "Runtime": "python3.9",
                 "MemorySize": 256,
                 "Timeout": 30,
@@ -309,8 +310,8 @@ class TestMonitoringStack(unittest.TestCase):
 
         # Create real CDK resources
         from aws_cdk import aws_apigateway as apigateway
-        from aws_cdk import aws_lambda as lambda_
         from aws_cdk import aws_dynamodb as dynamodb
+        from aws_cdk import aws_lambda as lambda_
 
         test_api = apigateway.RestApi(
             self.stack, "TestApi", rest_api_name=f"ProductReviewsAPI-{env_suffix}"
