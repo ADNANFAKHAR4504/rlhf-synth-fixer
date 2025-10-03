@@ -23,15 +23,15 @@ export class DatabaseStack extends Construct {
     const region = cdk.Stack.of(this).region;
 
     // Define database engine and version based on region support
-    // us-west-1 has extremely limited database version support, use older stable versions
+    // us-east-1 has full PostgreSQL support with modern versions available
     const getDatabaseEngine = (region: string): rds.IInstanceEngine => {
-      if (region === 'us-west-1') {
-        // us-west-1 has very limited support - use oldest MySQL 5.7 version
-        return rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_5_7_38,
+      if (region === 'us-east-1') {
+        // us-east-1 has full PostgreSQL support
+        return rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15_4,
         });
       } else {
-        // Other regions typically support PostgreSQL
+        // Other regions may have limited support, use stable PostgreSQL version
         return rds.DatabaseInstanceEngine.postgres({
           version: rds.PostgresEngineVersion.VER_13_7,
         });
@@ -39,18 +39,18 @@ export class DatabaseStack extends Construct {
     };
 
     const databaseEngine = getDatabaseEngine(region);
-    const isMySql = region === 'us-west-1'; // Use MySQL for us-west-1 due to limited PostgreSQL support
+    const isPostgres = true; // Use PostgreSQL for all regions now
 
     // Output the selected database engine for debugging
     new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
-      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 5.7.38' : 'PostgreSQL 13.7'}`,
+      value: `Database engine selected for region ${region}: PostgreSQL ${region === 'us-east-1' ? '15.4' : '13.7'}`,
       description:
         'Database engine automatically selected based on region compatibility',
     });
 
     // Create KMS key for database encryption
     const encryptionKey = new kms.Key(this, 'DatabaseEncryptionKey', {
-      description: 'KMS key for RDS PostgreSQL encryption',
+      description: 'KMS key for RDS database encryption',
       enableKeyRotation: true,
       alias: `retail-db-key-${props.environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
@@ -113,20 +113,14 @@ export class DatabaseStack extends Construct {
       databaseName: 'retaildb',
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
         engine: databaseEngine,
-        parameters: isMySql
-          ? {
-            // MySQL 5.7 parameters
-            general_log: '1',
-            slow_query_log: '1',
-            long_query_time: '2',
-            innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}',
-          }
-          : {
-            // PostgreSQL parameters
-            log_statement: 'all',
-            log_duration: 'on',
-            shared_preload_libraries: 'pg_stat_statements',
-          },
+        parameters: {
+          // PostgreSQL parameters - optimized for us-east-1
+          log_statement: 'all',
+          log_duration: 'on',
+          shared_preload_libraries: 'pg_stat_statements',
+          max_connections: '100',
+          shared_buffers: '256MB',
+        },
       }),
     });
 

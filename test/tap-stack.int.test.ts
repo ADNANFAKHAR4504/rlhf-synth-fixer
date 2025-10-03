@@ -1,7 +1,6 @@
 // Integration tests for the deployed infrastructure
-import fs from 'fs';
 import AWS from 'aws-sdk';
-import { promisify } from 'util';
+import fs from 'fs';
 
 // Helper function to check if outputs file exists
 function getOutputs() {
@@ -15,7 +14,7 @@ function getOutputs() {
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth74150629';
-const region = process.env.AWS_REGION || 'us-west-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // Configure AWS SDK
 AWS.config.update({ region });
