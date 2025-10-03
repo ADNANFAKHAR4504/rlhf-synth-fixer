@@ -201,15 +201,22 @@ class TestTapStackNetworkLayer(unittest.TestCase):
         args = TapStackArgs()
         stack = TapStack("test-stack", args)
         
-        def check_vpc(args_dict):
-            vpc_id, vpc_props = args_dict
+        def check_vpc(vpc_data):
+            vpc_id, cidr, dns_hostnames, dns_support, tags = vpc_data
             self.assertIsNotNone(vpc_id)
-            self.assertEqual(vpc_props['cidr_block'], '10.18.0.0/16')
-            self.assertTrue(vpc_props['enable_dns_hostnames'])
-            self.assertTrue(vpc_props['enable_dns_support'])
-            self.assertIn('Environment', vpc_props['tags'])
+            self.assertEqual(cidr, '10.18.0.0/16')
+            self.assertTrue(dns_hostnames)
+            self.assertTrue(dns_support)
+            self.assertIn('Environment', tags)
+            return True
         
-        return pulumi.Output.all(stack.vpc.id, stack.vpc).apply(lambda args: check_vpc(args))
+        return pulumi.Output.all(
+            stack.vpc.id,
+            stack.vpc.cidr_block,
+            stack.vpc.enable_dns_hostnames,
+            stack.vpc.enable_dns_support,
+            stack.vpc.tags
+        ).apply(check_vpc)
     
     @pulumi.runtime.test
     def test_internet_gateway_creation(self):
