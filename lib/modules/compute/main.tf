@@ -77,10 +77,11 @@ resource "aws_lb" "main" {
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.bucket
-    enabled = true
-  }
+  # Temporarily disable access logs to resolve permission issues
+  # access_logs {
+  #   bucket  = aws_s3_bucket.alb_logs.bucket
+  #   enabled = true
+  # }
 
   tags = {
     Name = "${var.name_prefix}-alb-${var.region}"
@@ -114,7 +115,8 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
 data "aws_elb_service_account" "main" {}
 
 resource "aws_s3_bucket_policy" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  bucket     = aws_s3_bucket.alb_logs.id
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -138,6 +140,16 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         Action = [
           "s3:GetBucketAcl",
           "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.alb_logs.arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action = [
+          "s3:GetBucketLocation"
         ]
         Resource = aws_s3_bucket.alb_logs.arn
       }
@@ -210,9 +222,6 @@ resource "aws_launch_template" "main" {
     delete_on_termination       = true
     security_groups             = [aws_security_group.app.id]
   }
-
-  # Ensure instances can reach the internet for package installation
-  vpc_security_group_ids = [aws_security_group.app.id]
 
   block_device_mappings {
     device_name = "/dev/xvda"
