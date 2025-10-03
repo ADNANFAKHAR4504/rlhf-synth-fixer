@@ -447,7 +447,7 @@ describe("Terraform Infrastructure Files", () => {
 
     test("WAF CloudWatch log group is configured", () => {
       expect(mainContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"waf_logs"/);
-      expect(mainContent).toMatch(/name\s*=\s*"\/aws\/waf\/fintech-api-\$\{var\.environment_suffix\}"/);
+      expect(mainContent).toMatch(/name\s*=\s*"\/aws\/wafv2\/fintech-api-\$\{var\.environment_suffix\}"/);
     });
 
     test("WAF outputs are defined", () => {

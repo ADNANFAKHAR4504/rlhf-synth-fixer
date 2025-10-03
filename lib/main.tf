@@ -170,7 +170,7 @@ resource "aws_lambda_function" "transaction_processor" {
       ENVIRONMENT          = "Production"
       ENVIRONMENT_SUFFIX   = var.environment_suffix
       SSM_PARAMETER_PREFIX = "/fintech-api-${var.environment_suffix}"
-      _X_AMZN_TRACE_ID     = "" # Required for X-Ray context
+      XRAY_TRACE_ID        = "" # X-Ray tracing context
     }
   }
 
@@ -472,7 +472,8 @@ resource "aws_xray_sampling_rule" "fintech_api_sampling" {
 
 # X-Ray Encryption Configuration
 resource "aws_xray_encryption_config" "fintech_api" {
-  type = "KMS"
+  type   = "KMS"
+  key_id = "alias/aws/xray"
 }
 
 # X-Ray Group for filtering traces
@@ -487,7 +488,7 @@ resource "aws_xray_group" "fintech_api_group" {
 
 # CloudWatch Log Group for WAF
 resource "aws_cloudwatch_log_group" "waf_logs" {
-  name              = "/aws/waf/fintech-api-${var.environment_suffix}"
+  name              = "/aws/wafv2/fintech-api-${var.environment_suffix}"
   retention_in_days = 7
 
   tags = var.common_tags
@@ -717,6 +718,6 @@ resource "aws_wafv2_web_acl_logging_configuration" "fintech_api_waf_logging" {
 
 # Associate WAF with API Gateway
 resource "aws_wafv2_web_acl_association" "api_gateway_waf" {
-  resource_arn = aws_apigatewayv2_stage.api_stage.arn
+  resource_arn = "${aws_apigatewayv2_api.fintech_api.arn}/stages/${aws_apigatewayv2_stage.api_stage.name}"
   web_acl_arn  = aws_wafv2_web_acl.fintech_api_waf.arn
 }
