@@ -857,10 +857,6 @@ Resources:
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values: 
-                - 'arn:aws:s3:::*/*'
       Tags:
         - Key: 'Name'
           Value: !Sub '${AWS::StackName}-CloudTrail'
