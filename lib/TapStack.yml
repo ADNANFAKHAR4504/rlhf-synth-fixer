@@ -67,14 +67,22 @@ Parameters:
 
   CreateConfigDeliveryChannel:
     Type: String
-    Description: Whether to create AWS Config delivery channel (set to false if one already exists in account)
-    Default: 'true'
+    Description: |
+      Whether to create AWS Config delivery channel. 
+      IMPORTANT: AWS allows only 1 delivery channel per account per region.
+      Set to 'false' if a delivery channel already exists in your account to avoid deployment errors.
+      Check existing channels with: aws configservice describe-delivery-channels
+    Default: 'false'
     AllowedValues: ['true', 'false']
 
   CreateConfigRecorder:
     Type: String
-    Description: Whether to create AWS Config configuration recorder (set to false if one already exists in account)
-    Default: 'true'
+    Description: |
+      Whether to create AWS Config configuration recorder.
+      IMPORTANT: AWS allows only 1 configuration recorder per account per region.
+      Set to 'false' if a configuration recorder already exists in your account to avoid deployment errors.
+      Check existing recorders with: aws configservice describe-configuration-recorders
+    Default: 'false'
     AllowedValues: ['true', 'false']
 
 Conditions:
