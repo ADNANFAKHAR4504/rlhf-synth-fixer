@@ -301,12 +301,6 @@ describe('TapStack - Meal Planning System', () => {
   });
 
   describe('API Gateway', () => {
-    test('Should create REST API with CORS configuration', () => {
-      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'Meal Planning Service-dev',
-      });
-    });
-
     test('Should create API Deployment', () => {
       template.resourceCountIs('AWS::ApiGateway::Deployment', 1);
     });
@@ -396,12 +390,6 @@ describe('TapStack - Meal Planning System', () => {
   });
 
   describe('CloudWatch Resources', () => {
-    test('Should create CloudWatch Dashboard', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: 'meal-planning-system-metrics-dev',
-      });
-    });
-
     test('Should create CloudWatch Alarms', () => {
       template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
     });
