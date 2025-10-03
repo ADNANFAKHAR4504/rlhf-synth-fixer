@@ -40,7 +40,7 @@ import {
 import { 
   BackupClient, 
   DescribeBackupVaultCommand,
-  DescribeBackupPlanCommand 
+  ListBackupPlansCommand 
 } from '@aws-sdk/client-backup';
 import { 
   EC2Client, 
@@ -355,8 +355,8 @@ describe('Enhanced SaaS Staging Environment Integration Tests', () => {
       });
       const sgResult = await ec2Client.send(sgCommand);
       
-      const ingressRules = sgResult.SecurityGroups?.[0]?.IpRules;
-      expect(ingressRules?.some(rule => rule.FromPort === 3306 && rule.ToPort === 3306)).toBe(true);
+      const ingressRules = sgResult.SecurityGroups?.[0]?.IpPermissions;
+      expect(ingressRules?.some((rule: any) => rule.FromPort === 3306 && rule.ToPort === 3306)).toBe(true);
     });
 
     test('should validate ElastiCache security group configuration', async () => {
@@ -370,7 +370,7 @@ describe('Enhanced SaaS Staging Environment Integration Tests', () => {
       
       expect(sgResult.SecurityGroups).toHaveLength(1);
       const sg = sgResult.SecurityGroups?.[0];
-      expect(sg?.IpRules?.some(rule => rule.FromPort === 6379)).toBe(true);
+      expect(sg?.IpPermissions?.some((rule: any) => rule.FromPort === 6379)).toBe(true);
     });
   });
 
