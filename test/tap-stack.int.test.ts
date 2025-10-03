@@ -1,95 +1,110 @@
-// test/live-integration.test.ts
-import { readFileSync } from "fs";
+import fs from "fs";
 import path from "path";
 import {
   EC2Client,
+  DescribeVpcsCommand,
   DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
 } from "@aws-sdk/client-ec2";
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from "@aws-sdk/client-rds";
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
 } from "@aws-sdk/client-elastic-load-balancing-v2";
-import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
 import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
-import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
 
-const outputs = JSON.parse(readFileSync('cfn-outputs/flat-outputs.json', "utf-8"));
+const region = process.env.AWS_REGION || "us-east-1";
 
-// Create AWS SDK clients
-const ec2Client = new EC2Client({});
-const rdsClient = new RDSClient({});
-const elbv2Client = new ElasticLoadBalancingV2Client({});
-const s3Client = new S3Client({});
-const secretsClient = new SecretsManagerClient({});
-const cloudwatchClient = new CloudWatchClient({});
+// Load flat-outputs.json
 
-describe("Live AWS Resource Integration Tests", () => {
-  jest.setTimeout(60000); // 1 min timeout for live calls
+const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', "utf8"));
 
-  test("EC2 Instance exists and is running", async () => {
-    const { EC2InstanceId } = outputs;
-    const command = new DescribeInstancesCommand({ InstanceIds: [EC2InstanceId] });
-    const response = await ec2Client.send(command);
+describe("Live Integration Tests - CloudFormation Stack", () => {
+  const ec2 = new EC2Client({ region });
+  const alb = new ElasticLoadBalancingV2Client({ region });
+  const rds = new RDSClient({ region });
+  const secrets = new SecretsManagerClient({ region });
 
-    expect(response.Reservations?.length).toBeGreaterThan(0);
-    const instance = response.Reservations![0].Instances![0];
-    expect(instance.InstanceId).toBe(EC2InstanceId);
-    expect(instance.State?.Name).toBeDefined();
+  // --- Basic Resource Tests ---
+  test("VPC should exist", async () => {
+    const vpcId = outputs.VPCId;
+    expect(vpcId).toBeDefined();
+
+    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+    expect(res.Vpcs?.[0].VpcId).toBe(vpcId);
   });
 
-  test("RDS Database exists and healthy", async () => {
-    const { DBInstanceEndpoint } = outputs;
-    const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.DBInstanceEndpoint.split(".")[0] });
-    const response = await rdsClient.send(command);
+  test("Application Load Balancer should exist", async () => {
+    const albArn = outputs.ApplicationLoadBalancerArn;
+    expect(albArn).toBeDefined();
 
-    expect(response.DBInstances?.length).toBeGreaterThan(0);
-    const db = response.DBInstances![0];
-    expect(db.Endpoint?.Address).toBe(DBInstanceEndpoint);
+    const res = await alb.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [albArn] }));
+    expect(res.LoadBalancers?.[0].LoadBalancerArn).toBe(albArn);
   });
 
-  test("ALB exists and reachale", async () => {
-    const { ApplicationLoadBalancerArn } = outputs;
-    const command = new DescribeLoadBalancersCommand({ LoadBalancerArns: [ApplicationLoadBalancerArn] });
-    const response = await elbv2Client.send(command);
+  test("RDS instance should be available", async () => {
+    const dbEndpoint = outputs.DBInstanceEndpoint;
+    expect(dbEndpoint).toBeDefined();
 
-    expect(response.LoadBalancers?.length).toBe(1);
-    expect(response.LoadBalancers![0].LoadBalancerArn).toBe(ApplicationLoadBalancerArn);
+    const res = await rds.send(new DescribeDBInstancesCommand({}));
+    const found = res.DBInstances?.find(
+      (db) => db.Endpoint?.Address === dbEndpoint
+    );
+    expect(found).toBeDefined();
+    expect(found?.DBInstanceStatus).toBe("available");
   });
 
-  test("ALB Target Group exists and have some target", async () => {
-    const { ALBTargetGroupArn } = outputs;
-    const command = new DescribeTargetGroupsCommand({ TargetGroupArns: [ALBTargetGroupArn] });
-    const response = await elbv2Client.send(command);
+  test("Secrets Manager secret should exist", async () => {
+    const secretArn = outputs.DBSecretArn;
+    expect(secretArn).toBeDefined();
 
-    expect(response.TargetGroups?.length).toBe(1);
-    expect(response.TargetGroups![0].TargetGroupArn).toBe(ALBTargetGroupArn);
+    const res = await secrets.send(new DescribeSecretCommand({ SecretId: secretArn }));
+    expect(res.ARN).toBe(secretArn);
   });
 
-  test("S3 Logs Bucket exists", async () => {
-    const { LogsBucketName } = outputs;
-    const command = new HeadBucketCommand({ Bucket: LogsBucketName });
-    await expect(s3Client.send(command)).resolves.not.toThrow();
+  // --- Service Integration Tests ---
+  test("ALB TargetGroup should be registered with EC2", async () => {
+    const tgArn = outputs.ALBTargetGroupArn;
+    expect(tgArn).toBeDefined();
+
+    // Ensure TargetGroup exists
+    const tgRes = await alb.send(new DescribeTargetGroupsCommand({ TargetGroupArns: [tgArn] }));
+    expect(tgRes.TargetGroups?.[0].TargetGroupArn).toBe(tgArn);
+
+    // Ensure at least 1 healthy target
+    const health = await alb.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
+    expect(health.TargetHealthDescriptions?.length).toBeGreaterThan(0);
+
+    const healthy = health.TargetHealthDescriptions?.some(
+      (t) => t.TargetHealth?.State === "healthy"
+    );
+    expect(healthy).toBe(true);
   });
 
-  test("Secrets Manager secret exists", async () => {
-    const { DBSecretArn } = outputs;
-    const command = new DescribeSecretCommand({ SecretId: DBSecretArn });
-    const response = await secretsClient.send(command);
+  test("EC2 instances should exist in AutoScalingGroup", async () => {
+    const asgName = outputs.AutoScalingGroupName;
+    expect(asgName).toBeDefined();
 
-    expect(response.ARN).toBe(DBSecretArn);
+    const res = await ec2.send(new DescribeInstancesCommand({}));
+    const instances = res.Reservations?.flatMap((r) => r.Instances ?? []);
+    // Simple check: there should be EC2s tagged with ASG name
+    const filtered = instances.filter((i) =>
+      i.Tags?.some((t) => t.Key === "aws:autoscaling:groupName" && t.Value === asgName)
+    );
+    expect(filtered.length).toBeGreaterThan(0);
   });
 
-  test("CloudWatch Dashboard exists", async () => {
-    const { DashboardName } = outputs;
-    const command = new GetDashboardCommand({ DashboardName });
-    const response = await cloudwatchClient.send(command);
+  test("Security Group should allow ALB -> EC2 traffic", async () => {
+    const albSgId = outputs.ALBSecurityGroupId;
+    const ec2SgId = outputs.EC2SecurityGroupId;
 
-    expect(response.DashboardName).toBe(DashboardName);
-    expect(response.DashboardBody).toBeDefined();
+    const sgRes = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [ec2SgId] }));
+    const rules = sgRes.SecurityGroups?.[0].IpPermissions ?? [];
+    const ruleFromAlb = rules.some((r) =>
+      r.UserIdGroupPairs?.some((pair) => pair.GroupId === albSgId)
+    );
+    expect(ruleFromAlb).toBe(true);
   });
 });
