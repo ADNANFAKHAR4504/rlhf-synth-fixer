@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "70708394",
+  "team": "1",
+  "startedAt": "2025-10-02T10:11:38.206Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "S3, SageMaker, Lambda, Step Functions, Batch, DynamoDB, Kinesis Data Streams, API Gateway, CloudWatch, EventBridge, Glue, Athena, SNS, Systems Manager, IAM, VPC",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}
