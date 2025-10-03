@@ -40,8 +40,10 @@ describe('Hotel Booking Platform CloudFormation Template', () => {
 
     test('should have database credentials parameters', () => {
       expect(template.Parameters.DBMasterUsername).toBeDefined();
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
+      expect(template.Parameters.DBMasterUsername.Type).toBe('String');
+      expect(template.Parameters.DBMasterUsername.Default).toBe('admin');
+      // DBMasterPassword parameter removed - now using Secrets Manager
+      expect(template.Parameters.DBMasterPassword).toBeUndefined();
     });
   });
 
@@ -223,6 +225,17 @@ describe('Hotel Booking Platform CloudFormation Template', () => {
   });
 
   describe('Database Layer', () => {
+    test('should have Secrets Manager secret for database password', () => {
+      expect(template.Resources.DBMasterPasswordSecret).toBeDefined();
+      expect(template.Resources.DBMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      const secret = template.Resources.DBMasterPasswordSecret.Properties;
+      expect(secret.Name['Fn::Sub']).toBe('BookingPlatform-DB-Password-${EnvironmentSuffix}');
+      expect(secret.Description).toBe('Master password for Aurora MySQL cluster');
+      expect(secret.GenerateSecretString).toBeDefined();
+      expect(secret.GenerateSecretString.PasswordLength).toBe(16);
+      expect(secret.GenerateSecretString.GenerateStringKey).toBe('password');
+    });
+
     test('should have Aurora MySQL cluster configured', () => {
       expect(template.Resources.AuroraDBCluster).toBeDefined();
       expect(template.Resources.AuroraDBCluster.Type).toBe('AWS::RDS::DBCluster');
@@ -233,6 +246,8 @@ describe('Hotel Booking Platform CloudFormation Template', () => {
       expect(cluster.BackupRetentionPeriod).toBe(7);
       expect(cluster.StorageEncrypted).toBe(true);
       expect(cluster.DBClusterIdentifier['Fn::Sub']).toBe('bookingplatform-aurora-cluster-${EnvironmentSuffix}');
+      // Verify using Secrets Manager for password
+      expect(cluster.MasterUserPassword['Fn::Sub']).toBe('{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}');
     });
 
     test('should have Multi-AZ Aurora instances', () => {
