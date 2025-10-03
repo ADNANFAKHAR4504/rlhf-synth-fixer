@@ -920,6 +920,22 @@ def send_response(event, context, status, data, physical_id=None):
                                     "s3:HeadObject"
                                 ],
                                 resources=[f"{self.trail_bucket.bucket_arn}/*"]
+                            ),
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
+                                    "s3:GetBucketLocation",
+                                    "s3:ListBucket"
+                                ],
+                                resources=[self.trail_bucket.bucket_arn]
+                            ),
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
+                                    "kms:Decrypt",
+                                    "kms:GenerateDataKey"
+                                ],
+                                resources=[self.audit_key.key_arn]
                             )
                         ]
                     )
