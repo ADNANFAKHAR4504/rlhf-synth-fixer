@@ -1006,6 +1006,106 @@
                     "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
                 }
             }
+        },
+        "ValidatePaymentLambdaName": {
+            "Description": "Name of the Validate Payment Lambda function",
+            "Value": {
+                "Ref": "ValidatePaymentLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidatePaymentLambdaName"
+                }
+            }
+        },
+        "ValidatePaymentLambdaArn": {
+            "Description": "ARN of the Validate Payment Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ValidatePaymentLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ValidatePaymentLambdaArn"
+                }
+            }
+        },
+        "ProcessPaymentLambdaName": {
+            "Description": "Name of the Process Payment Lambda function",
+            "Value": {
+                "Ref": "ProcessPaymentLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessPaymentLambdaName"
+                }
+            }
+        },
+        "ProcessPaymentLambdaArn": {
+            "Description": "ARN of the Process Payment Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessPaymentLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessPaymentLambdaArn"
+                }
+            }
+        },
+        "StoreTransactionLambdaName": {
+            "Description": "Name of the Store Transaction Lambda function",
+            "Value": {
+                "Ref": "StoreTransactionLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StoreTransactionLambdaName"
+                }
+            }
+        },
+        "StoreTransactionLambdaArn": {
+            "Description": "ARN of the Store Transaction Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StoreTransactionLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StoreTransactionLambdaArn"
+                }
+            }
+        },
+        "NotifyCustomerLambdaName": {
+            "Description": "Name of the Notify Customer Lambda function",
+            "Value": {
+                "Ref": "NotifyCustomerLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotifyCustomerLambdaName"
+                }
+            }
+        },
+        "NotifyCustomerLambdaArn": {
+            "Description": "ARN of the Notify Customer Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NotifyCustomerLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotifyCustomerLambdaArn"
+                }
+            }
         }
     }
 }
