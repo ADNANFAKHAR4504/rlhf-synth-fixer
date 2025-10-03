@@ -13,6 +13,7 @@ Parameters:
 
   AlertEmail:
     Type: String
+    Default: 'test@example.com'
     Description: Email address for workflow failure alerts
     AllowedPattern: '[^@]+@[^@]+\.[^@]+'
 
