@@ -7,8 +7,8 @@ Parameters:
     Type: String
     Default: dev
   KeyName:
-    Description: Name of an existing EC2 KeyPair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access (leave empty to skip SSH key)
+    Type: String
     Default: ""
   DBUsername:
     Description: Username for MySQL database
