@@ -94,13 +94,13 @@ variable "ssl_certificate_arn" {
 variable "min_instances" {
   description = "Min EC2 instances in ASG"
   type        = number
-  default     = 1
+  default     = 0
 }
 
 variable "max_instances" {
   description = "Max EC2 instances in ASG"
   type        = number
-  default     = 4
+  default     = 2
 }
 
 ###################
@@ -940,7 +940,7 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${var.project}-asg"
   max_size                  = var.max_instances
   min_size                  = var.min_instances
-  desired_capacity          = var.min_instances
+  desired_capacity          = 0
   health_check_grace_period = 300
   health_check_type         = "ELB"
   vpc_zone_identifier       = aws_subnet.private_app[*].id
