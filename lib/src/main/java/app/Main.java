@@ -821,34 +821,36 @@ class TapStack extends Stack {
                                          final Map<String, String> environment) {
         return new Function(this, id + environmentSuffix, FunctionProps.builder()
                 .functionName(functionName + "-" + environmentSuffix)
-                .runtime(Runtime.JAVA_17)
-                .handler("com.doccollab.handlers." + id + "::handleRequest")
+                .runtime(Runtime.PYTHON_3_12)
+                .handler("index.handler")
                 .code(Code.fromInline(
-                        "package com.doccollab.handlers;\n" +
-                        "import java.util.*;\n" +
-                        "public class " + id + " {\n" +
-                        "    public Map<String, Object> handleRequest(Map<String, Object> input, Object context) {\n" +
-                        "        Map<String, Object> response = new HashMap<>();\n" +
-                        "        try {\n" +
-                        "            String userId = (String) input.get(\"userId\");\n" +
-                        "            String docId = (String) input.get(\"documentId\");\n" +
-                        "            if (userId == null || userId.isEmpty()) {\n" +
-                        "                response.put(\"statusCode\", 400);\n" +
-                        "                response.put(\"body\", \"Missing or invalid userId\");\n" +
-                        "                return response;\n" +
+                        "import json\n" +
+                        "import time\n\n" +
+                        "def handler(event, context):\n" +
+                        "    try:\n" +
+                        "        user_id = event.get('userId')\n" +
+                        "        doc_id = event.get('documentId')\n" +
+                        "        \n" +
+                        "        if not user_id:\n" +
+                        "            return {\n" +
+                        "                'statusCode': 400,\n" +
+                        "                'body': json.dumps({'error': 'userId is required'})\n" +
                         "            }\n" +
-                        "            response.put(\"statusCode\", 200);\n" +
-                        "            response.put(\"message\", \"Document access validated\");\n" +
-                        "            response.put(\"userId\", userId);\n" +
-                        "            response.put(\"documentId\", docId);\n" +
-                        "            response.put(\"timestamp\", System.currentTimeMillis());\n" +
-                        "        } catch (Exception e) {\n" +
-                        "            response.put(\"statusCode\", 500);\n" +
-                        "            response.put(\"error\", e.getMessage());\n" +
+                        "        \n" +
+                        "        return {\n" +
+                        "            'statusCode': 200,\n" +
+                        "            'body': json.dumps({\n" +
+                        "                'message': 'Document access validated',\n" +
+                        "                'userId': user_id,\n" +
+                        "                'documentId': doc_id,\n" +
+                        "                'timestamp': int(time.time())\n" +
+                        "            })\n" +
                         "        }\n" +
-                        "        return response;\n" +
-                        "    }\n" +
-                        "}"
+                        "    except Exception as e:\n" +
+                        "        return {\n" +
+                        "            'statusCode': 500,\n" +
+                        "            'body': json.dumps({'error': str(e)})\n" +
+                        "        }\n"
                 ))
                 .role(role)
                 .timeout(Duration.seconds(timeout))
