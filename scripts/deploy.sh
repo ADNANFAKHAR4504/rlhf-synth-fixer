@@ -54,10 +54,6 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
-  # TEMPORARY: Clean up existing infrastructure to ensure fresh Aurora deployment
-  echo "🧹 Cleaning up existing infrastructure..."
-  npm run cdk:destroy || echo "No existing infrastructure to destroy"
-  echo "🚀 Deploying fresh Aurora infrastructure..."
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then
