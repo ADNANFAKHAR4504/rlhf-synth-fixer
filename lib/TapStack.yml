@@ -155,6 +155,7 @@ Resources:
   CentralizedLoggingBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Condition: IsPrimaryRegion
+    DependsOn: CentralizedLoggingBucket
     Properties:
       Bucket: !Ref CentralizedLoggingBucket
       PolicyDocument:
@@ -168,7 +169,9 @@ Resources:
             Action:
               - 's3:PutObject'
             Resource:
-              - !Sub '${CentralizedLoggingBucket}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
+                - BucketName: !Ref CentralizedLoggingBucket
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -179,7 +182,10 @@ Resources:
               Service: 'cloudtrail.amazonaws.com'
             Action:
               - 's3:GetBucketAcl'
-            Resource: !Sub '${CentralizedLoggingBucket}'
+            Resource: 
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
           # Allow AWS Config to write snapshots
           - Sid: 'AllowConfigServicePuts'
             Effect: Allow
@@ -189,19 +195,25 @@ Resources:
               - 's3:PutObject'
               - 's3:GetBucketAcl'
             Resource:
-              - !Sub '${CentralizedLoggingBucket}'
-              - !Sub '${CentralizedLoggingBucket}/config/*'
-          # Deny all public access
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/config/*'
+                - BucketName: !Ref CentralizedLoggingBucket
+          # Deny all public access except for AWS services
           - Sid: 'DenyPublicAccess'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${CentralizedLoggingBucket}'
-              - !Sub '${CentralizedLoggingBucket}/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/*'
+                - BucketName: !Ref CentralizedLoggingBucket
             Condition:
-              Bool:
-                'aws:PrincipalServiceName': 'false'
               StringNotEquals:
                 'aws:PrincipalServiceName':
                   - 'cloudtrail.amazonaws.com'
@@ -247,7 +259,9 @@ Resources:
             Action:
               - 's3:PutObject'
             Resource:
-              - !Sub '${CentralizedLoggingBucket}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
+                - BucketName: !Ref CentralizedLoggingBucket
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -255,7 +269,9 @@ Resources:
             Action:
               - 's3:GetBucketAcl'
             Resource:
-              - !Ref CentralizedLoggingBucket
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
           # CloudWatch Logs permissions for CloudTrail
           - Effect: Allow
             Action:
@@ -341,13 +357,17 @@ Resources:
               - 's3:PutObject'
               - 's3:PutObjectAcl'
             Resource:
-              - !Sub '${CentralizedLoggingBucket}/config/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/config/*'
+                - BucketName: !Ref CentralizedLoggingBucket
           - Effect: Allow
             Action:
               - 's3:ListBucket'
               - 's3:GetBucketAcl'
             Resource:
-              - !Ref CentralizedLoggingBucket
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}'
+                - BucketName: !Ref CentralizedLoggingBucket
   
   # ====================================
   # VPC AND NETWORK CONFIGURATION
@@ -818,7 +838,10 @@ Resources:
   # CloudTrail Configuration - Multi-region trail for comprehensive auditing
   CloudTrailToS3:
     Type: 'AWS::CloudTrail::Trail'
+    Condition: IsPrimaryRegion
     DependsOn: 
+      - CentralizedLoggingBucket
+      - CentralizedLoggingBucketPolicy
       - CloudTrailS3Policy
     Properties:
       TrailName: !Sub '${AWS::StackName}-audit-trail'
@@ -826,9 +849,7 @@ Resources:
       # Multi-region trail for complete account coverage
       IsMultiRegionTrail: true
       # Use centralized logging bucket
-      S3BucketName: !Sub 
-        - '${AccountId}-centralized-logs'
-        - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
+      S3BucketName: !Ref CentralizedLoggingBucket
       S3KeyPrefix: 'cloudtrail'
       # CloudWatch integration for real-time monitoring
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
