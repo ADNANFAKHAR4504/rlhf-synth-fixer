@@ -23,15 +23,6 @@
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Database master password",
-      "MinLength": 8,
-      "MaxLength": 41,
-      "AllowedPattern": "[a-zA-Z0-9]*",
-      "ConstraintDescription": "Must contain only alphanumeric characters"
     }
   },
   "Resources": {
@@ -1304,6 +1295,39 @@
         }
       }
     },
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "BookingPlatform-DB-Password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora MySQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "BookingPlatform-DB-Password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "BookingPlatform"
+          }
+        ]
+      }
+    },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
@@ -1366,7 +1390,7 @@
           "Ref": "DBMasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
         },
         "DatabaseName": "bookingdb",
         "DBSubnetGroupName": {
@@ -1777,8 +1801,7 @@
       "Value": {
         "Fn::GetAtt": [
           "AuroraDBCluster",
-          "Endpoint",
-          "Address"
+          "Endpoint.Address"
         ]
       },
       "Export": {
@@ -1792,8 +1815,7 @@
       "Value": {
         "Fn::GetAtt": [
           "RedisCache",
-          "RedisEndpoint",
-          "Address"
+          "RedisEndpoint.Address"
         ]
       },
       "Export": {

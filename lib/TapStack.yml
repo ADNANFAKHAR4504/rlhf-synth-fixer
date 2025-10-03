@@ -24,15 +24,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
-  DBMasterPassword:
-    Type: String
-    NoEcho: true
-    Description: Database master password
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must contain only alphanumeric characters
-
 Resources:
   # VPC Configuration
   VPC:
@@ -793,6 +784,25 @@ Resources:
           PredefinedMetricType: ASGAverageCPUUtilization
         TargetValue: 60
 
+  # Database Password Secret
+  DBMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'BookingPlatform-DB-Password-${EnvironmentSuffix}'
+      Description: Master password for Aurora MySQL cluster
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'BookingPlatform-DB-Password-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: BookingPlatform
+
   # RDS Aurora MySQL Cluster
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -831,7 +841,7 @@ Resources:
       EngineMode: provisioned
       EngineVersion: 8.0.mysql_aurora.3.04.0
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
       DatabaseName: bookingdb
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
