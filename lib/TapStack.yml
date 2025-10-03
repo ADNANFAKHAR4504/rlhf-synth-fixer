@@ -342,7 +342,7 @@ Resources:
   # IAM policy for Config to access centralized S3 bucket
   ConfigS3Policy:
     Type: 'AWS::IAM::Policy'
-    Condition: CreateLoggingBucket
+    Condition: IsPrimaryRegion
     Properties:
       PolicyName: ConfigS3DeliveryPolicy
       Roles:
