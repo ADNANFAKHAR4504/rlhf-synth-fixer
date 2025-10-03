@@ -8,7 +8,7 @@ This document analyzes common failures and anti-patterns that models typically e
 
 ### 1. Hardcoding Values
 
-❌ **Common Mistakes:**
+**Common Mistakes:**
 
 ```yaml
 # BAD: Hardcoded account ID
@@ -18,7 +18,7 @@ Resource: 'arn:aws:ses:us-east-1:123456789012:identity/example.com'
 Resource: 'arn:aws:sns:us-east-1:*:order-confirmations'
 ```
 
-✅ **Correct Approach:**
+**Correct Approach:**
 
 ```yaml
 # GOOD: Dynamic references
@@ -27,14 +27,14 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 2. Insufficient IAM Permissions
 
-❌ **Common Mistakes:**
+**Common Mistakes:**
 
 - Using wildcard permissions (`"Resource": "*"`)
 - Missing least-privilege principle
 - Forgetting cross-service permissions
 - Not including condition statements for security
 
-✅ **Correct Approach:**
+**Correct Approach:**
 
 - Specific resource ARNs with parameter substitution
 - Minimal required permissions only
@@ -42,14 +42,14 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 3. Missing Error Handling
 
-❌ **Common Mistakes:**
+**Common Mistakes:**
 
 - No retry logic in Lambda functions
 - Missing dead letter queues
 - No idempotency protection
 - Inadequate error logging
 
-✅ **Correct Approach:**
+**Correct Approach:**
 
 - Exponential backoff retry strategies
 - DLQ for failed messages
@@ -58,14 +58,14 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 4. Poor Resource Configuration
 
-❌ **Common Mistakes:**
+**Common Mistakes:**
 
 - Fixed provisioned capacity instead of on-demand
 - Missing encryption at rest
 - No backup or point-in-time recovery
 - Inadequate monitoring and alerting
 
-✅ **Correct Approach:**
+**Correct Approach:**
 
 - Pay-per-request billing for variable workloads
 - KMS encryption with customer-managed keys
@@ -76,7 +76,7 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 1. Incomplete Resource Dependencies
 
-❌ **Common Issues:**
+**Common Issues:**
 
 - Missing DependsOn attributes
 - Circular dependencies
@@ -85,7 +85,7 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 2. Inadequate Monitoring
 
-❌ **Common Oversights:**
+**Common Oversights:**
 
 - No custom CloudWatch metrics
 - Missing alarms for critical thresholds
@@ -94,7 +94,7 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 3. Security Vulnerabilities
 
-❌ **Security Anti-patterns:**
+**Security Anti-patterns:**
 
 - SNS topics without encryption
 - Lambda functions with excessive permissions
@@ -105,7 +105,7 @@ Resource: !Sub 'arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${Verified
 
 ### 1. Lambda Function Issues
 
-❌ **Common Problems:**
+**Common Problems:**
 
 ```python
 # BAD: No error handling
@@ -118,7 +118,7 @@ def lambda_handler(event, context):
     email = event['email']  # KeyError if missing
 ```
 
-✅ **Correct Implementation:**
+**Correct Implementation:**
 
 ```python
 # GOOD: Proper error handling and validation
@@ -143,14 +143,14 @@ def lambda_handler(event, context):
 
 ### 2. Testing Inadequacies
 
-❌ **Common Testing Failures:**
+**Common Testing Failures:**
 
 - Only happy path testing
 - No integration test coverage
 - Missing edge case scenarios
 - No load testing for scale requirements
 
-✅ **Comprehensive Testing:**
+**Comprehensive Testing:**
 
 - Unit tests with mocking
 - Integration tests with real AWS services
@@ -161,7 +161,7 @@ def lambda_handler(event, context):
 
 ### 1. Cost Management Issues
 
-❌ **Common Problems:**
+**Common Problems:**
 
 - No cost monitoring or alerting
 - Over-provisioned resources
@@ -170,7 +170,7 @@ def lambda_handler(event, context):
 
 ### 2. Deployment Failures
 
-❌ **Common Issues:**
+**Common Issues:**
 
 - Missing parameter validation
 - No rollback strategies
@@ -179,7 +179,7 @@ def lambda_handler(event, context):
 
 ### 3. Maintenance Challenges
 
-❌ **Operational Anti-patterns:**
+**Operational Anti-patterns:**
 
 - No automated backup strategies
 - Missing disaster recovery plans
@@ -190,7 +190,7 @@ def lambda_handler(event, context):
 
 ### 1. Template Structure Issues
 
-❌ **CloudFormation Problems:**
+**CloudFormation Problems:**
 
 - Missing AWSTemplateFormatVersion
 - Inadequate parameter descriptions
@@ -199,7 +199,7 @@ def lambda_handler(event, context):
 
 ### 2. Logic Flow Errors
 
-❌ **Architectural Mistakes:**
+**Architectural Mistakes:**
 
 - Wrong message flow direction
 - Missing feedback loops
@@ -208,7 +208,7 @@ def lambda_handler(event, context):
 
 ### 3. Scalability Oversights
 
-❌ **Scale-Related Issues:**
+**Scale-Related Issues:**
 
 - Fixed capacity configurations
 - No auto-scaling considerations
