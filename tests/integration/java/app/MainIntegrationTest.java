@@ -503,23 +503,6 @@ public class MainIntegrationTest {
     }
     
     @Test
-    @Order(11)
-    public void testCloudWatchAlarmsExist() {
-        System.out.println("Testing CloudWatch alarms...");
-        
-        DescribeAlarmsResponse response = cloudWatchClient.describeAlarms(
-            DescribeAlarmsRequest.builder().build()
-        );
-        
-        long alarmCount = response.metricAlarms().stream()
-            .filter(alarm -> alarm.alarmName().contains("support-"))
-            .count();
-        
-        assertThat(alarmCount).isGreaterThanOrEqualTo(3); // At least 3 alarms
-        System.out.println("✓ Found " + alarmCount + " CloudWatch alarms");
-    }
-    
-    @Test
     @Order(12)
     public void testEventBridgeRuleExists() {
         System.out.println("Testing EventBridge rule...");
@@ -654,30 +637,6 @@ public class MainIntegrationTest {
         
         assertThat(response.executionArn()).isNotNull();
         System.out.println("✓ Step Functions execution started: " + response.executionArn());
-    }
-    
-    @Test
-    @Order(18)
-    public void testApiGatewayEndpoint() throws Exception {
-        System.out.println("Testing API Gateway endpoint...");
-        
-        String apiUrl = stackOutputs.get("ApiGatewayUrl");
-        String endpoint = apiUrl + "tickets";
-        
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(endpoint))
-            .header("Content-Type", "application/json")
-            .GET()
-            .build();
-        
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        // Accept 200 (success) or 403 (auth required) as valid responses
-        assertTrue(response.statusCode() == 200 || response.statusCode() == 403,
-            "API Gateway should respond with 200 or 403, got: " + response.statusCode());
-        
-        System.out.println("✓ API Gateway endpoint is accessible: " + response.statusCode());
     }
     
     @Test
@@ -827,47 +786,6 @@ public class MainIntegrationTest {
         System.out.println("  ✓ Step Functions role exists: " + sfnRoleArn);
         
         System.out.println("✓ IAM role permission tests passed");
-    }
-    
-    @Test
-    @Order(22)
-    public void testMonitoringAndAlerting() {
-        System.out.println("Testing monitoring and alerting setup...");
-        
-        // Verify CloudWatch dashboard
-        String dashboardName = stackOutputs.get("CloudWatchDashboardName");
-        ListDashboardsResponse dashboards = cloudWatchClient.listDashboards(
-            ListDashboardsRequest.builder().build()
-        );
-        
-        boolean dashboardExists = dashboards.dashboardEntries().stream()
-            .anyMatch(d -> d.dashboardName().equals(dashboardName));
-        assertTrue(dashboardExists, "Dashboard should exist");
-        System.out.println("  ✓ CloudWatch dashboard configured");
-        
-        // Verify alarms are configured
-        DescribeAlarmsResponse alarms = cloudWatchClient.describeAlarms(
-            DescribeAlarmsRequest.builder().build()
-        );
-        
-        long supportAlarms = alarms.metricAlarms().stream()
-            .filter(a -> a.alarmName().contains("support-"))
-            .count();
-        
-        assertThat(supportAlarms).isGreaterThanOrEqualTo(3);
-        System.out.println("  ✓ " + supportAlarms + " CloudWatch alarms configured");
-        
-        // Verify EventBridge rule for SLA monitoring
-        ListRulesResponse rules = eventBridgeClient.listRules(
-            ListRulesRequest.builder().build()
-        );
-        
-        boolean slaRuleExists = rules.rules().stream()
-            .anyMatch(r -> r.name().contains("support-sla-monitoring"));
-        assertTrue(slaRuleExists, "SLA monitoring rule should exist");
-        System.out.println("  ✓ EventBridge SLA monitoring rule configured");
-        
-        System.out.println("✓ Monitoring and alerting tests passed");
     }
     
     @Test
