@@ -937,8 +937,8 @@ Resources:
   SecurityAlertTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
-      TopicName: 'SecurityAlerts'
-      DisplayName: 'Security Alert Notifications'
+      TopicName: 'SecurityAlertsTopic'
+      DisplayName: 'Security Alert Notifications Topic'
       Tags:
         - Key: 'cost-center'
           Value: !Ref CostCenterTag
