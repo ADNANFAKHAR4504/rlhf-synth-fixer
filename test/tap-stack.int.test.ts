@@ -332,7 +332,7 @@ describeTest('Survey Data Platform Integration Tests', () => {
       }));
       
       expect(listObjectsResponse.Contents).toBeDefined();
-      expect(listObjectsResponse.Contents!.length).toBeGreaterThan(0);
+      expect(listObjectsResponse.Contents?.length || 0).toBeGreaterThan(0);
     }, 60000);
 
     test('Scheduled Backup Validation: Manually trigger backup Lambda and verify S3 export', async () => {
@@ -356,15 +356,18 @@ describeTest('Survey Data Platform Integration Tests', () => {
       }));
       
       expect(listObjectsResponse.Contents).toBeDefined();
-      expect(listObjectsResponse.Contents!.length).toBeGreaterThan(0);
+      expect(listObjectsResponse.Contents?.length || 0).toBeGreaterThan(0);
       
       // Verify the backup file contains valid JSON data
-      const latestBackup = listObjectsResponse.Contents!
+      const latestBackup = (listObjectsResponse.Contents || [])
         .sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0))[0];
+      
+      expect(latestBackup).toBeDefined();
+      expect(latestBackup.Key).toBeDefined();
       
       const backupObject = await s3Client.send(new GetObjectCommand({
         Bucket: outputs.BackupBucketName,
-        Key: latestBackup.Key
+        Key: latestBackup.Key!
       }));
       
       const backupData = await backupObject.Body!.transformToString();
@@ -545,7 +548,7 @@ describeTest('Survey Data Platform Integration Tests', () => {
         Bucket: outputs.BackupBucketName
       }));
       
-      expect(s3ListResponse.Contents!.length).toBeGreaterThan(0);
+      expect(s3ListResponse.Contents?.length || 0).toBeGreaterThan(0);
     }, 120000);
   });
 });

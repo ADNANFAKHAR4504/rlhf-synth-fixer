@@ -311,7 +311,7 @@ Resources:
           import os
           import datetime
           import logging
-          from boto3.dynamodb.conditions import Key
+          from boto3.dynamodb.conditions import Key, Attr
           from decimal import Decimal
           
           # Initialize logging
@@ -345,7 +345,7 @@ Resources:
                   total_items_processed = 0
                   
                   scan_kwargs = {
-                      'FilterExpression': Key('timestamp').begins_with(yesterday)
+                      'FilterExpression': Attr('timestamp').begins_with(yesterday)
                   }
                   
                   while True:
