@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "typescript",
+  "complexity": "high",
+  "turn_type": "implementation",
+  "po_id": "49271563",
+  "team": "synth",
+  "startedAt": "2025-10-03T13:01:11+05:30",
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "CloudFront KeyValueStore",
+    "Lambda@Edge",
+    "Lambda",
+    "EventBridge Scheduler",
+    "DynamoDB",
+    "DynamoDB Streams",
+    "Route53",
+    "MediaConvert",
+    "CloudWatch",
+    "IAM",
+    "SNS"
+  ]
+}
