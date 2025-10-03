@@ -20,7 +20,7 @@ import { ResilienceStack } from '../lib/resilience-stack';
 import { VpcPeeringStack } from '../lib/vpc-peering-stack';
 
 const environmentSuffix = 'test';
-const testEnv = { account: '123456789012', region: 'us-east-1' };
+const testEnv = { account: '123456789012', region: 'eu-west-2' };
 
 describe('TapStack - Main Stack', () => {
   let app: cdk.App;
@@ -297,7 +297,7 @@ describe('DatabaseStack', () => {
 
     beforeEach(() => {
       app = new cdk.App();
-      parentStack = new cdk.Stack(app, 'ParentStack2', { env: { ...testEnv, region: 'eu-west-1' } });
+      parentStack = new cdk.Stack(app, 'ParentStack2', { env: { ...testEnv, region: 'eu-west-3' } });
       const vpc = new ec2.Vpc(parentStack, 'TestVpc', {
         ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16')
       });
@@ -306,7 +306,7 @@ describe('DatabaseStack', () => {
       });
 
       stack = new DatabaseStack(parentStack, 'TestReplicaStack', {
-        env: { ...testEnv, region: 'eu-west-1' },
+        env: { ...testEnv, region: 'eu-west-3' },
         vpc: vpc,
         kmsKey: kmsKey,
         isReplica: true,
@@ -721,15 +721,15 @@ describe('VpcPeeringStack', () => {
       env: testEnv,
       primaryVpc,
       standbyVpc,
-      primaryRegion: 'us-east-1',
-      standbyRegion: 'eu-west-1'
+      primaryRegion: 'eu-west-2',
+      standbyRegion: 'eu-west-3'
     });
     template = Template.fromStack(stack);
   });
 
   test('creates VPC peering connection', () => {
     template.hasResourceProperties('AWS::EC2::VPCPeeringConnection', {
-      PeerRegion: 'eu-west-1',
+      PeerRegion: 'eu-west-3',
       PeerVpcId: Match.anyValue(),
       VpcId: Match.anyValue()
     });
@@ -746,7 +746,7 @@ describe('VpcPeeringStack', () => {
     template.hasResourceProperties('Custom::AcceptVpcPeering', {
       ServiceToken: Match.anyValue(),
       PeeringConnectionId: Match.anyValue(),
-      Region: 'eu-west-1'
+      Region: 'eu-west-3'
     });
   });
 

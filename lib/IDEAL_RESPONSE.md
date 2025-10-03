@@ -1,7 +1,7 @@
 # Ideal CDK Multi-Region Infrastructure Solution
 
 ## Overview
-This is the corrected and production-ready CDK TypeScript implementation for a fully resilient, multi-region active-passive setup across us-east-1 (primary) and eu-west-1 (standby).
+This is the corrected and production-ready CDK TypeScript implementation for a fully resilient, multi-region active-passive setup across eu-west-2 (primary) and eu-west-3 (standby).
 
 ## Main CDK Entry Point
 
@@ -62,8 +62,8 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix = props?.environmentSuffix ||
                              this.node.tryGetContext('environmentSuffix') || 'dev';
 
-    const primaryRegion = 'us-east-1';
-    const standbyRegion = 'eu-west-1';
+    const primaryRegion = 'eu-west-2';
+    const standbyRegion = 'eu-west-3';
     const domainName = this.node.tryGetContext('domainName') || 'example.com';
 
     const primaryEnv = {
@@ -80,7 +80,7 @@ export class TapStack extends cdk.Stack {
     const primaryVpcStack = new VpcStack(this, `VpcStack-Primary`, {
       env: primaryEnv,
       cidr: '10.0.0.0/16',
-      description: 'VPC in primary region (us-east-1)',
+      description: 'VPC in primary region (eu-west-2)',
       stackName: `${this.stackName}-VpcStack-Primary`,
       crossRegionReferences: true,
     });
@@ -88,7 +88,7 @@ export class TapStack extends cdk.Stack {
     const standbyVpcStack = new VpcStack(this, `VpcStack-Standby`, {
       env: standbyEnv,
       cidr: '10.1.0.0/16',
-      description: 'VPC in standby region (eu-west-1)',
+      description: 'VPC in standby region (eu-west-3)',
       stackName: `${this.stackName}-VpcStack-Standby`,
       crossRegionReferences: true,
     });

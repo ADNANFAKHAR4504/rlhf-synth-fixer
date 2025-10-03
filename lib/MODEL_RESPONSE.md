@@ -4,7 +4,7 @@
 
 This is a complex request to create a multi-region, resilient infrastructure using AWS CDK in TypeScript. Let's break this down and plan the implementation:
 
-1. Multi-region setup with us-east-1 (primary) and eu-west-1 (standby)
+1. Multi-region setup with eu-west-2 (primary) and eu-west-3 (standby)
 2. VPC in each region with VPC peering
 3. ALB and Auto Scaling groups in each region
 4. EFS file system in each region for file sharing
@@ -48,8 +48,8 @@ import { ResilienceStack } from '../lib/resilience-stack';
 const app = new cdk.App();
 
 // Define the regions
-const primaryRegion = 'us-east-1';
-const standbyRegion = 'eu-west-1';
+const primaryRegion = 'eu-west-2';
+const standbyRegion = 'eu-west-3';
 
 // Define account and other parameters
 const env = { account: process.env.CDK_DEFAULT_ACCOUNT, region: primaryRegion };
@@ -159,7 +159,7 @@ export class VpcStack extends cdk.Stack {
     // Create a VPC with public and private subnets across multiple AZs
     this.vpc = new ec2.Vpc(this, 'AppVpc', {
       maxAzs: 3,
-      cidr: props?.env?.region === 'us-east-1' ? '10.0.0.0/16' : '10.1.0.0/16',
+      cidr: props?.env?.region === 'eu-west-2' ? '10.0.0.0/16' : '10.1.0.0/16',
       subnetConfiguration: [
         {
           name: 'public',
@@ -1184,7 +1184,7 @@ multi-region-app/
 
 # Multi-Region Resilient Architecture with AWS CDK
 
-I'll create a complete CDK project in TypeScript to implement a fully resilient, multi-region setup for your web application. This solution will survive a full regional outage by deploying in an active-passive configuration across us-east-1 (primary) and eu-west-1 (standby).
+I'll create a complete CDK project in TypeScript to implement a fully resilient, multi-region setup for your web application. This solution will survive a full regional outage by deploying in an active-passive configuration across eu-west-2 (primary) and eu-west-3 (standby).
 
 ## Project Structure
 
@@ -1224,8 +1224,8 @@ import { ResilienceStack } from '../lib/resilience-stack';
 const app = new cdk.App();
 
 // Define regions
-const primaryRegion = 'us-east-1';
-const standbyRegion = 'eu-west-1';
+const primaryRegion = 'eu-west-2';
+const standbyRegion = 'eu-west-3';
 const domainName = app.node.tryGetContext('domainName') || 'example.com';
 
 // Primary region stacks
@@ -1244,13 +1244,13 @@ const standbyEnv = {
 const primaryVpcStack = new VpcStack(app, 'VpcStack-Primary', {
   env: primaryEnv,
   cidr: '10.0.0.0/16',
-  description: 'VPC in primary region (us-east-1)',
+  description: 'VPC in primary region (eu-west-2)',
 });
 
 const standbyVpcStack = new VpcStack(app, 'VpcStack-Standby', {
   env: standbyEnv,
   cidr: '10.1.0.0/16',
-  description: 'VPC in standby region (eu-west-1)',
+  description: 'VPC in standby region (eu-west-3)',
 });
 
 // Create security stacks with KMS keys and security groups

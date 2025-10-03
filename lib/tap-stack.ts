@@ -27,8 +27,8 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Define regions
-    const primaryRegion = 'us-east-1';
-    const standbyRegion = 'eu-west-1';
+    const primaryRegion = 'eu-west-2';
+    const standbyRegion = 'eu-west-3';
     const domainName = this.node.tryGetContext('domainName') || 'example.com';
 
     // Primary region stacks
@@ -47,7 +47,7 @@ export class TapStack extends cdk.Stack {
     const primaryVpcStack = new VpcStack(this, `VpcStack-Primary`, {
       env: primaryEnv,
       cidr: '10.0.0.0/16',
-      description: 'VPC in primary region (us-east-1)',
+      description: 'VPC in primary region (eu-west-2)',
       stackName: `${this.stackName}-VpcStack-Primary`,
       crossRegionReferences: true,
     });
@@ -55,7 +55,7 @@ export class TapStack extends cdk.Stack {
     const standbyVpcStack = new VpcStack(this, `VpcStack-Standby`, {
       env: standbyEnv,
       cidr: '10.1.0.0/16',
-      description: 'VPC in standby region (eu-west-1)',
+      description: 'VPC in standby region (eu-west-3)',
       stackName: `${this.stackName}-VpcStack-Standby`,
       crossRegionReferences: true,
     });
