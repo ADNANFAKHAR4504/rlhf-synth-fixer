@@ -1,4 +1,8 @@
 import {
+  CloudFormationClient,
+  DescribeStacksCommand
+} from '@aws-sdk/client-cloudformation';
+import {
   DescribeVpcsCommand,
   EC2Client
 } from '@aws-sdk/client-ec2';
@@ -26,7 +30,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load the deployment outputs based on environment
-function loadOutputsForEnvironment(): any {
+async function loadOutputsForEnvironment(): Promise<any> {
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   const expectedStackName = `TapStack${environmentSuffix}`;
   
@@ -50,8 +54,49 @@ function loadOutputsForEnvironment(): any {
       console.log(`Found outputs for matching stack: ${matchingStackKey}`);
       return cdkOutputs[matchingStackKey];
     }
+  }
+  
+  // If cdk-outputs.json doesn't have the right environment, try to fetch from CloudFormation
+  console.log(`Attempting to fetch outputs from CloudFormation for environment: ${environmentSuffix}`);
+  
+  try {
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const cfnClient = new CloudFormationClient({ region });
     
-    // Fallback to first available stack (backwards compatibility)
+    try {
+      const response = await cfnClient.send(new DescribeStacksCommand({
+        StackName: expectedStackName
+      }));
+      
+      const stack = response.Stacks?.[0];
+      if (stack?.Outputs) {
+        console.log(`Fetched outputs from CloudFormation stack: ${expectedStackName}`);
+        const outputs: any = {};
+        stack.Outputs.forEach(output => {
+          if (output.OutputKey && output.OutputValue) {
+            outputs[output.OutputKey] = output.OutputValue;
+          }
+        });
+        return outputs;
+      }
+    } catch (cfnError: any) {
+      console.warn(`CloudFormation stack ${expectedStackName} not found:`, cfnError.message);
+    }
+    
+    // Fallback to try get-outputs script results
+    const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    if (fs.existsSync(cfnOutputsPath)) {
+      console.log('Loading outputs from cfn-outputs/flat-outputs.json');
+      return JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf-8'));
+    }
+    
+  } catch (cfnClientError) {
+    console.warn('CloudFormation API error:', cfnClientError);
+  }
+  
+  // Final fallback to first available stack (backwards compatibility)
+  if (fs.existsSync(cdkOutputsPath)) {
+    const cdkOutputs = JSON.parse(fs.readFileSync(cdkOutputsPath, 'utf-8'));
     const stackKeys = Object.keys(cdkOutputs);
     if (stackKeys.length > 0) {
       console.log(`Using fallback stack: ${stackKeys[0]} (expected: ${expectedStackName})`);
@@ -59,18 +104,11 @@ function loadOutputsForEnvironment(): any {
     }
   }
   
-  // Try to load from cfn-outputs as fallback
-  const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-  if (fs.existsSync(cfnOutputsPath)) {
-    console.log('Loading outputs from cfn-outputs/flat-outputs.json');
-    return JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf-8'));
-  }
-  
   console.warn(`No outputs found for environment: ${environmentSuffix}`);
   return {};
 }
 
-let outputs: any = loadOutputsForEnvironment();
+let outputs: any = {};
 
 // Determine the correct region from the outputs (e.g., from Aurora cluster endpoint or SNS ARN)
 function detectRegionFromOutputs(outputs: any): string {
@@ -115,6 +153,9 @@ describe('Infrastructure Integration Tests', () => {
   const testTimeout = 30000;
 
   beforeAll(async () => {
+    // Load outputs asynchronously
+    outputs = await loadOutputsForEnvironment();
+    
     hasCredentials = await checkAwsCredentials(region);
     if (!hasCredentials) {
       console.warn('AWS credentials not available - some tests will be skipped');
@@ -162,6 +203,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('Aurora RDS Cluster', () => {
     test('Aurora cluster is available', async () => {
       expect(outputs.ClusterEndpoint).toBeDefined();
+      expect(outputs.ClusterEndpoint).toContain('.rds.amazonaws.com');
 
       if (!hasCredentials) {
         console.warn('Skipping RDS API test - no AWS credentials available');
@@ -202,6 +244,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {
     test('VPC is configured', async () => {
       expect(outputs.VpcId).toBeDefined();
+      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
       if (!hasCredentials) {
         console.warn('Skipping EC2 API test - no AWS credentials available');
@@ -232,6 +275,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('Database Secrets', () => {
     test('database secret is accessible', async () => {
       expect(outputs.SecretArn).toBeDefined();
+      expect(outputs.SecretArn).toMatch(/^arn:aws:secretsmanager:/);
 
       if (!hasCredentials) {
         console.warn('Skipping Secrets Manager API test - no AWS credentials available');
@@ -260,6 +304,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('SNS Alarm Topic', () => {
     test('alarm topic is accessible', async () => {
       expect(outputs.AlarmTopicArn).toBeDefined();
+      expect(outputs.AlarmTopicArn).toMatch(/^arn:aws:sns:/);
 
       if (!hasCredentials) {
         console.warn('Skipping SNS API test - no AWS credentials available');
