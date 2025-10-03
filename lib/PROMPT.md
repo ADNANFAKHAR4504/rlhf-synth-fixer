@@ -21,7 +21,7 @@ You need to deploy a highly available web application using AWS CloudFormation i
 - Write all infrastructure as YAML CloudFormation templates.
 - Follow AWS best practices and keep the setup cost-effective.
 
-## Deliverables
+## Deliverables 
 
 - One or more YAML CloudFormation templates that define the full setup.
 - Use parameters where needed to make the templates reusable.
