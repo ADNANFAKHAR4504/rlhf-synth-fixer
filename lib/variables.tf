@@ -96,7 +96,7 @@ variable "high_origin_latency_threshold" {
 }
 
 variable "enable_cloudtrail" {
-  description = "Enable CloudTrail for audit logging"
+  description = "Enable CloudTrail for audit logging (Note: AWS limit is 5 trails per region - currently at limit)"
   type        = bool
-  default     = true
+  default     = false
 }
