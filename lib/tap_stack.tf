@@ -707,6 +707,12 @@ resource "aws_s3_bucket_policy" "lb_logs" {
         Resource  = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
       },
       {
+        Effect    = "Allow"
+        Principal = { Service = "elasticloadbalancing.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.lb_logs.arn}/alb-logs/*"
+      },
+      {
         Sid       = "DenyInsecureTransport"
         Effect    = "Deny"
         Principal = "*"
