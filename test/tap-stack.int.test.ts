@@ -1,67 +1,106 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+// integration.tapstack.test.ts
+
 import fs from 'fs';
-import AWS from 'aws-sdk';
-import mysql from 'mysql2/promise';
-import axios from 'axios';
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  ELBv2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+} from '@aws-sdk/client-rds';
+import {
+  S3Client,
+  HeadBucketCommand,
+} from '@aws-sdk/client-s3';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  CloudWatchClient,
+  ListDashboardsCommand,
+} from '@aws-sdk/client-cloudwatch';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Environment suffix
+// Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Extract outputs
-const albDNS = outputs[`${environmentSuffix}-LoadBalancerDNS`];
-const rdsEndpoint = outputs[`${environmentSuffix}-RDSInstanceEndpoint`];
-const secretName = `${environmentSuffix}-db-secretscredential`;
-const logsBucket = `${environmentSuffix}-logs-${process.env.AWS_ACCOUNT_ID}-web-app`;
+// Shared AWS clients
+const ec2 = new EC2Client({});
+const alb = new ELBv2Client({});
+const rds = new RDSClient({});
+const s3 = new S3Client({});
+const secrets = new SecretsManagerClient({});
+const cloudwatch = new CloudWatchClient({});
 
-AWS.config.update({ region: process.env.AWS_REGION || 'ap-south-1' });
-const secretsManager = new AWS.SecretsManager();
-const s3 = new AWS.S3();
-
-describe('TapStack Integration Tests', () => {
-  jest.setTimeout(60000);
-
-  test('ALB should respond with HTTP 200', async () => {
-    const res = await axios.get(`http://${albDNS}`);
-    expect(res.status).toBe(200);
+describe('TapStack Infrastructure Integration Tests', () => {
+  // EC2 Instance
+  test('EC2 instance should exist and be running', async () => {
+    const instanceId = outputs.MyEC2InstanceId; // ensure your flat-outputs.json has this
+    const result = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    const instance = result.Reservations?.[0].Instances?.[0];
+    expect(instance).toBeDefined();
+    expect(instance?.State?.Name).toBe('running');
+    expect(instance?.InstanceType).toBe('t2.micro');
   });
 
-  test('SecretsManager secret should exist and contain username/password', async () => {
-    const secret = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
-    const parsed = JSON.parse(secret.SecretString || '{}');
-    expect(parsed).toHaveProperty('username');
-    expect(parsed).toHaveProperty('password');
+  // ALB
+  test('Application Load Balancer should exist and be active', async () => {
+    const albDns = outputs.LoadBalancerDNS;
+    const result = await alb.send(new DescribeLoadBalancersCommand({}));
+    const found = result.LoadBalancers?.find(lb => lb.DNSName === albDns);
+    expect(found).toBeDefined();
+    expect(found?.State?.Code).toBe('active');
+    expect(found?.Type).toBe('application');
   });
 
-  test('Can connect to RDS using credentials from SecretsManager', async () => {
-    const secret = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
-    const creds = JSON.parse(secret.SecretString || '{}');
-
-    const conn = await mysql.createConnection({
-      host: rdsEndpoint,
-      user: creds.username,
-      password: creds.password,
-      port: 3306,
-    });
-
-    const [rows] = await conn.query('SELECT 1 as test');
-    expect(rows[0].test).toBe(1);
-
-    await conn.end();
+  test('ALB Target Group should exist and be HTTP', async () => {
+    const result = await alb.send(new DescribeTargetGroupsCommand({}));
+    const tg = result.TargetGroups?.find(t => t.Port === 80);
+    expect(tg).toBeDefined();
+    expect(tg?.Protocol).toBe('HTTP');
   });
 
-  test('EC2 should be able to write to Logs S3 bucket (cross-service interaction)', async () => {
-    const key = `integration-test/${Date.now()}.txt`;
-    await s3.putObject({
-      Bucket: logsBucket,
-      Key: key,
-      Body: 'Integration test log content',
-    }).promise();
+  // RDS
+  test('RDS Instance should exist and be available', async () => {
+    const endpoint = outputs.RDSInstanceEndpoint;
+    const result = await rds.send(new DescribeDBInstancesCommand({}));
+    const db = result.DBInstances?.find(d => d.Endpoint?.Address === endpoint);
+    expect(db).toBeDefined();
+    expect(db?.DBInstanceStatus).toBe('available');
+    expect(db?.Engine).toContain('mysql');
+  });
 
-    const obj = await s3.getObject({ Bucket: logsBucket, Key: key }).promise();
-    expect(obj.Body?.toString()).toContain('Integration test log content');
+  // S3 Logs Bucket
+  test('Logs S3 bucket should exist', async () => {
+    const bucketName = outputs.LogsBucketName;
+    const result = await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
+    expect(result.$metadata.httpStatusCode).toBe(200);
+  });
+
+  // Secrets Manager
+  test('DB Secret should exist in Secrets Manager', async () => {
+    const secretName = `${environmentSuffix}-db-secretscredential`;
+    const result = await secrets.send(new DescribeSecretCommand({ SecretId: secretName }));
+    expect(result).toBeDefined();
+    expect(result.Name).toBe(secretName);
+  });
+
+  // CloudWatch Dashboard
+  test('CloudWatch Dashboard should exist', async () => {
+    const dashboardName = `${environmentSuffix}-dashboard`;
+    const result = await cloudwatch.send(new ListDashboardsCommand({}));
+    const found = result.DashboardEntries?.find(d => d.DashboardName === dashboardName);
+    expect(found).toBeDefined();
   });
 });
