@@ -10,5 +10,6 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "APIGateway, DynamoDB, EventBridge, Cloudwatch"
+  "aws_services": ["API Gateway", "DynamoDB", "EventBridge", "CloudWatch", "Lambda", "S3", "SNS", "IAM"],
+  "training_quality": 8
 }
