@@ -230,7 +230,7 @@ Resources:
       LaunchTemplateName: !Sub ForumWebServer-${Environment}
       VersionDescription: Initial version
       LaunchTemplateData:
-        ImageId: ami-0c55b159cbfafe1f0 # Replace with appropriate Amazon Linux 2 AMI ID
+        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
         InstanceType: t3.medium
         KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
         SecurityGroupIds:
