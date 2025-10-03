@@ -34,7 +34,7 @@ Parameters:
     AllowedValues: ["true", "false"]
 
 Resources:
-  # KMS Key for encryption
+  # KMS Key for encryption (simplified to break circular dependency)
   SurveyDataKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -48,10 +48,10 @@ Resources:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-          - Sid: Allow Lambda functions to use the key
+          - Sid: Allow Lambda service to use the key
             Effect: Allow
             Principal:
-              AWS: !GetAtt LambdaExecutionRole.Arn
+              Service: lambda.amazonaws.com
             Action:
               - "kms:Decrypt"
               - "kms:DescribeKey"
@@ -71,6 +71,7 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       SSESpecification:
         SSEEnabled: true
+        SSEType: KMS
         KMSMasterKeyId: !Ref SurveyDataKmsKey
       AttributeDefinitions:
         - AttributeName: responseId
@@ -128,7 +129,7 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
 
-  # Lambda Execution Role
+  # Lambda Execution Role (moved after DynamoDB and S3 to break circular dependency)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -183,7 +184,7 @@ Resources:
           TABLE_NAME: !Ref SurveyResponseTable
           REGION: us-east-1
       Code:
-        ZipFile: !Sub |
+        ZipFile: |
           import json
           import boto3
           import uuid
@@ -304,7 +305,7 @@ Resources:
           TOPIC_ARN: !Ref AdminNotificationTopic
           REGION: us-east-1
       Code:
-        ZipFile: !Sub |
+        ZipFile: |
           import json
           import boto3
           import os
@@ -478,7 +479,7 @@ Resources:
           TOPIC_ARN: !Ref AdminNotificationTopic
           REGION: us-east-1
       Code:
-        ZipFile: !Sub |
+        ZipFile: |
           import json
           import boto3
           import os
