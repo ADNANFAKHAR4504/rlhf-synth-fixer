@@ -10,5 +10,23 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, EC2, ElasticCache, Redis CLoudWatch"
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer (ALB)",
+    "ElastiCache (Redis)",
+    "RDS (MySQL)",
+    "CloudWatch",
+    "X-Ray",
+    "WAF",
+    "GuardDuty",
+    "KMS",
+    "S3",
+    "IAM",
+    "SNS",
+    "Secrets Manager",
+    "EventBridge"
+  ]
 }

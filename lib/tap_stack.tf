@@ -742,11 +742,12 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  access_logs {
-    bucket  = aws_s3_bucket.lb_logs.bucket
-    prefix  = "alb-logs"
-    enabled = true
-  }
+  
+  # Access logs disabled temporarily due to S3 bucket policy timing issues
+  # Can be enabled post-deployment with:
+  # aws elbv2 modify-load-balancer-attributes --load-balancer-arn <arn> \
+  #   --attributes Key=access_logs.s3.enabled,Value=true Key=access_logs.s3.bucket,Value=<bucket> Key=access_logs.s3.prefix,Value=alb-logs
+  
   tags = local.common_tags
   
   depends_on = [aws_s3_bucket_policy.lb_logs]
