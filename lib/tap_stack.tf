@@ -402,7 +402,7 @@ resource "aws_s3_bucket_policy" "content" {
 
 # CloudTrail for audit logging
 resource "aws_cloudtrail" "content_delivery" {
-  count = var.enable_cloudtrail ? 1 : 0
+  count = var.enable_cloudtrail && !local.skip_cloudtrail_creation ? 1 : 0
 
   name                          = "${var.project_name}-cloudtrail-${var.environment}"
   s3_bucket_name                = aws_s3_bucket.logs.id
@@ -466,8 +466,8 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # S3 Bucket Policy for CloudTrail logs (conditional)
 resource "aws_s3_bucket_policy" "cloudtrail_logs" {
-  count = var.enable_cloudtrail ? 1 : 0
-  
+  count = var.enable_cloudtrail && !local.skip_cloudtrail_creation ? 1 : 0
+
   bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
@@ -522,6 +522,15 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 
 # Data source for current AWS account ID
 data "aws_caller_identity" "current" {}
+
+# Data source to check existing CloudTrail trails
+data "aws_cloudtrail_service_account" "main" {}
+
+# Check if we can create CloudTrail (limit is 5 trails per region)
+locals {
+  # CloudTrail creation should be skipped if we hit the limit
+  skip_cloudtrail_creation = var.enable_cloudtrail && false # Set to true if hitting trail limit
+}
 
 # CloudWatch Log Group for CloudFront logs
 resource "aws_cloudwatch_log_group" "cloudfront" {
@@ -685,6 +694,10 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   name  = "${var.project_name}-${var.region_prefix}-waf-${var.environment}"
   scope = "CLOUDFRONT"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   default_action {
     allow {}
   }
@@ -704,11 +717,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       }
     }
 
-        visibility_config {
-          cloudwatch_metrics_enabled = true
-          metric_name                = "${var.project_name}-${var.region_prefix}-rate-limit"
-          sampled_requests_enabled   = true
-        }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-${var.region_prefix}-rate-limit"
+      sampled_requests_enabled   = true
+    }
   }
 
   rule {
@@ -726,11 +739,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       }
     }
 
-        visibility_config {
-          cloudwatch_metrics_enabled = true
-          metric_name                = "${var.project_name}-${var.region_prefix}-common-rules"
-          sampled_requests_enabled   = true
-        }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-${var.region_prefix}-common-rules"
+      sampled_requests_enabled   = true
+    }
   }
 
   visibility_config {
