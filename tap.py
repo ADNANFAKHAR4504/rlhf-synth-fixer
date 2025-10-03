@@ -38,3 +38,12 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export stack outputs
+pulumi.export("main_queue_url", stack.main_queue.url)
+pulumi.export("main_queue_arn", stack.main_queue.arn)
+pulumi.export("dlq_url", stack.dlq.url)
+pulumi.export("dlq_arn", stack.dlq.arn)
+pulumi.export("dynamodb_table_name", stack.event_log_table.name)
+pulumi.export("lambda_function_name", stack.event_processor.name)
+pulumi.export("lambda_function_arn", stack.event_processor.arn)

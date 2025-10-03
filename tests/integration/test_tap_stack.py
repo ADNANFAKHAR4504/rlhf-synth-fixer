@@ -21,9 +21,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live stack."""
-        cls.stack_name = os.getenv('PULUMI_STACK_NAME', 'dev')
-        cls.project_name = "tap-infra"
         cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        cls.stack_name = f"TapStack{cls.environment_suffix}"
+        cls.project_name = "TapStack"
         cls.aws_region = 'us-west-1'
 
         # AWS clients

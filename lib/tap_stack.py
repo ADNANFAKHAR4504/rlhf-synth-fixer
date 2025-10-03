@@ -257,7 +257,7 @@ def handler(event, context):
             name=f"campaign-event-processor-{self.environment_suffix}",
             role=self.lambda_role.arn,
             handler="index.handler",
-            runtime="python3.11",
+            runtime="python3.9",
             code=pulumi.AssetArchive({
                 "index.py": pulumi.StringAsset(lambda_code)
             }),
