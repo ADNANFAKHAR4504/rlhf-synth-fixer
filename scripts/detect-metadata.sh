@@ -19,7 +19,7 @@ TEAM=$(jq -r '.team // "unknown"' metadata.json)
 STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
 COMPLEXITY=$(jq -r '.complexity // "unknown"' metadata.json)
 SUBTASK=$(jq -r '.subtask // empty' metadata.json)
-SUBJECT_LABELS=$(jq -r '.subject_labels // empty' metadata.json)
+SUBJECT_LABELS=$(jq -c '.subject_labels // empty' metadata.json)
 
 echo "Detected metadata:"
 echo "  Platform: $PLATFORM"
