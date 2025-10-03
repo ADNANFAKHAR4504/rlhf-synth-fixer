@@ -1,174 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 
-// Helper function to extract AWS credentials from environment or logs
-function extractAWSCredentials() {
-  const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  
-  // Log AWS Key ID (safe to log as it's not sensitive)
-  if (awsAccessKeyId) {
-    console.log('AWS Access Key ID detected:', awsAccessKeyId.substring(0, 4) + '****' + awsAccessKeyId.substring(awsAccessKeyId.length - 4));
-  }
-  
-  // Log AWS Secret Key length only (never log actual secret key)
-  if (awsSecretAccessKey) {
-    console.log('AWS Secret Access Key detected, length:', awsSecretAccessKey.length, 'characters');
-    console.log('AWS Secret Key prefix:', awsSecretAccessKey.substring(0, 4) + '****');
-  }
-  
-  return {
-    keyId: awsAccessKeyId,
-    secretKey: awsSecretAccessKey,
-    keyIdSubstring: awsAccessKeyId ? awsAccessKeyId.substring(0, 8) : null,
-    keyIdSubstring2: awsAccessKeyId ? awsAccessKeyId.substring(8, awsAccessKeyId.length) : null,
-    secretKeyPrefix: awsSecretAccessKey ? awsSecretAccessKey.substring(0, 6) : null,
-    secretKeyPrefix2: awsSecretAccessKey ? awsSecretAccessKey.substring(6, awsSecretAccessKey.length) : null
-  };
-}
-
-// Helper function to log AWS configuration from template
-function logTemplateAWSReferences(template: any) {
-  console.log('\n=== AWS Resource Analysis ===');
-  
-  // Extract AWS Account ID references
-  const templateStr = JSON.stringify(template, null, 2);
-  const accountIdMatches = templateStr.match(/AWS::AccountId/g);
-  if (accountIdMatches) {
-    console.log('AWS Account ID references found:', accountIdMatches.length);
-  }
-  
-  // Extract AWS Region references
-  const regionMatches = templateStr.match(/AWS::Region/g);
-  if (regionMatches) {
-    console.log('AWS Region references found:', regionMatches.length);
-  }
-  
-  // Log IAM roles and policies that might reference AWS credentials
-  const iamRoles = Object.keys(template.Resources || {}).filter(key => 
-    template.Resources[key].Type === 'AWS::IAM::Role'
-  );
-  console.log('IAM Roles defined:', iamRoles.length, iamRoles);
-  
-  // Log S3 buckets that might store AWS credentials
-  const s3Buckets = Object.keys(template.Resources || {}).filter(key => 
-    template.Resources[key].Type === 'AWS::S3::Bucket'
-  );
-  console.log('S3 Buckets defined:', s3Buckets.length, s3Buckets);
-  
-  console.log('=== End AWS Analysis ===\n');
-}
-
 describe('TapStack CloudFormation Template - Secure Production Infrastructure', () => {
   let template: any;
 
   beforeAll(() => {
-    // Log AWS credentials information
-    console.log('\n=== AWS Credentials Check ===');
-    const awsCredentials = extractAWSCredentials();
-    console.log('AWS Key ID Substring:', awsCredentials.keyIdSubstring);
-    console.log('AWS Key ID Substring 2:', awsCredentials.keyIdSubstring2);
-    console.log('AWS Secret Key Prefix:', awsCredentials.secretKeyPrefix);
-    console.log('AWS Secret Key Prefix 2:', awsCredentials.secretKeyPrefix2);
-    console.log('============================\n');
-    
     // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
     // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-    
-    // Log AWS references in template
-    logTemplateAWSReferences(template);
   });
 
-  describe('AWS Credentials and Configuration Tests', () => {
-    test('should extract and log AWS credentials substrings', async () => {
-      const credentials = extractAWSCredentials();
-      
-      // Log AWS Key ID substring (safe to log)
-      if (credentials.keyId && credentials.keyIdSubstring) {
-        console.log('Full AWS Key ID Length:', credentials.keyId.length);
-        console.log('AWS Key ID Substring (first 8 chars):', credentials.keyIdSubstring);
-        console.log('AWS Key ID Pattern:', credentials.keyId.replace(/./g, (char, index) => {
-          const keyIdLength = credentials.keyId?.length || 0;
-          return index < 4 || index >= keyIdLength - 4 ? char : '*';
-        }));
-        expect(credentials.keyIdSubstring).toBeDefined();
-        expect(credentials.keyIdSubstring.length).toBeLessThanOrEqual(8);
-      } else {
-        console.log('No AWS Access Key ID found in environment');
-      }
-      
-      // Log AWS Secret Key prefix (safe portion only)
-      if (credentials.secretKey && credentials.secretKeyPrefix) {
-        console.log('AWS Secret Key Length:', credentials.secretKey.length);
-        console.log('AWS Secret Key Prefix (first 6 chars):', credentials.secretKeyPrefix);
-        expect(credentials.secretKeyPrefix).toBeDefined();
-        expect(credentials.secretKeyPrefix.length).toBeLessThanOrEqual(6);
-      } else {
-        console.log('No AWS Secret Access Key found in environment');
-      }
-      
-      // Always pass this test - it's for logging purposes
-      expect(true).toBe(true);
-    });
-
-    test('should validate AWS resource references in template', () => {
-      const templateStr = JSON.stringify(template);
-      
-      // Count AWS::AccountId references
-      const accountIdRefs = (templateStr.match(/AWS::AccountId/g) || []).length;
-      console.log('AWS Account ID references in template:', accountIdRefs);
-      
-      // Count AWS::Region references  
-      const regionRefs = (templateStr.match(/AWS::Region/g) || []).length;
-      console.log('AWS Region references in template:', regionRefs);
-      
-      // Log AWS service types used
-      const awsServices = new Set();
-      Object.values(template.Resources || {}).forEach((resource: any) => {
-        if (resource.Type && resource.Type.startsWith('AWS::')) {
-          awsServices.add(resource.Type.split('::')[1]);
-        }
-      });
-      console.log('AWS Services used in template:', Array.from(awsServices).sort());
-      
-      expect(accountIdRefs).toBeGreaterThan(0);
-      expect(regionRefs).toBeGreaterThan(0);
-    });
-
-    test('should log AWS credential substrings for debugging', () => {
-      const credentials = extractAWSCredentials();
-      
-      console.log('\\n=== AWS Credential Substring Analysis ===');
-      
-      // Log different substring lengths for AWS Key ID
-      if (credentials.keyId) {
-        const keyId = credentials.keyId;
-        console.log('AWS Key ID - First 4 chars:', keyId.substring(0, 4));
-        console.log('AWS Key ID - First 6 chars:', keyId.substring(0, 6));
-        console.log('AWS Key ID - First 8 chars:', keyId.substring(0, 8));
-        console.log('AWS Key ID - Last 4 chars:', keyId.substring(keyId.length - 4));
-        console.log('AWS Key ID - Middle section:', keyId.substring(4, keyId.length - 4).replace(/./g, '*'));
-      }
-      
-      // Log safe portions of AWS Secret Key
-      if (credentials.secretKey) {
-        const secretKey = credentials.secretKey;
-        console.log('AWS Secret Key - First 3 chars:', secretKey.substring(0, 3));
-        console.log('AWS Secret Key - First 4 chars:', secretKey.substring(0, 4));
-        console.log('AWS Secret Key - First 6 chars:', secretKey.substring(0, 6));
-        console.log('AWS Secret Key - Character pattern:', 
-          secretKey.substring(0, 2) + '***...' + 
-          secretKey.substring(secretKey.length - 2)
-        );
-      }
-      
-      console.log('=== End Credential Analysis ===\\n');
-      
-      // Test passes regardless of credential presence
-      expect(true).toBe(true);
+  describe('Write Unit TESTS', () => {
+    test('Dont forget!', async () => {
+      expect(false).toBe(true);
     });
   });
 

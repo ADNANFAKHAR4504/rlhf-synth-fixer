@@ -233,6 +233,8 @@ Resources:
   # CloudTrail IAM policy - least privilege for S3 writes
   CloudTrailS3Policy:
     Type: 'AWS::IAM::Policy'
+    Condition: IsPrimaryRegion
+    DependsOn: CentralizedLoggingBucket
     Properties:
       PolicyName: CloudTrailS3Policy
       Roles:
@@ -245,9 +247,7 @@ Resources:
             Action:
               - 's3:PutObject'
             Resource:
-              - !Sub 
-                - 'arn:aws:s3:::${AccountId}-centralized-logs/cloudtrail/AWSLogs/${AWS::AccountId}/*'
-                - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
+              - !Sub '${CentralizedLoggingBucket}/cloudtrail/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -255,7 +255,7 @@ Resources:
             Action:
               - 's3:GetBucketAcl'
             Resource:
-              - !Sub 'arn:aws:s3:::${LoggingAccountId}-centralized-logs'
+              - !Ref CentralizedLoggingBucket
           # CloudWatch Logs permissions for CloudTrail
           - Effect: Allow
             Action:
@@ -326,6 +326,8 @@ Resources:
   # IAM policy for Config to access centralized S3 bucket
   ConfigS3Policy:
     Type: 'AWS::IAM::Policy'
+    Condition: IsPrimaryRegion
+    DependsOn: CentralizedLoggingBucket
     Properties:
       PolicyName: ConfigS3DeliveryPolicy
       Roles:
@@ -339,15 +341,13 @@ Resources:
               - 's3:PutObject'
               - 's3:PutObjectAcl'
             Resource:
-              - !Sub 
-                - 'arn:aws:s3:::${AccountId}-centralized-logs/config/*'
-                - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
+              - !Sub '${CentralizedLoggingBucket}/config/*'
           - Effect: Allow
             Action:
               - 's3:ListBucket'
               - 's3:GetBucketAcl'
             Resource:
-              - !Sub 'arn:aws:s3:::${LoggingAccountId}-centralized-logs'
+              - !Ref CentralizedLoggingBucket
   
   # ====================================
   # VPC AND NETWORK CONFIGURATION
@@ -783,6 +783,7 @@ Resources:
   # AWS Config Configuration
   ConfigRecorder:
     Type: 'AWS::Config::ConfigurationRecorder'
+    Condition: IsPrimaryRegion
     Properties:
       RecordingGroup:
         AllSupported: true
@@ -791,18 +792,21 @@ Resources:
   
   ConfigDeliveryChannel:
     Type: 'AWS::Config::DeliveryChannel'
+    DependsOn: 
+      - CentralizedLoggingBucket
+      - ConfigS3Policy
+    Condition: IsPrimaryRegion
     Properties:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: Six_Hours
       # Use centralized logging bucket for Config snapshots
-      S3BucketName: !Sub 
-        - '${AccountId}-centralized-logs'
-        - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
+      S3BucketName: !Ref CentralizedLoggingBucket
       S3KeyPrefix: 'config'
   
   # AWS Config Rules
   IAMFullAccessRule:
     Type: 'AWS::Config::ConfigRule'
+    Condition: IsPrimaryRegion
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: iam-policy-no-statements-with-full-access
