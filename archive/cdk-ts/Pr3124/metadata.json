@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349422",
+  "team": "4",
+  "startedAt": "2025-09-29T19:08:08.963Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "AWS CodePipeline",
+    "AWS CodeBuild",
+    "Amazon S3",
+    "Amazon DynamoDB",
+    "Amazon SNS",
+    "AWS KMS",
+    "AWS Secrets Manager",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "AWS CloudFormation"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}
