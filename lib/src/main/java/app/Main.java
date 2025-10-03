@@ -16,14 +16,7 @@ import software.amazon.awscdk.services.apigatewayv2.CfnRoute;
 import software.amazon.awscdk.services.apigatewayv2.CfnRouteProps;
 import software.amazon.awscdk.services.apigatewayv2.CfnStage;
 import software.amazon.awscdk.services.apigatewayv2.CfnStageProps;
-import software.amazon.awscdk.services.appsync.AppsyncFunction;
-import software.amazon.awscdk.services.appsync.AuthorizationConfig;
-import software.amazon.awscdk.services.appsync.AuthorizationMode;
-import software.amazon.awscdk.services.appsync.AuthorizationType;
 import software.amazon.awscdk.services.appsync.GraphqlApi;
-import software.amazon.awscdk.services.appsync.GraphqlApiProps;
-import software.amazon.awscdk.services.appsync.SchemaFile;
-import software.amazon.awscdk.services.appsync.UserPoolConfig;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.AlarmProps;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
@@ -53,7 +46,6 @@ import software.amazon.awscdk.services.ec2.IVpc;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SecurityGroupProps;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
-import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ec2.VpcProps;
@@ -118,13 +110,13 @@ import java.util.stream.Collectors;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(final String environmentSuffix, final StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -143,13 +135,13 @@ class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(final String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(final StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
@@ -167,8 +159,8 @@ final class NetworkResources {
     private final SecurityGroup lambdaSecurityGroup;
     private final SecurityGroup redisSecurityGroup;
 
-    NetworkResources(final IVpc vpc, final SecurityGroup lambdaSg, final SecurityGroup redisSg) {
-        this.vpc = vpc;
+    NetworkResources(final IVpc vpcResource, final SecurityGroup lambdaSg, final SecurityGroup redisSg) {
+        this.vpc = vpcResource;
         this.lambdaSecurityGroup = lambdaSg;
         this.redisSecurityGroup = redisSg;
     }
@@ -824,33 +816,33 @@ class TapStack extends Stack {
                 .runtime(Runtime.PYTHON_3_12)
                 .handler("index.handler")
                 .code(Code.fromInline(
-                        "import json\n" +
-                        "import time\n\n" +
-                        "def handler(event, context):\n" +
-                        "    try:\n" +
-                        "        user_id = event.get('userId')\n" +
-                        "        doc_id = event.get('documentId')\n" +
-                        "        \n" +
-                        "        if not user_id:\n" +
-                        "            return {\n" +
-                        "                'statusCode': 400,\n" +
-                        "                'body': json.dumps({'error': 'userId is required'})\n" +
-                        "            }\n" +
-                        "        \n" +
-                        "        return {\n" +
-                        "            'statusCode': 200,\n" +
-                        "            'body': json.dumps({\n" +
-                        "                'message': 'Document access validated',\n" +
-                        "                'userId': user_id,\n" +
-                        "                'documentId': doc_id,\n" +
-                        "                'timestamp': int(time.time())\n" +
-                        "            })\n" +
-                        "        }\n" +
-                        "    except Exception as e:\n" +
-                        "        return {\n" +
-                        "            'statusCode': 500,\n" +
-                        "            'body': json.dumps({'error': str(e)})\n" +
-                        "        }\n"
+                        "import json\n"
+                        + "import time\n\n"
+                        + "def handler(event, context):\n"
+                        + "    try:\n"
+                        + "        user_id = event.get('userId')\n"
+                        + "        doc_id = event.get('documentId')\n"
+                        + "        \n"
+                        + "        if not user_id:\n"
+                        + "            return {\n"
+                        + "                'statusCode': 400,\n"
+                        + "                'body': json.dumps({'error': 'userId is required'})\n"
+                        + "            }\n"
+                        + "        \n"
+                        + "        return {\n"
+                        + "            'statusCode': 200,\n"
+                        + "            'body': json.dumps({\n"
+                        + "                'message': 'Document access validated',\n"
+                        + "                'userId': user_id,\n"
+                        + "                'documentId': doc_id,\n"
+                        + "                'timestamp': int(time.time())\n"
+                        + "            })\n"
+                        + "        }\n"
+                        + "    except Exception as e:\n"
+                        + "        return {\n"
+                        + "            'statusCode': 500,\n"
+                        + "            'body': json.dumps({'error': str(e)})\n"
+                        + "        }\n"
                 ))
                 .role(role)
                 .timeout(Duration.seconds(timeout))
