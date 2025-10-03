@@ -22,6 +22,10 @@ import {
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
+import dns from 'dns';
+import { promisify } from 'util';
+import net from 'net';
 
 const region = process.env.AWS_REGION || 'ap-south-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr3382';
@@ -35,7 +39,7 @@ const s3Client = new S3Client({ region });
 
 // Load deployment outputs
 let deploymentOutputs: any = {};
-const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+const outputsPath = path.join(__dirname, './flat-outputs.json');
 
 if (fs.existsSync(outputsPath)) {
   const outputsContent = fs.readFileSync(outputsPath, 'utf8');
@@ -216,19 +220,22 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
+      // Find ALB by DNS name instead of name
       const response = await elbClient.send(
-        new DescribeLoadBalancersCommand({
-          Names: [`tap-${environmentSuffix}-alb`],
-        })
+        new DescribeLoadBalancersCommand({})
       );
 
-      if (response.LoadBalancers && response.LoadBalancers.length > 0) {
-        const alb = response.LoadBalancers[0];
+      const alb = response.LoadBalancers?.find(
+        lb => lb.DNSName === deploymentOutputs.ALBDNSName
+      );
 
+      if (alb) {
         expect(alb.Scheme).toBe('internet-facing');
         expect(alb.AvailabilityZones).toHaveLength(3);
         expect(alb.State?.Code).toBe('active');
         expect(alb.Type).toBe('application');
+      } else {
+        throw new Error(`ALB with DNS ${deploymentOutputs.ALBDNSName} not found`);
       }
     });
 
@@ -358,9 +365,6 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      const https = await import('https');
-      const http = await import('http');
-
       await new Promise<void>((resolve, reject) => {
         const req = http.request(
           `http://${deploymentOutputs.ALBDNSName}`,
@@ -420,10 +424,7 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      const dns = await import('dns');
-      const { promisify } = await import('util');
       const resolve4 = promisify(dns.resolve4);
-
       const hostname = deploymentOutputs.RDSEndpoint.split(':')[0];
 
       try {
@@ -448,8 +449,6 @@ describe('TapStack Integration Tests', () => {
         console.log('Skipping test - no Bastion Host IP in outputs');
         return;
       }
-
-      const net = await import('net');
 
       // Try to connect to port 22 (SSH) with a short timeout
       await new Promise<void>((resolve) => {
