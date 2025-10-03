@@ -8,7 +8,7 @@
   "startedAt": "2025-10-02T15:19:52.622Z",
   "subtask": "Cloud Environment Setup",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Network Configuration"
   ],
   "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
 }
