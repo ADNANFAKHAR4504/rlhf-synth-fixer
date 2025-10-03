@@ -94,13 +94,13 @@ variable "ssl_certificate_arn" {
 variable "min_instances" {
   description = "Min EC2 instances in ASG"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "max_instances" {
   description = "Max EC2 instances in ASG"
   type        = number
-  default     = 10
+  default     = 4
 }
 
 ###################
@@ -147,8 +147,9 @@ resource "aws_vpc" "main" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${var.project}-flow-logs"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.main.arn
   tags              = local.common_tags
+  
+  depends_on = [aws_kms_key.main]
 }
 
 resource "aws_iam_role" "vpc_flow_logs" {
@@ -491,8 +492,9 @@ resource "aws_kms_alias" "main" {
 resource "aws_cloudwatch_log_group" "app_logs" {
   name              = "/aws/${var.project}/application"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.main.arn
   tags              = local.common_tags
+  
+  depends_on = [aws_kms_key.main]
 }
 
 ###################
@@ -549,7 +551,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage           = 100
   storage_type                    = "gp3"
   engine                          = "mysql"
-  engine_version                  = "8.0.35"
+  engine_version                  = "8.0"
   instance_class                  = var.db_instance_class
   identifier                      = "${var.project}-db"
   db_name                         = var.db_name
@@ -601,8 +603,12 @@ resource "aws_elasticache_parameter_group" "main" {
 }
 
 resource "random_password" "redis_auth" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!&#$^<>-"
+  min_lower        = 1
+  min_upper        = 1
+  min_numeric      = 1
 }
 
 resource "aws_elasticache_replication_group" "main" {
@@ -728,6 +734,8 @@ resource "aws_lb" "main" {
     enabled = true
   }
   tags = local.common_tags
+  
+  depends_on = [aws_s3_bucket_policy.lb_logs]
 }
 
 resource "aws_lb_target_group" "main" {
