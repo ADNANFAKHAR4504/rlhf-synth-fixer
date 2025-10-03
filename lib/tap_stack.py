@@ -570,6 +570,9 @@ class TapStack(Stack):
             max_session_duration=Duration.hours(1),
             description="Admin role with time-based and MFA-enforced access"
         )
+        
+        # Set deletion policy to handle cleanup gracefully
+        self.admin_role.node.default_child.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
 
         # Read-only role for auditors
         self.auditor_role = iam.Role(
@@ -583,6 +586,9 @@ class TapStack(Stack):
             max_session_duration=Duration.hours(4),
             description="Auditor role with read-only access to compliance data"
         )
+        
+        # Set deletion policy to handle cleanup gracefully
+        self.auditor_role.node.default_child.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
 
         # Incident response role
         self.incident_response_role = iam.Role(
@@ -617,6 +623,10 @@ class TapStack(Stack):
             },
             description="Automated incident response role"
         )
+        
+        # Set deletion policy to handle cleanup gracefully - but this role may be in use by Lambda
+        # Use RETAIN to prevent deletion issues with dependent resources
+        self.incident_response_role.node.default_child.cfn_options.deletion_policy = CfnDeletionPolicy.RETAIN
 
     def _create_logging_infrastructure(self):
         """Set up comprehensive logging with CloudTrail"""
