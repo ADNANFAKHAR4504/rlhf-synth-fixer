@@ -275,3 +275,68 @@ Outputs:
   RDSInstanceEndpoint:
     Description: RDS Endpoint
     Value: !GetAtt RDSDatabase.Endpoint.Address
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref MyVPC
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+
+  EC2SecurityGroupId:
+    Description: Security Group ID for EC2
+    Value: !Ref EC2SecurityGroup
+
+  RDSSecurityGroupId:
+    Description: Security Group ID for RDS
+    Value: !Ref RDSSecurityGroup
+
+  LogsBucketName:
+    Description: S3 Bucket for Logs
+    Value: !Ref LogsBucket
+
+  EC2InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref MyEC2Instance
+
+  EC2InstancePublicIP:
+    Description: EC2 Instance Public IP
+    Value: !GetAtt MyEC2Instance.PublicIp
+
+  EC2InstancePrivateIP:
+    Description: EC2 Instance Private IP
+    Value: !GetAtt MyEC2Instance.PrivateIp
+
+  ApplicationLoadBalancerDNS:
+    Description: ALB DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ApplicationLoadBalancerArn:
+    Description: ALB ARN
+    Value: !Ref ApplicationLoadBalancer
+
+  ALBTargetGroupArn:
+    Description: ALB Target Group ARN
+    Value: !Ref ALBTargetGroup
+
+  DBSecretArn:
+    Description: Secrets Manager ARN for RDS
+    Value: !Ref DBSecret
+
+  DBInstanceEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt RDSDatabase.Endpoint.Address
+
+  DBInstancePort:
+    Description: RDS Database Port
+    Value: !GetAtt RDSDatabase.Endpoint.Port
+
+  DashboardName:
+    Description: CloudWatch Dashboard Name
+    Value: !Ref MyDashboard
+
