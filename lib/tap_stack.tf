@@ -68,6 +68,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "content" {
     id     = "transition-old-content"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -75,7 +77,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "content" {
 
     transition {
       days          = 90
-      storage_class = "GLACIER_FLEXIBLE_RETRIEVAL"
+      storage_class = "GLACIER"
     }
 
     noncurrent_version_transition {
@@ -261,6 +263,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "delete-old-logs"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = var.log_retention_days

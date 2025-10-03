@@ -77,7 +77,7 @@ describe("Secure Content Delivery System - Unit Tests", () => {
     test("S3 bucket lifecycle configuration for cost optimization", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"content"/);
       expect(stackContent).toMatch(/storage_class\s*=\s*"STANDARD_IA"/);
-      expect(stackContent).toMatch(/storage_class\s*=\s*"GLACIER_FLEXIBLE_RETRIEVAL"/);
+      expect(stackContent).toMatch(/storage_class\s*=\s*"GLACIER"/);
     });
 
     test("S3 bucket policy restricts access to CloudFront only", () => {

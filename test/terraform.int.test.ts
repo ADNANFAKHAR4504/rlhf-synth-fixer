@@ -2,12 +2,18 @@
 // Comprehensive integration tests for secure content delivery system
 // Tests real-world use cases and actual functionality
 
+import * as fs from 'fs';
+import * as path from 'path';
 
-const OUTPUTS_REL = "../cfn-outputs/all-outputs.json";
+const OUTPUTS_FILE = path.join(__dirname, "../cfn-outputs/all-outputs.json");
+const IS_CI_CD = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
 describe("Secure Content Delivery System - Integration Tests", () => {
-  // Mock outputs for local development
-  const outputs = {
+  let outputs: any;
+  let usingMockData = false;
+
+  // Mock outputs for local development only
+  const mockOutputs = {
     cloudfront_distribution_id: "E1234567890ABC",
     cloudfront_domain_name: "d1234567890abc.cloudfront.net",
     cloudfront_distribution_arn: "arn:aws:cloudfront::123456789012:distribution/E1234567890ABC",
@@ -28,10 +34,112 @@ describe("Secure Content Delivery System - Integration Tests", () => {
     cloudtrail_arn: "arn:aws:cloudtrail:us-east-1:123456789012:trail/tap-content-delivery-cloudtrail-production",
     waf_web_acl_arn: "arn:aws:wafv2:us-east-1:123456789012:global/webacl/tap-content-delivery-waf-production/12345678-1234-1234-1234-123456789012",
     website_url: "https://example.com",
-    content_delivery_summary: '{"domain_name":"example.com","cloudfront_domain":"d1234567890abc.cloudfront.net","s3_bucket":"tap-content-delivery-content-production","encryption_enabled":true,"waf_enabled":true,"cloudtrail_enabled":true,"monitoring_enabled":true,"cost_optimization":"Lifecycle policies configured for S3 storage classes"}'
+    test_url: "https://d1234567890abc.cloudfront.net",
+    content_delivery_summary: '{"domain_name":"example.com","cloudfront_domain":"d1234567890abc.cloudfront.net","s3_bucket":"tap-content-delivery-content-production","encryption_enabled":true,"waf_enabled":true,"cloudtrail_enabled":true,"monitoring_enabled":true,"cost_optimization":"Lifecycle policies configured for S3 storage classes","test_url":"https://d1234567890abc.cloudfront.net"}'
   };
 
+  beforeAll(async () => {
+    try {
+      // In CI/CD, we MUST have real deployment outputs
+      if (IS_CI_CD) {
+        if (!fs.existsSync(OUTPUTS_FILE)) {
+          throw new Error(`CI/CD deployment outputs not found at ${OUTPUTS_FILE}. Deployment may have failed.`);
+        }
+
+        const rawOutputs = fs.readFileSync(OUTPUTS_FILE, 'utf8');
+        const parsedOutputs = JSON.parse(rawOutputs);
+
+        // Process Terraform output format (extract 'value' property if present)
+        outputs = {};
+        Object.keys(parsedOutputs).forEach(key => {
+          const value = parsedOutputs[key];
+          if (typeof value === 'object' && value !== null && 'value' in value) {
+            outputs[key] = value.value;
+          } else {
+            outputs[key] = value;
+          }
+        });
+
+        console.log(`✅ Loaded real deployment outputs from CI/CD`);
+        usingMockData = false;
+
+      } else {
+        // Local development - use mock data
+        outputs = mockOutputs;
+        usingMockData = true;
+        console.log(`⚠️  Using mock data for local development`);
+      }
+
+    } catch (error) {
+      if (IS_CI_CD) {
+        // In CI/CD, we must fail if we can't load real outputs
+        throw new Error(`Failed to load deployment outputs in CI/CD: ${error}`);
+      } else {
+        // Local development - fallback to mock data
+        outputs = mockOutputs;
+        usingMockData = true;
+        console.log(`⚠️  Failed to load outputs, using mock data: ${error}`);
+      }
+    }
+  });
+
+  afterAll(async () => {
+    // Remove mock data after successful testing (only in local development)
+    if (usingMockData && !IS_CI_CD) {
+      console.log(`🧹 Tests completed successfully. Mock data can be removed after verifying real deployment.`);
+    }
+  });
+
   describe("Infrastructure Outputs Validation", () => {
+    test("Deployment outputs source validation", () => {
+      if (IS_CI_CD) {
+        // In CI/CD, we must be using real deployment outputs
+        expect(usingMockData).toBe(false);
+        expect(outputs).toBeDefined();
+        expect(Object.keys(outputs).length).toBeGreaterThan(0);
+
+        // Verify we have real AWS resource identifiers (not mock values)
+        expect(outputs.cloudfront_distribution_id).not.toBe("E1234567890ABC");
+        expect(outputs.s3_bucket_name).not.toBe("tap-content-delivery-content-production");
+        expect(outputs.kms_key_id).not.toBe("12345678-1234-1234-1234-123456789012");
+
+        console.log(`✅ CI/CD validation passed - using real deployment outputs`);
+      } else {
+        // Local development - mock data is acceptable
+        expect(usingMockData).toBe(true);
+        console.log(`⚠️  Local development - using mock data`);
+      }
+    });
+
+    test("CI/CD outputs file validation", () => {
+      if (IS_CI_CD) {
+        // In CI/CD, the outputs file must exist and be valid JSON
+        expect(fs.existsSync(OUTPUTS_FILE)).toBe(true);
+
+        const rawContent = fs.readFileSync(OUTPUTS_FILE, 'utf8');
+        expect(() => JSON.parse(rawContent)).not.toThrow();
+
+        const parsedOutputs = JSON.parse(rawContent);
+        expect(parsedOutputs).toBeDefined();
+        expect(typeof parsedOutputs).toBe('object');
+
+        // Verify essential outputs are present
+        const requiredOutputs = [
+          'cloudfront_distribution_id',
+          'cloudfront_domain_name',
+          's3_bucket_name',
+          'kms_key_id',
+          'test_url'
+        ];
+
+        requiredOutputs.forEach(outputKey => {
+          expect(parsedOutputs[outputKey]).toBeDefined();
+        });
+
+        console.log(`✅ CI/CD outputs file validation passed`);
+      }
+    });
+
     test("CloudFront distribution outputs are valid", () => {
       expect(outputs.cloudfront_distribution_id).toBeDefined();
       expect(outputs.cloudfront_domain_name).toBeDefined();
