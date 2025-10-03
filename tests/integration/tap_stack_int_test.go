@@ -161,7 +161,7 @@ func TestNetworkingStackIntegration(t *testing.T) {
 
 		// ASSERT - DynamoDB endpoint exists
 		template.HasResourceProperties(jsii.String("AWS::EC2::VPCEndpoint"), map[string]interface{}{
-			"ServiceName": assertions.Match_StringLikeRegexp("com.amazonaws.us-east-1.dynamodb"),
+			"ServiceName":     assertions.Match_StringLikeRegexp("com.amazonaws.us-east-1.dynamodb"),
 			"VpcEndpointType": "Gateway",
 		})
 
@@ -229,8 +229,8 @@ func TestSecurityStackIntegration(t *testing.T) {
 
 		// ASSERT - KMS key properties
 		template.HasResourceProperties(jsii.String("AWS::KMS::Key"), map[string]interface{}{
-			"EnableKeyRotation": true,
-			"Description":       assertions.Match_StringLikeRegexp("Customer-managed KMS key for RDS encryption"),
+			"EnableKeyRotation":   true,
+			"Description":         assertions.Match_StringLikeRegexp("Customer-managed KMS key for RDS encryption"),
 			"PendingWindowInDays": 30,
 		})
 
@@ -263,7 +263,7 @@ func TestSecurityStackIntegration(t *testing.T) {
 			"KeyPolicy": map[string]interface{}{
 				"Statement": assertions.Match_ArrayWith(&[]interface{}{
 					map[string]interface{}{
-						"Sid": "Enable CloudTrail Encrypt Permissions",
+						"Sid":    "Enable CloudTrail Encrypt Permissions",
 						"Effect": "Allow",
 						"Principal": map[string]interface{}{
 							"Service": "cloudtrail.amazonaws.com",
@@ -331,8 +331,8 @@ func TestSecurityStackIntegration(t *testing.T) {
 						"Status": "Enabled",
 						"Transitions": assertions.Match_ArrayWith(&[]interface{}{
 							map[string]interface{}{
-								"StorageClass":         "STANDARD_IA",
-								"TransitionInDays":     30,
+								"StorageClass":     "STANDARD_IA",
+								"TransitionInDays": 30,
 							},
 						}),
 						"ExpirationInDays": 365,
@@ -360,7 +360,7 @@ func TestSecurityStackIntegration(t *testing.T) {
 			"PolicyDocument": map[string]interface{}{
 				"Statement": assertions.Match_ArrayWith(&[]interface{}{
 					map[string]interface{}{
-						"Sid": "AWSCloudTrailWrite",
+						"Sid":    "AWSCloudTrailWrite",
 						"Effect": "Allow",
 						"Principal": map[string]interface{}{
 							"Service": "cloudtrail.amazonaws.com",
@@ -388,8 +388,8 @@ func TestSecurityStackIntegration(t *testing.T) {
 		// ASSERT - CloudTrail properties
 		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
 			"IncludeGlobalServiceEvents": true,
-			"IsMultiRegionTrail":          false,
-			"EnableLogFileValidation":     true,
+			"IsMultiRegionTrail":         false,
+			"EnableLogFileValidation":    true,
 		})
 
 		// Verify CloudTrail is encrypted with KMS
