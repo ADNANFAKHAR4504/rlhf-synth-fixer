@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { StaticWebsiteStack } from '../lib/static-website-stack';
+import { TapStack } from '../lib/tap-stack';
 import { WafStack } from '../lib/waf-stack';
 
 describe('TapStack', () => {
@@ -333,13 +333,13 @@ describe('StaticWebsiteStack', () => {
 
     test('creates hosted zone', () => {
       template.hasResourceProperties('AWS::Route53::HostedZone', {
-        Name: 'test.example.com.'
+        Name: 'portfolio-test.example.com.'
       });
     });
 
     test('creates A record for CloudFront', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: 'portfolio-test.test.example.com.',
+        Name: 'portfolio-test.portfolio-test.example.com.',
         Type: 'A',
         AliasTarget: Match.objectLike({
           DNSName: Match.anyValue(),
