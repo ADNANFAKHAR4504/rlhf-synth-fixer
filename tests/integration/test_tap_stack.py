@@ -33,32 +33,43 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.aws_region)
         cls.logs_client = boto3.client('logs', region_name=cls.aws_region)
 
-        # Get actual resource names from Pulumi stack outputs
-        try:
-            # Initialize Pulumi workspace
-            work_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)))
-            stack = auto.select_stack(stack_name=cls.stack_name, work_dir=work_dir)
-            outputs = stack.outputs()
-            
-            # Extract queue names from URLs
-            main_queue_url = outputs.get('main_queue_url', {}).get('value', '')
-            dlq_url = outputs.get('dlq_url', {}).get('value', '')
-            
-            # Parse queue names from URLs (format: https://sqs.region.amazonaws.com/account/queue-name)
-            cls.main_queue_name = main_queue_url.split('/')[-1] if main_queue_url else f"campaign-events-queue-{cls.environment_suffix}"
-            cls.dlq_name = dlq_url.split('/')[-1] if dlq_url else f"campaign-events-dlq-{cls.environment_suffix}"
-            
-            # Other resources from outputs
-            cls.table_name = outputs.get('dynamodb_table_name', {}).get('value', f"campaign-events-log-{cls.environment_suffix}")
-            cls.lambda_function_name = outputs.get('lambda_function_name', {}).get('value', f"campaign-event-processor-{cls.environment_suffix}")
-            
-        except Exception as e:
-            # Fallback to constructed names if Pulumi outputs are not available
-            print(f"Warning: Could not get Pulumi outputs, using fallback names: {e}")
+        # Get actual resource names from environment variables or discover them
+        # First try to get from environment variables (set by CI/CD)
+        cls.main_queue_name = os.getenv('MAIN_QUEUE_NAME')
+        cls.dlq_name = os.getenv('DLQ_NAME') 
+        cls.table_name = os.getenv('DYNAMODB_TABLE_NAME')
+        cls.lambda_function_name = os.getenv('LAMBDA_FUNCTION_NAME')
+        
+        # If not in env vars, try to discover queue names by listing and filtering
+        if not cls.main_queue_name or not cls.dlq_name:
+            try:
+                # List all queues and find ones matching our pattern
+                queues_response = cls.sqs_client.list_queues(QueueNamePrefix=f'campaign-events')
+                queue_urls = queues_response.get('QueueUrls', [])
+                
+                for queue_url in queue_urls:
+                    queue_name = queue_url.split('/')[-1]
+                    if f'campaign-events-queue-{cls.environment_suffix}' in queue_name:
+                        cls.main_queue_name = queue_name
+                    elif f'campaign-events-dlq-{cls.environment_suffix}' in queue_name:
+                        cls.dlq_name = queue_name
+                        
+                print(f"Discovered queue names: main={cls.main_queue_name}, dlq={cls.dlq_name}")
+                        
+            except Exception as e:
+                print(f"Warning: Could not discover queue names: {e}")
+        
+        # Fallback to constructed names if discovery fails
+        if not cls.main_queue_name:
             cls.main_queue_name = f"campaign-events-queue-{cls.environment_suffix}"
+        if not cls.dlq_name:
             cls.dlq_name = f"campaign-events-dlq-{cls.environment_suffix}"
+        if not cls.table_name:
             cls.table_name = f"campaign-events-log-{cls.environment_suffix}"
+        if not cls.lambda_function_name:
             cls.lambda_function_name = f"campaign-event-processor-{cls.environment_suffix}"
+        
+        print(f"Using resource names: queue={cls.main_queue_name}, dlq={cls.dlq_name}, table={cls.table_name}, lambda={cls.lambda_function_name}")
 
     def test_sqs_main_queue_exists(self):
         """Test that the main SQS queue exists and is configured correctly."""
