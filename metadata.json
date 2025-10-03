@@ -10,5 +10,5 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": ",S3,OAI,Route 53, KMS, S3 Buckcet Policy , CloudWatch,IAM,Cloud Formation"
+  "aws_services": "S3,OAI,Route 53, KMS, S3 Buckcet Policy , CloudWatch,IAM,Cloud Formation"
 }
