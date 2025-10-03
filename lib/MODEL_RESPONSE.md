@@ -83,3 +83,4 @@ func env() *awscdk.Environment {
 ```
 
 This Go CDK code defines a serverless application with a REST API backed by DynamoDB and Lambda. The API Gateway includes CORS support, and the Lambda function has necessary permissions. The code is structured to be region-independent and follows AWS best practices. Ensure you have a `lambda` directory with a Python handler (`handler.py`) to complete the deployment.
+
