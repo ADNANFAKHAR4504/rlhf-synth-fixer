@@ -523,19 +523,10 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 # Data source for current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# Data source to check existing CloudTrail trails
-data "aws_cloudtrail_service_account" "main" {}
-
-# Data source to find existing CloudTrail trail
-data "aws_cloudtrail_trails" "existing" {}
-
 # Check if we can create CloudTrail (limit is 5 trails per region)
 locals {
   # CloudTrail creation should be skipped if we hit the limit
   skip_cloudtrail_creation = var.enable_cloudtrail && false # Set to true if hitting trail limit
-  
-  # Use existing trail if available, otherwise create new one
-  use_existing_cloudtrail = var.enable_cloudtrail && length(data.aws_cloudtrail_trails.existing.names) > 0
 }
 
 # CloudWatch Log Group for CloudFront logs
