@@ -1,8 +1,17 @@
 # Zero Trust Infrastructure Deployment Guide
 
-## 🚨 CRITICAL: Avoiding "Detector Already Exists" Error
+## 🚨 IMMEDIATE FIX FOR YOUR CURRENT ERROR
 
-If you're getting the error **"The request is rejected because a detector already exists for the current account"**, follow the **Existing AWS Account** deployment steps below.
+Since you're getting "detector already exists" errors, run these commands right now:
+
+```bash
+# Get your existing GuardDuty detector ID
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+echo "Found existing detector: $DETECTOR_ID"
+
+# Deploy using the existing detector (this will fix your error)
+cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=$DETECTOR_ID
+```
 
 ## ⚠️ IMPORTANT: Check Your AWS Account First
 
