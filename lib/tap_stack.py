@@ -809,7 +809,16 @@ def send_response(event, context, status, data, physical_id=None):
                                     "guardduty:CreateDetector",
                                     "guardduty:UpdateDetector",
                                     "guardduty:GetDetector",
-                                    "guardduty:TagResource"
+                                    "guardduty:TagResource",
+                                    "guardduty:CreateThreatIntelSet",
+                                    "guardduty:CreateIPSet",
+                                    "guardduty:UpdateThreatIntelSet",
+                                    "guardduty:UpdateIPSet",
+                                    "guardduty:GetThreatIntelSet",
+                                    "guardduty:GetIPSet",
+                                    "guardduty:DeleteThreatIntelSet",
+                                    "guardduty:DeleteIPSet",
+                                    "s3:GetObject"
                                 ],
                                 resources=["*"]
                             )
