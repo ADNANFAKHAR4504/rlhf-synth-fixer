@@ -86,11 +86,11 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  npm run cfn:deploy-yaml
+  AWS_REGION=${AWS_REGION:-us-east-1} npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  npm run cfn:deploy-json
+  AWS_REGION=${AWS_REGION:-us-east-1} npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
