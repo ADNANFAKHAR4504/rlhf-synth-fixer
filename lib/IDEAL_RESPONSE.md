@@ -5,7 +5,6 @@ I'll create the infrastructure code for a secure RDS Aurora MySQL database deplo
 ## tap-stack.ts
 
 
-
 ```typescript## tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
