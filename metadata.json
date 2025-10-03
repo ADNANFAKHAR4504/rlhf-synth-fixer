@@ -10,5 +10,15 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, Subnets, Route Tables, Internet Gateway, NAT Gateway, Security Groups, Network ACLs, EC2, Auto Scaling, Bastion Host, Application Load Balancer, RDS, S3, EBS, KMS, IAM, VPC Flow Logs, CloudFormation"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELBv2",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "CloudFormation"
+  ],
+  "training_quality": 8
 }
