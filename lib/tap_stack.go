@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
@@ -43,6 +44,7 @@ type SecurityNestedStack struct {
 	awscdk.NestedStack
 	KmsKey        awskms.Key
 	LoggingBucket awss3.Bucket
+	CloudTrail    awscloudtrail.Trail
 }
 
 // DataNestedStack contains data resources like RDS and S3
@@ -140,14 +142,50 @@ func NewSecurityNestedStack(scope constructs.Construct, id *string, environmentS
 		PendingWindow:     awscdk.Duration_Days(jsii.Number(30)),
 	})
 
+	// Grant CloudTrail permission to use the KMS key
+	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:    jsii.String("Enable CloudTrail Encrypt Permissions"),
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:GenerateDataKey*"),
+			jsii.String("kms:DecryptDataKey"),
+		},
+		Resources: &[]*string{
+			jsii.String("*"),
+		},
+		Conditions: &map[string]interface{}{
+			"StringLike": map[string]interface{}{
+				"kms:EncryptionContext:aws:cloudtrail:arn": jsii.String(fmt.Sprintf("arn:aws:cloudtrail:us-east-1:%s:trail/*", *awscdk.Aws_ACCOUNT_ID())),
+			},
+		},
+	}), nil)
+
+	// Grant CloudTrail permission to describe the key
+	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:    jsii.String("Enable CloudTrail to describe key"),
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:DescribeKey"),
+		},
+		Resources: &[]*string{
+			jsii.String("*"),
+		},
+	}), nil)
+
 	// Add tags to KMS key
 	awscdk.Tags_Of(kmsKey).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
 	awscdk.Tags_Of(kmsKey).Add(jsii.String("Owner"), jsii.String("TapProject"), nil)
 	awscdk.Tags_Of(kmsKey).Add(jsii.String("Purpose"), jsii.String("RDS-Encryption"), nil)
 
-	// Create S3 bucket for logging with complete public access block
-	bucketName := fmt.Sprintf("tapstack-logs-%s", environmentSuffix)
-	loggingBucket := awss3.NewBucket(nestedStack, jsii.String("LoggingBucket"), &awss3.BucketProps{
+	// Create S3 bucket for CloudTrail logs with complete public access block
+	bucketName := fmt.Sprintf("tapstack-cloudtrail-logs-%s", environmentSuffix)
+	loggingBucket := awss3.NewBucket(nestedStack, jsii.String("CloudTrailLogsBucket"), &awss3.BucketProps{
 		BucketName:    jsii.String(bucketName),
 		Versioned:     jsii.Bool(true),
 		Encryption:    awss3.BucketEncryption_S3_MANAGED,
@@ -178,12 +216,65 @@ func NewSecurityNestedStack(scope constructs.Construct, id *string, environmentS
 	// Add tags to S3 bucket
 	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
 	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Owner"), jsii.String("TapProject"), nil)
-	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Purpose"), jsii.String("Application-Logs"), nil)
+	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Purpose"), jsii.String("CloudTrail-Logs"), nil)
+
+	// Add bucket policy to allow CloudTrail to write logs
+	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:    jsii.String("AWSCloudTrailAclCheck"),
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:GetBucketAcl"),
+		},
+		Resources: &[]*string{
+			loggingBucket.BucketArn(),
+		},
+	}))
+
+	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:    jsii.String("AWSCloudTrailWrite"),
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:PutObject"),
+		},
+		Resources: &[]*string{
+			jsii.String(fmt.Sprintf("%s/*", *loggingBucket.BucketArn())),
+		},
+		Conditions: &map[string]interface{}{
+			"StringEquals": map[string]interface{}{
+				"s3:x-amz-acl": jsii.String("bucket-owner-full-control"),
+			},
+		},
+	}))
+
+	// Create CloudTrail
+	trailName := fmt.Sprintf("tap-trail-%s", environmentSuffix)
+	trail := awscloudtrail.NewTrail(nestedStack, jsii.String("CloudTrail"), &awscloudtrail.TrailProps{
+		TrailName:                  jsii.String(trailName),
+		Bucket:                     loggingBucket,
+		IncludeGlobalServiceEvents: jsii.Bool(true),
+		IsMultiRegionTrail:         jsii.Bool(false), // Single region as specified (us-east-1)
+		EnableFileValidation:       jsii.Bool(true),
+		// Log all management events
+		ManagementEvents: awscloudtrail.ReadWriteType_ALL,
+		// Encrypt CloudTrail logs
+		EncryptionKey: kmsKey,
+	})
+
+	// Add tags to CloudTrail
+	awscdk.Tags_Of(trail).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
+	awscdk.Tags_Of(trail).Add(jsii.String("Owner"), jsii.String("TapProject"), nil)
 
 	return &SecurityNestedStack{
 		NestedStack:   nestedStack,
 		KmsKey:        kmsKey,
 		LoggingBucket: loggingBucket,
+		CloudTrail:    trail,
 	}
 }
 
@@ -481,14 +572,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		},
 	)
 
-	// 2. Create Security Stack (KMS, S3)
+	// 2. Create Security Stack (KMS, S3, CloudTrail)
 	securityStackId := fmt.Sprintf("SecurityStack-%s", environmentSuffix)
 	securityStack := NewSecurityNestedStack(
 		stack,
 		jsii.String(securityStackId),
 		environmentSuffix,
 		&awscdk.NestedStackProps{
-			Description: jsii.String(fmt.Sprintf("Security resources including KMS (%s)", environmentSuffix)),
+			Description: jsii.String(fmt.Sprintf("Security resources including KMS and CloudTrail (%s)", environmentSuffix)),
 		},
 	)
 
@@ -537,7 +628,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	awscdk.NewCfnOutput(stack, jsii.String("LoggingBucketName"), &awscdk.CfnOutputProps{
 		Value:       securityStack.LoggingBucket.BucketName(),
-		Description: jsii.String("Application logging bucket name"),
+		Description: jsii.String("CloudTrail logging bucket name"),
 		ExportName:  jsii.String(fmt.Sprintf("TapLoggingBucket-%s", environmentSuffix)),
 	})
 
@@ -557,7 +648,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Add informational output about security features
 	awscdk.NewCfnOutput(stack, jsii.String("SecurityFeatures"), &awscdk.CfnOutputProps{
-		Value:       jsii.String("Enabled: KMS encryption, WAF protection, VPC endpoints, Restricted security groups"),
+		Value:       jsii.String("Enabled: KMS encryption, WAF protection, CloudTrail logging, VPC endpoints, Restricted security groups"),
 		Description: jsii.String("Security features enabled in this stack"),
 	})
 
