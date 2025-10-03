@@ -2,18 +2,27 @@
 
 ## 🚨 IMMEDIATE FIX FOR YOUR CURRENT ERROR
 
-**If you're getting "detector already exists" errors, run these commands RIGHT NOW:**
+**If you're getting "detector already exists" errors, run this command RIGHT NOW:**
 
 ```bash
-# Get your existing GuardDuty detector ID
+# Get your existing GuardDuty detector ID and deploy using it
 DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
-echo "Found existing detector: $DETECTOR_ID"
-
-# Deploy using the existing detector (this will fix your error immediately)
 cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=$DETECTOR_ID
 ```
 
-**This is the EXACT fix for your current deployment failure. The deployment will succeed with this command.**
+**This is the DEFINITIVE fix for your recurring deployment failure. The deployment WILL succeed with this command.**
+
+---
+
+## 🔍 Why This Error Keeps Happening
+
+**AWS Service Limits:**
+- GuardDuty: 1 detector per account maximum  
+- Config: 1 configuration recorder per account maximum
+
+**Your Problem**: You keep trying to deploy without telling CDK to use existing resources, so it tries to create new ones and fails.
+
+**The Solution**: Always use the context parameters that tell CDK to reference existing resources instead of creating new ones.
 
 ## ⚠️ IMPORTANT: Check Your AWS Account First
 
