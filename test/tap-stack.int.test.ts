@@ -312,12 +312,13 @@ describeTest('Survey Data Platform Integration Tests', () => {
       // Wait for data to be available
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Manually invoke the aggregation Lambda function
+      // Manually invoke the aggregation Lambda function with today's date for testing
       const aggregationFunctionName = `survey-aggregation-${environmentSuffix}`;
+      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
       
       const invokeResponse = await lambdaClient.send(new InvokeCommand({
         FunctionName: aggregationFunctionName,
-        Payload: JSON.stringify({}),
+        Payload: JSON.stringify({ date: today }),
       }));
       
       expect(invokeResponse.StatusCode).toBe(200);
@@ -527,10 +528,11 @@ describeTest('Survey Data Platform Integration Tests', () => {
       
       expect(queryResponse.Items!.length).toBe(3);
       
-      // Step 4: Trigger aggregation
+      // Step 4: Trigger aggregation with today's date
+      const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
       const aggregationResponse = await lambdaClient.send(new InvokeCommand({
         FunctionName: `survey-aggregation-${environmentSuffix}`,
-        Payload: JSON.stringify({}),
+        Payload: JSON.stringify({ date: today }),
       }));
       
       expect(aggregationResponse.StatusCode).toBe(200);

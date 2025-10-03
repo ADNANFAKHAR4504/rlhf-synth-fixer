@@ -335,17 +335,23 @@ Resources:
               try:
                   logger.info("Starting daily aggregation process")
                   
-                  # Get yesterday's date for aggregation
-                  yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+                  # Get date for aggregation - allow override for testing
+                  if event and 'date' in event:
+                      target_date = event['date']
+                      logger.info(f"Using provided date: {target_date}")
+                  else:
+                      # Default to yesterday for scheduled execution
+                      target_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+                      logger.info(f"Using default yesterday date: {target_date}")
                   
-                  logger.info(f"Aggregating data for date: {yesterday}")
+                  logger.info(f"Aggregating data for date: {target_date}")
                   
                   # Get all survey responses with pagination
                   surveys = {}
                   total_items_processed = 0
                   
                   scan_kwargs = {
-                      'FilterExpression': Attr('timestamp').begins_with(yesterday)
+                      'FilterExpression': Attr('timestamp').begins_with(target_date)
                   }
                   
                   while True:
@@ -366,7 +372,7 @@ Resources:
                   
                   # Process aggregations for each survey
                   aggregation_results = {
-                      'date': yesterday,
+                      'date': target_date,
                       'generated_at': datetime.datetime.now().isoformat(),
                       'total_surveys': len(surveys),
                       'total_responses': total_items_processed,
@@ -407,7 +413,7 @@ Resources:
                       }
                   
                   # Save aggregation to S3
-                  s3_key = f"aggregations/daily/{yesterday}-aggregation.json"
+                  s3_key = f"aggregations/daily/{target_date}-aggregation.json"
                   
                   s3.put_object(
                       Bucket=os.environ['BUCKET_NAME'],
@@ -419,10 +425,10 @@ Resources:
                   logger.info(f"Aggregation saved to S3: {s3_key}")
                   
                   # Send success notification
-                  message = f"""Daily survey aggregation for {yesterday} completed successfully.
+                  message = f"""Daily survey aggregation for {target_date} completed successfully.
 
           Summary:
-          - Date: {yesterday}
+          - Date: {target_date}
           - Total Surveys: {len(surveys)}
           - Total Responses: {total_items_processed}
           - File: s3://{os.environ['BUCKET_NAME']}/{s3_key}
@@ -431,7 +437,7 @@ Resources:
                   
                   sns.publish(
                       TopicArn=os.environ['TOPIC_ARN'],
-                      Subject=f"Survey Aggregation Complete - {yesterday}",
+                      Subject=f"Survey Aggregation Complete - {target_date}",
                       Message=message
                   )
                   
@@ -439,7 +445,7 @@ Resources:
                       'statusCode': 200,
                       'body': json.dumps({
                           'message': 'Aggregation completed successfully',
-                          'date': yesterday,
+                          'date': target_date,
                           'total_surveys': len(surveys),
                           'total_responses': total_items_processed
                       })
