@@ -33,11 +33,32 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.aws_region)
         cls.logs_client = boto3.client('logs', region_name=cls.aws_region)
 
-        # Resource names based on environment suffix
-        cls.main_queue_name = f"campaign-events-queue-{cls.environment_suffix}"
-        cls.dlq_name = f"campaign-events-dlq-{cls.environment_suffix}"
-        cls.table_name = f"campaign-events-log-{cls.environment_suffix}"
-        cls.lambda_function_name = f"campaign-event-processor-{cls.environment_suffix}"
+        # Get actual resource names from Pulumi stack outputs
+        try:
+            # Initialize Pulumi workspace
+            work_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)))
+            stack = auto.select_stack(stack_name=cls.stack_name, work_dir=work_dir)
+            outputs = stack.outputs()
+            
+            # Extract queue names from URLs
+            main_queue_url = outputs.get('main_queue_url', {}).get('value', '')
+            dlq_url = outputs.get('dlq_url', {}).get('value', '')
+            
+            # Parse queue names from URLs (format: https://sqs.region.amazonaws.com/account/queue-name)
+            cls.main_queue_name = main_queue_url.split('/')[-1] if main_queue_url else f"campaign-events-queue-{cls.environment_suffix}"
+            cls.dlq_name = dlq_url.split('/')[-1] if dlq_url else f"campaign-events-dlq-{cls.environment_suffix}"
+            
+            # Other resources from outputs
+            cls.table_name = outputs.get('dynamodb_table_name', {}).get('value', f"campaign-events-log-{cls.environment_suffix}")
+            cls.lambda_function_name = outputs.get('lambda_function_name', {}).get('value', f"campaign-event-processor-{cls.environment_suffix}")
+            
+        except Exception as e:
+            # Fallback to constructed names if Pulumi outputs are not available
+            print(f"Warning: Could not get Pulumi outputs, using fallback names: {e}")
+            cls.main_queue_name = f"campaign-events-queue-{cls.environment_suffix}"
+            cls.dlq_name = f"campaign-events-dlq-{cls.environment_suffix}"
+            cls.table_name = f"campaign-events-log-{cls.environment_suffix}"
+            cls.lambda_function_name = f"campaign-event-processor-{cls.environment_suffix}"
 
     def test_sqs_main_queue_exists(self):
         """Test that the main SQS queue exists and is configured correctly."""

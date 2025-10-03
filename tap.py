@@ -39,7 +39,7 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
 
-# Export stack outputs
+# Export outputs at stack level
 pulumi.export("main_queue_url", stack.main_queue.url)
 pulumi.export("main_queue_arn", stack.main_queue.arn)
 pulumi.export("dlq_url", stack.dlq.url)
