@@ -227,10 +227,10 @@ resource "aws_launch_template" "main" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size           = 30
-      volume_type           = "gp3"
-      encrypted             = true
-      kms_key_id            = var.kms_key_id
+      volume_size = 30
+      volume_type = "gp3"
+      encrypted   = false # Temporarily disable encryption to test instance launch
+      # kms_key_id            = var.kms_key_id
       delete_on_termination = true
     }
   }

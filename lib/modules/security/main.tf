@@ -18,44 +18,23 @@ resource "aws_kms_key" "main" {
         Resource = "*"
       },
       {
-        Sid    = "Allow EC2 to use the key"
+        Sid    = "Allow EC2 services to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "ec2.amazonaws.com"
+          Service = [
+            "ec2.amazonaws.com",
+            "autoscaling.amazonaws.com"
+          ]
         }
         Action = [
           "kms:CreateGrant",
           "kms:Decrypt",
           "kms:DescribeKey",
+          "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:ReEncrypt*"
         ]
         Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "ec2.${var.region}.amazonaws.com"
-          }
-        }
-      },
-      {
-        Sid    = "Allow Auto Scaling to use the key"
-        Effect = "Allow"
-        Principal = {
-          Service = "autoscaling.amazonaws.com"
-        }
-        Action = [
-          "kms:CreateGrant",
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:ReEncrypt*"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "ec2.${var.region}.amazonaws.com"
-          }
-        }
       }
     ]
   })
