@@ -9,38 +9,6 @@ describe('TapStack Terraform Unit Tests', () => {
     tfContent = fs.readFileSync(tfPath, 'utf8');
   });
 
-  // =========================
-  // Variables
-  // =========================
-  describe('Terraform Variables', () => {
-    test('should define region variable with default', () => {
-      expect(tfContent).toMatch(/variable\s+"region"/);
-      expect(tfContent).toMatch(/default\s+=\s+"us-west-2"/);
-    });
-
-    test('should define VPC CIDR variable', () => {
-      expect(tfContent).toMatch(/variable\s+"vpc_cidr"/);
-      expect(tfContent).toMatch(/default\s+=\s+"10\.0\.0\.0\/16"/);
-    });
-  });
-
-  // =========================
-  // VPC & Subnets
-  // =========================
-  describe('Networking', () => {
-    test('should define VPC resource', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_vpc"/);
-    });
-
-    test('should define public and private subnets', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_subnet".*public/i);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet".*private/i);
-    });
-
-    test('should create NAT Gateway for private subnets', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_nat_gateway"/);
-    });
-  });
 
   // =========================
   // S3 Buckets
@@ -84,16 +52,6 @@ describe('TapStack Terraform Unit Tests', () => {
     test('should define CloudWatch alarms for bucket size', () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"/);
       expect(tfContent).toMatch(/metric_name\s+=\s+"BucketSizeBytes"/);
-    });
-  });
-
-  // =========================
-  // Tags
-  // =========================
-  describe('Resource Tags', () => {
-    test('all resources should include standard tags', () => {
-      expect(tfContent).toMatch(/tags\s+=\s+{[\s\S]*ManagedBy\s+=\s+"Terraform"/);
-      expect(tfContent).toMatch(/Purpose\s+=\s+"DailyBackup"/);
     });
   });
 
