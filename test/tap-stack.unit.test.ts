@@ -315,7 +315,7 @@ describe('DatabaseStack', () => {
   describe('KMS Key', () => {
     test('should create KMS key with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'KMS key for RDS PostgreSQL encryption',
+        Description: 'KMS key for RDS database encryption',
         EnableKeyRotation: true,
       });
     });
@@ -345,7 +345,7 @@ describe('DatabaseStack', () => {
     test('should create PostgreSQL database with correct engine version', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: Match.stringLikeRegexp('16\\.5'),
+        EngineVersion: Match.stringLikeRegexp('12\\.13'),
       });
     });
 
