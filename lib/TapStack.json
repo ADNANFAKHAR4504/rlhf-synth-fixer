@@ -1276,7 +1276,7 @@
                 },
                 "RecordingGroup": {
                     "AllSupported": true,
-                    "IncludeGlobalResources": true
+                    "IncludeGlobalResourceTypes": true
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [

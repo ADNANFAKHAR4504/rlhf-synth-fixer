@@ -717,7 +717,7 @@ Resources:
       Name: !Sub 'prod-config-recorder-${EnvironmentSuffix}'
       RecordingGroup:
         AllSupported: true
-        IncludeGlobalResources: true
+        IncludeGlobalResourceTypes: true
       RoleARN: !GetAtt ConfigRole.Arn
 
   ConfigDeliveryChannel:
