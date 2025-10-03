@@ -381,6 +381,7 @@ exports.handler = async (event) => {
     archiveBucket.grantRead(quicksightDataSourceRole);
 
     new quicksight.CfnDataSource(this, 'GpsDataSource', {
+      awsAccountId: this.account,
       dataSourceId: `gps-tracking-datasource-${environmentSuffix}`,
       name: 'GPS Tracking Data Source',
       type: 'S3',
