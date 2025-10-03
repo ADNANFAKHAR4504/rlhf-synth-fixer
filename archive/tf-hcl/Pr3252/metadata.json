@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-349424",
+  "team": "6",
+  "startedAt": "2025-09-30T14:58:23.594Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "EBS",
+    "Auto Scaling",
+    "Elastic Load Balancing (ALB)",
+    "S3",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "CloudFront",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "SNS",
+    "WAF",
+    "Shield",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}

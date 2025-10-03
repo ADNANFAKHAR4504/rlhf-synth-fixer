@@ -18,6 +18,8 @@ PO_ID=$(jq -r '.po_id // empty' metadata.json)
 TEAM=$(jq -r '.team // "unknown"' metadata.json)
 STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
 COMPLEXITY=$(jq -r '.complexity // "unknown"' metadata.json)
+SUBTASK=$(jq -r '.subtask // empty' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels // empty' metadata.json)
 
 echo "Detected metadata:"
 echo "  Platform: $PLATFORM"
@@ -26,6 +28,8 @@ echo "  PO ID: $PO_ID"
 echo "  Team: $TEAM"
 echo "  Started At: $STARTED_AT"
 echo "  Complexity: $COMPLEXITY"
+echo "  Subtask: $SUBTASK"
+echo "  Subject Labels: $SUBJECT_LABELS"
 
 # Validation checks
 ERROR_COUNT=0
@@ -46,6 +50,25 @@ fi
 if [ "$COMPLEXITY" == "unknown" ]; then
   echo "❌ Complexity is required but not found in metadata.json"
   ((ERROR_COUNT++))
+fi
+
+# If subtask is empty, raise error
+if [ -z "$SUBTASK" ]; then
+  echo "❌ Subtask is required but not found in metadata.json"
+  ((ERROR_COUNT++))
+fi
+
+# If subject_labels is empty or not an array, raise error
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ]; then
+  echo "❌ subject_labels is required but not found in metadata.json"
+  ((ERROR_COUNT++))
+else
+  # Check if subject_labels is a non-empty array
+  SUBJECT_LABELS_LENGTH=$(jq -r '.subject_labels | length' metadata.json 2>/dev/null || echo "0")
+  if [ "$SUBJECT_LABELS_LENGTH" == "0" ] || [ "$SUBJECT_LABELS_LENGTH" == "null" ]; then
+    echo "❌ subject_labels must be a non-empty array in metadata.json"
+    ((ERROR_COUNT++))
+  fi
 fi
 
 # Check for required documentation files
@@ -87,6 +110,8 @@ export PO_ID
 export TEAM
 export STARTED_AT
 export COMPLEXITY
+export SUBTASK
+export SUBJECT_LABELS
 
 # If in GitHub Actions, also set outputs
 if [ -n "$GITHUB_OUTPUT" ]; then
@@ -96,6 +121,8 @@ if [ -n "$GITHUB_OUTPUT" ]; then
   echo "team=$TEAM" >> "$GITHUB_OUTPUT"
   echo "started_at=$STARTED_AT" >> "$GITHUB_OUTPUT"
   echo "complexity=$COMPLEXITY" >> "$GITHUB_OUTPUT"
+  echo "subtask=$SUBTASK" >> "$GITHUB_OUTPUT"
+  echo "subject_labels=$SUBJECT_LABELS" >> "$GITHUB_OUTPUT"
 fi
 
 echo "✅ Metadata detection and validation completed successfully"
