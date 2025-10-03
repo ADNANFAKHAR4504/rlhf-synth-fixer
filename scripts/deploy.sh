@@ -86,19 +86,15 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  echo "🧹 Cleaning up old stack TapStackpr3403 if it exists..."
-  aws cloudformation delete-stack --stack-name TapStackpr3403 || true
-  echo "⏳ Waiting 30 seconds for cleanup to start..."
-  sleep 30
-  npm run cfn:deploy-yaml
+  npm run cfn:cleanup
+  echo "🚀 Starting CloudFormation YAML deployment..."
+  aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  echo "🧹 Cleaning up old stack TapStackpr3403 if it exists..."
-  aws cloudformation delete-stack --stack-name TapStackpr3403 || true
-  echo "⏳ Waiting 30 seconds for cleanup to start..."
-  sleep 30
-  npm run cfn:deploy-json
+  npm run cfn:cleanup
+  echo "🚀 Starting CloudFormation JSON deployment..."
+  aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
