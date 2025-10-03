@@ -1,4 +1,4 @@
-I'll create the infrastructure code for a comprehensive backup system using AWS CDK with TypeScript. Here's the complete implementation:I'll create the infrastructure code for a comprehensive backup system using AWS CDK with TypeScript. Here's the complete implementation:I'll create the infrastructure code for a secure RDS Aurora MySQL database deployment using AWS CDK with TypeScript. Here's the complete implementation:
+I'll create the infrastructure code for a secure RDS Aurora MySQL database deployment using AWS CDK with TypeScript. Here's the complete implementation:I'll create the infrastructure code for a comprehensive backup system using AWS CDK with TypeScript. Here's the complete implementation:I'll create the infrastructure code for a comprehensive backup system using AWS CDK with TypeScript. Here's the complete implementation:I'll create the infrastructure code for a secure RDS Aurora MySQL database deployment using AWS CDK with TypeScript. Here's the complete implementation:
 
 
 
@@ -6,7 +6,7 @@ I'll create the infrastructure code for a comprehensive backup system using AWS 
 
 
 
-```typescript## tap-stack.ts## tap-stack.ts
+```typescript## tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
 
@@ -14,15 +14,15 @@ import { Construct } from 'constructs';
 
 
 
-// ? Import your stacks here```typescript```typescript
+// ? Import your stacks here```typescript## tap-stack.ts## tap-stack.ts
 
 import { InfrastructureStack } from './infrastructure-stack';
 
-import * as cdk from 'aws-cdk-lib';import * as cdk from 'aws-cdk-lib';
+import * as cdk from 'aws-cdk-lib';
 
 interface TapStackProps extends cdk.StackProps {
 
-  environmentSuffix?: string;import { Construct } from 'constructs';import { Construct } from 'constructs';
+  environmentSuffix?: string;import { Construct } from 'constructs';
 
 }
 
@@ -30,27 +30,27 @@ interface TapStackProps extends cdk.StackProps {
 
 export class TapStack extends cdk.Stack {
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {// ? Import your stacks here// ? Import your stacks here
+  constructor(scope: Construct, id: string, props?: TapStackProps) {// ? Import your stacks here```typescript```typescript
 
     super(scope, id, props);
 
-import { InfrastructureStack } from './infrastructure-stack';import { InfrastructureStack } from './infrastructure-stack';
+import { InfrastructureStack } from './infrastructure-stack';
 
     // Get environment suffix from props, context, or use 'dev' as default
 
-    const environmentSuffix =
+    const environmentSuffix =import * as cdk from 'aws-cdk-lib';import * as cdk from 'aws-cdk-lib';
 
       props?.environmentSuffix ||
 
-      this.node.tryGetContext('environmentSuffix') ||interface TapStackProps extends cdk.StackProps {interface TapStackProps extends cdk.StackProps {
+      this.node.tryGetContext('environmentSuffix') ||interface TapStackProps extends cdk.StackProps {
 
       'dev';
 
-  environmentSuffix?: string;  environmentSuffix?: string;
+  environmentSuffix?: string;import { Construct } from 'constructs';import { Construct } from 'constructs';
 
     // ? Add your stack instantiations here
 
-    // ! Do NOT create resources directly in this stack.}}
+    // ! Do NOT create resources directly in this stack.}
 
     // ! Instead, create separate stacks for each resource type.
 
@@ -58,311 +58,675 @@ import { InfrastructureStack } from './infrastructure-stack';import { Infrastruc
 
     // Instantiate the Infrastructure Stack
 
-    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {export class TapStack extends cdk.Stack {export class TapStack extends cdk.Stack {
+    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {export class TapStack extends cdk.Stack {
 
       environmentSuffix,
 
-      env: props?.env,  constructor(scope: Construct, id: string, props?: TapStackProps) {  constructor(scope: Construct, id: string, props?: TapStackProps) {
+      env: props?.env,  constructor(scope: Construct, id: string, props?: TapStackProps) {// ? Import your stacks here// ? Import your stacks here
 
     });
 
-  }    super(scope, id, props);    super(scope, id, props);
+  }    super(scope, id, props);
 
 }
 
-```
+```import { InfrastructureStack } from './infrastructure-stack';import { InfrastructureStack } from './infrastructure-stack';
 
 
 
-## infrastructure-stack.ts    // Get environment suffix from props, context, or use 'dev' as default    // Get environment suffix from props, context, or use 'dev' as default
+## infrastructure-stack.ts    // Get environment suffix from props, context, or use 'dev' as default
 
 
 
-```typescript    const environmentSuffix =    const environmentSuffix =
+```typescript    const environmentSuffix =
 
 import * as cdk from 'aws-cdk-lib';
 
-import * as s3 from 'aws-cdk-lib/aws-s3';      props?.environmentSuffix ||      props?.environmentSuffix ||
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';      props?.environmentSuffix ||
+
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+
+import * as ec2 from 'aws-cdk-lib/aws-ec2';      this.node.tryGetContext('environmentSuffix') ||interface TapStackProps extends cdk.StackProps {interface TapStackProps extends cdk.StackProps {
 
 import * as kms from 'aws-cdk-lib/aws-kms';
 
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';      this.node.tryGetContext('environmentSuffix') ||      this.node.tryGetContext('environmentSuffix') ||
+import * as rds from 'aws-cdk-lib/aws-rds';      'dev';
 
-import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
-import * as sns from 'aws-cdk-lib/aws-sns';      'dev';      'dev';
-
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';  environmentSuffix?: string;  environmentSuffix?: string;
 
 import { Construct } from 'constructs';
 
+    // ? Add your stack instantiations here
 
+export interface InfrastructureStackProps extends cdk.StackProps {
 
-export interface InfrastructureStackProps extends cdk.StackProps {    // ? Add your stack instantiations here    // ? Add your stack instantiations here
+  environmentSuffix?: string;    // ! Do NOT create resources directly in this stack.}}
 
-  environmentSuffix?: string;
+}
 
-}    // ! Do NOT create resources directly in this stack.    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
 
-
-
-export class InfrastructureStack extends cdk.Stack {    // ! Instead, create separate stacks for each resource type.    // ! Instead, create separate stacks for each resource type.
+export class InfrastructureStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {
 
     super(scope, id, props);
 
+    // Instantiate the Infrastructure Stack
 
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';    // Instantiate the Infrastructure Stack    // Instantiate the Infrastructure Stack
+    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {export class TapStack extends cdk.Stack {export class TapStack extends cdk.Stack {
 
+    // Create a VPC with only private isolated subnets (no NAT Gateway)
 
+    const vpc = new ec2.Vpc(this, `AuroraVpc-${environmentSuffix}`, {      environmentSuffix,
 
-    // Create KMS key for encryption    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {
+      ipAddresses: ec2.IpAddresses.cidr('10.30.0.0/16'),
 
-    const encryptionKey = new kms.Key(this, `BackupEncryptionKey-${environmentSuffix}`, {
+      maxAzs: 2, // Use 2 AZs for high availability      env: props?.env,  constructor(scope: Construct, id: string, props?: TapStackProps) {  constructor(scope: Construct, id: string, props?: TapStackProps) {
 
-      enableKeyRotation: true,      environmentSuffix,      environmentSuffix,
+      enableDnsHostnames: true,
 
-      description: 'KMS key for backup system encryption',
+      enableDnsSupport: true,    });
 
-      removalPolicy: cdk.RemovalPolicy.DESTROY,      env: props?.env,      env: props?.env,
+      natGateways: 0, // No NAT Gateway for cost optimization
 
-    });
-
-    });    });
-
-    // Primary backup bucket
-
-    const backupBucket = new s3.Bucket(this, `BackupBucket-${environmentSuffix}`, {  }  }
-
-      bucketName: `backup-primary-${environmentSuffix}-${this.account}-${this.region}`,
-
-      encryption: s3.BucketEncryption.KMS,}}
-
-      encryptionKey: encryptionKey,
-
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,``````
-
-      versioned: true,
-
-      lifecycleRules: [
+      subnetConfiguration: [  }    super(scope, id, props);    super(scope, id, props);
 
         {
 
-          id: 'IntelligentTiering',## infrastructure-stack.ts## infrastructure-stack.ts
+          cidrMask: 24,}
 
-          enabled: true,
+          name: 'PrivateIsolated',
 
-          transitions: [
-
-            {
-
-              storageClass: s3.StorageClass.INTELLIGENT_TIERING,```typescript```typescript
-
-              transitionAfter: cdk.Duration.days(1),
-
-            },import * as cdk from 'aws-cdk-lib';import * as cdk from 'aws-cdk-lib';
-
-            {
-
-              storageClass: s3.StorageClass.GLACIER,import * as s3 from 'aws-cdk-lib/aws-s3';import * as ec2 from 'aws-cdk-lib/aws-ec2';
-
-              transitionAfter: cdk.Duration.days(30),
-
-            },import * as kms from 'aws-cdk-lib/aws-kms';import * as rds from 'aws-cdk-lib/aws-rds';
-
-            {
-
-              storageClass: s3.StorageClass.DEEP_ARCHIVE,import * * dynamodb from 'aws-cdk-lib/aws-dynamodb';import * as kms from 'aws-cdk-lib/aws-kms';
-
-              transitionAfter: cdk.Duration.days(90),
-
-            },import * as sqs from 'aws-cdk-lib/aws-sqs';import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-
-          ],
-
-          expiration: cdk.Duration.days(365),import * as sns from 'aws-cdk-lib/aws-sns';import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,```
 
         },
 
-      ],import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';import * as sns from 'aws-cdk-lib/aws-sns';
-
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-
-      autoDeleteObjects: true,import { Construct } from 'constructs';import * as s3 from 'aws-cdk-lib/aws-s3';
+      ],
 
     });
 
-import { Construct } from 'constructs';
+## infrastructure-stack.ts    // Get environment suffix from props, context, or use 'dev' as default    // Get environment suffix from props, context, or use 'dev' as default
 
-    // Replication bucket for cross-region backup
+    // Create KMS key for encryption at rest
 
-    const replicationBucket = new s3.Bucket(this, `ReplicationBucket-${environmentSuffix}`, {export interface InfrastructureStackProps extends cdk.StackProps {
+    const encryptionKey = new kms.Key(
 
-      bucketName: `backup-replication-${environmentSuffix}-${this.account}-${this.region}`,
+      this,
 
-      encryption: s3.BucketEncryption.KMS,  environmentSuffix?: string;interface InfrastructureStackProps extends cdk.StackProps {
+      `AuroraEncryptionKey-${environmentSuffix}`,```typescript    const environmentSuffix =    const environmentSuffix =
 
-      encryptionKey: encryptionKey,
+      {
 
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,}  environmentSuffix?: string;
+        enableKeyRotation: true,import * as cdk from 'aws-cdk-lib';
 
-      versioned: true,
+        description: 'KMS key for Aurora database encryption',
 
-      removalPolicy: cdk.RemovalPolicy.DESTROY,}
+        removalPolicy: cdk.RemovalPolicy.DESTROY,import * as s3 from 'aws-cdk-lib/aws-s3';      props?.environmentSuffix ||      props?.environmentSuffix ||
 
-      autoDeleteObjects: true,
+      }
 
-    });export class InfrastructureStack extends cdk.Stack {
+    );import * as kms from 'aws-cdk-lib/aws-kms';
 
 
 
-    // DynamoDB table for backup metadata  constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {export class InfrastructureStack extends cdk.Stack {
+    // Generate unique alias name using stack name to avoid conflictsimport * as dynamodb from 'aws-cdk-lib/aws-dynamodb';      this.node.tryGetContext('environmentSuffix') ||      this.node.tryGetContext('environmentSuffix') ||
 
-    const metadataTable = new dynamodb.Table(this, `BackupMetadataTable-${environmentSuffix}`, {
+    const uniqueId = cdk.Names.uniqueId(this).toLowerCase().substring(0, 8);
 
-      partitionKey: { name: 'backupId', type: dynamodb.AttributeType.STRING },    super(scope, id, props);  constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {
+    new kms.Alias(this, `AuroraKeyAlias-${environmentSuffix}`, {import * as sqs from 'aws-cdk-lib/aws-sqs';
 
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+      aliasName: `alias/aurora-db-key-${environmentSuffix}-${uniqueId}`,
 
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,    super(scope, id, props);
-
-      encryptionKey: encryptionKey,
-
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,    const environmentSuffix = props?.environmentSuffix || 'dev';
-
-      pointInTimeRecovery: true,
-
-      removalPolicy: cdk.RemovalPolicy.DESTROY,    const environmentSuffix = props?.environmentSuffix || 'dev';
+      targetKey: encryptionKey,import * as sns from 'aws-cdk-lib/aws-sns';      'dev';      'dev';
 
     });
 
-    // Create KMS key for encryption
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
-    // DynamoDB table for deduplication
+    // Create security group for Aurora
 
-    const deduplicationTable = new dynamodb.Table(this, `DeduplicationTable-${environmentSuffix}`, {    const encryptionKey = new kms.Key(this, `BackupEncryptionKey-${environmentSuffix}`, {    // Create VPC with private subnets
+    const dbSecurityGroup = new ec2.SecurityGroup(import { Construct } from 'constructs';
 
-      partitionKey: { name: 'fileHash', type: dynamodb.AttributeType.STRING },
+      this,
 
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,      enableKeyRotation: true,    const vpc = new ec2.Vpc(this, `DatabaseVPC-${environmentSuffix}`, {
+      `AuroraSecurityGroup-${environmentSuffix}`,
 
-      encryptionKey: encryptionKey,
+      {
 
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,      description: 'KMS key for backup system encryption',      maxAzs: 2,
+        vpc,export interface InfrastructureStackProps extends cdk.StackProps {    // ? Add your stack instantiations here    // ? Add your stack instantiations here
 
-      timeToLiveAttribute: 'ttl',
+        description: 'Security group for Aurora MySQL database',
 
-      removalPolicy: cdk.RemovalPolicy.DESTROY,      removalPolicy: cdk.RemovalPolicy.DESTROY,      natGateways: 0, // No NAT gateways for cost optimization
+        allowAllOutbound: false,  environmentSuffix?: string;
 
-    });
+      }
 
-    });      subnetConfiguration: [
+    );}    // ! Do NOT create resources directly in this stack.    // ! Do NOT create resources directly in this stack.
 
-    // SQS queue for backup processing
 
-    const backupQueue = new sqs.Queue(this, `BackupQueue-${environmentSuffix}`, {        {
 
-      encryption: sqs.QueueEncryption.KMS,
+    // Allow MySQL traffic only from within the VPC
 
-      encryptionMasterKey: encryptionKey,    // Primary backup bucket          cidrMask: 24,
+    dbSecurityGroup.addIngressRule(
 
-      visibilityTimeout: cdk.Duration.minutes(15),
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),export class InfrastructureStack extends cdk.Stack {    // ! Instead, create separate stacks for each resource type.    // ! Instead, create separate stacks for each resource type.
 
-      retentionPeriod: cdk.Duration.days(14),    const backupBucket = new s3.Bucket(this, `BackupBucket-${environmentSuffix}`, {          name: 'Private',
+      ec2.Port.tcp(3306),
 
-      deadLetterQueue: {
+      'Allow MySQL traffic from VPC'  constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {
 
-        queue: new sqs.Queue(this, `BackupDeadLetterQueue-${environmentSuffix}`, {      bucketName: `backup-primary-${environmentSuffix}-${this.account}-${this.region}`,          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+    );
 
-          encryption: sqs.QueueEncryption.KMS,
+    super(scope, id, props);
 
-          encryptionMasterKey: encryptionKey,      encryption: s3.BucketEncryption.KMS,        },
+    // Create a DB subnet group
+
+    const subnetGroup = new rds.SubnetGroup(
+
+      this,
+
+      `AuroraSubnetGroup-${environmentSuffix}`,    const environmentSuffix = props?.environmentSuffix || 'dev';    // Instantiate the Infrastructure Stack    // Instantiate the Infrastructure Stack
+
+      {
+
+        vpc,
+
+        vpcSubnets: {
+
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,    // Create KMS key for encryption    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {    new InfrastructureStack(this, `InfrastructureStack-${environmentSuffix}`, {
+
+        },
+
+        description: 'Subnet group for Aurora database',    const encryptionKey = new kms.Key(this, `BackupEncryptionKey-${environmentSuffix}`, {
+
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+
+      }      enableKeyRotation: true,      environmentSuffix,      environmentSuffix,
+
+    );
+
+      description: 'KMS key for backup system encryption',
+
+    // Create Aurora MySQL Serverless v2 cluster
+
+    const dbCluster = new rds.DatabaseCluster(      removalPolicy: cdk.RemovalPolicy.DESTROY,      env: props?.env,      env: props?.env,
+
+      this,
+
+      `AuroraCluster-${environmentSuffix}`,    });
+
+      {
+
+        engine: rds.DatabaseClusterEngine.auroraMysql({    });    });
+
+          version: rds.AuroraMysqlEngineVersion.VER_3_08_2,
+
+        }),    // Primary backup bucket
+
+        writer: rds.ClusterInstance.serverlessV2(
+
+          `writer-${environmentSuffix}`,    const backupBucket = new s3.Bucket(this, `BackupBucket-${environmentSuffix}`, {  }  }
+
+          {
+
+            publiclyAccessible: false,      bucketName: `backup-primary-${environmentSuffix}-${this.account}-${this.region}`,
+
+            enablePerformanceInsights: true,
+
+            performanceInsightRetention:      encryption: s3.BucketEncryption.KMS,}}
+
+              rds.PerformanceInsightRetention.DEFAULT, // 7 days
+
+          }      encryptionKey: encryptionKey,
+
+        ),
+
+        readers: [      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,``````
+
+          rds.ClusterInstance.serverlessV2(`reader-${environmentSuffix}`, {
+
+            scaleWithWriter: true,      versioned: true,
+
+            publiclyAccessible: false,
+
+            enablePerformanceInsights: true,      lifecycleRules: [
+
+            performanceInsightRetention:
+
+              rds.PerformanceInsightRetention.DEFAULT,        {
+
+          }),
+
+        ],          id: 'IntelligentTiering',## infrastructure-stack.ts## infrastructure-stack.ts
+
+        serverlessV2MinCapacity: 0.5,
+
+        serverlessV2MaxCapacity: 2,          enabled: true,
+
+        vpc,
+
+        vpcSubnets: {          transitions: [
+
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+
+        },            {
+
+        subnetGroup,
+
+        securityGroups: [dbSecurityGroup],              storageClass: s3.StorageClass.INTELLIGENT_TIERING,```typescript```typescript
+
+        storageEncrypted: true,
+
+        storageEncryptionKey: encryptionKey,              transitionAfter: cdk.Duration.days(1),
+
+        backup: {
+
+          retention: cdk.Duration.days(5),            },import * as cdk from 'aws-cdk-lib';import * as cdk from 'aws-cdk-lib';
+
+          preferredWindow: '03:00-04:00',
+
+        },            {
+
+        preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+
+        deletionProtection: false,              storageClass: s3.StorageClass.GLACIER,import * as s3 from 'aws-cdk-lib/aws-s3';import * as ec2 from 'aws-cdk-lib/aws-ec2';
+
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+
+        defaultDatabaseName: 'saasdb',              transitionAfter: cdk.Duration.days(30),
+
+        credentials: rds.Credentials.fromGeneratedSecret('admin', {
+
+          secretName: `aurora-db-secret-${environmentSuffix}`,            },import * as kms from 'aws-cdk-lib/aws-kms';import * as rds from 'aws-cdk-lib/aws-rds';
 
         }),
 
-        maxReceiveCount: 3,      encryptionKey: encryptionKey,      ],
+        monitoringInterval: cdk.Duration.seconds(60),            {
 
-      },
+        cloudwatchLogsExports: ['error', 'general', 'slowquery'],
 
-    });      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,      ipAddresses: ec2.IpAddresses.cidr('10.30.0.0/16'),
+        cloudwatchLogsRetention: 7,              storageClass: s3.StorageClass.DEEP_ARCHIVE,import * * dynamodb from 'aws-cdk-lib/aws-dynamodb';import * as kms from 'aws-cdk-lib/aws-kms';
 
+      }
 
-
-    // SNS topic for notifications      versioned: true,    });
-
-    const notificationTopic = new sns.Topic(this, `BackupNotificationTopic-${environmentSuffix}`, {
-
-      masterKey: encryptionKey,      lifecycleRules: [
-
-    });
-
-        {    // Override subnet CIDR blocks
-
-    // CloudWatch Dashboard
-
-    const dashboard = new cloudwatch.Dashboard(this, `BackupDashboard-${environmentSuffix}`, {          id: 'IntelligentTiering',    const cfnSubnet1 = vpc.isolatedSubnets[0].node
-
-      dashboardName: `BackupSystemMonitoring-${environmentSuffix}`,
-
-    });          enabled: true,      .defaultChild as ec2.CfnSubnet;
+    );              transitionAfter: cdk.Duration.days(90),
 
 
 
-    // System capabilities configuration          transitions: [    cfnSubnet1.cidrBlock = '10.30.10.0/24';
+    // Create S3 bucket for backup storage (for export tasks)            },import * as sqs from 'aws-cdk-lib/aws-sqs';import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
-    const systemCapabilities = {
+    const backupBucket = new s3.Bucket(
+
+      this,          ],
+
+      `DatabaseBackupBucket-${environmentSuffix}`,
+
+      {          expiration: cdk.Duration.days(365),import * as sns from 'aws-cdk-lib/aws-sns';import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+
+        bucketName: `aurora-backups-${this.account}-${environmentSuffix}`,
+
+        encryption: s3.BucketEncryption.KMS,        },
+
+        encryptionKey: encryptionKey,
+
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,      ],import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';import * as sns from 'aws-cdk-lib/aws-sns';
+
+        versioned: true,
+
+        lifecycleRules: [      removalPolicy: cdk.RemovalPolicy.DESTROY,
+
+          {
+
+            id: 'BackupLifecycle',      autoDeleteObjects: true,import { Construct } from 'constructs';import * as s3 from 'aws-cdk-lib/aws-s3';
+
+            enabled: true,
+
+            transitions: [    });
+
+              {
+
+                storageClass: s3.StorageClass.INFREQUENT_ACCESS,import { Construct } from 'constructs';
+
+                transitionAfter: cdk.Duration.days(30),
+
+              },    // Replication bucket for cross-region backup
+
+              {
+
+                storageClass: s3.StorageClass.GLACIER,    const replicationBucket = new s3.Bucket(this, `ReplicationBucket-${environmentSuffix}`, {export interface InfrastructureStackProps extends cdk.StackProps {
+
+                transitionAfter: cdk.Duration.days(90),
+
+              },      bucketName: `backup-replication-${environmentSuffix}-${this.account}-${this.region}`,
+
+            ],
+
+            expiration: cdk.Duration.days(365),      encryption: s3.BucketEncryption.KMS,  environmentSuffix?: string;interface InfrastructureStackProps extends cdk.StackProps {
+
+          },
+
+        ],      encryptionKey: encryptionKey,
+
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+
+        autoDeleteObjects: true,      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,}  environmentSuffix?: string;
+
+      }
+
+    );      versioned: true,
+
+
+
+    // Create SNS topic for alarms      removalPolicy: cdk.RemovalPolicy.DESTROY,}
+
+    const alarmTopic = new sns.Topic(
+
+      this,      autoDeleteObjects: true,
+
+      `DatabaseAlarmTopic-${environmentSuffix}`,
+
+      {    });export class InfrastructureStack extends cdk.Stack {
+
+        displayName: 'Aurora Database Alarms',
+
+        topicName: `aurora-alarms-${environmentSuffix}`,
+
+        masterKey: encryptionKey,
+
+      }    // DynamoDB table for backup metadata  constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {export class InfrastructureStack extends cdk.Stack {
+
+    );
+
+    const metadataTable = new dynamodb.Table(this, `BackupMetadataTable-${environmentSuffix}`, {
+
+    // CloudWatch Alarms for monitoring
+
+      partitionKey: { name: 'backupId', type: dynamodb.AttributeType.STRING },    super(scope, id, props);  constructor(scope: Construct, id: string, props?: InfrastructureStackProps) {
+
+    // ServerlessDatabaseCapacity alarm
+
+    const capacityAlarm = new cloudwatch.Alarm(      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+
+      this,
+
+      `HighDatabaseCapacity-${environmentSuffix}`,      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,    super(scope, id, props);
+
+      {
+
+        metric: new cloudwatch.Metric({      encryptionKey: encryptionKey,
+
+          namespace: 'AWS/RDS',
+
+          metricName: 'ServerlessDatabaseCapacity',      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,    const environmentSuffix = props?.environmentSuffix || 'dev';
+
+          dimensionsMap: {
+
+            DBClusterIdentifier: dbCluster.clusterIdentifier,      pointInTimeRecovery: true,
+
+          },
+
+          statistic: 'Average',      removalPolicy: cdk.RemovalPolicy.DESTROY,    const environmentSuffix = props?.environmentSuffix || 'dev';
+
+          period: cdk.Duration.minutes(5),
+
+        }),    });
+
+        threshold: 1.5,
+
+        evaluationPeriods: 2,    // Create KMS key for encryption
+
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+
+        alarmDescription: 'Aurora Serverless capacity is high',    // DynamoDB table for deduplication
+
+        actionsEnabled: true,
+
+      }    const deduplicationTable = new dynamodb.Table(this, `DeduplicationTable-${environmentSuffix}`, {    const encryptionKey = new kms.Key(this, `BackupEncryptionKey-${environmentSuffix}`, {    // Create VPC with private subnets
+
+    );
+
+    capacityAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));      partitionKey: { name: 'fileHash', type: dynamodb.AttributeType.STRING },
+
+
+
+    // ACUUtilization alarm      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,      enableKeyRotation: true,    const vpc = new ec2.Vpc(this, `DatabaseVPC-${environmentSuffix}`, {
+
+    const acuAlarm = new cloudwatch.Alarm(
+
+      this,      encryptionKey: encryptionKey,
+
+      `HighACUUtilization-${environmentSuffix}`,
+
+      {      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,      description: 'KMS key for backup system encryption',      maxAzs: 2,
+
+        metric: new cloudwatch.Metric({
+
+          namespace: 'AWS/RDS',      timeToLiveAttribute: 'ttl',
+
+          metricName: 'ACUUtilization',
+
+          dimensionsMap: {      removalPolicy: cdk.RemovalPolicy.DESTROY,      removalPolicy: cdk.RemovalPolicy.DESTROY,      natGateways: 0, // No NAT gateways for cost optimization
+
+            DBClusterIdentifier: dbCluster.clusterIdentifier,
+
+          },    });
+
+          statistic: 'Average',
+
+          period: cdk.Duration.minutes(5),    });      subnetConfiguration: [
+
+        }),
+
+        threshold: 80,    // SQS queue for backup processing
+
+        evaluationPeriods: 2,
+
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,    const backupQueue = new sqs.Queue(this, `BackupQueue-${environmentSuffix}`, {        {
+
+        alarmDescription: 'Aurora ACU utilization is high',
+
+        actionsEnabled: true,      encryption: sqs.QueueEncryption.KMS,
+
+      }
+
+    );      encryptionMasterKey: encryptionKey,    // Primary backup bucket          cidrMask: 24,
+
+    acuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
+
+      visibilityTimeout: cdk.Duration.minutes(15),
+
+    // DatabaseConnections alarm
+
+    const connectionsAlarm = new cloudwatch.Alarm(      retentionPeriod: cdk.Duration.days(14),    const backupBucket = new s3.Bucket(this, `BackupBucket-${environmentSuffix}`, {          name: 'Private',
+
+      this,
+
+      `HighDatabaseConnections-${environmentSuffix}`,      deadLetterQueue: {
+
+      {
+
+        metric: new cloudwatch.Metric({        queue: new sqs.Queue(this, `BackupDeadLetterQueue-${environmentSuffix}`, {      bucketName: `backup-primary-${environmentSuffix}-${this.account}-${this.region}`,          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+
+          namespace: 'AWS/RDS',
+
+          metricName: 'DatabaseConnections',          encryption: sqs.QueueEncryption.KMS,
+
+          dimensionsMap: {
+
+            DBClusterIdentifier: dbCluster.clusterIdentifier,          encryptionMasterKey: encryptionKey,      encryption: s3.BucketEncryption.KMS,        },
+
+          },
+
+          statistic: 'Average',        }),
+
+          period: cdk.Duration.minutes(5),
+
+        }),        maxReceiveCount: 3,      encryptionKey: encryptionKey,      ],
+
+        threshold: 40,
+
+        evaluationPeriods: 2,      },
+
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+
+        alarmDescription: 'Aurora database connections are high',    });      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,      ipAddresses: ec2.IpAddresses.cidr('10.30.0.0/16'),
+
+        actionsEnabled: true,
+
+      }
+
+    );
+
+    connectionsAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));    // SNS topic for notifications      versioned: true,    });
+
+
+
+    // CPU Utilization alarm    const notificationTopic = new sns.Topic(this, `BackupNotificationTopic-${environmentSuffix}`, {
+
+    const cpuAlarm = new cloudwatch.Alarm(
+
+      this,      masterKey: encryptionKey,      lifecycleRules: [
+
+      `HighCPUUtilization-${environmentSuffix}`,
+
+      {    });
+
+        metric: new cloudwatch.Metric({
+
+          namespace: 'AWS/RDS',        {    // Override subnet CIDR blocks
+
+          metricName: 'CPUUtilization',
+
+          dimensionsMap: {    // CloudWatch Dashboard
+
+            DBClusterIdentifier: dbCluster.clusterIdentifier,
+
+          },    const dashboard = new cloudwatch.Dashboard(this, `BackupDashboard-${environmentSuffix}`, {          id: 'IntelligentTiering',    const cfnSubnet1 = vpc.isolatedSubnets[0].node
+
+          statistic: 'Average',
+
+          period: cdk.Duration.minutes(5),      dashboardName: `BackupSystemMonitoring-${environmentSuffix}`,
+
+        }),
+
+        threshold: 80,    });          enabled: true,      .defaultChild as ec2.CfnSubnet;
+
+        evaluationPeriods: 2,
+
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+
+        alarmDescription: 'Aurora CPU utilization is high',
+
+        actionsEnabled: true,    // System capabilities configuration          transitions: [    cfnSubnet1.cidrBlock = '10.30.10.0/24';
+
+      }
+
+    );    const systemCapabilities = {
+
+    cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
 
       maxUsers: 1000,            {
 
-      retentionDays: 60,
-
-      rto: '2 hours',              storageClass: s3.StorageClass.INTELLIGENT_TIERING,    const cfnSubnet2 = vpc.isolatedSubnets[1].node
-
-      rpo: '24 hours',
-
-      availability: '99.9%',              transitionAfter: cdk.Duration.days(1),      .defaultChild as ec2.CfnSubnet;
-
-      encryption: 'KMS Customer Managed',
-
-      replication: 'Cross-Region',            },    cfnSubnet2.cidrBlock = '10.30.20.0/24';
-
-      deduplication: 'Enabled',
-
-      networkIsolation: true,            {
-
-      auditLogging: 'CloudTrail + S3 Access Logs',
-
-      costOptimization: 'Intelligent Tiering + Lifecycle',              storageClass: s3.StorageClass.GLACIER,    // Create KMS key for database encryption
-
-    };
-
-              transitionAfter: cdk.Duration.days(30),    const encryptionKey = new kms.Key(
-
     // Outputs
 
-    new cdk.CfnOutput(this, 'BackupBucketName', {            },      this,
+    new cdk.CfnOutput(this, 'VpcId', {      retentionDays: 60,
 
-      value: backupBucket.bucketName,
+      value: vpc.vpcId,
 
-      description: 'Primary backup bucket name',            {      `DatabaseEncryptionKey-${environmentSuffix}`,
+      description: 'VPC ID',      rto: '2 hours',              storageClass: s3.StorageClass.INTELLIGENT_TIERING,    const cfnSubnet2 = vpc.isolatedSubnets[1].node
 
     });
 
+      rpo: '24 hours',
+
+    new cdk.CfnOutput(this, 'ClusterEndpoint', {
+
+      value: dbCluster.clusterEndpoint.socketAddress,      availability: '99.9%',              transitionAfter: cdk.Duration.days(1),      .defaultChild as ec2.CfnSubnet;
+
+      description: 'Aurora cluster endpoint',
+
+    });      encryption: 'KMS Customer Managed',
+
+
+
+    new cdk.CfnOutput(this, 'ClusterReadEndpoint', {      replication: 'Cross-Region',            },    cfnSubnet2.cidrBlock = '10.30.20.0/24';
+
+      value: dbCluster.clusterReadEndpoint.socketAddress,
+
+      description: 'Aurora cluster read endpoint',      deduplication: 'Enabled',
+
+    });
+
+      networkIsolation: true,            {
+
+    new cdk.CfnOutput(this, 'SecretArn', {
+
+      value: dbCluster.secret!.secretArn,      auditLogging: 'CloudTrail + S3 Access Logs',
+
+      description: 'Secret ARN for database credentials',
+
+    });      costOptimization: 'Intelligent Tiering + Lifecycle',              storageClass: s3.StorageClass.GLACIER,    // Create KMS key for database encryption
+
+
+
+    new cdk.CfnOutput(this, 'BackupBucketName', {    };
+
+      value: backupBucket.bucketName,
+
+      description: 'S3 bucket for database backups',              transitionAfter: cdk.Duration.days(30),    const encryptionKey = new kms.Key(
+
+    });
+
+    // Outputs
+
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+
+      value: alarmTopic.topicArn,    new cdk.CfnOutput(this, 'BackupBucketName', {            },      this,
+
+      description: 'SNS topic for database alarms',
+
+    });      value: backupBucket.bucketName,
+
+  }
+
+}      description: 'Primary backup bucket name',            {      `DatabaseEncryptionKey-${environmentSuffix}`,
+
+```
+
+    });
+
+## Key Features in IDEAL_RESPONSE
+
               storageClass: s3.StorageClass.DEEP_ARCHIVE,      {
 
-    new cdk.CfnOutput(this, 'ReplicationBucketName', {
+1. **Aurora Version Compatibility**: Uses `VER_3_08_2` which is available in all AWS regions including us-west-2
 
-      value: replicationBucket.bucketName,              transitionAfter: cdk.Duration.days(90),        description: 'KMS key for Aurora database encryption',
+2. **Proper Resource Cleanup**: All resources have `DESTROY` removal policy for complete cleanup    new cdk.CfnOutput(this, 'ReplicationBucketName', {
 
-      description: 'Replication backup bucket name',
+3. **S3 Auto-Delete**: Includes `autoDeleteObjects: true` for S3 bucket cleanup
 
-    });            },        enableKeyRotation: true,
+4. **Deletion Protection Disabled**: RDS cluster has `deletionProtection: false` for testing environments      value: replicationBucket.bucketName,              transitionAfter: cdk.Duration.days(90),        description: 'KMS key for Aurora database encryption',
 
+5. **Proper CDK API Usage**: Uses correct CDK v2 API for Serverless v2 configuration
 
+6. **Complete Monitoring Setup**: All required CloudWatch alarms with SNS integration      description: 'Replication backup bucket name',
 
-    new cdk.CfnOutput(this, 'MetadataTableName', {          ],        removalPolicy: cdk.RemovalPolicy.DESTROY,
+7. **Cost-Optimized Configuration**: No NAT gateways, minimal ACU capacity (0.5-2)
+
+8. **Security Best Practices**: KMS encryption, private subnets, restricted security groups    });            },        enableKeyRotation: true,
+
+9. **Backup Configuration**: 5-day retention with S3 lifecycle rules
+
+10. **Performance Insights**: Enabled with 7-day retention for monitoring
+
+11. **Unique KMS Alias**: Prevents conflicts across deployments
+
+12. **VPC CIDR Configuration**: Uses 10.30.0.0/16 as specified in requirements    new cdk.CfnOutput(this, 'MetadataTableName', {          ],        removalPolicy: cdk.RemovalPolicy.DESTROY,
 
       value: metadataTable.tableName,
 

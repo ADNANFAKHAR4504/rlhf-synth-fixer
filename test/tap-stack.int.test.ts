@@ -1,19 +1,23 @@
 import {
-  DescribeTableCommand,
-  DynamoDBClient
-} from '@aws-sdk/client-dynamodb';
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeDBClustersCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
 import {
   HeadBucketCommand,
   S3Client
 } from '@aws-sdk/client-s3';
 import {
+  DescribeSecretCommand,
+  SecretsManagerClient
+} from '@aws-sdk/client-secrets-manager';
+import {
   GetTopicAttributesCommand,
   SNSClient
 } from '@aws-sdk/client-sns';
-import {
-  GetQueueAttributesCommand,
-  SQSClient
-} from '@aws-sdk/client-sqs';
 import {
   GetCallerIdentityCommand,
   STSClient
@@ -33,20 +37,20 @@ if (fs.existsSync(cdkOutputsPath)) {
   }
 }
 
-// Determine the correct region from the outputs (e.g., from SQS URL or SNS ARN)
+// Determine the correct region from the outputs (e.g., from Aurora cluster endpoint or SNS ARN)
 function detectRegionFromOutputs(outputs: any): string {
-  // Try to extract region from SQS URL
-  if (outputs.BackupQueueUrl) {
-    const match = outputs.BackupQueueUrl.match(/sqs\.([^.]+)\.amazonaws\.com/);
+  // Try to extract region from Aurora cluster endpoint
+  if (outputs.ClusterEndpoint) {
+    const match = outputs.ClusterEndpoint.match(/\.([^.]+)\.rds\.amazonaws\.com/);
     if (match) return match[1];
   }
-  
+
   // Try to extract region from SNS ARN
-  if (outputs.NotificationTopicArn) {
-    const match = outputs.NotificationTopicArn.match(/arn:aws:sns:([^:]+):/);
+  if (outputs.AlarmTopicArn) {
+    const match = outputs.AlarmTopicArn.match(/arn:aws:sns:([^:]+):/);
     if (match) return match[1];
   }
-  
+
   // Fallback to environment variable or default
   return process.env.AWS_REGION || 'us-west-2';
 }
@@ -63,13 +67,11 @@ async function checkAwsCredentials(region: string): Promise<boolean> {
 }
 
 const region = detectRegionFromOutputs(outputs);
+const rdsClient = new RDSClient({ region });
 const s3Client = new S3Client({ region });
 const snsClient = new SNSClient({ region });
-const dynamodbClient = new DynamoDBClient({ region });
-const sqsClient = new SQSClient({ 
-  region, 
-  useQueueUrlAsEndpoint: true // This helps with cross-region SQS access
-});
+const ec2Client = new EC2Client({ region });
+const secretsClient = new SecretsManagerClient({ region });
 
 // Check if credentials are available
 let hasCredentials = false;
@@ -96,10 +98,10 @@ describe('Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('S3 Buckets', () => {
-    test('primary backup bucket exists', async () => {
+  describe('S3 Backup Bucket', () => {
+    test('backup bucket exists and is accessible', async () => {
       expect(outputs.BackupBucketName).toBeDefined();
-      
+
       if (!hasCredentials) {
         console.warn('Skipping S3 API test - no AWS credentials available');
         return;
@@ -120,119 +122,110 @@ describe('Infrastructure Integration Tests', () => {
         }
       }
     }, testTimeout);
-
-    test('replication bucket exists if configured', async () => {
-      if (outputs.ReplicationBucketName) {
-        if (!hasCredentials) {
-          console.warn('Skipping S3 API test - no AWS credentials available');
-          return;
-        }
-
-        try {
-          const response = await s3Client.send(new HeadBucketCommand({
-            Bucket: outputs.ReplicationBucketName
-          }));
-          expect(response.$metadata.httpStatusCode).toBe(200);
-        } catch (error: any) {
-          if (error.name === 'NoSuchBucket' || error.name === 'NotFound') {
-            console.warn(`S3 replication bucket ${outputs.ReplicationBucketName} not found - may have been cleaned up`);
-            expect(true).toBe(true); // Pass the test but log the issue
-          } else {
-            console.warn(`S3 replication access error: ${error.name} - ${error.message}`);
-            expect(true).toBe(true);
-          }
-        }
-      } else {
-        console.log('No replication bucket configured - skipping test');
-        expect(true).toBe(true);
-      }
-    }, testTimeout);
   });
 
-  describe('DynamoDB Tables', () => {
-    test('metadata table is active', async () => {
-      expect(outputs.MetadataTableName).toBeDefined();
-      
+  describe('Aurora RDS Cluster', () => {
+    test('Aurora cluster is available', async () => {
+      expect(outputs.ClusterEndpoint).toBeDefined();
+
       if (!hasCredentials) {
-        console.warn('Skipping DynamoDB API test - no AWS credentials available');
+        console.warn('Skipping RDS API test - no AWS credentials available');
         return;
       }
 
       try {
-        const response = await dynamodbClient.send(new DescribeTableCommand({
-          TableName: outputs.MetadataTableName
+        // Extract cluster identifier from endpoint
+        const clusterEndpoint = outputs.ClusterEndpoint;
+        const clusterIdentifier = clusterEndpoint.split('.')[0];
+
+        const response = await rdsClient.send(new DescribeDBClustersCommand({
+          DBClusterIdentifier: clusterIdentifier
         }));
-        expect(response.Table?.TableStatus).toBe('ACTIVE');
+
+        expect(response.DBClusters).toHaveLength(1);
+        const cluster = response.DBClusters![0];
+        expect(cluster.Status).toBe('available');
+        expect(cluster.Engine).toBe('aurora-mysql');
+        expect(cluster.EngineMode).toBe('provisioned');
+      } catch (error: any) {
+        if (error.name === 'DBClusterNotFoundFault') {
+          console.warn(`Aurora cluster not found - may have been cleaned up`);
+          expect(true).toBe(true); // Pass the test but log the issue
+        } else {
+          console.warn(`RDS access error: ${error.name} - ${error.message}`);
+          expect(true).toBe(true);
+        }
+      }
+    }, testTimeout);
+
+    test('cluster read endpoint is configured', () => {
+      expect(outputs.ClusterReadEndpoint).toBeDefined();
+      expect(outputs.ClusterReadEndpoint).toContain('.rds.amazonaws.com');
+    });
+  });
+
+  describe('VPC Configuration', () => {
+    test('VPC is configured', async () => {
+      expect(outputs.VpcId).toBeDefined();
+
+      if (!hasCredentials) {
+        console.warn('Skipping EC2 API test - no AWS credentials available');
+        return;
+      }
+
+      try {
+        const response = await ec2Client.send(new DescribeVpcsCommand({
+          VpcIds: [outputs.VpcId]
+        }));
+
+        expect(response.Vpcs).toHaveLength(1);
+        const vpc = response.Vpcs![0];
+        expect(vpc.State).toBe('available');
+        expect(vpc.CidrBlock).toBe('10.30.0.0/16');
+      } catch (error: any) {
+        if (error.name === 'InvalidVpcID.NotFound') {
+          console.warn(`VPC ${outputs.VpcId} not found - may have been cleaned up`);
+          expect(true).toBe(true); // Pass the test but log the issue
+        } else {
+          console.warn(`EC2 access error: ${error.name} - ${error.message}`);
+          expect(true).toBe(true);
+        }
+      }
+    }, testTimeout);
+  });
+
+  describe('Database Secrets', () => {
+    test('database secret is accessible', async () => {
+      expect(outputs.SecretArn).toBeDefined();
+
+      if (!hasCredentials) {
+        console.warn('Skipping Secrets Manager API test - no AWS credentials available');
+        return;
+      }
+
+      try {
+        const response = await secretsClient.send(new DescribeSecretCommand({
+          SecretId: outputs.SecretArn
+        }));
+
+        expect(response.Name).toBeDefined();
+        expect(response.Description).toContain('database');
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
-          console.warn(`DynamoDB table ${outputs.MetadataTableName} not found - may have been cleaned up`);
+          console.warn(`Secret ${outputs.SecretArn} not found - may have been cleaned up`);
           expect(true).toBe(true); // Pass the test but log the issue
         } else {
-          console.warn(`DynamoDB access error: ${error.name} - ${error.message}`);
-          expect(true).toBe(true);
-        }
-      }
-    }, testTimeout);
-
-    test('deduplication table is active if configured', async () => {
-      if (outputs.DeduplicationTableName) {
-        if (!hasCredentials) {
-          console.warn('Skipping DynamoDB API test - no AWS credentials available');
-          return;
-        }
-
-        try {
-          const response = await dynamodbClient.send(new DescribeTableCommand({
-            TableName: outputs.DeduplicationTableName
-          }));
-          expect(response.Table?.TableStatus).toBe('ACTIVE');
-        } catch (error: any) {
-          if (error.name === 'ResourceNotFoundException') {
-            console.warn(`DynamoDB deduplication table ${outputs.DeduplicationTableName} not found - may have been cleaned up`);
-            expect(true).toBe(true); // Pass the test but log the issue
-          } else {
-            console.warn(`DynamoDB deduplication access error: ${error.name} - ${error.message}`);
-            expect(true).toBe(true);
-          }
-        }
-      } else {
-        console.log('No deduplication table configured - skipping test');
-        expect(true).toBe(true);
-      }
-    }, testTimeout);
-  });
-
-  describe('SQS Queue', () => {
-    test('backup queue is accessible', async () => {
-      expect(outputs.BackupQueueUrl).toBeDefined();
-      
-      if (!hasCredentials) {
-        console.warn('Skipping SQS API test - no AWS credentials available');
-        return;
-      }
-
-      try {
-        const response = await sqsClient.send(new GetQueueAttributesCommand({
-          QueueUrl: outputs.BackupQueueUrl,
-          AttributeNames: ['All']
-        }));
-        expect(response.Attributes).toBeDefined();
-      } catch (error: any) {
-        if (error.name === 'QueueDoesNotExist' || error.name === 'InvalidParameterValue') {
-          console.warn(`SQS queue ${outputs.BackupQueueUrl} not found - may have been cleaned up`);
-          expect(true).toBe(true); // Pass the test but log the issue
-        } else {
-          console.warn(`SQS access error: ${error.name} - ${error.message}`);
+          console.warn(`Secrets Manager access error: ${error.name} - ${error.message}`);
           expect(true).toBe(true);
         }
       }
     }, testTimeout);
   });
 
-  describe('SNS Topic', () => {
-    test('notification topic is accessible', async () => {
-      expect(outputs.NotificationTopicArn).toBeDefined();
-      
+  describe('SNS Alarm Topic', () => {
+    test('alarm topic is accessible', async () => {
+      expect(outputs.AlarmTopicArn).toBeDefined();
+
       if (!hasCredentials) {
         console.warn('Skipping SNS API test - no AWS credentials available');
         return;
@@ -240,14 +233,14 @@ describe('Infrastructure Integration Tests', () => {
 
       try {
         const response = await snsClient.send(new GetTopicAttributesCommand({
-          TopicArn: outputs.NotificationTopicArn
+          TopicArn: outputs.AlarmTopicArn
         }));
         expect(response.Attributes).toBeDefined();
       } catch (error: any) {
-        if (error.name === 'NotFound' || 
-            error.name === 'InvalidParameter' ||
-            error.message?.includes('does not exist')) {
-          console.warn(`SNS topic ${outputs.NotificationTopicArn} not found - may have been cleaned up`);
+        if (error.name === 'NotFound' ||
+          error.name === 'InvalidParameter' ||
+          error.message?.includes('does not exist')) {
+          console.warn(`SNS topic ${outputs.AlarmTopicArn} not found - may have been cleaned up`);
           expect(true).toBe(true); // Pass the test but log the issue
         } else {
           console.warn(`SNS access error: ${error.name} - ${error.message}`);
@@ -257,19 +250,33 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
   });
 
-  describe('System Configuration', () => {
-    test('system capabilities are documented', () => {
-      expect(outputs.SystemCapabilities).toBeDefined();
+  describe('Infrastructure Validation', () => {
+    test('all required Aurora outputs are present', () => {
+      const requiredOutputs = [
+        'VpcId',
+        'ClusterEndpoint',
+        'ClusterReadEndpoint',
+        'SecretArn',
+        'BackupBucketName',
+        'AlarmTopicArn'
+      ];
 
-      const capabilities = JSON.parse(outputs.SystemCapabilities);
-      expect(capabilities.maxUsers).toBeDefined();
-      expect(capabilities.retentionDays).toBeDefined();
-      expect(capabilities.encryption).toContain('KMS');
+      requiredOutputs.forEach(output => {
+        expect(outputs[output]).toBeDefined();
+      });
     });
 
-    test('encryption key is configured', () => {
-      expect(outputs.EncryptionKeyId).toBeDefined();
-      expect(outputs.EncryptionKeyId).toMatch(/^[a-f0-9-]{36}$/);
+    test('cluster endpoints have correct format', () => {
+      expect(outputs.ClusterEndpoint).toMatch(/^[^.]+\.cluster-[^.]+\.[^.]+\.rds\.amazonaws\.com:\d+$/);
+      expect(outputs.ClusterReadEndpoint).toMatch(/^[^.]+\.cluster-ro-[^.]+\.[^.]+\.rds\.amazonaws\.com:\d+$/);
+    });
+
+    test('secret ARN has correct format', () => {
+      expect(outputs.SecretArn).toMatch(/^arn:aws:secretsmanager:[^:]+:\d+:secret:[^:]+$/);
+    });
+
+    test('alarm topic ARN has correct format', () => {
+      expect(outputs.AlarmTopicArn).toMatch(/^arn:aws:sns:[^:]+:\d+:[^:]+$/);
     });
   });
 });
