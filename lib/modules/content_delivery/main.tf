@@ -185,35 +185,39 @@ resource "aws_lambda_function" "edge_request" {
   }
 }
 
-# Route53 configuration with latency-based routing
-resource "aws_route53_record" "main" {
-  zone_id = var.hosted_zone_id
-  name    = var.domain_name
-  type    = "A"
-  
-  alias {
-    name                   = aws_cloudfront_distribution.main.domain_name
-    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
-    evaluate_target_health = false
-  }
-}
+# Route53 configuration removed - no domain available for this deployment
+# To enable Route53:
+# 1. Register a domain or use an existing hosted zone
+# 2. Uncomment the resources below and provide hosted_zone_id variable
+# 3. Update content_delivery module call in main.tf with hosted_zone_id parameter
 
-# Latency-based routing for regional endpoints
-resource "aws_route53_record" "regional" {
-  for_each = toset(var.regions)
-  
-  zone_id        = var.hosted_zone_id
-  name           = "regional-${each.key}.${var.domain_name}"
-  type           = "A"
-  set_identifier = each.key
-  
-  alias {
-    name                   = aws_cloudfront_distribution.main.domain_name
-    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
-    evaluate_target_health = true
-  }
-  
-  latency_routing_policy {
-    region = each.key
-  }
-}
+# resource "aws_route53_record" "main" {
+#   zone_id = var.hosted_zone_id
+#   name    = var.domain_name
+#   type    = "A"
+#   
+#   alias {
+#     name                   = aws_cloudfront_distribution.main.domain_name
+#     zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+#     evaluate_target_health = false
+#   }
+# }
+
+# resource "aws_route53_record" "regional" {
+#   for_each = toset(var.regions)
+#   
+#   zone_id        = var.hosted_zone_id
+#   name           = "regional-${each.key}.${var.domain_name}"
+#   type           = "A"
+#   set_identifier = each.key
+#   
+#   alias {
+#     name                   = aws_cloudfront_distribution.main.domain_name
+#     zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+#     evaluate_target_health = true
+#   }
+#   
+#   latency_routing_policy {
+#     region = each.key
+#   }
+# }

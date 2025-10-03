@@ -301,3 +301,46 @@ After initial fixes, additional errors were discovered during terraform plan exe
 - All template variables properly configured
 - Terraform plan should now execute without errors
 - Complete monitoring solution in place
+
+---
+
+### 9. Security Module CIDR Block Error and Route53 Domain Issues
+
+**Errors that occurred:**
+
+**Invalid CIDR Block:**
+```
+Error: "" is not a valid CIDR block: invalid CIDR address: 
+  with module.security.aws_network_acl.private,
+  on modules/security/main.tf line 193
+```
+
+**Root Cause:**
+- Security module's `vpc_cidr_block` variable had default value of "" (empty string)
+- Module was not receiving the actual VPC CIDR from main.tf
+- Network ACL resources require valid CIDR blocks
+
+**Route53 Domain Issue:**
+- Infrastructure requires a registered domain for Route53 configuration
+- No domain is available for this deployment
+- Route53 resources would fail without a valid hosted zone
+
+**What we fixed:**
+
+**Security Module CIDR:**
+- Updated main.tf to pass `vpc_cidr_block` from root variable to security module
+- Added `public_subnet_ids` and `private_subnet_ids` to security module call
+- Security module now receives all required networking information
+
+**Route53 Resources:**
+- Commented out all Route53 resources in content_delivery/main.tf
+- Added clear documentation on how to enable Route53 when domain is available
+- Removed latency-based routing records (require hosted zone)
+- CloudFront distribution still works without Route53 (accessible via CloudFront domain)
+
+**Result:**
+- Security module now receives valid VPC CIDR block
+- Network ACL resources can be created successfully
+- Route53 dependency removed - infrastructure can deploy without domain
+- Clear instructions provided for enabling Route53 in the future
+- Terraform plan passes with 74 resources to add

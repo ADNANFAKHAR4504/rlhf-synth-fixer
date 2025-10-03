@@ -49,6 +49,9 @@ module "security" {
   source = "./modules/security"
   
   vpc_id                     = module.networking.vpc_id
+  vpc_cidr_block             = var.vpc_cidr_block
+  public_subnet_ids          = module.networking.public_subnet_ids
+  private_subnet_ids         = module.networking.private_subnet_ids
   alb_arn                    = module.compute.alb_arn
   cloudfront_distribution_id = module.content_delivery.distribution_id
   waf_rate_limits            = var.waf_rate_limits
