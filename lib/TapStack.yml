@@ -19,14 +19,6 @@ Parameters:
     Type: String
     Description: AWS Account ID where centralized logs will be stored (leave blank to use current account)
     Default: ''
-    
-  PrimaryRegion:
-    Type: String
-    Default: 'us-west-2'
-    Description: Primary deployment region
-    AllowedValues:
-      - 'us-west-2'
-      - 'us-east-1'
   
   VpcCIDR:
     Type: String
@@ -90,15 +82,12 @@ Parameters:
 # CONDITIONS - Logic for multi-region deployment
 # ====================================
 Conditions:
-  # Used to deploy certain resources (like Shield Protection and S3 bucket) only in primary region
-  # This prevents duplicate expensive services and ensures centralized logging
-  IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
   # Check if LoggingAccountId is provided, otherwise use current account
   UseCurrentAccountForLogs: !Equals [!Ref LoggingAccountId, '']
   # WAF is supported in most regions, but not all
   WAFSupported: !Not [!Equals [!Ref 'AWS::Region', 'ap-northeast-3']]
-  # Shield Advanced is enabled and we're in primary region
-  CreateShieldProtection: !And [!Equals [!Ref EnableShieldAdvanced, 'true'], !Condition IsPrimaryRegion]
+  # Shield Advanced is enabled
+  CreateShieldProtection: !Equals [!Ref EnableShieldAdvanced, 'true']
 
 # ====================================
 # RESOURCES
@@ -108,10 +97,9 @@ Resources:
   # S3 CENTRALIZED LOGGING BUCKET
   # ====================================
   
-  # S3 Bucket for centralized logging - created only in primary region
+  # S3 Bucket for centralized logging
   CentralizedLoggingBucket:
     Type: 'AWS::S3::Bucket'
-    Condition: IsPrimaryRegion
     Properties:
       BucketName: !Sub 
         - '${AccountId}-centralized-logging-bucket2'
@@ -149,7 +137,6 @@ Resources:
   # Simple bucket policy for centralized logging - basic security only
   CentralizedLoggingBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
-    Condition: IsPrimaryRegion
     Properties:
       Bucket: !Ref CentralizedLoggingBucket
       PolicyDocument:
@@ -205,7 +192,6 @@ Resources:
   # CloudTrail IAM policy - least privilege for S3 writes
   CloudTrailS3Policy:
     Type: 'AWS::IAM::Policy'
-    Condition: IsPrimaryRegion
     Properties:
       PolicyName: CloudTrailS3Policy
       Roles:
@@ -301,7 +287,6 @@ Resources:
   # IAM policy for Config to access centralized S3 bucket
   ConfigS3Policy:
     Type: 'AWS::IAM::Policy'
-    Condition: IsPrimaryRegion
     Properties:
       PolicyName: ConfigS3DeliveryPolicy
       Roles:
@@ -761,7 +746,6 @@ Resources:
   # AWS Config Configuration
   ConfigRecorder:
     Type: 'AWS::Config::ConfigurationRecorder'
-    Condition: IsPrimaryRegion
     Properties:
       RecordingGroup:
         AllSupported: true
@@ -770,7 +754,6 @@ Resources:
   
   ConfigDeliveryChannel:
     Type: 'AWS::Config::DeliveryChannel'
-    Condition: IsPrimaryRegion
     Properties:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: Six_Hours
@@ -781,7 +764,6 @@ Resources:
   # AWS Config Rules
   IAMFullAccessRule:
     Type: 'AWS::Config::ConfigRule'
-    Condition: IsPrimaryRegion
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: iam-policy-no-statements-with-full-access
@@ -793,7 +775,6 @@ Resources:
   # CloudTrail Configuration - Multi-region trail for comprehensive auditing
   CloudTrailToS3:
     Type: 'AWS::CloudTrail::Trail'
-    Condition: IsPrimaryRegion
     Properties:
       TrailName: !Sub '${AWS::StackName}-audit-trail'
       IsLogging: true

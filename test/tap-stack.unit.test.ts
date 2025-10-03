@@ -29,10 +29,11 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       expect(template.Description).toContain('comprehensive security controls');
     });
 
-    test('should have conditions for multi-region deployment', () => {
+    test('should have conditions for deployment', () => {
       expect(template.Conditions).toBeDefined();
-      expect(template.Conditions.IsPrimaryRegion).toBeDefined();
       expect(template.Conditions.UseCurrentAccountForLogs).toBeDefined();
+      expect(template.Conditions.WAFSupported).toBeDefined();
+      expect(template.Conditions.CreateShieldProtection).toBeDefined();
     });
   });
 
@@ -42,7 +43,6 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
         'CostCenterTag',
         'ProjectIDTag', 
         'LoggingAccountId',
-        'PrimaryRegion',
         'VpcCIDR',
         'PublicSubnet1CIDR',
         'PublicSubnet2CIDR',
@@ -51,7 +51,8 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
         'DBSubnet1CIDR',
         'DBSubnet2CIDR',
         'DBInstanceClass',
-        'DBBackupRetentionPeriod'
+        'DBBackupRetentionPeriod',
+        'EnableShieldAdvanced'
       ];
 
       requiredParams.forEach(param => {
@@ -61,11 +62,11 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       });
     });
 
-    test('PrimaryRegion parameter should have correct allowed values', () => {
-      const primaryRegionParam = template.Parameters.PrimaryRegion;
-      expect(primaryRegionParam.Type).toBe('String');
-      expect(primaryRegionParam.Default).toBe('us-west-2');
-      expect(primaryRegionParam.AllowedValues).toEqual(['us-west-2', 'us-east-1']);
+    test('EnableShieldAdvanced parameter should have correct allowed values', () => {
+      const shieldParam = template.Parameters.EnableShieldAdvanced;
+      expect(shieldParam.Type).toBe('String');
+      expect(shieldParam.Default).toBe('false');
+      expect(shieldParam.AllowedValues).toEqual(['true', 'false']);
     });
 
     test('DB parameters should have correct constraints', () => {
@@ -89,7 +90,8 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       expect(template.Resources.CentralizedLoggingBucket).toBeDefined();
       const bucket = template.Resources.CentralizedLoggingBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Condition).toBe('IsPrimaryRegion');
+      // Bucket is now created in all regions, no condition
+      expect(bucket.Condition).toBeUndefined();
     });
 
     test('should have CloudTrail for auditing', () => {
@@ -244,7 +246,7 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       expect(template.Resources.ShieldProtection).toBeDefined();
       const shield = template.Resources.ShieldProtection;
       expect(shield.Type).toBe('AWS::Shield::Protection');
-      expect(shield.Condition).toBe('IsPrimaryRegion');
+      expect(shield.Condition).toBe('CreateShieldProtection');
     });
 
     test('should have Application Load Balancer', () => {
@@ -338,7 +340,7 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
 
     test('should have all required parameters for production infrastructure', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(13); // All infrastructure parameters
+      expect(parameterCount).toBe(13); // All infrastructure parameters (removed PrimaryRegion, added EnableShieldAdvanced)
     });
 
     test('should have infrastructure outputs', () => {
@@ -399,17 +401,17 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
       expect(s3Bucket.Properties.BucketEncryption).toBeDefined();
     });
 
-    test('should have multi-region failover capabilities', () => {
-      // Check conditions for primary region
-      expect(template.Conditions.IsPrimaryRegion).toBeDefined();
+    test('should have configurable Shield Advanced protection', () => {
+      // Check condition for Shield Advanced
+      expect(template.Conditions.CreateShieldProtection).toBeDefined();
       
-      // Check that Shield Protection is conditional on primary region
+      // Check that Shield Protection is conditional on EnableShieldAdvanced parameter
       const shieldProtection = template.Resources.ShieldProtection;
-      expect(shieldProtection.Condition).toBe('IsPrimaryRegion');
+      expect(shieldProtection.Condition).toBe('CreateShieldProtection');
       
-      // Check that S3 bucket is conditional on primary region
+      // Check that S3 bucket is now created in all regions
       const s3Bucket = template.Resources.CentralizedLoggingBucket;
-      expect(s3Bucket.Condition).toBe('IsPrimaryRegion');
+      expect(s3Bucket.Condition).toBeUndefined();
     });
 
     test('should have comprehensive monitoring and alerting', () => {
