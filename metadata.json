@@ -6,6 +6,10 @@
   "po_id": "91027458",
   "team": "synth",
   "startedAt": "2025-10-03T21:54:26+05:30",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
   "training_quality": 8.5,
   "aws_services": [
     "API Gateway",
