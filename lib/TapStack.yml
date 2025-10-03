@@ -1002,7 +1002,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
