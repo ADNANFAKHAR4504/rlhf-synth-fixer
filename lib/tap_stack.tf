@@ -6,7 +6,7 @@ resource "random_id" "bucket_suffix" {
 
 # Local values for dynamic naming
 locals {
-  content_bucket_name = var.content_bucket_name != "" ? var.content_bucket_name : "tap-content-delivery-${random_id.bucket_suffix.hex}"
+  content_bucket_name = var.content_bucket_name != "" ? var.content_bucket_name : "${var.project_name}-${var.region_prefix}-${random_id.bucket_suffix.hex}"
 }
 
 # KMS Key for S3 encryption
@@ -21,7 +21,7 @@ resource "aws_kms_key" "content_encryption" {
 }
 
 resource "aws_kms_alias" "content_encryption" {
-  name          = "alias/${var.project_name}-content-${var.environment}"
+  name          = "alias/${var.project_name}-${var.region_prefix}-content-${var.environment}"
   target_key_id = aws_kms_key.content_encryption.key_id
 }
 
@@ -219,7 +219,7 @@ resource "aws_cloudfront_distribution" "content" {
 
 # Response Headers Policy
 resource "aws_cloudfront_response_headers_policy" "security_headers" {
-  name    = "${var.project_name}-security-headers-${var.environment}"
+  name    = "${var.project_name}-${var.region_prefix}-security-headers-${var.environment}"
   comment = "Security headers for content delivery"
 
   security_headers_config {
@@ -682,7 +682,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   count    = var.enable_waf ? 1 : 0
   provider = aws.us_east_1
 
-  name  = "${var.project_name}-waf-${var.environment}"
+  name  = "${var.project_name}-${var.region_prefix}-waf-${var.environment}"
   scope = "CLOUDFRONT"
 
   default_action {
@@ -704,11 +704,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       }
     }
 
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-rate-limit"
-      sampled_requests_enabled   = true
-    }
+        visibility_config {
+          cloudwatch_metrics_enabled = true
+          metric_name                = "${var.project_name}-${var.region_prefix}-rate-limit"
+          sampled_requests_enabled   = true
+        }
   }
 
   rule {
@@ -726,16 +726,16 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       }
     }
 
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-common-rules"
-      sampled_requests_enabled   = true
-    }
+        visibility_config {
+          cloudwatch_metrics_enabled = true
+          metric_name                = "${var.project_name}-${var.region_prefix}-common-rules"
+          sampled_requests_enabled   = true
+        }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-waf"
+    metric_name                = "${var.project_name}-${var.region_prefix}-waf"
     sampled_requests_enabled   = true
   }
 }

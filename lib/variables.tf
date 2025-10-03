@@ -2,7 +2,13 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
+}
+
+variable "region_prefix" {
+  description = "Short region prefix for globally unique resources (e.g., usw2 for us-west-2)"
+  type        = string
+  default     = "usw2"
 }
 
 variable "project_name" {
