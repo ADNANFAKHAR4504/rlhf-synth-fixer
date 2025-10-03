@@ -15,6 +15,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
+Tags.of(app).add('iac-rlhf-amazon', 'true');
 
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
