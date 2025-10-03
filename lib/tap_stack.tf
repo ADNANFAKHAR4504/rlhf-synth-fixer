@@ -358,7 +358,8 @@ resource "aws_kms_key" "main" {
           Service = [
             "dynamodb.amazonaws.com",
             "elasticache.amazonaws.com",
-            "lambda.amazonaws.com"
+            "lambda.amazonaws.com",
+            "logs.amazonaws.com"
           ]
         },
         Action = [
@@ -366,7 +367,8 @@ resource "aws_kms_key" "main" {
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
-          "kms:DescribeKey"
+          "kms:DescribeKey",
+          "kms:CreateGrant"
         ],
         Resource = "*"
       }
@@ -555,7 +557,7 @@ resource "aws_elasticache_subnet_group" "redis" {
 
 resource "aws_elasticache_parameter_group" "redis" {
   name   = "${var.project_name}-redis-params"
-  family = "redis6.x"
+  family = "redis7"
 
   parameter {
     name  = "maxmemory-policy"
@@ -1225,20 +1227,21 @@ resource "aws_cloudwatch_dashboard" "main" {
 }
 
 # QuickSight setup
-resource "aws_quicksight_data_source" "dynamodb" {
-  name           = "${var.project_name}-dynamodb-source"
-  data_source_id = "${var.project_name}-dynamodb-source"
-  aws_account_id = local.account_id
-  type           = "ATHENA"
-
-  parameters {
-    athena {
-      work_group = "primary"
-    }
-  }
-
-  tags = local.common_tags
-}
+# QuickSight requires account setup - comment out if QuickSight is not enabled
+# resource "aws_quicksight_data_source" "dynamodb" {
+#   name           = "${var.project_name}-dynamodb-source"
+#   data_source_id = "${var.project_name}-dynamodb-source"
+#   aws_account_id = local.account_id
+#   type           = "ATHENA"
+#
+#   parameters {
+#     athena {
+#       work_group = "primary"
+#     }
+#   }
+#
+#   tags = local.common_tags
+# }
 
 # Outputs
 output "api_gateway_url" {
