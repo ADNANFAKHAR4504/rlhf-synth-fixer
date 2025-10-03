@@ -8,10 +8,14 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.services.apigatewayv2.WebSocketApi;
-import software.amazon.awscdk.services.apigatewayv2.WebSocketApiProps;
-import software.amazon.awscdk.services.apigatewayv2.WebSocketStage;
-import software.amazon.awscdk.services.apigatewayv2.WebSocketStageProps;
+import software.amazon.awscdk.services.apigatewayv2.CfnApi;
+import software.amazon.awscdk.services.apigatewayv2.CfnApiProps;
+import software.amazon.awscdk.services.apigatewayv2.CfnIntegration;
+import software.amazon.awscdk.services.apigatewayv2.CfnIntegrationProps;
+import software.amazon.awscdk.services.apigatewayv2.CfnRoute;
+import software.amazon.awscdk.services.apigatewayv2.CfnRouteProps;
+import software.amazon.awscdk.services.apigatewayv2.CfnStage;
+import software.amazon.awscdk.services.apigatewayv2.CfnStageProps;
 import software.amazon.awscdk.services.appsync.AppsyncFunction;
 import software.amazon.awscdk.services.appsync.AuthorizationConfig;
 import software.amazon.awscdk.services.appsync.AuthorizationMode;
@@ -29,7 +33,7 @@ import software.amazon.awscdk.services.cloudwatch.GraphWidget;
 import software.amazon.awscdk.services.cloudwatch.GraphWidgetProps;
 import software.amazon.awscdk.services.cloudwatch.IMetric;
 import software.amazon.awscdk.services.cloudwatch.Metric;
-import software.amazon.awscdk.services.cloudwatch.MetricProps;
+import software.amazon.awscdk.services.cloudwatch.MetricOptions;
 import software.amazon.awscdk.services.cognito.AccountRecovery;
 import software.amazon.awscdk.services.cognito.CfnUserPoolGroup;
 import software.amazon.awscdk.services.cognito.CfnUserPoolGroupProps;
@@ -329,19 +333,19 @@ final class LambdaResources {
  * Helper class to hold WebSocket API resources.
  */
 final class WebSocketResources {
-    private final WebSocketApi webSocketApi;
-    private final WebSocketStage stage;
+    private final CfnApi webSocketApi;
+    private final CfnStage stage;
 
-    WebSocketResources(final WebSocketApi api, final WebSocketStage stg) {
+    WebSocketResources(final CfnApi api, final CfnStage stg) {
         this.webSocketApi = api;
         this.stage = stg;
     }
 
-    public WebSocketApi getWebSocketApi() {
+    public CfnApi getWebSocketApi() {
         return webSocketApi;
     }
 
-    public WebSocketStage getStage() {
+    public CfnStage getStage() {
         return stage;
     }
 }
@@ -818,29 +822,94 @@ class TapStack extends Stack {
     }
 
     private WebSocketResources createWebSocketApi(final LambdaResources lambdas) {
-        WebSocketApi webSocketApi = new WebSocketApi(this, "DocumentCollabWebSocket" + environmentSuffix,
-                WebSocketApiProps.builder()
-                        .apiName("document-collaboration-websocket-" + environmentSuffix)
+        // Create WebSocket API
+        CfnApi webSocketApi = new CfnApi(this, "DocumentCollabWebSocket" + environmentSuffix,
+                CfnApiProps.builder()
+                        .name("document-collaboration-websocket-" + environmentSuffix)
+                        .protocolType("WEBSOCKET")
+                        .routeSelectionExpression("$request.body.action")
                         .description("WebSocket API for real-time document collaboration")
-                        .connectRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                                .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                        "ConnectIntegration", lambdas.getConnectionHandler()))
-                                .build())
-                        .disconnectRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                                .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                        "DisconnectIntegration", lambdas.getConnectionHandler()))
-                                .build())
-                        .defaultRouteOptions(software.amazon.awscdk.services.apigatewayv2.WebSocketRouteOptions.builder()
-                                .integration(new software.amazon.awscdk.services.apigatewayv2.integrations.WebSocketLambdaIntegration(
-                                        "DefaultIntegration", lambdas.getMessageHandler()))
-                                .build())
                         .build());
 
-        WebSocketStage stage = new WebSocketStage(this, "ProdStage" + environmentSuffix,
-                WebSocketStageProps.builder()
-                        .webSocketApi(webSocketApi)
+        // Create Lambda integrations
+        CfnIntegration connectIntegration = new CfnIntegration(this, 
+                "ConnectIntegration" + environmentSuffix,
+                CfnIntegrationProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .integrationType("AWS_PROXY")
+                        .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                                + ":lambda:path/2015-03-31/functions/" 
+                                + lambdas.getConnectionHandler().getFunctionArn() 
+                                + "/invocations")
+                        .build());
+
+        CfnIntegration disconnectIntegration = new CfnIntegration(this, 
+                "DisconnectIntegration" + environmentSuffix,
+                CfnIntegrationProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .integrationType("AWS_PROXY")
+                        .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                                + ":lambda:path/2015-03-31/functions/" 
+                                + lambdas.getConnectionHandler().getFunctionArn() 
+                                + "/invocations")
+                        .build());
+
+        CfnIntegration defaultIntegration = new CfnIntegration(this, 
+                "DefaultIntegration" + environmentSuffix,
+                CfnIntegrationProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .integrationType("AWS_PROXY")
+                        .integrationUri("arn:aws:apigateway:" + this.getRegion() 
+                                + ":lambda:path/2015-03-31/functions/" 
+                                + lambdas.getMessageHandler().getFunctionArn() 
+                                + "/invocations")
+                        .build());
+
+        // Create routes
+        new CfnRoute(this, "ConnectRoute" + environmentSuffix,
+                CfnRouteProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .routeKey("$connect")
+                        .target("integrations/" + connectIntegration.getRef())
+                        .build());
+
+        new CfnRoute(this, "DisconnectRoute" + environmentSuffix,
+                CfnRouteProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .routeKey("$disconnect")
+                        .target("integrations/" + disconnectIntegration.getRef())
+                        .build());
+
+        new CfnRoute(this, "DefaultRoute" + environmentSuffix,
+                CfnRouteProps.builder()
+                        .apiId(webSocketApi.getRef())
+                        .routeKey("$default")
+                        .target("integrations/" + defaultIntegration.getRef())
+                        .build());
+
+        // Create stage
+        CfnStage stage = new CfnStage(this, "ProdStage" + environmentSuffix,
+                CfnStageProps.builder()
+                        .apiId(webSocketApi.getRef())
                         .stageName("prod")
                         .autoDeploy(true)
+                        .build());
+
+        // Grant API Gateway permission to invoke Lambda functions
+        lambdas.getConnectionHandler().addPermission("AllowApiGatewayInvokeConnect",
+                software.amazon.awscdk.services.lambda.Permission.builder()
+                        .principal(new ServicePrincipal("apigateway.amazonaws.com"))
+                        .action("lambda:InvokeFunction")
+                        .sourceArn("arn:aws:execute-api:" + this.getRegion() + ":" 
+                                + this.getAccount() + ":" + webSocketApi.getRef() + "/*")
+                        .build());
+
+        lambdas.getMessageHandler().addPermission("AllowApiGatewayInvokeMessage",
+                software.amazon.awscdk.services.lambda.Permission.builder()
+                        .principal(new ServicePrincipal("apigateway.amazonaws.com"))
+                        .action("lambda:InvokeFunction")
+                        .sourceArn("arn:aws:execute-api:" + this.getRegion() + ":" 
+                                + this.getAccount() + ":" + webSocketApi.getRef() + "/*")
                         .build());
 
         return new WebSocketResources(webSocketApi, stage);
@@ -988,10 +1057,10 @@ class TapStack extends Stack {
                 .build();
 
         IMetric lambdaErrors = lambdas.getMessageHandler().metricErrors(
-                MetricProps.builder().period(Duration.minutes(5)).build());
+                MetricOptions.builder().period(Duration.minutes(5)).build());
         
         IMetric lambdaDuration = lambdas.getMessageHandler().metricDuration(
-                MetricProps.builder().period(Duration.minutes(5)).build());
+                MetricOptions.builder().period(Duration.minutes(5)).build());
 
         dashboard.addWidgets(
                 new GraphWidget(GraphWidgetProps.builder()
@@ -1019,7 +1088,7 @@ class TapStack extends Stack {
 
     private void createCloudWatchAlarms(final LambdaResources lambdas) {
         IMetric messageHandlerErrors = lambdas.getMessageHandler().metricErrors(
-                MetricProps.builder().period(Duration.minutes(5)).build());
+                MetricOptions.builder().period(Duration.minutes(5)).build());
 
         new Alarm(this, "HighErrorRateAlarm" + environmentSuffix, AlarmProps.builder()
                 .alarmName("document-collab-high-errors-" + environmentSuffix)
@@ -1030,7 +1099,7 @@ class TapStack extends Stack {
                 .build());
 
         IMetric messageHandlerDuration = lambdas.getMessageHandler().metricDuration(
-                MetricProps.builder().period(Duration.minutes(5)).build());
+                MetricOptions.builder().period(Duration.minutes(5)).build());
 
         new Alarm(this, "HighLatencyAlarm" + environmentSuffix, AlarmProps.builder()
                 .alarmName("document-collab-high-latency-" + environmentSuffix)
@@ -1044,13 +1113,15 @@ class TapStack extends Stack {
     private void createOutputs(final OutputResources resources) {
         new CfnOutput(this, "WebSocketApiUrl", CfnOutputProps.builder()
                 .description("WebSocket API endpoint")
-                .value(resources.getWebSocket().getWebSocketApi().getApiEndpoint())
+                .value("wss://" + resources.getWebSocket().getWebSocketApi().getRef() 
+                        + ".execute-api." + this.getRegion() + ".amazonaws.com/" 
+                        + resources.getWebSocket().getStage().getStageName())
                 .exportName("WebSocketApiUrl-" + environmentSuffix)
                 .build());
 
         new CfnOutput(this, "WebSocketApiId", CfnOutputProps.builder()
                 .description("WebSocket API ID")
-                .value(resources.getWebSocket().getWebSocketApi().getApiId())
+                .value(resources.getWebSocket().getWebSocketApi().getRef())
                 .exportName("WebSocketApiId-" + environmentSuffix)
                 .build());
 
