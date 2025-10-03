@@ -705,7 +705,7 @@ describe("Travel Platform API - Stack Validation & Integration Tests", () => {
         // Check for assignment without proper spacing
         return /[a-zA-Z_]\s*=[^=\s]/.test(line) || /[a-zA-Z_][^=\s]=\s*[^=]/.test(line);
       });
-      
+
       // Should have minimal violations (allow some flexibility in JSON blocks)
       expect(assignmentLines.length).toBeLessThan(10);
     });
