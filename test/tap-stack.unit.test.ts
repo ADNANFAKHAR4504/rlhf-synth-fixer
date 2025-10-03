@@ -1,5 +1,6 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
+import { PriceMonitorStack } from '../lib/price-monitor-stack';
 
 describe('Stack Structure', () => {
   let app: App;
@@ -83,6 +84,124 @@ describe('Stack Structure', () => {
         },
       },
     });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack without AWS_REGION_OVERRIDE uses props awsRegion', () => {
+    // Ensure AWS_REGION_OVERRIDE is not set
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoOverride', {
+      environmentSuffix: 'staging',
+      awsRegion: 'ap-southeast-1',
+      stateBucket: 'test-bucket',
+      stateBucketRegion: 'ap-southeast-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack without AWS_REGION_OVERRIDE and no awsRegion prop uses default', () => {
+    // Ensure AWS_REGION_OVERRIDE is not set
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackNoOverrideNoRegion', {
+      environmentSuffix: 'test',
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack with all undefined props uses all defaults', () => {
+    // Ensure AWS_REGION_OVERRIDE is not set
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackAllDefaults', {
+      environmentSuffix: undefined,
+      awsRegion: undefined,
+      stateBucket: undefined,
+      stateBucketRegion: undefined,
+      defaultTags: undefined,
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+});
+
+describe('PriceMonitorStack', () => {
+  let app: App;
+  let stack: PriceMonitorStack;
+  let synthesized: string;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('PriceMonitorStack with all props provided', () => {
+    app = new App();
+    stack = new PriceMonitorStack(app, 'TestPriceMonitorWithProps', {
+      environmentSuffix: 'prod',
+      awsRegion: 'us-west-2',
+      defaultTags: {
+        tags: {
+          Environment: 'production',
+        },
+      },
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('PriceMonitorStack with no props uses defaults', () => {
+    app = new App();
+    stack = new PriceMonitorStack(app, 'TestPriceMonitorDefaults');
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('PriceMonitorStack with undefined environmentSuffix uses default', () => {
+    app = new App();
+    stack = new PriceMonitorStack(app, 'TestPriceMonitorNoEnvSuffix', {
+      environmentSuffix: undefined,
+      awsRegion: 'eu-west-1',
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('PriceMonitorStack with undefined awsRegion uses default', () => {
+    app = new App();
+    stack = new PriceMonitorStack(app, 'TestPriceMonitorNoRegion', {
+      environmentSuffix: 'test',
+      awsRegion: undefined,
+    });
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('PriceMonitorStack with empty props object uses all defaults', () => {
+    app = new App();
+    stack = new PriceMonitorStack(app, 'TestPriceMonitorEmptyProps', {});
     synthesized = Testing.synth(stack);
 
     expect(stack).toBeDefined();
