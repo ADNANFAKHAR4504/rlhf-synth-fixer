@@ -255,7 +255,7 @@ class TapStack(pulumi.ComponentResource):
             }),
             timeout=30,
             memory_size=512,
-            reserved_concurrent_executions=100,
+            # reserved_concurrent_executions removed - account lacks unreserved concurrency
             tracing_config={"mode": "Active"},
             environment={
                 "variables": {
