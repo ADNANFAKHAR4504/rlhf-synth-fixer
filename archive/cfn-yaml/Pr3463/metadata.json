@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "59031627",
+  "team": "3",
+  "startedAt": "2025-10-03T12:37:33.641Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "KMS",
+    "DynamoDB",
+    "S3",
+    "SNS",
+    "Lambda",
+    "API Gateway",
+    "ElastiCache",
+    "CloudWatch",
+    "IAM",
+    "Cognito"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}
