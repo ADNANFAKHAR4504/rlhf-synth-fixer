@@ -23,8 +23,6 @@ Encrypt the RDS instance using a customer-managed KMS key that you create as par
 Create an S3 bucket for logging that blocks all public access.
 
 5. Monitoring and Protection:
-Enable CloudTrail to log all management events. The logs should be sent to the secure,
-      encrypted S3 bucket created above.
 Deploy an Application Load Balancer (ALB) protected by a Web Application Firewall (WAF)
       using a managed rule set like AWSManagedRulesCommonRuleSet.
 

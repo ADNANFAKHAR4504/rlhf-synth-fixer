@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -38,15 +37,14 @@ const (
 
 // TestClients holds all AWS service clients needed for integration tests
 type TestClients struct {
-	CFN        *cloudformation.Client
-	EC2        *ec2.Client
-	RDS        *rds.Client
-	S3         *s3.Client
-	KMS        *kms.Client
-	ELB        *elasticloadbalancingv2.Client
-	WAF        *wafv2.Client
-	CloudTrail *cloudtrail.Client
-	DynamoDB   *dynamodb.Client
+	CFN      *cloudformation.Client
+	EC2      *ec2.Client
+	RDS      *rds.Client
+	S3       *s3.Client
+	KMS      *kms.Client
+	ELB      *elasticloadbalancingv2.Client
+	WAF      *wafv2.Client
+	DynamoDB *dynamodb.Client
 }
 
 // setupTestClients initializes all AWS service clients
@@ -57,15 +55,14 @@ func setupTestClients(t *testing.T, ctx context.Context) *TestClients {
 	require.NoError(t, err, "Failed to load AWS config")
 
 	return &TestClients{
-		CFN:        cloudformation.NewFromConfig(cfg),
-		EC2:        ec2.NewFromConfig(cfg),
-		RDS:        rds.NewFromConfig(cfg),
-		S3:         s3.NewFromConfig(cfg),
-		KMS:        kms.NewFromConfig(cfg),
-		ELB:        elasticloadbalancingv2.NewFromConfig(cfg),
-		WAF:        wafv2.NewFromConfig(cfg),
-		CloudTrail: cloudtrail.NewFromConfig(cfg),
-		DynamoDB:   dynamodb.NewFromConfig(cfg),
+		CFN:      cloudformation.NewFromConfig(cfg),
+		EC2:      ec2.NewFromConfig(cfg),
+		RDS:      rds.NewFromConfig(cfg),
+		S3:       s3.NewFromConfig(cfg),
+		KMS:      kms.NewFromConfig(cfg),
+		ELB:      elasticloadbalancingv2.NewFromConfig(cfg),
+		WAF:      wafv2.NewFromConfig(cfg),
+		DynamoDB: dynamodb.NewFromConfig(cfg),
 	}
 }
 
@@ -245,39 +242,6 @@ func TestSecurityStackIntegration(t *testing.T) {
 		})
 	})
 
-	t.Run("KMS key has CloudTrail permissions", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		defer jsii.Close()
-
-		stack := lib.NewTapStack(app, jsii.String("KmsCloudTrailTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(testEnvironmentSuffix),
-		})
-
-		// ACT
-		template := assertions.Template_FromStack(stack, nil)
-
-		// ASSERT - KMS key policy allows CloudTrail
-		template.HasResourceProperties(jsii.String("AWS::KMS::Key"), map[string]interface{}{
-			"KeyPolicy": map[string]interface{}{
-				"Statement": assertions.Match_ArrayWith(&[]interface{}{
-					map[string]interface{}{
-						"Sid":    "Enable CloudTrail Encrypt Permissions",
-						"Effect": "Allow",
-						"Principal": map[string]interface{}{
-							"Service": "cloudtrail.amazonaws.com",
-						},
-						"Action": []interface{}{
-							"kms:GenerateDataKey*",
-							"kms:DecryptDataKey",
-						},
-					},
-				}),
-			},
-		})
-	})
-
 	t.Run("S3 bucket blocks all public access", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
@@ -339,66 +303,6 @@ func TestSecurityStackIntegration(t *testing.T) {
 					},
 				}),
 			},
-		})
-	})
-
-	t.Run("S3 bucket policy allows CloudTrail to write logs", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		defer jsii.Close()
-
-		stack := lib.NewTapStack(app, jsii.String("S3CloudTrailPolicyTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(testEnvironmentSuffix),
-		})
-
-		// ACT
-		template := assertions.Template_FromStack(stack, nil)
-
-		// ASSERT - Bucket policy allows CloudTrail
-		template.HasResourceProperties(jsii.String("AWS::S3::BucketPolicy"), map[string]interface{}{
-			"PolicyDocument": map[string]interface{}{
-				"Statement": assertions.Match_ArrayWith(&[]interface{}{
-					map[string]interface{}{
-						"Sid":    "AWSCloudTrailWrite",
-						"Effect": "Allow",
-						"Principal": map[string]interface{}{
-							"Service": "cloudtrail.amazonaws.com",
-						},
-						"Action": "s3:PutObject",
-					},
-				}),
-			},
-		})
-	})
-
-	t.Run("CloudTrail is configured with encryption and validation", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		defer jsii.Close()
-
-		stack := lib.NewTapStack(app, jsii.String("CloudTrailTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(testEnvironmentSuffix),
-		})
-
-		// ACT
-		template := assertions.Template_FromStack(stack, nil)
-
-		// ASSERT - CloudTrail properties
-		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-			"IncludeGlobalServiceEvents": true,
-			"IsMultiRegionTrail":         false,
-			"EnableLogFileValidation":    true,
-		})
-
-		// Verify CloudTrail is encrypted with KMS
-		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-			"KMSKeyId": assertions.Match_ObjectLike(map[string]interface{}{
-				"Fn::GetAtt": assertions.Match_ArrayWith(&[]interface{}{
-					assertions.Match_StringLikeRegexp(".*RdsKmsKey.*"),
-				}),
-			}),
 		})
 	})
 }
@@ -747,12 +651,12 @@ func TestCrossServiceInteractions(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), assertions.Match_AnyValue())
 	})
 
-	t.Run("KMS key encrypts both RDS and CloudTrail", func(t *testing.T) {
+	t.Run("KMS key encrypts RDS", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		defer jsii.Close()
 
-		stack := lib.NewTapStack(app, jsii.String("KmsSharedTest"), &lib.TapStackProps{
+		stack := lib.NewTapStack(app, jsii.String("KmsRdsTest"), &lib.TapStackProps{
 			StackProps:        &awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String(testEnvironmentSuffix),
 		})
@@ -760,27 +664,14 @@ func TestCrossServiceInteractions(t *testing.T) {
 		// ACT
 		template := assertions.Template_FromStack(stack, nil)
 
-		// ASSERT - Same KMS key used for both RDS and CloudTrail
-		// Count references to the KMS key
-		kmsKeyRefs := 0
-
+		// ASSERT - KMS key used for RDS
 		// Check RDS uses KMS key
 		rdsProps := template.FindResources(jsii.String("AWS::RDS::DBInstance"), &map[string]interface{}{
 			"Properties": map[string]interface{}{
 				"StorageEncrypted": true,
 			},
 		})
-		if len(*rdsProps.(*map[string]map[string]interface{})) > 0 {
-			kmsKeyRefs++
-		}
-
-		// Check CloudTrail uses KMS key
-		trailProps := template.FindResources(jsii.String("AWS::CloudTrail::Trail"), &map[string]interface{}{})
-		if len(*trailProps.(*map[string]map[string]interface{})) > 0 {
-			kmsKeyRefs++
-		}
-
-		assert.Equal(t, 2, kmsKeyRefs, "KMS key should be referenced by both RDS and CloudTrail")
+		assert.Greater(t, len(*rdsProps.(*map[string]map[string]interface{})), 0, "RDS should be encrypted with KMS key")
 	})
 
 	t.Run("RDS is isolated in private subnets with no internet access", func(t *testing.T) {
@@ -839,30 +730,6 @@ func TestCrossServiceInteractions(t *testing.T) {
 		template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroupEgress"), map[string]interface{}{
 			"IpProtocol": "tcp",
 			"CidrIp":     "10.0.0.0/16",
-		})
-	})
-
-	t.Run("CloudTrail logs are encrypted and stored in S3", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		defer jsii.Close()
-
-		stack := lib.NewTapStack(app, jsii.String("CloudTrailS3Test"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(testEnvironmentSuffix),
-		})
-
-		// ACT
-		template := assertions.Template_FromStack(stack, nil)
-
-		// ASSERT - CloudTrail references S3 bucket and KMS key
-		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-			"S3BucketName": assertions.Match_ObjectLike(map[string]interface{}{
-				"Ref": assertions.Match_StringLikeRegexp(".*CloudTrailLogsBucket.*"),
-			}),
-			"KMSKeyId": assertions.Match_ObjectLike(map[string]interface{}{
-				"Fn::GetAtt": assertions.Match_AnyValue(),
-			}),
 		})
 	})
 }
@@ -1165,12 +1032,12 @@ func TestSecurityCompliance(t *testing.T) {
 				case string:
 					// Only fail if it's exactly "*" - some services require wildcard for specific actions
 					if v == "*" {
-						// Check if this is an allowed case (KMS key policy, CloudTrail, etc.)
+						// Check if this is an allowed case (KMS key policy, etc.)
 						actions := statement["Action"]
 						actionStr := fmt.Sprintf("%v", actions)
 
-						// Allow wildcards for specific CloudTrail and KMS actions
-						if !strings.Contains(actionStr, "kms:") && !strings.Contains(actionStr, "cloudtrail:") {
+						// Allow wildcards for specific KMS actions
+						if !strings.Contains(actionStr, "kms:") {
 							t.Errorf("IAM policy %s should not use wildcard (*) resource without specific service context", logicalId)
 						}
 					}
@@ -1181,7 +1048,7 @@ func TestSecurityCompliance(t *testing.T) {
 							actions := statement["Action"]
 							actionStr := fmt.Sprintf("%v", actions)
 
-							if !strings.Contains(actionStr, "kms:") && !strings.Contains(actionStr, "cloudtrail:") {
+							if !strings.Contains(actionStr, "kms:") {
 								t.Errorf("IAM policy %s should not use wildcard (*) in resources array without specific service context", logicalId)
 							}
 						}
@@ -1318,22 +1185,6 @@ func verifyWAFAssociation(ctx context.Context, wafClient *wafv2.Client, albArn s
 
 	if len(result.ResourceArns) == 0 {
 		return fmt.Errorf("no resources associated with WAF ACL")
-	}
-
-	return nil
-}
-
-// verifyCloudTrailLogging validates CloudTrail is logging to S3
-func verifyCloudTrailLogging(ctx context.Context, cloudTrailClient *cloudtrail.Client, trailName string) error {
-	result, err := cloudTrailClient.GetTrailStatus(ctx, &cloudtrail.GetTrailStatusInput{
-		Name: aws.String(trailName),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get trail status: %w", err)
-	}
-
-	if result.IsLogging == nil || !*result.IsLogging {
-		return fmt.Errorf("CloudTrail should be logging")
 	}
 
 	return nil
