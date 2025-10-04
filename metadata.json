@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "83697283",
+  "team": "1",
+  "startedAt": "2025-10-04T20:36:39.168Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "dynamodb, s3, lambda, aurora, ses"
+}
