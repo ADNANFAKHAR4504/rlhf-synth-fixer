@@ -40,7 +40,7 @@ This tool is meant only to test IaC tasks from Turing Enterprises.
 
 ### Required Service Quota Increases
 
-For **ALL regions** listed in `aws-nuke-config.yaml` (us-west-1, us-east-2, us-west-1, us-west-2, af-south-1, ap-east-1, ap-northeast-1, ap-northeast-2, ap-northeast-3, ap-south-1, ap-south-2, ap-southeast-1, ap-southeast-2, ap-southeast-3, ap-southeast-4, ca-central-1, ca-west-1, eu-central-1, eu-central-2, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-2, eu-west-3, il-central-1, me-central-1, me-south-1, sa-east-1), increase the following service quotas to a **minimum of 50**:
+For **ALL regions** listed in `aws-nuke-config.yaml` (us-east-1, us-east-2, us-west-1, us-west-2, af-south-1, ap-east-1, ap-northeast-1, ap-northeast-2, ap-northeast-3, ap-south-1, ap-south-2, ap-southeast-1, ap-southeast-2, ap-southeast-3, ap-southeast-4, ca-central-1, ca-west-1, eu-central-1, eu-central-2, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-2, eu-west-3, il-central-1, me-central-1, me-south-1, sa-east-1), increase the following service quotas to a **minimum of 50**:
 
 - **VPC per region** - Default: 5, Required: 50+
 - **NAT Gateway per Availability Zone** - Default: 5, Required: 50+
@@ -58,14 +58,14 @@ For **ALL regions** listed in `aws-nuke-config.yaml` (us-west-1, us-east-2, us-w
    - Set new limit to 50 or higher
    - **Repeat for ALL regions** where you plan to run tasks
 
-2. **Via AWS CLI** (example for EC2 instances in us-west-1):
+2. **Via AWS CLI** (example for EC2 instances in us-east-1):
 
    ```bash
    aws service-quotas request-service-quota-increase \
      --service-code ec2 \
      --quota-code L-1216C47A \
      --desired-value 50 \
-     --region us-west-1
+     --region us-east-1
    ```
 
 3. **Processing Time**: Quota increase requests typically take 24-48 hours to be approved

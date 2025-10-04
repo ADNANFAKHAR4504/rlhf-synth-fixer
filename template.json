@@ -33,7 +33,7 @@
     "SecureNetworkingSecureVPCPublicSubnet1SubnetCF185293": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1a",
+        "AvailabilityZone": "us-east-1a",
         "CidrBlock": "10.0.0.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -200,7 +200,7 @@
     "SecureNetworkingSecureVPCPublicSubnet2SubnetEE81EFA3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1b",
+        "AvailabilityZone": "us-east-1b",
         "CidrBlock": "10.0.1.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -301,7 +301,7 @@
     "SecureNetworkingSecureVPCPrivateSubnet1Subnet6F3EC960": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1a",
+        "AvailabilityZone": "us-east-1a",
         "CidrBlock": "10.0.2.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -399,7 +399,7 @@
     "SecureNetworkingSecureVPCPrivateSubnet2Subnet4787D1C4": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1b",
+        "AvailabilityZone": "us-east-1b",
         "CidrBlock": "10.0.3.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -497,7 +497,7 @@
     "SecureNetworkingSecureVPCDatabaseSubnet1SubnetF81AF2A6": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1a",
+        "AvailabilityZone": "us-east-1a",
         "CidrBlock": "10.0.4.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -580,7 +580,7 @@
     "SecureNetworkingSecureVPCDatabaseSubnet2Subnet8E46A379": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "AvailabilityZone": "us-west-1b",
+        "AvailabilityZone": "us-east-1b",
         "CidrBlock": "10.0.5.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -1020,7 +1020,7 @@
                       "Fn::Join": [
                         "",
                         [
-                          "arn:aws:ec2:us-west-1:086440326438:security-group/",
+                          "arn:aws:ec2:us-east-1:086440326438:security-group/",
                           {
                             "Fn::GetAtt": [
                               "SecureNetworkingSecureVPC073AE483",
@@ -1045,7 +1045,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "Code": {
-          "S3Bucket": "cdk-hnb659fds-assets-086440326438-us-west-1",
+          "S3Bucket": "cdk-hnb659fds-assets-086440326438-us-east-1",
           "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
         },
         "Timeout": 900,
@@ -1996,7 +1996,7 @@
                 "Fn::Join": [
                   "",
                   [
-                    "arn:aws:rds:us-west-1:086440326438:db:",
+                    "arn:aws:rds:us-east-1:086440326438:db:",
                     {
                       "Ref": "SecureDatabase3BA930E1"
                     }
@@ -2205,7 +2205,7 @@
         "Fn::Join": [
           "",
           [
-            "arn:aws:rds:us-west-1:086440326438:db:",
+            "arn:aws:rds:us-east-1:086440326438:db:",
             {
               "Ref": "SecureDatabase3BA930E1"
             }
@@ -2233,7 +2233,7 @@
     },
     "StackRegion": {
       "Description": "Stack deployment region",
-      "Value": "us-west-1"
+      "Value": "us-east-1"
     },
     "SecurityCompliance": {
       "Description": "Security compliance status",

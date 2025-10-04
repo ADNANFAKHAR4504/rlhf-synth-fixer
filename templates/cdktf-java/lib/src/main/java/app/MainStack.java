@@ -32,7 +32,7 @@ public class MainStack extends TerraformStack {
 
         // Configure AWS Provider
         AwsProvider.Builder.create(this, "aws")
-                .region("us-west-1")
+                .region("us-east-1")
                 .build();
 
         // Create S3 bucket for application storage
