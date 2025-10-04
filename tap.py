@@ -35,3 +35,18 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export key stack outputs for integration testing
+pulumi.export("environment_suffix", environment_suffix)
+pulumi.export("metrics_table_name", stack.metrics_table.id)
+pulumi.export("alert_config_table_name", stack.alert_config_table.id)
+pulumi.export("metrics_bucket_name", stack.metrics_export_bucket.id)
+pulumi.export("lambda_function_name", stack.metrics_processor.id)
+pulumi.export("alert_topic_arn", stack.alert_topic.arn)
+pulumi.export("api_gateway_id", stack.api.id)
+pulumi.export("api_endpoint", pulumi.Output.concat(
+    "https://", stack.api.id,
+    ".execute-api.us-east-1.amazonaws.com/",
+    stack.api_stage.stage_name
+))
+pulumi.export("aws_region", "us-east-1")  # Current region used in the stack

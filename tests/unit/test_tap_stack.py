@@ -48,19 +48,12 @@ class MyMocks(pulumi.runtime.Mocks):
                 "id": f"{args.name}-id",
                 "arn": f"arn:aws:sns:us-east-2:123456789012:{args.name}",
             }
-        elif args.typ == "aws:timestreamwrite/database:Database":
+        elif args.typ == "aws:dynamodb/table:Table":
             outputs = {
                 **args.inputs,
                 "id": f"{args.name}-id",
-                "arn": f"arn:aws:timestream:us-east-2:123456789012:database/{args.name}",
-                "database_name": args.inputs.get("database_name", args.name),
-            }
-        elif args.typ == "aws:timestreamwrite/table:Table":
-            outputs = {
-                **args.inputs,
-                "id": f"{args.name}-id",
-                "arn": f"arn:aws:timestream:us-east-2:123456789012:table/{args.name}",
-                "table_name": args.inputs.get("table_name", args.name),
+                "arn": f"arn:aws:dynamodb:us-east-2:123456789012:table/{args.name}",
+                "name": args.inputs.get("name", args.name),
             }
         elif args.typ == "aws:lambda/function:Function":
             outputs = {
@@ -164,7 +157,7 @@ class TestTapStack(unittest.TestCase):
 
             # Verify S3 bucket exists
             self.assertIsNotNone(stack.metrics_export_bucket)
-            self.assertIsNotNone(stack.metrics_bucket_acl)
+            self.assertIsNotNone(stack.metrics_bucket_public_access_block)
             self.assertIsNotNone(stack.metrics_bucket_versioning)
             self.assertIsNotNone(stack.metrics_bucket_encryption)
 
@@ -199,18 +192,18 @@ class TestTapStack(unittest.TestCase):
         test_sns()
 
     @pulumi.runtime.test
-    def test_timestream_resources_creation(self):
-        """Test Timestream database and table are created correctly."""
-        def test_timestream():
+    def test_dynamodb_resources_creation(self):
+        """Test DynamoDB tables are created correctly."""
+        def test_dynamodb():
             args = TapStackArgs(environment_suffix="test")
             stack = TapStack("test-stack", args)
 
-            # Verify Timestream resources exist
-            self.assertIsNotNone(stack.timestream_database)
-            self.assertIsNotNone(stack.timestream_table)
+            # Verify DynamoDB resources exist
+            self.assertIsNotNone(stack.metrics_table)
+            self.assertIsNotNone(stack.alert_config_table)
 
         pulumi.runtime.set_mocks(MyMocks())
-        test_timestream()
+        test_dynamodb()
 
     @pulumi.runtime.test
     def test_lambda_function_creation(self):
@@ -285,7 +278,7 @@ class TestTapStack(unittest.TestCase):
         self.assertIn("import json", code)
         self.assertIn("import boto3", code)
         self.assertIn("def handler(event, context):", code)
-        self.assertIn("write_to_timestream", code)
+        self.assertIn("write_to_dynamodb", code)
         self.assertIn("check_and_send_alerts", code)
         self.assertIn("export_metrics_to_s3", code)
         self.assertIn("aws_xray_sdk", code)
@@ -337,7 +330,7 @@ class TestLambdaCodeIntegrity(unittest.TestCase):
         # Check for required function definitions
         required_functions = [
             "def handler(event, context):",
-            "def write_to_timestream(",
+            "def write_to_dynamodb(",
             "def check_and_send_alerts(",
             "def export_metrics_to_s3("
         ]
@@ -353,8 +346,7 @@ class TestLambdaCodeIntegrity(unittest.TestCase):
 
         # Check for environment variable usage
         env_vars = [
-            "TIMESTREAM_DB",
-            "TIMESTREAM_TABLE",
+            "METRICS_TABLE",
             "ALERT_CONFIG_TABLE",
             "ALERT_TOPIC_ARN",
             "METRICS_BUCKET"
@@ -372,7 +364,6 @@ class TestLambdaCodeIntegrity(unittest.TestCase):
 
         # Check for AWS client initialization
         clients = [
-            "boto3.client('timestream-write'",
             "boto3.resource('dynamodb'",
             "boto3.client('sns'",
             "boto3.client('s3'"

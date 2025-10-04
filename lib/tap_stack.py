@@ -418,7 +418,7 @@ class TapStack(pulumi.ComponentResource):
         self.register_outputs({
             "api_endpoint": Output.concat(
                 "https://", self.api.id,
-                ".execute-api.us-east-2.amazonaws.com/",
+                ".execute-api.us-east-1.amazonaws.com/",
                 self.api_stage.stage_name
             ),
             "metrics_bucket": self.metrics_export_bucket.id,
@@ -459,9 +459,9 @@ except ImportError:
     xray_recorder = DummyXRayRecorder()
 
 # Initialize AWS clients
-dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-sns = boto3.client('sns', region_name='us-east-2')
-s3 = boto3.client('s3', region_name='us-east-2')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+sns = boto3.client('sns', region_name='us-east-1')
+s3 = boto3.client('s3', region_name='us-east-1')
 
 # Environment variables
 METRICS_TABLE = os.environ['METRICS_TABLE']

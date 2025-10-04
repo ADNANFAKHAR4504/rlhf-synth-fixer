@@ -99,9 +99,6 @@ src/main/resources/
 __pycache__/
 .pulumi/
 
-# Pulumi stack files (keep Pulumi.yaml but ignore stack-specific files)
-Pulumi.*.yaml
-
 tasks-status.md
 worktree/
 bin/.terraform.lock.hcl
