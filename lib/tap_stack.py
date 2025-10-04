@@ -987,21 +987,159 @@ def send_response(event, context, status, data, physical_id=None):
         # This resolves the authorization error since the Lambda has proper GuardDuty permissions
 
     def _create_security_hub(self):
-        """Enable Security Hub for centralized security management"""
+        """Enable Security Hub for centralized security management with automatic existing subscription detection"""
         
-        # Use native CDK Security Hub
-        self.security_hub = securityhub.CfnHub(
-            self, "SecurityHub",
-            auto_enable_controls=False,
-            control_finding_generator="SECURITY_CONTROL",
-            enable_default_standards=False,
-            tags={
-                "Name": f"ZeroTrustSecurityHub-{self.environment_suffix}"
-            }
+        # Create Lambda function to detect existing Security Hub subscriptions
+        security_hub_lambda = lambda_.Function(
+            self, "SecurityHubLambda",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="index.handler",
+            code=lambda_.Code.from_inline(f"""
+import boto3
+import json
+import urllib3
+
+def handler(event, context):
+    try:
+        client = boto3.client('securityhub')
+        
+        if event['RequestType'] == 'Delete':
+            # Don't disable existing Security Hub on stack deletion
+            hub_arn = event.get('PhysicalResourceId', 'not-found')
+            return send_response(event, context, 'SUCCESS', {{
+                'HubArn': hub_arn
+            }})
+        
+        # Check if Security Hub is already enabled
+        try:
+            # Try to describe the hub
+            response = client.describe_hub()
+            
+            # Hub already exists, use it and update configuration
+            hub_arn = response['HubArn']
+            
+            # Update hub settings to match our requirements if needed
+            try:
+                client.update_security_hub_configuration(
+                    AutoEnableControls=False,
+                    ControlFindingGenerator='SECURITY_CONTROL'
+                )
+            except Exception as e:
+                print(f"Warning: Could not update Security Hub settings: {{e}}")
+            
+            mode = 'existing'
+            
+        except client.exceptions.InvalidAccessException:
+            # Security Hub is not enabled, create it
+            response = client.enable_security_hub(
+                Tags={{
+                    'Name': f'ZeroTrustSecurityHub-{self.environment_suffix}',
+                    'ManagedBy': 'CDK-AutoDetection',
+                    'Environment': 'production'
+                }},
+                EnableDefaultStandards=False,
+                ControlFindingGenerator='SECURITY_CONTROL'
+            )
+            
+            hub_arn = response['HubArn']
+            mode = 'new'
+            
+        except Exception as e:
+            # Handle other exceptions - might be already subscribed
+            if "already subscribed" in str(e).lower():
+                # Get hub details
+                try:
+                    response = client.describe_hub()
+                    hub_arn = response['HubArn']
+                    mode = 'existing'
+                except:
+                    # Fallback ARN format if describe fails
+                    account_id = context.invoked_function_arn.split(':')[4]
+                    region_name = context.invoked_function_arn.split(':')[3]
+                    hub_arn = f"arn:aws:securityhub:{{region_name}}:{{account_id}}:hub/default"
+                    mode = 'existing-fallback'
+            else:
+                raise e
+        
+        return send_response(event, context, 'SUCCESS', {{
+            'HubArn': hub_arn,
+            'Mode': mode
+        }}, hub_arn)
+            
+    except Exception as e:
+        print(f"Error: {{str(e)}}")
+        return send_response(event, context, 'FAILED', {{'Error': str(e)}})
+
+def send_response(event, context, status, data, physical_id=None):
+    response_body = json.dumps({{
+        'Status': status,
+        'Reason': f'See CloudWatch Log Stream: {{context.log_stream_name}}',
+        'PhysicalResourceId': physical_id or context.log_stream_name,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'Data': data
+    }})
+    
+    http = urllib3.PoolManager()
+    try:
+        response = http.request('PUT', event['ResponseURL'], body=response_body,
+                              headers={{'Content-Type': 'application/json'}})
+        print(f"Response status: {{response.status}}")
+    except Exception as e:
+        print(f"Failed to send response: {{e}}")
+    
+    return {{'statusCode': 200, 'body': 'Complete'}}
+"""),
+            timeout=Duration.minutes(5),
+            role=iam.Role(
+                self, "SecurityHubLambdaRole",
+                assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+                managed_policies=[
+                    iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+                ],
+                inline_policies={
+                    "SecurityHubAccess": iam.PolicyDocument(
+                        statements=[
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
+                                    "securityhub:DescribeHub",
+                                    "securityhub:EnableSecurityHub",
+                                    "securityhub:UpdateSecurityHubConfiguration",
+                                    "securityhub:GetEnabledStandards",
+                                    "securityhub:TagResource"
+                                ],
+                                resources=["*"]
+                            )
+                        ]
+                    )
+                }
+            )
         )
         
-        # Get Security Hub ARN from native resource
-        self.security_hub_arn = self.security_hub.attr_arn
+        # Custom resource to handle Security Hub subscription detection
+        security_hub_resource = CustomResource(
+            self, "SecurityHubResource",
+            service_token=security_hub_lambda.function_arn
+        )
+        
+        # Get Security Hub ARN from custom resource
+        self.security_hub_arn = security_hub_resource.get_att("HubArn").to_string()
+        self.security_hub_mode = security_hub_resource.get_att("Mode").to_string()
+        
+        # Output deployment information
+        CfnOutput(
+            self, "SecurityHubArn", 
+            value=self.security_hub_arn,
+            description="Security Hub ARN (existing or newly created)"
+        )
+        
+        CfnOutput(
+            self, "SecurityHubDeploymentMode", 
+            value=self.security_hub_mode,
+            description="Whether using existing hub or created new one"
+        )
 
         # Note: Security Hub standards can be enabled manually or via separate deployment
         # to avoid rate limiting and ARN format issues during initial stack creation
@@ -1695,5 +1833,4 @@ def send_response(event, context, status, data, physical_id=None):
 
         # Output important values
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
-        CfnOutput(self, "SecurityHubArn", value=self.security_hub_arn)
         CfnOutput(self, "AlertTopicArn", value=self.alert_topic.topic_arn)
