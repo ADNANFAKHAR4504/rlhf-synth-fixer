@@ -15,12 +15,13 @@ new TapStack(app, stackName, {
   description: `Production IoT data pipeline for processing 500k daily sensor readings - ${environmentSuffix}`,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-west-2', // Default to us-west-2 as specified in requirements
+    region: process.env.CDK_DEFAULT_REGION,
   },
   tags: {
     Environment: environmentSuffix,
     Project: 'IoT-DataPipeline',
   },
+  terminationProtection: false,
 });
 
 // Add stack-level configurations

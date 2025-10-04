@@ -68,7 +68,7 @@ export class TapStack extends cdk.Stack {
           abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // DynamoDB table for device state with TTL enabled
@@ -81,7 +81,7 @@ export class TapStack extends cdk.Stack {
       pointInTimeRecoverySpecification: {
         pointInTimeRecoveryEnabled: true,
       },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Add GSI for querying by device status
