@@ -533,12 +533,6 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		sprops = *props.StackProps
 	}
 
-	// Override region to us-east-1 as required
-	sprops.Env = &awscdk.Environment{
-		Account: awscdk.Aws_ACCOUNT_ID(),
-		Region:  jsii.String("us-east-1"),
-	}
-
 	stack := awscdk.NewStack(scope, id, &sprops)
 
 	// Get environment suffix from props, context, or use 'dev' as default
