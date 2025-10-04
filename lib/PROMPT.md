@@ -1,16 +1,3 @@
-ROLE: You are a senior Terraform engineer.
-
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
-
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
-
-
 We’re designing infrastructure for a startup that expects around 2,000 daily users. The main goals are keeping things cost-optimized, ensuring the app stays up, balancing traffic properly, and having some basic monitoring in place. Nothing crazy enterprise-level, but still solid enough to handle real traffic.
 
 The region to work with is us-west-2. The core building block is a proper VPC (10.0.0.0/16) with the usual setup: two public subnets and two private subnets, each spread across different availability zones. Public subnets get an Internet Gateway, and private ones get a NAT Gateway so they can reach the internet when needed. Route tables and associations should be wired up cleanly to make everything behave.
