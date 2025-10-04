@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "55253849",
+  "team": "1",
+  "startedAt": "2025-10-04T18:47:13.818Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+}
