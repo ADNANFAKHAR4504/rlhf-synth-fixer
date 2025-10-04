@@ -133,20 +133,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create SNS topic subscription with filter policy
-        # Note: Adding a dummy email subscription to demonstrate filter policy
-        # In production, this would be replaced with actual endpoints
-        self.alert_subscription = aws.sns.TopicSubscription(
-            f"alert-subscription-{self.environment_suffix}",
-            topic=self.alert_topic.arn,
-            protocol="email",
-            endpoint="alerts@example.com",
-            filter_policy=json.dumps({
-                "severity": ["high", "critical"],
-                "metric_type": ["system", "application", "business"]
-            }),
-            opts=ResourceOptions(parent=self)
-        )
+        # SNS topic subscription removed for security
+        # In production, configure subscriptions manually via AWS Console
+        # or through environment-specific configuration with proper email verification
 
         # Create DynamoDB table for time-series metrics storage
         # Using DynamoDB as alternative to Timestream
@@ -295,13 +284,23 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create API Gateway method
+        # Create API Key for secure access
+        self.api_key = aws.apigateway.ApiKey(
+            f"metrics-api-key-{self.environment_suffix}",
+            name=f"metrics-api-key-{self.environment_suffix}",
+            description="API key for metrics ingestion",
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create API Gateway method with API key requirement
         self.metrics_method = aws.apigateway.Method(
             f"metrics-method-{self.environment_suffix}",
             rest_api=self.api.id,
             resource_id=self.metrics_resource.id,
             http_method="POST",
             authorization="NONE",
+            api_key_required=True,  # Require API key for authentication
             opts=ResourceOptions(parent=self)
         )
 
@@ -343,6 +342,41 @@ class TapStack(pulumi.ComponentResource):
             stage_name=self.environment_suffix,
             xray_tracing_enabled=True,
             tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create Usage Plan for API key management
+        self.usage_plan = aws.apigateway.UsagePlan(
+            f"metrics-usage-plan-{self.environment_suffix}",
+            name=f"metrics-usage-plan-{self.environment_suffix}",
+            description="Usage plan for metrics API",
+            api_stages=[{
+                "api_id": self.api.id,
+                "stage": self.api_stage.stage_name,
+                "throttle": [{
+                    "path": "/*/*",
+                    "rate_limit": 1000,
+                    "burst_limit": 2000
+                }]
+            }],
+            quota_settings={
+                "limit": 10000,
+                "period": "DAY"
+            },
+            throttle_settings={
+                "rate_limit": 1000,
+                "burst_limit": 2000
+            },
+            tags=self.tags,
+            opts=ResourceOptions(parent=self, depends_on=[self.api_stage])
+        )
+
+        # Associate API key with usage plan
+        self.usage_plan_key = aws.apigateway.UsagePlanKey(
+            f"metrics-usage-plan-key-{self.environment_suffix}",
+            key_id=self.api_key.id,
+            key_type="API_KEY",
+            usage_plan_id=self.usage_plan.id,
             opts=ResourceOptions(parent=self)
         )
 
@@ -428,6 +462,8 @@ class TapStack(pulumi.ComponentResource):
                 ".execute-api.us-east-2.amazonaws.com/",
                 self.api_stage.stage_name
             ),
+            "api_key_id": self.api_key.id,
+            "api_key_value": self.api_key.value,
             "metrics_bucket": self.metrics_export_bucket.id,
             "metrics_table": self.metrics_table.id,
             "alert_config_table": self.alert_config_table.id,
