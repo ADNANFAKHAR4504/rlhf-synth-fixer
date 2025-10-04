@@ -179,14 +179,14 @@ class TestTapStack(unittest.TestCase):
 
     @pulumi.runtime.test
     def test_sns_topic_creation(self):
-        """Test SNS topic and subscription are created correctly."""
+        """Test SNS topic is created correctly."""
         def test_sns():
             args = TapStackArgs(environment_suffix="test")
             stack = TapStack("test-stack", args)
 
-            # Verify SNS resources exist
+            # Verify SNS topic exists
             self.assertIsNotNone(stack.alert_topic)
-            self.assertIsNotNone(stack.alert_subscription)
+            # Note: alert_subscription was removed for security (no dummy email endpoints)
 
         pulumi.runtime.set_mocks(MyMocks())
         test_sns()
@@ -234,6 +234,11 @@ class TestTapStack(unittest.TestCase):
             self.assertIsNotNone(stack.metrics_integration)
             self.assertIsNotNone(stack.api_deployment)
             self.assertIsNotNone(stack.api_stage)
+            
+            # Verify API security resources exist
+            self.assertIsNotNone(stack.api_key)
+            self.assertIsNotNone(stack.usage_plan)
+            self.assertIsNotNone(stack.usage_plan_key)
 
         pulumi.runtime.set_mocks(MyMocks())
         test_api()
