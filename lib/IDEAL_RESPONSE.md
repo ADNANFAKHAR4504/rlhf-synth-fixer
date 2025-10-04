@@ -612,7 +612,7 @@ def export_metrics_to_s3():
             'body': json.dumps({'error': str(e)})
         }
 '''
-```
+
 
 ## Key Features
 
