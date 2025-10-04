@@ -14,20 +14,20 @@ let outputs;
 try {
   // Try to read from cfn-outputs/flat-outputs.json first (CI/CD format)
   outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
-  console.log('✅ Loaded deployment outputs from cfn-outputs/flat-outputs.json');
+  console.log('Loaded deployment outputs from cfn-outputs/flat-outputs.json');
 } catch (error) {
   try {
     // Fallback to cdk-outputs.json (local deployment format)
     const cdkOutputs = JSON.parse(fs.readFileSync('cdk-outputs.json', 'utf8'));
     const stackName = `TapStack${environmentSuffix}`;
     outputs = cdkOutputs[stackName] || {};
-    console.log(`✅ Loaded deployment outputs from cdk-outputs.json (stack: ${stackName})`);
+    console.log(`Loaded deployment outputs from cdk-outputs.json (stack: ${stackName})`);
   } catch (cdkError) {
-    console.error('❌ Failed to load deployment outputs from both sources:');
+    console.error('Failed to load deployment outputs from both sources:');
     console.error(`  - cfn-outputs/flat-outputs.json: ${error.message}`);
     console.error(`  - cdk-outputs.json: ${cdkError.message}`);
-    console.error('💡 Integration tests require real deployment outputs');
-    console.error('🚀 Deploy the stack first using: ./scripts/deploy.sh');
+    console.error('Integration tests require real deployment outputs');
+    console.error('Deploy the stack first using: ./scripts/deploy.sh');
     process.exit(1);
   }
 }
@@ -88,10 +88,10 @@ describe('News Website Infrastructure Integration Tests', () => {
 
   beforeAll(() => {
     // Debug: Show available outputs
-    console.log('🔍 Available deployment outputs:');
+    console.log('Available deployment outputs:');
     console.log(JSON.stringify(outputs, null, 2));
     
-    console.log(`\n🔍 Looking for news website outputs (environment: ${environmentSuffix}):`);
+    console.log(`\nLooking for news website outputs (environment: ${environmentSuffix}):`);
     console.log(`  - WebsiteBucketName${environmentSuffix} OR NewsWebsiteBucket-${environmentSuffix}`);
     console.log(`  - DistributionId${environmentSuffix} OR NewsDistributionId-${environmentSuffix}`);
     console.log(`  - DistributionDomainName${environmentSuffix} OR NewsDistributionDomain-${environmentSuffix}`);
@@ -99,23 +99,23 @@ describe('News Website Infrastructure Integration Tests', () => {
     
     // Validate that all required outputs are present
     if (!bucketName || !distributionId || !distributionDomain || !kmsKeyId) {
-      console.error('\n❌ Missing required deployment outputs for news website infrastructure:');
+      console.error('\nMissing required deployment outputs for news website infrastructure:');
       console.error(`  - Bucket Name: ${bucketName || 'MISSING'}`);
       console.error(`  - Distribution ID: ${distributionId || 'MISSING'}`);
       console.error(`  - Distribution Domain: ${distributionDomain || 'MISSING'}`);
       console.error(`  - KMS Key ID: ${kmsKeyId || 'MISSING'}`);
-      console.error('\n💡 The current deployment appears to be a different stack (backup system).');
-      console.error('🔄 To deploy the news website infrastructure:');
+      console.error('\nThe current deployment appears to be a different stack (backup system).');
+      console.error('To deploy the news website infrastructure:');
       console.error(`   1. Run: cdk deploy TapStack${environmentSuffix}`);
       console.error('   2. Ensure the stack creates S3 bucket, CloudFront distribution, and KMS key');
       console.error('   3. Re-run integration tests');
       throw new Error('Integration tests require news website deployment outputs to be present');
     }
     
-    console.log('\n✅ All deployment outputs validated successfully');
-    console.log(`🗄️  Bucket: ${bucketName}`);
-    console.log(`🌐 Distribution: ${distributionId} (${distributionDomain})`);
-    console.log(`🔐 KMS Key: ${kmsKeyId}`);
+    console.log('\nAll deployment outputs validated successfully');
+    console.log(`Bucket: ${bucketName}`);
+    console.log(`Distribution: ${distributionId} (${distributionDomain})`);
+    console.log(`KMS Key: ${kmsKeyId}`);
   });
 
   describe('S3 Bucket Operations', () => {
