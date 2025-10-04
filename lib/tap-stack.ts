@@ -268,6 +268,19 @@ def handler(event, context):
 
     iotDataBucket.grantWrite(firehoseRole);
     sensorDataStream.grantRead(firehoseRole);
+    
+    // Additional Kinesis permissions required for Firehose
+    firehoseRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'kinesis:DescribeStream',
+        'kinesis:GetShardIterator',
+        'kinesis:ListShards',
+        'kinesis:GetRecords',
+        'kinesis:ListStreams'
+      ],
+      resources: [sensorDataStream.streamArn],
+    }));
 
     // CloudWatch log group for Firehose errors
     const firehoseLogGroup = new logs.LogGroup(this, 'FirehoseLogGroup', {
@@ -283,7 +296,7 @@ def handler(event, context):
 
     firehoseLogGroup.grantWrite(firehoseRole);
 
-    new kinesisfirehose.CfnDeliveryStream(this, 'FirehoseDeliveryStream', {
+    const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(this, 'FirehoseDeliveryStream', {
       deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
       deliveryStreamType: 'KinesisStreamAsSource',
       kinesisStreamSourceConfiguration: {
@@ -540,7 +553,7 @@ def handler(event, context):
       namespace: 'AWS/Kinesis/Firehose',
       metricName: 'DeliveryToS3.DataFreshness',
       dimensionsMap: {
-        DeliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
+        DeliveryStreamName: firehoseDeliveryStream.ref!,
       },
       period: cdk.Duration.minutes(5),
       statistic: 'Maximum',
