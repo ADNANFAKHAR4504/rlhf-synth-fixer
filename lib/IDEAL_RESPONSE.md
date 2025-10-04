@@ -12,7 +12,7 @@ This solution provides a comprehensive metrics aggregation system with REST API 
 tap_stack.py
 
 This module defines the TapStack class, the main Pulumi ComponentResource for
-the TAP (Test Automation Platform) project - Metrics Aggregation System.
+the TAP project - Metrics Aggregation System.
 
 It orchestrates the instantiation of AWS resources for metrics ingestion, processing,
 storage, alerting, and monitoring.
