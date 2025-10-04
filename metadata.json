@@ -7,6 +7,18 @@
   "team": "synth",
   "startedAt": "2025-10-03T16:43:18+05:30",
   "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "Serverless Architecture Design",
+    "API Gateway Configuration",
+    "Lambda Function Management",
+    "Database Management",
+    "Event-Driven Architecture",
+    "Auto Scaling Configuration",
+    "Time Series Data Processing",
+    "Security Configuration",
+    "Monitoring and Logging",
+    "Scheduled Task Automation"
+  ],
   "training_quality": 9.0,
   "aws_services": [
     "API Gateway",
