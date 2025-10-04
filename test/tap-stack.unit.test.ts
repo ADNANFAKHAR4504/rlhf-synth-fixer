@@ -385,7 +385,7 @@ describe('TapStack', () => {
             IntervalInSeconds: 300,
             SizeInMBs: 128,
           },
-          CompressionFormat: 'GZIP',
+          CompressionFormat: 'UNCOMPRESSED',
           DataFormatConversionConfiguration: {
             Enabled: true,
             OutputFormatConfiguration: {

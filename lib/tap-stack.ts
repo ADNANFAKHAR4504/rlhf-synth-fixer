@@ -300,7 +300,7 @@ def handler(event, context):
           intervalInSeconds: 300, // Batch for 5 minutes
           sizeInMBs: 128, // Or 128MB, whichever comes first
         },
-        compressionFormat: 'GZIP', // Compress for cost optimization
+        compressionFormat: 'UNCOMPRESSED', // Must be UNCOMPRESSED when data format conversion is enabled
         cloudWatchLoggingOptions: {
           enabled: true,
           logGroupName: firehoseLogGroup.logGroupName,
