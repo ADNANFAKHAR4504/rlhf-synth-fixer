@@ -293,16 +293,18 @@ async function main(): Promise<void> {
       po_id: taskId,
       team,
       startedAt: new Date().toISOString(),
-      subtask: taskSubCategory,
-      ...(label ? { subject_labels: [label] } : {}),
+      subtask: label ? label : taskSubCategory,
+      ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? { aws_services: resourcesText.trim() }
         : {}),
     };
 
     console.log('\n📋 Task Summary:');
-    console.log(`Subtask: ${taskSubCategory}`);
-    console.log(`Subject Labels: ${label ? `[${label}]` : '[]'}`);
+    console.log(
+      `Subtask (now subject label): ${label ? label : taskSubCategory}`
+    );
+    console.log(`Subject Labels (now selected subtask): [${taskSubCategory}]`);
     console.log(`Platform: ${platform}`);
     console.log(`Language: ${language}`);
     console.log(`Complexity: ${complexity}`);
@@ -330,5 +332,4 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 }
-
 main().catch(console.error);
