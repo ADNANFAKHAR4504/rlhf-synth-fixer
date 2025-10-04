@@ -1,14 +1,10 @@
-# SageMaker Model Training Infrastructure - Production-Ready Solution
+# SageMaker Model Training Infrastructure Implementation
 
-## Overview
+Here's the CDK infrastructure code for the SageMaker model training platform:
 
-This solution provides a comprehensive AWS CDK TypeScript infrastructure for a model training platform with SageMaker, AWS Batch, and supporting services deployed in us-west-2.
+## tap-stack.ts
 
-## Infrastructure Code
-
-### Main Stack Entry Point
-
-```typescript
+<!-- ```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -38,7 +34,7 @@ new TapStack(app, stackName, {
 });
 ```
 
-### Main Stack Orchestration
+### Main Stack Orchestration -->
 
 ```typescript
 // lib/tap-stack.ts
@@ -105,7 +101,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-### Networking Infrastructure
+## networking-stack.ts
 
 ```typescript
 // lib/networking-stack.ts
@@ -187,7 +183,7 @@ export class NetworkingStack extends cdk.NestedStack {
 }
 ```
 
-### Storage Resources
+## storage-stack.ts
 
 ```typescript
 // lib/storage-stack.ts
@@ -268,7 +264,7 @@ export class StorageStack extends cdk.NestedStack {
 }
 ```
 
-### SageMaker Configuration
+## sagemaker-stack.ts
 
 ```typescript
 // lib/sagemaker-stack.ts
@@ -392,7 +388,7 @@ export class SageMakerStack extends cdk.NestedStack {
 }
 ```
 
-### AWS Batch Configuration
+## batch-stack.ts
 
 ```typescript
 // lib/batch-stack.ts
@@ -519,7 +515,7 @@ export class BatchStack extends cdk.NestedStack {
 }
 ```
 
-### Monitoring Stack
+## monitoring-stack.ts
 
 ```typescript
 // lib/monitoring-stack.ts
