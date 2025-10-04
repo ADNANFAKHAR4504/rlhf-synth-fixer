@@ -303,12 +303,20 @@ describe('TapStack GPS Tracking System', () => {
     });
   });
 
-  describe('QuickSight Data Source', () => {
-    test('should create QuickSight data source', () => {
-      template.hasResourceProperties('AWS::QuickSight::DataSource', {
-        DataSourceId: `gps-tracking-datasource-${environmentSuffix}`,
-        Name: 'GPS Tracking Data Source',
-        Type: 'S3',
+  describe('QuickSight IAM Role', () => {
+    test('should create QuickSight data source role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'quicksight.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
   });
@@ -427,10 +435,23 @@ describe('TapStack GPS Tracking System', () => {
       template.hasOutput('AlertTopicArn', {
         Description: 'SNS Topic ARN for Alerts',
       });
+
+      template.hasOutput('AnalyticsDataPath', {
+        Description: 'S3 path for analytics data (for QuickSight setup)',
+      });
+
+      template.hasOutput('QuickSightRoleArn', {
+        Description: 'IAM Role for QuickSight (use for manual QuickSight setup)',
+      });
     });
   });
 
   describe('Resource Count Validation', () => {
+    test('should have exactly 7 outputs', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(Object.keys(outputs)).toHaveLength(7);
+    });
+
     test('should create expected number of key resources', () => {
       const resources = template.toJSON().Resources;
       const resourceTypes = Object.values(resources).map((r: any) => r.Type);
@@ -447,7 +468,7 @@ describe('TapStack GPS Tracking System', () => {
       ).toHaveLength(1);
       expect(
         resourceTypes.filter(t => t === 'AWS::Lambda::Function')
-      ).toHaveLength(4); // GPS Processor, Alert Handler, Analytics, + 1 AwsCustomResource provider
+      ).toHaveLength(3); // GPS Processor, Alert Handler, Analytics
       expect(resourceTypes.filter(t => t === 'AWS::SNS::Topic')).toHaveLength(
         1
       );

@@ -9,11 +9,9 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as kinesisfirehose from 'aws-cdk-lib/aws-kinesisfirehose';
-import * as quicksight from 'aws-cdk-lib/aws-quicksight';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as kinesisEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -385,7 +383,7 @@ exports.handler = async (event) => {
       new targets.LambdaFunction(analyticsProcessorLambda)
     );
 
-    // QuickSight Data Source
+    // QuickSight Data Source Role (for manual QuickSight setup)
     const quicksightDataSourceRole = new iam.Role(
       this,
       'QuicksightDataSourceRole',
@@ -395,98 +393,6 @@ exports.handler = async (event) => {
     );
 
     archiveBucket.grantRead(quicksightDataSourceRole);
-
-    // Create a manifest file in S3 for QuickSight
-    const manifestContent = {
-      fileLocations: [
-        {
-          URIPrefixes: [`s3://${archiveBucket.bucketName}/raw-gps-data/`],
-        },
-      ],
-      globalUploadSettings: {
-        format: 'JSON',
-        delimiter: ',',
-        textqualifier: '"',
-        containsHeader: 'true',
-      },
-    };
-
-    // Deploy the manifest file using AwsCustomResource
-    const manifestDeployment = new cr.AwsCustomResource(
-      this,
-      'ManifestDeployment',
-      {
-        onCreate: {
-          service: 'S3',
-          action: 'putObject',
-          parameters: {
-            Bucket: archiveBucket.bucketName,
-            Key: 'manifest.json',
-            Body: JSON.stringify(manifestContent),
-            ContentType: 'application/json',
-          },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            'manifest-file-deployment'
-          ),
-        },
-        onUpdate: {
-          service: 'S3',
-          action: 'putObject',
-          parameters: {
-            Bucket: archiveBucket.bucketName,
-            Key: 'manifest.json',
-            Body: JSON.stringify(manifestContent),
-            ContentType: 'application/json',
-          },
-          physicalResourceId: cr.PhysicalResourceId.of(
-            'manifest-file-deployment'
-          ),
-        },
-        onDelete: {
-          service: 'S3',
-          action: 'deleteObject',
-          parameters: {
-            Bucket: archiveBucket.bucketName,
-            Key: 'manifest.json',
-          },
-        },
-        policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-          resources: [`${archiveBucket.bucketArn}/*`],
-        }),
-        timeout: cdk.Duration.minutes(5),
-      }
-    );
-
-    const gpsDataSource = new quicksight.CfnDataSource(this, 'GpsDataSource', {
-      awsAccountId: this.account,
-      dataSourceId: `gps-tracking-datasource-${environmentSuffix}`,
-      name: 'GPS Tracking Data Source',
-      type: 'S3',
-      dataSourceParameters: {
-        s3Parameters: {
-          manifestFileLocation: {
-            bucket: archiveBucket.bucketName,
-            key: 'manifest.json',
-          },
-        },
-      },
-      permissions: [
-        {
-          principal: `arn:aws:quicksight:${this.region}:${this.account}:user/default/Admin`,
-          actions: [
-            'quicksight:DescribeDataSource',
-            'quicksight:DescribeDataSourcePermissions',
-            'quicksight:PassDataSource',
-            'quicksight:UpdateDataSource',
-            'quicksight:DeleteDataSource',
-            'quicksight:UpdateDataSourcePermissions',
-          ],
-        },
-      ],
-    });
-
-    // Ensure the DataSource is created after the manifest file
-    gpsDataSource.node.addDependency(manifestDeployment);
 
     // CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'GpsTrackingDashboard', {
@@ -618,6 +524,16 @@ exports.handler = async (event) => {
     new cdk.CfnOutput(this, 'AlertTopicArn', {
       value: alertTopic.topicArn,
       description: 'SNS Topic ARN for Alerts',
+    });
+
+    new cdk.CfnOutput(this, 'AnalyticsDataPath', {
+      value: `s3://${archiveBucket.bucketName}/analytics/`,
+      description: 'S3 path for analytics data (for QuickSight setup)',
+    });
+
+    new cdk.CfnOutput(this, 'QuickSightRoleArn', {
+      value: quicksightDataSourceRole.roleArn,
+      description: 'IAM Role for QuickSight (use for manual QuickSight setup)',
     });
   }
 }
