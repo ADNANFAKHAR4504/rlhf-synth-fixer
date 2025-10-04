@@ -16,7 +16,9 @@
     "S3",
     "CloudFront",
     "CloudWatch",
-    "CertificateManager",
-    "Route53"
+    "WAF",
+    "Lambda",
+    "IAM",
+    "CertificateManager"
   ]
 }
