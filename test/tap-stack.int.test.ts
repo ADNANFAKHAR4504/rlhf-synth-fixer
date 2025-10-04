@@ -62,7 +62,7 @@ const testDataToCleanup: Array<{
 describe('GPS Tracking System Integration Tests', () => {
   // Cleanup after all tests
   afterAll(async () => {
-    console.log('🧹 Cleaning up test data...');
+    console.log('Cleaning up test data...');
 
     // Clean up DynamoDB items
     for (const item of testDataToCleanup) {
@@ -77,7 +77,7 @@ describe('GPS Tracking System Integration Tests', () => {
               },
             })
           );
-          console.log(`  ✅ Deleted DynamoDB item: ${item.key}`);
+          console.log(`  Deleted DynamoDB item: ${item.key}`);
         } else if (item.type === 's3') {
           await s3Client.send(
             new DeleteObjectCommand({
@@ -85,14 +85,14 @@ describe('GPS Tracking System Integration Tests', () => {
               Key: item.key,
             })
           );
-          console.log(`  ✅ Deleted S3 object: ${item.key}`);
+          console.log(`  Deleted S3 object: ${item.key}`);
         }
       } catch (error) {
-        console.log(`  ⚠️ Failed to cleanup ${item.type} ${item.key}:`, error);
+        console.log(`  Failed to cleanup ${item.type} ${item.key}:`, error);
       }
     }
 
-    console.log('✅ Cleanup completed');
+    console.log('Cleanup completed');
   });
   describe('Kinesis Stream Operations', () => {
     test('should describe Kinesis stream and verify it is ACTIVE', async () => {
