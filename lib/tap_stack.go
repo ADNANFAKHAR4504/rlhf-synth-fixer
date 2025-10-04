@@ -528,12 +528,11 @@ func NewApplicationNestedStack(scope constructs.Construct, id *string, environme
 
 // NewTapStack creates a new instance of TapStack.
 func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack {
-	var sprops awscdk.StackProps
 	if props != nil {
 		sprops = *props.StackProps
 	}
 
-	stack := awscdk.NewStack(scope, id, &sprops)
+	stack := awscdk.NewStack(scope, id, &props.StackProps)
 
 	// Get environment suffix from props, context, or use 'dev' as default
 	var environmentSuffix string
