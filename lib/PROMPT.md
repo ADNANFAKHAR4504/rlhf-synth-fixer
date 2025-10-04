@@ -5,50 +5,48 @@ Build an IoT data pipeline in **us-west-2** for an IoT platform ingesting **500,
 
 **Requirements:**
 
-* **Device Connectivity:**
+- **Device Connectivity:**
+  - AWS IoT Core with **device certificates** for authentication
+  - IoT Device Shadows enabled
 
-  * AWS IoT Core with **device certificates** for authentication
-  * IoT Device Shadows enabled
-* **Routing & Processing:**
+- **Routing & Processing:**
+  - IoT Rules → route messages to **Kinesis Data Streams**
+  - Kinesis Data Streams with shard scaling
+  - Lambda (Python 3.11) for stream processing with retry logic + exponential backoff
 
-  * IoT Rules → route messages to **Kinesis Data Streams**
-  * Kinesis Data Streams with shard scaling
-  * Lambda (Python 3.11) for stream processing with retry logic + exponential backoff
-* **Storage & Analytics:**
+- **Storage & Analytics:**
+  - Kinesis Data Firehose → deliver data to **S3** with batching enabled
+  - DynamoDB table for device state with **TTL for auto-expiration**
+  - Timestream for time-series sensor data
+  - Glue Crawler for schema discovery + automated updates
+  - Athena for ad-hoc queries
 
-  * Kinesis Data Firehose → deliver data to **S3** with batching enabled
-  * DynamoDB table for device state with **TTL for auto-expiration**
-  * Timestream for time-series sensor data
-  * Glue Crawler for schema discovery + automated updates
-  * Athena for ad-hoc queries
-* **Monitoring & Alerts:**
+- **Monitoring & Alerts:**
+  - CloudWatch metrics + alarms
+  - SNS for alert notifications
 
-  * CloudWatch metrics + alarms
-  * SNS for alert notifications
-* **IAM:**
-
-  * Fine-grained IAM roles for IoT, Lambda, Firehose, Glue, Athena
-  * Policies enforcing least privilege
+- **IAM:**
+  - Fine-grained IAM roles for IoT, Lambda, Firehose, Glue, Athena
+  - Policies enforcing least privilege
 
 **Implementation Guidelines:**
 
 1. Use **AWS CDK with TypeScript**; structure into constructs for IoT, ingestion, processing, storage, and monitoring.
 2. Clearly show **how each component is connected** (IoT Core → Kinesis → Lambda → Firehose → S3, etc.).
 3. Configure:
+   - Firehose batching for cost optimization
+   - Kinesis shard scaling
+   - DynamoDB TTL for auto-expiration
+   - Lambda retry with exponential backoff
 
-   * Firehose batching for cost optimization
-   * Kinesis shard scaling
-   * DynamoDB TTL for auto-expiration
-   * Lambda retry with exponential backoff
 4. Ensure security with IAM roles and device certificates.
 5. Add inline comments explaining each construct and connection.
 6. Output must include:
-
-   * **Full CDK stack code** (`tap-stack.ts`)
-   * **Initialisation code** (`bin/main.ts`)
-   * **Architecture explanation** (step-by-step data flow)
+   - **Full CDK stack code** (`tap-stack.ts`)
+   - **Initialisation code** (`bin/main.ts`)
+   - **Architecture explanation** (step-by-step data flow)
 
 **Output Format:**
 
-* Provide the **TypeScript CDK code** inside a fenced code block.
-* Then write a **clear explanation** of the architecture, highlighting resource interconnections.
+- Provide the **TypeScript CDK code** inside a fenced code block.
+- Then write a **clear explanation** of the architecture, highlighting resource interconnections.

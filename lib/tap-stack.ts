@@ -117,7 +117,7 @@ export class TapStack extends cdk.Stack {
 
     // Kinesis Data Stream with auto-scaling and encryption
     const sensorDataStream = new kinesis.Stream(this, 'SensorDataStream', {
-      streamName: `iot-sensor-data-stream-${environmentSuffix}`,
+      streamName: `iot-sensor-data-stream-${environmentSuffix}-${Date.now()}`,
       shardCount: 2, // Start with 2 shards for 500k daily messages
       retentionPeriod: cdk.Duration.hours(24),
       streamMode: kinesis.StreamMode.PROVISIONED,
@@ -284,7 +284,7 @@ def handler(event, context):
     firehoseLogGroup.grantWrite(firehoseRole);
 
     new kinesisfirehose.CfnDeliveryStream(this, 'FirehoseDeliveryStream', {
-      deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}`,
+      deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
       deliveryStreamType: 'KinesisStreamAsSource',
       kinesisStreamSourceConfiguration: {
         kinesisStreamArn: sensorDataStream.streamArn,
@@ -540,7 +540,7 @@ def handler(event, context):
       namespace: 'AWS/Kinesis/Firehose',
       metricName: 'DeliveryToS3.DataFreshness',
       dimensionsMap: {
-        DeliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}`,
+        DeliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
       },
       period: cdk.Duration.minutes(5),
       statistic: 'Maximum',
@@ -577,7 +577,8 @@ def handler(event, context):
     // 6. DynamoDB Metrics Table - Write throttling
     new cloudwatch.Alarm(this, 'DynamoDBMetricsThrottling', {
       alarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
-      alarmDescription: 'Alert when DynamoDB metrics table experiences throttling',
+      alarmDescription:
+        'Alert when DynamoDB metrics table experiences throttling',
       metric: sensorMetricsTable.metricUserErrors({
         period: cdk.Duration.minutes(5),
         statistic: 'Sum',

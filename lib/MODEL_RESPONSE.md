@@ -1,4 +1,5 @@
 ### Reasoning Trace
+
 ---
 
 This is a comprehensive request for an AWS IoT data pipeline using CDK with TypeScript. Let me break down what needs to be created:
@@ -27,13 +28,16 @@ This is a comprehensive request for an AWS IoT data pipeline using CDK with Type
    - Fine-grained roles with least privilege
 
 I need to structure this properly with:
+
 - Separate constructs for different components
 - Clear connections between resources
 - Proper IAM roles and policies
 - Configuration for optimization (batching, scaling, TTL, etc.)
 
 Let me create the CDK stack code first, then the initialization code, followed by an architecture explanation.
-### Answer 
+
+### Answer
+
 ---
 
 ## AWS CDK IoT Data Pipeline Implementation
@@ -64,7 +68,7 @@ export class IotPipelineStack extends cdk.Stack {
     super(scope, id, props);
 
     // ==================== STORAGE LAYER ====================
-    
+
     // S3 bucket for long-term storage with lifecycle policies
     const iotDataBucket = new s3.Bucket(this, 'IotDataBucket', {
       bucketName: `iot-sensor-data-${this.account}-${this.region}`,
@@ -108,22 +112,30 @@ export class IotPipelineStack extends cdk.Stack {
     });
 
     // Timestream database and table for time-series data
-    const timestreamDatabase = new timestream.CfnDatabase(this, 'IoTTimestreamDB', {
-      databaseName: 'iot-sensor-metrics',
-    });
+    const timestreamDatabase = new timestream.CfnDatabase(
+      this,
+      'IoTTimestreamDB',
+      {
+        databaseName: 'iot-sensor-metrics',
+      }
+    );
 
-    const timestreamTable = new timestream.CfnTable(this, 'IoTTimestreamTable', {
-      databaseName: timestreamDatabase.databaseName!,
-      tableName: 'sensor-readings',
-      retentionProperties: {
-        memoryStoreRetentionPeriodInHours: 24, // 1 day in memory
-        magneticStoreRetentionPeriodInDays: 365, // 1 year in magnetic store
-      },
-    });
+    const timestreamTable = new timestream.CfnTable(
+      this,
+      'IoTTimestreamTable',
+      {
+        databaseName: timestreamDatabase.databaseName!,
+        tableName: 'sensor-readings',
+        retentionProperties: {
+          memoryStoreRetentionPeriodInHours: 24, // 1 day in memory
+          magneticStoreRetentionPeriodInDays: 365, // 1 year in magnetic store
+        },
+      }
+    );
     timestreamTable.addDependency(timestreamDatabase);
 
     // ==================== STREAMING LAYER ====================
-    
+
     // Kinesis Data Stream with auto-scaling
     const sensorDataStream = new kinesis.Stream(this, 'SensorDataStream', {
       streamName: 'iot-sensor-data-stream',
@@ -133,7 +145,7 @@ export class IotPipelineStack extends cdk.Stack {
     });
 
     // ==================== PROCESSING LAYER ====================
-    
+
     // Lambda function for stream processing with retry logic
     const streamProcessor = new lambda.Function(this, 'StreamProcessor', {
       functionName: 'iot-stream-processor',
@@ -263,32 +275,33 @@ def handler(event, context):
 
     // Grant permissions to Lambda
     deviceStateTable.grantReadWriteData(streamProcessor);
-    
+
     // Grant Timestream permissions
-    streamProcessor.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'timestream:WriteRecords',
-        'timestream:DescribeEndpoints',
-      ],
-      resources: [
-        `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}/table/${timestreamTable.tableName}`,
-        `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}`,
-      ],
-    }));
+    streamProcessor.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['timestream:WriteRecords', 'timestream:DescribeEndpoints'],
+        resources: [
+          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}/table/${timestreamTable.tableName}`,
+          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}`,
+        ],
+      })
+    );
 
     // Add Kinesis event source to Lambda with parallel processing
-    streamProcessor.addEventSource(new lambdaEventSources.KinesisEventSource(sensorDataStream, {
-      startingPosition: lambda.StartingPosition.LATEST,
-      batchSize: 100,
-      maxBatchingWindowInSeconds: 5,
-      parallelizationFactor: 2, // Process 2 batches in parallel per shard
-      retryAttempts: 3,
-      reportBatchItemFailures: true, // Enable partial batch response
-    }));
+    streamProcessor.addEventSource(
+      new lambdaEventSources.KinesisEventSource(sensorDataStream, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 100,
+        maxBatchingWindowInSeconds: 5,
+        parallelizationFactor: 2, // Process 2 batches in parallel per shard
+        retryAttempts: 3,
+        reportBatchItemFailures: true, // Enable partial batch response
+      })
+    );
 
     // ==================== DATA DELIVERY LAYER ====================
-    
+
     // Kinesis Data Firehose for S3 delivery
     const firehoseRole = new iam.Role(this, 'FirehoseRole', {
       assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
@@ -311,51 +324,56 @@ def handler(event, context):
 
     firehoseLogGroup.grantWrite(firehoseRole);
 
-    const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(this, 'FirehoseDeliveryStream', {
-      deliveryStreamName: 'iot-sensor-data-to-s3',
-      deliveryStreamType: 'KinesisStreamAsSource',
-      kinesisStreamSourceConfiguration: {
-        kinesisStreamArn: sensorDataStream.streamArn,
-        roleArn: firehoseRole.roleArn,
-      },
-      extendedS3DestinationConfiguration: {
-        bucketArn: iotDataBucket.bucketArn,
-        roleArn: firehoseRole.roleArn,
-        prefix: 'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-        errorOutputPrefix: 'error-data/',
-        bufferingHints: {
-          intervalInSeconds: 300, // Batch for 5 minutes
-          sizeInMBs: 128, // Or 128MB, whichever comes first
+    const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(
+      this,
+      'FirehoseDeliveryStream',
+      {
+        deliveryStreamName: 'iot-sensor-data-to-s3',
+        deliveryStreamType: 'KinesisStreamAsSource',
+        kinesisStreamSourceConfiguration: {
+          kinesisStreamArn: sensorDataStream.streamArn,
+          roleArn: firehoseRole.roleArn,
         },
-        compressionFormat: 'GZIP', // Compress for cost optimization
-        cloudWatchLoggingOptions: {
-          enabled: true,
-          logGroupName: firehoseLogGroup.logGroupName,
-          logStreamName: firehoseLogStream.logStreamName,
-        },
-        dataFormatConversionConfiguration: {
-          enabled: true,
-          outputFormatConfiguration: {
-            serializer: {
-              parquetSerDe: {}, // Convert to Parquet for efficient querying
+        extendedS3DestinationConfiguration: {
+          bucketArn: iotDataBucket.bucketArn,
+          roleArn: firehoseRole.roleArn,
+          prefix:
+            'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+          errorOutputPrefix: 'error-data/',
+          bufferingHints: {
+            intervalInSeconds: 300, // Batch for 5 minutes
+            sizeInMBs: 128, // Or 128MB, whichever comes first
+          },
+          compressionFormat: 'GZIP', // Compress for cost optimization
+          cloudWatchLoggingOptions: {
+            enabled: true,
+            logGroupName: firehoseLogGroup.logGroupName,
+            logStreamName: firehoseLogStream.logStreamName,
+          },
+          dataFormatConversionConfiguration: {
+            enabled: true,
+            outputFormatConfiguration: {
+              serializer: {
+                parquetSerDe: {}, // Convert to Parquet for efficient querying
+              },
+            },
+            inputFormatConfiguration: {
+              deserializer: {
+                openXJsonSerDe: {},
+              },
+            },
+            schemaConfiguration: {
+              databaseName: 'iot_sensor_db',
+              tableName: 'sensor_data',
+              roleArn: firehoseRole.roleArn,
             },
           },
-          inputFormatConfiguration: {
-            deserializer: {
-              openXJsonSerDe: {},
-            },
-          },
-          schemaConfiguration: {
-            databaseName: 'iot_sensor_db',
-            tableName: 'sensor_data',
-            roleArn: firehoseRole.roleArn,
-          },
         },
-      },
-    });
+      }
+    );
 
     // ==================== IOT CORE LAYER ====================
-    
+
     // IAM Role for IoT Core Rules
     const iotRuleRole = new iam.Role(this, 'IoTRuleRole', {
       assumedBy: new iam.ServicePrincipal('iot.amazonaws.com'),
@@ -389,11 +407,19 @@ def handler(event, context):
     });
 
     // Grant CloudWatch Logs permissions to IoT Rule Role
-    iotRuleRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
-      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/iot/rules/errors:*`],
-    }));
+    iotRuleRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/iot/rules/errors:*`,
+        ],
+      })
+    );
 
     // IoT Policy for device authentication
     const iotPolicy = new iot.CfnPolicy(this, 'IoTDevicePolicy', {
@@ -417,10 +443,7 @@ def handler(event, context):
           },
           {
             Effect: 'Allow',
-            Action: [
-              'iot:GetThingShadow',
-              'iot:UpdateThingShadow',
-            ],
+            Action: ['iot:GetThingShadow', 'iot:UpdateThingShadow'],
             Resource: `arn:aws:iot:${this.region}:${this.account}:thing/\${iot:Connection.Thing.ThingName}`,
           },
         ],
@@ -428,7 +451,7 @@ def handler(event, context):
     });
 
     // ==================== ANALYTICS LAYER ====================
-    
+
     // Glue Database
     const glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
       catalogId: this.account,
@@ -442,7 +465,9 @@ def handler(event, context):
     const glueRole = new iam.Role(this, 'GlueRole', {
       assumedBy: new iam.ServicePrincipal('glue.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSGlueServiceRole'
+        ),
       ],
     });
 
@@ -476,7 +501,7 @@ def handler(event, context):
     });
 
     // ==================== MONITORING LAYER ====================
-    
+
     // SNS Topic for alerts
     const alertTopic = new sns.Topic(this, 'IoTAlertTopic', {
       topicName: 'iot-pipeline-alerts',
@@ -542,7 +567,8 @@ def handler(event, context):
 
     new cloudwatch.Alarm(this, 'FirehoseDataFreshness', {
       alarmName: 'iot-firehose-data-staleness',
-      alarmDescription: 'Alert when Firehose data delivery is delayed > 10 minutes',
+      alarmDescription:
+        'Alert when Firehose data delivery is delayed > 10 minutes',
       metric: firehoseMetric,
       threshold: 600, // 10 minutes in seconds
       evaluationPeriods: 2,
@@ -569,11 +595,11 @@ def handler(event, context):
         title: 'DynamoDB Performance',
         left: [deviceStateTable.metricConsumedReadCapacityUnits()],
         right: [deviceStateTable.metricConsumedWriteCapacityUnits()],
-      }),
+      })
     );
 
     // ==================== OUTPUTS ====================
-    
+
     new cdk.CfnOutput(this, 'IoTEndpoint', {
       value: `${this.account}.iot.${this.region}.amazonaws.com`,
       description: 'AWS IoT Core Endpoint',
@@ -625,7 +651,8 @@ const app = new cdk.App();
 // Deploy to us-west-2 as specified
 const iotPipelineStack = new IotPipelineStack(app, 'IotPipelineStack', {
   stackName: 'iot-sensor-data-pipeline',
-  description: 'Production IoT data pipeline for processing 500k daily sensor readings',
+  description:
+    'Production IoT data pipeline for processing 500k daily sensor readings',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-west-2', // Specified region
