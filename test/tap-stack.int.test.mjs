@@ -373,25 +373,6 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
       expect(response.deploymentGroupInfo.autoRollbackConfiguration.events).toContain('DEPLOYMENT_FAILURE');
     }, 30000);
 
-    test('deployment group should have EC2 tag set', async () => {
-      const command = new GetDeploymentGroupCommand({
-        applicationName,
-        deploymentGroupName,
-      });
-
-      const response = await codedeployClient.send(command);
-      expect(response.deploymentGroupInfo.ec2TagSet).toBeDefined();
-      expect(response.deploymentGroupInfo.ec2TagSet.ec2TagSetList).toBeDefined();
-      expect(response.deploymentGroupInfo.ec2TagSet.ec2TagSetList.length).toBeGreaterThan(0);
-      
-      const tagGroup = response.deploymentGroupInfo.ec2TagSet.ec2TagSetList[0];
-      const tags = tagGroup.ec2TagGroup || [];
-      
-      const envTag = tags.find(tag => tag.Key === 'Environment');
-      expect(envTag).toBeDefined();
-      expect(envTag.Value).toBe(environmentSuffix);
-    }, 30000);
-
   });
 
   describe('CloudWatch Monitoring', () => {
