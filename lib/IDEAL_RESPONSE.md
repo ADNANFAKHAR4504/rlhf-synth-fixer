@@ -1,9 +1,12 @@
 # Metrics Aggregation System Infrastructure - Production Ready
 
-Here's the complete, production-ready infrastructure code for your metrics aggregation system using Pulumi Python for deployment in us-east-2.
+Complete, production-ready infrastructure code for your metrics aggregation system using Pulumi Python for deployment in us-east-2.
+
+## Overview
+
+This solution provides a comprehensive metrics aggregation system with REST API ingestion, Lambda processing, DynamoDB storage, SNS alerting, S3 archival, and CloudWatch monitoring.
 
 ## File: tap_stack.py
-
 ```python
 """
 tap_stack.py
@@ -245,7 +248,6 @@ class TapStack(pulumi.ComponentResource):
             }),
             timeout=30,
             memory_size=512,
-            # reserved_concurrent_executions removed - account lacks unreserved concurrency
             tracing_config={"mode": "Active"},
             environment={
                 "variables": {
@@ -294,7 +296,7 @@ class TapStack(pulumi.ComponentResource):
             resource_id=self.metrics_resource.id,
             http_method="POST",
             authorization="NONE",
-            api_key_required=True,  # Require API key for authentication
+            api_key_required=True,
             opts=ResourceOptions(parent=self)
         )
 
@@ -637,7 +639,6 @@ def export_metrics_to_s3():
             'body': json.dumps({'error': str(e)})
         }
 '''
-```
 
 ## Key Features
 
