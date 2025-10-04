@@ -6,40 +6,95 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.ecs.*;
-import software.amazon.awscdk.services.ecs.patterns.*;
-import software.amazon.awscdk.services.rds.*;
-import software.amazon.awscdk.services.dynamodb.*;
+import software.amazon.awscdk.services.ec2.IpAddresses;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ecs.FargateTaskDefinition;
+import software.amazon.awscdk.services.ecs.ContainerDefinition;
+import software.amazon.awscdk.services.ecs.ContainerDefinitionOptions;
+import software.amazon.awscdk.services.ecs.ContainerImage;
+import software.amazon.awscdk.services.ecs.LogDriver;
+import software.amazon.awscdk.services.ecs.AwsLogDriverProps;
+import software.amazon.awscdk.services.ecs.PortMapping;
+import software.amazon.awscdk.services.ecs.ScalableTaskCount;
+import software.amazon.awscdk.services.ecs.CpuUtilizationScalingProps;
+import software.amazon.awscdk.services.ecs.MemoryUtilizationScalingProps;
+import software.amazon.awscdk.services.ecs.patterns.ApplicationLoadBalancedFargateService;
+import software.amazon.awscdk.services.rds.DatabaseCluster;
+import software.amazon.awscdk.services.rds.DatabaseClusterEngine;
+import software.amazon.awscdk.services.rds.AuroraPostgresClusterEngineProps;
+import software.amazon.awscdk.services.rds.AuroraPostgresEngineVersion;
+import software.amazon.awscdk.services.rds.Credentials;
+import software.amazon.awscdk.services.rds.ClusterInstance;
+import software.amazon.awscdk.services.rds.ServerlessV2ClusterInstanceProps;
+import software.amazon.awscdk.services.rds.DatabaseSecret;
+import software.amazon.awscdk.services.dynamodb.Table;
+import software.amazon.awscdk.services.dynamodb.Attribute;
+import software.amazon.awscdk.services.dynamodb.AttributeType;
+import software.amazon.awscdk.services.dynamodb.BillingMode;
+import software.amazon.awscdk.services.dynamodb.StreamViewType;
+import software.amazon.awscdk.services.dynamodb.GlobalSecondaryIndexProps;
+import software.amazon.awscdk.services.dynamodb.ProjectionType;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.LayerVersion;
-import software.amazon.awscdk.services.lambda.eventsources.*;
+import software.amazon.awscdk.services.lambda.eventsources.DynamoEventSource;
 import software.amazon.awscdk.services.lambda.StartingPosition;
-import software.amazon.awscdk.services.apigateway.*;
-import software.amazon.awscdk.services.s3.*;
-import software.amazon.awscdk.services.cognito.*;
-import software.amazon.awscdk.services.ses.*;
-import software.amazon.awscdk.services.logs.*;
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.apigateway.RestApi;
+import software.amazon.awscdk.services.apigateway.StageOptions;
+import software.amazon.awscdk.services.apigateway.MethodLoggingLevel;
+import software.amazon.awscdk.services.apigateway.CorsOptions;
+import software.amazon.awscdk.services.apigateway.ApiKeySourceType;
+import software.amazon.awscdk.services.apigateway.Resource;
+import software.amazon.awscdk.services.apigateway.LambdaIntegration;
+import software.amazon.awscdk.services.apigateway.MethodOptions;
+import software.amazon.awscdk.services.apigateway.ApiKey;
+import software.amazon.awscdk.services.apigateway.UsagePlan;
+import software.amazon.awscdk.services.apigateway.ThrottleSettings;
+import software.amazon.awscdk.services.apigateway.UsagePlanPerApiStage;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.cognito.UserPool;
+import software.amazon.awscdk.services.cognito.SignInAliases;
+import software.amazon.awscdk.services.cognito.AutoVerifiedAttrs;
+import software.amazon.awscdk.services.cognito.PasswordPolicy;
+import software.amazon.awscdk.services.cognito.Mfa;
+import software.amazon.awscdk.services.cognito.MfaSecondFactor;
+import software.amazon.awscdk.services.cognito.AccountRecovery;
+import software.amazon.awscdk.services.cognito.UserPoolClient;
+import software.amazon.awscdk.services.cognito.AuthFlow;
+import software.amazon.awscdk.services.ses.CfnConfigurationSet;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.constructs.Construct;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -54,17 +109,17 @@ class TapStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    static class Builder {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
