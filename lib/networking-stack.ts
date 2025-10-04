@@ -1,16 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
+import { NestedStack, NestedStackProps } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
-interface NetworkingStackProps {
+interface NetworkingStackProps extends NestedStackProps {
   environmentSuffix: string;
 }
 
-export class NetworkingStack extends cdk.NestedStack {
+export class NetworkingStack extends NestedStack {
   public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, props: NetworkingStackProps) {
-    super(scope, id);
+  constructor(scope: Construct, id: string, _props?: NetworkingStackProps) {
+    super(scope, id, _props);
 
     // Create VPC with simplified configuration to avoid EIP limits
     this.vpc = new ec2.Vpc(this, 'TrainingVPC', {
