@@ -1,4 +1,4 @@
-**"Implement a SaaS staging environment (5k test transactions daily, data masking) mirroring production using AWS (us-west-1, YAML, staging). Requirements:**
+**"Implement a SaaS staging environment (5k test transactions daily, data masking) mirroring production using AWS (us-west-2, YAML, staging). Requirements:**
 
 - **Network:** VPC (10.25.0.0/16), Private Subnets (10.25.10.0/24, 10.25.20.0/24).
 - **Database/Security:** RDS Aurora MySQL (clone from prod snapshot), Lambda (Python 3.10) for **data masking before restore**, Secrets Manager.

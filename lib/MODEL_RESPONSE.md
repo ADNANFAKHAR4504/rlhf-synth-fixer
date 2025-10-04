@@ -9,7 +9,7 @@ I need to create a YAML configuration file (CloudFormation template) for a SaaS 
    - 5k test transactions daily
    - Data masking required
    - Mirror of production
-   - AWS region: us-west-1
+   - AWS region: us-west-2
    - Format: YAML
    - Stack name: TapStack.yml
 
@@ -36,7 +36,7 @@ Let me create the CloudFormation template (TapStack.yml) with these specificatio
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SaaS staging environment mirroring production (us-west-1)'
+Description: 'SaaS staging environment mirroring production (us-west-2)'
 
 Parameters:
   ProductionDBSnapshotIdentifier:
@@ -69,7 +69,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [0, !GetAZs us-west-1]
+      AvailabilityZone: !Select [0, !GetAZs us-west-2]
       CidrBlock: 10.25.10.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -80,7 +80,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [1, !GetAZs us-west-1]
+      AvailabilityZone: !Select [1, !GetAZs us-west-2]
       CidrBlock: 10.25.20.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -112,7 +112,7 @@ Resources:
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
-      ServiceName: !Sub com.amazonaws.us-west-1.s3
+      ServiceName: !Sub com.amazonaws.us-west-2.s3
       VpcId: !Ref StagingVPC
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -461,8 +461,8 @@ Resources:
                   - rds:ModifyDBInstance
                   - rds:RebootDBInstance
                 Resource:
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:cluster:${EnvironmentName}-aurora-cluster
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:db:${EnvironmentName}-aurora-instance1
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:cluster:${EnvironmentName}-aurora-cluster
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:db:${EnvironmentName}-aurora-instance1
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
@@ -558,7 +558,7 @@ Below is a complete YAML CloudFormation template (TapStack.yml) that implements 
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SaaS staging environment mirroring production in us-west-1 region'
+Description: 'SaaS staging environment mirroring production in us-west-2 region'
 
 Parameters:
   ProductionDBSnapshotIdentifier:
@@ -600,7 +600,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [0, !GetAZs us-west-1]
+      AvailabilityZone: !Select [0, !GetAZs us-west-2]
       CidrBlock: 10.25.10.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -613,7 +613,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [1, !GetAZs us-west-1]
+      AvailabilityZone: !Select [1, !GetAZs us-west-2]
       CidrBlock: 10.25.20.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -647,7 +647,7 @@ Resources:
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
-      ServiceName: !Sub com.amazonaws.us-west-1.s3
+      ServiceName: !Sub com.amazonaws.us-west-2.s3
       VpcId: !Ref StagingVPC
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -1047,8 +1047,8 @@ Resources:
                   - rds:ModifyDBInstance
                   - rds:RebootDBInstance
                 Resource:
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:cluster:staging-aurora-cluster
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:db:staging-aurora-instance1
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:cluster:staging-aurora-cluster
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:db:staging-aurora-instance1
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction

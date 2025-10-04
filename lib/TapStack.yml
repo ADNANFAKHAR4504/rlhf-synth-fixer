@@ -42,7 +42,7 @@ Parameters:
   ProductionDBSnapshotIdentifier:
     Type: String
     Description: The ARN of the production database snapshot to clone
-    Default: 'arn:aws:rds:us-west-1:123456789012:cluster-snapshot:production-snapshot'
+    Default: 'arn:aws:rds:us-west-2:123456789012:cluster-snapshot:production-snapshot'
 
   VPNCidr:
     Type: String

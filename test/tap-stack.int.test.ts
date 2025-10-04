@@ -90,7 +90,7 @@ if (outputs.TestDataBucketName) {
 }
 
 // Initialize AWS clients
-const region = 'us-west-1'; // SaaS staging environment region
+const region = 'us-west-2'; // SaaS staging environment region
 const dynamoClient = new DynamoDBClient({ region });
 const rdsClient = new RDSClient({ region });
 const elastiCacheClient = new ElastiCacheClient({ region });

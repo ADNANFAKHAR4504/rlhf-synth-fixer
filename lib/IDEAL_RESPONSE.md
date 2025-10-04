@@ -1,10 +1,10 @@
 # AWS CloudFormation Template for SaaS Staging Environment
 
-Complete YAML CloudFormation template (TapStack.yml) that implements the SaaS staging environment with data masking capabilities in us-west-1 region:
+Complete YAML CloudFormation template (TapStack.yml) that implements the SaaS staging environment with data masking capabilities in us-west-2 region:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'SaaS staging environment mirroring production in us-west-1 region'
+Description: 'SaaS staging environment mirroring production in us-west-2 region'
 
 Parameters:
   ProductionDBSnapshotIdentifier:
@@ -46,7 +46,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [0, !GetAZs us-west-1]
+      AvailabilityZone: !Select [0, !GetAZs us-west-2]
       CidrBlock: 10.25.10.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -59,7 +59,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref StagingVPC
-      AvailabilityZone: !Select [1, !GetAZs us-west-1]
+      AvailabilityZone: !Select [1, !GetAZs us-west-2]
       CidrBlock: 10.25.20.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -93,7 +93,7 @@ Resources:
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
-      ServiceName: !Sub com.amazonaws.us-west-1.s3
+      ServiceName: !Sub com.amazonaws.us-west-2.s3
       VpcId: !Ref StagingVPC
       RouteTableIds:
         - !Ref PrivateRouteTable
@@ -486,8 +486,8 @@ Resources:
                   - rds:ModifyDBInstance
                   - rds:RebootDBInstance
                 Resource:
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:cluster:staging-aurora-cluster
-                  - !Sub arn:aws:rds:us-west-1:${AWS::AccountId}:db:staging-aurora-instance1
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:cluster:staging-aurora-cluster
+                  - !Sub arn:aws:rds:us-west-2:${AWS::AccountId}:db:staging-aurora-instance1
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
