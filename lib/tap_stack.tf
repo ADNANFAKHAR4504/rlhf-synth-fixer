@@ -755,37 +755,6 @@ resource "aws_iam_role_policy_attachment" "admin_policy" {
 # ==============================================================================
 # CLOUDTRAIL
 # ==============================================================================
-
-# S3 bucket for CloudTrail logs
-resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-${data.aws_caller_identity.current.account_id}"
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-cloudtrail"
-  })
-}
-
-# S3 bucket versioning for CloudTrail
-resource "aws_s3_bucket_versioning" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-  
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# S3 bucket encryption for CloudTrail
-resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# CloudTrail
 resource "aws_cloudtrail" "main" {
   name                          = "${local.name_prefix}-trail"
   s3_bucket_name               = aws_s3_bucket.cloudtrail.id
