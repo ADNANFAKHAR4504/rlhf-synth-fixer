@@ -15,19 +15,18 @@ import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.LayerVersion;
 import software.amazon.awscdk.services.lambda.eventsources.*;
+import software.amazon.awscdk.services.lambda.StartingPosition;
 import software.amazon.awscdk.services.apigateway.*;
 import software.amazon.awscdk.services.s3.*;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.ses.*;
 import software.amazon.awscdk.services.logs.*;
 import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.secretsmanager.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
