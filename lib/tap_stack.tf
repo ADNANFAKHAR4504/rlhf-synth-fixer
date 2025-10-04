@@ -45,17 +45,20 @@ locals {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-  
+
   # Naming convention
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # Network configuration
   vpc_cidr = "10.0.0.0/16"
   azs      = ["${var.region}a", "${var.region}b"]
-  
+
   # Subnet CIDRs
   public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnets = ["10.0.10.0/24", "10.0.20.0/24"]
+
+  # RDS username
+  rds_username = "a${random_string.rds_username.result}"
 }
 
 # ==============================================================================
@@ -257,7 +260,7 @@ resource "aws_iam_role" "flow_logs" {
 # IAM policy for VPC Flow Logs
 resource "aws_iam_role_policy" "flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-policy"
-  role = aws_iam_role.flow_logs.id
+  role = aws_iam_role.flow_logs.name
   
   policy = jsonencode({
     Version = "2012-10-17"
@@ -408,10 +411,6 @@ resource "random_string" "rds_username" {
   lower   = true
 }
 
-locals {
-  rds_username = "a${random_string.rds_username.result}"
-}
-
 # Random password for RDS (16 chars with allowed special chars)
 resource "random_password" "rds_password" {
   length  = 16
@@ -437,7 +436,7 @@ resource "aws_db_instance" "main" {
   # Engine configuration
   engine               = "mysql"
   engine_version       = "8.0.43"
-  instance_class       = "db.t3.micro"
+  instance_class       = "db.t3.small"
   allocated_storage    = 20
   storage_type         = "gp2"
   storage_encrypted    = true
@@ -505,7 +504,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 
 # S3 bucket for application data
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${local.name_prefix}-app-data-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-app-data-${data.aws_caller_identity.current.account_id}-${var.region}"
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-data"
@@ -595,7 +594,7 @@ resource "aws_iam_role" "ec2_instance" {
 # IAM policy for EC2 instances
 resource "aws_iam_role_policy" "ec2_instance" {
   name = "${local.name_prefix}-ec2-instance-policy"
-  role = aws_iam_role.ec2_instance.id
+  role = aws_iam_role.ec2_instance.name
   
   policy = jsonencode({
     Version = "2012-10-17"
@@ -805,12 +804,12 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   alarm_name          = "${local.name_prefix}-unauthorized-api-calls"
   alarm_description   = "This metric monitors unauthorized API calls"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "1"
+  evaluation_periods  = 1
   metric_name         = "UnauthorizedAPICalls"
   namespace           = "${local.name_prefix}/Security"
-  period              = "300"
+  period              = 300
   statistic           = "Sum"
-  threshold           = "5"
+  threshold           = 5
   treat_missing_data  = "notBreaching"
   
   tags = local.common_tags
