@@ -268,8 +268,9 @@ describe('SageMaker Training Infrastructure Integration Tests', () => {
       expect(outputs.JobDefinitionArn).toBeDefined();
       expect(outputs.JobDefinitionArn).toMatch(/^arn:aws:batch:[a-z0-9\-]+:\d+:job-definition\/.+/);
 
-      const arnParts = outputs.JobDefinitionArn.split(':');
-      const jobDefName = arnParts[arnParts.length - 1];
+      // Extract job definition name (format: arn:aws:batch:region:account:job-definition/name:version)
+      const jobDefPart = outputs.JobDefinitionArn.split('job-definition/')[1];
+      const jobDefName = jobDefPart.split(':')[0]; // Get name before version
       expect(jobDefName).toContain('training-job');
     });
 
