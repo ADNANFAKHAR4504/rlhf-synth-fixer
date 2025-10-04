@@ -928,6 +928,16 @@ def send_response(event, context, status, data, physical_id=None):
                             iam.PolicyStatement(
                                 effect=iam.Effect.ALLOW,
                                 actions=[
+                                    "iam:PutRolePolicy",
+                                    "iam:CreateServiceLinkedRole",
+                                    "iam:GetRole",
+                                    "iam:PassRole"
+                                ],
+                                resources=["*"]
+                            ),
+                            iam.PolicyStatement(
+                                effect=iam.Effect.ALLOW,
+                                actions=[
                                     "s3:GetObject",
                                     "s3:PutObject",
                                     "s3:HeadObject"
