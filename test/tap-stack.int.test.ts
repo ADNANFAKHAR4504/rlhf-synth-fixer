@@ -179,12 +179,19 @@ describe('Enhanced SaaS Staging Environment Integration Tests', () => {
 
     test('should validate Aurora instance with enhanced monitoring', async () => {
       try {
-        // Get instance identifier from cluster
+        // Check cluster-level Performance Insights first
         const clusterCommand = new DescribeDBClustersCommand({
           DBClusterIdentifier: outputs.AuroraClusterId
         });
         const clusterResult = await rdsClient.send(clusterCommand);
-        const instanceId = clusterResult.DBClusters?.[0]?.DBClusterMembers?.[0]?.DBInstanceIdentifier;
+        const cluster = clusterResult.DBClusters?.[0];
+        
+        // Performance Insights is configured at cluster level for Aurora
+        expect(cluster?.PerformanceInsightsEnabled).toBe(true);
+        expect(cluster?.PerformanceInsightsRetentionPeriod).toBe(7);
+        
+        // Get instance identifier and validate instance-specific properties
+        const instanceId = cluster?.DBClusterMembers?.[0]?.DBInstanceIdentifier;
         
         const instanceCommand = new DescribeDBInstancesCommand({
           DBInstanceIdentifier: instanceId
@@ -194,7 +201,6 @@ describe('Enhanced SaaS Staging Environment Integration Tests', () => {
         const instance = instanceResult.DBInstances?.[0];
         expect(instance?.DBInstanceStatus).toBe('available');
         expect(instance?.MonitoringInterval).toBe(60);
-        expect(instance?.PerformanceInsightsEnabled).toBe(true);
         expect(instance?.PubliclyAccessible).toBe(false);
       } catch (error) {
         if (isAwsAuthError(error)) {

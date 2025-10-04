@@ -622,6 +622,8 @@
                     "general",
                     "slowquery"
                 ],
+                "PerformanceInsightsEnabled": true,
+                "PerformanceInsightsRetentionPeriod": 7,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -661,8 +663,6 @@
                         "Arn"
                     ]
                 },
-                "PerformanceInsightsEnabled": true,
-                "PerformanceInsightsRetentionPeriod": 7,
                 "Tags": [
                     {
                         "Key": "Name",
