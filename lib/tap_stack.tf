@@ -198,44 +198,6 @@ resource "aws_route_table_association" "private" {
 # VPC FLOW LOGS
 # ==============================================================================
 
-# S3 bucket for VPC Flow Logs
-resource "aws_s3_bucket" "flow_logs" {
-  bucket = "${local.name_prefix}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}"
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs"
-  })
-}
-
-# S3 bucket versioning
-resource "aws_s3_bucket_versioning" "flow_logs" {
-  bucket = aws_s3_bucket.flow_logs.id
-  
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# S3 bucket server-side encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "flow_logs" {
-  bucket = aws_s3_bucket.flow_logs.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-# S3 bucket public access block
-resource "aws_s3_bucket_public_access_block" "flow_logs" {
-  bucket = aws_s3_bucket.flow_logs.id
-  
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
 
 # IAM role for VPC Flow Logs
 resource "aws_iam_role" "flow_logs" {
@@ -503,25 +465,30 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 # ==============================================================================
 
 # S3 bucket for application data
+# ==============================================================================
+# S3 BUCKETS
+# ==============================================================================
+
+# Application data S3 bucket
 resource "aws_s3_bucket" "app_data" {
   bucket = "${local.name_prefix}-app-data-${data.aws_caller_identity.current.account_id}-${var.region}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-data"
   })
 }
 
-# S3 bucket versioning
 resource "aws_s3_bucket_versioning" "app_data" {
   bucket = aws_s3_bucket.app_data.id
+
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-# S3 bucket encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -529,19 +496,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   }
 }
 
-# S3 bucket public access block
 resource "aws_s3_bucket_public_access_block" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# S3 bucket policy to restrict access to specific IP ranges
 resource "aws_s3_bucket_policy" "app_data" {
   bucket = aws_s3_bucket.app_data.id
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -559,10 +525,131 @@ resource "aws_s3_bucket_policy" "app_data" {
             "aws:SecureTransport" = "false"
           }
         }
+      },
+      {
+        Sid       = "RestrictByIP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          "${aws_s3_bucket.app_data.arn}",
+          "${aws_s3_bucket.app_data.arn}/*"
+        ]
+        Condition = {
+          NotIpAddress = {
+            "aws:SourceIp" = var.allowed_ip_ranges
+          }
+        }
       }
     ]
   })
 }
+
+# CloudTrail S3 bucket
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket = "${local.name_prefix}-cloudtrail-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# VPC Flow Logs S3 bucket
+resource "aws_s3_bucket" "flow_logs" {
+  bucket = "${local.name_prefix}-vpc-flow-logs-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-logs"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "flow_logs" {
+  bucket = aws_s3_bucket.flow_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "flow_logs" {
+  bucket = aws_s3_bucket.flow_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "flow_logs" {
+  bucket = aws_s3_bucket.flow_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # ==============================================================================
 # IAM RESOURCES
 # ==============================================================================
@@ -696,48 +783,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
       sse_algorithm = "AES256"
     }
   }
-}
-
-# S3 bucket public access block for CloudTrail
-resource "aws_s3_bucket_public_access_block" "app_data" {
-  bucket                  = aws_s3_bucket.app_data.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-# S3 bucket policy for CloudTrail
-resource "aws_s3_bucket_policy" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSCloudTrailAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.cloudtrail.arn
-      },
-      {
-        Sid    = "AWSCloudTrailWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      }
-    ]
-  })
 }
 
 # CloudTrail
