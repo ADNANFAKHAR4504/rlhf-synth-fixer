@@ -661,6 +661,8 @@
                         "Arn"
                     ]
                 },
+                "PerformanceInsightsEnabled": true,
+                "PerformanceInsightsRetentionPeriod": 7,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1051,6 +1053,7 @@
                 "FunctionName": {
                     "Fn::Sub": "staging-data-masking-${EnvironmentSuffix}"
                 },
+                "Description": "Enhanced data masking function with comprehensive error handling and monitoring",
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [

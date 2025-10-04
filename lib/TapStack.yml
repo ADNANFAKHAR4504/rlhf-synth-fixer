@@ -380,6 +380,8 @@ Resources:
       PubliclyAccessible: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      PerformanceInsightsEnabled: true
+      PerformanceInsightsRetentionPeriod: 7
       Tags:
         - Key: Name
           Value: !Sub 'staging-aurora-instance1-${EnvironmentSuffix}'
@@ -600,6 +602,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'staging-data-masking-${EnvironmentSuffix}'
+      Description: 'Enhanced data masking function with comprehensive error handling and monitoring'
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
