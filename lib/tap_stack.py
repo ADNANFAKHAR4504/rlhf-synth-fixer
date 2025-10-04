@@ -718,6 +718,7 @@ class TapStack(Stack):
 import boto3
 import json
 import urllib3
+from botocore.exceptions import ClientError
 
 def handler(event, context):
     try:
@@ -802,26 +803,38 @@ def handler(event, context):
         # Create threat intel file if it doesn't exist
         try:
             s3_client.head_object(Bucket=bucket_name, Key='threat-intel/bad-ips.txt')
-        except s3_client.exceptions.NoSuchKey:
-            # Create a basic threat intel file
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key='threat-intel/bad-ips.txt',
-                Body='# Threat Intelligence IP List\\n# Add malicious IPs here (one per line)\\n# Example: 1.2.3.4\\n',
-                ContentType='text/plain'
-            )
+            print("Threat intel file already exists")
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                print("Creating threat intel file - does not exist")
+                # Create a basic threat intel file
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key='threat-intel/bad-ips.txt',
+                    Body='# Threat Intelligence IP List\\n# Add malicious IPs here (one per line)\\n# Example: 1.2.3.4\\n',
+                    ContentType='text/plain'
+                )
+            else:
+                print(f"Error checking threat intel file: {{e}}")
+                raise e
         
         # Create trusted IPs file if it doesn't exist
         try:
             s3_client.head_object(Bucket=bucket_name, Key='trusted-ips/whitelist.txt')
-        except s3_client.exceptions.NoSuchKey:
-            # Create a basic trusted IPs file
-            s3_client.put_object(
-                Bucket=bucket_name,
-                Key='trusted-ips/whitelist.txt',
-                Body='# Trusted IP List\\n# Add trusted IPs here (one per line)\\n# Example: 10.0.0.0/8\\n',
-                ContentType='text/plain'
-            )
+            print("Trusted IPs file already exists")
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                print("Creating trusted IPs file - does not exist")
+                # Create a basic trusted IPs file
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key='trusted-ips/whitelist.txt',
+                    Body='# Trusted IP List\\n# Add trusted IPs here (one per line)\\n# Example: 10.0.0.0/8\\n',
+                    ContentType='text/plain'
+                )
+            else:
+                print(f"Error checking trusted IPs file: {{e}}")
+                raise e
         
         # Create ThreatIntelSet
         threat_intel_response = client.create_threat_intel_set(
