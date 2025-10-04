@@ -20,6 +20,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -53,6 +54,7 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
+
     const projectName = 'freelancer-platform';
     const resourcePrefix = `${env}-${projectName}`;
 
@@ -60,11 +62,15 @@ export class TapStack extends cdk.Stack {
     // 1. NETWORKING LAYER - VPC with Multi-AZ configuration
     // =================================================================
 
+    // For dev environment, use single NAT Gateway to avoid EIP limits
+    // For production, increase to 2 for high availability
+    const natGateways = env === 'dev' ? 1 : 2;
+
     const vpc = new ec2.Vpc(this, 'FreelancerVPC', {
       vpcName: `${resourcePrefix}-vpc`,
       ipAddresses: ec2.IpAddresses.cidr('10.36.0.0/16'),
       maxAzs: 2,
-      natGateways: 2, // Multi-AZ NAT for high availability
+      natGateways: natGateways, // Reduced to 1 for dev to avoid EIP limit
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -109,11 +115,13 @@ export class TapStack extends cdk.Stack {
       securityGroupName: `${resourcePrefix}-alb-sg`,
       allowAllOutbound: true,
     });
+
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP from anywhere'
     );
+
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
@@ -126,6 +134,7 @@ export class TapStack extends cdk.Stack {
       securityGroupName: `${resourcePrefix}-ecs-sg`,
       allowAllOutbound: true,
     });
+
     ecsSecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(3000),
@@ -142,11 +151,6 @@ export class TapStack extends cdk.Stack {
         allowAllOutbound: false,
       }
     );
-    auroraSecurityGroup.addIngressRule(
-      ecsSecurityGroup,
-      ec2.Port.tcp(3306),
-      'Allow MySQL from ECS tasks'
-    );
 
     const redisSecurityGroup = new ec2.SecurityGroup(
       this,
@@ -157,11 +161,6 @@ export class TapStack extends cdk.Stack {
         securityGroupName: `${resourcePrefix}-redis-sg`,
         allowAllOutbound: false,
       }
-    );
-    redisSecurityGroup.addIngressRule(
-      ecsSecurityGroup,
-      ec2.Port.tcp(6379),
-      'Allow Redis from ECS tasks'
     );
 
     const lambdaSecurityGroup = new ec2.SecurityGroup(
@@ -174,10 +173,24 @@ export class TapStack extends cdk.Stack {
         allowAllOutbound: true,
       }
     );
+
+    // Configure security group rules after all SGs are created
+    auroraSecurityGroup.addIngressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL from ECS tasks'
+    );
+
     auroraSecurityGroup.addIngressRule(
       lambdaSecurityGroup,
       ec2.Port.tcp(3306),
       'Allow MySQL from Lambda'
+    );
+
+    redisSecurityGroup.addIngressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(6379),
+      'Allow Redis from ECS tasks'
     );
 
     // =================================================================
@@ -241,7 +254,9 @@ export class TapStack extends cdk.Stack {
       },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -298,6 +313,7 @@ export class TapStack extends cdk.Stack {
         transitEncryptionEnabled: true,
       }
     );
+
     redisReplicationGroup.addDependency(redisSubnetGroup);
 
     // =================================================================
@@ -344,12 +360,22 @@ export class TapStack extends cdk.Stack {
         comment: `OAI for ${resourcePrefix} portfolio bucket`,
       }
     );
+
     portfolioBucket.grantRead(originAccessIdentity);
+
+    // CDN Log Bucket
+    const cdnLogBucket = new s3.Bucket(this, 'CDNLogBucket', {
+      bucketName: `${resourcePrefix}-cdn-logs-${this.account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      objectOwnership: s3.ObjectOwnership.OBJECT_WRITER,
+    });
 
     const distribution = new cloudfront.Distribution(this, 'CDNDistribution', {
       comment: `${resourcePrefix} portfolio content CDN`,
       defaultBehavior: {
-        origin: new origins.S3Origin(portfolioBucket, {
+        origin: S3BucketOrigin.withOriginAccessIdentity(portfolioBucket, {
           originAccessIdentity,
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -358,12 +384,7 @@ export class TapStack extends cdk.Stack {
       },
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // US, Canada, Europe
       enableLogging: true,
-      logBucket: new s3.Bucket(this, 'CDNLogBucket', {
-        bucketName: `${resourcePrefix}-cdn-logs-${this.account}`,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-      }),
+      logBucket: cdnLogBucket,
       logFilePrefix: 'cdn-access-logs/',
     });
 
@@ -465,9 +486,13 @@ export class TapStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, 'ECSCluster', {
       clusterName: `${resourcePrefix}-cluster`,
       vpc,
-      containerInsights: true,
+      enableFargateCapacityProviders: true,
     });
 
+    cluster.addDefaultCloudMapNamespace({
+      name: `${resourcePrefix}.local`,
+    });
+    
     const taskRole = new iam.Role(this, 'ECSTaskRole', {
       roleName: `${resourcePrefix}-ecs-task-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -485,22 +510,25 @@ export class TapStack extends cdk.Stack {
       taskRole,
     });
 
+    const ecsLogGroup = new logs.LogGroup(this, 'ECSLogGroup', {
+      logGroupName: `/ecs/${resourcePrefix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const container = taskDefinition.addContainer('AppContainer', {
       containerName: 'freelancer-app',
       image: ecs.ContainerImage.fromRegistry('nginx:latest'), // Replace with actual app image
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'ecs',
-        logGroup: new logs.LogGroup(this, 'ECSLogGroup', {
-          logGroupName: `/ecs/${resourcePrefix}`,
-          retention: logs.RetentionDays.ONE_WEEK,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        }),
+        logGroup: ecsLogGroup,
       }),
       environment: {
         ENVIRONMENT: env,
         AURORA_ENDPOINT: auroraCluster.clusterEndpoint.hostname,
         DYNAMODB_TABLE: messagesTable.tableName,
-        REDIS_ENDPOINT: redisReplicationGroup.attrConfigurationEndPointAddress,
+        REDIS_ENDPOINT:
+          redisReplicationGroup.attrConfigurationEndPointAddress,
         S3_BUCKET: portfolioBucket.bucketName,
         CLOUDFRONT_URL: distribution.distributionDomainName,
         FREELANCER_POOL_ID: freelancerPool.userPoolId,
@@ -642,14 +670,14 @@ export class TapStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          console.log('Payment webhook received:', JSON.stringify(event));
-          // Process payment webhook
-          // Update Aurora database with payment status
-          // Publish to SNS for notifications
-          return { statusCode: 200, body: 'Payment processed' };
-        };
-      `),
+exports.handler = async (event) => {
+  console.log('Payment webhook received:', JSON.stringify(event));
+  // Process payment webhook
+  // Update Aurora database with payment status
+  // Publish to SNS for notifications
+  return { statusCode: 200, body: 'Payment processed' };
+};
+        `),
         environment: {
           AURORA_ENDPOINT: auroraCluster.clusterEndpoint.hostname,
           DB_SECRET_ARN: dbSecret.secretArn,
@@ -745,7 +773,7 @@ export class TapStack extends cdk.Stack {
       'ProjectLifecycleStateMachine',
       {
         stateMachineName: `${resourcePrefix}-project-lifecycle`,
-        definition,
+        definitionBody: sfn.DefinitionBody.fromChainable(definition),
         timeout: cdk.Duration.hours(24),
         tracingEnabled: true,
       }
@@ -763,11 +791,13 @@ export class TapStack extends cdk.Stack {
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'ALB Request Count',
-        left: [alb.metricRequestCount()],
+        left: [alb.metrics.requestCount()],
       }),
       new cloudwatch.GraphWidget({
         title: 'ALB 5XX Errors',
-        left: [alb.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT)],
+        left: [
+          alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT),
+        ],
       })
     );
 
@@ -797,10 +827,13 @@ export class TapStack extends cdk.Stack {
     // CloudWatch Alarms
     new cloudwatch.Alarm(this, 'ALB5XXAlarm', {
       alarmName: `${resourcePrefix}-alb-5xx-errors`,
-      metric: alb.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT),
+      metric: alb.metrics.httpCodeTarget(
+        elbv2.HttpCodeTarget.TARGET_5XX_COUNT
+      ),
       threshold: 10,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
@@ -809,7 +842,8 @@ export class TapStack extends cdk.Stack {
       metric: auroraCluster.metricDatabaseConnections(),
       threshold: 80,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     new cloudwatch.Alarm(this, 'DynamoDBThrottlesAlarm', {
@@ -819,7 +853,8 @@ export class TapStack extends cdk.Stack {
       }),
       threshold: 5,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     // =================================================================
