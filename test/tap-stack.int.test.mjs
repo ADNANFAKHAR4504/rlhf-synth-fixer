@@ -380,19 +380,12 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
       });
 
       const response = await codedeployClient.send(command);
-      
-      // Debug output
-      console.log('DEBUG - Full ec2TagSet:', JSON.stringify(response.deploymentGroupInfo.ec2TagSet, null, 2));
-      
       expect(response.deploymentGroupInfo.ec2TagSet).toBeDefined();
       expect(response.deploymentGroupInfo.ec2TagSet.ec2TagSetList).toBeDefined();
       expect(response.deploymentGroupInfo.ec2TagSet.ec2TagSetList.length).toBeGreaterThan(0);
       
       const tagGroup = response.deploymentGroupInfo.ec2TagSet.ec2TagSetList[0];
-      console.log('DEBUG - Tag group:', JSON.stringify(tagGroup, null, 2));
-      
       const tags = tagGroup.ec2TagGroup || [];
-      console.log('DEBUG - Tags array:', JSON.stringify(tags, null, 2));
       
       const envTag = tags.find(tag => tag.Key === 'Environment');
       expect(envTag).toBeDefined();
