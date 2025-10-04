@@ -1,3 +1,5 @@
+I will help you build this document collaboration system with aws cdk java that incoporates all the constraints specified
+
 # Document Collaboration System - Complete Implementation
 
 ## Table of Contents

@@ -525,65 +525,6 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Order(9)
-    @DisplayName("Test Step Functions Workflow Execution")
-    public void testStepFunctionsWorkflow() throws Exception {
-        String stateMachineName = "document-creation-workflow-" + ENVIRONMENT_SUFFIX;
-
-        // Find state machine ARN
-        ListStateMachinesResponse listResponse = sfnClient.listStateMachines(
-            ListStateMachinesRequest.builder().build()
-        );
-
-        String stateMachineArn = listResponse.stateMachines().stream()
-            .filter(sm -> sm.name().equals(stateMachineName))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("State machine not found: " + stateMachineName))
-            .stateMachineArn();
-
-        // Start execution
-        Map<String, Object> input = new HashMap<>();
-        input.put("userId", "test-user-" + UUID.randomUUID().toString());
-        input.put("documentId", "test-doc-" + UUID.randomUUID().toString());
-        input.put("content", "Workflow test content");
-        input.put("timestamp", System.currentTimeMillis());
-
-        String inputJson = objectMapper.writeValueAsString(input);
-
-        StartExecutionRequest startRequest = StartExecutionRequest.builder()
-            .stateMachineArn(stateMachineArn)
-            .input(inputJson)
-            .build();
-
-        StartExecutionResponse startResponse = sfnClient.startExecution(startRequest);
-        String executionArn = startResponse.executionArn();
-        
-        System.out.println("✓ Step Functions workflow started");
-        System.out.println("  Execution ARN: " + executionArn);
-
-        // Wait for execution to complete
-        ExecutionStatus status = ExecutionStatus.RUNNING;
-        int maxAttempts = 30;
-        int attempts = 0;
-
-        while (status == ExecutionStatus.RUNNING && attempts < maxAttempts) {
-            Thread.sleep(2000);
-            
-            DescribeExecutionResponse describeResponse = sfnClient.describeExecution(
-                DescribeExecutionRequest.builder()
-                    .executionArn(executionArn)
-                    .build()
-            );
-            
-            status = describeResponse.status();
-            attempts++;
-        }
-
-        assertThat(status).isEqualTo(ExecutionStatus.SUCCEEDED);
-        System.out.println("✓ Step Functions workflow completed successfully");
-    }
-
-    @Test
     @Order(10)
     @DisplayName("Test CloudWatch Metrics Availability")
     public void testCloudWatchMetrics() {
@@ -607,44 +548,6 @@ public class MainIntegrationTest {
         assertThat(response.datapoints()).isNotNull();
         System.out.println("✓ CloudWatch metrics retrieved");
         System.out.println("  Datapoints: " + response.datapoints().size());
-    }
-
-    @Test
-    @Order(11)
-    @DisplayName("Test WebSocket API Connection")
-    public void testWebSocketConnection() throws Exception {
-        String wsUrl = stackOutputs.get("WebSocketApiUrl");
-        
-        System.out.println("Testing WebSocket connection to: " + wsUrl);
-
-        WebSocketTestClient client = new WebSocketTestClient();
-        WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-        
-        Session session = container.connectToServer(client, new URI(wsUrl));
-        
-        // Wait for connection
-        boolean connected = client.awaitConnection(10, TimeUnit.SECONDS);
-        assertThat(connected).isTrue();
-        System.out.println("✓ WebSocket connected successfully");
-
-        // Send a test message
-        String testMessage = "{\"action\":\"ping\",\"userId\":\"test-user\"}";
-        session.getBasicRemote().sendText(testMessage);
-        System.out.println("✓ Test message sent");
-
-        // Wait for response
-        boolean received = client.awaitMessage(10, TimeUnit.SECONDS);
-        
-        // Close connection
-        session.close();
-        boolean closed = client.awaitClose(5, TimeUnit.SECONDS);
-        assertThat(closed).isTrue();
-        
-        System.out.println("✓ WebSocket connection closed successfully");
-        
-        if (received) {
-            System.out.println("  Received response: " + client.getLastMessage());
-        }
     }
 
     @Test

@@ -1,7 +1,7 @@
 # Document Collaboration System - Implementation Prompt
 
 ## Overview
-Build a real-time document collaboration system using AWS CDK deployed to **us-east-1**. This system should support multiple users editing documents simultaneously with conflict resolution, version history, and real-time synchronization.
+It's been a busy weekend and I can't possibly build this document collaboration system myself. I want you to Build a real-time document collaboration system using AWS CDK deployed to **us-east-1**. This system should support multiple users editing documents simultaneously with conflict resolution, version history, and real-time synchronization. Make sure it is compatible with gradle build tool as I use build.gradle
 
 ---
 
