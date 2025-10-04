@@ -1,6 +1,6 @@
 # Metrics Aggregation System Infrastructure - Production Ready
 
-Here's the complete, production-ready infrastructure code for your metrics aggregation system using Pulumi Python for deployment in us-east-1.
+Here's the complete, production-ready infrastructure code for your metrics aggregation system using Pulumi Python for deployment in us-east-2.
 
 ## File: tap_stack.py
 
@@ -262,7 +262,7 @@ class TapStack(pulumi.ComponentResource):
             }),
             timeout=30,
             memory_size=512,
-            reserved_concurrent_executions=100,
+            # reserved_concurrent_executions removed - account lacks unreserved concurrency
             tracing_config={"mode": "Active"},
             environment={
                 "variables": {
@@ -425,7 +425,7 @@ class TapStack(pulumi.ComponentResource):
         self.register_outputs({
             "api_endpoint": Output.concat(
                 "https://", self.api.id,
-                ".execute-api.us-east-1.amazonaws.com/",
+                ".execute-api.us-east-2.amazonaws.com/",
                 self.api_stage.stage_name
             ),
             "metrics_bucket": self.metrics_export_bucket.id,
@@ -466,9 +466,9 @@ except ImportError:
     xray_recorder = DummyXRayRecorder()
 
 # Initialize AWS clients
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-sns = boto3.client('sns', region_name='us-east-1')
-s3 = boto3.client('s3', region_name='us-east-1')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+sns = boto3.client('sns', region_name='us-east-2')
+s3 = boto3.client('s3', region_name='us-east-2')
 
 # Environment variables
 METRICS_TABLE = os.environ['METRICS_TABLE']
@@ -646,13 +646,9 @@ def export_metrics_to_s3():
 
 ```bash
 # Set environment variables
-export AWS_REGION=us-east-1
+export AWS_REGION=us-east-2
 export ENVIRONMENT_SUFFIX=prod
 
 # Deploy with Pulumi
 pulumi up --yes --stack TapStack${ENVIRONMENT_SUFFIX}
 ```
-
-## Testing
-
-The infrastructure includes comprehensive unit tests (100% coverage) and integration tests that validate all AWS resources and their interactions.
