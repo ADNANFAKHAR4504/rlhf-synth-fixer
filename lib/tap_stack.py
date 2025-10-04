@@ -428,6 +428,15 @@ class TapStack(Stack):
             }]
         )
 
+        # Create CloudWatch log group for NetworkFirewall logs
+        firewall_log_group = logs.LogGroup(
+            self, "NetworkFirewallLogGroup",
+            log_group_name=f"/aws/networkfirewall/{self.firewall.firewall_name}",
+            retention=logs.RetentionDays.ONE_MONTH,
+            encryption_key=self.master_key,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         # Enable firewall logging
         network_firewall.CfnLoggingConfiguration(
             self, "FirewallLogging",
@@ -436,14 +445,14 @@ class TapStack(Stack):
                 log_destination_configs=[
                     network_firewall.CfnLoggingConfiguration.LogDestinationConfigProperty(
                         log_destination={
-                            "logGroup": f"/aws/networkfirewall/{self.firewall.firewall_name}"
+                            "logGroup": firewall_log_group.log_group_name
                         },
                         log_destination_type="CloudWatchLogs",
                         log_type="ALERT"
                     ),
                     network_firewall.CfnLoggingConfiguration.LogDestinationConfigProperty(
                         log_destination={
-                            "logGroup": f"/aws/networkfirewall/{self.firewall.firewall_name}"
+                            "logGroup": firewall_log_group.log_group_name
                         },
                         log_destination_type="CloudWatchLogs",
                         log_type="FLOW"
