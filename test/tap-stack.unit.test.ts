@@ -447,7 +447,7 @@ describe('TapStack GPS Tracking System', () => {
       ).toHaveLength(1);
       expect(
         resourceTypes.filter(t => t === 'AWS::Lambda::Function')
-      ).toHaveLength(4); // GPS Processor, Alert Handler, Analytics, Manifest Deployment
+      ).toHaveLength(4); // GPS Processor, Alert Handler, Analytics, + 1 AwsCustomResource provider
       expect(resourceTypes.filter(t => t === 'AWS::SNS::Topic')).toHaveLength(
         1
       );
