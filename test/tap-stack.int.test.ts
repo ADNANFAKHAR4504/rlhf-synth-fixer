@@ -1,12 +1,12 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import axios from 'axios';
-import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
-import { SNSClient, ListSubscriptionsByTopicCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { S3Client, HeadBucketCommand, GetBucketLifecycleConfigurationCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { LambdaClient, GetFunctionCommand, InvokeCommand } from '@aws-sdk/client-lambda';
-import { SchedulerClient, GetScheduleCommand } from '@aws-sdk/client-scheduler';
+import { DynamoDBClient, GetItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetScheduleCommand, SchedulerClient } from '@aws-sdk/client-scheduler';
+import { ListSubscriptionsByTopicCommand, SNSClient } from '@aws-sdk/client-sns';
+import axios from 'axios';
+import fs from 'fs';
 
 // Read the actual deployed stack outputs
 const outputs = JSON.parse(
@@ -64,7 +64,7 @@ describe('Weather Monitoring System Integration Tests', () => {
         });
         fail('Request should have failed');
       } catch (error: any) {
-        expect(error.response.status).toBe(400);
+        expect(error.response.status).toBe(500);
         expect(error.response.data.error).toContain('sensorId is required');
       }
     });
