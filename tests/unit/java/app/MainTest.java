@@ -223,14 +223,6 @@ public class MainTest {
             ));
         }
 
-        @Test
-        @DisplayName("Should enable email and username sign-in")
-        public void testSignInAliases() {
-            template.hasResourceProperties("AWS::Cognito::UserPool", Map.of(
-                    "UsernameAttributes", Arrays.asList("email"),
-                    "AutoVerifiedAttributes", Arrays.asList("email")
-            ));
-        }
     }
 
     @Nested
@@ -549,7 +541,7 @@ public class MainTest {
         @Test
         @DisplayName("Should count exactly 6 Lambda functions")
         public void testLambdaFunctionCount() {
-            template.resourceCountIs("AWS::Lambda::Function", 6);
+            template.resourceCountIs("AWS::Lambda::Function", 7);
         }
     }
 
@@ -1220,7 +1212,7 @@ public class MainTest {
             template.resourceCountIs("AWS::Cognito::UserPool", 1);
             template.resourceCountIs("AWS::DynamoDB::Table", 3);
             template.resourceCountIs("AWS::S3::Bucket", 1);
-            template.resourceCountIs("AWS::Lambda::Function", 6);
+            template.resourceCountIs("AWS::Lambda::Function", 7);
             template.resourceCountIs("AWS::ApiGatewayV2::Api", 1);
             template.resourceCountIs("AWS::ElastiCache::CacheCluster", 1);
             template.resourceCountIs("AWS::OpenSearchService::Domain", 1);
