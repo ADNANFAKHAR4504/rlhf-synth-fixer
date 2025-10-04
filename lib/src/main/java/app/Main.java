@@ -95,11 +95,11 @@ final class TapStackProps {
         this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
-    public String getEnvironmentSuffix() {
+    String getEnvironmentSuffix() {
         return environmentSuffix;
     }
 
-    public StackProps getStackProps() {
+    StackProps getStackProps() {
         return stackProps;
     }
 
