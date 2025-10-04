@@ -845,31 +845,101 @@ def handler(event, context):
                 print(f"Error checking trusted IPs file: {{e}}")
                 raise e
         
-        # Create ThreatIntelSet
-        threat_intel_response = client.create_threat_intel_set(
-            DetectorId=detector_id,
-            Name=f'BankingThreatIntel-{self.unique_suffix}',
-            Format='TXT',
-            Location=f's3://{{bucket_name}}/threat-intel/bad-ips.txt',
-            Activate=True,
-            Tags={{
-                'Name': f'BankingThreatIntel-{self.unique_suffix}',
-                'ManagedBy': 'ZeroTrust-CDK'
-            }}
-        )
+        # Check for existing ThreatIntelSets and create only if needed
+        threat_intel_name = f'BankingThreatIntel-{self.unique_suffix}'
+        existing_threat_intel = None
         
-        # Create IPSet for trusted IPs
-        ip_set_response = client.create_ip_set(
-            DetectorId=detector_id,
-            Name=f'TrustedBankingIPs-{self.unique_suffix}',
-            Format='TXT',
-            Location=f's3://{{bucket_name}}/trusted-ips/whitelist.txt',
-            Activate=True,
-            Tags={{
-                'Name': f'TrustedBankingIPs-{self.unique_suffix}',
-                'ManagedBy': 'ZeroTrust-CDK'
-            }}
-        )
+        try:
+            # List existing ThreatIntelSets
+            threat_intel_list = client.list_threat_intel_sets(DetectorId=detector_id)
+            for threat_intel_id in threat_intel_list.get('ThreatIntelSetIds', []):
+                threat_intel_details = client.get_threat_intel_set(
+                    DetectorId=detector_id,
+                    ThreatIntelSetId=threat_intel_id
+                )
+                if threat_intel_details['Name'] == threat_intel_name:
+                    existing_threat_intel = threat_intel_id
+                    print(f"Using existing ThreatIntelSet: {{threat_intel_name}}")
+                    break
+        except Exception as e:
+            print(f"Warning: Could not list existing ThreatIntelSets: {{e}}")
+        
+        if existing_threat_intel:
+            # Use existing ThreatIntelSet
+            threat_intel_response = {{'ThreatIntelSetId': existing_threat_intel}}
+        else:
+            # Create new ThreatIntelSet
+            try:
+                threat_intel_response = client.create_threat_intel_set(
+                    DetectorId=detector_id,
+                    Name=threat_intel_name,
+                    Format='TXT',
+                    Location=f's3://{{bucket_name}}/threat-intel/bad-ips.txt',
+                    Activate=True,
+                    Tags={{
+                        'Name': threat_intel_name,
+                        'ManagedBy': 'ZeroTrust-CDK'
+                    }}
+                )
+                print(f"Created new ThreatIntelSet: {{threat_intel_name}}")
+            except Exception as e:
+                if 'LimitExceeded' in str(e) or 'limit' in str(e).lower():
+                    print(f"ThreatIntelSet limit reached, using existing resources: {{e}}")
+                    # Try to use any existing ThreatIntelSet as fallback
+                    if threat_intel_list.get('ThreatIntelSetIds'):
+                        threat_intel_response = {{'ThreatIntelSetId': threat_intel_list['ThreatIntelSetIds'][0]}}
+                    else:
+                        raise e
+                else:
+                    raise e
+        
+        # Check for existing IPSets and create only if needed
+        ip_set_name = f'TrustedBankingIPs-{self.unique_suffix}'
+        existing_ip_set = None
+        
+        try:
+            # List existing IPSets
+            ip_set_list = client.list_ip_sets(DetectorId=detector_id)
+            for ip_set_id in ip_set_list.get('IpSetIds', []):
+                ip_set_details = client.get_ip_set(
+                    DetectorId=detector_id,
+                    IpSetId=ip_set_id
+                )
+                if ip_set_details['Name'] == ip_set_name:
+                    existing_ip_set = ip_set_id
+                    print(f"Using existing IPSet: {{ip_set_name}}")
+                    break
+        except Exception as e:
+            print(f"Warning: Could not list existing IPSets: {{e}}")
+        
+        if existing_ip_set:
+            # Use existing IPSet
+            ip_set_response = {{'IpSetId': existing_ip_set}}
+        else:
+            # Create new IPSet
+            try:
+                ip_set_response = client.create_ip_set(
+                    DetectorId=detector_id,
+                    Name=ip_set_name,
+                    Format='TXT',
+                    Location=f's3://{{bucket_name}}/trusted-ips/whitelist.txt',
+                    Activate=True,
+                    Tags={{
+                        'Name': ip_set_name,
+                        'ManagedBy': 'ZeroTrust-CDK'
+                    }}
+                )
+                print(f"Created new IPSet: {{ip_set_name}}")
+            except Exception as e:
+                if 'LimitExceeded' in str(e) or 'limit' in str(e).lower():
+                    print(f"IPSet limit reached, using existing resources: {{e}}")
+                    # Try to use any existing IPSet as fallback
+                    if ip_set_list.get('IpSetIds'):
+                        ip_set_response = {{'IpSetId': ip_set_list['IpSetIds'][0]}}
+                    else:
+                        raise e
+                else:
+                    raise e
         
         return send_response(event, context, 'SUCCESS', {{
             'DetectorId': detector_id,
