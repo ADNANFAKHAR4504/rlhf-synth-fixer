@@ -7,7 +7,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as timestream from 'aws-cdk-lib/aws-timestream';
+// Removed timestream import - using DynamoDB for time-series data instead
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -92,28 +92,26 @@ export class TapStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Timestream database and table for time-series data
-    const timestreamDatabase = new timestream.CfnDatabase(
-      this,
-      'IoTTimestreamDB',
-      {
-        databaseName: `iot-sensor-metrics-${environmentSuffix}`,
-      }
-    );
+    // DynamoDB table for time-series sensor data (replacing Timestream)
+    const sensorMetricsTable = new dynamodb.Table(this, 'SensorMetricsTable', {
+      tableName: `iot-sensor-metrics-${environmentSuffix}`,
+      partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      timeToLiveAttribute: 'ttl', // Enable TTL for auto-expiration (365 days)
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-    const timestreamTable = new timestream.CfnTable(
-      this,
-      'IoTTimestreamTable',
-      {
-        databaseName: timestreamDatabase.databaseName!,
-        tableName: 'sensor-readings',
-        retentionProperties: {
-          memoryStoreRetentionPeriodInHours: 24, // 1 day in memory
-          magneticStoreRetentionPeriodInDays: 365, // 1 year in magnetic store
-        },
-      }
-    );
-    timestreamTable.addDependency(timestreamDatabase);
+    // Add GSI for querying by timestamp range
+    sensorMetricsTable.addGlobalSecondaryIndex({
+      indexName: 'timestamp-index',
+      partitionKey: { name: 'metricType', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
 
     // ==================== STREAMING LAYER ====================
 
@@ -141,14 +139,10 @@ from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
 dynamodb = boto3.resource('dynamodb')
-timestream = boto3.client('timestream-write')
 
-# DynamoDB table reference
+# DynamoDB table references
 device_table = dynamodb.Table('${deviceStateTable.tableName}')
-
-# Timestream configuration
-TS_DATABASE = '${timestreamDatabase.databaseName}'
-TS_TABLE = '${timestreamTable.tableName}'
+metrics_table = dynamodb.Table('${sensorMetricsTable.tableName}')
 
 def exponential_backoff_retry(func, max_retries=3, initial_delay=0.1):
     """Exponential backoff retry decorator"""
@@ -194,40 +188,35 @@ def handler(event, context):
             
             exponential_backoff_retry(write_to_dynamodb)
             
-            # Write to Timestream with retry
-            def write_to_timestream():
-                records = [
+            # Write to DynamoDB metrics table with retry
+            def write_to_metrics_table():
+                # Create separate records for each metric type
+                metrics_data = [
                     {
-                        'Time': str(timestamp),
-                        'TimeUnit': 'MILLISECONDS',
-                        'Dimensions': [
-                            {'Name': 'deviceId', 'Value': device_id},
-                            {'Name': 'region', 'Value': context.invoked_function_arn.split(':')[3]}
-                        ],
-                        'MeasureName': 'sensor_reading',
-                        'MeasureValueType': 'MULTI',
-                        'MeasureValues': [
-                            {
-                                'Name': 'temperature',
-                                'Value': str(payload.get('temperature', 0)),
-                                'Type': 'DOUBLE'
-                            },
-                            {
-                                'Name': 'humidity',
-                                'Value': str(payload.get('humidity', 0)),
-                                'Type': 'DOUBLE'
-                            }
-                        ]
+                        'deviceId': device_id,
+                        'timestamp': timestamp,
+                        'metricType': 'temperature',
+                        'value': payload.get('temperature', 0),
+                        'unit': 'celsius',
+                        'region': context.invoked_function_arn.split(':')[3],
+                        'ttl': int((datetime.now() + timedelta(days=365)).timestamp())  # TTL: 1 year
+                    },
+                    {
+                        'deviceId': device_id,
+                        'timestamp': timestamp,
+                        'metricType': 'humidity',
+                        'value': payload.get('humidity', 0),
+                        'unit': 'percent',
+                        'region': context.invoked_function_arn.split(':')[3],
+                        'ttl': int((datetime.now() + timedelta(days=365)).timestamp())  # TTL: 1 year
                     }
                 ]
                 
-                timestream.write_records(
-                    DatabaseName=TS_DATABASE,
-                    TableName=TS_TABLE,
-                    Records=records
-                )
+                # Write each metric as a separate item
+                for metric in metrics_data:
+                    metrics_table.put_item(Item=metric)
             
-            exponential_backoff_retry(write_to_timestream)
+            exponential_backoff_retry(write_to_metrics_table)
             
             print(f"Successfully processed record for device {device_id}")
             
@@ -248,8 +237,7 @@ def handler(event, context):
       memorySize: 512,
       environment: {
         DYNAMODB_TABLE: deviceStateTable.tableName,
-        TIMESTREAM_DB: timestreamDatabase.databaseName!,
-        TIMESTREAM_TABLE: timestreamTable.tableName!,
+        METRICS_TABLE: sensorMetricsTable.tableName,
       },
       reservedConcurrentExecutions: 10, // Limit concurrency for controlled processing
       retryAttempts: 2, // Lambda service retry attempts
@@ -257,18 +245,7 @@ def handler(event, context):
 
     // Grant permissions to Lambda
     deviceStateTable.grantReadWriteData(streamProcessor);
-
-    // Grant Timestream permissions
-    streamProcessor.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['timestream:WriteRecords', 'timestream:DescribeEndpoints'],
-        resources: [
-          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}/table/${timestreamTable.tableName}`,
-          `arn:aws:timestream:${this.region}:${this.account}:database/${timestreamDatabase.databaseName}`,
-        ],
-      })
-    );
+    sensorMetricsTable.grantReadWriteData(streamProcessor);
 
     // Add Kinesis event source to Lambda with parallel processing
     streamProcessor.addEventSource(
@@ -597,22 +574,15 @@ def handler(event, context):
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
 
-    // 6. Timestream - Write throttling
-    new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
-      alarmName: `iot-timestream-throttling-${environmentSuffix}`,
-      alarmDescription: 'Alert when Timestream experiences write throttling',
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Timestream',
-        metricName: 'UserErrors',
-        dimensionsMap: {
-          DatabaseName: timestreamDatabase.databaseName!,
-          TableName: timestreamTable.tableName!,
-          Operation: 'WriteRecords',
-        },
+    // 6. DynamoDB Metrics Table - Write throttling
+    new cloudwatch.Alarm(this, 'DynamoDBMetricsThrottling', {
+      alarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
+      alarmDescription: 'Alert when DynamoDB metrics table experiences throttling',
+      metric: sensorMetricsTable.metricUserErrors({
         period: cdk.Duration.minutes(5),
         statistic: 'Sum',
       }),
-      threshold: 10,
+      threshold: 5,
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
@@ -634,9 +604,14 @@ def handler(event, context):
         right: [streamProcessor.metricErrors()],
       }),
       new cloudwatch.GraphWidget({
-        title: 'DynamoDB Performance',
+        title: 'DynamoDB Device State Performance',
         left: [deviceStateTable.metricConsumedReadCapacityUnits()],
         right: [deviceStateTable.metricConsumedWriteCapacityUnits()],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'DynamoDB Metrics Performance',
+        left: [sensorMetricsTable.metricConsumedReadCapacityUnits()],
+        right: [sensorMetricsTable.metricConsumedWriteCapacityUnits()],
       })
     );
 
@@ -662,9 +637,9 @@ def handler(event, context):
       description: 'DynamoDB table for device state',
     });
 
-    new cdk.CfnOutput(this, 'TimestreamDatabase', {
-      value: timestreamDatabase.databaseName!,
-      description: 'Timestream database name',
+    new cdk.CfnOutput(this, 'SensorMetricsTableName', {
+      value: sensorMetricsTable.tableName,
+      description: 'DynamoDB table for sensor metrics',
     });
 
     new cdk.CfnOutput(this, 'AlertTopicArn', {

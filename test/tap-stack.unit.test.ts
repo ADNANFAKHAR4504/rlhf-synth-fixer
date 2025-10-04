@@ -247,20 +247,72 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Timestream Database', () => {
-    test('should create Timestream database', () => {
-      template.hasResourceProperties('AWS::Timestream::Database', {
-        DatabaseName: `iot-sensor-metrics-${environmentSuffix}`,
+  describe('DynamoDB Metrics Table', () => {
+    test('should create DynamoDB metrics table', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        BillingMode: 'PAY_PER_REQUEST',
+        TimeToLiveSpecification: {
+          AttributeName: 'ttl',
+          Enabled: true,
+        },
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true,
+        },
       });
     });
 
-    test('should create Timestream table with correct retention', () => {
-      template.hasResourceProperties('AWS::Timestream::Table', {
-        TableName: 'sensor-readings',
-        RetentionProperties: {
-          memoryStoreRetentionPeriodInHours: 24,
-          magneticStoreRetentionPeriodInDays: 365,
-        },
+    test('should create DynamoDB metrics table with correct key schema', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        KeySchema: [
+          {
+            AttributeName: 'deviceId',
+            KeyType: 'HASH',
+          },
+          {
+            AttributeName: 'timestamp',
+            KeyType: 'RANGE',
+          },
+        ],
+        AttributeDefinitions: [
+          {
+            AttributeName: 'deviceId',
+            AttributeType: 'S',
+          },
+          {
+            AttributeName: 'timestamp',
+            AttributeType: 'N',
+          },
+          {
+            AttributeName: 'metricType',
+            AttributeType: 'S',
+          },
+        ],
+      });
+    });
+
+    test('should create GSI for timestamp queries', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'timestamp-index',
+            KeySchema: [
+              {
+                AttributeName: 'metricType',
+                KeyType: 'HASH',
+              },
+              {
+                AttributeName: 'timestamp',
+                KeyType: 'RANGE',
+              },
+            ],
+            Projection: {
+              ProjectionType: 'ALL',
+            },
+          },
+        ],
       });
     });
   });
@@ -292,8 +344,9 @@ describe('TapStack', () => {
             DYNAMODB_TABLE: {
               Ref: 'DeviceStateTable0D20B4A5',
             },
-            TIMESTREAM_DB: `iot-sensor-metrics-${environmentSuffix}`,
-            TIMESTREAM_TABLE: 'sensor-readings',
+            METRICS_TABLE: {
+              Ref: 'SensorMetricsTableA94D079E',
+            },
           },
         },
       });
@@ -491,12 +544,12 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create Timestream write throttling alarm', () => {
+    test('should create DynamoDB metrics table throttling alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-timestream-throttling-${environmentSuffix}`,
+        AlarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
         AlarmDescription:
-          'Alert when Timestream experiences write throttling',
-        Threshold: 10,
+          'Alert when DynamoDB metrics table experiences throttling',
+        Threshold: 5,
         EvaluationPeriods: 2,
       });
     });
@@ -535,9 +588,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create Timestream Database output', () => {
-      template.hasOutput('TimestreamDatabase', {
-        Description: 'Timestream database name',
+    test('should create Sensor Metrics Table output', () => {
+      template.hasOutput('SensorMetricsTableName', {
+        Description: 'DynamoDB table for sensor metrics',
       });
     });
 
@@ -570,9 +623,7 @@ describe('TapStack', () => {
     test('should create expected number of resources', () => {
       // Count major resource types
       template.resourceCountIs('AWS::S3::Bucket', 1);
-      template.resourceCountIs('AWS::DynamoDB::Table', 1);
-      template.resourceCountIs('AWS::Timestream::Database', 1);
-      template.resourceCountIs('AWS::Timestream::Table', 1);
+      template.resourceCountIs('AWS::DynamoDB::Table', 2); // Device state + Metrics tables
       template.resourceCountIs('AWS::Kinesis::Stream', 1);
       template.resourceCountIs('AWS::Lambda::Function', 1);
       template.resourceCountIs('AWS::KinesisFirehose::DeliveryStream', 1);

@@ -158,9 +158,9 @@ new cloudwatch.Alarm(this, 'LambdaDLQMessages', {
   // ... DLQ monitoring
 });
 
-new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
-  alarmName: `iot-timestream-throttling-${environmentSuffix}`,
-  // ... Timestream monitoring
+new cloudwatch.Alarm(this, 'DynamoDBMetricsThrottling', {
+  alarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
+  // ... DynamoDB metrics monitoring
 });
 ```
 
@@ -168,6 +168,52 @@ new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
 - Incomplete operational visibility
 - Missing critical failure detection
 - Poor incident response capability
+
+### 8. **AWS Timestream Access Permissions Issue**
+**Problem**: The model response used AWS Timestream which requires special access permissions not available in standard AWS accounts.
+
+**Model Response (PROBLEMATIC)**:
+```typescript
+// Timestream requires special AWS support approval
+const timestreamDatabase = new timestream.CfnDatabase(this, 'IoTTimestreamDB', {
+  databaseName: `iot-sensor-metrics-${environmentSuffix}`,
+});
+
+const timestreamTable = new timestream.CfnTable(this, 'IoTTimestreamTable', {
+  databaseName: timestreamDatabase.databaseName!,
+  tableName: 'sensor-readings',
+  // ... Timestream configuration
+});
+```
+
+**Deployment Error**:
+```
+Resource handler returned message: "Only existing Timestream for LiveAnalytics customers can access the service. 
+Reach out to AWS support, for more information. (Service: AmazonTimestreamWrite; Status Code: 403; 
+Error Code: AccessDeniedException)"
+```
+
+**Correct Implementation**:
+```typescript
+// Use DynamoDB for time-series data instead
+const sensorMetricsTable = new dynamodb.Table(this, 'SensorMetricsTable', {
+  tableName: `iot-sensor-metrics-${environmentSuffix}`,
+  partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
+  sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+  billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+  timeToLiveAttribute: 'ttl', // Enable TTL for auto-expiration
+  pointInTimeRecoverySpecification: {
+    pointInTimeRecoveryEnabled: true,
+  },
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
+});
+```
+
+**Impact**:
+- Deployment failures due to access restrictions
+- Requires AWS support approval for Timestream access
+- Blocks infrastructure deployment in standard AWS accounts
+- Unnecessary complexity for basic time-series use cases
 
 ## Summary of Critical Issues
 
@@ -177,6 +223,7 @@ new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
 4. **Error Handling**: No proper failure handling and notification
 5. **Monitoring Gaps**: Incomplete operational monitoring
 6. **Stack Lifecycle**: No explicit termination protection control
+7. **Service Access Restrictions**: Used AWS services requiring special permissions
 
 ## Lessons Learned
 
@@ -186,3 +233,5 @@ new cloudwatch.Alarm(this, 'TimestreamWriteThrottling', {
 - Implement proper error handling with DLQs
 - Ensure complete monitoring coverage for all critical components
 - Explicitly configure stack-level lifecycle policies
+- Avoid AWS services requiring special access permissions (like Timestream) for standard deployments
+- Use widely available AWS services (like DynamoDB) for time-series data instead of specialized services

@@ -223,8 +223,8 @@ describe('IoT Pipeline Integration Tests', () => {
 
           // Test environment variables
           expect(getFunctionResponse.Configuration?.Environment?.Variables).toBeDefined();
-          expect(getFunctionResponse.Configuration?.Environment?.Variables?.TIMESTREAM_DB).toContain('iot-sensor-metrics');
-          expect(getFunctionResponse.Configuration?.Environment?.Variables?.TIMESTREAM_TABLE).toBe('sensor-readings');
+          expect(getFunctionResponse.Configuration?.Environment?.Variables?.DYNAMODB_TABLE).toContain('iot-device-state');
+          expect(getFunctionResponse.Configuration?.Environment?.Variables?.METRICS_TABLE).toContain('iot-sensor-metrics');
 
           // Test event source mappings
           const eventSourceResponse = await lambdaClient.send(
@@ -307,6 +307,7 @@ describe('IoT Pipeline Integration Tests', () => {
           `iot-lambda-high-error-rate-${environmentSuffix}`,
           `iot-dynamodb-throttling-${environmentSuffix}`,
           `iot-firehose-data-staleness-${environmentSuffix}`,
+          `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
         ];
 
         try {
@@ -315,7 +316,7 @@ describe('IoT Pipeline Integration Tests', () => {
             new DescribeAlarmsCommand({ AlarmNames: alarmNames })
           );
           expect(describeAlarmsResponse.MetricAlarms).toBeDefined();
-          expect(describeAlarmsResponse.MetricAlarms?.length).toBe(4);
+          expect(describeAlarmsResponse.MetricAlarms?.length).toBe(5);
 
           // Verify each alarm exists and is properly configured
           alarmNames.forEach(alarmName => {
@@ -390,25 +391,66 @@ describe('IoT Pipeline Integration Tests', () => {
     );
   });
 
-  describe('Timestream Database Integration Tests', () => {
+  describe('DynamoDB Metrics Table Integration Tests', () => {
     test(
-      'Timestream Database exists and is properly configured',
+      'DynamoDB Metrics Table exists and is properly configured',
       async () => {
-        // Note: Timestream SDK not available in this environment
-        // This test would verify Timestream Database configuration in a real deployment
-        console.log('Timestream Database integration test skipped - Timestream SDK not available');
-        expect(true).toBe(true);
+        if (!outputs.SensorMetricsTableName) {
+          console.warn('SensorMetricsTableName output not found, skipping metrics table integration test');
+          return;
+        }
+
+        const tableName = outputs.SensorMetricsTableName;
+
+        // Test table description
+        const describeResponse = await dynamoClient.send(
+          new DescribeTableCommand({ TableName: tableName })
+        );
+        expect(describeResponse.Table).toBeDefined();
+        expect(describeResponse.Table?.TableName).toBe(tableName);
+        expect(describeResponse.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+        expect((describeResponse.Table as any)?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
+
+        // Test TTL configuration
+        const ttlResponse = await dynamoClient.send(
+          new DescribeTimeToLiveCommand({ TableName: tableName })
+        );
+        expect(ttlResponse.TimeToLiveDescription?.TimeToLiveStatus).toBe('ENABLED');
+        expect(ttlResponse.TimeToLiveDescription?.AttributeName).toBe('ttl');
+
+        // Test table accessibility by scanning
+        const scanResponse = await dynamoClient.send(
+          new ScanCommand({ TableName: tableName, Limit: 1 })
+        );
+        expect(scanResponse).toBeDefined();
       },
       testTimeout
     );
 
     test(
-      'Timestream Table exists and is properly configured',
+      'DynamoDB Metrics Table has correct GSI configuration',
       async () => {
-        // Note: Timestream SDK not available in this environment
-        // This test would verify Timestream Table configuration in a real deployment
-        console.log('Timestream Table integration test skipped - Timestream SDK not available');
-        expect(true).toBe(true);
+        if (!outputs.SensorMetricsTableName) {
+          console.warn('SensorMetricsTableName output not found, skipping GSI test');
+          return;
+        }
+
+        const tableName = outputs.SensorMetricsTableName;
+
+        // Test table description for GSI
+        const describeResponse = await dynamoClient.send(
+          new DescribeTableCommand({ TableName: tableName })
+        );
+        expect(describeResponse.Table).toBeDefined();
+        
+        // Check for GSI
+        const gsi = describeResponse.Table?.GlobalSecondaryIndexes?.find(
+          index => index.IndexName === 'timestamp-index'
+        );
+        expect(gsi).toBeDefined();
+        expect(gsi?.KeySchema).toHaveLength(2);
+        expect(gsi?.KeySchema?.[0]?.AttributeName).toBe('metricType');
+        expect(gsi?.KeySchema?.[1]?.AttributeName).toBe('timestamp');
       },
       testTimeout
     );
