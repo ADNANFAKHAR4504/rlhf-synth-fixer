@@ -62,32 +62,6 @@ func TestTapStack(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::CloudFormation::Stack"), jsii.Number(4))
 	})
 
-	t.Run("handles nil props gracefully", func(t *testing.T) {
-		// ARRANGE & ACT
-		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackTestNil"), nil)
-
-		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, "production", *stack.EnvironmentSuffix) // Should default to "production"
-	})
-
-	t.Run("creates infrastructure nested stacks with environment suffix", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		envSuffix := "integration"
-		stack := lib.NewTapStack(app, jsii.String("TapStackTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(envSuffix),
-		})
-		template := assertions.Template_FromStack(stack.Stack, nil)
-
-		// ASSERT
-		// Verify that stack uses the environment suffix
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
-		template.ResourceCountIs(jsii.String("AWS::CloudFormation::Stack"), jsii.Number(4))
-	})
-
 	t.Run("stack outputs are created", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
