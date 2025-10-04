@@ -75,13 +75,11 @@ import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
-import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -113,17 +111,17 @@ final class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(final String envSuffix) {
+        Builder environmentSuffix(final String envSuffix) {
             this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(final StackProps props) {
+        Builder stackProps(final StackProps props) {
             this.stackProps = props;
             return this;
         }
 
-        public TapStackProps build() {
+        TapStackProps build() {
             return new TapStackProps(environmentSuffix, stackProps);
         }
     }
