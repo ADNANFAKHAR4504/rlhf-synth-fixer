@@ -332,6 +332,9 @@ describe('GPS Tracking System Integration Tests', () => {
       const vehicleId = 'E2E-VEHICLE-001';
       const timestamp = Date.now();
 
+      // Track for cleanup
+      testDataToCleanup.push({ type: 'dynamodb', key: vehicleId, timestamp });
+
       // 1. Put GPS data to Kinesis
       const gpsData = {
         vehicleId,
@@ -352,23 +355,37 @@ describe('GPS Tracking System Integration Tests', () => {
       });
       await kinesisClient.send(putRecordCommand);
 
-      // 2. Wait for Lambda to process (adjust wait time as needed)
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      // 2. Poll DynamoDB with retries (Lambda processing can take time)
+      const maxRetries = 10;
+      const retryDelay = 3000; // 3 seconds between retries
+      let response;
+      let found = false;
+
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+        const getItemCommand = new GetItemCommand({
+          TableName: tableName,
+          Key: {
+            vehicleId: { S: vehicleId },
+            timestamp: { N: String(timestamp) },
+          },
+        });
+
+        response = await dynamodbClient.send(getItemCommand);
+        
+        if (response.Item) {
+          found = true;
+          break;
+        }
+      }
 
       // 3. Verify data is in DynamoDB
-      const getItemCommand = new GetItemCommand({
-        TableName: tableName,
-        Key: {
-          vehicleId: { S: vehicleId },
-          timestamp: { N: String(timestamp) },
-        },
-      });
-
-      const response = await dynamodbClient.send(getItemCommand);
-      expect(response.Item).toBeDefined();
-      expect(response.Item!.vehicleId.S).toBe(vehicleId);
-      expect(response.Item!.latitude.N).toBe('37.7749');
-    }, 45000);
+      expect(found).toBe(true);
+      expect(response!.Item).toBeDefined();
+      expect(response!.Item!.vehicleId.S).toBe(vehicleId);
+      expect(response!.Item!.latitude.N).toBe('37.7749');
+    }, 60000);
 
     test('should handle high volume GPS data ingestion', async () => {
       const batchSize = 25;
