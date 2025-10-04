@@ -1,6 +1,6 @@
-# tap_stack.tf - Complete infrastructure stack for startup application
-
 ```hcl
+
+# tap_stack.tf - Complete infrastructure stack for startup application
 
 # ==================== VARIABLES ====================
 variable "region" {
@@ -735,11 +735,8 @@ output "internet_gateway_id" {
   value       = aws_internet_gateway.main.id
 }
 
-```
-
 # provider.tf
 
-```hcl
 
 terraform {
   required_version = ">= 1.4.0"
