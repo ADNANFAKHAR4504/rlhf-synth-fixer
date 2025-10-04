@@ -345,12 +345,7 @@ class TapStack(pulumi.ComponentResource):
             description="Usage plan for metrics API",
             api_stages=[{
                 "api_id": self.api.id,
-                "stage": self.api_stage.stage_name,
-                "throttle": [{
-                    "path": "/*/*",
-                    "rate_limit": 1000,
-                    "burst_limit": 2000
-                }]
+                "stage": self.api_stage.stage_name
             }],
             quota_settings={
                 "limit": 10000,
