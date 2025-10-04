@@ -320,7 +320,7 @@ describe('TapStack', () => {
   describe('Kinesis Data Stream', () => {
     test('should create Kinesis Data Stream with correct properties', () => {
       template.hasResourceProperties('AWS::Kinesis::Stream', {
-        // Name now includes timestamp suffix, so we skip name validation
+        Name: `iot-sensor-data-stream-${environmentSuffix}`,
         ShardCount: 2,
         RetentionPeriodHours: 24,
         StreamModeDetails: {
@@ -372,7 +372,7 @@ describe('TapStack', () => {
   describe('Kinesis Data Firehose', () => {
     test('should create Firehose delivery stream', () => {
       template.hasResourceProperties('AWS::KinesisFirehose::DeliveryStream', {
-        // Name now includes timestamp suffix, so we skip name validation
+        DeliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}`,
         DeliveryStreamType: 'KinesisStreamAsSource',
         ExtendedS3DestinationConfiguration: {
           BucketARN: {

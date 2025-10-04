@@ -117,7 +117,7 @@ export class TapStack extends cdk.Stack {
 
     // Kinesis Data Stream with auto-scaling and encryption
     const sensorDataStream = new kinesis.Stream(this, 'SensorDataStream', {
-      streamName: `iot-sensor-data-stream-${environmentSuffix}-${Date.now()}`,
+      streamName: `iot-sensor-data-stream-${environmentSuffix}`,
       shardCount: 2, // Start with 2 shards for 500k daily messages
       retentionPeriod: cdk.Duration.hours(24),
       streamMode: kinesis.StreamMode.PROVISIONED,
@@ -312,7 +312,7 @@ def handler(event, context):
       this,
       'FirehoseDeliveryStream',
       {
-        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
+        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}`,
         deliveryStreamType: 'KinesisStreamAsSource',
         kinesisStreamSourceConfiguration: {
           kinesisStreamArn: sensorDataStream.streamArn,
