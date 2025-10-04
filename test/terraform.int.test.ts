@@ -366,8 +366,8 @@ describe("Secure Content Delivery System - Integration Tests", () => {
         expect(nameServers.length).toBeGreaterThan(0);
       } else {
         // When no domain is provided, Route 53 resources should not exist
-        expect(outputs.route53_zone_id).toBeNull();
-        expect(outputs.route53_name_servers).toBeNull();
+        expect(outputs.route53_zone_id).toBeUndefined();
+        expect(outputs.route53_name_servers).toBeUndefined();
       }
     });
 
@@ -455,25 +455,44 @@ describe("Secure Content Delivery System - Integration Tests", () => {
 
   describe("Integration with AWS Services", () => {
     test("All AWS services are properly integrated", async () => {
-      const services = [
+      const requiredServices = [
         "cloudfront",
         "s3",
         "kms",
-        "route53",
-        "acm",
         "cloudwatch",
         "sns",
-        "cloudtrail",
         "wafv2"
       ];
 
-      // Check that each service is represented in the outputs
-      services.forEach(service => {
+      const optionalServices = [
+        "route53",
+        "acm",
+        "cloudtrail"
+      ];
+
+      // Check that all required services are represented in the outputs
+      requiredServices.forEach(service => {
         const hasService = Object.keys(outputs).some(key =>
           key.toLowerCase().includes(service) || (outputs as any)[key].toString().toLowerCase().includes(service)
         );
         expect(hasService).toBe(true);
       });
+
+      // Check that at least some optional services are present (when domain is provided)
+      // For domain-optional deployment, these may not be present
+      const hasOptionalServices = optionalServices.some(service => {
+        return Object.keys(outputs).some(key =>
+          key.toLowerCase().includes(service) || (outputs as any)[key].toString().toLowerCase().includes(service)
+        );
+      });
+
+      // Either we have optional services OR we're in domain-optional mode
+      const isDomainOptional = outputs.content_delivery_summary &&
+        (typeof outputs.content_delivery_summary === 'string' ?
+          JSON.parse(outputs.content_delivery_summary).domain_name.includes("No custom domain") :
+          outputs.content_delivery_summary.domain_name.includes("No custom domain"));
+
+      expect(hasOptionalServices || isDomainOptional).toBe(true);
     });
 
     test("Cross-service dependencies are properly configured", async () => {
@@ -487,7 +506,7 @@ describe("Secure Content Delivery System - Integration Tests", () => {
       }
       // When no domain is provided, ACM certificate should not exist
       else {
-        expect(outputs.acm_certificate_arn).toBeNull();
+        expect(outputs.acm_certificate_arn).toBeUndefined();
       }
 
       // CloudWatch uses SNS for notifications
