@@ -143,7 +143,7 @@ class TapStack extends Stack {
     private final RestApi validationApi;
     private final UserPool userPool;
 
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         this.environmentSuffix = Optional.ofNullable(props)
