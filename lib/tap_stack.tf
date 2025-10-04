@@ -265,6 +265,76 @@ resource "aws_s3_bucket_acl" "logs" {
   depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 
+# Sample content for testing
+resource "aws_s3_object" "sample_content" {
+  bucket       = aws_s3_bucket.content.id
+  key          = "index.html"
+  content      = <<-EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Content Delivery System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .status { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50; }
+        .info { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #2196F3; }
+        .feature { margin: 15px 0; padding: 10px; background: #f9f9f9; border-radius: 5px; }
+        .success { color: #4CAF50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Secure Content Delivery System</h1>
+            <p>Successfully deployed with Terraform</p>
+        </div>
+        
+        <div class="status">
+            <h3 class="success">✅ System Status: OPERATIONAL</h3>
+            <p>Your secure content delivery infrastructure is live and ready to serve content globally.</p>
+        </div>
+        
+        <div class="info">
+            <h3>📊 System Configuration</h3>
+            <div class="feature"><strong>CloudFront Distribution:</strong> Global CDN with HTTPS</div>
+            <div class="feature"><strong>S3 Storage:</strong> Encrypted with KMS</div>
+            <div class="feature"><strong>WAF Protection:</strong> Web Application Firewall enabled</div>
+            <div class="feature"><strong>Monitoring:</strong> CloudWatch alarms and dashboard</div>
+            <div class="feature"><strong>Security:</strong> Origin Access Identity (OAI) configured</div>
+            <div class="feature"><strong>Cost Optimization:</strong> S3 lifecycle policies enabled</div>
+        </div>
+        
+        <div class="info">
+            <h3>🔗 Access Information</h3>
+            <p><strong>Test URL:</strong> <a href="https://${aws_cloudfront_distribution.content.domain_name}" target="_blank">https://${aws_cloudfront_distribution.content.domain_name}</a></p>
+            <p><strong>CloudFront Domain:</strong> ${aws_cloudfront_distribution.content.domain_name}</p>
+            <p><strong>S3 Bucket:</strong> ${aws_s3_bucket.content.bucket}</p>
+        </div>
+        
+        <div class="info">
+            <h3>📝 Next Steps</h3>
+            <p>1. Upload your e-books and content to the S3 bucket</p>
+            <p>2. Configure your domain name (if not using CloudFront default)</p>
+            <p>3. Set up monitoring alerts</p>
+            <p>4. Test content delivery performance</p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+  content_type = "text/html"
+
+  tags = {
+    Name        = "${var.project_name}-sample-content-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 # Set ownership controls to allow ACLs
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
