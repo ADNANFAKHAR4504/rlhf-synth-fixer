@@ -211,7 +211,7 @@ for ((i=0; i<TASK_COUNT; i++)); do
         -v "$(pwd)/task_reports.csv:/app/task_reports.csv" \
         -e AWS_ACCESS_KEY_ID="$(aws configure get aws_access_key_id)" \
         -e AWS_SECRET_ACCESS_KEY="$(aws configure get aws_secret_access_key)" \
-        -e AWS_DEFAULT_REGION="us-east-1" \
+        -e AWS_DEFAULT_REGION="us-west-1" \
         -e CURRENT_ACCOUNT_ID="$CURRENT_ACCOUNT_ID" \
         -e TASK_PATH="$TASK_PATH" \
         -e TASK_ID="$WORK_ITEM_ID" \

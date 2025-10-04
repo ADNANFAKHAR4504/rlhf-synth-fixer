@@ -63,7 +63,7 @@ Execute these phases in sequence to deliver production-ready IaC:
    ```
 
     - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
-      region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+      region name. e.g: `echo "us-west-1" > lib/AWS_REGION`
 6. Install dependencies inside the worktree with error handling:
     - If language is py: `pipenv install --dev --ignore-pipfile`
     - If language is not py: `npm ci`
@@ -83,7 +83,7 @@ Additional:
   that can block future tasks, document it in `.claude/lessons_learnt.md`
 
 ## Status Reporting Requirements
-You must always report in each log, the taskId you're working on and the region specified for deployment (default is us-east-1).
+You must always report in each log, the taskId you're working on and the region specified for deployment (default is us-west-1).
 
 All subagents MUST report their execution status to the coordinator using the following format:
 

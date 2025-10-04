@@ -1491,7 +1491,7 @@ def handler(event, context):
             # Don't delete existing recorders on stack deletion
             return send_response(event, context, 'SUCCESS', {
                 'RecorderName': event.get('PhysicalResourceId', 'not-found'),
-                'RecorderArn': f"arn:aws:config:us-east-1:123456789012:configuration-recorder/not-found"
+                'RecorderArn': f"arn:aws:config:us-west-1:123456789012:configuration-recorder/not-found"
             })
         
         bucket_name = event['ResourceProperties']['BucketName']

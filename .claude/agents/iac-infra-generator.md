@@ -27,7 +27,7 @@ generates infrastructure described in the task description.
 
 2. **Analyze Configuration**
    - Read `metadata.json` for platform (cfn/cdk/cdktf/terraform/pulumi) and language
-   - Check `lib/AWS_REGION` for target region (default: us-east-1)
+   - Check `lib/AWS_REGION` for target region (default: us-west-1)
 
 3. **Generate Solution**
    - Use the `lib/PROMPT.md` to get a response.

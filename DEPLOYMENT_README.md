@@ -6,7 +6,7 @@
 
 ```bash
 # Get your existing GuardDuty detector ID and deploy using it
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
 cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detector_id=$DETECTOR_ID
 ```
 
@@ -29,10 +29,10 @@ cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detecto
 **Always run this check before deploying:**
 ```bash
 # Check for existing GuardDuty detector
-aws guardduty list-detectors --region us-east-1
+aws guardduty list-detectors --region us-west-1
 
 # Check for existing Config recorder  
-aws configservice describe-configuration-recorders --region us-east-1
+aws configservice describe-configuration-recorders --region us-west-1
 ```
 
 If either command returns results, you **MUST** use the "Existing AWS Account" deployment method below.
@@ -51,10 +51,10 @@ cdk deploy
 **Step 1: Get existing resource identifiers:**
 ```bash
 # Get existing GuardDuty detector ID (if any)
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
 
 # Get existing Config recorder name (if any)
-RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-west-1)
 
 echo "Existing GuardDuty Detector: $DETECTOR_ID"
 echo "Existing Config Recorder: $RECORDER_NAME"
@@ -150,7 +150,7 @@ cdk deploy
 **Account with existing GuardDuty detector:**
 ```bash
 # Get detector ID
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
 echo "Using existing GuardDuty detector: $DETECTOR_ID"
 
 # Deploy with existing detector
@@ -160,7 +160,7 @@ cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detecto
 **Account with existing Config recorder:**
 ```bash
 # Get recorder name
-RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-west-1)
 
 # Deploy with existing recorder
 cdk deploy -c use_existing_config_recorder=true -c existing_config_recorder_name="$RECORDER_NAME"
@@ -169,8 +169,8 @@ cdk deploy -c use_existing_config_recorder=true -c existing_config_recorder_name
 **Account with both existing resources:**
 ```bash
 # Get both IDs/names
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
-RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-west-1)
 
 # Deploy with both existing resources
 cdk deploy \
@@ -189,7 +189,7 @@ cdk deploy \
 **Solution**:
 ```bash
 # 1. Find your existing detector ID
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
 echo "Existing detector: $DETECTOR_ID"
 
 # 2. Redeploy using the existing detector
@@ -203,7 +203,7 @@ cdk deploy -c use_existing_guardduty_detector=true -c existing_guardduty_detecto
 **Solution**:
 ```bash
 # 1. Find your existing recorder name
-RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-west-1)
 echo "Existing recorder: $RECORDER_NAME"
 
 # 2. Redeploy using the existing recorder
@@ -213,8 +213,8 @@ cdk deploy -c use_existing_config_recorder=true -c existing_config_recorder_name
 ### 🟡 Both Resources Exist?
 ```bash
 # Get both existing resources
-DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-east-1)
-RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-east-1)
+DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text --region us-west-1)
+RECORDER_NAME=$(aws configservice describe-configuration-recorders --query 'ConfigurationRecorders[0].name' --output text --region us-west-1)
 
 # Deploy using both existing resources
 cdk deploy \
@@ -262,9 +262,9 @@ cdk import
 ### Verification Commands
 ```bash
 # Verify deployment was successful
-aws cloudformation describe-stacks --stack-name TapStackpr3365 --region us-east-1 --query 'Stacks[0].StackStatus'
+aws cloudformation describe-stacks --stack-name TapStackpr3365 --region us-west-1 --query 'Stacks[0].StackStatus'
 
 # Check deployed resources
-aws guardduty list-detectors --region us-east-1
-aws configservice describe-configuration-recorders --region us-east-1
+aws guardduty list-detectors --region us-west-1
+aws configservice describe-configuration-recorders --region us-west-1
 ```

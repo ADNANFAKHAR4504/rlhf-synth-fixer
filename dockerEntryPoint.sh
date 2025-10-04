@@ -175,7 +175,7 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
 
     # Define bucket-region pairs
     declare -A BUCKETS=(
-        ["iac-rlhf-cfn-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-$CURRENT_ACCOUNT_ID"]="us-west-1"
         ["iac-rlhf-cfn-states-ap-northeast-1-$CURRENT_ACCOUNT_ID"]="ap-northeast-1"
         ["iac-rlhf-cfn-states-ap-south-1-$CURRENT_ACCOUNT_ID"]="ap-south-1"
         ["iac-rlhf-cfn-states-ap-southeast-1-$CURRENT_ACCOUNT_ID"]="ap-southeast-1"
@@ -185,12 +185,12 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         ["iac-rlhf-cfn-states-eu-west-1-$CURRENT_ACCOUNT_ID"]="eu-west-1"
         ["iac-rlhf-cfn-states-eu-west-2-$CURRENT_ACCOUNT_ID"]="eu-west-2"
         ["iac-rlhf-cfn-states-eu-west-3-$CURRENT_ACCOUNT_ID"]="eu-west-3"
-        ["iac-rlhf-cfn-states-us-east-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-west-1"
         ["iac-rlhf-cfn-states-us-east-2-$CURRENT_ACCOUNT_ID"]="us-east-2"
         ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-west-1"
         ["iac-rlhf-cfn-states-us-west-2-$CURRENT_ACCOUNT_ID"]="us-west-2"
-        ["iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
-        ["iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"]="us-west-1"
+        ["iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"]="us-west-1"
     )
     
     # Buckets that need versioning enabled
@@ -225,8 +225,8 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
             MAX_RETRIES=3
             RETRY_DELAY=5  # seconds
 
-            if [ "$region" = "us-east-1" ]; then
-                # us-east-1 doesn't need LocationConstraint
+            if [ "$region" = "us-west-1" ]; then
+                # us-west-1 doesn't need LocationConstraint
                 for ((i=1; i<=MAX_RETRIES; i++)); do
                     if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null; then
                         [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
@@ -331,13 +331,13 @@ PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 [ "$REPORT" != "1" ] && echo "Detected project: platform=$PLATFORM, language=$LANGUAGE"
 
-# Set CFN_S3_BUCKET. If lib/AWS_REGION is present, use the region there. If not use us-east-1
+# Set CFN_S3_BUCKET. If lib/AWS_REGION is present, use the region there. If not use us-west-1
 if [ -f "lib/AWS_REGION" ]; then
     region="$(cat lib/AWS_REGION)"
     export AWS_REGION="$region"
     export AWS_DEFAULT_REGION="$region"
 else
-    region="us-east-1"
+    region="us-west-1"
 fi
 
 export CFN_S3_BUCKET="iac-rlhf-cfn-states-$region-$CURRENT_ACCOUNT_ID"

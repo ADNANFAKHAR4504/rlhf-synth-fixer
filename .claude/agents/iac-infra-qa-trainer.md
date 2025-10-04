@@ -45,7 +45,7 @@ that can be deployed with the current configuration of the ci-cd pipelines.
     attached to all resource names to avoid conflicts between deployments. Multiple deployments can be
     deploying to dev, qa, stage envs. ENVIRONMENT_SUFFIX is there to differentiate resource names deployed to the
     same envs.
-  - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
+  - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-west-1
   - If deployment fails, fix the code until it deploys succesfully.
   - If you are not able to deploy, report this error and finish your execution with an error message.
   - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
