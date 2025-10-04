@@ -11,7 +11,9 @@ import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.ecs.patterns.*;
 import software.amazon.awscdk.services.rds.*;
 import software.amazon.awscdk.services.dynamodb.*;
-import software.amazon.awscdk.services.lambda.*;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.LayerVersion;
 import software.amazon.awscdk.services.lambda.eventsources.*;
 import software.amazon.awscdk.services.apigateway.*;
 import software.amazon.awscdk.services.s3.*;
@@ -20,6 +22,8 @@ import software.amazon.awscdk.services.ses.*;
 import software.amazon.awscdk.services.logs.*;
 import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.secretsmanager.*;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.applicationautoscaling.EnableScalingProps;
 import software.constructs.Construct;
 
 import java.util.Arrays;
@@ -385,7 +389,7 @@ class TapStack extends Stack {
         // Create Lambda function with inline code
         Function function = Function.Builder.create(this, "QrCodeGenerator" + environmentSuffix)
                 .functionName("QRCodeGenerator-" + environmentSuffix)
-                .runtime(Runtime.PYTHON_3_11)
+                .runtime(software.amazon.awscdk.services.lambda.Runtime.PYTHON_3_11)
                 .code(Code.fromInline(qrGeneratorCode))
                 .handler("index.lambda_handler")
                 .memorySize(512)
@@ -556,7 +560,7 @@ class TapStack extends Stack {
 
         Function validationFunction = Function.Builder.create(this, "ValidationFunction" + environmentSuffix)
                 .functionName("TicketValidator-" + environmentSuffix)
-                .runtime(Runtime.PYTHON_3_11)
+                .runtime(software.amazon.awscdk.services.lambda.Runtime.PYTHON_3_11)
                 .code(Code.fromInline(validationCode))
                 .handler("index.lambda_handler")
                 .memorySize(256)
@@ -715,7 +719,7 @@ class TapStack extends Stack {
 
         container.addPortMappings(PortMapping.builder()
                 .containerPort(8080)
-                .protocol(Protocol.TCP)
+                .protocol(software.amazon.awscdk.services.ecs.Protocol.TCP)
                 .build());
 
         // Create Application Load Balanced Fargate Service
@@ -749,8 +753,8 @@ class TapStack extends Stack {
                 .build());
 
         // Configure health checks
-        albService.getTargetGroup().configureHealthCheck(HealthCheck.builder()
-                .path("/health")
+        albService.getTargetGroup().configureHealthCheck(software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck.builder()
+                .healthyHttpCodes("200")
                 .interval(Duration.seconds(30))
                 .timeout(Duration.seconds(5))
                 .healthyThresholdCount(2)
