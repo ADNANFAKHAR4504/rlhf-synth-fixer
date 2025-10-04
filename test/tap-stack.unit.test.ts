@@ -471,7 +471,7 @@ describe('TapStack', () => {
           Ref: 'GlueDatabase',
         },
         Schedule: {
-          ScheduleExpression: 'rate(6 hours)',
+          ScheduleExpression: 'cron(0 */6 * * ? *)',
         },
         SchemaChangePolicy: {
           UpdateBehavior: 'UPDATE_IN_DATABASE',

@@ -441,7 +441,7 @@ def handler(event, context):
         ],
       },
       schedule: {
-        scheduleExpression: 'rate(6 hours)', // Run every 6 hours for schema updates
+        scheduleExpression: 'cron(0 */6 * * ? *)', // Run every 6 hours for schema updates
       },
       schemaChangePolicy: {
         updateBehavior: 'UPDATE_IN_DATABASE',
