@@ -133,12 +133,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # SNS topic subscription removed for security
-        # In production, configure subscriptions manually via AWS Console
-        # or through environment-specific configuration with proper email verification
-
-        # Create DynamoDB table for time-series metrics storage
-        # Using DynamoDB as alternative to Timestream
         self.metrics_table = aws.dynamodb.Table(
             f"metrics-timeseries-{self.environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
@@ -643,7 +637,7 @@ def export_metrics_to_s3():
             'body': json.dumps({'error': str(e)})
         }
 '''
-
+```
 
 ## Key Features
 
