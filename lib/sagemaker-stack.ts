@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
 import { Construct } from 'constructs';
 
 interface SageMakerStackProps {
@@ -82,7 +82,10 @@ export class SageMakerStack extends cdk.NestedStack {
         instanceType: 'ml.t3.medium',
         roleArn: this.notebookRole.roleArn,
         notebookInstanceName: `training-notebook-${props.environmentSuffix}`,
-        subnetId: props.vpc.privateSubnets[0].subnetId,
+        // Use first available private subnet if any, otherwise use public subnet
+        subnetId: props.vpc.privateSubnets.length > 0
+          ? props.vpc.privateSubnets[0].subnetId
+          : props.vpc.publicSubnets[0].subnetId,
         securityGroupIds: [securityGroup.securityGroupId],
         defaultCodeRepository:
           'https://github.com/aws/amazon-sagemaker-examples.git',

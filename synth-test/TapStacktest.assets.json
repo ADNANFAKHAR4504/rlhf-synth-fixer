@@ -1,0 +1,126 @@
+{
+  "version": "45.0.0",
+  "files": {
+    "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200": {
+      "displayName": "TapStacktest/NetworkingStack/Custom::VpcRestrictDefaultSGCustomResourceProvider Code",
+      "source": {
+        "path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6": {
+      "displayName": "TapStacktest/StorageStack/Custom::S3AutoDeleteObjectsCustomResourceProvider Code",
+      "source": {
+        "path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+        "packaging": "zip"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "8b2dab6d850a66b87c6e159287b478f6890e17897e2d7af1ab4dfd81cdf9b1d8": {
+      "displayName": "NetworkingStack Nested Stack Template",
+      "source": {
+        "path": "TapStacktestNetworkingStack70E7D999.nested.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "8b2dab6d850a66b87c6e159287b478f6890e17897e2d7af1ab4dfd81cdf9b1d8.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "cebaef42524fb1a001121d934535cf03c27b317f037d2bf86ce422142b7ecbd5": {
+      "displayName": "StorageStack Nested Stack Template",
+      "source": {
+        "path": "TapStacktestStorageStack2469751C.nested.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "cebaef42524fb1a001121d934535cf03c27b317f037d2bf86ce422142b7ecbd5.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "0f30a49b4a23a1ea8c086a810c2ea70600c43c3b90299d3ca611ec72891b294c": {
+      "displayName": "MonitoringStack Nested Stack Template",
+      "source": {
+        "path": "TapStacktestMonitoringStack46234D0D.nested.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "0f30a49b4a23a1ea8c086a810c2ea70600c43c3b90299d3ca611ec72891b294c.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "77eb3c27689af445b5527337e2755331eda5a96d28fc19f9c36c635bd6e70658": {
+      "displayName": "SageMakerStack Nested Stack Template",
+      "source": {
+        "path": "TapStacktestSageMakerStack888CF24C.nested.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "77eb3c27689af445b5527337e2755331eda5a96d28fc19f9c36c635bd6e70658.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "0113a4db800cdf906f45d313672a233cc7b0b8a3cfb0972f9058b63078916bcd": {
+      "displayName": "BatchStack Nested Stack Template",
+      "source": {
+        "path": "TapStacktestBatchStack6459C299.nested.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "0113a4db800cdf906f45d313672a233cc7b0b8a3cfb0972f9058b63078916bcd.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    },
+    "5a97650d7d8ce7fe760e76f128f9358d84436907482d471d8b592c90186da8b3": {
+      "displayName": "TapStacktest Template",
+      "source": {
+        "path": "TapStacktest.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "656003592164-us-east-1": {
+          "bucketName": "cdk-hnb659fds-assets-656003592164-us-east-1",
+          "objectKey": "5a97650d7d8ce7fe760e76f128f9358d84436907482d471d8b592c90186da8b3.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::656003592164:role/cdk-hnb659fds-file-publishing-role-656003592164-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

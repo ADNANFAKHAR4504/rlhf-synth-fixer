@@ -1,0 +1,507 @@
+{
+ "Resources": {
+  "BatchSecurityGroup77EC865F": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Batch compute environment",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "test"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "referencetoTapStacktestNetworkingStackNestedStackNetworkingStackNestedStackResource30904E1EOutputsTapStacktestNetworkingStackTrainingVPC6C86E502Ref"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/BatchSecurityGroup/Resource"
+   }
+  },
+  "ComputeEnvironmentInstanceProfileRole8A54EE11": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "test"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/ComputeEnvironment/InstanceProfileRole/Resource"
+   }
+  },
+  "ComputeEnvironmentInstanceProfile3A1CEBD9": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "ComputeEnvironmentInstanceProfileRole8A54EE11"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/ComputeEnvironment/InstanceProfile"
+   }
+  },
+  "ComputeEnvironmentC570994D": {
+   "Type": "AWS::Batch::ComputeEnvironment",
+   "Properties": {
+    "ComputeEnvironmentName": "batch-inference-test",
+    "ComputeResources": {
+     "AllocationStrategy": "SPOT_PRICE_CAPACITY_OPTIMIZED",
+     "BidPercentage": 80,
+     "InstanceRole": {
+      "Fn::GetAtt": [
+       "ComputeEnvironmentInstanceProfile3A1CEBD9",
+       "Arn"
+      ]
+     },
+     "InstanceTypes": [
+      "m5.large",
+      "optimal"
+     ],
+     "MaxvCpus": 256,
+     "MinvCpus": 0,
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "BatchSecurityGroup77EC865F",
+        "GroupId"
+       ]
+      }
+     ],
+     "Subnets": [],
+     "Tags": {
+      "Author": "unknown",
+      "Environment": "test",
+      "Repository": "unknown"
+     },
+     "Type": "SPOT"
+    },
+    "ReplaceComputeEnvironment": false,
+    "State": "ENABLED",
+    "Tags": {
+     "Author": "unknown",
+     "Environment": "test",
+     "Repository": "unknown"
+    },
+    "Type": "managed",
+    "UpdatePolicy": {}
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/ComputeEnvironment/Resource"
+   }
+  },
+  "JobQueueEE3AD499": {
+   "Type": "AWS::Batch::JobQueue",
+   "Properties": {
+    "ComputeEnvironmentOrder": [
+     {
+      "ComputeEnvironment": {
+       "Fn::GetAtt": [
+        "ComputeEnvironmentC570994D",
+        "ComputeEnvironmentArn"
+       ]
+      },
+      "Order": 1
+     }
+    ],
+    "JobQueueName": "inference-queue-test",
+    "Priority": 1,
+    "State": "ENABLED",
+    "Tags": {
+     "Author": "unknown",
+     "Environment": "test",
+     "Repository": "unknown"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/JobQueue/Resource"
+   }
+  },
+  "JobExecutionRoleF19B4342": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "test"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/JobExecutionRole/Resource"
+   }
+  },
+  "JobExecutionRoleDefaultPolicyE87C0721": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:Abort*",
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackModelBucket5B9CD771Arn"
+           },
+           "/*"
+          ]
+         ]
+        },
+        {
+         "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackModelBucket5B9CD771Arn"
+        }
+       ]
+      },
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DEArn"
+       }
+      },
+      {
+       "Action": "ecr:GetAuthorizationToken",
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "JobExecutionRoleDefaultPolicyE87C0721",
+    "Roles": [
+     {
+      "Ref": "JobExecutionRoleF19B4342"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/JobExecutionRole/DefaultPolicy/Resource"
+   }
+  },
+  "ContainerDefExecutionRole81D8BECA": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ecs-tasks.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "test"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/ContainerDef/ExecutionRole/Resource"
+   }
+  },
+  "ContainerDefExecutionRoleDefaultPolicyA938569B": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": "arn:aws:logs:us-east-1:656003592164:log-group:/aws/batch/job:*"
+      },
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DEArn"
+       }
+      },
+      {
+       "Action": "ecr:GetAuthorizationToken",
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ContainerDefExecutionRoleDefaultPolicyA938569B",
+    "Roles": [
+     {
+      "Ref": "ContainerDefExecutionRole81D8BECA"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/ContainerDef/ExecutionRole/DefaultPolicy/Resource"
+   }
+  },
+  "JobDefinition24FFE3ED": {
+   "Type": "AWS::Batch::JobDefinition",
+   "Properties": {
+    "ContainerProperties": {
+     "Environment": [],
+     "ExecutionRoleArn": {
+      "Fn::GetAtt": [
+       "ContainerDefExecutionRole81D8BECA",
+       "Arn"
+      ]
+     },
+     "Image": {
+      "Fn::Join": [
+       "",
+       [
+        {
+         "Fn::Select": [
+          4,
+          {
+           "Fn::Split": [
+            ":",
+            {
+             "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DEArn"
+            }
+           ]
+          }
+         ]
+        },
+        ".dkr.ecr.",
+        {
+         "Fn::Select": [
+          3,
+          {
+           "Fn::Split": [
+            ":",
+            {
+             "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DEArn"
+            }
+           ]
+          }
+         ]
+        },
+        ".",
+        {
+         "Ref": "AWS::URLSuffix"
+        },
+        "/",
+        {
+         "Ref": "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DERef"
+        },
+        ":latest"
+       ]
+      ]
+     },
+     "JobRoleArn": {
+      "Fn::GetAtt": [
+       "JobExecutionRoleF19B4342",
+       "Arn"
+      ]
+     },
+     "ReadonlyRootFilesystem": false,
+     "ResourceRequirements": [
+      {
+       "Type": "MEMORY",
+       "Value": "8192"
+      },
+      {
+       "Type": "VCPU",
+       "Value": "4"
+      }
+     ]
+    },
+    "JobDefinitionName": "inference-job-test",
+    "PlatformCapabilities": [
+     "EC2"
+    ],
+    "RetryStrategy": {
+     "Attempts": 3
+    },
+    "Tags": {
+     "Author": "unknown",
+     "Environment": "test",
+     "Repository": "unknown"
+    },
+    "Timeout": {
+     "AttemptDurationSeconds": 3600
+    },
+    "Type": "container"
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/JobDefinition/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/81U22obMRD9lugxyFt3KRT85rimJNDEdfK2mKAdjRM5WklII7tm2X8v2osvGNJCoe3DIs2ZozkzsyPlWT7+lI2vxC6MQL6NtCqz+h4DoXwkAW9c7MJzjZBn9SNC9Ir2X72NrqjZ1gGbsGvGmcQAXjlS1vSI0Nruplo/RCptNJJNyEdsVny2NmdxGl4Kgtes/iaMeEE5h3wOYWYrFwnnZqu8NRUaKmoGF+C9qLAXPCazdfAYS4MU2KRmYdgWq4azcCqdQHbNVpwFZ6nLsNvfKLlAD2hIvAwClfixnbkYBlOZU1OZQMIAPu0dDhgaUWqUQ2CPTgvAy9LYZC106Jtz6eZ3tvweMWJRd5TB5nMIc8hn1pBQBv0XXCuj0k9InjtbHoGiZptT+6RxMBzvbY/k91MirBwNlZCq0EZqrUMOx2gNV6LK6qXVWNRMhBArlDf71H7nlQHlhJ4C2GhoGI+Wkw5M4TA1TWpyOwQLqxWo1MiiPsP2U99zVw3/u1JSPtnFINEx0pneSyTg9dZoZfDgS7P1a+f7cd/3/kH53mo8TMF/WWA7ZynxtN7292vh7Vpp5B0ziRz0n2wiX6R1Ccv0shGmuxXOMvlt+N/Itg3pCm8avsRgowdse9B/LeMhkovUcGMlZpvwYZvn2cfP2fhqE5Qa+WjSbc6W3foTSXre4P8FAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStacktest/BatchStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ComputeEnvironmentArn": {
+   "Description": "Batch compute environment ARN",
+   "Value": {
+    "Fn::GetAtt": [
+     "ComputeEnvironmentC570994D",
+     "ComputeEnvironmentArn"
+    ]
+   }
+  },
+  "JobQueueArn": {
+   "Description": "Batch job queue ARN",
+   "Value": {
+    "Fn::GetAtt": [
+     "JobQueueEE3AD499",
+     "JobQueueArn"
+    ]
+   }
+  },
+  "JobDefinitionArn": {
+   "Description": "Batch job definition ARN",
+   "Value": {
+    "Ref": "JobDefinition24FFE3ED"
+   }
+  }
+ },
+ "Parameters": {
+  "referencetoTapStacktestNetworkingStackNestedStackNetworkingStackNestedStackResource30904E1EOutputsTapStacktestNetworkingStackTrainingVPC6C86E502Ref": {
+   "Type": "String"
+  },
+  "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackModelBucket5B9CD771Arn": {
+   "Type": "String"
+  },
+  "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DEArn": {
+   "Type": "String"
+  },
+  "referencetoTapStacktestStorageStackNestedStackStorageStackNestedStackResource6D3E7340OutputsTapStacktestStorageStackTrainingRepository701D07DERef": {
+   "Type": "String"
+  }
+ }
+}

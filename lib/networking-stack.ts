@@ -9,13 +9,14 @@ interface NetworkingStackProps {
 export class NetworkingStack extends cdk.NestedStack {
   public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, _props: NetworkingStackProps) {
+  constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
+    // Create VPC with simplified configuration to avoid EIP limits
     this.vpc = new ec2.Vpc(this, 'TrainingVPC', {
       ipAddresses: ec2.IpAddresses.cidr('10.220.0.0/16'),
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 0, // Use 0 NAT gateways to avoid EIP limit
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -25,7 +26,7 @@ export class NetworkingStack extends cdk.NestedStack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // No NAT gateway needed
         },
       ],
     });
@@ -33,29 +34,29 @@ export class NetworkingStack extends cdk.NestedStack {
     // S3 VPC Endpoint
     this.vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
     // SageMaker VPC Endpoints
     this.vpc.addInterfaceEndpoint('SageMakerAPIEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_API,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
     this.vpc.addInterfaceEndpoint('SageMakerRuntimeEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
     // ECR VPC Endpoints
     this.vpc.addInterfaceEndpoint('ECREndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.ECR,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
     this.vpc.addInterfaceEndpoint('ECRDockerEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
     // Outputs

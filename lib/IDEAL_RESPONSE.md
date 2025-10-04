@@ -2,10 +2,19 @@
 
 Here's the CDK infrastructure code for the SageMaker model training platform:
 
+## Key Architecture Optimizations
+
+This implementation includes several optimizations to address AWS account resource limits:
+
+- **No NAT Gateway**: Eliminates Elastic IP usage by using `natGateways: 0`
+- **PRIVATE_ISOLATED Subnets**: Uses isolated private subnets instead of egress-enabled ones
+- **VPC Endpoints**: Provides AWS service connectivity without internet gateway dependency
+- **Flexible Subnet Selection**: SageMaker notebook falls back to public subnet if private subnets unavailable
+- **Resource Efficiency**: Optimized for accounts with VPC and EIP limits
+
 ## tap-stack.ts
 
 ```typescript
-// lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingStack } from './networking-stack';
@@ -72,7 +81,6 @@ export class TapStack extends cdk.Stack {
 ## networking-stack.ts
 
 ```typescript
-// lib/networking-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -84,57 +92,54 @@ interface NetworkingStackProps {
 export class NetworkingStack extends cdk.NestedStack {
   public readonly vpc: ec2.Vpc;
 
-  constructor(scope: Construct, id: string, _props: NetworkingStackProps) {
+  constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
+    // Create VPC with simplified configuration to avoid EIP limits
     this.vpc = new ec2.Vpc(this, 'TrainingVPC', {
-      cidr: '10.220.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.220.0.0/16'),
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 0, // Use 0 NAT gateways to avoid EIP limit
       subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
         {
           cidrMask: 24,
           name: 'Public',
           subnetType: ec2.SubnetType.PUBLIC,
         },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // No NAT gateway needed
+        },
       ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
     });
 
-    // S3 Gateway Endpoint
+    // S3 VPC Endpoint
     this.vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
-    // SageMaker API Endpoint
+    // SageMaker VPC Endpoints
     this.vpc.addInterfaceEndpoint('SageMakerAPIEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_API,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
-    // SageMaker Runtime Endpoint
     this.vpc.addInterfaceEndpoint('SageMakerRuntimeEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
-    // ECR API Endpoint
+    // ECR VPC Endpoints
     this.vpc.addInterfaceEndpoint('ECREndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.ECR,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
-    // ECR Docker Endpoint
     this.vpc.addInterfaceEndpoint('ECRDockerEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
     });
 
     // Outputs
@@ -154,7 +159,6 @@ export class NetworkingStack extends cdk.NestedStack {
 ## storage-stack.ts
 
 ```typescript
-// lib/storage-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -235,7 +239,6 @@ export class StorageStack extends cdk.NestedStack {
 ## sagemaker-stack.ts
 
 ```typescript
-// lib/sagemaker-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -320,7 +323,10 @@ export class SageMakerStack extends cdk.NestedStack {
         instanceType: 'ml.t3.medium',
         roleArn: this.notebookRole.roleArn,
         notebookInstanceName: `training-notebook-${props.environmentSuffix}`,
-        subnetId: props.vpc.privateSubnets[0].subnetId,
+        // Use first available private subnet if any, otherwise use public subnet
+        subnetId: props.vpc.privateSubnets.length > 0
+          ? props.vpc.privateSubnets[0].subnetId
+          : props.vpc.publicSubnets[0].subnetId,
         securityGroupIds: [securityGroup.securityGroupId],
         defaultCodeRepository:
           'https://github.com/aws/amazon-sagemaker-examples.git',
@@ -359,7 +365,6 @@ export class SageMakerStack extends cdk.NestedStack {
 ## batch-stack.ts
 
 ```typescript
-// lib/batch-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as batch from 'aws-cdk-lib/aws-batch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -486,7 +491,6 @@ export class BatchStack extends cdk.NestedStack {
 ## monitoring-stack.ts
 
 ```typescript
-// lib/monitoring-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
