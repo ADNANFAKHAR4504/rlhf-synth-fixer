@@ -64,7 +64,7 @@ describe('Weather Monitoring System Integration Tests', () => {
         });
         fail('Request should have failed');
       } catch (error: any) {
-        expect(error.response.status).toBe(500);
+        expect(error.response.status).toBe(400);
         expect(error.response.data.error).toContain('sensorId is required');
       }
     });
