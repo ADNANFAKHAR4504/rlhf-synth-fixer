@@ -274,15 +274,23 @@ def handler(event, context):
         effect: iam.Effect.ALLOW,
         actions: [
           'kinesis:DescribeStream',
-          'kinesis:DescribeStreamConsumer',
           'kinesis:DescribeStreamSummary',
+          'kinesis:DescribeStreamConsumer',
           'kinesis:GetShardIterator',
           'kinesis:ListShards',
           'kinesis:GetRecords',
-          'kinesis:ListStreams',
           'kinesis:SubscribeToShard',
         ],
         resources: [sensorDataStream.streamArn],
+      })
+    );
+
+    // These actions need "*" resource
+    firehoseRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['kinesis:ListStreams'],
+        resources: ['*'],
       })
     );
 
