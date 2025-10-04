@@ -267,20 +267,24 @@ def handler(event, context):
     });
 
     iotDataBucket.grantWrite(firehoseRole);
-    sensorDataStream.grantRead(firehoseRole);
-    
-    // Additional Kinesis permissions required for Firehose
-    firehoseRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'kinesis:DescribeStream',
-        'kinesis:GetShardIterator',
-        'kinesis:ListShards',
-        'kinesis:GetRecords',
-        'kinesis:ListStreams'
-      ],
-      resources: [sensorDataStream.streamArn],
-    }));
+
+    // Kinesis permissions required for Firehose
+    firehoseRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'kinesis:DescribeStream',
+          'kinesis:DescribeStreamConsumer',
+          'kinesis:DescribeStreamSummary',
+          'kinesis:GetShardIterator',
+          'kinesis:ListShards',
+          'kinesis:GetRecords',
+          'kinesis:ListStreams',
+          'kinesis:SubscribeToShard',
+        ],
+        resources: [sensorDataStream.streamArn],
+      })
+    );
 
     // CloudWatch log group for Firehose errors
     const firehoseLogGroup = new logs.LogGroup(this, 'FirehoseLogGroup', {
@@ -296,49 +300,53 @@ def handler(event, context):
 
     firehoseLogGroup.grantWrite(firehoseRole);
 
-    const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(this, 'FirehoseDeliveryStream', {
-      deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
-      deliveryStreamType: 'KinesisStreamAsSource',
-      kinesisStreamSourceConfiguration: {
-        kinesisStreamArn: sensorDataStream.streamArn,
-        roleArn: firehoseRole.roleArn,
-      },
-      extendedS3DestinationConfiguration: {
-        bucketArn: iotDataBucket.bucketArn,
-        roleArn: firehoseRole.roleArn,
-        prefix:
-          'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-        errorOutputPrefix: 'error-data/',
-        bufferingHints: {
-          intervalInSeconds: 300, // Batch for 5 minutes
-          sizeInMBs: 128, // Or 128MB, whichever comes first
+    const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(
+      this,
+      'FirehoseDeliveryStream',
+      {
+        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
+        deliveryStreamType: 'KinesisStreamAsSource',
+        kinesisStreamSourceConfiguration: {
+          kinesisStreamArn: sensorDataStream.streamArn,
+          roleArn: firehoseRole.roleArn,
         },
-        compressionFormat: 'UNCOMPRESSED', // Must be UNCOMPRESSED when data format conversion is enabled
-        cloudWatchLoggingOptions: {
-          enabled: true,
-          logGroupName: firehoseLogGroup.logGroupName,
-          logStreamName: firehoseLogStream.logStreamName,
-        },
-        dataFormatConversionConfiguration: {
-          enabled: true,
-          outputFormatConfiguration: {
-            serializer: {
-              parquetSerDe: {}, // Convert to Parquet for efficient querying
+        extendedS3DestinationConfiguration: {
+          bucketArn: iotDataBucket.bucketArn,
+          roleArn: firehoseRole.roleArn,
+          prefix:
+            'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+          errorOutputPrefix: 'error-data/',
+          bufferingHints: {
+            intervalInSeconds: 300, // Batch for 5 minutes
+            sizeInMBs: 128, // Or 128MB, whichever comes first
+          },
+          compressionFormat: 'UNCOMPRESSED', // Must be UNCOMPRESSED when data format conversion is enabled
+          cloudWatchLoggingOptions: {
+            enabled: true,
+            logGroupName: firehoseLogGroup.logGroupName,
+            logStreamName: firehoseLogStream.logStreamName,
+          },
+          dataFormatConversionConfiguration: {
+            enabled: true,
+            outputFormatConfiguration: {
+              serializer: {
+                parquetSerDe: {}, // Convert to Parquet for efficient querying
+              },
+            },
+            inputFormatConfiguration: {
+              deserializer: {
+                openXJsonSerDe: {},
+              },
+            },
+            schemaConfiguration: {
+              databaseName: `iot_sensor_db_${environmentSuffix}`,
+              tableName: 'sensor_data',
+              roleArn: firehoseRole.roleArn,
             },
           },
-          inputFormatConfiguration: {
-            deserializer: {
-              openXJsonSerDe: {},
-            },
-          },
-          schemaConfiguration: {
-            databaseName: `iot_sensor_db_${environmentSuffix}`,
-            tableName: 'sensor_data',
-            roleArn: firehoseRole.roleArn,
-          },
         },
-      },
-    });
+      }
+    );
 
     // ==================== IOT CORE LAYER ====================
 
