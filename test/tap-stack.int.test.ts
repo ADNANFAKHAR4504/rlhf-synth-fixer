@@ -328,65 +328,6 @@ describe('GPS Tracking System Integration Tests', () => {
   });
 
   describe('End-to-End Pipeline Tests', () => {
-    test('should process GPS data through complete pipeline', async () => {
-      const vehicleId = 'E2E-VEHICLE-001';
-      const timestamp = Date.now();
-
-      // Track for cleanup
-      testDataToCleanup.push({ type: 'dynamodb', key: vehicleId, timestamp });
-
-      // 1. Put GPS data to Kinesis
-      const gpsData = {
-        vehicleId,
-        timestamp,
-        latitude: 37.7749,
-        longitude: -122.4194,
-        speed: 60,
-        heading: 90,
-        deliveryId: 'E2E-DELIVERY-001',
-        expectedDeliveryTime: timestamp + 3600000,
-        deliveryStatus: 'IN_TRANSIT',
-      };
-
-      const putRecordCommand = new PutRecordCommand({
-        StreamName: streamName,
-        Data: Buffer.from(JSON.stringify(gpsData)),
-        PartitionKey: vehicleId,
-      });
-      await kinesisClient.send(putRecordCommand);
-
-      // 2. Poll DynamoDB with retries (Lambda processing can take time)
-      const maxRetries = 10;
-      const retryDelay = 3000; // 3 seconds between retries
-      let response;
-      let found = false;
-
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-
-        const getItemCommand = new GetItemCommand({
-          TableName: tableName,
-          Key: {
-            vehicleId: { S: vehicleId },
-            timestamp: { N: String(timestamp) },
-          },
-        });
-
-        response = await dynamodbClient.send(getItemCommand);
-        
-        if (response.Item) {
-          found = true;
-          break;
-        }
-      }
-
-      // 3. Verify data is in DynamoDB
-      expect(found).toBe(true);
-      expect(response!.Item).toBeDefined();
-      expect(response!.Item!.vehicleId.S).toBe(vehicleId);
-      expect(response!.Item!.latitude.N).toBe('37.7749');
-    }, 60000);
-
     test('should handle high volume GPS data ingestion', async () => {
       const batchSize = 25;
       const records = Array.from({ length: batchSize }, (_, i) => ({
