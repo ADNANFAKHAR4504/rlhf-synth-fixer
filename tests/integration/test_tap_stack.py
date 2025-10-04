@@ -11,7 +11,7 @@ import pytest
 from aws_cdk import App
 from typing import Optional
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../lib')))
 from tap_stack import TapStack, TapStackProps
 
 STACK_NAME = "TapStackpr3386"
