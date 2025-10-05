@@ -544,7 +544,7 @@ def handler(event, context):
 
     // 1. Kinesis Stream - High incoming records
     new cloudwatch.Alarm(this, 'KinesisHighThroughput', {
-      alarmName: `iot-kinesis-high-throughput-${environmentSuffix}`,
+      alarmName: `iot-kinesis-high-throughput-dev-${environmentSuffix}`,
       alarmDescription: 'Alert when Kinesis receives > 10000 records/minute',
       metric: sensorDataStream.metricIncomingRecords({
         period: cdk.Duration.minutes(1),
@@ -557,7 +557,7 @@ def handler(event, context):
 
     // 2. Lambda - High error rate
     new cloudwatch.Alarm(this, 'LambdaErrorRate', {
-      alarmName: `iot-lambda-high-error-rate-${environmentSuffix}`,
+      alarmName: `iot-lambda-high-error-rate-dev-${environmentSuffix}`,
       alarmDescription: 'Alert when Lambda error rate > 1%',
       metric: streamProcessor.metricErrors({
         period: cdk.Duration.minutes(5),
@@ -570,7 +570,7 @@ def handler(event, context):
 
     // 3. DynamoDB - Throttling
     new cloudwatch.Alarm(this, 'DynamoDBThrottling', {
-      alarmName: `iot-dynamodb-throttling-${environmentSuffix}`,
+      alarmName: `iot-dynamodb-throttling-dev-${environmentSuffix}`,
       alarmDescription: 'Alert when DynamoDB experiences throttling',
       metric: deviceStateTable.metricUserErrors({
         period: cdk.Duration.minutes(5),
@@ -593,7 +593,7 @@ def handler(event, context):
     });
 
     new cloudwatch.Alarm(this, 'FirehoseDataFreshness', {
-      alarmName: `iot-firehose-data-staleness-${environmentSuffix}`,
+      alarmName: `iot-firehose-data-staleness-dev-${environmentSuffix}`,
       alarmDescription:
         'Alert when Firehose data delivery is delayed > 10 minutes',
       metric: firehoseMetric,
@@ -604,7 +604,7 @@ def handler(event, context):
 
     // 5. Lambda - DLQ messages
     new cloudwatch.Alarm(this, 'LambdaDLQMessages', {
-      alarmName: `iot-lambda-dlq-messages-${environmentSuffix}`,
+      alarmName: `iot-lambda-dlq-messages-dev-${environmentSuffix}`,
       alarmDescription: 'Alert when Lambda sends messages to DLQ',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/SNS',
@@ -622,7 +622,7 @@ def handler(event, context):
 
     // 6. DynamoDB Metrics Table - Write throttling
     new cloudwatch.Alarm(this, 'DynamoDBMetricsThrottling', {
-      alarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
+      alarmName: `iot-dynamodb-metrics-throttling-dev-${environmentSuffix}`,
       alarmDescription:
         'Alert when DynamoDB metrics table experiences throttling',
       metric: sensorMetricsTable.metricUserErrors({

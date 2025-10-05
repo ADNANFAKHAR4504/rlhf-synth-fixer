@@ -490,7 +490,7 @@ describe('TapStack', () => {
   describe('CloudWatch Alarms', () => {
     test('should create Kinesis high throughput alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-kinesis-high-throughput-${environmentSuffix}`,
+        AlarmName: `iot-kinesis-high-throughput-dev-${environmentSuffix}`,
         AlarmDescription: 'Alert when Kinesis receives > 10000 records/minute',
         Threshold: 10000,
         EvaluationPeriods: 2,
@@ -499,7 +499,7 @@ describe('TapStack', () => {
 
     test('should create Lambda error rate alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-lambda-high-error-rate-${environmentSuffix}`,
+        AlarmName: `iot-lambda-high-error-rate-dev-${environmentSuffix}`,
         AlarmDescription: 'Alert when Lambda error rate > 1%',
         Threshold: 0.01,
         EvaluationPeriods: 2,
@@ -508,7 +508,7 @@ describe('TapStack', () => {
 
     test('should create DynamoDB throttling alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-dynamodb-throttling-${environmentSuffix}`,
+        AlarmName: `iot-dynamodb-throttling-dev-${environmentSuffix}`,
         AlarmDescription: 'Alert when DynamoDB experiences throttling',
         Threshold: 5,
         EvaluationPeriods: 2,
@@ -517,7 +517,7 @@ describe('TapStack', () => {
 
     test('should create Firehose data freshness alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-firehose-data-staleness-${environmentSuffix}`,
+        AlarmName: `iot-firehose-data-staleness-dev-${environmentSuffix}`,
         AlarmDescription:
           'Alert when Firehose data delivery is delayed > 10 minutes',
         Threshold: 600,
@@ -527,7 +527,7 @@ describe('TapStack', () => {
 
     test('should create Lambda DLQ messages alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-lambda-dlq-messages-${environmentSuffix}`,
+        AlarmName: `iot-lambda-dlq-messages-dev-${environmentSuffix}`,
         AlarmDescription: 'Alert when Lambda sends messages to DLQ',
         Threshold: 1,
         EvaluationPeriods: 1,
@@ -536,7 +536,7 @@ describe('TapStack', () => {
 
     test('should create DynamoDB metrics table throttling alarm', () => {
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `iot-dynamodb-metrics-throttling-${environmentSuffix}`,
+        AlarmName: `iot-dynamodb-metrics-throttling-dev-${environmentSuffix}`,
         AlarmDescription:
           'Alert when DynamoDB metrics table experiences throttling',
         Threshold: 5,
