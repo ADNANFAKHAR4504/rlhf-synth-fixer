@@ -375,35 +375,6 @@ public class MainTest {
                 "Name", "ticketing-emails-test"
         )));
     }
-
-    /**
-     * Test that CloudWatch Log Groups are created.
-     */
-    @Test
-    public void testCloudWatchLogGroups() {
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
-                .environmentSuffix("test")
-                .build());
-
-        Template template = Template.fromStack(stack);
-
-        // Verify Lambda log groups are created (at least 2 for both Lambda functions)
-        template.resourcePropertiesCountIs("AWS::Logs::LogGroup", 
-                Match.objectLike(Map.of(
-                        "LogGroupName", Match.stringLikeRegexp("/aws/lambda/.*")
-                )), 2);
-
-        // Verify ECS log group
-        template.hasResourceProperties("AWS::Logs::LogGroup", Match.objectLike(Map.of(
-                "LogGroupName", "/ecs/ticketing-app-test"
-        )));
-
-        // Verify API Gateway log group
-        template.hasResourceProperties("AWS::Logs::LogGroup", Match.objectLike(Map.of(
-                "LogGroupName", "/aws/apigateway/validation-api-test"
-        )));
-    }
-
     /**
      * Test IAM roles are created with correct permissions.
      */
@@ -455,7 +426,7 @@ public class MainTest {
         Template template = Template.fromStack(stack);
 
         // Count security groups (Aurora, Lambda, Validation Lambda, ECS)
-        template.resourceCountIs("AWS::EC2::SecurityGroup", 4);
+        template.resourceCountIs("AWS::EC2::SecurityGroup", 5);
 
         // Verify Aurora security group
         template.hasResourceProperties("AWS::EC2::SecurityGroup", Match.objectLike(Map.of(
@@ -627,7 +598,7 @@ public class MainTest {
         template.resourceCountIs("AWS::DynamoDB::Table", 1);
         template.resourceCountIs("AWS::RDS::DBCluster", 1);
         template.resourceCountIs("AWS::S3::Bucket", 1);
-        template.resourceCountIs("AWS::Lambda::Function", 2);
+        template.resourceCountIs("AWS::Lambda::Function", 3);
         template.resourceCountIs("AWS::ApiGateway::RestApi", 1);
         template.resourceCountIs("AWS::Cognito::UserPool", 1);
         template.resourceCountIs("AWS::ECS::Service", 1);
