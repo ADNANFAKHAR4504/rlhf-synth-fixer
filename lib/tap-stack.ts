@@ -424,7 +424,7 @@ def handler(event, context):
 
     // IoT Policy for device authentication
     new iot.CfnPolicy(this, 'IoTDevicePolicy', {
-      policyName: `IoTDeviceAccessPolicy-${environmentSuffix}`,
+      policyName: `IoTDeviceAccessPolicy-dev-${environmentSuffix}`,
       policyDocument: {
         Version: '2012-10-17',
         Statement: [

@@ -418,7 +418,7 @@ describe('TapStack', () => {
 
     test('should create IoT Policy', () => {
       template.hasResourceProperties('AWS::IoT::Policy', {
-        PolicyName: `IoTDeviceAccessPolicy-${environmentSuffix}`,
+        PolicyName: `IoTDeviceAccessPolicy-dev-${environmentSuffix}`,
         PolicyDocument: {
           Version: '2012-10-17',
           Statement: [
