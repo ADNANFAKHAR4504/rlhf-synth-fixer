@@ -6,37 +6,31 @@
       "Type": "String",
       "Description": "Custom domain name for the portfolio website (e.g., portfolio.example.com)",
       "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-\\.]*[a-zA-Z0-9]$",
-      "ConstraintDescription": "Must be a valid domain name"
+      "ConstraintDescription": "Must be a valid domain name",
+      "Default": "my-portfolio.example.com"
     },
     "SenderEmail": {
       "Type": "String",
       "Description": "Verified SES sender email address for contact form submissions",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "ConstraintDescription": "Must be a valid email address",
+      "Default": "sender@example.com"
     },
     "ReceiverEmail": {
       "Type": "String",
       "Description": "Email address that will receive contact form submissions",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "ConstraintDescription": "Must be a valid email address",
+      "Default": "receiver@example.com"
     }
   },
   "Resources": {
     "WebsiteBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "portfolio-website-${AWS::AccountId}-${AWS::Region}"
-        },
         "WebsiteConfiguration": {
           "IndexDocument": "index.html",
           "ErrorDocument": "error.html"
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": false,
-          "BlockPublicPolicy": false,
-          "IgnorePublicAcls": false,
-          "RestrictPublicBuckets": false
         },
         "Tags": [
           {
@@ -44,6 +38,16 @@
             "Value": "iac-rlhf-amazon"
           }
         ]
+      }
+    },
+    "CloudFrontOriginAccessIdentity": {
+      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+      "Properties": {
+        "CloudFrontOriginAccessIdentityConfig": {
+          "Comment": {
+            "Fn::Sub": "OAI for ${DomainName}"
+          }
+        }
       }
     },
     "WebsiteBucketPolicy": {
@@ -56,9 +60,13 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "PublicReadGetObject",
+              "Sid": "AllowCloudFrontAccess",
               "Effect": "Allow",
-              "Principal": "*",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}"
+                }
+              },
               "Action": "s3:GetObject",
               "Resource": {
                 "Fn::Sub": "${WebsiteBucket.Arn}/*"
@@ -80,13 +88,13 @@
               "DomainName": {
                 "Fn::GetAtt": [
                   "WebsiteBucket",
-                  "RegionalDomainName"
+                  "DomainName"
                 ]
               },
-              "CustomOriginConfig": {
-                "HTTPPort": 80,
-                "HTTPSPort": 443,
-                "OriginProtocolPolicy": "http-only"
+              "S3OriginConfig": {
+                "OriginAccessIdentity": {
+                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                }
               }
             }
           ],
@@ -103,10 +111,7 @@
               "HEAD"
             ],
             "ForwardedValues": {
-              "QueryString": false,
-              "Cookies": {
-                "Forward": "none"
-              }
+              "QueryString": false
             },
             "Compress": true
           },
@@ -140,17 +145,13 @@
               "DomainName"
             ]
           },
-          "HostedZoneId": "Z2FDTNDATAQYW2",
-          "EvaluateTargetHealth": false
+          "HostedZoneId": "Z2FDTNDATAQYW2"
         }
       }
     },
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "portfolio-lambda-execution-role-${AWS::Region}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -192,10 +193,7 @@
     "ContactFormLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": {
-          "Fn::Sub": "portfolio-contact-form-${AWS::Region}"
-        },
-        "Runtime": "python3.9",
+        "Runtime": "python3.12",
         "Handler": "index.lambda_handler",
         "Role": {
           "Fn::GetAtt": [
@@ -214,7 +212,7 @@
           }
         },
         "Code": {
-          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\nses_client = boto3.client('ses', region_name='us-west-2')\n\ndef lambda_handler(event, context):\n    try:\n        # Parse the incoming JSON body\n        if 'body' in event:\n            body = json.loads(event['body'])\n        else:\n            body = event\n        \n        name = body.get('name', 'Unknown')\n        email = body.get('email', 'no-reply@example.com')\n        message = body.get('message', '')\n        \n        # Get environment variables\n        sender_email = os.environ['SENDER_EMAIL']\n        receiver_email = os.environ['RECEIVER_EMAIL']\n        \n        # Construct email\n        email_subject = f'Portfolio Contact Form Submission from {name}'\n        email_body = f\"\"\"You have received a new contact form submission:\n\nName: {name}\nEmail: {email}\n\nMessage:\n{message}\n\"\"\"\n        \n        # Send email via SES\n        response = ses_client.send_email(\n            Source=sender_email,\n            Destination={\n                'ToAddresses': [receiver_email]\n            },\n            Message={\n                'Subject': {\n                    'Data': email_subject,\n                    'Charset': 'UTF-8'\n                },\n                'Body': {\n                    'Text': {\n                        'Data': email_body,\n                        'Charset': 'UTF-8'\n                    }\n                }\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Contact form submission successful',\n                'messageId': response['MessageId']\n            })\n        }\n    \n    except ClientError as e:\n        print(f'SES Error: {e.response[\"Error\"][\"Message\"]}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Failed to send email',\n                'error': e.response['Error']['Message']\n            })\n        }\n    \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'An error occurred',\n                'error': str(e)\n            })\n        }\n"
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\nses_client = boto3.client('ses')\n\ndef lambda_handler(event, context):\n    try:\n        if 'body' in event:\n            body = json.loads(event['body'])\n        else:\n            body = event\n        \n        name = body.get('name', 'Unknown')\n        email = body.get('email', 'no-reply@example.com')\n        message = body.get('message', '')\n        \n        sender_email = os.environ['SENDER_EMAIL']\n        receiver_email = os.environ['RECEIVER_EMAIL']\n        \n        email_subject = f'Portfolio Contact Form Submission from {name}'\n        email_body = f\"\"\"You have received a new contact form submission:\\n\\nName: {name}\\nEmail: {email}\\n\\nMessage:\\n{message}\\n\"\"\"\n        \n        response = ses_client.send_email(\n            Source=sender_email,\n            Destination={\n                'ToAddresses': [receiver_email]\n            },\n            Message={\n                'Subject': {\n                    'Data': email_subject,\n                    'Charset': 'UTF-8'\n                },\n                'Body': {\n                    'Text': {\n                        'Data': email_body,\n                        'Charset': 'UTF-8'\n                    }\n                }\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Contact form submission successful',\n                'messageId': response['MessageId']\n            })\n        }\n    \n    except ClientError as e:\n        print(f'SES Error: {e.response[\"Error\"][\"Message\"]}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Failed to send email'\n            })\n        }\n    \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'An error occurred'\n            })\n        }\n"
         },
         "Timeout": 30,
         "MemorySize": 128,
@@ -230,7 +228,7 @@
       "Type": "AWS::ApiGateway::RestApi",
       "Properties": {
         "Name": {
-          "Fn::Sub": "portfolio-contact-api-${AWS::Region}"
+          "Fn::Sub": "portfolio-contact-api-${AWS::StackName}"
         },
         "Description": "REST API for portfolio contact form submissions",
         "Tags": [
@@ -273,15 +271,7 @@
           "Uri": {
             "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ContactFormLambda.Arn}/invocations"
           }
-        },
-        "MethodResponses": [
-          {
-            "StatusCode": "200",
-            "ResponseParameters": {
-              "method.response.header.Access-Control-Allow-Origin": true
-            }
-          }
-        ]
+        }
       }
     },
     "ContactOptionsMethod": {
@@ -320,7 +310,7 @@
             "ResponseParameters": {
               "method.response.header.Access-Control-Allow-Headers": true,
               "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-Control-Allow-Origin": true
+              "method.response.header.Access-control-Allow-Origin": true
             }
           }
         ]
@@ -355,9 +345,6 @@
     "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "portfolio-lambda-errors-${AWS::Region}"
-        },
         "AlarmDescription": "Alarm when Lambda function encounters errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
@@ -373,8 +360,7 @@
               "Ref": "ContactFormLambda"
             }
           }
-        ],
-        "TreatMissingData": "notBreaching"
+        ]
       }
     }
   },
@@ -383,44 +369,24 @@
       "Description": "URL of the CloudFront distribution for the portfolio website",
       "Value": {
         "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-WebsiteURL"
-        }
       }
     },
     "ApiEndpoint": {
       "Description": "API Gateway endpoint URL for contact form submissions",
       "Value": {
         "Fn::Sub": "https://${ContactFormApi}.execute-api.${AWS::Region}.amazonaws.com/prod/contact"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
-        }
       }
     },
     "S3BucketName": {
       "Description": "Name of the S3 bucket hosting the website files",
       "Value": {
         "Ref": "WebsiteBucket"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-S3BucketName"
-        }
       }
     },
     "CloudFrontDistributionId": {
       "Description": "ID of the CloudFront distribution",
       "Value": {
         "Ref": "CloudFrontDistribution"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-CloudFrontDistributionId"
-        }
       }
     }
   }
