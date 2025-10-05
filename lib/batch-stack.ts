@@ -37,7 +37,7 @@ export class BatchStack extends cdk.NestedStack {
         computeEnvironmentName: `batch-inference-${props.environmentSuffix}`,
         vpc: props.vpc,
         vpcSubnets: {
-          subnets: props.vpc.privateSubnets,
+          subnets: props.vpc.publicSubnets, // Use public subnets for internet access
         },
         securityGroups: [securityGroup],
         spot: true,

@@ -4,7 +4,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
 interface NetworkingStackProps extends NestedStackProps {
-  environmentSuffix: string;
+  environmentSuffix?: string;
 }
 
 export class NetworkingStack extends NestedStack {

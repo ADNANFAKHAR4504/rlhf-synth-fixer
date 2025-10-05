@@ -82,11 +82,8 @@ export class SageMakerStack extends cdk.NestedStack {
         instanceType: 'ml.t3.medium',
         roleArn: this.notebookRole.roleArn,
         notebookInstanceName: `training-notebook-${props.environmentSuffix}`,
-        // Use first available private subnet if any, otherwise use public subnet
-        subnetId:
-          props.vpc.privateSubnets.length > 0
-            ? props.vpc.privateSubnets[0].subnetId
-            : props.vpc.publicSubnets[0].subnetId,
+        // Use public subnet for internet access (required for SageMaker notebook initialization)
+        subnetId: props.vpc.publicSubnets[0].subnetId,
         securityGroupIds: [securityGroup.securityGroupId],
         defaultCodeRepository:
           'https://github.com/aws/amazon-sagemaker-examples.git',
