@@ -1,15 +1,15 @@
+import base64
 import json
 import os
-import unittest
-import boto3
+import tempfile
 import time
+import unittest
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
-from unittest.mock import patch, MagicMock
-import base64
-import tempfile
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, patch
 
+import boto3
 from pytest import mark
 
 # Configuration for multi-account E2E testing
@@ -34,7 +34,7 @@ flat_outputs = json.loads(flat_outputs)
 class BankingEnvironmentSimulator:
     """Simulator for 100 banking account environments"""
     
-    def __init__(self, aws_region: str = 'us-east-1'):
+    def __init__(self, aws_region: str = 'us-west-1'):
         self.region = aws_region
         self.accounts = self._generate_bank_accounts()
         self.clients = self._initialize_aws_clients()
@@ -94,7 +94,7 @@ class TestTapStackIntegration(unittest.TestCase):
         if self.has_aws_credentials:
             # Initialize real AWS clients
             try:
-                self.region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+                self.region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-1')
                 self.ec2_client = boto3.client('ec2', region_name=self.region)
                 self.s3_client = boto3.client('s3', region_name=self.region)
                 self.kms_client = boto3.client('kms', region_name=self.region)
@@ -114,7 +114,7 @@ class TestTapStackIntegration(unittest.TestCase):
         
         if not self.has_aws_credentials:
             # Set all clients to None for test environments without credentials
-            self.region = 'us-east-1'
+            self.region = 'us-west-1'
             self.ec2_client = None
             self.s3_client = None
             self.kms_client = None
