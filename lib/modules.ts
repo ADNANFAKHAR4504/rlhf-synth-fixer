@@ -768,7 +768,6 @@ export class RdsModule extends Construct {
     this.dbInstance = new DbInstance(this, 'mysql', {
       identifier: `${id.toLowerCase()}-mysql-db`, // ← Add .toLowerCase() here
       engine: 'mysql',
-      engineVersion: '8.0.35',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
@@ -823,7 +822,7 @@ export class S3Module extends Construct {
 
     // S3 bucket for ALB logs
     this.bucket = new S3Bucket(this, 'logs-bucket', {
-      bucket: `${id}-alb-logs-${Date.now()}`, // Unique bucket name
+      bucket: `${id.toLowerCase()}-alb-logs-${Date.now()}`, // Convert to lowercase
 
       tags: {
         ...config.tags,
