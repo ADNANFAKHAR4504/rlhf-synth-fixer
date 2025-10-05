@@ -1,92 +1,34 @@
-# Prompt
+I’m designing a production-grade AWS network infrastructure using CloudFormation YAML, and I need your help generating a complete, validated template for it.
 
-Write me Infrastructure as Code (IaC) in **AWS CloudFormation YAML** based on the following requirements.
+The goal is to automate the provisioning of a secure, high-availability (HA) VPC environment that fully adheres to AWS best practices for cost optimization, scalability, and compliance. The CloudFormation file should be named prod-HA-vpc.yaml and must successfully deploy a production-ready stack when run through CloudFormation validation tools.
 
-## Problem
+Here’s the scenario:
+We’re building a multi-AZ production VPC setup that spans three availability zones, with three public subnets and three private subnets evenly distributed. The public subnets will host load-balanced application servers, while the private subnets will host a multi-AZ RDS MySQL database and other backend services that should never be publicly accessible.
 
-Create a CloudFormation YAML template that automates the provisioning of a **VPC with high-availability infrastructure**, suitable for a production environment. The infrastructure must be **secure, cost-effective, scalable**, and aligned with **AWS security best practices**.
+Each public subnet should be tied to its own route table, connected to an Internet Gateway, while each private subnet should have its own managed NAT Gateway for outbound internet access. Public subnets should allow HTTP and HTTPS traffic from anywhere, but no security group should allow unrestricted inbound access—only specific ports should be opened as required.
 
-### Requirements:
+The infrastructure should include:
 
-1. A VPC with **three public subnets** and **three private subnets**, distributed across **three Availability Zones**.
-2. An **Internet Gateway** attached to the public subnets.
-3. **NAT Gateways** for each private subnet to enable outbound internet access.
-4. Security configurations ensuring **least privilege access** for public and private subnet resources.
-5. An **RDS instance** with Multi-AZ deployment, high availability, and automatic backups.
-6. A **Bastion Host** in a public subnet for secure SSH access to private subnet instances.
-7. An **Application Load Balancer** managing public-facing traffic across EC2 instances.
-8. **Encryption at rest** enabled for all services (EBS, RDS, S3).
-9. **VPC Flow Logs** directed to an encrypted S3 bucket.
-10. **No hardcoded secrets or credentials** — use managed IAM roles.
-11. Apply **tags** to all resources to clearly identify the production environment.
+A VPC with flow logs enabled, sending logs to an encrypted S3 bucket.
 
-## Expected Output
+RDS MySQL configured for multi-AZ failover and automatic backups, with data encrypted at rest.
 
-- A **CloudFormation YAML file** named `TapStack.yaml`.
-- The template must be correctly formatted, validated, and adhere to **AWS best practices**.
-- It must successfully deploy the infrastructure described above in **AWS CloudFormation**.
-- The provided `TapStack.yaml` file should use the following code in it:
+A bastion host in a public subnet to securely access private subnet resources over SSH.
 
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+A Load Balancer to handle public-facing traffic across application EC2 instances in the public subnets.
 
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
+All EBS volumes and S3 buckets must enforce encryption at rest.
 
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+IAM roles should be used for any service needing AWS access—no hardcoded secrets or credentials anywhere in the template.
 
-Resources:
+Every resource created should be clearly tagged with Environment: Production for easy identification and governance. The entire stack should represent a cost-efficient yet resilient production environment, enabling safe, controlled, and observable operations.
 
-Outputs:
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+Please make sure that:
 
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-```
-
-- Response should only include the single code file `TapStack.yaml` with the above content included.
-
-## Environment
-
-- Region: **us-east-1**.
-- Purpose: **High availability, secure, and monitorable networking infrastructure** for a production environment.
-
-## Constraints
-
-- All resources must include the tag: **Environment: Production**.
-- VPC with **3 public and 3 private subnets**, equally spread across 3 AZs.
-- Each **public subnet** must have a **separate route table** associated.
-- Internet Gateway must be attached to the VPC and linked to **public route tables**.
-- A **managed NAT Gateway** must be created for each private subnet in its AZ.
-- **Security Groups**:
-  - Allow HTTP/HTTPS from anywhere to public subnets.
-  - No "all inbound" rules; only specific ports allowed.
-- **Private subnets**:
-  - No direct internet access.
-  - Contain **database resources only**, not publicly accessible.
-- **RDS**: MySQL Multi-AZ with automatic backups, deployed in private subnets.
-- **Bastion Host**: Deployed in a public subnet; only this host can SSH into private instances.
-- **Load Balancer**: Public-facing, attached only to public subnets.
-- **Encryption**: Enabled for all EBS volumes, RDS, and S3 buckets.
-- **VPC Flow Logs**: Enabled, directed to encrypted S3 bucket.
-- **IAM**: Use managed roles; no access keys or hardcoded credentials.
-- All policies and configurations must align with **AWS security best practices**.
+Private subnets have no direct internet connectivity.
+RDS and database resources reside strictly in private subnets.
+VPC flow logs are directed to an encrypted S3 bucket.
+NAT Gateways are managed (not instance-based) and deployed in each AZ.
+IAM roles replace any use of direct AWS keys.
+The template passes CloudFormation validation and aligns with AWS architecture and security best practices.
+This configuration supports our AWS Infrastructure Migration efforts and should serve as a reusable, version-controlled CloudFormation template for automating secure, high-availability production environments.
