@@ -11,7 +11,6 @@ This implementation includes several critical optimizations to address AWS accou
 - **VPC Endpoints**: Provides AWS service connectivity for private communications
 - **Flexible Environment Suffixes**: Supports dynamic environment naming (dev, pr3507, etc.)
 - **Resource Efficiency**: Optimized for accounts with VPC and EIP limits
-- **CI/CD Compatible**: Integration tests work across different deployment environments
 
 ## tap-stack.ts
 
@@ -650,49 +649,6 @@ npm run cdk:deploy
 npx cdk deploy --context environmentSuffix=prod
 ```
 
-## Testing
-
-The solution includes comprehensive unit and integration tests with CI/CD compatibility:
-
-```bash
-# Run unit tests
-npm run test:unit
-
-# Run integration tests (requires deployed stack)
-npm run test:integration
-
-# Check test coverage
-npm run test:coverage
-```
-
-### Integration Test Environment Compatibility
-
-The integration tests are designed to work across different deployment environments (dev, staging, production, PR environments):
-
-- **Dynamic Environment Detection**: Tests automatically detect the environment suffix from CloudFormation outputs
-- **Environment-Agnostic Resource Discovery**: Tests dynamically find resources using pattern matching instead of hardcoded keys
-- **Flexible Account Validation**: Tests work with any valid AWS account ID
-- **Dynamic Subnet Discovery**: Tests find public/private subnets based on environment-specific naming patterns
-- **CloudWatch Alarm Compatibility**: Tests handle different alarm naming conventions across environments
-
-Example of environment-agnostic test patterns:
-```typescript
-// Dynamic environment suffix detection
-const envSuffix = outputs.EnvironmentSuffix;
-
-// Dynamic resource key discovery
-const publicSubnetKeys = Object.keys(outputs).filter(key => 
-  key.startsWith(`TapStack${envSuffix}NetworkingStack`) && 
-  key.includes('PublicSubnet1') && 
-  key.endsWith('Ref')
-);
-
-// Flexible account ID validation
-expect(outputs.AccountId).toMatch(/^\d{12}$/);
-```
-
-This ensures tests pass in CI/CD pipelines regardless of the environment suffix (dev, pr3507, staging, etc.).
-
 ## Clean Up
 
 ```bash
@@ -707,10 +663,5 @@ npm run cdk:destroy
 - **Public Subnet Architecture**: Provides internet access without EIP consumption
 - **VPC Endpoints**: Enables private AWS service communication
 - **Spot Instance Usage**: Reduces compute costs for Batch workloads
-
-### CI/CD Pipeline Compatibility
-- **Environment-Agnostic Code**: Works with dynamic environment suffixes
-- **Automated Testing**: Integration tests validate actual AWS resources
-- **Resource Discovery**: Tests adapt to different naming conventions automatically
 
 This solution successfully addresses all requirements while implementing production best practices for security, cost optimization, and operational excellence.
