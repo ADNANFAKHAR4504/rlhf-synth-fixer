@@ -11,6 +11,7 @@ import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 
 import java.util.Map;
+import java.util.List;
 
 /**
  * Unit tests for the Main CDK application.
@@ -118,7 +119,7 @@ public class MainTest {
 
         // Verify GSI exists
         template.hasResourceProperties("AWS::DynamoDB::Table", Match.objectLike(Map.of(
-                "GlobalSecondaryIndexes", Match.arrayWith(java.util.List.of(Match.objectLike(Map.of(
+                "GlobalSecondaryIndexes", Match.arrayWith(List.of(Match.objectLike(Map.of(
                         "IndexName", "statusIndex"
                 ))))
         )));
@@ -175,9 +176,9 @@ public class MainTest {
                         "ServerSideEncryptionConfiguration", Match.anyValue()
                 )),
                 "LifecycleConfiguration", Match.objectLike(Map.of(
-                        "Rules", Match.arrayWith(Match.objectLike(Map.of(
+                        "Rules", Match.arrayWith(List.of(Match.objectLike(Map.of(
                                 "ExpirationInDays", 90
-                        )))
+                        ))))
                 ))
         )));
 
@@ -290,7 +291,7 @@ public class MainTest {
         // Verify Cognito User Pool
         template.hasResourceProperties("AWS::Cognito::UserPool", Match.objectLike(Map.of(
                 "UserPoolName", "TicketSystemUsers-test",
-                "AutoVerifiedAttributes", Match.arrayWith("email"),
+                "AutoVerifiedAttributes", List.of("email"),
                 "MfaConfiguration", "OPTIONAL",
                 "Policies", Match.objectLike(Map.of(
                         "PasswordPolicy", Match.objectLike(Map.of(
@@ -331,7 +332,7 @@ public class MainTest {
                 "Cpu", "512",
                 "Memory", "1024",
                 "NetworkMode", "awsvpc",
-                "RequiresCompatibilities", Match.arrayWith("FARGATE")
+                "RequiresCompatibilities", List.of("FARGATE")
         )));
 
         // Verify ECS Service
@@ -417,27 +418,27 @@ public class MainTest {
         // Verify Lambda execution roles
         template.hasResourceProperties("AWS::IAM::Role", Match.objectLike(Map.of(
                 "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                        "Statement", Match.arrayWith(Match.objectLike(Map.of(
+                        "Statement", Match.arrayWith(List.of(Match.objectLike(Map.of(
                                 "Principal", Map.of("Service", "lambda.amazonaws.com")
-                        )))
+                        ))))
                 ))
         )));
 
         // Verify ECS task role
         template.hasResourceProperties("AWS::IAM::Role", Match.objectLike(Map.of(
                 "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                        "Statement", Match.arrayWith(Match.objectLike(Map.of(
+                        "Statement", Match.arrayWith(List.of(Match.objectLike(Map.of(
                                 "Principal", Map.of("Service", "ecs-tasks.amazonaws.com")
-                        )))
+                        ))))
                 ))
         )));
 
         // Verify API Gateway CloudWatch role
         template.hasResourceProperties("AWS::IAM::Role", Match.objectLike(Map.of(
                 "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                        "Statement", Match.arrayWith(Match.objectLike(Map.of(
+                        "Statement", Match.arrayWith(List.of(Match.objectLike(Map.of(
                                 "Principal", Map.of("Service", "apigateway.amazonaws.com")
-                        )))
+                        ))))
                 ))
         )));
     }
