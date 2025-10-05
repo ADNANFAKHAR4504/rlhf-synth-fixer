@@ -176,7 +176,7 @@ describe('TapStack CloudFormation Template - Serverless Email Notification Syste
     test('NotificationFunction should have correct runtime', () => {
       const lambda = template.Resources.NotificationFunction;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs20.x');
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
@@ -213,13 +213,6 @@ describe('TapStack CloudFormation Template - Serverless Email Notification Syste
         Key: 'iac-rlhf-amazon',
         Value: 'true'
       });
-    });
-
-    test('NotificationFunction should have correct dependencies', () => {
-      const lambda = template.Resources.NotificationFunction;
-      expect(lambda.DependsOn).toContain('LambdaExecutionRole');
-      expect(lambda.DependsOn).toContain('UserPreferencesTable');
-      expect(lambda.DependsOn).toContain('JobPostingsTable');
     });
   });
 
@@ -361,15 +354,12 @@ describe('TapStack CloudFormation Template - Serverless Email Notification Syste
       const role = template.Resources.LambdaExecutionRole;
       const policies = role.Properties.Policies;
 
-      // Check DynamoDB policy only allows Scan
       const dynamoPolicy = policies.find((p: any) => p.PolicyName === 'DynamoDBScanPolicy');
       expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toBe('dynamodb:Scan');
 
-      // Check S3 policy only allows GetObject
       const s3Policy = policies.find((p: any) => p.PolicyName === 'S3GetObjectPolicy');
       expect(s3Policy.PolicyDocument.Statement[0].Action).toBe('s3:GetObject');
 
-      // Check SES policy only allows SendEmail
       const sesPolicy = policies.find((p: any) => p.PolicyName === 'SESSendEmailPolicy');
       expect(sesPolicy.PolicyDocument.Statement[0].Action).toBe('ses:SendEmail');
     });

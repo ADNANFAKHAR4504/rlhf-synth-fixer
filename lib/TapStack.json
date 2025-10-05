@@ -6,7 +6,8 @@
       "Type": "String",
       "Description": "Verified SES email address for sending notifications",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "ConstraintDescription": "Must be a valid email address",
+      "Default": "test@example.com"
     }
   },
   "Resources": {
@@ -113,10 +114,16 @@
                   "Action": "dynamodb:Scan",
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["UserPreferencesTable", "Arn"]
+                      "Fn::GetAtt": [
+                        "UserPreferencesTable",
+                        "Arn"
+                      ]
                     },
                     {
-                      "Fn::GetAtt": ["JobPostingsTable", "Arn"]
+                      "Fn::GetAtt": [
+                        "JobPostingsTable",
+                        "Arn"
+                      ]
                     }
                   ]
                 }
@@ -163,10 +170,13 @@
     "NotificationFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Code": {
           "ZipFile": {
@@ -183,17 +193,14 @@
                 "",
                 "exports.handler = async (event) => {",
                 "  try {",
-                "    // Scan UserPreferences table",
                 "    const usersResponse = await dynamodb.send(new ScanCommand({",
                 "      TableName: process.env.USER_PREFERENCES_TABLE",
                 "    }));",
                 "",
-                "    // Scan JobPostings table",
                 "    const jobsResponse = await dynamodb.send(new ScanCommand({",
                 "      TableName: process.env.JOB_POSTINGS_TABLE",
                 "    }));",
                 "",
-                "    // Fetch email template from S3",
                 "    const templateResponse = await s3.send(new GetObjectCommand({",
                 "      Bucket: process.env.TEMPLATE_BUCKET,",
                 "      Key: 'notification-template.html'",
@@ -201,11 +208,9 @@
                 "",
                 "    const templateContent = await templateResponse.Body.transformToString();",
                 "",
-                "    // Match jobs to users (simplified logic)",
                 "    const users = usersResponse.Items || [];",
                 "    const jobs = jobsResponse.Items || [];",
                 "",
-                "    // Send emails via SES",
                 "    for (const user of users) {",
                 "      const emailParams = {",
                 "        Source: process.env.SENDER_EMAIL,",
@@ -263,8 +268,7 @@
             "Value": "true"
           }
         ]
-      },
-      "DependsOn": ["LambdaExecutionRole", "UserPreferencesTable", "JobPostingsTable"]
+      }
     },
     "EventBridgeRule": {
       "Type": "AWS::Events::Rule",
@@ -275,7 +279,10 @@
         "Targets": [
           {
             "Arn": {
-              "Fn::GetAtt": ["NotificationFunction", "Arn"]
+              "Fn::GetAtt": [
+                "NotificationFunction",
+                "Arn"
+              ]
             },
             "Id": "NotificationFunctionTarget"
           }
@@ -291,7 +298,10 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
         "SourceArn": {
-          "Fn::GetAtt": ["EventBridgeRule", "Arn"]
+          "Fn::GetAtt": [
+            "EventBridgeRule",
+            "Arn"
+          ]
         }
       }
     },
@@ -312,7 +322,11 @@
         "EventDestination": {
           "Name": "CloudWatchDestination",
           "Enabled": true,
-          "MatchingEventTypes": ["send", "bounce", "complaint"],
+          "MatchingEventTypes": [
+            "send",
+            "bounce",
+            "complaint"
+          ],
           "CloudWatchDestination": {
             "DimensionConfigurations": [
               {
@@ -348,7 +362,10 @@
     "LambdaFunctionARN": {
       "Description": "ARN of the notification Lambda function",
       "Value": {
-        "Fn::GetAtt": ["NotificationFunction", "Arn"]
+        "Fn::GetAtt": [
+          "NotificationFunction",
+          "Arn"
+        ]
       }
     }
   }
