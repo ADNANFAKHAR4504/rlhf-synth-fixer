@@ -175,17 +175,17 @@ describe('SageMaker Training Infrastructure Integration Tests', () => {
     test('Public subnets exist and are configured', async () => {
       // Find public subnet IDs dynamically based on environment suffix
       const envSuffix = outputs.EnvironmentSuffix;
-      const publicSubnetKeys = Object.keys(outputs).filter(key => 
-        key.includes('NetworkingStack') && 
-        key.includes('PublicSubnet') && 
+      const publicSubnetKeys = Object.keys(outputs).filter(key =>
+        key.includes('NetworkingStack') &&
+        key.includes('PublicSubnet') &&
         key.includes('Ref') &&
         key.includes(`TapStack${envSuffix}`)
       );
-      
+
       expect(publicSubnetKeys.length).toBeGreaterThanOrEqual(1);
-      
+
       const publicSubnetIds = publicSubnetKeys.map(key => outputs[key]).filter(id => id);
-      
+
       if (publicSubnetIds.length === 0) {
         // Skip test if no public subnets found
         console.log('No public subnet IDs found, skipping subnet test');
@@ -340,19 +340,19 @@ describe('SageMaker Training Infrastructure Integration Tests', () => {
 
       const response = await cloudwatchClient.send(command);
       expect(response.MetricAlarms).toBeDefined();
-      
+
       if (response.MetricAlarms?.length === 0) {
         // Try alternative alarm naming patterns
         const alternativeCommand = new DescribeAlarmsCommand({
           AlarmNamePrefix: `TapStack${envSuffix}`,
         });
         const altResponse = await cloudwatchClient.send(alternativeCommand);
-        
+
         if (altResponse.MetricAlarms?.length === 0) {
           console.log('No training job failure alarms found, this may be expected in some deployments');
           return; // Skip if no alarms found
         }
-        
+
         const alarm = altResponse.MetricAlarms?.[0];
         expect(alarm?.AlarmName).toContain('TrainingJob');
         expect(['GreaterThanThreshold', 'GreaterThanOrEqualToThreshold']).toContain(alarm?.ComparisonOperator);
@@ -372,28 +372,28 @@ describe('SageMaker Training Infrastructure Integration Tests', () => {
       expect(outputs.VpcId).toBeDefined();
       expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
 
-      // Check private subnets (empty by design for optimized infrastructure)
+      // Check private subnets (isolated subnets for VPC endpoints)
       expect(outputs.PrivateSubnetIds).toBeDefined();
-      expect(outputs.PrivateSubnetIds).toBe(''); // Empty string as designed
+      expect(outputs.PrivateSubnetIds).toMatch(/^subnet-[a-f0-9]+(,subnet-[a-f0-9]+)*$/); // Comma-separated subnet IDs
 
       // Check public subnets using dynamic output keys
       const envSuffix = outputs.EnvironmentSuffix;
-      const publicSubnet1Keys = Object.keys(outputs).filter(key => 
-        key.startsWith(`TapStack${envSuffix}NetworkingStack`) && 
-        key.includes('PublicSubnet1') && 
+      const publicSubnet1Keys = Object.keys(outputs).filter(key =>
+        key.startsWith(`TapStack${envSuffix}NetworkingStack`) &&
+        key.includes('PublicSubnet1') &&
         key.endsWith('Ref')
       );
-      const publicSubnet2Keys = Object.keys(outputs).filter(key => 
-        key.startsWith(`TapStack${envSuffix}NetworkingStack`) && 
-        key.includes('PublicSubnet2') && 
+      const publicSubnet2Keys = Object.keys(outputs).filter(key =>
+        key.startsWith(`TapStack${envSuffix}NetworkingStack`) &&
+        key.includes('PublicSubnet2') &&
         key.endsWith('Ref')
       );
-      
+
       if (publicSubnet1Keys.length > 0) {
         const publicSubnet1 = outputs[publicSubnet1Keys[0]];
         expect(publicSubnet1).toMatch(/^subnet-[a-f0-9]+$/);
       }
-      
+
       if (publicSubnet2Keys.length > 0) {
         const publicSubnet2 = outputs[publicSubnet2Keys[0]];
         expect(publicSubnet2).toMatch(/^subnet-[a-f0-9]+$/);
