@@ -1,5 +1,4 @@
 ```hcl
-
 # tap_stack.tf - Complete Infrastructure Stack for Multi-Region Deployment
 
 # ============================================================================
@@ -1355,13 +1354,10 @@ output "secondary_alb_security_group_id" {
   description = "ALB security group ID for secondary region"
   value       = aws_security_group.secondary_alb.id
 }
-
 ```
 
 ```hcl
-
 # provider.tf
-
 terraform {
   required_version = ">= 1.4.0"
 
@@ -1386,5 +1382,4 @@ provider "aws" {
   alias  = "eu_west_1"
   region = var.secondary_region
 }
-
 ```
