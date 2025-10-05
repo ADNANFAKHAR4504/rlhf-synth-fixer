@@ -47,7 +47,7 @@ describe('TAP Stack Integration Tests - Full Infrastructure Validation', () => {
           
           expect(response.Stacks).toBeDefined();
           expect(response.Stacks!.length).toBeGreaterThan(0);
-          expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE' || 'UPDATE_COMPLETE');
+          expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks![0].StackStatus);
         } catch (error) {
           // If stack doesn't exist, outputs should be empty
           expect(Object.keys(outputs).length).toBe(0);
