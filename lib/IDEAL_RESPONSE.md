@@ -44,12 +44,14 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
+    // Configure S3 Backend for state storage
+    // Note: DynamoDB table for state locking must be created externally
+    // to avoid circular dependency
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
-      dynamodbTable: 'terraform-state-locks',
     });
 
     new PriceMonitorStack(this, 'price-monitor', {
@@ -104,6 +106,9 @@ export class PriceMonitorStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Add unique suffix to avoid resource conflicts during redeployment
+    const resourceSuffix = 'primary-1';
 
     // Configure providers
     new AwsProvider(this, 'aws', {
@@ -575,6 +580,286 @@ export class PriceMonitorStack extends TerraformStack {
     });
   }
 }
+```
+
+## Lambda Function Implementations
+
+### Price Scraper Lambda Function
+
+Located at `lib/lambda/scraper/index.py`, this function handles scraping product prices from retailers with exponential backoff retry logic:
+
+```python
+# lib/lambda/scraper/index.py
+import json
+import os
+import time
+import boto3
+import random
+from decimal import Decimal
+from datetime import datetime
+from typing import Dict, Any, List
+import logging
+from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+cloudwatch = boto3.client('cloudwatch')
+sqs = boto3.client('sqs')
+
+PRICE_TABLE = os.environ['PRICE_TABLE']
+S3_BUCKET = os.environ['S3_BUCKET']
+QUEUE_URL = os.environ['QUEUE_URL']
+ENVIRONMENT = os.environ['ENVIRONMENT']
+
+table = dynamodb.Table(PRICE_TABLE)
+
+def exponential_backoff(attempt: int, max_delay: int = 60) -> float:
+    """Calculate exponential backoff with jitter."""
+    delay = min(2 ** attempt + random.uniform(0, 1), max_delay)
+    return delay
+
+def scrape_price(product_id: str, retailer: str, url: str) -> Dict[str, Any]:
+    """Simulate price scraping with exponential backoff."""
+    max_attempts = 5
+
+    for attempt in range(max_attempts):
+        try:
+            # Simulate price scraping (replace with actual scraping logic)
+            simulated_price = Decimal(str(round(random.uniform(10, 500), 2)))
+
+            # Random failure simulation for testing retry logic
+            if random.random() < 0.1:  # 10% failure rate
+                raise Exception("Simulated scraping failure")
+
+            return {
+                'product_id': product_id,
+                'retailer': retailer,
+                'price': simulated_price,
+                'url': url,
+                'scraped_at': datetime.utcnow().isoformat(),
+                'attempt': attempt + 1
+            }
+
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                delay = exponential_backoff(attempt)
+                logger.warning(f"Attempt {attempt + 1} failed for {product_id}, retrying in {delay:.2f}s: {str(e)}")
+                time.sleep(delay)
+            else:
+                logger.error(f"Failed to scrape {product_id} after {max_attempts} attempts")
+                raise
+
+def store_price(price_data: Dict[str, Any]) -> None:
+    """Store price in DynamoDB and S3."""
+    timestamp = int(datetime.utcnow().timestamp() * 1000)
+
+    item = {
+        'product_id': price_data['product_id'],
+        'timestamp': timestamp,
+        'retailer': price_data['retailer'],
+        'price': price_data['price'],
+        'url': price_data['url'],
+        'scraped_at': price_data['scraped_at'],
+        'attempts': price_data['attempt']
+    }
+
+    table.put_item(Item=item)
+
+    # Archive to S3 for historical analysis
+    s3_key = f"prices/{price_data['retailer']}/{price_data['product_id']}/{timestamp}.json"
+    s3.put_object(
+        Bucket=S3_BUCKET,
+        Key=s3_key,
+        Body=json.dumps(item, default=str),
+        ContentType='application/json'
+    )
+
+def handler(event: Dict, context: Any) -> Dict:
+    """Lambda handler for price scraping."""
+    try:
+        records = event.get('Records', [])
+
+        if not records:
+            logger.warning("No records to process")
+            return {'statusCode': 200, 'body': json.dumps('No records to process')}
+
+        success_count = 0
+        failure_count = 0
+
+        for record in records:
+            try:
+                body = json.loads(record['body'])
+
+                # Handle batch scraping or individual product
+                if body.get('action') == 'scrape_all_products':
+                    # Generate and queue 5300 products
+                    products = generate_product_list()
+                    for product in products:
+                        sqs.send_message(QueueUrl=QUEUE_URL, MessageBody=json.dumps(product))
+                    success_count += 1
+                else:
+                    price_data = scrape_price(body['product_id'], body['retailer'], body['url'])
+                    store_price(price_data)
+                    success_count += 1
+
+            except Exception as e:
+                logger.error(f"Failed to process record: {str(e)}")
+                failure_count += 1
+
+        # Send CloudWatch metrics
+        cloudwatch.put_metric_data(
+            Namespace=f'PriceMonitor/{ENVIRONMENT}',
+            MetricData=[
+                {'MetricName': 'ScrapingSuccess', 'Value': success_count, 'Unit': 'Count'},
+                {'MetricName': 'ScrapingFailure', 'Value': failure_count, 'Unit': 'Count'}
+            ]
+        )
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'success': success_count, 'failure': failure_count})
+        }
+
+    except Exception as e:
+        logger.error(f"Handler error: {str(e)}")
+        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+```
+
+### Stream Processor Lambda Function
+
+Located at `lib/lambda/stream-processor/index.py`, this function processes DynamoDB stream events to detect price changes and send notifications:
+
+```python
+# lib/lambda/stream-processor/index.py
+import json
+import os
+import boto3
+from decimal import Decimal
+from datetime import datetime
+from typing import Dict, Any
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+sns = boto3.client('sns')
+cloudwatch = boto3.client('cloudwatch')
+
+SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+ENVIRONMENT = os.environ['ENVIRONMENT']
+PRICE_DROP_THRESHOLD = 10.0  # 10% drop threshold
+
+def calculate_price_change(old_price: Decimal, new_price: Decimal) -> float:
+    """Calculate percentage change between prices."""
+    if old_price == 0:
+        return 0.0
+    return float(((new_price - old_price) / old_price) * 100)
+
+def process_record(record: Dict) -> Dict[str, Any]:
+    """Process a single DynamoDB stream record."""
+    event_name = record.get('eventName')
+
+    if event_name not in ['INSERT', 'MODIFY']:
+        return None
+
+    new_image = record.get('dynamodb', {}).get('NewImage', {})
+    old_image = record.get('dynamodb', {}).get('OldImage', {})
+
+    if not new_image:
+        return None
+
+    product_id = new_image.get('product_id', {}).get('S')
+    retailer = new_image.get('retailer', {}).get('S')
+    new_price = Decimal(new_image.get('price', {}).get('N', '0'))
+
+    result = {
+        'product_id': product_id,
+        'retailer': retailer,
+        'new_price': new_price,
+        'event_type': event_name
+    }
+
+    # Check for significant price drops
+    if old_image and event_name == 'MODIFY':
+        old_price = Decimal(old_image.get('price', {}).get('N', '0'))
+        result['old_price'] = old_price
+        result['price_change'] = calculate_price_change(old_price, new_price)
+
+        if result['price_change'] <= -PRICE_DROP_THRESHOLD:
+            result['significant_drop'] = True
+
+    return result
+
+def send_notification(price_data: Dict[str, Any]) -> None:
+    """Send price drop notification via SNS."""
+    message = {
+        'product_id': price_data['product_id'],
+        'retailer': price_data['retailer'],
+        'old_price': float(price_data.get('old_price', 0)),
+        'new_price': float(price_data['new_price']),
+        'price_change_percent': price_data['price_change'],
+        'timestamp': datetime.utcnow().isoformat()
+    }
+
+    sns.publish(
+        TopicArn=SNS_TOPIC_ARN,
+        Subject=f"Price Drop Alert: {price_data['product_id']}",
+        Message=json.dumps(message, default=lambda x: float(x) if isinstance(x, Decimal) else x)
+    )
+
+def handler(event: Dict, context: Any) -> Dict:
+    """Lambda handler for processing DynamoDB streams."""
+    try:
+        records = event.get('Records', [])
+
+        if not records:
+            return {'statusCode': 200, 'body': json.dumps('No records to process')}
+
+        price_changes = 0
+        price_drops = 0
+
+        for record in records:
+            try:
+                result = process_record(record)
+
+                if not result:
+                    continue
+
+                if 'price_change' in result:
+                    price_changes += 1
+
+                    if result.get('significant_drop'):
+                        price_drops += 1
+                        send_notification(result)
+
+            except Exception as e:
+                logger.error(f"Failed to process record: {str(e)}")
+                continue
+
+        # Send CloudWatch metrics
+        cloudwatch.put_metric_data(
+            Namespace=f'PriceMonitor/{ENVIRONMENT}',
+            MetricData=[
+                {'MetricName': 'PriceChanges', 'Value': price_changes, 'Unit': 'Count'},
+                {'MetricName': 'SignificantPriceDrops', 'Value': price_drops, 'Unit': 'Count'}
+            ]
+        )
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'processed': len(records),
+                'price_changes': price_changes,
+                'price_drops': price_drops
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Handler error: {str(e)}")
+        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
 ```
 
 ## Key Features
