@@ -5,23 +5,36 @@
     "DomainName": {
       "Type": "String",
       "Description": "Custom domain name for the portfolio website (e.g., portfolio.example.com)",
-      "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-\\.]*[a-zA-Z0-9]$",
-      "ConstraintDescription": "Must be a valid domain name",
       "Default": "my-portfolio.example.com"
     },
     "SenderEmail": {
       "Type": "String",
       "Description": "Verified SES sender email address for contact form submissions",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address",
       "Default": "sender@example.com"
     },
     "ReceiverEmail": {
       "Type": "String",
       "Description": "Email address that will receive contact form submissions",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address",
       "Default": "receiver@example.com"
+    },
+    "CreateDnsRecord": {
+      "Type": "String",
+      "Description": "Set to 'true' to create a Route 53 DNS record. The Hosted Zone must exist in the account.",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Default": "false"
+    }
+  },
+  "Conditions": {
+    "ShouldCreateDnsRecord": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateDnsRecord"
+        },
+        "true"
+      ]
     }
   },
   "Resources": {
@@ -130,6 +143,7 @@
     },
     "Route53RecordSet": {
       "Type": "AWS::Route53::RecordSet",
+      "Condition": "ShouldCreateDnsRecord",
       "Properties": {
         "HostedZoneName": {
           "Fn::Sub": "${DomainName}."
@@ -212,10 +226,9 @@
           }
         },
         "Code": {
-          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\nses_client = boto3.client('ses')\n\ndef lambda_handler(event, context):\n    try:\n        if 'body' in event:\n            body = json.loads(event['body'])\n        else:\n            body = event\n        \n        name = body.get('name', 'Unknown')\n        email = body.get('email', 'no-reply@example.com')\n        message = body.get('message', '')\n        \n        sender_email = os.environ['SENDER_EMAIL']\n        receiver_email = os.environ['RECEIVER_EMAIL']\n        \n        email_subject = f'Portfolio Contact Form Submission from {name}'\n        email_body = f\"\"\"You have received a new contact form submission:\\n\\nName: {name}\\nEmail: {email}\\n\\nMessage:\\n{message}\\n\"\"\"\n        \n        response = ses_client.send_email(\n            Source=sender_email,\n            Destination={\n                'ToAddresses': [receiver_email]\n            },\n            Message={\n                'Subject': {\n                    'Data': email_subject,\n                    'Charset': 'UTF-8'\n                },\n                'Body': {\n                    'Text': {\n                        'Data': email_body,\n                        'Charset': 'UTF-8'\n                    }\n                }\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Contact form submission successful',\n                'messageId': response['MessageId']\n            })\n        }\n    \n    except ClientError as e:\n        print(f'SES Error: {e.response[\"Error\"][\"Message\"]}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Failed to send email'\n            })\n        }\n    \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'An error occurred'\n            })\n        }\n"
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\nses_client = boto3.client('ses')\n\ndef lambda_handler(event, context):\n    try:\n        body = json.loads(event.get('body', '{}'))\n        name = body.get('name', 'Unknown')\n        email = body.get('email', 'no-reply@example.com')\n        message = body.get('message', '')\n        \n        sender_email = os.environ['SENDER_EMAIL']\n        receiver_email = os.environ['RECEIVER_EMAIL']\n        \n        email_subject = f'Portfolio Contact Form Submission from {name}'\n        email_body = f\"\"\"You have received a new contact form submission:\\n\\nName: {name}\\nEmail: {email}\\n\\nMessage:\\n{message}\n\"\"\"\n        \n        ses_client.send_email(\n            Source=sender_email,\n            Destination={'ToAddresses': [receiver_email]},\n            Message={\n                'Subject': {'Data': email_subject, 'Charset': 'UTF-8'},\n                'Body': {'Text': {'Data': email_body, 'Charset': 'UTF-8'}}\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({'message': 'Contact form submission successful'})\n        }\n    \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({'message': 'An error occurred', 'error': str(e)})\n        }\n"
         },
         "Timeout": 30,
-        "MemorySize": 128,
         "Tags": [
           {
             "Key": "Project",
@@ -294,9 +307,6 @@
                 "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
                 "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
                 "method.response.header.Access-Control-Allow-Origin": "'*'"
-              },
-              "ResponseTemplates": {
-                "application/json": ""
               }
             }
           ],
@@ -310,7 +320,7 @@
             "ResponseParameters": {
               "method.response.header.Access-Control-Allow-Headers": true,
               "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-control-Allow-Origin": true
+              "method.response.header.Access-Control-Allow-Origin": true
             }
           }
         ]
@@ -345,7 +355,7 @@
     "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmDescription": "Alarm when Lambda function encounters errors",
+        "AlarmDescription": "Alarm when the portfolio contact form Lambda function encounters errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
         "Statistic": "Sum",
@@ -360,7 +370,8 @@
               "Ref": "ContactFormLambda"
             }
           }
-        ]
+        ],
+        "TreatMissingData": "notBreaching"
       }
     }
   },
