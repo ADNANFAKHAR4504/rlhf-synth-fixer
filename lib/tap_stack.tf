@@ -25,7 +25,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "tap-stack"
+  default     = "tap-stk"
 }
 
 variable "db_instance_class" {
@@ -104,8 +104,8 @@ locals {
   }
 
   # Resource naming convention
-  primary_prefix   = "${var.project_name}-primary-Byte"
-  secondary_prefix = "${var.project_name}-secondary-Byte"
+  primary_prefix   = "${var.project_name}-pri-bt"
+  secondary_prefix = "${var.project_name}-seco-bt"
 
   # VPC CIDR blocks
   primary_vpc_cidr   = "10.0.0.0/16"
