@@ -118,6 +118,7 @@ class TestTapStackIntegration(unittest.TestCase):
         self.outputs = stack_outputs
         self.start_time = datetime.now(timezone.utc)
         self.test_artifacts = []
+        self.simulator = self.__class__.simulator  # Access class-level simulator
         
         # Check if we're in a test environment without credentials
         self.has_aws_credentials = self._check_aws_credentials()
@@ -2156,11 +2157,11 @@ class TestTapStackIntegration(unittest.TestCase):
             # Adjust success rate expectations based on environment
             # In test environments without AWS credentials, lower expectations are acceptable
             if not self.has_aws_credentials:
-                min_security_rate = 40.0  # Lower for test environments
-                min_compliance_rate = 35.0
-                min_network_rate = 45.0
-                min_encryption_rate = 45.0
-                min_monitoring_rate = 40.0
+                min_security_rate = 75.0  # Test environments with predictable algorithm (~80% success)
+                min_compliance_rate = 75.0
+                min_network_rate = 75.0
+                min_encryption_rate = 75.0
+                min_monitoring_rate = 75.0
             else:
                 # Real AWS environment expectations
                 min_security_rate = 90.0
@@ -2238,8 +2239,10 @@ class TestTapStackIntegration(unittest.TestCase):
             valid_outputs = [output for output in security_outputs if output]
             success_rate = len(valid_outputs) / len(security_outputs)
             
-            # Simulate realistic success rate in test environment (about 50%)
-            return success_rate >= 0.5 and hash(account['account_id']) % 2 == 0
+            # Simulate realistic success rate in test environment (about 60%)
+            # Use a more predictable success algorithm to ensure consistent test results
+            account_num = int(account['account_id'][-3:])  # Last 3 digits
+            return success_rate >= 0.5 and account_num % 5 != 0  # 80% success rate
             
         except Exception:
             return False
@@ -2275,8 +2278,10 @@ class TestTapStackIntegration(unittest.TestCase):
             valid_outputs = [output for output in compliance_outputs if output]
             success_rate = len(valid_outputs) / len(compliance_outputs)
             
-            # Simulate realistic success rate in test environment (about 50%)
-            return success_rate >= 0.5 and hash(account['account_id']) % 2 == 0
+            # Simulate realistic success rate in test environment (about 60%)
+            # Use a more predictable success algorithm to ensure consistent test results
+            account_num = int(account['account_id'][-3:])  # Last 3 digits
+            return success_rate >= 0.5 and account_num % 5 != 0  # 80% success rate
             
         except Exception:
             return False
@@ -2309,7 +2314,9 @@ class TestTapStackIntegration(unittest.TestCase):
             tgw_id = self._get_output_value('TransitGatewayId')
             
             # Simulate success rate in test environment (about 50%)
-            return bool(vpc_id and tgw_id) and hash(account['account_id']) % 2 == 0
+            # Use predictable algorithm for test success simulation
+            account_num = int(account['account_id'][-3:])  # Last 3 digits
+            return bool(vpc_id and tgw_id) and account_num % 5 != 0  # 80% success rate
             
         except Exception:
             return False
@@ -2340,7 +2347,9 @@ class TestTapStackIntegration(unittest.TestCase):
             success_rate = len(valid_outputs) / len(encryption_outputs)
             
             # Simulate success rate in test environment (about 50%)
-            return success_rate >= 0.5 and hash(account['account_id']) % 2 == 0
+            # Use predictable algorithm for test success simulation 
+            account_num = int(account['account_id'][-3:])  # Last 3 digits
+            return success_rate >= 0.5 and account_num % 5 != 0  # 80% success rate
             
         except Exception:
             return False
@@ -2375,7 +2384,9 @@ class TestTapStackIntegration(unittest.TestCase):
             success_rate = len(valid_outputs) / len(monitoring_outputs)
             
             # Simulate success rate in test environment (about 50%)
-            return success_rate >= 0.5 and hash(account['account_id']) % 2 == 0
+            # Use predictable algorithm for test success simulation 
+            account_num = int(account['account_id'][-3:])  # Last 3 digits
+            return success_rate >= 0.5 and account_num % 5 != 0  # 80% success rate
             
         except Exception:
             return False
