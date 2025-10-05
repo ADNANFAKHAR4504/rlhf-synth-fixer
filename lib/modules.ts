@@ -1,0 +1,1079 @@
+import { Construct } from 'constructs';
+
+// VPC
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+
+// Security Groups
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+
+// Data Sources
+import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
+
+// IAM
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+
+// Auto Scaling
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
+
+// Load Balancer
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+
+// RDS
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+
+// S3
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+
+// CloudWatch
+import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
+
+/**
+ * VPC Module - Creates a VPC with public and private subnets across 2 AZs
+ * Security: Private subnets for compute/data layers, public only for load balancer
+ */
+export class VpcModule extends Construct {
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly natGateways: NatGateway[];
+  public readonly internetGateway: InternetGateway;
+
+  constructor(scope: Construct, id: string, tags: { [key: string]: string }) {
+    super(scope, id);
+
+    // Create VPC with DNS support for private hosted zones
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        ...tags,
+        Name: `${id}-vpc`,
+      },
+    });
+
+    // Internet Gateway for public subnet outbound connectivity
+    this.internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...tags,
+        Name: `${id}-igw`,
+      },
+    });
+
+    // Public route table
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...tags,
+        Name: `${id}-public-rt`,
+      },
+    });
+
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id,
+    });
+
+    // Create subnets across 2 AZs for HA
+    const azs = ['us-west-2a', 'us-west-2b'];
+    this.publicSubnets = [];
+    this.privateSubnets = [];
+    this.natGateways = [];
+
+    azs.forEach((az, index) => {
+      // Public subnets for ALB
+      const publicSubnet = new Subnet(this, `public-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${index + 1}.0/24`,
+        availabilityZone: az,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...tags,
+          Name: `${id}-public-subnet-${az}`,
+          Tier: 'Public',
+        },
+      });
+      this.publicSubnets.push(publicSubnet);
+
+      new RouteTableAssociation(this, `public-rta-${index}`, {
+        subnetId: publicSubnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+
+      // Private subnets for EC2 and RDS
+      const privateSubnet = new Subnet(this, `private-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${index + 10}.0/24`,
+        availabilityZone: az,
+        tags: {
+          ...tags,
+          Name: `${id}-private-subnet-${az}`,
+          Tier: 'Private',
+        },
+      });
+      this.privateSubnets.push(privateSubnet);
+
+      // NAT Gateway for private subnet outbound connectivity
+      const eip = new Eip(this, `nat-eip-${index}`, {
+        domain: 'vpc',
+        tags: {
+          ...tags,
+          Name: `${id}-nat-eip-${az}`,
+        },
+      });
+
+      const natGateway = new NatGateway(this, `nat-gw-${index}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnet.id,
+        tags: {
+          ...tags,
+          Name: `${id}-nat-gw-${az}`,
+        },
+      });
+      this.natGateways.push(natGateway);
+
+      // Private route table with NAT Gateway route
+      const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
+        vpcId: this.vpc.id,
+        tags: {
+          ...tags,
+          Name: `${id}-private-rt-${az}`,
+        },
+      });
+
+      new Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: natGateway.id,
+      });
+
+      new RouteTableAssociation(this, `private-rta-${index}`, {
+        subnetId: privateSubnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+  }
+}
+
+/**
+ * Security Groups Module - Least privilege network access controls
+ */
+export class SecurityGroupsModule extends Construct {
+  public readonly albSg: SecurityGroup;
+  public readonly ec2Sg: SecurityGroup;
+  public readonly rdsSg: SecurityGroup;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    vpcId: string,
+    tags: { [key: string]: string }
+  ) {
+    super(scope, id);
+
+    // ALB Security Group - Allow HTTPS from internet
+    this.albSg = new SecurityGroup(this, 'alb-sg', {
+      name: `${id}-alb-sg`,
+      description: 'Security group for Application Load Balancer - HTTPS only',
+      vpcId: vpcId,
+      ingress: [
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow HTTPS from internet',
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow all outbound traffic',
+        },
+      ],
+      tags: {
+        ...tags,
+        Name: `${id}-alb-sg`,
+      },
+    });
+
+    // EC2 Security Group - Allow traffic from ALB only
+    this.ec2Sg = new SecurityGroup(this, 'ec2-sg', {
+      name: `${id}-ec2-sg`,
+      description: 'Security group for EC2 instances - restricted access',
+      vpcId: vpcId,
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+          description:
+            'Allow all outbound traffic for updates and dependencies',
+        },
+      ],
+      tags: {
+        ...tags,
+        Name: `${id}-ec2-sg`,
+      },
+    });
+
+    // Allow traffic from ALB to EC2
+    new SecurityGroupRule(this, 'alb-to-ec2', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.albSg.id,
+      securityGroupId: this.ec2Sg.id,
+      description: 'Allow HTTP from ALB',
+    });
+
+    // RDS Security Group - Allow traffic from EC2 only
+    this.rdsSg = new SecurityGroup(this, 'rds-sg', {
+      name: `${id}-rds-sg`,
+      description: 'Security group for RDS - EC2 access only',
+      vpcId: vpcId,
+      tags: {
+        ...tags,
+        Name: `${id}-rds-sg`,
+      },
+    });
+
+    // Allow MySQL traffic from EC2 to RDS
+    new SecurityGroupRule(this, 'ec2-to-rds', {
+      type: 'ingress',
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.ec2Sg.id,
+      securityGroupId: this.rdsSg.id,
+      description: 'Allow MySQL from EC2 instances',
+    });
+  }
+}
+
+/**
+ * IAM Module - Least privilege roles and policies
+ */
+export class IamModule extends Construct {
+  public readonly ec2Role: IamRole;
+  public readonly instanceProfile: IamInstanceProfile;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    secretArn: string,
+    tags: { [key: string]: string }
+  ) {
+    super(scope, id);
+
+    // EC2 instance role with minimal permissions
+    this.ec2Role = new IamRole(this, 'ec2-role', {
+      name: `${id}-ec2-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    // Policy for CloudWatch Logs
+    const cloudwatchPolicy = new IamPolicy(this, 'cloudwatch-policy', {
+      name: `${id}-cloudwatch-policy`,
+      description: 'Allow EC2 instances to send logs to CloudWatch',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: 'arn:aws:logs:us-west-2:*:*',
+          },
+          {
+            Effect: 'Allow',
+            Action: ['cloudwatch:PutMetricData'],
+            Resource: '*',
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    // Policy for Secrets Manager access (restricted to specific secret)
+    const secretsPolicy = new IamPolicy(this, 'secrets-policy', {
+      name: `${id}-secrets-policy`,
+      description:
+        'Allow EC2 instances to read RDS credentials from Secrets Manager',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'secretsmanager:GetSecretValue',
+              'secretsmanager:DescribeSecret',
+            ],
+            Resource: secretArn,
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    // SSM policy for Session Manager (secure remote access without SSH)
+    const ssmPolicy = new IamPolicy(this, 'ssm-policy', {
+      name: `${id}-ssm-policy`,
+      description: 'Allow EC2 instances to use SSM Session Manager',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'ssm:UpdateInstanceInformation',
+              'ssmmessages:CreateControlChannel',
+              'ssmmessages:CreateDataChannel',
+              'ssmmessages:OpenControlChannel',
+              'ssmmessages:OpenDataChannel',
+              'ec2messages:GetMessages',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    // Attach policies to role
+    new IamRolePolicyAttachment(this, 'cloudwatch-attachment', {
+      role: this.ec2Role.name,
+      policyArn: cloudwatchPolicy.arn,
+    });
+
+    new IamRolePolicyAttachment(this, 'secrets-attachment', {
+      role: this.ec2Role.name,
+      policyArn: secretsPolicy.arn,
+    });
+
+    new IamRolePolicyAttachment(this, 'ssm-attachment', {
+      role: this.ec2Role.name,
+      policyArn: ssmPolicy.arn,
+    });
+
+    // Instance profile for EC2
+    this.instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
+      name: `${id}-instance-profile`,
+      role: this.ec2Role.name,
+      tags: tags,
+    });
+  }
+}
+
+/**
+ * Auto Scaling Group Module - Resilient EC2 deployment
+ */
+export class AutoScalingModule extends Construct {
+  public readonly asg: AutoscalingGroup;
+  public readonly launchTemplate: LaunchTemplate;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: {
+      subnetIds: string[];
+      securityGroupId: string;
+      instanceProfileArn: string;
+      targetGroupArns: string[];
+      dbSecretArn: string; // Add this line
+      awsRegion: string; // Add this line
+      instanceType: string;
+      minSize: number;
+      maxSize: number;
+      desiredCapacity: number;
+      tags: { [key: string]: string };
+    }
+  ) {
+    super(scope, id);
+
+    // Get latest Amazon Linux 2 AMI using SSM parameter
+    const amiData = new DataAwsSsmParameter(this, 'ami', {
+      name: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',
+    });
+
+    // Updated user data script in AutoScalingModule
+    const userData = `#!/bin/bash
+# Update system and install dependencies
+yum update -y
+yum install -y httpd aws-cli jq
+
+# Configure CloudWatch agent
+amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s
+
+# Retrieve RDS credentials from Secrets Manager
+// Retrieve RDS credentials from Secrets Manager
+DB_SECRET=$(aws secretsmanager get-secret-value --secret-id ${config.dbSecretArn} --region ${config.awsRegion} --query SecretString --output text)DB_USERNAME=$(echo $DB_SECRET | jq -r '.username')
+DB_PASSWORD=$(echo $DB_SECRET | jq -r '.password')
+
+# Export for application use (ensure proper security in production)
+export DB_USERNAME
+export DB_PASSWORD
+
+# Start web server with health check endpoint
+echo "<h1>Production Application Server</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+systemctl start httpd
+systemctl enable httpd
+
+# Log instance metadata
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+echo "Instance $INSTANCE_ID initialized at $(date)" >> /var/log/app-init.log
+`;
+
+    // Launch template with production configurations
+    this.launchTemplate = new LaunchTemplate(this, 'launch-template', {
+      name: `${id}-launch-template`,
+      description: 'Production launch template with security hardening',
+      imageId: amiData.value,
+      instanceType: config.instanceType,
+      iamInstanceProfile: {
+        arn: config.instanceProfileArn,
+      },
+      vpcSecurityGroupIds: [config.securityGroupId],
+      userData: Buffer.from(userData).toString('base64'),
+
+      // Enable detailed monitoring for better observability
+      monitoring: {
+        enabled: true,
+      },
+
+      // Instance metadata security - require IMDSv2
+      metadataOptions: {
+        httpEndpoint: 'enabled',
+        httpTokens: 'required', // Require IMDSv2 for security
+        httpPutResponseHopLimit: 1,
+      },
+
+      // EBS encryption for data at rest
+      blockDeviceMappings: [
+        {
+          deviceName: '/dev/xvda',
+          ebs: {
+            volumeSize: 20,
+            volumeType: 'gp3',
+            encrypted: 'true',
+            deleteOnTermination: 'true',
+          },
+        },
+      ],
+
+      tagSpecifications: [
+        {
+          resourceType: 'instance',
+          tags: {
+            ...config.tags,
+            Name: `${id}-ec2-instance`,
+          },
+        },
+        {
+          resourceType: 'volume',
+          tags: {
+            ...config.tags,
+            Name: `${id}-ec2-volume`,
+          },
+        },
+      ],
+    });
+
+    // Auto Scaling Group with health checks
+    this.asg = new AutoscalingGroup(this, 'asg', {
+      name: `${id}-asg`,
+      vpcZoneIdentifier: config.subnetIds,
+      targetGroupArns: config.targetGroupArns,
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      minSize: config.minSize,
+      maxSize: config.maxSize,
+      desiredCapacity: config.desiredCapacity,
+
+      launchTemplate: {
+        id: this.launchTemplate.id,
+        version: '$Latest',
+      },
+
+      // Enable instance refresh for rolling updates
+      instanceRefresh: {
+        strategy: 'Rolling',
+        preferences: {
+          minHealthyPercentage: 90,
+        },
+      },
+
+      tag: Object.entries(config.tags).map(([key, value]) => ({
+        key,
+        value,
+        propagateAtLaunch: true,
+      })),
+    });
+
+    // Auto scaling policies for dynamic scaling
+    new AutoscalingPolicy(this, 'scale-up', {
+      name: `${id}-scale-up`,
+      autoscalingGroupName: this.asg.name,
+      policyType: 'TargetTrackingScaling',
+      targetTrackingConfiguration: {
+        predefinedMetricSpecification: {
+          predefinedMetricType: 'ASGAverageCPUUtilization',
+        },
+        targetValue: 70,
+      },
+    });
+  }
+}
+
+/**
+ * Application Load Balancer Module - HTTPS-only with health checks
+ */
+export class AlbModule extends Construct {
+  public readonly alb: Lb;
+  public readonly targetGroup: LbTargetGroup;
+  public readonly httpsListener: LbListener;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: {
+      subnetIds: string[];
+      securityGroupId: string;
+      vpcId: string;
+      certificateArn?: string;
+      logBucketName: string;
+      tags: { [key: string]: string };
+    }
+  ) {
+    super(scope, id);
+
+    // Target group for EC2 instances
+    this.targetGroup = new LbTargetGroup(this, 'target-group', {
+      name: `${id}-tg`,
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: config.vpcId,
+      targetType: 'instance',
+
+      // Health check configuration
+      healthCheck: {
+        enabled: true,
+        path: '/health',
+        protocol: 'HTTP',
+        healthyThreshold: 2,
+        unhealthyThreshold: 3,
+        timeout: 5,
+        interval: 30,
+        matcher: '200',
+      },
+
+      // Stickiness for session affinity
+      stickiness: {
+        type: 'lb_cookie',
+        cookieDuration: 86400, // 1 day
+        enabled: true,
+      },
+
+      deregistrationDelay: '30',
+      tags: config.tags,
+    });
+
+    // Application Load Balancer
+    this.alb = new Lb(this, 'alb', {
+      name: `${id}-alb`,
+      internal: false,
+      loadBalancerType: 'application',
+      securityGroups: [config.securityGroupId],
+      subnets: config.subnetIds,
+
+      // Enable deletion protection for production
+      enableDeletionProtection: false, // Set to true in production
+
+      // Enable HTTP/2
+      enableHttp2: true,
+
+      // Enable access logs to S3
+      accessLogs: {
+        bucket: config.logBucketName,
+        prefix: 'alb-logs',
+        enabled: true,
+      },
+
+      tags: {
+        ...config.tags,
+        Name: `${id}-alb`,
+      },
+    });
+
+    // HTTPS listener (requires ACM certificate)
+    if (config.certificateArn) {
+      this.httpsListener = new LbListener(this, 'https-listener', {
+        loadBalancerArn: this.alb.arn,
+        port: 443,
+        protocol: 'HTTPS',
+        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+        certificateArn: config.certificateArn,
+
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: this.targetGroup.arn,
+          },
+        ],
+
+        tags: config.tags,
+      });
+    } else {
+      // HTTP listener (redirects to HTTPS in production with certificate)
+      this.httpsListener = new LbListener(this, 'http-listener', {
+        loadBalancerArn: this.alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: this.targetGroup.arn,
+          },
+        ],
+
+        tags: config.tags,
+      });
+    }
+  }
+}
+
+/**
+ * RDS MySQL Module - Multi-AZ with encryption and Secrets Manager integration
+ */
+export class RdsModule extends Construct {
+  public readonly dbInstance: DbInstance;
+  public readonly subnetGroup: DbSubnetGroup;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: {
+      subnetIds: string[];
+      securityGroupId: string;
+      secretArn: string;
+      dependsOn?: any[];
+      instanceClass: string;
+      allocatedStorage: number;
+      tags: { [key: string]: string };
+    }
+  ) {
+    super(scope, id);
+
+    // DB subnet group for Multi-AZ deployment
+    this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
+      name: `${id}-db-subnet-group`,
+      description: 'Subnet group for RDS Multi-AZ deployment',
+      subnetIds: config.subnetIds,
+      tags: {
+        ...config.tags,
+        Name: `${id}-db-subnet-group`,
+      },
+    });
+
+    // Get secret data
+    const secretData = new DataAwsSecretsmanagerSecret(this, 'db-secret-data', {
+      arn: config.secretArn,
+    });
+
+    new DataAwsSecretsmanagerSecretVersion(this, 'db-secret-version', {
+      secretId: secretData.id,
+    });
+
+    // RDS MySQL instance with Secrets Manager integration
+    this.dbInstance = new DbInstance(this, 'mysql', {
+      identifier: `${id}-mysql-db`,
+      engine: 'mysql',
+      engineVersion: '8.0.35',
+      instanceClass: config.instanceClass,
+      allocatedStorage: config.allocatedStorage,
+      storageType: 'gp3',
+      storageEncrypted: true, // Encryption at rest
+
+      // Use credentials from Secrets Manager
+      username: `\${jsondecode(data.aws_secretsmanager_secret_version.${this.node.id}-db-secret-version.secret_string)["username"]}`,
+      password: `\${jsondecode(data.aws_secretsmanager_secret_version.${this.node.id}-db-secret-version.secret_string)["password"]}`,
+
+      // Network configuration
+      dbSubnetGroupName: this.subnetGroup.name,
+      vpcSecurityGroupIds: [config.securityGroupId],
+      publiclyAccessible: false, // No public access for security
+
+      // High availability
+      multiAz: true,
+
+      // Backup configuration
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+
+      // Automatic minor version upgrades
+      autoMinorVersionUpgrade: true,
+
+      // Performance Insights for monitoring
+      performanceInsightsEnabled: true,
+      performanceInsightsRetentionPeriod: 7,
+
+      // Enhanced monitoring
+      enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      monitoringInterval: 60,
+      monitoringRoleArn: new IamRole(this, 'rds-monitoring-role', {
+        name: `${id}-rds-enhanced-monitoring-role`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+        ],
+        tags: config.tags,
+      }).arn,
+
+      // Deletion protection
+      deletionProtection: false, // Set to true in production
+      skipFinalSnapshot: true,
+      finalSnapshotIdentifier: `${id}-final-snapshot-${Date.now()}`,
+
+      tags: {
+        ...config.tags,
+        Name: `${id}-mysql-db`,
+      },
+
+      dependsOn: config.dependsOn,
+    });
+  }
+}
+
+/**
+ * S3 Module - Encrypted bucket for ALB logs with lifecycle policies
+ */
+export class S3Module extends Construct {
+  public readonly bucket: S3Bucket;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: {
+      transitionDays: number;
+      expirationDays: number;
+      tags: { [key: string]: string };
+    }
+  ) {
+    super(scope, id);
+
+    // S3 bucket for ALB logs
+    this.bucket = new S3Bucket(this, 'logs-bucket', {
+      bucket: `${id}-alb-logs-${Date.now()}`, // Unique bucket name
+
+      tags: {
+        ...config.tags,
+        Name: `${id}-alb-logs`,
+        Purpose: 'ALB Access Logs',
+      },
+    });
+
+    // Enable versioning for data protection
+    new S3BucketVersioningA(this, 'versioning', {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+    });
+
+    // Server-side encryption with S3-managed keys
+    new S3BucketServerSideEncryptionConfigurationA(this, 'encryption', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
+
+    // Block all public access
+    new S3BucketPublicAccessBlock(this, 'public-access-block', {
+      bucket: this.bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // Lifecycle policies for cost optimization
+    new S3BucketLifecycleConfiguration(this, 'lifecycle', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          id: 'alb-logs-lifecycle',
+          status: 'Enabled',
+          transition: [
+            {
+              days: config.transitionDays,
+              storageClass: 'STANDARD_IA',
+            },
+            {
+              days: config.transitionDays + 30,
+              storageClass: 'GLACIER',
+            },
+          ],
+
+          //Fix: use array for expiration
+          expiration: [
+            {
+              days: config.expirationDays,
+            },
+          ],
+
+          //Fix: use array for noncurrent version expiration
+          noncurrentVersionExpiration: [
+            {
+              noncurrentDays: 30,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Bucket policy for ALB access logs
+    new S3BucketPolicy(this, 'bucket-policy', {
+      bucket: this.bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::797873946194:root', // ELB service account for us-west-2
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.bucket.arn}/alb-logs/*`,
+          },
+        ],
+      }),
+    });
+  }
+}
+
+/**
+ * CloudWatch Dashboard Module - Comprehensive monitoring
+ */
+export class CloudWatchDashboardModule extends Construct {
+  public readonly dashboard: CloudwatchDashboard;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: {
+      asgName: string;
+      albArn: string;
+      dbInstanceId: string;
+      tags: { [key: string]: string };
+    }
+  ) {
+    super(scope, id);
+
+    // Extract ALB name from ARN
+    const albName = config.albArn.split('/').slice(-3).join('/');
+
+    const dashboardBody = {
+      widgets: [
+        // EC2 Auto Scaling metrics
+        {
+          type: 'metric',
+          properties: {
+            metrics: [
+              [
+                'AWS/EC2',
+                'CPUUtilization',
+                { stat: 'Average', label: 'EC2 CPU %' },
+              ],
+              ['.', '.', { stat: 'Maximum', label: 'EC2 CPU Max %' }],
+              [
+                'AWS/AutoScaling',
+                'GroupDesiredCapacity',
+                { stat: 'Average', label: 'Desired Capacity' },
+              ],
+              [
+                '.',
+                'GroupInServiceInstances',
+                { stat: 'Average', label: 'InService Instances' },
+              ],
+            ],
+            view: 'timeSeries',
+            stacked: false,
+            region: 'us-west-2',
+            title: 'EC2 Auto Scaling Group Metrics',
+            period: 300,
+            dimensions: {
+              AutoScalingGroupName: config.asgName,
+            },
+          },
+        },
+
+        // ALB metrics
+        {
+          type: 'metric',
+          properties: {
+            metrics: [
+              [
+                'AWS/ApplicationELB',
+                'RequestCount',
+                { stat: 'Sum', label: 'Request Count' },
+              ],
+              [
+                '.',
+                'TargetResponseTime',
+                { stat: 'Average', label: 'Response Time (s)' },
+              ],
+              [
+                '.',
+                'HTTPCode_Target_2XX_Count',
+                { stat: 'Sum', label: '2XX Responses' },
+              ],
+              [
+                '.',
+                'HTTPCode_Target_4XX_Count',
+                { stat: 'Sum', label: '4XX Errors' },
+              ],
+              [
+                '.',
+                'HTTPCode_Target_5XX_Count',
+                { stat: 'Sum', label: '5XX Errors' },
+              ],
+              [
+                '.',
+                'HealthyHostCount',
+                { stat: 'Average', label: 'Healthy Hosts' },
+              ],
+              [
+                '.',
+                'UnHealthyHostCount',
+                { stat: 'Average', label: 'Unhealthy Hosts' },
+              ],
+            ],
+            view: 'timeSeries',
+            stacked: false,
+            region: 'us-west-2',
+            title: 'Application Load Balancer Metrics',
+            period: 300,
+            dimensions: {
+              LoadBalancer: albName,
+            },
+          },
+        },
+
+        // RDS metrics
+        {
+          type: 'metric',
+          properties: {
+            metrics: [
+              [
+                'AWS/RDS',
+                'DatabaseConnections',
+                { stat: 'Average', label: 'DB Connections' },
+              ],
+              ['.', 'CPUUtilization', { stat: 'Average', label: 'DB CPU %' }],
+              [
+                '.',
+                'FreeableMemory',
+                { stat: 'Average', label: 'Freeable Memory' },
+              ],
+              [
+                '.',
+                'ReadLatency',
+                { stat: 'Average', label: 'Read Latency (ms)' },
+              ],
+              [
+                '.',
+                'WriteLatency',
+                { stat: 'Average', label: 'Write Latency (ms)' },
+              ],
+              [
+                '.',
+                'FreeStorageSpace',
+                { stat: 'Average', label: 'Free Storage' },
+              ],
+            ],
+            view: 'timeSeries',
+            stacked: false,
+            region: 'us-west-2',
+            title: 'RDS Database Metrics',
+            period: 300,
+            dimensions: {
+              DBInstanceIdentifier: config.dbInstanceId,
+            },
+          },
+        },
+      ],
+    };
+
+    this.dashboard = new CloudwatchDashboard(this, 'dashboard', {
+      dashboardName: `${id}-production-dashboard`,
+      dashboardBody: JSON.stringify(dashboardBody),
+    });
+  }
+}
