@@ -4,13 +4,14 @@ Here's the CDK infrastructure code for the SageMaker model training platform:
 
 ## Key Architecture Optimizations
 
-This implementation includes several optimizations to address AWS account resource limits:
+This implementation includes several critical optimizations to address AWS account resource limits and ensure successful deployment:
 
 - **No NAT Gateway**: Eliminates Elastic IP usage by using `natGateways: 0`
-- **PRIVATE_ISOLATED Subnets**: Uses isolated private subnets instead of egress-enabled ones
-- **VPC Endpoints**: Provides AWS service connectivity without internet gateway dependency
-- **Flexible Subnet Selection**: SageMaker notebook falls back to public subnet if private subnets unavailable
+- **Public Subnets for Internet Access**: All resources use public subnets to avoid NAT gateway EIP requirements
+- **VPC Endpoints**: Provides AWS service connectivity for private communications
+- **Flexible Environment Suffixes**: Supports dynamic environment naming (dev, pr3507, etc.)
 - **Resource Efficiency**: Optimized for accounts with VPC and EIP limits
+- **CI/CD Compatible**: Integration tests work across different deployment environments
 
 ## tap-stack.ts
 
@@ -95,11 +96,11 @@ export class NetworkingStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
-    // Create VPC with simplified configuration to avoid EIP limits
+    // Create VPC with optimized configuration for resource-constrained accounts
     this.vpc = new ec2.Vpc(this, 'TrainingVPC', {
       ipAddresses: ec2.IpAddresses.cidr('10.220.0.0/16'),
       maxAzs: 2,
-      natGateways: 0, // Use 0 NAT gateways to avoid EIP limit
+      natGateways: 0, // Critical: Use 0 NAT gateways to avoid EIP limit
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -109,7 +110,7 @@ export class NetworkingStack extends cdk.NestedStack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // No NAT gateway needed
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // For VPC endpoints
         },
       ],
     });
@@ -323,10 +324,8 @@ export class SageMakerStack extends cdk.NestedStack {
         instanceType: 'ml.t3.medium',
         roleArn: this.notebookRole.roleArn,
         notebookInstanceName: `training-notebook-${props.environmentSuffix}`,
-        // Use first available private subnet if any, otherwise use public subnet
-        subnetId: props.vpc.privateSubnets.length > 0
-          ? props.vpc.privateSubnets[0].subnetId
-          : props.vpc.publicSubnets[0].subnetId,
+        // Use public subnet for internet access (required for notebook initialization)
+        subnetId: props.vpc.publicSubnets[0].subnetId,
         securityGroupIds: [securityGroup.securityGroupId],
         defaultCodeRepository:
           'https://github.com/aws/amazon-sagemaker-examples.git',
@@ -404,7 +403,7 @@ export class BatchStack extends cdk.NestedStack {
         computeEnvironmentName: `batch-inference-${props.environmentSuffix}`,
         vpc: props.vpc,
         vpcSubnets: {
-          subnets: props.vpc.privateSubnets,
+          subnets: props.vpc.publicSubnets, // Use public subnets for internet access
         },
         securityGroups: [securityGroup],
         spot: true,
@@ -653,7 +652,7 @@ npx cdk deploy --context environmentSuffix=prod
 
 ## Testing
 
-The solution includes comprehensive unit and integration tests:
+The solution includes comprehensive unit and integration tests with CI/CD compatibility:
 
 ```bash
 # Run unit tests
@@ -666,11 +665,52 @@ npm run test:integration
 npm run test:coverage
 ```
 
+### Integration Test Environment Compatibility
+
+The integration tests are designed to work across different deployment environments (dev, staging, production, PR environments):
+
+- **Dynamic Environment Detection**: Tests automatically detect the environment suffix from CloudFormation outputs
+- **Environment-Agnostic Resource Discovery**: Tests dynamically find resources using pattern matching instead of hardcoded keys
+- **Flexible Account Validation**: Tests work with any valid AWS account ID
+- **Dynamic Subnet Discovery**: Tests find public/private subnets based on environment-specific naming patterns
+- **CloudWatch Alarm Compatibility**: Tests handle different alarm naming conventions across environments
+
+Example of environment-agnostic test patterns:
+```typescript
+// Dynamic environment suffix detection
+const envSuffix = outputs.EnvironmentSuffix;
+
+// Dynamic resource key discovery
+const publicSubnetKeys = Object.keys(outputs).filter(key => 
+  key.startsWith(`TapStack${envSuffix}NetworkingStack`) && 
+  key.includes('PublicSubnet1') && 
+  key.endsWith('Ref')
+);
+
+// Flexible account ID validation
+expect(outputs.AccountId).toMatch(/^\d{12}$/);
+```
+
+This ensures tests pass in CI/CD pipelines regardless of the environment suffix (dev, pr3507, staging, etc.).
+
 ## Clean Up
 
 ```bash
 # Destroy all resources
 npm run cdk:destroy
 ```
+
+## Production Deployment Considerations
+
+### Resource Optimization Features
+- **Zero NAT Gateways**: Eliminates Elastic IP usage to work within AWS account limits
+- **Public Subnet Architecture**: Provides internet access without EIP consumption
+- **VPC Endpoints**: Enables private AWS service communication
+- **Spot Instance Usage**: Reduces compute costs for Batch workloads
+
+### CI/CD Pipeline Compatibility
+- **Environment-Agnostic Code**: Works with dynamic environment suffixes
+- **Automated Testing**: Integration tests validate actual AWS resources
+- **Resource Discovery**: Tests adapt to different naming conventions automatically
 
 This solution successfully addresses all requirements while implementing production best practices for security, cost optimization, and operational excellence.
