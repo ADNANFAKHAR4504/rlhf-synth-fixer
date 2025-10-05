@@ -715,7 +715,7 @@ export class RdsModule extends Construct {
 
     // DB subnet group for Multi-AZ deployment
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
-      name: `${id}-db-subnet-group`,
+      name: `${id.toLowerCase()}-db-subnet-group`, // Convert to lowercase
       description: 'Subnet group for RDS Multi-AZ deployment',
       subnetIds: config.subnetIds,
       tags: {
@@ -731,6 +731,31 @@ export class RdsModule extends Construct {
 
     new DataAwsSecretsmanagerSecretVersion(this, 'db-secret-version', {
       secretId: secretData.id,
+    });
+
+    // Create monitoring role without deprecated managedPolicyArns
+    const monitoringRole = new IamRole(this, 'rds-monitoring-role', {
+      name: `${id}-rds-enhanced-monitoring-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'monitoring.rds.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: config.tags,
+    });
+
+    // Attach the policy separately
+    new IamRolePolicyAttachment(this, 'rds-monitoring-policy-attachment', {
+      role: monitoringRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
     });
 
     // RDS MySQL instance with Secrets Manager integration
@@ -870,6 +895,8 @@ export class S3Module extends Construct {
         {
           id: 'alb-logs-lifecycle',
           status: 'Enabled',
+          prefix: 'alb-logs/', // FIXED: Added required prefix
+
           transition: [
             {
               days: config.transitionDays,
