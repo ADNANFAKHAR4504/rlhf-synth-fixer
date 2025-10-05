@@ -22,9 +22,10 @@ describe('Fitness Tracking API Integration Tests', () => {
   let tableName;
 
   beforeAll(async () => {
-    apiEndpoint = outputs[`FitnessApiEndpoint-${environmentSuffix}`];
-    const apiKeyId = outputs[`FitnessApiKeyId-${environmentSuffix}`];
-    tableName = outputs[`WorkoutTableName-${environmentSuffix}`];
+    // CloudFormation outputs use logical IDs as keys in flat-outputs.json
+    apiEndpoint = outputs['ApiEndpoint'];
+    const apiKeyId = outputs['ApiKeyId'];
+    tableName = outputs['TableName'];
 
     expect(apiEndpoint).toBeDefined();
     expect(apiKeyId).toBeDefined();
