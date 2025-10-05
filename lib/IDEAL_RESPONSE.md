@@ -26,12 +26,13 @@ export interface TapStackProps extends cdk.StackProps {
   // prefer "suffix" or "environmentSuffix" via pipeline/context; keep optional
   suffix?: string;
   environmentSuffix?: string;
-  natGateways?: number; // default 0 for CI-friendly deployments
+  natGateways?: number; // default 1 to meet NAT requirement
   iacRlhfTagValue?: string; // optional tag value, defaults to "true"
 
   // new configurable options
-  deletionProtection?: boolean; // default true
+  deletionProtection?: boolean; // default false; enable when long-lived environment needs protection
   bucketRemovalPolicy?: cdk.RemovalPolicy; // default RETAIN
+  amiId?: string; // optional override for EC2 AMI
 }
 
 export class TapStack extends cdk.Stack {
@@ -51,9 +52,10 @@ export class TapStack extends cdk.Stack {
     const rawSuffix = props.suffix ?? props.environmentSuffix ?? '';
     const suffix = sanitize(rawSuffix || 'dev');
 
-    const natGateways = props.natGateways ?? 0;
+    const natGateways = props.natGateways ?? 1;
     const bucketRemovalPolicy = props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
-    const deletionProtection = props.deletionProtection ?? true;
+    const deletionProtection = props.deletionProtection ?? false;
+    const defaultAmiId = props.amiId ?? 'ami-0c02fb55956c7d316';
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
@@ -223,9 +225,9 @@ export class TapStack extends cdk.Stack {
       open: true,
     });
 
-    // Use AMI lookup helper (no hardcoded AMI)
-    const ami = ec2.MachineImage.latestAmazonLinux({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+    // Use explicit AMI mapping (AL2 x86_64)
+    const ami = ec2.MachineImage.genericLinux({
+      'us-east-1': defaultAmiId,
     });
 
     const asg = new autoscaling.AutoScalingGroup(this, `ASG-${suffix}`, {

@@ -191,7 +191,7 @@ Let's review what I've created against the requirements:
 1. **Region:** Deployment is set to us-east-1  
 2. **VPC:** Created with both public and private subnets  
 3. **IAM Role:** Created with restricted permissions for EC2 instances  
-4. **S3 Buckets:** Logging is enabled for the main bucket, but I need to add cross-region replication ❓
+4. **S3 Buckets:** Logging is enabled for the main bucket, but I need to add cross-region replication 
 5. **RDS:** PostgreSQL instance created in a private subnet  
 6. **NAT Gateway:** Included with the VPC configuration  
 7. **EC2 Instances:** Using a specified AMI  
