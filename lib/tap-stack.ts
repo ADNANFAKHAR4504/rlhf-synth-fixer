@@ -237,12 +237,35 @@ export class TapStack extends TerraformStack {
 
   // Helper method to generate random password
   private generateRandomPassword(length: number): string {
+    // Remove invalid characters: @, /, ", and space
     const chars =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%^&*()_+-=[]{}|;:,.<>?';
     let result = '';
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+
+    // Ensure password meets AWS requirements
+    const hasUpperCase = /[A-Z]/;
+    const hasLowerCase = /[a-z]/;
+    const hasNumbers = /[0-9]/;
+    const hasSpecialChar = /[!#$%^&*()_+=$${}|;:,.<>?-]/;
+
+    // Keep generating until we have a valid password
+    while (true) {
+      result = '';
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Check if password meets all requirements
+      if (
+        hasUpperCase.test(result) &&
+        hasLowerCase.test(result) &&
+        hasNumbers.test(result) &&
+        hasSpecialChar.test(result)
+      ) {
+        break;
+      }
     }
+
     return result;
   }
 }

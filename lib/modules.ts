@@ -449,27 +449,42 @@ yum update -y
 yum install -y httpd aws-cli jq
 
 # Configure CloudWatch agent
-amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s
+amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s || true
 
 # Retrieve RDS credentials from Secrets Manager
-// Retrieve RDS credentials from Secrets Manager
-DB_SECRET=$(aws secretsmanager get-secret-value --secret-id ${config.dbSecretArn} --region ${config.awsRegion} --query SecretString --output text)DB_USERNAME=$(echo $DB_SECRET | jq -r '.username')
+DB_SECRET=$(aws secretsmanager get-secret-value --secret-id ${config.dbSecretArn} --region ${config.awsRegion} --query SecretString --output text)
+DB_USERNAME=$(echo $DB_SECRET | jq -r '.username')
 DB_PASSWORD=$(echo $DB_SECRET | jq -r '.password')
 
-# Export for application use (ensure proper security in production)
+# Export for application use
 export DB_USERNAME
 export DB_PASSWORD
 
 # Start web server with health check endpoint
 echo "<h1>Production Application Server</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
+
+# Ensure proper permissions
+chmod 644 /var/www/html/index.html
+chmod 644 /var/www/html/health
+
+# Start and enable httpd
 systemctl start httpd
 systemctl enable httpd
 
+# Verify httpd is running
+sleep 5
+if ! systemctl is-active --quiet httpd; then
+  echo "HTTPD failed to start" >> /var/log/app-init.log
+  systemctl status httpd >> /var/log/app-init.log 2>&1
+  exit 1
+fi
+
 # Log instance metadata
-TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 echo "Instance $INSTANCE_ID initialized at $(date)" >> /var/log/app-init.log
+echo "Health check available at http://localhost/health" >> /var/log/app-init.log
 `;
 
     // Launch template with production configurations
@@ -533,7 +548,7 @@ echo "Instance $INSTANCE_ID initialized at $(date)" >> /var/log/app-init.log
       vpcZoneIdentifier: config.subnetIds,
       targetGroupArns: config.targetGroupArns,
       healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
+      healthCheckGracePeriod: 600,
       minSize: config.minSize,
       maxSize: config.maxSize,
       desiredCapacity: config.desiredCapacity,
@@ -609,8 +624,8 @@ export class AlbModule extends Construct {
         path: '/health',
         protocol: 'HTTP',
         healthyThreshold: 2,
-        unhealthyThreshold: 3,
-        timeout: 5,
+        unhealthyThreshold: 5,
+        timeout: 10,
         interval: 30,
         matcher: '200',
       },
