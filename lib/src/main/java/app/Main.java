@@ -45,7 +45,6 @@ import software.amazon.awscdk.services.lambda.eventsources.DynamoEventSource;
 import software.amazon.awscdk.services.lambda.StartingPosition;
 import software.amazon.awscdk.services.apigateway.RestApi;
 import software.amazon.awscdk.services.apigateway.StageOptions;
-import software.amazon.awscdk.services.apigateway.MethodLoggingLevel;
 import software.amazon.awscdk.services.apigateway.CorsOptions;
 import software.amazon.awscdk.services.apigateway.ApiKeySourceType;
 import software.amazon.awscdk.services.apigateway.Resource;
@@ -633,8 +632,6 @@ class TapStack extends Stack {
                 .description("API for ticket validation")
                 .deployOptions(StageOptions.builder()
                         .stageName("prod")
-                        .loggingLevel(MethodLoggingLevel.INFO)
-                        .dataTraceEnabled(true)
                         .build())
                 .defaultCorsPreflightOptions(CorsOptions.builder()
                         .allowOrigins(Arrays.asList("*"))
