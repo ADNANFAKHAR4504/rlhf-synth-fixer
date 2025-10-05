@@ -766,7 +766,7 @@ class TapStack extends Stack {
                 .build());
 
         container.addPortMappings(PortMapping.builder()
-                .containerPort(8080)
+                .containerPort(80)
                 .protocol(software.amazon.awscdk.services.ecs.Protocol.TCP)
                 .build());
 
