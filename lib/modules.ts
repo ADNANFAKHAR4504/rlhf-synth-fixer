@@ -795,25 +795,7 @@ export class RdsModule extends Construct {
       // Enhanced monitoring
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       monitoringInterval: 60,
-      monitoringRoleArn: new IamRole(this, 'rds-monitoring-role', {
-        name: `${id}-rds-enhanced-monitoring-role`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
-        ],
-        tags: config.tags,
-      }).arn,
+      monitoringRoleArn: monitoringRole.arn, // ← Use the already created role
 
       // Deletion protection
       deletionProtection: false, // Set to true in production
