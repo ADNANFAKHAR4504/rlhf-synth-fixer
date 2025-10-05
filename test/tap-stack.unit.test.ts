@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match, Capture } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
