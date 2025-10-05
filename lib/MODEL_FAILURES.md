@@ -1,3 +1,7 @@
+1. Model used incorrect naming convention for few of the resoruces.
+2. Model used incorrect prefix for few of the resources.
+3. Models use incorrect Capital letters for few of the resoruces.
+
 ```
 
 │ Error: "name_prefix" cannot be longer than 6 characters: "pr-Byte"
