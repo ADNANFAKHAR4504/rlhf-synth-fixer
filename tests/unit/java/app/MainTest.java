@@ -118,9 +118,9 @@ public class MainTest {
 
         // Verify GSI exists
         template.hasResourceProperties("AWS::DynamoDB::Table", Match.objectLike(Map.of(
-                "GlobalSecondaryIndexes", Match.arrayWith(Match.objectLike(Map.of(
+                "GlobalSecondaryIndexes", Match.arrayWith(java.util.List.of(Match.objectLike(Map.of(
                         "IndexName", "statusIndex"
-                )))
+                ))))
         )));
 
         assertThat(stack.getTicketInventoryTable()).isNotNull();
