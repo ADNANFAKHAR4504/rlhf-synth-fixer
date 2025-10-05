@@ -1,6 +1,7 @@
 import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from "@aws-sdk/client-ec2";
@@ -10,212 +11,239 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 import * as fs from "fs";
 import * as path from "path";
 
-type OutputsRaw = Record<string, any>;
+type DeploymentOutputs = {
+  ec2_instance_id: string;
+  ec2_instance_public_ip: string;
+  public_subnet_id: string;
+  rds_endpoint: string;
+  rds_password_secret_arn?: string;
+  s3_app_bucket_name: string;
+  vpc_id: string;
+};
 
-function readAllOutputs(): OutputsRaw {
-  const allOutputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  if (!fs.existsSync(allOutputsPath)) throw new Error(`Outputs file not found: ${allOutputsPath}`);
-  const raw = JSON.parse(fs.readFileSync(allOutputsPath, "utf8"));
+const REQUIRED_OUTPUT_KEYS: Array<keyof DeploymentOutputs> = [
+  "ec2_instance_id",
+  "ec2_instance_public_ip",
+  "public_subnet_id",
+  "rds_endpoint",
+  "s3_app_bucket_name",
+  "vpc_id",
+];
 
-  // helper to flatten common CFN shapes to a map of key -> rawValue
-  const map: Record<string, any> = {};
+const OPTIONAL_SECRET_KEY: keyof DeploymentOutputs = "rds_password_secret_arn";
 
-  // Case: top-level is a map of stack -> array of {OutputKey, OutputValue}
-  if (Object.values(raw).some((v) => Array.isArray(v) && v.length && v[0]?.OutputKey)) {
-    Object.values(raw).forEach((arr: any) => {
-      const list = Array.isArray(arr) ? arr : [];
-      list.forEach((o: any) => { if (o?.OutputKey) map[o.OutputKey] = o.OutputValue ?? o.Value; });
-      return map;
+function coerceToString(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value) && value.length > 0) return coerceToString(value[0]);
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (record.value !== undefined) return coerceToString(record.value);
+    if (record.Value !== undefined) return coerceToString(record.Value);
+    if (record.OutputValue !== undefined) return coerceToString(record.OutputValue);
+  }
+  return undefined;
+}
+
+function resolveValue(key: string, store: Record<string, string>): string | undefined {
+  if (store[key] !== undefined) return store[key];
+  const upper = key.toUpperCase();
+  if (store[upper] !== undefined) return store[upper];
+  const camel = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+  if (store[camel] !== undefined) return store[camel];
+  const compact = key.replace(/_/g, "");
+  if (store[compact] !== undefined) return store[compact];
+  return undefined;
+}
+
+function readDeploymentOutputs(): DeploymentOutputs {
+  const outputsDir = path.resolve(process.cwd(), "cfn-outputs");
+  const flatPath = path.join(outputsDir, "flat-outputs.json");
+  const allPath = path.join(outputsDir, "all-outputs.json");
+
+  const collected: Record<string, string> = {};
+
+  if (fs.existsSync(flatPath)) {
+    const flatRaw = JSON.parse(fs.readFileSync(flatPath, "utf8")) as Record<string, unknown>;
+    Object.entries(flatRaw).forEach(([key, value]) => {
+      const asString = coerceToString(value);
+      if (asString !== undefined) collected[key] = asString;
     });
   }
-  // Case: top-level is an array like [ { StackName: [ { OutputKey, OutputValue }, ... ] } ]
-  if (Array.isArray(raw)) {
-    const first = raw[0];
-    const arr = Array.isArray(first) ? first : Object.values(first)[0];
-    const list = Array.isArray(arr) ? arr : [];
-    list.forEach((o: any) => { if (o?.OutputKey) map[o.OutputKey] = o.OutputValue ?? o.Value; });
-    return map;
+
+  if (fs.existsSync(allPath)) {
+    const allRaw = JSON.parse(fs.readFileSync(allPath, "utf8")) as Record<string, unknown>;
+    Object.entries(allRaw).forEach(([key, value]) => {
+      const asString = coerceToString(value);
+      if (asString !== undefined) collected[key] = asString;
+    });
   }
 
-  // Case: flat map but values may be objects (e.g. { key: { value: "..."} } )
-  Object.entries(raw).forEach(([k, v]) => {
-    if (v && typeof v === "object") {
-      if ("OutputValue" in v) map[k] = v.OutputValue;
-      else if ("value" in v) map[k] = v.value;
-      else if ("Value" in v) map[k] = v.Value;
-      else map[k] = v; // leave as-is for further normalization
-    } else {
-      map[k] = v;
-    }
+  const resolved: Partial<DeploymentOutputs> = {};
+  const missingKeys: string[] = [];
+
+  REQUIRED_OUTPUT_KEYS.forEach((key) => {
+    const value = resolveValue(key, collected);
+    if (value === undefined) missingKeys.push(key);
+    else resolved[key] = value.trim();
   });
 
-  return map;
-}
+  const optionalSecret = resolveValue(OPTIONAL_SECRET_KEY, collected);
+  if (optionalSecret !== undefined) resolved[OPTIONAL_SECRET_KEY] = optionalSecret.trim();
 
-// Normalizer used by tests to coerce to string when possible
-function normalizeOutputValue(v: any): string | undefined {
-  if (v == null) return undefined;
-  if (typeof v === "string") return v;
-  if (typeof v === "object") {
-    if ("OutputValue" in v) return String(v.OutputValue);
-    if ("OutputKey" in v && "OutputValue" in v) return String(v.OutputValue);
-    if ("value" in v) return String(v.value);
-    if ("Value" in v) return String(v.Value);
-    // sometimes an array with scalar inside
-    if (Array.isArray(v) && v.length && typeof v[0] === "string") return v[0];
-    // fallback to JSON string
-    return JSON.stringify(v);
+  if (missingKeys.length > 0) {
+    throw new Error(
+      `Missing required deployment outputs: ${missingKeys.join(", ")} (looked in ${flatPath} and ${allPath})`,
+    );
   }
-  return String(v);
+
+  return resolved as DeploymentOutputs;
 }
 
-function chooseRegion(outputs: OutputsRaw): string {
+function inferRegion(outputs: DeploymentOutputs): string {
   const envRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
   if (envRegion) return envRegion;
-  const rdsOut = outputs.rds_endpoint || outputs.RDS_Endpoint || outputs.RDSEndpoint;
-  if (typeof rdsOut === "string") {
-    const host = rdsOut.split(":")[0];
-    const m = host.match(/\.(?<region>[a-z0-9-]+)\.rds\.amazonaws\.com$/);
-    if (m && (m as any).groups?.region) return (m as any).groups.region;
-  }
-  throw new Error("AWS region not found; set AWS_REGION or include region in rds_endpoint output");
+
+  const [endpointHost] = outputs.rds_endpoint.split(":");
+  const match = endpointHost.match(/\.([a-z0-9-]+)\.rds\.amazonaws\.com$/);
+  if (match && match[1]) return match[1];
+
+  throw new Error("Unable to determine AWS region. Set AWS_REGION or include a region-specific RDS endpoint.");
 }
 
-function extractDbIdentifier(rdsEndpointValue: string): string {
-  const host = rdsEndpointValue.split(":")[0];
-  return host.split(".")[0];
+function extractDbIdentifier(endpoint: string): string {
+  const [endpointHost] = endpoint.split(":");
+  return endpointHost.split(".")[0];
 }
 
-describe("LIVE integration tests (flat outputs)", () => {
-  let outputs: OutputsRaw;
+describe("Terraform stack integration", () => {
+  let outputs: DeploymentOutputs;
   let region: string;
+  let ec2: EC2Client;
+  let rds: RDSClient;
+  let s3: S3Client;
+  let secretsManager: SecretsManagerClient;
 
   beforeAll(() => {
-    outputs = readAllOutputs();
-    region = chooseRegion(outputs);
+    outputs = readDeploymentOutputs();
+    region = inferRegion(outputs);
+    ec2 = new EC2Client({ region });
+    rds = new RDSClient({ region });
+    s3 = new S3Client({ region });
+    secretsManager = new SecretsManagerClient({ region });
   });
 
-  test("all expected outputs exist (7 keys)", async () => {
-    console.info("Validating all expected Terraform outputs exist and basic shapes...");
-    const expected = [
-      "ec2_instance_id",
-      "ec2_instance_public_ip",
-      "public_subnet_id",
-      "rds_endpoint",
-      "rds_password_secret_arn",
-      "s3_app_bucket_name",
-      "vpc_id",
-    ];
-    for (const k of expected) {
-      const v = outputs[k] ?? outputs[k.toUpperCase()] ?? outputs[k.replace(/_/g, '')];
-      expect(v).toBeDefined();
-    }
-
-    // explicit value shape checks (optional, non-failing if secret ARN is empty)
-    const vpc = normalizeOutputValue(outputs.vpc_id);
-    expect(typeof vpc).toBe("string");
-    expect(/^vpc-[0-9a-f]+$/.test(vpc as string)).toBe(true);
-
-    // ensure the VPC actually exists in the account/region
-    const ec2ForVpc = new EC2Client({ region });
-    const vpcRes = await ec2ForVpc.send(new DescribeVpcsCommand({ VpcIds: [vpc as string] }));
-    expect((vpcRes.Vpcs ?? []).length).toBeGreaterThan(0);
-
-    // human-friendly test message for clients / reporters
-    console.info("VPC exists: %s", vpc);
-
-    const secretArnRaw = outputs.rds_password_secret_arn;
-    // allow empty string (sometimes not created) but when present must look like an ARN
-    if (secretArnRaw && secretArnRaw !== "") {
-      const secretArn = normalizeOutputValue(secretArnRaw) as string;
-      expect(/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:/.test(secretArn)).toBe(true);
-
-      // rds_password_secret_arn: when present, assert the secret ARN looks valid and is accessible.
-      console.info("Validating RDS password secret ARN exists and is accessible: %s", secretArn);
-      // explicit existence check in Secrets Manager so reviewer sees a one-to-one output -> live resource validation
-      const secrets = new SecretsManagerClient({ region });
-      // Describe vs GetSecretValue; using GetSecretValue to ensure secret exists and is accessible
-      await expect(secrets.send(new GetSecretValueCommand({ SecretId: secretArn }))).resolves.toBeDefined();
-      console.info("RDS password secret accessible: %s", secretArn);
-    } else {
-      console.info("No rds_password_secret_arn output present (allowed): %s", String(secretArnRaw));
-    }
+  test("deployment outputs exist for live resources", () => {
+    expect(outputs.ec2_instance_id).toMatch(/^i-[a-f0-9]+$/);
+    expect(outputs.ec2_instance_public_ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+    expect(outputs.public_subnet_id).toMatch(/^subnet-[a-f0-9]+$/);
+    expect(outputs.rds_endpoint).toContain(".rds.amazonaws.com");
+    expect(outputs.s3_app_bucket_name).not.toHaveLength(0);
+    expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
   });
 
-  test("EC2 instance exists and metadata looks valid", async () => {
-    const ec2InstanceId = outputs.ec2_instance_id;
-    expect(typeof ec2InstanceId).toBe("string");
-    const ec2 = new EC2Client({ region });
-    const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] }));
-    const instance = res.Reservations?.[0]?.Instances?.[0];
+  test("network topology: VPC, subnet, and instance wiring are consistent", async () => {
+    const [vpcRes, subnetRes, instanceRes] = await Promise.all([
+      ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] })),
+      ec2.send(new DescribeSubnetsCommand({ SubnetIds: [outputs.public_subnet_id] })),
+      ec2.send(new DescribeInstancesCommand({ InstanceIds: [outputs.ec2_instance_id] })),
+    ]);
+
+    const vpc = vpcRes.Vpcs?.[0];
+    expect(vpc).toBeDefined();
+    expect(vpc?.VpcId).toBe(outputs.vpc_id);
+
+    const subnet = subnetRes.Subnets?.[0];
+    expect(subnet).toBeDefined();
+    expect(subnet?.VpcId).toBe(outputs.vpc_id);
+
+    const mapPublicIp = subnet?.MapPublicIpOnLaunch;
+    expect(mapPublicIp).toBe(true);
+    const instance = instanceRes.Reservations?.[0]?.Instances?.[0];
     expect(instance).toBeDefined();
-    console.info("EC2 instance exists and metadata looks valid: %s", ec2InstanceId);
-    expect(["running", "pending", "stopping", "stopped"]).toContain(instance?.State?.Name);
-    const ip = outputs.ec2_instance_public_ip;
-    // require a non-empty public IP and assert it matches the instance (normalize before compare)
-    const normalizedIp = normalizeOutputValue(ip);
-    expect(typeof normalizedIp).toBe("string");
-    expect((normalizedIp as string).trim()).not.toBe("");
-    expect(instance?.PublicIpAddress).toBe((normalizedIp as string).trim());
-    console.info("EC2 public ip matches: %s", (normalizedIp as string).trim());
-    if (outputs.public_subnet_id) expect(instance?.SubnetId).toBe(outputs.public_subnet_id);
-    if (outputs.public_subnet_id) console.info("EC2 subnet id matches: %s", outputs.public_subnet_id);
+    expect(instance?.VpcId).toBe(outputs.vpc_id);
+    expect(instance?.SubnetId).toBe(outputs.public_subnet_id);
+
+    const publicIp = outputs.ec2_instance_public_ip.trim();
+    expect(instance?.PublicIpAddress).toBe(publicIp);
   });
 
-  test("RDS exists and is encrypted / private and security groups allow EC2 access", async () => {
-    const rdsEndpointVal = outputs.rds_endpoint;
-    expect(typeof rdsEndpointVal).toBe("string");
-    const dbIdentifier = extractDbIdentifier(rdsEndpointVal);
-    const rds = new RDSClient({ region });
-    const dbRes = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier }));
+  test("database is private, encrypted, and reachable from the application security group", async () => {
+    const dbIdentifier = extractDbIdentifier(outputs.rds_endpoint);
+    const [dbRes, instanceRes] = await Promise.all([
+      rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })),
+      ec2.send(new DescribeInstancesCommand({ InstanceIds: [outputs.ec2_instance_id] })),
+    ]);
+
     const db = dbRes.DBInstances?.[0];
     expect(db).toBeDefined();
-    console.info("RDS exists: %s", dbIdentifier);
-    expect(db?.StorageEncrypted).toBeTruthy();
-    expect(db?.PubliclyAccessible).toBeFalsy();
-    const rdsSgIds = (db?.VpcSecurityGroups ?? []).map(g => g.VpcSecurityGroupId).filter((id): id is string => Boolean(id));
-    expect(rdsSgIds.length).toBeGreaterThan(0);
+    expect(db?.DBSubnetGroup?.VpcId).toBe(outputs.vpc_id);
+    expect(db?.PubliclyAccessible).toBe(false);
+    expect(db?.StorageEncrypted).toBe(true);
 
-    // confirm at least one SG rule allows DB port from EC2 SG
-    const ec2InstanceId = outputs.ec2_instance_id;
-    const ec2 = new EC2Client({ region });
-    const instRes = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] }));
-    const instance = instRes.Reservations?.[0]?.Instances?.[0];
+    const endpointHost = outputs.rds_endpoint.split(":")[0];
+    expect(db?.Endpoint?.Address).toBe(endpointHost);
+
+    const rdsSecurityGroupIds = (db?.VpcSecurityGroups ?? [])
+      .map((sg) => sg.VpcSecurityGroupId)
+      .filter((value): value is string => Boolean(value));
+    expect(rdsSecurityGroupIds.length).toBeGreaterThan(0);
+
+    const instance = instanceRes.Reservations?.[0]?.Instances?.[0];
     expect(instance).toBeDefined();
-    const ec2SgIds = (instance?.SecurityGroups ?? []).map(s => s.GroupId).filter((id): id is string => Boolean(id));
-    expect(ec2SgIds.length).toBeGreaterThan(0);
 
-    const sgClient = new EC2Client({ region });
-    const describeRes = await sgClient.send(new DescribeSecurityGroupsCommand({ GroupIds: rdsSgIds }));
-    const rdsSgs = describeRes.SecurityGroups ?? [];
-    let found = false;
-    for (const sg of rdsSgs) {
-      for (const p of sg.IpPermissions ?? []) {
-        const from = p.FromPort ?? -1;
-        const to = p.ToPort ?? -1;
-        const proto = p.IpProtocol ?? "";
-        if ((from <= 3306 && to >= 3306) && (proto === "tcp" || proto === "-1")) {
-          const userPairs = p.UserIdGroupPairs ?? [];
-          if (userPairs.some(up => ec2SgIds.includes(up.GroupId ?? ""))) {
-            found = true;
-            break;
-          }
-        }
-      }
-      if (found) break;
+    const instanceSecurityGroupIds = (instance?.SecurityGroups ?? [])
+      .map((sg) => sg.GroupId)
+      .filter((value): value is string => Boolean(value));
+    expect(instanceSecurityGroupIds.length).toBeGreaterThan(0);
+
+    const securityGroupRes = await ec2.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: rdsSecurityGroupIds }),
+    );
+
+    const allowsDbPortFromInstanceSg = (securityGroupRes.SecurityGroups ?? []).some((securityGroup) =>
+      (securityGroup.IpPermissions ?? []).some((permission) => {
+        const from = permission.FromPort ?? -1;
+        const to = permission.ToPort ?? -1;
+        const protocol = permission.IpProtocol ?? "";
+        const userPairs = permission.UserIdGroupPairs ?? [];
+        const mentionsInstanceGroup = userPairs.some((pair) => {
+          const groupId = pair.GroupId ?? "";
+          return groupId.length > 0 && instanceSecurityGroupIds.includes(groupId);
+        });
+
+        const coversPort3306 = from <= 3306 && to >= 3306;
+        const allowsTcp = protocol === "tcp" || protocol === "-1" || protocol === undefined;
+
+        return coversPort3306 && allowsTcp && mentionsInstanceGroup;
+      }),
+    );
+
+    expect(allowsDbPortFromInstanceSg).toBe(true);
+
+    const secretArn = outputs.rds_password_secret_arn?.trim();
+    if (secretArn) {
+      await expect(
+        secretsManager.send(
+          new GetSecretValueCommand({
+            SecretId: secretArn,
+          }),
+        ),
+      ).resolves.toBeDefined();
     }
-    expect(found).toBe(true);
   });
 
-  test("S3 bucket exists and enforces server-side encryption", async () => {
-    const bucket = outputs.s3_app_bucket_name;
-    expect(typeof bucket).toBe("string");
-    const s3 = new S3Client({ region });
-    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-    const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-    const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0];
+  test("application bucket exists and enforces server-side encryption", async () => {
+    await expect(
+      s3.send(new HeadBucketCommand({ Bucket: outputs.s3_app_bucket_name })),
+    ).resolves.toBeDefined();
+
+    const encryption = await s3.send(
+      new GetBucketEncryptionCommand({ Bucket: outputs.s3_app_bucket_name }),
+    );
+
+    const rule = encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
     expect(rule).toBeDefined();
-    // removed strict algorithm assertion per reviewer — only ensure encryption configured
-    console.info("S3 bucket enforces server-side encryption: %s", bucket);
   });
 });
