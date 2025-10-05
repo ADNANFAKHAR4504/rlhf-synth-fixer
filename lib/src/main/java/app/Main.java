@@ -457,10 +457,10 @@ class TapStack extends Stack {
                         "DYNAMODB_TABLE", ticketInventoryTable.getTableName(),
                         "SENDER_EMAIL", "tickets@yourdomain.com"
                 ))
-                .layers(Arrays.asList(
-                        LayerVersion.fromLayerVersionArn(this, "QRCodeLayer",
-                                "arn:aws:lambda:us-west-2:770693421928:layer:Klayers-p311-qrcode:1")
-                ))
+                // .layers(Arrays.asList(
+                //         LayerVersion.fromLayerVersionArn(this, "QRCodeLayer",
+                //                 "arn:aws:lambda:us-west-2:770693421928:layer:Klayers-p311-qrcode:1")
+                // ))
                 .build();
 
         // Add DynamoDB stream as event source
