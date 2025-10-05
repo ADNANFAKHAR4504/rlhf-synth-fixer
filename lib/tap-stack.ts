@@ -117,7 +117,7 @@ export class TapStack extends cdk.Stack {
 
     // Kinesis Data Stream with auto-scaling and encryption
     const sensorDataStream = new kinesis.Stream(this, 'SensorDataStream', {
-      streamName: `iot-sensor-data-stream-${environmentSuffix}`,
+      streamName: `iot-sensor-data-stream-${environmentSuffix}-${Date.now()}`,
       shardCount: 2, // Start with 2 shards for 500k daily messages
       retentionPeriod: cdk.Duration.hours(24),
       streamMode: kinesis.StreamMode.PROVISIONED,
@@ -264,35 +264,48 @@ def handler(event, context):
     // Kinesis Data Firehose for S3 delivery
     const firehoseRole = new iam.Role(this, 'FirehoseRole', {
       assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
+      inlinePolicies: {
+        FirehoseKinesisAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kinesis:DescribeStream',
+                'kinesis:DescribeStreamSummary',
+                'kinesis:DescribeStreamConsumer',
+                'kinesis:GetShardIterator',
+                'kinesis:ListShards',
+                'kinesis:GetRecords',
+                'kinesis:SubscribeToShard',
+                'kinesis:ListStreams',
+              ],
+              resources: [sensorDataStream.streamArn],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:PutObject',
+                's3:GetBucketLocation',
+                's3:ListBucket',
+                's3:PutObjectAcl'
+              ],
+              resources: [
+                `${iotDataBucket.bucketArn}`,
+                `${iotDataBucket.bucketArn}/*`
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogStream',
+                'logs:PutLogEvents'
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
-
-    iotDataBucket.grantWrite(firehoseRole);
-
-    // Kinesis permissions required for Firehose
-    firehoseRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'kinesis:DescribeStream',
-          'kinesis:DescribeStreamSummary',
-          'kinesis:DescribeStreamConsumer',
-          'kinesis:GetShardIterator',
-          'kinesis:ListShards',
-          'kinesis:GetRecords',
-          'kinesis:SubscribeToShard',
-        ],
-        resources: [sensorDataStream.streamArn],
-      })
-    );
-
-    // These actions need "*" resource
-    firehoseRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['kinesis:ListStreams'],
-        resources: ['*'],
-      })
-    );
 
     // CloudWatch log group for Firehose errors
     const firehoseLogGroup = new logs.LogGroup(this, 'FirehoseLogGroup', {
@@ -306,13 +319,11 @@ def handler(event, context):
       logStreamName: 's3-delivery',
     });
 
-    firehoseLogGroup.grantWrite(firehoseRole);
-
     const firehoseDeliveryStream = new kinesisfirehose.CfnDeliveryStream(
       this,
       'FirehoseDeliveryStream',
       {
-        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}`,
+        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
         deliveryStreamType: 'KinesisStreamAsSource',
         kinesisStreamSourceConfiguration: {
           kinesisStreamArn: sensorDataStream.streamArn,
@@ -355,6 +366,9 @@ def handler(event, context):
         },
       }
     );
+
+    // Ensure dependency order - Firehose must be created after Kinesis stream
+    firehoseDeliveryStream.node.addDependency(sensorDataStream);
 
     // ==================== IOT CORE LAYER ====================
 
