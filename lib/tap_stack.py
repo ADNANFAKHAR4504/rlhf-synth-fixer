@@ -1936,3 +1936,17 @@ def send_response(event, context, status, data, physical_id=None):
         # Output important values
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
         CfnOutput(self, "AlertTopicArn", value=self.alert_topic.topic_arn)
+        
+        # Additional outputs for integration tests
+        CfnOutput(self, "CloudTrailArn", value=self.trail.trail_arn)
+        CfnOutput(self, "CloudTrailBucket", value=self.trail_bucket.bucket_name)
+        CfnOutput(self, "ApplicationLogsBucket", value=self.application_logs_bucket.bucket_name)
+        CfnOutput(self, "MasterKeyId", value=self.master_key.key_arn)
+        CfnOutput(self, "AuditKeyId", value=self.audit_key.key_arn)
+        CfnOutput(self, "SecurityHubArn", value=self.security_hub_arn)
+        CfnOutput(self, "TransitGatewayId", value=self.transit_gateway.ref)
+        CfnOutput(self, "NetworkFirewallArn", value=self.firewall.attr_firewall_arn)
+        CfnOutput(self, "AdminRoleArn", value=self.admin_role.role_arn)
+        CfnOutput(self, "AuditorRoleArn", value=self.auditor_role.role_arn)
+        CfnOutput(self, "IncidentResponseRoleArn", value=self.incident_response_role.role_arn)
+        CfnOutput(self, "IncidentResponseTopicArn", value=self.incident_response_topic.topic_arn)
