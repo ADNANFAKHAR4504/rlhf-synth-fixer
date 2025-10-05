@@ -28,11 +28,11 @@ interface TapStackProps extends cdk.StackProps {
 
 /**
  * Freelancer Marketplace Platform Stack
- *
+ * 
  * Implements a production-ready freelancer marketplace connecting 8,000 professionals
  * with clients. Features include profile management, project bidding, milestone-based
  * payments, and real-time messaging.
- *
+ * 
  * Architecture:
  * - Multi-AZ VPC with public/private subnets
  * - ECS Fargate for containerized application
@@ -54,14 +54,12 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
-
     const projectName = 'freelancer-platform';
     const resourcePrefix = `${env}-${projectName}`;
 
     // =================================================================
     // 1. NETWORKING LAYER - VPC with Multi-AZ configuration
     // =================================================================
-
     // For dev environment, use single NAT Gateway to avoid EIP limits
     // For production, increase to 2 for high availability
     const natGateways = env === 'dev' ? 1 : 2;
@@ -108,7 +106,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 2. SECURITY GROUPS - Define all upfront for proper dependency management
     // =================================================================
-
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
@@ -196,7 +193,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 3. AURORA MYSQL - Transactional database for users, projects, bids
     // =================================================================
-
     const dbSecret = new secretsmanager.Secret(this, 'AuroraSecret', {
       secretName: `${resourcePrefix}-aurora-credentials`,
       generateSecretString: {
@@ -245,7 +241,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 4. DYNAMODB - Real-time messaging with optimized query patterns
     // =================================================================
-
     const messagesTable = new dynamodb.Table(this, 'MessagesTable', {
       tableName: `${resourcePrefix}-messages`,
       partitionKey: {
@@ -254,9 +249,7 @@ export class TapStack extends cdk.Stack {
       },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
+      pointInTimeRecovery: true,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -280,7 +273,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 5. ELASTICACHE REDIS - Session caching and search result optimization
     // =================================================================
-
     const redisSubnetGroup = new elasticache.CfnSubnetGroup(
       this,
       'RedisSubnetGroup',
@@ -319,7 +311,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 6. S3 + CLOUDFRONT - Portfolio content storage and global delivery
     // =================================================================
-
     const portfolioBucket = new s3.Bucket(this, 'PortfolioBucket', {
       bucketName: `${resourcePrefix}-portfolios-${this.account}`,
       versioned: true,
@@ -391,7 +382,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 7. COGNITO USER POOLS - Separate authentication for freelancers and clients
     // =================================================================
-
     // Freelancer User Pool
     const freelancerPool = new cognito.UserPool(this, 'FreelancerUserPool', {
       userPoolName: `${resourcePrefix}-freelancers`,
@@ -482,7 +472,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 8. ECS FARGATE - Containerized application layer
     // =================================================================
-
     const cluster = new ecs.Cluster(this, 'ECSCluster', {
       clusterName: `${resourcePrefix}-cluster`,
       vpc,
@@ -492,7 +481,7 @@ export class TapStack extends cdk.Stack {
     cluster.addDefaultCloudMapNamespace({
       name: `${resourcePrefix}.local`,
     });
-    
+
     const taskRole = new iam.Role(this, 'ECSTaskRole', {
       roleName: `${resourcePrefix}-ecs-task-role`,
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -516,6 +505,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // FIXED: Remove REDIS_ENDPOINT from initial environment
     const container = taskDefinition.addContainer('AppContainer', {
       containerName: 'freelancer-app',
       image: ecs.ContainerImage.fromRegistry('nginx:latest'), // Replace with actual app image
@@ -527,8 +517,7 @@ export class TapStack extends cdk.Stack {
         ENVIRONMENT: env,
         AURORA_ENDPOINT: auroraCluster.clusterEndpoint.hostname,
         DYNAMODB_TABLE: messagesTable.tableName,
-        REDIS_ENDPOINT:
-          redisReplicationGroup.attrConfigurationEndPointAddress,
+        // REDIS_ENDPOINT removed from here
         S3_BUCKET: portfolioBucket.bucketName,
         CLOUDFRONT_URL: distribution.distributionDomainName,
         FREELANCER_POOL_ID: freelancerPool.userPoolId,
@@ -545,6 +534,24 @@ export class TapStack extends cdk.Stack {
       containerPort: 3000,
       protocol: ecs.Protocol.TCP,
     });
+
+    // FIXED: Add explicit dependency and Redis endpoint after container is created
+    taskDefinition.node.addDependency(redisReplicationGroup);
+    
+    // Add Redis endpoint as environment variable after task definition is created
+    const cfnTaskDef = taskDefinition.node.defaultChild as ecs.CfnTaskDefinition;
+    cfnTaskDef.addPropertyOverride('ContainerDefinitions.0.Environment', [
+      { Name: 'ENVIRONMENT', Value: env },
+      { Name: 'AURORA_ENDPOINT', Value: auroraCluster.clusterEndpoint.hostname },
+      { Name: 'DYNAMODB_TABLE', Value: messagesTable.tableName },
+      { Name: 'REDIS_ENDPOINT', Value: redisReplicationGroup.attrConfigurationEndPointAddress },
+      { Name: 'S3_BUCKET', Value: portfolioBucket.bucketName },
+      { Name: 'CLOUDFRONT_URL', Value: distribution.distributionDomainName },
+      { Name: 'FREELANCER_POOL_ID', Value: freelancerPool.userPoolId },
+      { Name: 'FREELANCER_CLIENT_ID', Value: freelancerPoolClient.userPoolClientId },
+      { Name: 'CLIENT_POOL_ID', Value: clientPool.userPoolId },
+      { Name: 'CLIENT_CLIENT_ID', Value: clientPoolClient.userPoolClientId },
+    ]);
 
     const fargateService = new ecs.FargateService(this, 'FargateService', {
       serviceName: `${resourcePrefix}-service`,
@@ -580,7 +587,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 9. APPLICATION LOAD BALANCER - Traffic distribution
     // =================================================================
-
     const alb = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
       loadBalancerName: `${resourcePrefix}-alb`,
       vpc,
@@ -617,7 +623,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 10. SNS TOPICS - Real-time notifications
     // =================================================================
-
     const bidNotificationTopic = new sns.Topic(this, 'BidNotificationTopic', {
       topicName: `${resourcePrefix}-bid-notifications`,
       displayName: 'New Bid Notifications',
@@ -644,7 +649,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 11. SES CONFIGURATION - Transactional emails
     // =================================================================
-
     new ses.EmailIdentity(this, 'EmailIdentity', {
       identity: ses.Identity.email('noreply@example.com'), // Replace with actual domain
     });
@@ -656,7 +660,6 @@ export class TapStack extends cdk.Stack {
     // =================================================================
     // 12. LAMBDA - Payment webhook processing
     // =================================================================
-
     const paymentWebhookDLQ = new sqs.Queue(this, 'PaymentWebhookDLQ', {
       queueName: `${resourcePrefix}-payment-webhook-dlq`,
       retentionPeriod: cdk.Duration.days(14),
@@ -699,7 +702,6 @@ exports.handler = async (event) => {
     // =================================================================
     // 13. STEP FUNCTIONS - Project lifecycle workflow
     // =================================================================
-
     const projectCreatedTask = new tasks.SnsPublish(
       this,
       'ProjectCreatedNotification',
@@ -782,7 +784,6 @@ exports.handler = async (event) => {
     // =================================================================
     // 14. CLOUDWATCH MONITORING - Dashboards and Alarms
     // =================================================================
-
     const dashboard = new cloudwatch.Dashboard(this, 'PlatformDashboard', {
       dashboardName: `${resourcePrefix}-dashboard`,
     });
@@ -860,7 +861,6 @@ exports.handler = async (event) => {
     // =================================================================
     // 15. RESOURCE TAGGING - Consistent tagging strategy
     // =================================================================
-
     cdk.Tags.of(this).add('Environment', env);
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
@@ -869,7 +869,6 @@ exports.handler = async (event) => {
     // =================================================================
     // 16. CLOUDFORMATION OUTPUTS - Important resource identifiers
     // =================================================================
-
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',

@@ -1,1573 +1,1560 @@
 ### Reasoning Trace
 ---
 
-This is a comprehensive multi-tenant SaaS infrastructure request. Let me break down the requirements:
+This is a comprehensive AWS CDK implementation request for a freelancer marketplace platform. Let me break down what needs to be implemented:
 
-1. **Network Layer**: VPC with public/private subnets, IGW, NAT Gateways
-2. **Compute & Load Balancing**: ALB with host-based routing, ASG with m5.large instances
-3. **Database & Caching**: Aurora PostgreSQL with RLS, ElastiCache Redis (separated by tenant tier)
-4. **Storage & CDN**: S3 with tenant isolation, CloudFront
-5. **DNS & Certificates**: Route53, ACM
-6. **Auth**: Cognito user pools per tenant
-7. **Serverless**: Lambda for tenant provisioning, DynamoDB for metadata
-8. **Monitoring**: CloudWatch logs per tenant
-9. **Configuration**: Systems Manager Parameter Store
+1. **Network Layer**: VPC with CIDR 10.36.0.0/16, multi-AZ setup with public/private subnets, NAT gateways
+2. **Compute**: ECS Fargate with ALB, auto-scaling
+3. **Data Layer**: Aurora MySQL, DynamoDB with GSIs, S3 for files, ElastiCache Redis
+4. **Auth**: Two separate Cognito user pools (freelancers and clients)
+5. **Serverless**: Lambda for payment webhooks, Step Functions for project workflow
+6. **Messaging**: SES for emails, SNS for notifications
+7. **CDN**: CloudFront for S3 content
+8. **Monitoring**: CloudWatch dashboards and alarms
 
-Key tenant isolation mechanisms:
-- PostgreSQL RLS for database
-- Host-based routing in ALB
-- Separate Redis clusters for premium tenants
-- S3 bucket policies
-- Separate Cognito user pools
-- Separate CloudWatch log groups
+Key considerations:
+- Region: us-east-2 (Ohio)
+- Environment: dev
+- User base: 8,000 professionals + clients
+- High concurrency requirements
+- Message query performance < 100ms
+- Tenant isolation between freelancers and clients
 
-I need to create a comprehensive Pulumi stack that implements all these components with proper connections and dependencies.
+I need to create three files:
+1. lib/tap-stack.ts - Main CDK stack
+2. tests/tap-stack.unit.test.ts - Unit tests
+3. tests/tap-stack.int.test.ts - Integration tests
 
-Let me structure the code properly:
-
-1. lib/tap_stack.py - Main infrastructure
-2. tests/unit/test_tap_stack.py - Unit tests
-3. tests/integration/test_tap_stack.py - Integration tests
-
-I'll start with the main stack implementation.
+Let me structure the implementation carefully with all the required resources and proper interconnections.
 ### Answer 
 ---
 
-I'll implement a comprehensive multi-tenant SaaS infrastructure with strict tenant isolation at every layer. Let me provide the complete solution:
+Looking at this comprehensive freelancer marketplace platform requirements, I'll design a production-ready infrastructure with proper resource interconnections, security, and scalability. Let me implement the three required files with all necessary AWS resources.
 
-## 1. lib/tap_stack.py - Full Infrastructure Implementation
+### File 1: lib/tap-stack.ts
 
-```python
-"""
-Multi-tenant SaaS infrastructure stack with complete tenant isolation.
-Supports 30,000 users across 500 organizations with custom domains.
-"""
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodeJs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as stepfunctions_tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as ses from 'aws-cdk-lib/aws-ses';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import { Construct } from 'constructs';
+import * as path from 'path';
 
-import json
-import base64
-from typing import Dict, List, Optional, Any
-import pulumi
-from pulumi import Input, Output, ResourceOptions
-import pulumi_aws as aws
-from pulumi_aws import ec2, rds, elasticache, s3, cloudfront, route53, acm
-from pulumi_aws import iam, cognito, lambda_, dynamodb, logs, ssm, autoscaling, elbv2
+/**
+ * TAP Stack - Freelancer Marketplace Platform Infrastructure
+ * 
+ * This stack provisions a complete AWS infrastructure for a freelancer marketplace
+ * supporting 8,000+ professionals with project bidding, milestone payments, and messaging.
+ */
+export class TapStack extends cdk.Stack {
+  // Public properties for testing
+  public readonly vpc: ec2.Vpc;
+  public readonly auroraCluster: rds.DatabaseCluster;
+  public readonly messagesTable: dynamodb.Table;
+  public readonly portfolioBucket: s3.Bucket;
+  public readonly distribution: cloudfront.Distribution;
+  public readonly freelancerPool: cognito.UserPool;
+  public readonly clientPool: cognito.UserPool;
+  public readonly fargateService: ecs_patterns.ApplicationLoadBalancedFargateService;
+  public readonly paymentLambda: lambda.Function;
+  public readonly projectWorkflow: stepfunctions.StateMachine;
+  
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, {
+      ...props,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-east-2',
+      },
+    });
 
+    const environment = 'dev';
+    const projectName = 'freelancer-platform';
+    
+    // Apply default tags to all resources
+    cdk.Tags.of(this).add('Environment', environment);
+    cdk.Tags.of(this).add('Project', projectName);
+    cdk.Tags.of(this).add('ManagedBy', 'CDK');
+    cdk.Tags.of(this).add('CostCenter', 'engineering');
 
-class MultiTenantSaaSStack(pulumi.ComponentResource):
-    """
-    Production-grade multi-tenant SaaS infrastructure with strict isolation.
+    // =============================
+    // 1. NETWORKING LAYER
+    // =============================
     
-    This stack implements:
-    - Network isolation with VPC and subnets
-    - Database isolation with Aurora PostgreSQL RLS
-    - Cache isolation with separate Redis clusters per tier
-    - Storage isolation with S3 bucket policies
-    - Authentication isolation with Cognito user pools per tenant
-    - Custom domain support with ALB host-based routing
-    """
-    
-    def __init__(self, name: str, opts: Optional[ResourceOptions] = None):
-        super().__init__('custom:infrastructure:MultiTenantSaaSStack', name, {}, opts)
-        
-        # Configuration
-        self.region = "us-east-1"
-        self.vpc_cidr = "10.18.0.0/16"
-        self.availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
-        
-        # Create core infrastructure
-        self._create_networking()
-        self._create_security_groups()
-        self._create_iam_roles()
-        self._create_database()
-        self._create_cache_clusters()
-        self._create_storage_and_cdn()
-        self._create_compute_and_load_balancing()
-        self._create_dns_and_certificates()
-        self._create_authentication()
-        self._create_serverless_components()
-        self._create_monitoring()
-        self._create_configuration_management()
-        
-        # Export critical outputs
-        self._export_outputs()
-    
-    def _create_networking(self):
-        """Create VPC with public/private subnets across multiple AZs."""
-        
-        # Create VPC with DNS support for internal resolution
-        self.vpc = ec2.Vpc("saas-vpc",
-            cidr_block=self.vpc_cidr,
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={"Name": "saas-multi-tenant-vpc", "Environment": "production"}
-        )
-        
-        # Internet Gateway for public subnet connectivity
-        self.igw = ec2.InternetGateway("saas-igw",
-            vpc_id=self.vpc.id,
-            tags={"Name": "saas-igw"}
-        )
-        
-        # Create public and private subnets across AZs
-        self.public_subnets = []
-        self.private_subnets = []
-        self.database_subnets = []
-        self.nat_gateways = []
-        
-        for idx, az in enumerate(self.availability_zones):
-            # Public subnet for ALB and NAT Gateway
-            public_subnet = ec2.Subnet(f"public-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{idx}.0/24",
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags={"Name": f"public-subnet-{az}", "Type": "public"}
-            )
-            self.public_subnets.append(public_subnet)
-            
-            # Elastic IP for NAT Gateway
-            eip = ec2.Eip(f"nat-eip-{idx}",
-                tags={"Name": f"nat-eip-{az}"}
-            )
-            
-            # NAT Gateway for private subnet outbound connectivity
-            nat_gw = ec2.NatGateway(f"nat-gateway-{idx}",
-                allocation_id=eip.id,
-                subnet_id=public_subnet.id,
-                tags={"Name": f"nat-gateway-{az}"}
-            )
-            self.nat_gateways.append(nat_gw)
-            
-            # Private subnet for application tier
-            private_subnet = ec2.Subnet(f"private-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{10 + idx}.0/24",
-                availability_zone=az,
-                tags={"Name": f"private-subnet-{az}", "Type": "private"}
-            )
-            self.private_subnets.append(private_subnet)
-            
-            # Database subnet for Aurora
-            database_subnet = ec2.Subnet(f"database-subnet-{idx}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.18.{20 + idx}.0/24",
-                availability_zone=az,
-                tags={"Name": f"database-subnet-{az}", "Type": "database"}
-            )
-            self.database_subnets.append(database_subnet)
-        
-        # Route tables
-        self.public_route_table = ec2.RouteTable("public-route-table",
-            vpc_id=self.vpc.id,
-            tags={"Name": "public-route-table"}
-        )
-        
-        # Public route to Internet Gateway
-        ec2.Route("public-route",
-            route_table_id=self.public_route_table.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=self.igw.id
-        )
-        
-        # Associate public subnets with public route table
-        for idx, subnet in enumerate(self.public_subnets):
-            ec2.RouteTableAssociation(f"public-rta-{idx}",
-                route_table_id=self.public_route_table.id,
-                subnet_id=subnet.id
-            )
-        
-        # Private route tables (one per AZ for NAT Gateway)
-        for idx, nat_gw in enumerate(self.nat_gateways):
-            private_route_table = ec2.RouteTable(f"private-route-table-{idx}",
-                vpc_id=self.vpc.id,
-                tags={"Name": f"private-route-table-{self.availability_zones[idx]}"}
-            )
-            
-            # Private route to NAT Gateway
-            ec2.Route(f"private-route-{idx}",
-                route_table_id=private_route_table.id,
-                destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gw.id
-            )
-            
-            # Associate private subnet with route table
-            ec2.RouteTableAssociation(f"private-rta-{idx}",
-                route_table_id=private_route_table.id,
-                subnet_id=self.private_subnets[idx].id
-            )
-            
-            # Associate database subnet with private route table
-            ec2.RouteTableAssociation(f"database-rta-{idx}",
-                route_table_id=private_route_table.id,
-                subnet_id=self.database_subnets[idx].id
-            )
-    
-    def _create_security_groups(self):
-        """Create security groups with least-privilege access."""
-        
-        # ALB Security Group - allows HTTPS traffic from internet
-        self.alb_sg = ec2.SecurityGroup("alb-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Application Load Balancer",
-            ingress=[
-                ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=443,
-                    to_port=443,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTPS from internet"
-                ),
-                ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTP from internet (redirect to HTTPS)"
-                )
-            ],
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "alb-security-group"}
-        )
-        
-        # Application tier Security Group
-        self.app_sg = ec2.SecurityGroup("app-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for application instances",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "app-security-group"}
-        )
-        
-        # Allow traffic from ALB to App tier
-        ec2.SecurityGroupRule("alb-to-app",
-            type="ingress",
-            from_port=8080,
-            to_port=8080,
-            protocol="tcp",
-            security_group_id=self.app_sg.id,
-            source_security_group_id=self.alb_sg.id,
-            description="Traffic from ALB"
-        )
-        
-        # Database Security Group
-        self.db_sg = ec2.SecurityGroup("db-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Aurora PostgreSQL",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "database-security-group"}
-        )
-        
-        # Allow PostgreSQL traffic from App tier
-        ec2.SecurityGroupRule("app-to-db",
-            type="ingress",
-            from_port=5432,
-            to_port=5432,
-            protocol="tcp",
-            security_group_id=self.db_sg.id,
-            source_security_group_id=self.app_sg.id,
-            description="PostgreSQL from app tier"
-        )
-        
-        # Redis Security Group
-        self.redis_sg = ec2.SecurityGroup("redis-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for ElastiCache Redis",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "redis-security-group"}
-        )
-        
-        # Allow Redis traffic from App tier
-        ec2.SecurityGroupRule("app-to-redis",
-            type="ingress",
-            from_port=6379,
-            to_port=6379,
-            protocol="tcp",
-            security_group_id=self.redis_sg.id,
-            source_security_group_id=self.app_sg.id,
-            description="Redis from app tier"
-        )
-        
-        # Lambda Security Group
-        self.lambda_sg = ec2.SecurityGroup("lambda-sg",
-            vpc_id=self.vpc.id,
-            description="Security group for Lambda functions",
-            egress=[
-                ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="Allow all outbound"
-                )
-            ],
-            tags={"Name": "lambda-security-group"}
-        )
-    
-    def _create_iam_roles(self):
-        """Create IAM roles with least-privilege policies."""
-        
-        # EC2 Instance Role for application tier
-        self.ec2_assume_role_policy = json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"}
-            }]
-        })
-        
-        self.ec2_role = iam.Role("ec2-app-role",
-            assume_role_policy=self.ec2_assume_role_policy,
-            description="IAM role for EC2 application instances",
-            tags={"Name": "ec2-app-role"}
-        )
-        
-        # Policy for EC2 instances - access to S3, SSM, CloudWatch
-        self.ec2_policy = iam.Policy("ec2-app-policy",
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetObject",
-                            "s3:PutObject",
-                            "s3:DeleteObject"
-                        ],
-                        "Resource": "arn:aws:s3:::tenant-*/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:ExistingObjectTag/TenantId": "${aws:PrincipalTag/TenantId}"
-                            }
-                        }
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "ssm:GetParameter",
-                            "ssm:GetParameters"
-                        ],
-                        "Resource": f"arn:aws:ssm:{self.region}:*:parameter/saas/tenant/*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
-                        ],
-                        "Resource": "arn:aws:logs:*:*:*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "cloudwatch:PutMetricData"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
+    /**
+     * VPC Configuration
+     * Multi-AZ deployment with 10.36.0.0/16 CIDR for high availability
+     * Includes public and private subnets across 2 availability zones
+     */
+    this.vpc = new ec2.Vpc(this, 'MarketplaceVpc', {
+      vpcName: `${environment}-${projectName}-vpc`,
+      ipAddresses: ec2.IpAddresses.cidr('10.36.0.0/16'),
+      maxAzs: 2, // Multi-AZ for high availability
+      natGateways: 2, // One per AZ for redundancy
+      subnetConfiguration: [
+        {
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 20, // 4096 IPs per subnet
+        },
+        {
+          name: 'private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 20,
+        },
+        {
+          name: 'isolated',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          cidrMask: 20,
+        },
+      ],
+      flowLogs: {
+        'vpc-flow-logs': {
+          destination: ec2.FlowLogDestination.toCloudWatchLogs(
+            new logs.LogGroup(this, 'VpcFlowLogGroup', {
+              logGroupName: `/aws/vpc/${environment}-${projectName}`,
+              retention: logs.RetentionDays.ONE_WEEK, // Reduced for dev environment
+              removalPolicy: cdk.RemovalPolicy.DESTROY,
             })
-        )
-        
-        iam.RolePolicyAttachment("ec2-policy-attachment",
-            role=self.ec2_role.name,
-            policy_arn=self.ec2_policy.arn
-        )
-        
-        self.ec2_instance_profile = iam.InstanceProfile("ec2-instance-profile",
-            role=self.ec2_role.name
-        )
-        
-        # Lambda Execution Role for tenant provisioning
-        self.lambda_assume_role_policy = json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {"Service": "lambda.amazonaws.com"}
-            }]
-        })
-        
-        self.lambda_role = iam.Role("lambda-provisioning-role",
-            assume_role_policy=self.lambda_assume_role_policy,
-            description="IAM role for tenant provisioning Lambda",
-            tags={"Name": "lambda-provisioning-role"}
-        )
-        
-        # Lambda policy for tenant provisioning
-        self.lambda_policy = iam.Policy("lambda-provisioning-policy",
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "cognito-idp:CreateUserPool",
-                            "cognito-idp:CreateUserPoolDomain",
-                            "cognito-idp:UpdateUserPool"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "route53:CreateHostedZone",
-                            "route53:ChangeResourceRecordSets",
-                            "route53:GetHostedZone"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "acm:RequestCertificate",
-                            "acm:DescribeCertificate",
-                            "acm:DeleteCertificate"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "elasticloadbalancing:CreateRule",
-                            "elasticloadbalancing:ModifyRule",
-                            "elasticloadbalancing:DeleteRule",
-                            "elasticloadbalancing:DescribeRules"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "dynamodb:PutItem",
-                            "dynamodb:GetItem",
-                            "dynamodb:UpdateItem",
-                            "dynamodb:Query"
-                        ],
-                        "Resource": "arn:aws:dynamodb:*:*:table/tenant-registry*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
-                        ],
-                        "Resource": "arn:aws:logs:*:*:*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "ec2:CreateNetworkInterface",
-                            "ec2:DescribeNetworkInterfaces",
-                            "ec2:DeleteNetworkInterface",
-                            "ec2:AssignPrivateIpAddresses",
-                            "ec2:UnassignPrivateIpAddresses"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            })
-        )
-        
-        iam.RolePolicyAttachment("lambda-policy-attachment",
-            role=self.lambda_role.name,
-            policy_arn=self.lambda_policy.arn
-        )
-        
-        # Attach VPC execution policy for Lambda
-        iam.RolePolicyAttachment("lambda-vpc-policy",
-            role=self.lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-        )
-    
-    def _create_database(self):
-        """Create Aurora PostgreSQL cluster with Row-Level Security for tenant isolation."""
-        
-        # Database subnet group
-        self.db_subnet_group = rds.SubnetGroup("aurora-subnet-group",
-            subnet_ids=[subnet.id for subnet in self.database_subnets],
-            description="Subnet group for Aurora PostgreSQL cluster",
-            tags={"Name": "aurora-subnet-group"}
-        )
-        
-        # Parameter group for PostgreSQL with RLS optimization
-        self.db_parameter_group = rds.ClusterParameterGroup("aurora-pg-params",
-            family="aurora-postgresql14",
-            description="Parameter group for multi-tenant Aurora PostgreSQL",
-            parameters=[
-                {"name": "shared_preload_libraries", "value": "pg_stat_statements,pgaudit"},
-                {"name": "log_statement", "value": "all"},
-                {"name": "log_connections", "value": "1"},
-                {"name": "log_disconnections", "value": "1"},
-                {"name": "row_security", "value": "on"},  # Enable RLS
-                {"name": "pgaudit.log", "value": "ALL"},
-                {"name": "max_connections", "value": "1000"}  # Support scale
-            ],
-            tags={"Name": "aurora-pg-params"}
-        )
-        
-        # Aurora PostgreSQL cluster with encryption
-        self.aurora_cluster = rds.Cluster("aurora-cluster",
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            database_name="saasdb",
-            master_username="dbadmin",
-            master_password=pulumi.Config().require_secret("db_password"),
-            db_subnet_group_name=self.db_subnet_group.name,
-            db_cluster_parameter_group_name=self.db_parameter_group.name,
-            vpc_security_group_ids=[self.db_sg.id],
-            storage_encrypted=True,
-            backup_retention_period=30,
-            preferred_backup_window="03:00-04:00",
-            preferred_maintenance_window="mon:04:00-mon:05:00",
-            enabled_cloudwatch_logs_exports=["postgresql"],
-            deletion_protection=True,
-            skip_final_snapshot=False,
-            final_snapshot_identifier="aurora-final-snapshot",
-            tags={
-                "Name": "aurora-multi-tenant-cluster",
-                "Environment": "production",
-                "TenantIsolation": "RLS"
-            }
-        )
-        
-        # Aurora instances (writer and reader)
-        self.aurora_writer = rds.ClusterInstance("aurora-writer",
-            cluster_identifier=self.aurora_cluster.id,
-            instance_class="db.r6g.xlarge",  # Production-grade instance
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            performance_insights_enabled=True,
-            monitoring_interval=60,
-            monitoring_role_arn=self._create_rds_monitoring_role().arn,
-            tags={"Name": "aurora-writer", "Role": "writer"}
-        )
-        
-        self.aurora_reader = rds.ClusterInstance("aurora-reader",
-            cluster_identifier=self.aurora_cluster.id,
-            instance_class="db.r6g.xlarge",
-            engine="aurora-postgresql",
-            engine_version="14.6",
-            performance_insights_enabled=True,
-            monitoring_interval=60,
-            monitoring_role_arn=self._create_rds_monitoring_role().arn,
-            tags={"Name": "aurora-reader", "Role": "reader"}
-        )
-    
-    def _create_rds_monitoring_role(self) -> iam.Role:
-        """Create IAM role for RDS enhanced monitoring."""
-        role = iam.Role("rds-monitoring-role",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {"Service": "monitoring.rds.amazonaws.com"}
-                }]
-            })
-        )
-        
-        iam.RolePolicyAttachment("rds-monitoring-policy",
-            role=role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-        )
-        
-        return role
-    
-    def _create_cache_clusters(self):
-        """Create ElastiCache Redis clusters with tier-based separation."""
-        
-        # Subnet group for ElastiCache
-        self.cache_subnet_group = elasticache.SubnetGroup("cache-subnet-group",
-            subnet_ids=[subnet.id for subnet in self.private_subnets],
-            description="Subnet group for ElastiCache Redis",
-            tags={"Name": "cache-subnet-group"}
-        )
-        
-        # Parameter group for Redis optimization
-        self.redis_parameter_group = elasticache.ParameterGroup("redis-params",
-            family="redis7",
-            description="Parameter group for multi-tenant Redis",
-            parameters=[
-                {"name": "maxmemory-policy", "value": "allkeys-lru"},
-                {"name": "timeout", "value": "300"},
-                {"name": "tcp-keepalive", "value": "300"},
-                {"name": "notify-keyspace-events", "value": "Ex"}
-            ],
-            tags={"Name": "redis-params"}
-        )
-        
-        # Premium tier - Dedicated Redis cluster with replication
-        self.premium_redis = elasticache.ReplicationGroup("premium-redis",
-            replication_group_description="Dedicated Redis for premium tenants",
-            engine="redis",
-            node_type="cache.r6g.large",
-            num_cache_clusters=2,  # Primary + replica
-            automatic_failover_enabled=True,
-            multi_az_enabled=True,
-            subnet_group_name=self.cache_subnet_group.name,
-            security_group_ids=[self.redis_sg.id],
-            parameter_group_name=self.redis_parameter_group.name,
-            at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            auth_token=pulumi.Config().require_secret("redis_auth_token"),
-            snapshot_retention_limit=5,
-            snapshot_window="03:00-05:00",
-            maintenance_window="sun:05:00-sun:06:00",
-            tags={
-                "Name": "premium-redis-cluster",
-                "Tier": "premium",
-                "TenantIsolation": "physical"
-            }
-        )
-        
-        # Standard tier - Shared Redis cluster with logical isolation
-        self.standard_redis = elasticache.ReplicationGroup("standard-redis",
-            replication_group_description="Shared Redis for standard tenants with key prefixing",
-            engine="redis",
-            node_type="cache.r6g.xlarge",  # Larger instance for multiple tenants
-            num_cache_clusters=3,  # More nodes for shared workload
-            automatic_failover_enabled=True,
-            multi_az_enabled=True,
-            subnet_group_name=self.cache_subnet_group.name,
-            security_group_ids=[self.redis_sg.id],
-            parameter_group_name=self.redis_parameter_group.name,
-            at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
-            auth_token=pulumi.Config().require_secret("redis_auth_token"),
-            snapshot_retention_limit=5,
-            snapshot_window="03:00-05:00",
-            maintenance_window="sun:05:00-sun:06:00",
-            tags={
-                "Name": "standard-redis-cluster",
-                "Tier": "standard",
-                "TenantIsolation": "logical-key-prefix"
-            }
-        )
-    
-    def _create_storage_and_cdn(self):
-        """Create S3 buckets with tenant isolation and CloudFront distribution."""
-        
-        # S3 bucket for tenant data with versioning and encryption
-        self.tenant_data_bucket = s3.Bucket("tenant-data-bucket",
-            bucket=f"saas-tenant-data-{pulumi.get_stack()}",
-            versioning=s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )]
-            ),
-            lifecycle_rules=[
-                s3.BucketLifecycleRuleArgs(
-                    enabled=True,
-                    id="archive-old-versions",
-                    noncurrent_version_transitions=[
-                        s3.BucketLifecycleRuleNoncurrentVersionTransitionArgs(
-                            days=30,
-                            storage_class="GLACIER"
-                        )
-                    ]
-                )
-            ],
-            tags={
-                "Name": "tenant-data-bucket",
-                "Environment": "production",
-                "DataClassification": "confidential"
-            }
-        )
-        
-        # Bucket policy for tenant isolation
-        self.tenant_bucket_policy = s3.BucketPolicy("tenant-data-policy",
-            bucket=self.tenant_data_bucket.id,
-            policy=pulumi.Output.all(self.tenant_data_bucket.arn).apply(
-                lambda args: json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "DenyIncorrectEncryption",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:PutObject",
-                            "Resource": f"{args[0]}/*",
-                            "Condition": {
-                                "StringNotEquals": {
-                                    "s3:x-amz-server-side-encryption": "AES256"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "TenantIsolation",
-                            "Effect": "Allow",
-                            "Principal": {"AWS": "*"},
-                            "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-                            "Resource": f"{args[0]}/*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:ExistingObjectTag/TenantId": "${{aws:PrincipalTag/TenantId}}"
-                                }
-                            }
-                        }
-                    ]
-                })
-            )
-        )
-        
-        # Static assets bucket for CloudFront
-        self.static_assets_bucket = s3.Bucket("static-assets-bucket",
-            bucket=f"saas-static-assets-{pulumi.get_stack()}",
-            website=s3.BucketWebsiteArgs(
-                index_document="index.html",
-                error_document="error.html"
-            ),
-            cors_rules=[
-                s3.BucketCorsRuleArgs(
-                    allowed_headers=["*"],
-                    allowed_methods=["GET", "HEAD"],
-                    allowed_origins=["*"],
-                    max_age_seconds=3000
-                )
-            ],
-            tags={"Name": "static-assets-bucket"}
-        )
-        
-        # Origin Access Identity for CloudFront
-        self.oai = cloudfront.OriginAccessIdentity("cloudfront-oai",
-            comment="OAI for multi-tenant SaaS CloudFront distribution"
-        )
-        
-        # Bucket policy for OAI access
-        self.static_bucket_policy = s3.BucketPolicy("static-assets-policy",
-            bucket=self.static_assets_bucket.id,
-            policy=pulumi.Output.all(
-                self.static_assets_bucket.arn,
-                self.oai.iam_arn
-            ).apply(lambda args: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Sid": "AllowCloudFrontOAI",
-                    "Effect": "Allow",
-                    "Principal": {"AWS": args[1]},
-                    "Action": "s3:GetObject",
-                    "Resource": f"{args[0]}/*"
-                }]
-            }))
-        )
-        
-        # CloudFront distribution with custom SSL
-        self.cdn_distribution = cloudfront.Distribution("cdn-distribution",
-            enabled=True,
-            is_ipv6_enabled=True,
-            comment="Multi-tenant SaaS CDN distribution",
-            default_root_object="index.html",
-            price_class="PriceClass_100",
-            
-            origins=[
-                cloudfront.DistributionOriginArgs(
-                    domain_name=self.static_assets_bucket.bucket_regional_domain_name,
-                    origin_id="S3-static-assets",
-                    s3_origin_config=cloudfront.DistributionOriginS3OriginConfigArgs(
-                        origin_access_identity=self.oai.cloudfront_access_identity_path
-                    )
-                )
-            ],
-            
-            default_cache_behavior=cloudfront.DistributionDefaultCacheBehaviorArgs(
-                target_origin_id="S3-static-assets",
-                viewer_protocol_policy="redirect-to-https",
-                allowed_methods=["GET", "HEAD", "OPTIONS"],
-                cached_methods=["GET", "HEAD"],
-                compress=True,
-                
-                forwarded_values=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
-                    query_string=False,
-                    cookies=cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
-                        forward="none"
-                    ),
-                    headers=["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
-                ),
-                
-                min_ttl=0,
-                default_ttl=3600,
-                max_ttl=86400
-            ),
-            
-            restrictions=cloudfront.DistributionRestrictionsArgs(
-                geo_restriction=cloudfront.DistributionRestrictionsGeoRestrictionArgs(
-                    restriction_type="none"
-                )
-            ),
-            
-            viewer_certificate=cloudfront.DistributionViewerCertificateArgs(
-                cloudfront_default_certificate=True  # Will be updated per tenant
-            ),
-            
-            tags={
-                "Name": "cdn-distribution",
-                "Environment": "production"
-            }
-        )
-    
-    def _create_compute_and_load_balancing(self):
-        """Create ALB, Auto Scaling Group, and EC2 instances."""
-        
-        # Application Load Balancer for multi-tenant routing
-        self.alb = elbv2.LoadBalancer("tenant-alb",
-            load_balancer_type="application",
-            subnets=[subnet.id for subnet in self.public_subnets],
-            security_groups=[self.alb_sg.id],
-            enable_deletion_protection=True,
-            enable_http2=True,
-            enable_cross_zone_load_balancing=True,
-            access_logs=elbv2.LoadBalancerAccessLogsArgs(
-                enabled=True,
-                bucket=self._create_alb_logs_bucket().bucket
-            ),
-            tags={
-                "Name": "tenant-alb",
-                "Environment": "production",
-                "Purpose": "multi-tenant-routing"
-            }
-        )
-        
-        # Target group for application instances
-        self.target_group = elbv2.TargetGroup("app-target-group",
-            port=8080,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
-            target_type="instance",
-            
-            health_check=elbv2.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                unhealthy_threshold=3,
-                interval=30,
-                timeout=10,
-                path="/health",
-                matcher="200-299"
-            ),
-            
-            deregistration_delay=30,
-            slow_start=60,
-            
-            stickiness=elbv2.TargetGroupStickinessArgs(
-                enabled=True,
-                type="lb_cookie",
-                cookie_duration=86400  # 24 hours
-            ),
-            
-            tags={"Name": "app-target-group"}
-        )
-        
-        # HTTPS listener with default action
-        self.https_listener = elbv2.Listener("https-listener",
-            load_balancer_arn=self.alb.arn,
-            port=443,
-            protocol="HTTPS",
-            certificate_arn=self._create_default_certificate().arn,
-            
-            default_actions=[elbv2.ListenerDefaultActionArgs(
-                type="fixed-response",
-                fixed_response=elbv2.ListenerDefaultActionFixedResponseArgs(
-                    status_code="404",
-                    content_type="text/plain",
-                    message_body="Tenant not found"
-                )
-            )]
-        )
-        
-        # HTTP listener with redirect to HTTPS
-        self.http_listener = elbv2.Listener("http-listener",
-            load_balancer_arn=self.alb.arn,
-            port=80,
-            protocol="HTTP",
-            
-            default_actions=[elbv2.ListenerDefaultActionArgs(
-                type="redirect",
-                redirect=elbv2.ListenerDefaultActionRedirectArgs(
-                    protocol="HTTPS",
-                    port="443",
-                    status_code="HTTP_301"
-                )
-            )]
-        )
-        
-        # Launch template for EC2 instances
-        self.launch_template = ec2.LaunchTemplate("app-launch-template",
-            name_prefix="saas-app-",
-            image_id="ami-0c02fb55731490381",  # Amazon Linux 2 AMI
-            instance_type="m5.large",
-            
-            iam_instance_profile=ec2.LaunchTemplateIamInstanceProfileArgs(
-                arn=self.ec2_instance_profile.arn
-            ),
-            
-            vpc_security_group_ids=[self.app_sg.id],
-            
-            user_data=base64.b64encode("""#!/bin/bash
-                # Install CloudWatch agent
-                wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-                rpm -U ./amazon-cloudwatch-agent.rpm
-                
-                # Install application dependencies
-                yum update -y
-                yum install -y docker
-                service docker start
-                usermod -a -G docker ec2-user
-                
-                # Configure tenant context extraction middleware
-                cat > /opt/tenant-context.sh << 'EOF'
-                export TENANT_ID=$(aws ssm get-parameter --name /saas/tenant/current --query Parameter.Value --output text)
-                export DB_ENDPOINT=$(aws ssm get-parameter --name /saas/db/endpoint --query Parameter.Value --output text)
-                export REDIS_ENDPOINT=$(aws ssm get-parameter --name /saas/redis/endpoint --query Parameter.Value --output text)
-                EOF
-                
-                # Start application with tenant context
-                source /opt/tenant-context.sh
-                docker run -d -p 8080:8080 \
-                    -e TENANT_ID=$TENANT_ID \
-                    -e DB_ENDPOINT=$DB_ENDPOINT \
-                    -e REDIS_ENDPOINT=$REDIS_ENDPOINT \
-                    your-app-image:latest
-            """.encode()).decode(),
-            
-            block_device_mappings=[ec2.LaunchTemplateBlockDeviceMappingArgs(
-                device_name="/dev/xvda",
-                ebs=ec2.LaunchTemplateBlockDeviceMappingEbsArgs(
-                    volume_size=30,
-                    volume_type="gp3",
-                    encrypted=True,
-                    delete_on_termination=True
-                )
-            )],
-            
-            metadata_options=ec2.LaunchTemplateMetadataOptionsArgs(
-                http_endpoint="enabled",
-                http_tokens="required",  # IMDSv2 only
-                instance_metadata_tags="enabled"
-            ),
-            
-            monitoring=ec2.LaunchTemplateMonitoringArgs(enabled=True),
-            
-            tag_specifications=[
-                ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="instance",
-                    tags={
-                        "Name": "saas-app-instance",
-                        "Environment": "production",
-                        "ManagedBy": "AutoScaling"
-                    }
-                ),
-                ec2.LaunchTemplateTagSpecificationArgs(
-                    resource_type="volume",
-                    tags={
-                        "Name": "saas-app-volume",
-                        "Environment": "production"
-                    }
-                )
-            ]
-        )
-        
-        # Auto Scaling Group
-        self.asg = autoscaling.Group("app-asg",
-            name="saas-app-asg",
-            vpc_zone_identifiers=[subnet.id for subnet in self.private_subnets],
-            
-            launch_template=autoscaling.GroupLaunchTemplateArgs(
-                id=self.launch_template.id,
-                version="$Latest"
-            ),
-            
-            min_size=3,
-            max_size=30,
-            desired_capacity=6,
-            
-            health_check_type="ELB",
-            health_check_grace_period=300,
-            
-            target_group_arns=[self.target_group.arn],
-            
-            enabled_metrics=[
-                "GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity",
-                "GroupInServiceInstances", "GroupTotalInstances"
-            ],
-            
-            tags=[
-                autoscaling.GroupTagArgs(
-                    key="Name",
-                    value="saas-app-asg-instance",
-                    propagate_at_launch=True
-                ),
-                autoscaling.GroupTagArgs(
-                    key="Environment",
-                    value="production",
-                    propagate_at_launch=True
-                )
-            ]
-        )
-        
-        # Auto Scaling Policies
-        self.scale_up_policy = autoscaling.Policy("scale-up",
-            autoscaling_group_name=self.asg.name,
-            policy_type="TargetTrackingScaling",
-            target_tracking_configuration=autoscaling.PolicyTargetTrackingConfigurationArgs(
-                predefined_metric_specification=autoscaling.PolicyTargetTrackingConfigurationPredefinedMetricSpecificationArgs(
-                    predefined_metric_type="ASGAverageCPUUtilization"
-                ),
-                target_value=70.0
-            )
-        )
-    
-    def _create_alb_logs_bucket(self) -> s3.Bucket:
-        """Create S3 bucket for ALB access logs."""
-        logs_bucket = s3.Bucket("alb-logs-bucket",
-            bucket=f"saas-alb-logs-{pulumi.get_stack()}",
-            lifecycle_rules=[
-                s3.BucketLifecycleRuleArgs(
-                    enabled=True,
-                    id="delete-old-logs",
-                    expiration=s3.BucketLifecycleRuleExpirationArgs(days=90)
-                )
-            ]
-        )
-        
-        # Bucket policy for ALB logging
-        s3.BucketPolicy("alb-logs-policy",
-            bucket=logs_bucket.id,
-            policy=pulumi.Output.all(logs_bucket.arn).apply(
-                lambda args: json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [{
-                        "Sid": "AllowALBLogging",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": "arn:aws:iam::127311923021:root"},  # ALB service account for us-east-1
-                        "Action": "s3:PutObject",
-                        "Resource": f"{args[0]}/AWSLogs/*"
-                    }]
-                })
-            )
-        )
-        
-        return logs_bucket
-    
-    def _create_default_certificate(self) -> acm.Certificate:
-        """Create default SSL certificate for ALB."""
-        return acm.Certificate("default-cert",
-            domain_name="*.saas-platform.example.com",
-            validation_method="DNS",
-            tags={"Name": "default-alb-cert"}
-        )
-    
-    def _create_dns_and_certificates(self):
-        """Create Route53 hosted zones and ACM certificates for custom domains."""
-        
-        # Main platform hosted zone
-        self.main_zone = route53.Zone("main-zone",
-            name="saas-platform.example.com",
-            comment="Main hosted zone for SaaS platform",
-            tags={"Name": "main-platform-zone"}
-        )
-        
-        # ALB DNS record
-        route53.Record("alb-dns",
-            zone_id=self.main_zone.zone_id,
-            name="app.saas-platform.example.com",
-            type="A",
-            aliases=[route53.RecordAliasArgs(
-                name=self.alb.dns_name,
-                zone_id=self.alb.zone_id,
-                evaluate_target_health=True
-            )]
-        )
-        
-        # CloudFront DNS record
-        route53.Record("cdn-dns",
-            zone_id=self.main_zone.zone_id,
-            name="cdn.saas-platform.example.com",
-            type="A",
-            aliases=[route53.RecordAliasArgs(
-                name=self.cdn_distribution.domain_name,
-                zone_id=self.cdn_distribution.hosted_zone_id,
-                evaluate_target_health=False
-            )]
-        )
-    
-    def _create_authentication(self):
-        """Create Cognito user pools for tenant isolation."""
-        
-        # Cognito user pool template for tenants
-        self.user_pool_template = cognito.UserPool("user-pool-template",
-            name="saas-tenant-template",
-            
-            account_recovery_setting=cognito.UserPoolAccountRecoverySettingArgs(
-                recovery_mechanisms=[
-                    cognito.UserPoolAccountRecoverySettingRecoveryMechanismArgs(
-                        name="verified_email",
-                        priority=1
-                    )
-                ]
-            ),
-            
-            auto_verified_attributes=["email"],
-            
-            device_configuration=cognito.UserPoolDeviceConfigurationArgs(
-                challenge_required_on_new_device=True,
-                device_only_remembered_on_user_prompt=True
-            ),
-            
-            email_configuration=cognito.UserPoolEmailConfigurationArgs(
-                email_sending_account="DEVELOPER",
-                from_email_address="noreply@saas-platform.example.com"
-            ),
-            
-            mfa_configuration="OPTIONAL",
-            
-            password_policy=cognito.UserPoolPasswordPolicyArgs(
-                minimum_length=12,
-                require_lowercase=True,
-                require_uppercase=True,
-                require_numbers=True,
-                require_symbols=True
-            ),
-            
-            schema=[
-                cognito.UserPoolSchemaArgs(
-                    name="email",
-                    attribute_data_type="String",
-                    mutable=True,
-                    required=True
-                ),
-                cognito.UserPoolSchemaArgs(
-                    name="tenant_id",
-                    attribute_data_type="String",
-                    mutable=False,
-                    required=False,
-                    developer_only_attribute=True
-                ),
-                cognito.UserPoolSchemaArgs(
-                    name="organization",
-                    attribute_data_type="String",
-                    mutable=True,
-                    required=False
-                )
-            ],
-            
-            user_attribute_update_settings=cognito.UserPoolUserAttributeUpdateSettingsArgs(
-                attributes_require_verification_before_update=["email"]
-            ),
-            
-            username_attributes=["email"],
-            username_configuration=cognito.UserPoolUsernameConfigurationArgs(
-                case_sensitive=False
-            ),
-            
-            tags={
-                "Name": "user-pool-template",
-                "Type": "template"
-            }
-        )
-    
-    def _create_serverless_components(self):
-        """Create Lambda functions and DynamoDB for tenant provisioning."""
-        
-        # DynamoDB table for tenant registry
-        self.tenant_registry = dynamodb.Table("tenant-registry",
-            name="tenant-registry",
-            billing_mode="PAY_PER_REQUEST",
-            
-            hash_key="tenant_id",
-            
-            attributes=[
-                dynamodb.TableAttributeArgs(name="tenant_id", type="S"),
-                dynamodb.TableAttributeArgs(name="domain", type="S"),
-                dynamodb.TableAttributeArgs(name="tier", type="S"),
-                dynamodb.TableAttributeArgs(name="organization", type="S")
-            ],
-            
-            global_secondary_indexes=[
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="domain-index",
-                    hash_key="domain",
-                    projection_type="ALL"
-                ),
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="tier-index",
-                    hash_key="tier",
-                    range_key="tenant_id",
-                    projection_type="ALL"
-                ),
-                dynamodb.TableGlobalSecondaryIndexArgs(
-                    name="org-index",
-                    hash_key="organization",
-                    projection_type="ALL"
-                )
-            ],
-            
-            point_in_time_recovery=dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
-            
-            server_side_encryption=dynamodb.TableServerSideEncryptionArgs(enabled=True),
-            
-            tags={
-                "Name": "tenant-registry",
-                "Environment": "production"
-            }
-        )
-        
-        # Lambda function for tenant provisioning
-        self.tenant_provisioning_lambda = lambda_.Function("tenant-provisioning",
-            name="tenant-provisioning",
-            runtime="python3.9",
-            handler="index.handler",
-            role=self.lambda_role.arn,
-            timeout=300,
-            memory_size=1024,
-            
-            environment=lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "TENANT_TABLE": self.tenant_registry.name,
-                    "USER_POOL_ID": self.user_pool_template.id,
-                    "ALB_LISTENER_ARN": self.https_listener.arn,
-                    "TARGET_GROUP_ARN": self.target_group.arn,
-                    "AURORA_ENDPOINT": self.aurora_cluster.endpoint,
-                    "AURORA_SECRET_ARN": pulumi.Config().get("aurora_secret_arn") or "",
-                    "PREMIUM_REDIS_ENDPOINT": self.premium_redis.configuration_endpoint_address,
-                    "STANDARD_REDIS_ENDPOINT": self.standard_redis.configuration_endpoint_address
-                }
-            ),
-            
-            vpc_config=lambda_.FunctionVpcConfigArgs(
-                subnet_ids=[subnet.id for subnet in self.private_subnets],
-                security_group_ids=[self.lambda_sg.id]
-            ),
-            
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.FileAsset("./lambda/tenant_provisioning.py")
-            }),
-            
-            tracing_config=lambda_.FunctionTracingConfigArgs(mode="Active"),
-            
-            tags={
-                "Name": "tenant-provisioning",
-                "Purpose": "automated-tenant-onboarding"
-            }
-        )
-    
-    def _create_monitoring(self):
-        """Create CloudWatch log groups and alarms for tenant isolation."""
-        
-        # Log group for application logs with tenant separation
-        self.app_log_group = logs.LogGroup("app-logs",
-            name="/aws/saas/application",
-            retention_in_days=30,
-            kms_key_id=self._create_logs_kms_key().arn,
-            tags={"Name": "app-logs", "Type": "application"}
-        )
-        
-        # Log group for audit logs
-        self.audit_log_group = logs.LogGroup("audit-logs",
-            name="/aws/saas/audit",
-            retention_in_days=2557,  # 7 years for compliance
-            kms_key_id=self._create_logs_kms_key().arn,
-            tags={"Name": "audit-logs", "Type": "audit"}
-        )
-        
-        # CloudWatch Logs Insights query for tenant analysis
-        self.tenant_insights_query = logs.QueryDefinition("tenant-insights",
-            name="TenantActivityAnalysis",
-            log_group_names=[self.app_log_group.name],
-            query_string="""
-                fields @timestamp, tenant_id, operation, duration, status
-                | filter tenant_id = "TENANT_ID_PLACEHOLDER"
-                | stats count() by operation
-                | sort count() desc
-            """
-        )
-    
-    def _create_logs_kms_key(self) -> aws.kms.Key:
-        """Create KMS key for CloudWatch Logs encryption."""
-        return aws.kms.Key("logs-kms-key",
-            description="KMS key for CloudWatch Logs encryption",
-            deletion_window_in_days=30,
-            enable_key_rotation=True,
-            tags={"Name": "logs-kms-key"}
-        )
-    
-    def _create_configuration_management(self):
-        """Create Systems Manager Parameter Store for tenant configurations."""
-        
-        # Database endpoint parameter
-        ssm.Parameter("db-endpoint",
-            name="/saas/db/endpoint",
-            type="String",
-            value=self.aurora_cluster.endpoint,
-            description="Aurora cluster endpoint",
-            tags={"Name": "db-endpoint"}
-        )
-        
-        # Redis endpoints by tier
-        ssm.Parameter("redis-premium-endpoint",
-            name="/saas/redis/premium/endpoint",
-            type="String",
-            value=self.premium_redis.configuration_endpoint_address,
-            description="Premium tier Redis endpoint",
-            tags={"Name": "redis-premium-endpoint"}
-        )
-        
-        ssm.Parameter("redis-standard-endpoint",
-            name="/saas/redis/standard/endpoint",
-            type="String",
-            value=self.standard_redis.configuration_endpoint_address,
-            description="Standard tier Redis endpoint",
-            tags={"Name": "redis-standard-endpoint"}
-        )
-        
-        # Application configuration template
-        ssm.Parameter("app-config-template",
-            name="/saas/config/app-template",
-            type="String",
-            value=json.dumps({
-                "features": {
-                    "max_users": 100,
-                    "api_rate_limit": 1000,
-                    "storage_gb": 10,
-                    "custom_domains": 1
-                },
-                "security": {
-                    "session_timeout_minutes": 30,
-                    "password_rotation_days": 90,
-                    "mfa_required": False
-                }
-            }),
-            description="Default application configuration template",
-            tags={"Name": "app-config-template"}
-        )
-    
-    def _export_outputs(self):
-        """Export stack outputs for external consumption."""
-        
-        pulumi.export("vpc_id", self.vpc.id)
-        pulumi.export("alb_dns", self.alb.dns_name)
-        pulumi.export("aurora_endpoint", self.aurora_cluster.endpoint)
-        pulumi.export("aurora_reader_endpoint", self.aurora_cluster.reader_endpoint)
-        pulumi.export("premium_redis_endpoint", self.premium_redis.configuration_endpoint_address)
-        pulumi.export("standard_redis_endpoint", self.standard_redis.configuration_endpoint_address)
-        pulumi.export("cdn_domain", self.cdn_distribution.domain_name)
-        pulumi.export("tenant_data_bucket", self.tenant_data_bucket.bucket)
-        pulumi.export("static_assets_bucket", self.static_assets_bucket.bucket)
-        pulumi.export("tenant_registry_table", self.tenant_registry.name)
-        pulumi.export("provisioning_function", self.tenant_provisioning_lambda.name)
-        pulumi.export("main_hosted_zone_id", self.main_zone.zone_id)
+          ),
+          trafficType: ec2.FlowLogTrafficType.REJECT, // Only log rejected traffic in dev
+        },
+      },
+    });
 
-# Lambda function code for tenant provisioning (referenced in stack)
-TENANT_PROVISIONING_LAMBDA_CODE = """
-import json
-import boto3
-import uuid
-import os
-from typing import Dict, Any
+    // =============================
+    // 2. SECURITY GROUPS
+    // =============================
+    
+    // ALB Security Group
+    const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: `${environment}-${projectName}-alb-sg`,
+      description: 'Security group for Application Load Balancer',
+      allowAllOutbound: false,
+    });
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS from internet'
+    );
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP from internet'
+    );
 
-dynamodb = boto3.client('dynamodb')
-cognito = boto3.client('cognito-idp')
-route53 = boto3.client('route53')
-acm = boto3.client('acm')
-elbv2 = boto3.client('elbv2')
-rds = boto3.client('rds-data')
+    // ECS Security Group
+    const ecsSecurityGroup = new ec2.SecurityGroup(this, 'EcsSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: `${environment}-${projectName}-ecs-sg`,
+      description: 'Security group for ECS Fargate tasks',
+      allowAllOutbound: true, // Needs to reach external APIs
+    });
+    
+    // Allow ALB to reach ECS tasks
+    ecsSecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(8080),
+      'Allow inbound from ALB on container port'
+    );
+    
+    // Aurora Security Group
+    const auroraSecurityGroup = new ec2.SecurityGroup(this, 'AuroraSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: `${environment}-${projectName}-aurora-sg`,
+      description: 'Security group for Aurora MySQL cluster',
+      allowAllOutbound: false,
+    });
+    auroraSecurityGroup.addIngressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL access from ECS tasks'
+    );
+    
+    // Redis Security Group
+    const redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: `${environment}-${projectName}-redis-sg`,
+      description: 'Security group for ElastiCache Redis',
+      allowAllOutbound: false,
+    });
+    redisSecurityGroup.addIngressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(6379),
+      'Allow Redis access from ECS tasks'
+    );
+    
+    // Lambda Security Group
+    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: `${environment}-${projectName}-lambda-sg`,
+      description: 'Security group for Lambda functions',
+      allowAllOutbound: true,
+    });
+    auroraSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL access from Lambda'
+    );
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    '''
-    Automated tenant provisioning workflow.
-    Creates: Cognito user pool, Route53 records, ACM certificate, ALB listener rule.
-    '''
-    try:
-        tenant_data = json.loads(event['body'])
-        tenant_id = str(uuid.uuid4())
-        domain = tenant_data['domain']
-        tier = tenant_data.get('tier', 'standard')
-        organization = tenant_data['organization']
-        
-        # 1. Create Cognito User Pool for tenant
-        user_pool = cognito.create_user_pool(
-            PoolName=f'tenant-{tenant_id}',
-            Policies={
-                'PasswordPolicy': {
-                    'MinimumLength': 12,
-                    'RequireUppercase': True,
-                    'RequireLowercase': True,
-                    'RequireNumbers': True,
-                    'RequireSymbols': True
-                }
+    // =============================
+    // 3. DATA STORAGE LAYER
+    // =============================
+    
+    /**
+     * Aurora MySQL Cluster
+     * Used for storing user profiles, projects, bids, and transactional data
+     * Multi-AZ deployment with read replicas for query offloading
+     */
+    const dbSecret = new secretsmanager.Secret(this, 'DbSecret', {
+      secretName: `${environment}-${projectName}-aurora-secret`,
+      description: 'Aurora MySQL cluster credentials',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'admin' }),
+        generateStringKey: 'password',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 32,
+      },
+    });
+
+    this.auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
+      clusterIdentifier: `${environment}-${projectName}-aurora-cluster`,
+      engine: rds.DatabaseClusterEngine.auroraMysql({
+        version: rds.AuroraMysqlEngineVersion.VER_3_04_0, // MySQL 8.0 compatible
+      }),
+      credentials: rds.Credentials.fromSecret(dbSecret),
+      instanceProps: {
+        vpc: this.vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+        securityGroups: [auroraSecurityGroup],
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MEDIUM // Suitable for 8,000 users in dev
+        ),
+      },
+      instances: 2, // One writer, one reader for dev
+      defaultDatabaseName: 'freelancer_marketplace',
+      backup: {
+        retention: cdk.Duration.days(7), // 7 days for dev environment
+        preferredWindow: '03:00-04:00', // Low traffic window
+      },
+      preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+      deletionProtection: false, // Disabled for dev environment
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion in dev
+    });
+
+    /**
+     * DynamoDB Table for Messages
+     * Optimized for real-time messaging with < 100ms query performance
+     */
+    this.messagesTable = new dynamodb.Table(this, 'MessagesTable', {
+      tableName: `${environment}-${projectName}-messages`,
+      partitionKey: {
+        name: 'conversationId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.NUMBER,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand for dev
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES, // For real-time updates
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // GSI for sender queries
+    this.messagesTable.addGlobalSecondaryIndex({
+      indexName: 'userId-timestamp-index',
+      partitionKey: {
+        name: 'userId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.NUMBER,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // GSI for receiver inbox queries
+    this.messagesTable.addGlobalSecondaryIndex({
+      indexName: 'receiverId-timestamp-index',
+      partitionKey: {
+        name: 'receiverId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.NUMBER,
+      },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    /**
+     * S3 Bucket for Portfolio Content
+     * Stores resumes, work samples, images, and videos
+     */
+    const s3EncryptionKey = new kms.Key(this, 'S3EncryptionKey', {
+      alias: `${environment}-${projectName}-s3-key`,
+      description: 'KMS key for S3 bucket encryption',
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    this.portfolioBucket = new s3.Bucket(this, 'PortfolioBucket', {
+      bucketName: `${environment}-${projectName}-portfolio-${this.account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: s3EncryptionKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      lifecycleRules: [
+        {
+          id: 'delete-old-versions',
+          noncurrentVersionExpiration: cdk.Duration.days(90),
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+        },
+        {
+          id: 'transition-to-ia',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
             },
-            Schema=[
-                {'Name': 'email', 'AttributeDataType': 'String', 'Required': True},
-                {'Name': 'tenant_id', 'AttributeDataType': 'String', 'DeveloperOnlyAttribute': True}
-            ]
-        )
-        
-        # 2. Create custom domain for Cognito
-        cognito.create_user_pool_domain(
-            Domain=f'{tenant_id}.auth',
-            UserPoolId=user_pool['UserPool']['Id']
-        )
-        
-        # 3. Request ACM certificate for custom domain
-        cert = acm.request_certificate(
-            DomainName=domain,
-            ValidationMethod='DNS',
-            SubjectAlternativeNames=[f'*.{domain}']
-        )
-        
-        # 4. Create ALB listener rule for host-based routing
-        elbv2.create_rule(
-            ListenerArn=os.environ['ALB_LISTENER_ARN'],
-            Conditions=[
-                {
-                    'Field': 'host-header',
-                    'Values': [domain, f'*.{domain}']
-                }
-            ],
-            Priority=get_next_priority(),
-            Actions=[
-                {
-                    'Type': 'forward',
-                    'TargetGroupArn': os.environ['TARGET_GROUP_ARN']
-                }
-            ]
-        )
-        
-        # 5. Store tenant metadata in DynamoDB
-        dynamodb.put_item(
-            TableName=os.environ['TENANT_TABLE'],
-            Item={
-                'tenant_id': {'S': tenant_id},
-                'domain': {'S': domain},
-                'tier': {'S': tier},
-                'organization': {'S': organization},
-                'user_pool_id': {'S': user_pool['UserPool']['Id']},
-                'certificate_arn': {'S': cert['CertificateArn']},
-                'created_at': {'S': context.aws_request_id},
-                'status': {'S': 'active'}
-            }
-        )
-        
-        # 6. Initialize database schema with RLS policies
-        create_tenant_schema(tenant_id)
-        
-        return {
-            'statusCode': 201,
-            'body': json.dumps({
-                'tenant_id': tenant_id,
-                'domain': domain,
-                'user_pool_id': user_pool['UserPool']['Id'],
-                'message': 'Tenant provisioned successfully'
-            })
-        }
-        
-    except Exception as e:
-        print(f'Error provisioning tenant: {str(e)}')
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+          ],
+        },
+      ],
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],
+          allowedOrigins: ['*'], // Will be restricted in production
+          allowedHeaders: ['*'],
+          exposedHeaders: ['ETag'],
+          maxAge: 3600,
+        },
+      ],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true, // For dev environment
+    });
 
-def get_next_priority() -> int:
-    '''Get next available priority for ALB listener rule.'''
-    response = elbv2.describe_rules(
-        ListenerArn=os.environ['ALB_LISTENER_ARN']
-    )
-    priorities = [int(rule['Priority']) for rule in response['Rules'] if rule['Priority'] != 'default']
-    return max(priorities) + 1 if priorities else 1
+    /**
+     * ElastiCache Redis Cluster
+     * Used for caching search results and session data
+     */
+    const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
+      subnetIds: this.vpc.selectSubnets({
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      }).subnetIds,
+      description: 'Subnet group for Redis cluster',
+      cacheSubnetGroupName: `${environment}-${projectName}-redis-subnet-group`,
+    });
 
-def create_tenant_schema(tenant_id: str) -> None:
-    '''Create database schema with Row-Level Security for tenant.'''
-    sql = f'''
-        -- Create tenant-specific schema
-        CREATE SCHEMA IF NOT EXISTS tenant_{tenant_id};
-        
-        -- Create RLS policy for data isolation
-        CREATE POLICY tenant_isolation_{tenant_id} ON public.data
-            FOR ALL
-            USING (tenant_id = '{tenant_id}');
-        
-        -- Enable RLS on tables
-        ALTER TABLE public.data ENABLE ROW LEVEL SECURITY;
-    '''
+    const redisCluster = new elasticache.CfnCacheCluster(this, 'RedisCluster', {
+      clusterName: `${environment}-${projectName}-redis`,
+      engine: 'redis',
+      engineVersion: '7.0.7',
+      cacheNodeType: 'cache.t3.micro', // Sufficient for dev environment
+      numCacheNodes: 1, // Single node for dev, will use replication group in prod
+      cacheSubnetGroupName: redisSubnetGroup.cacheSubnetGroupName,
+      vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId],
+      autoMinorVersionUpgrade: true,
+      preferredMaintenanceWindow: 'sun:05:00-sun:06:00',
+      snapshotRetentionLimit: 1, // 1 day for dev
+      snapshotWindow: '03:00-05:00',
+    });
+    redisCluster.addDependency(redisSubnetGroup);
+
+    // =============================
+    // 4. CONTENT DELIVERY
+    // =============================
     
-    rds.execute_statement(
-        resourceArn=os.environ['AURORA_ENDPOINT'],
-        secretArn=os.environ['AURORA_SECRET_ARN'],
-        database='saasdb',
-        sql=sql
-    )
-"""
+    /**
+     * CloudFront Distribution
+     * Provides global content delivery for portfolio assets
+     */
+    const oai = new cloudfront.OriginAccessIdentity(this, 'OAI', {
+      comment: `OAI for ${environment}-${projectName}`,
+    });
 
-# Create main stack
-stack = MultiTenantSaaSStack("saas-infrastructure")
+    this.portfolioBucket.grantRead(oai);
+
+    this.distribution = new cloudfront.Distribution(this, 'Distribution', {
+      comment: `${environment}-${projectName} portfolio CDN`,
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: new origins.S3Origin(this.portfolioBucket, {
+          originAccessIdentity: oai,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+        compress: true,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      additionalBehaviors: {
+        '/api/*': {
+          origin: new origins.HttpOrigin('placeholder.com'), // Will be updated with ALB DNS
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        },
+      },
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // US, Canada, Europe for dev
+      enabled: true,
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+    });
+
+    // =============================
+    // 5. AUTHENTICATION & AUTHORIZATION
+    // =============================
+    
+    /**
+     * Freelancer Cognito User Pool
+     * Separate pool for freelancer authentication with custom attributes
+     */
+    this.freelancerPool = new cognito.UserPool(this, 'FreelancerPool', {
+      userPoolName: `${environment}-${projectName}-freelancers`,
+      selfSignUpEnabled: true,
+      userVerification: {
+        emailSubject: 'Verify your freelancer account',
+        emailBody: 'Your verification code is {####}',
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
+      signInAliases: {
+        email: true,
+        username: false,
+      },
+      autoVerify: {
+        email: true,
+      },
+      passwordPolicy: {
+        minLength: 12,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+        tempPasswordValidity: cdk.Duration.days(3),
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      mfa: cognito.Mfa.OPTIONAL,
+      mfaSecondFactor: {
+        sms: true,
+        otp: true,
+      },
+      customAttributes: {
+        skills: new cognito.StringAttribute({ 
+          minLen: 1, 
+          maxLen: 500,
+          mutable: true,
+        }),
+        hourlyRate: new cognito.NumberAttribute({ 
+          min: 0, 
+          max: 10000,
+          mutable: true,
+        }),
+        portfolioLinks: new cognito.StringAttribute({ 
+          minLen: 0, 
+          maxLen: 2048,
+          mutable: true,
+        }),
+        experienceLevel: new cognito.StringAttribute({ 
+          minLen: 1, 
+          maxLen: 50,
+          mutable: true,
+        }),
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const freelancerClient = this.freelancerPool.addClient('FreelancerWebClient', {
+      userPoolClientName: `${environment}-${projectName}-freelancer-client`,
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      generateSecret: false,
+      refreshTokenValidity: cdk.Duration.days(30),
+      accessTokenValidity: cdk.Duration.hours(1),
+      idTokenValidity: cdk.Duration.hours(1),
+      preventUserExistenceErrors: true,
+    });
+
+    /**
+     * Client Cognito User Pool
+     * Separate pool for client authentication with company attributes
+     */
+    this.clientPool = new cognito.UserPool(this, 'ClientPool', {
+      userPoolName: `${environment}-${projectName}-clients`,
+      selfSignUpEnabled: true,
+      userVerification: {
+        emailSubject: 'Verify your client account',
+        emailBody: 'Your verification code is {####}',
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
+      signInAliases: {
+        email: true,
+        username: false,
+      },
+      autoVerify: {
+        email: true,
+      },
+      passwordPolicy: {
+        minLength: 12,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+        tempPasswordValidity: cdk.Duration.days(3),
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      mfa: cognito.Mfa.OPTIONAL,
+      mfaSecondFactor: {
+        sms: true,
+        otp: true,
+      },
+      customAttributes: {
+        companyName: new cognito.StringAttribute({ 
+          minLen: 1, 
+          maxLen: 255,
+          mutable: true,
+        }),
+        industry: new cognito.StringAttribute({ 
+          minLen: 1, 
+          maxLen: 100,
+          mutable: true,
+        }),
+        budgetPreferences: new cognito.StringAttribute({ 
+          minLen: 0, 
+          maxLen: 500,
+          mutable: true,
+        }),
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const clientClient = this.clientPool.addClient('ClientWebClient', {
+      userPoolClientName: `${environment}-${projectName}-client-client`,
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      generateSecret: false,
+      refreshTokenValidity: cdk.Duration.days(30),
+      accessTokenValidity: cdk.Duration.hours(1),
+      idTokenValidity: cdk.Duration.hours(1),
+      preventUserExistenceErrors: true,
+    });
+
+    // =============================
+    // 6. COMPUTE LAYER - ECS FARGATE
+    // =============================
+    
+    /**
+     * ECS Cluster and Fargate Service
+     * Runs the containerized web application with auto-scaling
+     */
+    const ecsCluster = new ecs.Cluster(this, 'EcsCluster', {
+      clusterName: `${environment}-${projectName}-cluster`,
+      vpc: this.vpc,
+      containerInsights: true,
+    });
+
+    // Task execution role
+    const taskExecutionRole = new iam.Role(this, 'TaskExecutionRole', {
+      roleName: `${environment}-${projectName}-task-execution-role`,
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
+      ],
+    });
+
+    // Grant access to database secret
+    dbSecret.grantRead(taskExecutionRole);
+
+    // Task role for application permissions
+    const taskRole = new iam.Role(this, 'TaskRole', {
+      roleName: `${environment}-${projectName}-task-role`,
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+
+    // Grant DynamoDB permissions to task role
+    this.messagesTable.grantReadWriteData(taskRole);
+    this.portfolioBucket.grantReadWrite(taskRole);
+
+    // Create Fargate service with ALB
+    this.fargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(
+      this,
+      'FargateService',
+      {
+        cluster: ecsCluster,
+        serviceName: `${environment}-${projectName}-service`,
+        taskImageOptions: {
+          image: ecs.ContainerImage.fromRegistry('nginx:latest'), // Placeholder image
+          containerPort: 8080,
+          containerName: 'web-app',
+          environment: {
+            NODE_ENV: environment,
+            AWS_REGION: this.region,
+            MESSAGES_TABLE_NAME: this.messagesTable.tableName,
+            PORTFOLIO_BUCKET_NAME: this.portfolioBucket.bucketName,
+            REDIS_ENDPOINT: redisCluster.attrRedisEndpointAddress,
+            REDIS_PORT: redisCluster.attrRedisEndpointPort,
+            FREELANCER_POOL_ID: this.freelancerPool.userPoolId,
+            FREELANCER_CLIENT_ID: freelancerClient.userPoolClientId,
+            CLIENT_POOL_ID: this.clientPool.userPoolId,
+            CLIENT_CLIENT_ID: clientClient.userPoolClientId,
+          },
+          secrets: {
+            DB_SECRET_ARN: ecs.Secret.fromSecretsManager(dbSecret),
+          },
+          logDriver: ecs.LogDrivers.awsLogs({
+            streamPrefix: 'web-app',
+            logGroup: new logs.LogGroup(this, 'WebAppLogGroup', {
+              logGroupName: `/ecs/${environment}-${projectName}-web-app`,
+              retention: logs.RetentionDays.ONE_WEEK,
+              removalPolicy: cdk.RemovalPolicy.DESTROY,
+            }),
+          }),
+          taskRole: taskRole,
+          executionRole: taskExecutionRole,
+        },
+        publicLoadBalancer: true,
+        desiredCount: 2, // Start with 2 tasks for dev
+        cpu: 512, // 0.5 vCPU
+        memoryLimitMiB: 1024, // 1 GB
+        assignPublicIp: false, // Tasks in private subnet
+        securityGroups: [ecsSecurityGroup],
+        taskSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        loadBalancerName: `${environment}-freelancer-alb`,
+        healthCheckGracePeriod: cdk.Duration.seconds(60),
+        enableLogging: true,
+      }
+    );
+
+    // Configure ALB health check
+    this.fargateService.targetGroup.configureHealthCheck({
+      path: '/health',
+      healthyHttpCodes: '200',
+      interval: cdk.Duration.seconds(30),
+      timeout: cdk.Duration.seconds(10),
+      healthyThresholdCount: 2,
+      unhealthyThresholdCount: 3,
+    });
+
+    // Configure auto-scaling
+    const scaling = this.fargateService.service.autoScaleTaskCount({
+      minCapacity: 2,
+      maxCapacity: 10, // Scale up to 10 tasks for load handling
+    });
+
+    scaling.scaleOnCpuUtilization('CpuScaling', {
+      targetUtilizationPercent: 70,
+      scaleInCooldown: cdk.Duration.seconds(300),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    });
+
+    scaling.scaleOnMemoryUtilization('MemoryScaling', {
+      targetUtilizationPercent: 80,
+      scaleInCooldown: cdk.Duration.seconds(300),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    });
+
+    // Configure ALB stickiness
+    this.fargateService.targetGroup.setAttribute(
+      'stickiness.enabled',
+      'true'
+    );
+    this.fargateService.targetGroup.setAttribute(
+      'stickiness.type',
+      'lb_cookie'
+    );
+    this.fargateService.targetGroup.setAttribute(
+      'stickiness.lb_cookie.duration_seconds',
+      '86400'
+    );
+
+    // Allow ALB to egress to ECS
+    albSecurityGroup.addEgressRule(
+      ecsSecurityGroup,
+      ec2.Port.tcp(8080),
+      'Allow ALB to reach ECS tasks'
+    );
+
+    // =============================
+    // 7. SERVERLESS COMPONENTS
+    // =============================
+    
+    /**
+     * Lambda Function for Payment Webhook Processing
+     * Handles payment provider webhooks and updates transaction status
+     */
+    const paymentDLQ = new sqs.Queue(this, 'PaymentDLQ', {
+      queueName: `${environment}-${projectName}-payment-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+      encryption: sqs.QueueEncryption.KMS_MANAGED,
+    });
+
+    this.paymentLambda = new lambda.Function(this, 'PaymentWebhookLambda', {
+      functionName: `${environment}-${projectName}-payment-webhook`,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        const AWS = require('aws-sdk');
+        const secretsManager = new AWS.SecretsManager();
+        const mysql = require('mysql2/promise');
+        const sns = new AWS.SNS();
+        
+        exports.handler = async (event) => {
+          console.log('Processing payment webhook:', JSON.stringify(event));
+          
+          try {
+            // Retrieve database credentials
+            const secret = await secretsManager.getSecretValue({ 
+              SecretId: process.env.DB_SECRET_ARN 
+            }).promise();
+            
+            const credentials = JSON.parse(secret.SecretString);
+            
+            // Connect to database
+            const connection = await mysql.createConnection({
+              host: process.env.DB_ENDPOINT,
+              user: credentials.username,
+              password: credentials.password,
+              database: 'freelancer_marketplace'
+            });
+            
+            // Process payment logic here
+            const webhookData = JSON.parse(event.body || '{}');
+            
+            // Update payment status in database
+            await connection.execute(
+              'UPDATE payments SET status = ?, updated_at = NOW() WHERE transaction_id = ?',
+              [webhookData.status, webhookData.transactionId]
+            );
+            
+            // Publish notification
+            await sns.publish({
+              TopicArn: process.env.PAYMENT_TOPIC_ARN,
+              Message: JSON.stringify({
+                transactionId: webhookData.transactionId,
+                status: webhookData.status,
+                amount: webhookData.amount
+              }),
+              Subject: 'Payment Status Update'
+            }).promise();
+            
+            await connection.end();
+            
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ success: true })
+            };
+          } catch (error) {
+            console.error('Payment webhook error:', error);
+            throw error;
+          }
+        };
+      `),
+      environment: {
+        DB_SECRET_ARN: dbSecret.secretArn,
+        DB_ENDPOINT: this.auroraCluster.clusterEndpoint.hostname,
+        PAYMENT_TOPIC_ARN: '', // Will be set after SNS topic creation
+      },
+      vpc: this.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      securityGroups: [lambdaSecurityGroup],
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      tracing: lambda.Tracing.ACTIVE,
+      deadLetterQueue: paymentDLQ,
+      deadLetterQueueEnabled: true,
+      reservedConcurrentExecutions: 10, // Limit concurrent executions
+      logRetention: logs.RetentionDays.ONE_WEEK,
+    });
+
+    // Grant Lambda permissions
+    dbSecret.grantRead(this.paymentLambda);
+    
+    /**
+     * Step Functions State Machine
+     * Orchestrates the project lifecycle workflow
+     */
+    
+    // Lambda for project notifications
+    const notificationLambda = new lambda.Function(this, 'NotificationLambda', {
+      functionName: `${environment}-${projectName}-notifications`,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        exports.handler = async (event) => {
+          console.log('Sending notification:', JSON.stringify(event));
+          // Notification logic would go here
+          return { success: true, messageId: Date.now().toString() };
+        };
+      `),
+      timeout: cdk.Duration.seconds(10),
+    });
+
+    // Define Step Functions tasks
+    const notifyProjectCreated = new stepfunctions_tasks.LambdaInvoke(
+      this,
+      'NotifyProjectCreated',
+      {
+        lambdaFunction: notificationLambda,
+        outputPath: '$.Payload',
+      }
+    );
+
+    const waitForBids = new stepfunctions.Wait(this, 'WaitForBids', {
+      time: stepfunctions.WaitTime.duration(cdk.Duration.hours(24)),
+    });
+
+    const checkBidStatus = new stepfunctions.Choice(this, 'CheckBidStatus')
+      .when(
+        stepfunctions.Condition.numberGreaterThan('$.bidCount', 0),
+        new stepfunctions.Pass(this, 'ProcessBids')
+      )
+      .otherwise(
+        new stepfunctions.Fail(this, 'NoBidsReceived', {
+          error: 'NoBids',
+          cause: 'No bids received within timeframe',
+        })
+      );
+
+    const freelancerSelected = new stepfunctions.Pass(this, 'FreelancerSelected');
+    const milestonesDefined = new stepfunctions.Pass(this, 'MilestonesDefined');
+    const workInProgress = new stepfunctions.Pass(this, 'WorkInProgress');
+    const milestoneApproval = new stepfunctions.Pass(this, 'MilestoneApproval');
+    const paymentProcessed = new stepfunctions.Pass(this, 'PaymentProcessed');
+    const projectCompleted = new stepfunctions.Pass(this, 'ProjectCompleted');
+
+    // Build the state machine
+    const definition = notifyProjectCreated
+      .next(waitForBids)
+      .next(checkBidStatus)
+      .next(freelancerSelected)
+      .next(milestonesDefined)
+      .next(workInProgress)
+      .next(milestoneApproval)
+      .next(paymentProcessed)
+      .next(projectCompleted);
+
+    this.projectWorkflow = new stepfunctions.StateMachine(this, 'ProjectWorkflow', {
+      stateMachineName: `${environment}-${projectName}-project-workflow`,
+      definition,
+      timeout: cdk.Duration.days(30),
+      tracingEnabled: true,
+      logs: {
+        destination: new logs.LogGroup(this, 'WorkflowLogGroup', {
+          logGroupName: `/aws/stepfunctions/${environment}-${projectName}`,
+          retention: logs.RetentionDays.ONE_WEEK,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }),
+        level: stepfunctions.LogLevel.ALL,
+        includeExecutionData: true,
+      },
+    });
+
+    // =============================
+    // 8. NOTIFICATIONS & COMMUNICATION
+    // =============================
+    
+    /**
+     * SNS Topics for Real-time Notifications
+     */
+    const bidNotificationTopic = new sns.Topic(this, 'BidNotificationTopic', {
+      topicName: `${environment}-${projectName}-bid-notifications`,
+      displayName: 'New Bid Notifications',
+    });
+
+    const milestoneApprovalTopic = new sns.Topic(this, 'MilestoneApprovalTopic', {
+      topicName: `${environment}-${projectName}-milestone-approvals`,
+      displayName: 'Milestone Approval Notifications',
+    });
+
+    const paymentConfirmationTopic = new sns.Topic(this, 'PaymentConfirmationTopic', {
+      topicName: `${environment}-${projectName}-payment-confirmations`,
+      displayName: 'Payment Confirmation Notifications',
+    });
+
+    // Update Lambda environment with SNS topic ARN
+    this.paymentLambda.addEnvironment('PAYMENT_TOPIC_ARN', paymentConfirmationTopic.topicArn);
+    paymentConfirmationTopic.grantPublish(this.paymentLambda);
+
+    /**
+     * SES Configuration for Transactional Emails
+     * Note: Requires verified domain/email in production
+     */
+    const sesConfigSet = new ses.ConfigurationSet(this, 'SesConfigSet', {
+      configurationSetName: `${environment}-${projectName}-config-set`,
+      reputationTracking: true,
+      sendingEnabled: true,
+      suppressionReasons: ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
+    });
+
+    // Email identity would be configured here in production
+    // For now, using placeholder
+    const emailIdentity = new ses.EmailIdentity(this, 'EmailIdentity', {
+      identity: ses.Identity.email('notifications@example.com'), // Replace in production
+    });
+
+    // =============================
+    // 9. MONITORING & OBSERVABILITY
+    // =============================
+    
+    /**
+     * CloudWatch Dashboard
+     * Provides centralized monitoring for all platform components
+     */
+    const dashboard = new cloudwatch.Dashboard(this, 'PlatformDashboard', {
+      dashboardName: `${environment}-${projectName}-dashboard`,
+      defaultInterval: cdk.Duration.hours(1),
+    });
+
+    // ALB Metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'ALB Request Count',
+        left: [this.fargateService.loadBalancer.metricRequestCount()],
+        right: [this.fargateService.loadBalancer.metricTargetResponseTime()],
+        width: 12,
+        height: 6,
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'ALB Error Rate',
+        left: [
+          this.fargateService.loadBalancer.metricHttpCodeElb(
+            cloudwatch.HttpCodeElb.ELB_4XX_COUNT
+          ),
+          this.fargateService.loadBalancer.metricHttpCodeElb(
+            cloudwatch.HttpCodeElb.ELB_5XX_COUNT
+          ),
+        ],
+        width: 12,
+        height: 6,
+      })
+    );
+
+    // ECS Metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'ECS CPU and Memory Utilization',
+        left: [this.fargateService.service.metricCpuUtilization()],
+        right: [this.fargateService.service.metricMemoryUtilization()],
+        width: 12,
+        height: 6,
+      })
+    );
+
+    // Database Metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'Aurora Connections',
+        left: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/RDS',
+            metricName: 'DatabaseConnections',
+            dimensionsMap: {
+              DBClusterIdentifier: this.auroraCluster.clusterIdentifier,
+            },
+            statistic: 'Average',
+          }),
+        ],
+        width: 12,
+        height: 6,
+      })
+    );
+
+    // DynamoDB Metrics
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'DynamoDB Consumed Capacity',
+        left: [
+          this.messagesTable.metricConsumedReadCapacityUnits(),
+          this.messagesTable.metricConsumedWriteCapacityUnits(),
+        ],
+        width: 12,
+        height: 6,
+      })
+    );
+
+    /**
+     * CloudWatch Alarms
+     * Critical alerts for production monitoring
+     */
+    
+    // ALB 5xx errors alarm
+    new cloudwatch.Alarm(this, 'ALB5xxAlarm', {
+      alarmName: `${environment}-${projectName}-alb-5xx-errors`,
+      metric: this.fargateService.loadBalancer.metricHttpCodeElb(
+        cloudwatch.HttpCodeElb.ELB_5XX_COUNT
+      ),
+      threshold: 10,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alert when ALB 5xx errors exceed threshold',
+    });
+
+    // High Aurora connections alarm
+    new cloudwatch.Alarm(this, 'HighDatabaseConnectionsAlarm', {
+      alarmName: `${environment}-${projectName}-high-db-connections`,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/RDS',
+        metricName: 'DatabaseConnections',
+        dimensionsMap: {
+          DBClusterIdentifier: this.auroraCluster.clusterIdentifier,
+        },
+        statistic: 'Average',
+      }),
+      threshold: 50,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alert when database connections are high',
+    });
+
+    // DynamoDB throttling alarm
+    new cloudwatch.Alarm(this, 'DynamoDBThrottleAlarm', {
+      alarmName: `${environment}-${projectName}-dynamodb-throttles`,
+      metric: this.messagesTable.metricSystemErrorsForOperations({
+        operations: [dynamodb.Operation.GET_ITEM, dynamodb.Operation.PUT_ITEM],
+        statistic: 'Sum',
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alert when DynamoDB operations are throttled',
+    });
+
+    // Lambda errors alarm
+    new cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
+      alarmName: `${environment}-${projectName}-lambda-errors`,
+      metric: this.paymentLambda.metricErrors(),
+      threshold: 5,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alert when Lambda function errors exceed threshold',
+    });
+
+    // =============================
+    // 10. OUTPUTS
+    // =============================
+    
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `${environment}-${projectName}-vpc-id`,
+    });
+
+    new cdk.CfnOutput(this, 'ALBEndpoint', {
+      value: `https://${this.fargateService.loadBalancer.loadBalancerDnsName}`,
+      description: 'Application Load Balancer endpoint',
+      exportName: `${environment}-${projectName}-alb-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontURL', {
+      value: `https://${this.distribution.distributionDomainName}`,
+      description: 'CloudFront distribution URL',
+      exportName: `${environment}-${projectName}-cloudfront-url`,
+    });
+
+    new cdk.CfnOutput(this, 'FreelancerPoolId', {
+      value: this.freelancerPool.userPoolId,
+      description: 'Freelancer Cognito User Pool ID',
+      exportName: `${environment}-${projectName}-freelancer-pool-id`,
+    });
+
+    new cdk.CfnOutput(this, 'ClientPoolId', {
+      value: this.clientPool.userPoolId,
+      description: 'Client Cognito User Pool ID',
+      exportName: `${environment}-${projectName}-client-pool-id`,
+    });
+
+    new cdk.CfnOutput(this, 'MessagesTableName', {
+      value: this.messagesTable.tableName,
+      description: 'DynamoDB messages table name',
+      exportName: `${environment}-${projectName}-messages-table`,
+    });
+
+    new cdk.CfnOutput(this, 'PortfolioBucketName', {
+      value: this.portfolioBucket.bucketName,
+      description: 'S3 portfolio bucket name',
+      exportName: `${environment}-${projectName}-portfolio-bucket`,
+    });
+
+    new cdk.CfnOutput(this, 'AuroraClusterEndpoint', {
+      value: this.auroraCluster.clusterEndpoint.hostname,
+      description: 'Aurora cluster write endpoint',
+      exportName: `${environment}-${projectName}-aurora-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'AuroraReaderEndpoint', {
+      value: this.auroraCluster.clusterReadEndpoint.hostname,
+      description: 'Aurora cluster read endpoint',
+      exportName: `${environment}-${projectName}-aurora-reader-endpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'StateMachineArn', {
+      value: this.projectWorkflow.stateMachineArn,
+      description: 'Step Functions state machine ARN',
+      exportName: `${environment}-${projectName}-state-machine-arn`,
+    });
+
+    new cdk.CfnOutput(this, 'PaymentLambdaArn', {
+      value: this.paymentLambda.functionArn,
+      description: 'Payment webhook Lambda function ARN',
+      exportName: `${environment}-${projectName}-payment-lambda-arn`,
+    });
+
+    new cdk.CfnOutput(this, 'RedisEndpoint', {
+      value: redisCluster.attrRedisEndpointAddress,
+      description: 'ElastiCache Redis endpoint',
+      exportName: `${environment}-${projectName}-redis-endpoint`,
+    });
+  }
+}
 ```
 
-## 2. tests/unit/test_tap_stack.py - Unit Tests
+### File 2: tests/tap-stack.unit.test.ts
 
-```python
-"""
-Unit tests for multi-tenant SaaS infrastructure stack.
-Tests resource creation, security configurations, and tenant isolation.
-"""
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import { TapStack } from '../lib/tap-stack';
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-import pulumi
-import pulumi.runtime
-from pulumi import Config, Output
-from lib.tap_stack import MultiTenantSaaSStack
+/**
+ * Unit tests for TapStack
+ * Validates resource creation, properties, and configurations
+ */
+describe('TapStack Unit Tests', () => {
+  let app: cdk.App;
+  let stack: TapStack;
+  let template: Template;
 
+  beforeEach(() => {
+    app = new cdk.App();
+    stack = new TapStack(app, 'TestStack', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-2',
+      },
+    });
+    template = Template.fromStack(stack);
+  });
 
-class TestMultiTenantSaaSStack(unittest.TestCase):
-    """Unit tests for infrastructure components."""
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test environment."""
-        pulumi.runtime.set_mocks(
-            MocksPulumiRuntime(),
-            project="test-project",
-            stack="test-stack",
-            preview=False
-        )
-    
-    def test_vpc_creation(self):
-        """Test VPC is created with correct CIDR."""
-        stack = MultiTenantSaaSStack("test-stack")
-        
-        self.assertIsNotN
+  describe('VPC Configuration', () => {
+    test('VPC is created with correct CIDR block', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.36.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+    });
+
+    test('VPC has multi-AZ subnets', () => {
+      // Should have 6 subnets total (3 types x 2 AZs)
+      template.resourceCountIs('AWS::EC2::Subnet', 6);
+      
+      // Verify public subnets
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        MapPublicIpOnLaunch: true,
+      });
+      
+      // Verify private subnets exist
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        MapPublicIpOnLaunch: false,
+      });
+    });
+
+    test('NAT Gateways are configured for high availability', () => {
+      // Should have 2 NAT Gateways for multi-AZ
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+    });
+
+    test('VPC Flow Logs are enabled', () => {
+      template.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'REJECT',
+      });
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('ALB Security Group allows HTTP and HTTPS', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+          }),
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0',
+          }),
+        ]),
+      });
+    });
+
+    test('Database Security Group restricts access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: Match.stringLikeRegexp('Aurora MySQL'),
+        SecurityGroupEgress: Match.arrayEquals([]), // No outbound rules
+      });
+    });
+
+    test('Redis Security Group is configured', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: Match.stringLikeRegexp('ElastiCache Redis'),
+      });
+    });
+  });
+
+  describe('Aurora MySQL Cluster', () => {
+    test('Aurora cluster is created with correct engine', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        Engine: 'aurora-mysql',
+        EngineMode: 'provisioned',
+        DatabaseName: 'freelancer_marketplace',
+      });
+    });
+
+    test('Aurora has multiple instances for HA', () => {
+      // Should have 2 instances (1 writer, 1 reader)
+      template.resourceCountIs('AWS::RDS::DBInstance', 2);
+    });
+
+    test('Aurora backup is configured', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        BackupRetentionPeriod: 7,
+        PreferredBackupWindow: '03:00-04:00',
+      });
+    });
+
+    test('Database credentials are stored in Secrets Manager', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Description: 'Aurora MySQL cluster credentials',
+        GenerateSecretString: Match.objectLike({
+          SecretStringTemplate: Match.serializedJson(
+            Match.objectLike({ username: 'admin' })
+          ),
+          GenerateStringKey: 'password',
+          PasswordLength: 32,
+        }),
+      });
+    });
+  });
+
+  describe('DynamoDB Configuration', () => {
+    test('Messages table is created with correct keys', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        KeySchema: [
+          {
+            AttributeName: 'conversationId',
+            KeyType: 'HASH',
+          },
+          {
+            AttributeName: 'timestamp',
+            KeyType: 'RANGE',
+          },
+        ],
+        BillingMode: 'PAY_PER_REQUEST',
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true,
+        },
+      });
+    });
+
+    test('GSIs are configured for message queries', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: 'userId-timestamp-index',
+            KeySchema: [
+              { AttributeName: 'userId', KeyType: 'HASH' },
+              { AttributeName: 'timestamp', KeyType: 'RANGE' },
+            ],
+          }),
+          Match.objectLike({
+            IndexName: 'receiverId-timestamp-index',
+            KeySchema: [
+              { AttributeName: 'receiverId', KeyType: 'HASH' },
+              { AttributeName: 'timestamp', KeyType: 'RANGE' },
+            ],
+          }),
+        ]),
+      });
+    });
+
+    test('DynamoDB streams are enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        StreamSpecification: {
+          StreamViewType: 'NEW_AND_OLD_IMAGES',
+        },
+      });
+    });
+  });
+
+  describe('S3 and CloudFront', () => {
+    test('Portfolio bucket has versioning and encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.arrayWith([
+            Match.objectLike({
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('S3 bucket has lifecycle rules', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        LifecycleConfiguration: {
+          Rules: Match.arrayWith([
+            Match.objectLike({
+              Id: 'delete-old-versions',
+              NoncurrentVersionExpirationInDays: 90,
+            }),
+            Match.objectLike({
+              Id: 'transition-to-ia',
+              Transitions: Match.arrayWith([
+                Match.objectLike({
+                  StorageClass: 'STANDARD_IA',
+                  TransitionInDays: 30,
+                }),
+              ]),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('CloudFront distribution is configured', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.objectLike({
+          Enabled: true,
+          HttpVersion: 'http2and3',
+          PriceClass: 'PriceClass_100',
+          ViewerCertificate: Match.objectLike({
+            MinimumProtocolVersion: 'TLSv1.2_2021',
+          }),
+        }),
+      });
+    });
+
+    test('OAI is created for secure S3 access', () => {
+      template.hasResourceProperties(
+        'AWS::CloudFront::CloudFrontOriginAccessIdentity',
+        {
+          CloudFrontOriginAccessIdentityConfig: {
+            Comment: Match.stringLikeRegexp('OAI'),
+          },
+        }
+      );
+    });
+  });
+
+  describe('Cognito User Pools', () => {
+    test('Two separate user pools are created', () => {
+      template.resourceCountIs('AWS::Cognito::UserPool', 2);
+    });
+
+    test('Freelancer pool has custom attributes', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        UserPoolName: Match.stringLikeRegexp('freelancers'),
+        Schema: Match.arrayWith([
+          Match.objectLike({
+            Name: 'skills',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+          Match.objectLike({
+            Name: 'hourlyRate',
+            AttributeDataType: 'Number',
+            Mutable: true,
+          }),
+          Match.objectLike({
+            Name: 'experienceLevel',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+        ]),
+      });
+    });
+
+    test('Client pool has company attributes', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        UserPoolName: Match.stringLikeRegexp('clients'),
+        Schema: Match.arrayWith([
+          Match.objectLike({
+            Name: 'companyName',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+          Match.objectLike({
+            Name: 'industry',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+        ]),
+      });
+    });
+
+    test('User pools have MFA configured', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        MfaConfiguration: 'OPTIONAL',
+        EnabledMfas: Match.arrayWith(['SMS_MFA', 'SOFTWARE_TOKEN_MFA']),
+      });
+    });
+
+    test('Password policies are strict', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        Policies: {
+          PasswordPolicy: {
+            MinimumLength: 12,
+            RequireLowercase: true,
+            RequireUppercase: true,
+            RequireNumbers: true,
+            RequireSymbols: true,
+          },
+        },
+      });
+    });
+  });
+
+  describe('ECS Fargate Service', () => {
+    test('ECS cluster is created with container insights', () => {
+      template.hasResourceProperties('AWS::ECS::Cluster', {
+        ClusterSettings: Match.arrayWith([
+          {
+            Name: 'containerInsights',
+            Value: 'enabled',
+          },
+        ]),
+      });
+    });
+
+    test('Fargate service has correct task definition', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        Cpu: '512',
+        Memory: '1024',
+        NetworkMode: 'awsvpc',
+        RequiresCompatibilities: ['FARGATE'],
+      });
+    });
+
+    test('Auto-scaling is configured', () => {
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalableTarget',
+        {
+          MinCapacity: 2,
+          MaxCapacity: 10,
+          ResourceId: Match.stringLikeRegexp('service/.*'),
+          ScalableDimension: 'ecs:service:DesiredCount',
+        }
+      );
+    });
+
+    test('Target group has health check configured', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        HealthCheckPath: '/health',
+        HealthCheckIntervalSeconds: 30,
+        HealthCheckTimeoutSeconds: 10,
+        HealthyThresholdCount: 2,
+        UnhealthyThresholdCount: 3,
+      });
+    });
+
+    test('Target group has sticky sessions', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        TargetGroupAttributes: Match.arrayWith([
+          {
+            Key: 'stickiness.enabled',
+            Value: 'true',
+          },
+          {
+            Key: 'stickiness.type',
+            Value: 'lb_cookie',
+          },
+        ]),
+      });
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    test('Payment Lambda is configured correctly', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: Match.stringLikeRegexp('payment-webhook'),
+        Runtime: 'nodejs18.x',
+        Timeout: 30,
+        MemorySize: 512,
+        TracingConfig: {
+          Mode: 'Active',
+        },
+      });
+    });
+
+    test('Lambda has DLQ configured', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        DeadLetterConfig: Match.objectLike({
+          TargetArn: Match.anyValue(),
+        }),
+      });
+    });
+
+    test('Lambda has reserved concurrent executions', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        ReservedConcurrentExecutions: 10,
+      });
+    });
+
+    test('DLQ is encrypted', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: Match.stringLikeRegexp('payment-dlq'),
+        KmsMasterKeyId: 'alias/aws/sqs',
+      });
+    });
+  });
+
+  describe('Step Functions', () => {
+    test('State machine is created with tracing', () => {
+      template.hasResourceProperties('AWS::St
