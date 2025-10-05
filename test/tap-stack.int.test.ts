@@ -265,7 +265,7 @@ describe('TapStack Integration Tests', () => {
         })
       );
 
-      publicSubnetIds.forEach(subnetId => {
+      publicSubnetIds.forEach((subnetId: string) => {
         const routeTable = routeTablesResponse.RouteTables!.find(rt =>
           rt.Associations?.some(assoc => assoc.SubnetId === subnetId)
         );
@@ -294,7 +294,7 @@ describe('TapStack Integration Tests', () => {
         })
       );
 
-      privateSubnetIds.forEach(subnetId => {
+      privateSubnetIds.forEach((subnetId: string) => {
         const routeTable = routeTablesResponse.RouteTables!.find(rt =>
           rt.Associations?.some(assoc => assoc.SubnetId === subnetId)
         );
