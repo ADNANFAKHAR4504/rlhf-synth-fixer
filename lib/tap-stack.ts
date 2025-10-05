@@ -525,8 +525,6 @@ def handler(event, context):
     );
 
     // Configure Lambda event invoke config for DLQ
-    // Temporarily commented out for successful deployment
-    /*
     new lambda.CfnEventInvokeConfig(this, 'StreamProcessorDLQConfig', {
       functionName: streamProcessor.functionName,
       qualifier: '$LATEST',
@@ -538,7 +536,6 @@ def handler(event, context):
       maximumEventAgeInSeconds: 21600, // 6 hours
       maximumRetryAttempts: 2,
     });
-    */
 
     // Grant SNS publish permission to Lambda
     dlqTopic.grantPublish(streamProcessor);
