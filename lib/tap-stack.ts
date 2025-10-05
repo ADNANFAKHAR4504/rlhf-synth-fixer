@@ -15,7 +15,7 @@ export interface TapStackProps extends cdk.StackProps {
   iacRlhfTagValue?: string; // optional tag value, defaults to "true"
 
   // new configurable options
-  deletionProtection?: boolean; // default true
+  deletionProtection?: boolean; // default false to ease CI cleanup
   bucketRemovalPolicy?: cdk.RemovalPolicy; // default RETAIN
 }
 
@@ -39,7 +39,7 @@ export class TapStack extends cdk.Stack {
     const natGateways = props.natGateways ?? 0;
     const bucketRemovalPolicy =
       props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
-    const deletionProtection = props.deletionProtection ?? true;
+    const deletionProtection = props.deletionProtection ?? false;
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {

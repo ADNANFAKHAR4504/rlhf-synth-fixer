@@ -10,7 +10,7 @@ Summary
   - Outputs for key logical identifiers (VPC id, ALB DNS, RDS identifier, main bucket name)
 
 
-## cloudsetup.sh
+## tap-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';

@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/cloudsetup';
+import { TapStack } from '../lib/tap-stack';
 
 // prevent unrelated stacks from interfering with unit tests
 jest.mock('../lib/ddb-stack', () => ({}), { virtual: true });

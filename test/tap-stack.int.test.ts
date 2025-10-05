@@ -1,7 +1,20 @@
 import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { DescribeDBClustersCommand, DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+  LoadBalancer,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketLoggingCommand,
+  GetBucketReplicationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -14,9 +27,7 @@ function loadOutputs(): Record<string, string> {
   const raw = fs.readFileSync(allOutputsPath, 'utf8').trim();
   if (!raw) throw new Error('Outputs file is empty');
   const parsed = JSON.parse(raw);
-  // Accept either { StackName: [ { OutputKey, OutputValue, ... }, ... ] } or flat map
   if (parsed && typeof parsed === 'object') {
-    // If first-level mapping has arrays (stack -> outputs list), flatten to map
     const firstValue = Object.values(parsed)[0];
     if (Array.isArray(firstValue)) {
       const arr = firstValue as any[];
@@ -26,150 +37,163 @@ function loadOutputs(): Record<string, string> {
       });
       return map;
     }
-    // Otherwise assume flat map of key->value
     return parsed as Record<string, string>;
   }
   throw new Error('Unexpected outputs file format');
 }
 
-describe('TapStack integration (live outputs)', () => {
+function findOutputValue(
+  outputs: Record<string, string>,
+  prefixes: string[]
+): string | undefined {
+  for (const [key, value] of Object.entries(outputs)) {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function inferRegionFromAlbDns(dns?: string): string | undefined {
+  if (!dns) return undefined;
+  const match = dns.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/i);
+  return match?.[1];
+}
+
+async function findLoadBalancerByDns(
+  client: ElasticLoadBalancingV2Client,
+  dnsName: string
+): Promise<LoadBalancer> {
+  let marker: string | undefined;
+  do {
+    const res = await client.send(
+      new DescribeLoadBalancersCommand(
+        marker
+          ? { Marker: marker }
+          : {}
+      )
+    );
+    const lb = (res.LoadBalancers ?? []).find(
+      (candidate) => candidate.DNSName === dnsName
+    );
+    if (lb) {
+      return lb;
+    }
+    marker = res.NextMarker;
+  } while (marker);
+  throw new Error(`Load balancer with DNS '${dnsName}' not found in account`);
+}
+
+describe('TapStack integration (live AWS verification)', () => {
   let outputs: Record<string, string>;
-  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || process.env.CDK_DEFAULT_REGION || '';
-  const ec2 = new EC2Client({ region: region || undefined });
-  const rds = new RDSClient({ region: region || undefined });
-  const s3 = new S3Client({ region: region || undefined });
-  const elbv2 = new ElasticLoadBalancingV2Client({ region: region || undefined });
+  let region: string;
+  let vpcId: string | undefined;
+  let rdsIdentifier: string | undefined;
+  let bucketName: string | undefined;
+  let loadBalancerDns: string | undefined;
+
+  let ec2: EC2Client;
+  let rds: RDSClient;
+  let s3: S3Client;
+  let elbv2: ElasticLoadBalancingV2Client;
 
   beforeAll(() => {
-    // increase timeout for network calls if Jest default is low
-    jest.setTimeout(120_000);
+    jest.setTimeout(180_000);
     outputs = loadOutputs();
-    console.info('Loaded outputs keys:', Object.keys(outputs));
+    vpcId = findOutputValue(outputs, ['VPCID']);
+    rdsIdentifier = findOutputValue(outputs, ['RDSIdentifier']);
+    bucketName = findOutputValue(outputs, [
+      'MainBucketName',
+      'AppBucketName',
+      'BucketName',
+    ]);
+    loadBalancerDns = findOutputValue(outputs, ['LoadBalancerDNS']);
+
+    const envRegion =
+      process.env.AWS_REGION ||
+      process.env.AWS_DEFAULT_REGION ||
+      process.env.CDK_DEFAULT_REGION ||
+      '';
+    region = envRegion || inferRegionFromAlbDns(loadBalancerDns) || '';
+    if (!region) {
+      throw new Error(
+        'AWS region not supplied. Provide AWS_REGION (or similar) or ensure LoadBalancerDNS output contains region hint.'
+      );
+    }
+
+    ec2 = new EC2Client({ region });
+    rds = new RDSClient({ region });
+    s3 = new S3Client({ region });
+    elbv2 = new ElasticLoadBalancingV2Client({ region });
   });
 
-  test('basic outputs present and use environment suffix', () => {
-    const keys = Object.keys(outputs);
-    console.info('Validating presence of expected logical keys. All keys:', keys);
-    expect(keys.length).toBeGreaterThanOrEqual(4);
-
-    // Find expected logical outputs using prefix matching (relaxed)
-    const vpcKey = keys.find((k) => k.startsWith('VPCID'));
-    const albKey = keys.find((k) => k.startsWith('LoadBalancerDNS'));
-    const rdsKey = keys.find((k) => k.startsWith('RDSIdentifier'));
-    const bucketKey = keys.find((k) => k.startsWith('MainBucketName') || k.startsWith('AppBucketName') || k.startsWith('BucketName'));
-
-    console.info('Discovered keys -> vpcKey:', vpcKey, 'albKey:', albKey, 'rdsKey:', rdsKey, 'bucketKey:', bucketKey);
-
-    expect(vpcKey).toBeDefined();
-    expect(albKey).toBeDefined();
-    expect(rdsKey).toBeDefined();
-    expect(bucketKey).toBeDefined();
-
-    // Ensure keys share a common suffix (extract suffix by removing known prefix)
-    const prefixes = ['VPCID', 'LoadBalancerDNS', 'RDSIdentifier', 'MainBucketName', 'AppBucketName', 'BucketName'];
-    const detectedSuffixes = new Set<string>();
-    keys.forEach((k) => {
-      for (const p of prefixes) {
-        if (k.startsWith(p)) {
-          detectedSuffixes.add(k.slice(p.length));
-        }
-      }
-    });
-    console.info('Detected suffixes for logical keys:', Array.from(detectedSuffixes));
-    expect(detectedSuffixes.size).toBeGreaterThanOrEqual(1);
-    const hasNonEmptySuffix = Array.from(detectedSuffixes).some((s) => s && s.length > 0);
-    expect(hasNonEmptySuffix).toBe(true);
+  test('deployment outputs expose core resource identifiers', () => {
+    expect(vpcId).toBeTruthy();
+    expect(rdsIdentifier).toBeTruthy();
+    expect(bucketName).toBeTruthy();
+    expect(loadBalancerDns).toBeTruthy();
   });
 
-  test('output values exist in AWS (live checks, no format-only asserts)', async () => {
-    const keys = Object.keys(outputs);
-
-    // VPC: presence then DescribeVpcs
-    const vpcKey = keys.find((k) => k.startsWith('VPCID'));
-    const vpcVal = vpcKey ? outputs[vpcKey] : undefined;
-    console.info('VPC validation start - key:', vpcKey, 'value:', vpcVal);
-    expect(vpcVal).toBeDefined();
-    expect(typeof vpcVal).toBe('string');
-    try {
-      const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [(vpcVal as string)] }));
-      console.info('DescribeVpcs result for', vpcVal, '-> Vpc count:', res.Vpcs?.length ?? 0);
-      expect((res.Vpcs?.length ?? 0) > 0).toBe(true);
-    } catch (err) {
-      console.error('EC2 DescribeVpcs failed for', vpcVal, err);
-      throw err;
-    }
-
-    // RDS: presence then describe instance/cluster
-    const rdsKey = keys.find((k) => k.startsWith('RDSIdentifier'));
-    const rdsVal = rdsKey ? outputs[rdsKey] : undefined;
-    console.info('RDS validation start - key:', rdsKey, 'value:', rdsVal);
-    expect(rdsVal).toBeDefined();
-    expect(typeof rdsVal).toBe('string');
-    let rdsVerified = false;
-    try {
-      const res = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsVal as string }));
-      console.info('DescribeDBInstances result for', rdsVal, '-> count:', res.DBInstances?.length ?? 0);
-      rdsVerified = (res.DBInstances?.length ?? 0) > 0;
-    } catch (e1) {
-      console.info('DescribeDBInstances failed, attempting DescribeDBClusters for', rdsVal, e1);
-      try {
-        const res2 = await rds.send(new DescribeDBClustersCommand({ DBClusterIdentifier: rdsVal as string }));
-        console.info('DescribeDBClusters result for', rdsVal, '-> count:', res2.DBClusters?.length ?? 0);
-        rdsVerified = (res2.DBClusters?.length ?? 0) > 0;
-      } catch (e2) {
-        console.error('Both RDS describe calls failed for', rdsVal, e2);
-      }
-    }
-    expect(rdsVerified).toBe(true);
-
-    // S3: presence then HeadBucket
-    const bucketKey = keys.find((k) => k.startsWith('MainBucketName') || k.startsWith('AppBucketName') || k.startsWith('BucketName'));
-    const bucketVal = bucketKey ? outputs[bucketKey] : undefined;
-    console.info('S3 validation start - key:', bucketKey, 'value:', bucketVal);
-    expect(bucketVal).toBeDefined();
-    expect(typeof bucketVal).toBe('string');
-    try {
-      await s3.send(new HeadBucketCommand({ Bucket: bucketVal as string }));
-      console.info('HeadBucket succeeded for', bucketVal);
-    } catch (err) {
-      console.error('S3 HeadBucket failed for', bucketVal, err);
-      throw err;
-    }
-
-    // ALB: presence then DescribeLoadBalancers search
-    const albKey = keys.find((k) => k.startsWith('LoadBalancerDNS'));
-    const albVal = albKey ? outputs[albKey] : undefined;
-    console.info('ALB validation start - key:', albKey, 'value:', albVal);
-    expect(albVal).toBeDefined();
-    expect(typeof albVal).toBe('string');
-    try {
-      const res = await elbv2.send(new DescribeLoadBalancersCommand({}));
-      const found = (res.LoadBalancers ?? []).some((lb) => lb.DNSName === albVal || albVal?.toString().includes(lb.DNSName ?? ''));
-      console.info('DescribeLoadBalancers matched DNSName?:', found);
-      expect(found).toBe(true);
-    } catch (err) {
-      console.error('ELBv2 DescribeLoadBalancers failed for', albVal, err);
-      throw err;
-    }
+  test('VPC is provisioned in AWS and not default', async () => {
+    expect(vpcId).toBeTruthy();
+    const res = await ec2.send(
+      new DescribeVpcsCommand({ VpcIds: [vpcId as string] })
+    );
+    const vpc = res.Vpcs?.[0];
+    expect(vpc).toBeDefined();
+    expect(vpc?.IsDefault).toBe(false);
+    expect(vpc?.VpcId).toBe(vpcId);
   });
 
-  test('no hardcoded region in outputs and values are generic', () => {
-    const values = Object.values(outputs).join(' ').toLowerCase();
-    console.info('Checking outputs for hardcoded region and presence of runtime region. Combined values:', values);
-    const suppliedRegion = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || '';
-    if (suppliedRegion) {
-      console.info('Runtime region supplied:', suppliedRegion);
-      expect(values.includes(suppliedRegion.toLowerCase())).toBe(true);
-    } else {
-      console.info('No runtime region supplied; ensure no hardcoded us-east-1 present');
-      expect(values.includes('us-east-1')).toBe(false);
-    }
+  test('database instance is private and within the VPC', async () => {
+    expect(rdsIdentifier).toBeTruthy();
+    const res = await rds.send(
+      new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: rdsIdentifier as string,
+      })
+    );
+    const instance = res.DBInstances?.[0];
+    expect(instance).toBeDefined();
+    expect(instance?.DBSubnetGroup?.VpcId).toBe(vpcId);
+    expect(instance?.PubliclyAccessible).toBe(false);
+    expect(instance?.MultiAZ).toBe(true);
   });
 
-  test('outputs reference expected resource types (sanity)', () => {
-    const vals = Object.values(outputs);
-    console.info('Sanity check values sample (first 10):', vals.slice(0, 10));
-    // Keep this test light: ensure at least one output exists
-    expect(vals.length).toBeGreaterThan(0);
+  test('application load balancer is online and attached to the VPC', async () => {
+    expect(loadBalancerDns).toBeTruthy();
+    const lb = await findLoadBalancerByDns(
+      elbv2,
+      loadBalancerDns as string
+    );
+    expect(lb?.Type).toBe('application');
+    expect(lb?.Scheme).toBe('internet-facing');
+    expect(lb?.VpcId).toBe(vpcId);
+  });
+
+  test('main bucket is versioned, logged, and replicating', async () => {
+    expect(bucketName).toBeTruthy();
+    const bucket = bucketName as string;
+
+    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+
+    const versioning = await s3.send(
+      new GetBucketVersioningCommand({ Bucket: bucket })
+    );
+    expect(versioning.Status).toBe('Enabled');
+
+    const replication = await s3.send(
+      new GetBucketReplicationCommand({ Bucket: bucket })
+    );
+    const enabledRule = replication.ReplicationConfiguration?.Rules?.find(
+      (rule) => rule.Status === 'Enabled'
+    );
+    expect(enabledRule).toBeDefined();
+    expect(enabledRule?.Destination?.Bucket).toBeTruthy();
+
+    const logging = await s3.send(
+      new GetBucketLoggingCommand({ Bucket: bucket })
+    );
+    expect(logging.LoggingEnabled?.TargetBucket).toBeTruthy();
+    expect(logging.LoggingEnabled?.TargetPrefix).toBeTruthy();
   });
 });
