@@ -16,7 +16,7 @@ terraform {
 
 # Primary AWS provider for general resources
 provider "aws" {
-  alias  = "us_east_2"
+  alias  = "eu_east_1"
   region = var.primary_region
   #access_key = var.aws_access_key
   #secret_key = var.aws_secret_key
@@ -28,7 +28,7 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "us_west_1"
+  alias  = "eu_west_1"
   region = var.secondary_region
   #access_key = var.aws_access_key
   #secret_key = var.aws_secret_key

@@ -7,13 +7,13 @@
 variable "primary_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "us-east-2"
+  default     = "eu-east-1"
 }
 
 variable "secondary_region" {
   description = "Secondary AWS region"
   type        = string
-  default     = "us-west-1"
+  default     = "eu-west-1"
 }
 
 variable "environment" {
