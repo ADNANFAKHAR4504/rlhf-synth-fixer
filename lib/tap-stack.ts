@@ -43,7 +43,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket for long-term storage with lifecycle policies
     const iotDataBucket = new s3.Bucket(this, 'IotDataBucket', {
-      bucketName: `iot-sensor-data-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `iot-sensor-data-${this.account}-${this.region}-dev-${environmentSuffix}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -73,7 +73,7 @@ export class TapStack extends cdk.Stack {
 
     // DynamoDB table for device state with TTL enabled
     const deviceStateTable = new dynamodb.Table(this, 'DeviceStateTable', {
-      tableName: `iot-device-state-${environmentSuffix}`,
+      tableName: `iot-device-state-dev-${environmentSuffix}`,
       partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -94,7 +94,7 @@ export class TapStack extends cdk.Stack {
 
     // DynamoDB table for time-series sensor data (replacing Timestream)
     const sensorMetricsTable = new dynamodb.Table(this, 'SensorMetricsTable', {
-      tableName: `iot-sensor-metrics-${environmentSuffix}`,
+      tableName: `iot-sensor-metrics-dev-${environmentSuffix}`,
       partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -326,7 +326,7 @@ def handler(event, context):
 
     // CloudWatch log group for Firehose errors
     const firehoseLogGroup = new logs.LogGroup(this, 'FirehoseLogGroup', {
-      logGroupName: `/aws/kinesisfirehose/iot-sensor-data-${environmentSuffix}`,
+      logGroupName: `/aws/kinesisfirehose/iot-sensor-data-dev-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -399,7 +399,7 @@ def handler(event, context):
         ],
         errorAction: {
           cloudwatchLogs: {
-            logGroupName: `/aws/iot/rules/errors-${environmentSuffix}`,
+            logGroupName: `/aws/iot/rules/errors-dev-${environmentSuffix}`,
             roleArn: iotRuleRole.roleArn,
           },
         },
@@ -457,7 +457,7 @@ def handler(event, context):
     const glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
       catalogId: this.account,
       databaseInput: {
-        name: `iot_sensor_db_${environmentSuffix}`,
+        name: `iot_sensor_db_dev_${environmentSuffix}`,
         description: 'IoT sensor data catalog',
       },
     });
@@ -476,7 +476,7 @@ def handler(event, context):
 
     // Glue Crawler for schema discovery
     new glue.CfnCrawler(this, 'GlueCrawler', {
-      name: `iot-sensor-data-crawler-${environmentSuffix}`,
+      name: `iot-sensor-data-crawler-dev-${environmentSuffix}`,
       role: glueRole.roleArn,
       databaseName: glueDatabase.ref,
       targets: {
@@ -505,7 +505,7 @@ def handler(event, context):
 
     // SNS Topic for alerts
     const alertTopic = new sns.Topic(this, 'IoTAlertTopic', {
-      topicName: `iot-pipeline-alerts-${environmentSuffix}`,
+      topicName: `iot-pipeline-alerts-dev-${environmentSuffix}`,
       displayName: 'IoT Pipeline Alerts',
     });
 
@@ -516,7 +516,7 @@ def handler(event, context):
 
     // Dead Letter Queue for failed Lambda invocations
     const dlqTopic = new sns.Topic(this, 'IoTDLQTopic', {
-      topicName: `iot-pipeline-dlq-${environmentSuffix}`,
+      topicName: `iot-pipeline-dlq-dev-${environmentSuffix}`,
       displayName: 'IoT Pipeline Dead Letter Queue',
     });
 

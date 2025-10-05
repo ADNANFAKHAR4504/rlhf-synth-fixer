@@ -37,7 +37,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              '-test-env',
+              '-dev-test-env',
             ],
           ],
         },
@@ -64,7 +64,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              '-context-env',
+              '-dev-context-env',
             ],
           ],
         },
@@ -90,7 +90,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              '-dev',
+              `-dev-${environmentSuffix}`,
             ],
           ],
         },
@@ -119,7 +119,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              '-props-env',
+              '-dev-props-env',
             ],
           ],
         },
@@ -142,7 +142,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              `-${environmentSuffix}`,
+              `-dev-${environmentSuffix}`,
             ],
           ],
         },
@@ -187,7 +187,7 @@ describe('TapStack', () => {
   describe('DynamoDB Table', () => {
     test('should create DynamoDB table with correct properties', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `iot-device-state-${environmentSuffix}`,
+        TableName: `iot-device-state-dev-${environmentSuffix}`,
         KeySchema: [
           {
             AttributeName: 'deviceId',
@@ -250,7 +250,7 @@ describe('TapStack', () => {
   describe('DynamoDB Metrics Table', () => {
     test('should create DynamoDB metrics table', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        TableName: `iot-sensor-metrics-dev-${environmentSuffix}`,
         BillingMode: 'PAY_PER_REQUEST',
         TimeToLiveSpecification: {
           AttributeName: 'ttl',
@@ -264,7 +264,7 @@ describe('TapStack', () => {
 
     test('should create DynamoDB metrics table with correct key schema', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        TableName: `iot-sensor-metrics-dev-${environmentSuffix}`,
         KeySchema: [
           {
             AttributeName: 'deviceId',
@@ -294,7 +294,7 @@ describe('TapStack', () => {
 
     test('should create GSI for timestamp queries', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `iot-sensor-metrics-${environmentSuffix}`,
+        TableName: `iot-sensor-metrics-dev-${environmentSuffix}`,
         GlobalSecondaryIndexes: [
           {
             IndexName: 'timestamp-index',
@@ -448,7 +448,7 @@ describe('TapStack', () => {
           Ref: 'AWS::AccountId',
         },
         DatabaseInput: {
-          Name: `iot_sensor_db_${environmentSuffix}`,
+          Name: `iot_sensor_db_dev_${environmentSuffix}`,
           Description: 'IoT sensor data catalog',
         },
       });
@@ -456,7 +456,7 @@ describe('TapStack', () => {
 
     test('should create Glue Crawler', () => {
       template.hasResourceProperties('AWS::Glue::Crawler', {
-        Name: `iot-sensor-data-crawler-${environmentSuffix}`,
+        Name: `iot-sensor-data-crawler-dev-${environmentSuffix}`,
         DatabaseName: {
           Ref: 'GlueDatabase',
         },
@@ -474,14 +474,14 @@ describe('TapStack', () => {
   describe('SNS Topic', () => {
     test('should create SNS Topic for alerts', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `iot-pipeline-alerts-${environmentSuffix}`,
+        TopicName: `iot-pipeline-alerts-dev-${environmentSuffix}`,
         DisplayName: 'IoT Pipeline Alerts',
       });
     });
 
     test('should create DLQ SNS Topic', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `iot-pipeline-dlq-${environmentSuffix}`,
+        TopicName: `iot-pipeline-dlq-dev-${environmentSuffix}`,
         DisplayName: 'IoT Pipeline Dead Letter Queue',
       });
     });
