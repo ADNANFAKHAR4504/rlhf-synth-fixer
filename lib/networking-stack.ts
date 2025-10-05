@@ -67,7 +67,7 @@ export class NetworkingStack extends NestedStack {
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: this.vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      value: this.vpc.isolatedSubnets.map(subnet => subnet.subnetId).join(','),
       description: 'Private subnet IDs',
     });
   }
