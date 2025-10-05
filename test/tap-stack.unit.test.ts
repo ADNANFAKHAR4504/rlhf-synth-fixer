@@ -90,7 +90,7 @@ describe('TapStack', () => {
               {
                 Ref: 'AWS::Region',
               },
-              `-dev-${environmentSuffix}`,
+              '-dev-dev',
             ],
           ],
         },
@@ -333,7 +333,7 @@ describe('TapStack', () => {
   describe('Lambda Function', () => {
     test('should create Lambda function with correct properties', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `iot-stream-processor-${environmentSuffix}`,
+        FunctionName: `iot-stream-processor-dev-${environmentSuffix}`,
         Runtime: 'python3.11',
         Handler: 'index.handler',
         Timeout: 60,
@@ -397,7 +397,7 @@ describe('TapStack', () => {
   describe('IoT Core', () => {
     test('should create IoT Topic Rule', () => {
       template.hasResourceProperties('AWS::IoT::TopicRule', {
-        RuleName: `route_sensor_data_to_kinesis_${environmentSuffix}`,
+        RuleName: `route_sensor_data_to_kinesis_dev_${environmentSuffix}`,
         TopicRulePayload: {
           Sql: "SELECT *, topic(2) as deviceId, timestamp() as timestamp FROM 'device/+/telemetry'",
           Description: 'Route sensor telemetry data to Kinesis Data Stream',
@@ -548,7 +548,7 @@ describe('TapStack', () => {
   describe('CloudWatch Dashboard', () => {
     test('should create CloudWatch Dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `iot-pipeline-monitoring-${environmentSuffix}`,
+        DashboardName: `iot-pipeline-monitoring-dev-${environmentSuffix}`,
       });
     });
   });

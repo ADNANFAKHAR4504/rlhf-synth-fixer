@@ -128,7 +128,7 @@ export class TapStack extends cdk.Stack {
 
     // Lambda function for stream processing with retry logic
     const streamProcessor = new lambda.Function(this, 'StreamProcessor', {
-      functionName: `iot-stream-processor-${environmentSuffix}`,
+      functionName: `iot-stream-processor-dev-${environmentSuffix}`,
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromInline(`
 import json
@@ -340,7 +340,7 @@ def handler(event, context):
       this,
       'FirehoseDeliveryStream',
       {
-        deliveryStreamName: `iot-sensor-data-to-s3-${environmentSuffix}-${Date.now()}`,
+        deliveryStreamName: `iot-sensor-data-to-s3-dev-${environmentSuffix}-${Date.now()}`,
         deliveryStreamType: 'KinesisStreamAsSource',
         kinesisStreamSourceConfiguration: {
           kinesisStreamArn: sensorDataStream.streamArn,
@@ -384,7 +384,7 @@ def handler(event, context):
 
     // IoT Rule to route messages to Kinesis
     new iot.CfnTopicRule(this, 'IoTSensorRule', {
-      ruleName: `route_sensor_data_to_kinesis_${environmentSuffix}`,
+      ruleName: `route_sensor_data_to_kinesis_dev_${environmentSuffix}`,
       topicRulePayload: {
         sql: "SELECT *, topic(2) as deviceId, timestamp() as timestamp FROM 'device/+/telemetry'",
         description: 'Route sensor telemetry data to Kinesis Data Stream',
@@ -636,7 +636,7 @@ def handler(event, context):
 
     // CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'IoTPipelineDashboard', {
-      dashboardName: `iot-pipeline-monitoring-${environmentSuffix}`,
+      dashboardName: `iot-pipeline-monitoring-dev-${environmentSuffix}`,
     });
 
     dashboard.addWidgets(
