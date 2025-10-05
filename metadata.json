@@ -10,5 +10,6 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "API Gateway, WAF, Lambda, DynamoDB, DAX, DynamoDB Streams, ElastiCache Redis, Kinesis Data Streams, Kinesis Data Analytics, Kinesis Data Firehose, S3 Bucket, Redshift Serverless, Fraud Detector, Step Functions, CloudWatch, CloudWatch LogGroup, Lambda Insights, X-Ray, EventBridge, SNS, SQS, Athena, QuickSight, Secrets Manager, KMS, IAM, VPC"
+  "aws_services": "API Gateway, WAF, Lambda, DynamoDB, DAX, DynamoDB Streams, ElastiCache Redis, Kinesis Data Streams, Kinesis Data Analytics, Kinesis Data Firehose, S3 Bucket, Redshift Serverless, Fraud Detector, Step Functions, CloudWatch, CloudWatch LogGroup, Lambda Insights, X-Ray, EventBridge, SNS, SQS, Athena, QuickSight, Secrets Manager, KMS, IAM, VPC",
+  "training_quality": 9
 }
