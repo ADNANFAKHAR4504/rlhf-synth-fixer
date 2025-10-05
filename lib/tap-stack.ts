@@ -362,23 +362,9 @@ def handler(event, context):
             logGroupName: firehoseLogGroup.logGroupName,
             logStreamName: firehoseLogStream.logStreamName,
           },
+          // Temporarily disable schema conversion until Glue table exists
           dataFormatConversionConfiguration: {
-            enabled: true,
-            outputFormatConfiguration: {
-              serializer: {
-                parquetSerDe: {}, // Convert to Parquet for efficient querying
-              },
-            },
-            inputFormatConfiguration: {
-              deserializer: {
-                openXJsonSerDe: {},
-              },
-            },
-            schemaConfiguration: {
-              databaseName: `iot_sensor_db_${environmentSuffix}`,
-              tableName: 'sensor_data',
-              roleArn: firehoseRole.roleArn,
-            },
+            enabled: false,
           },
         },
       }

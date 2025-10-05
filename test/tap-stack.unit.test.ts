@@ -387,17 +387,7 @@ describe('TapStack', () => {
           },
           CompressionFormat: 'UNCOMPRESSED',
           DataFormatConversionConfiguration: {
-            Enabled: true,
-            OutputFormatConfiguration: {
-              Serializer: {
-                ParquetSerDe: {},
-              },
-            },
-            InputFormatConfiguration: {
-              Deserializer: {
-                OpenXJsonSerDe: {},
-              },
-            },
+            Enabled: false,
           },
         },
       });
