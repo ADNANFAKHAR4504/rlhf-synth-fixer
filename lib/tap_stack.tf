@@ -543,7 +543,7 @@ resource "aws_iam_instance_profile" "primary_ec2" {
 
 resource "aws_lb" "primary" {
   provider           = aws.us_west_2
-  name_prefix        = "pr-Byte"
+  name_prefix        = "pr-byt"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.primary_alb.id]
@@ -559,7 +559,7 @@ resource "aws_lb" "primary" {
 
 resource "aws_lb_target_group" "primary" {
   provider    = aws.us_west_2
-  name_prefix = "pr-Byte"
+  name_prefix = "pr-byt"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
@@ -1035,7 +1035,7 @@ resource "aws_iam_instance_profile" "secondary_ec2" {
 
 resource "aws_lb" "secondary" {
   provider           = aws.eu_west_1
-  name_prefix        = "sc-Byte"
+  name_prefix        = "sc-byt"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.secondary_alb.id]
@@ -1051,7 +1051,7 @@ resource "aws_lb" "secondary" {
 
 resource "aws_lb_target_group" "secondary" {
   provider    = aws.eu_west_1
-  name_prefix = "sc-Byte"
+  name_prefix = "sc-byt"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.secondary.id
