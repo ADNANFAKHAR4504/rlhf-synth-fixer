@@ -697,6 +697,7 @@ export class AlbModule extends Construct {
 export class RdsModule extends Construct {
   public readonly dbInstance: DbInstance;
   public readonly subnetGroup: DbSubnetGroup;
+  private readonly secretVersion: DataAwsSecretsmanagerSecretVersion; // Add this
 
   constructor(
     scope: Construct,
@@ -715,7 +716,7 @@ export class RdsModule extends Construct {
 
     // DB subnet group for Multi-AZ deployment
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
-      name: `${id.toLowerCase()}-db-subnet-group`, // Convert to lowercase
+      name: `${id.toLowerCase()}-db-subnet-group`,
       description: 'Subnet group for RDS Multi-AZ deployment',
       subnetIds: config.subnetIds,
       tags: {
@@ -724,16 +725,21 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Get secret data
+    // Get secret data - Store the reference
     const secretData = new DataAwsSecretsmanagerSecret(this, 'db-secret-data', {
       arn: config.secretArn,
     });
 
-    new DataAwsSecretsmanagerSecretVersion(this, 'db-secret-version', {
-      secretId: secretData.id,
-    });
+    // Store the secret version reference
+    this.secretVersion = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-secret-version',
+      {
+        secretId: secretData.id,
+      }
+    );
 
-    // Create monitoring role without deprecated managedPolicyArns
+    // Create monitoring role...
     const monitoringRole = new IamRole(this, 'rds-monitoring-role', {
       name: `${id}-rds-enhanced-monitoring-role`,
       assumeRolePolicy: JSON.stringify({
@@ -758,7 +764,7 @@ export class RdsModule extends Construct {
         'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
     });
 
-    // RDS MySQL instance with Secrets Manager integration
+    // RDS MySQL instance with Secrets Manager integration - Use direct reference
     this.dbInstance = new DbInstance(this, 'mysql', {
       identifier: `${id}-mysql-db`,
       engine: 'mysql',
@@ -766,47 +772,33 @@ export class RdsModule extends Construct {
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
-      storageEncrypted: true, // Encryption at rest
+      storageEncrypted: true,
 
-      // Use credentials from Secrets Manager
-      username: `\${jsondecode(data.aws_secretsmanager_secret_version.${this.node.id}-db-secret-version.secret_string)["username"]}`,
-      password: `\${jsondecode(data.aws_secretsmanager_secret_version.${this.node.id}-db-secret-version.secret_string)["password"]}`,
+      // Use direct reference to the secret version
+      username: `\${jsondecode(${this.secretVersion.secretString})["username"]}`,
+      password: `\${jsondecode(${this.secretVersion.secretString})["password"]}`,
 
-      // Network configuration
+      // Rest of the configuration remains the same...
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: [config.securityGroupId],
-      publiclyAccessible: false, // No public access for security
-
-      // High availability
+      publiclyAccessible: false,
       multiAz: true,
-
-      // Backup configuration
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-
-      // Automatic minor version upgrades
       autoMinorVersionUpgrade: true,
-
-      // Performance Insights for monitoring
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
-
-      // Enhanced monitoring
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       monitoringInterval: 60,
-      monitoringRoleArn: monitoringRole.arn, // ← Use the already created role
-
-      // Deletion protection
-      deletionProtection: false, // Set to true in production
+      monitoringRoleArn: monitoringRole.arn,
+      deletionProtection: false,
       skipFinalSnapshot: true,
       finalSnapshotIdentifier: `${id}-final-snapshot-${Date.now()}`,
-
       tags: {
         ...config.tags,
         Name: `${id}-mysql-db`,
       },
-
       dependsOn: config.dependsOn,
     });
   }
@@ -871,13 +863,20 @@ export class S3Module extends Construct {
     });
 
     // Lifecycle policies for cost optimization
+    // In S3Module constructor, update the lifecycle configuration:
     new S3BucketLifecycleConfiguration(this, 'lifecycle', {
       bucket: this.bucket.id,
       rule: [
         {
           id: 'alb-logs-lifecycle',
           status: 'Enabled',
-          prefix: 'alb-logs/', // FIXED: Added required prefix
+
+          // ✅ Correct way to define a prefix filter
+          filter: [
+            {
+              prefix: 'alb-logs/',
+            },
+          ],
 
           transition: [
             {
@@ -890,14 +889,12 @@ export class S3Module extends Construct {
             },
           ],
 
-          //Fix: use array for expiration
           expiration: [
             {
               days: config.expirationDays,
             },
           ],
 
-          //Fix: use array for noncurrent version expiration
           noncurrentVersionExpiration: [
             {
               noncurrentDays: 30,
