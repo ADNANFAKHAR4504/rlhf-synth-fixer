@@ -80,7 +80,7 @@
                   "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}"
                 }
               },
-              "Action": "s_GetObject",
+              "Action": "s3:GetObject",
               "Resource": {
                 "Fn::Sub": "${WebsiteBucket.Arn}/*"
               }
