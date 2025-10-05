@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "11031627",
+  "team": "1",
+  "startedAt": "2025-10-05T06:27:18.500Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "S3, CloudFront, Route 53, API Gateway, Lambda, SES, CloudWatch, IAM, CloudFormation"
+}
