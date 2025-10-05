@@ -249,7 +249,7 @@ class TapStack extends Stack {
     private DatabaseCluster createAuroraCluster() {
         // Create database credentials in Secrets Manager
         DatabaseSecret dbSecret = DatabaseSecret.Builder.create(this, "AuroraSecret" + environmentSuffix)
-                .username("admin")
+                .username("dbadmin")
                 .build();
 
         // Security group for Aurora
