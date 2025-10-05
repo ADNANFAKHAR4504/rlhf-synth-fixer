@@ -766,7 +766,7 @@ export class RdsModule extends Construct {
 
     // RDS MySQL instance with Secrets Manager integration - Use direct reference
     this.dbInstance = new DbInstance(this, 'mysql', {
-      identifier: `${id}-mysql-db`,
+      identifier: `${id.toLowerCase()}-mysql-db`, // ← Add .toLowerCase() here
       engine: 'mysql',
       engineVersion: '8.0.35',
       instanceClass: config.instanceClass,
