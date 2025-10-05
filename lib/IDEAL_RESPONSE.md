@@ -43,28 +43,33 @@ The prompt requires a **production-grade, multi-AZ AWS VPC infrastructure** with
 ### Implementation Decisions
 
 **1. Environment Parameterization**
+
 - Added `EnvironmentSuffix` parameter (default: 'dev') to support dev/staging/prod deployments
 - All resource names and tags use `!Sub` to include environment suffix
 - Enables multiple isolated environments from same template
 
 **2. No External Dependencies**
+
 - Created `BastionKeyPair` resource (AWS::EC2::KeyPair) instead of referencing external key
 - Used SSM Parameter Store for dynamic AMI lookup: `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2`
 - No hardcoded AMI IDs - works across regions and stays up-to-date
 
 **3. Deletion Protection Disabled**
+
 - Set `DeletionProtection: false` on RDS
 - Set `DeleteAutomatedBackups: true` on RDS
 - Removed `DeletionPolicy: Retain` from S3 buckets
 - Allows clean stack deletion for dev/test environments
 
 **4. VPC Flow Logs to S3**
+
 - FlowLogsBucket with AES256 encryption
 - **Critical fix**: Removed `DeliverLogsPermissionArn` property from VpcFlowLog
 - When using S3 as destination, IAM role not required (CloudFormation error otherwise)
 - Bucket policy grants `delivery.logs.amazonaws.com` permission
 
 **5. Security Group Design**
+
 - **LoadBalancerSecurityGroup**: HTTP/HTTPS from 0.0.0.0/0
 - **WebServerSecurityGroup**: HTTP/HTTPS from ALB only, SSH from Bastion only
 - **DatabaseSecurityGroup**: MySQL (3306) from Web Servers only
@@ -72,18 +77,21 @@ The prompt requires a **production-grade, multi-AZ AWS VPC infrastructure** with
 - All security groups follow least-privilege principle
 
 **6. Secrets Management**
+
 - `DBPasswordSecret` using AWS Secrets Manager
 - Auto-generated 16-character password
 - RDS credentials resolved via `{{resolve:secretsmanager:...}}`
 - No credentials in template or version control
 
 **7. IAM Roles**
+
 - `EC2InstanceRole` with `AmazonSSMManagedInstanceCore` and `CloudWatchAgentServerPolicy`
 - Enables Systems Manager Session Manager (SSH alternative)
 - CloudWatch agent for metrics and logs collection
 - No access keys or credentials needed
 
 **8. Auto Scaling and Load Balancing**
+
 - Launch Template with encrypted gp3 volumes
 - Auto Scaling Group: Min 2, Max 6, Desired 2
 - Target tracking policy: 70% CPU utilization
@@ -91,67 +99,20 @@ The prompt requires a **production-grade, multi-AZ AWS VPC infrastructure** with
 - User data installs httpd, PHP, CloudWatch agent
 
 **9. Conditional HTTPS**
+
 - HTTP listener redirects to HTTPS (301)
 - HTTPS listener created only if `SSLCertificateARN` provided
 - Condition: `HasSSLCertificate: !Not [ !Equals [ !Ref SSLCertificateARN, '' ] ]`
 - Supports HTTP-only deployment for testing
 
 **10. Comprehensive Parameterization**
+
 - 17 parameters for full customization
 - Network CIDRs (VPC, 6 subnets)
 - Database configuration (name, user, class, storage)
 - Instance types (bastion, app servers)
 - Security (bastion allowed CIDR, SSL certificate ARN)
 - Organized in 5 parameter groups via Metadata
-
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              AWS Cloud (VPC: 10.0.0.0/16)                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
-│  ┌────────────────────────┐  ┌────────────────────────┐  ┌────────────────┐│
-│  │  Availability Zone 1   │  │  Availability Zone 2   │  │  Avail. Zone 3 ││
-│  │                        │  │                        │  │                ││
-│  │  ┌──────────────────┐  │  │  ┌──────────────────┐  │  │  ┌──────────┐  ││
-│  │  │ Public Subnet    │  │  │  │ Public Subnet    │  │  │  │ Public   │  ││
-│  │  │ 10.0.0.0/24      │  │  │  │ 10.0.1.0/24      │  │  │  │ 10.0.2/24│  ││
-│  │  │                  │  │  │  │                  │  │  │  │          │  ││
-│  │  │ [NAT Gateway 1]  │  │  │  │ [NAT Gateway 2]  │  │  │  │ [NAT GW] │  ││
-│  │  │ [Bastion Host]   │  │  │  │ [App Server ASG] │  │  │  │ [App ASG]│  ││
-│  │  └────────┬─────────┘  │  │  └────────┬─────────┘  │  │  └────┬─────┘  ││
-│  │           │            │  │           │            │  │       │        ││
-│  │  ┌────────┴─────────┐  │  │  ┌────────┴─────────┐  │  │  ┌────┴─────┐  ││
-│  │  │ Private Subnet   │  │  │  │ Private Subnet   │  │  │  │ Private  │  ││
-│  │  │ 10.0.3.0/24      │  │  │  │ 10.0.4.0/24      │  │  │  │ 10.0.5/24│  ││
-│  │  │                  │  │  │  │                  │  │  │  │          │  ││
-│  │  │ [RDS Primary/    │  │  │  │ [RDS Standby]    │  │  │  │ [RDS     │  ││
-│  │  │  Standby]        │  │  │  │                  │  │  │  │ Standby] │  ││
-│  │  └──────────────────┘  │  │  └──────────────────┘  │  │  └──────────┘  ││
-│  └────────────────────────┘  └────────────────────────┘  └────────────────┘│
-│                                                                               │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    Application Load Balancer                         │    │
-│  │                     (Public Subnets 1, 2, 3)                         │    │
-│  └──────────────────────────────────┬───────────────────────────────────┘    │
-│                                     │                                        │
-└─────────────────────────────────────┼────────────────────────────────────────┘
-                                      │
-                              ┌───────▼────────┐
-                              │  Internet      │
-                              │  Gateway       │
-                              └────────────────┘
-                                      │
-                                   Internet
-
-Data Flow:
-1. Internet → ALB (Public Subnets) → App Servers (Public Subnets) → RDS (Private)
-2. Private Subnet Resources → NAT Gateway (per AZ) → Internet Gateway → Internet
-3. Admin SSH → Bastion Host (Public) → App Servers / RDS (Private)
-4. VPC Flow Logs → S3 Bucket (Encrypted)
-5. CloudWatch Metrics/Logs ← App Servers
-```
 
 ### Compliance with AWS Best Practices
 
@@ -351,7 +312,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PublicSubnet1CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -364,7 +325,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PublicSubnet2CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -377,7 +338,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      AvailabilityZone: !Select [2, !GetAZs '']
       CidrBlock: !Ref PublicSubnet3CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -391,7 +352,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet1CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -404,7 +365,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -417,7 +378,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      AvailabilityZone: !Select [2, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet3CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -755,7 +716,7 @@ Resources:
       Description: !Sub 'Secret for ${EnvironmentSuffix} RDS Database Password'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUser}"}'
-        GenerateStringKey: "password"
+        GenerateStringKey: 'password'
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
       Tags:
@@ -786,7 +747,15 @@ Resources:
       MultiAZ: true
       StorageEncrypted: true
       MasterUsername: !Ref DBUser
-      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBPasswordSecret, ':SecretString:password}}' ]]
+      MasterUserPassword:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref DBPasswordSecret,
+            ':SecretString:password}}',
+          ],
+        ]
       DBInstanceClass: !Ref DBClass
       AllocatedStorage: !Ref DBAllocatedStorage
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -1082,50 +1051,55 @@ Resources:
         TargetValue: 70
 
 Conditions:
-  HasSSLCertificate: !Not [ !Equals [ !Ref SSLCertificateARN, '' ] ]
+  HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateARN, '']]
 
 Outputs:
   VpcId:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub "${AWS::StackName}-VPC-ID"
+      Name: !Sub '${AWS::StackName}-VPC-ID'
 
   PublicSubnets:
     Description: Public subnets
-    Value: !Join [ ",", [ !Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3 ] ]
+    Value:
+      !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3]]
     Export:
-      Name: !Sub "${AWS::StackName}-Public-Subnets"
+      Name: !Sub '${AWS::StackName}-Public-Subnets'
 
   PrivateSubnets:
     Description: Private subnets
-    Value: !Join [ ",", [ !Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3 ] ]
+    Value:
+      !Join [
+        ',',
+        [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3],
+      ]
     Export:
-      Name: !Sub "${AWS::StackName}-Private-Subnets"
+      Name: !Sub '${AWS::StackName}-Private-Subnets'
 
   BastionIP:
     Description: Bastion host public IP
     Value: !GetAtt BastionHost.PublicIp
     Export:
-      Name: !Sub "${AWS::StackName}-Bastion-IP"
+      Name: !Sub '${AWS::StackName}-Bastion-IP'
 
   LoadBalancerDNS:
     Description: DNS name of the load balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub "${AWS::StackName}-LB-DNS"
+      Name: !Sub '${AWS::StackName}-LB-DNS'
 
   RDSEndpoint:
     Description: RDS endpoint address
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub "${AWS::StackName}-RDS-Endpoint"
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 
   FlowLogsBucketName:
     Description: Name of the S3 bucket for VPC flow logs
     Value: !Ref FlowLogsBucket
     Export:
-      Name: !Sub "${AWS::StackName}-FlowLogs-Bucket"
+      Name: !Sub '${AWS::StackName}-FlowLogs-Bucket'
 ```
 
 ---
@@ -1149,63 +1123,63 @@ Outputs:
 
 ### Required Infrastructure Components
 
-| Requirement | Implementation | Verified |
-|-------------|----------------|----------|
-| **Multi-AZ VPC (3 AZs)** | VPC with 3 public + 3 private subnets across `!GetAZs` | Yes |
-| **VPC Flow Logs → Encrypted S3** | FlowLogsBucket (AES256), VpcFlowLog (S3 destination, no IAM role) | Yes |
-| **Multi-AZ RDS MySQL** | RDSInstance with `MultiAZ: true`, `StorageEncrypted: true`, 7-day backups | Yes |
-| **Bastion Host (Public Subnet)** | BastionHost in PublicSubnet1, encrypted EBS, SSM role | Yes |
-| **Application Load Balancer** | ApplicationLoadBalancer across 3 public subnets, HTTP→HTTPS redirect | Yes |
-| **All EBS Encrypted** | Bastion and Launch Template use `Encrypted: true` | Yes |
-| **All S3 Encrypted** | FlowLogsBucket with `SSEAlgorithm: AES256` | Yes |
-| **IAM Roles (No Hardcoded Credentials)** | EC2InstanceRole with managed policies, Secrets Manager for RDS | Yes |
+| Requirement                              | Implementation                                                            | Verified |
+| ---------------------------------------- | ------------------------------------------------------------------------- | -------- |
+| **Multi-AZ VPC (3 AZs)**                 | VPC with 3 public + 3 private subnets across `!GetAZs`                    | Yes      |
+| **VPC Flow Logs → Encrypted S3**         | FlowLogsBucket (AES256), VpcFlowLog (S3 destination, no IAM role)         | Yes      |
+| **Multi-AZ RDS MySQL**                   | RDSInstance with `MultiAZ: true`, `StorageEncrypted: true`, 7-day backups | Yes      |
+| **Bastion Host (Public Subnet)**         | BastionHost in PublicSubnet1, encrypted EBS, SSM role                     | Yes      |
+| **Application Load Balancer**            | ApplicationLoadBalancer across 3 public subnets, HTTP→HTTPS redirect      | Yes      |
+| **All EBS Encrypted**                    | Bastion and Launch Template use `Encrypted: true`                         | Yes      |
+| **All S3 Encrypted**                     | FlowLogsBucket with `SSEAlgorithm: AES256`                                | Yes      |
+| **IAM Roles (No Hardcoded Credentials)** | EC2InstanceRole with managed policies, Secrets Manager for RDS            | Yes      |
 
 ### Network Topology Requirements
 
-| Requirement | Implementation | Verified |
-|-------------|----------------|----------|
-| **Each Public Subnet → Own Route Table → IGW** | 3 PublicRouteTables, 3 DefaultPublicRoutes to IGW | Yes |
-| **Each Private Subnet → Own Route Table → NAT GW** | 3 PrivateRouteTables, 3 DefaultPrivateRoutes to respective NAT GWs | Yes |
-| **Managed NAT Gateways (1 per AZ)** | 3 NatGateways with 3 EIPs in public subnets | Yes |
-| **Private Subnets: No Direct Internet** | Only route is to NAT Gateway, `MapPublicIpOnLaunch: false` | Yes |
-| **RDS in Private Subnets Only** | DBSubnetGroup uses PrivateSubnet1/2/3 | Yes |
+| Requirement                                        | Implementation                                                     | Verified |
+| -------------------------------------------------- | ------------------------------------------------------------------ | -------- |
+| **Each Public Subnet → Own Route Table → IGW**     | 3 PublicRouteTables, 3 DefaultPublicRoutes to IGW                  | Yes      |
+| **Each Private Subnet → Own Route Table → NAT GW** | 3 PrivateRouteTables, 3 DefaultPrivateRoutes to respective NAT GWs | Yes      |
+| **Managed NAT Gateways (1 per AZ)**                | 3 NatGateways with 3 EIPs in public subnets                        | Yes      |
+| **Private Subnets: No Direct Internet**            | Only route is to NAT Gateway, `MapPublicIpOnLaunch: false`         | Yes      |
+| **RDS in Private Subnets Only**                    | DBSubnetGroup uses PrivateSubnet1/2/3                              | Yes      |
 
 ### Security Requirements
 
-| Requirement | Implementation | Verified |
-|-------------|----------------|----------|
-| **No Unrestricted Inbound Access** | Security groups use source SG references or specific CIDRs | Yes |
-| **HTTP/HTTPS from Internet** | LoadBalancerSecurityGroup allows 80/443 from 0.0.0.0/0 | Yes |
-| **Web Servers: HTTP/HTTPS from ALB Only** | WebServerSecurityGroup ingress from LoadBalancerSecurityGroup | Yes |
-| **Database: MySQL from Web Servers Only** | DatabaseSecurityGroup allows 3306 from WebServerSecurityGroup | Yes |
-| **SSH via Bastion Only** | WebServerSecurityGroup allows SSH from BastionSecurityGroup | Yes |
-| **VPC Flow Logs Encrypted** | FlowLogsBucket encryption enabled (AES256) | Yes |
-| **RDS Encrypted at Rest** | RDSInstance `StorageEncrypted: true` | Yes |
-| **No Hardcoded Secrets** | Secrets Manager for RDS password, IAM roles for AWS access | Yes |
+| Requirement                               | Implementation                                                | Verified |
+| ----------------------------------------- | ------------------------------------------------------------- | -------- |
+| **No Unrestricted Inbound Access**        | Security groups use source SG references or specific CIDRs    | Yes      |
+| **HTTP/HTTPS from Internet**              | LoadBalancerSecurityGroup allows 80/443 from 0.0.0.0/0        | Yes      |
+| **Web Servers: HTTP/HTTPS from ALB Only** | WebServerSecurityGroup ingress from LoadBalancerSecurityGroup | Yes      |
+| **Database: MySQL from Web Servers Only** | DatabaseSecurityGroup allows 3306 from WebServerSecurityGroup | Yes      |
+| **SSH via Bastion Only**                  | WebServerSecurityGroup allows SSH from BastionSecurityGroup   | Yes      |
+| **VPC Flow Logs Encrypted**               | FlowLogsBucket encryption enabled (AES256)                    | Yes      |
+| **RDS Encrypted at Rest**                 | RDSInstance `StorageEncrypted: true`                          | Yes      |
+| **No Hardcoded Secrets**                  | Secrets Manager for RDS password, IAM roles for AWS access    | Yes      |
 
 ### Operational Requirements
 
-| Requirement | Implementation | Verified |
-|-------------|----------------|----------|
-| **All Resources Tagged `Environment: Production`** | Every resource has `Environment: !Ref EnvironmentSuffix` tag | Yes |
-| **CloudFormation Validation Passes** | Template successfully deployed | Yes |
-| **Cost-Efficient & Resilient** | Managed NAT GWs, gp3 volumes, Auto Scaling, Multi-AZ RDS | Yes |
-| **Parameterized & Reusable** | 17 parameters for network, DB, EC2, security configuration | Yes |
-| **Safe & Observable Operations** | CloudWatch alarms, VPC Flow Logs, CloudWatch agent | Yes |
+| Requirement                                        | Implementation                                               | Verified |
+| -------------------------------------------------- | ------------------------------------------------------------ | -------- |
+| **All Resources Tagged `Environment: Production`** | Every resource has `Environment: !Ref EnvironmentSuffix` tag | Yes      |
+| **CloudFormation Validation Passes**               | Template successfully deployed                               | Yes      |
+| **Cost-Efficient & Resilient**                     | Managed NAT GWs, gp3 volumes, Auto Scaling, Multi-AZ RDS     | Yes      |
+| **Parameterized & Reusable**                       | 17 parameters for network, DB, EC2, security configuration   | Yes      |
+| **Safe & Observable Operations**                   | CloudWatch alarms, VPC Flow Logs, CloudWatch agent           | Yes      |
 
 ### Additional Enhancements Beyond Requirements
 
-| Enhancement | Benefit |
-|-------------|---------|
+| Enhancement                      | Benefit                                                              |
+| -------------------------------- | -------------------------------------------------------------------- |
 | **Environment Suffix Parameter** | Multi-environment deployment (dev/staging/prod) from single template |
-| **Auto Scaling Group** | Dynamic scaling based on CPU utilization (70% target) |
-| **Conditional HTTPS** | HTTPS listener created only if SSL certificate provided |
-| **Systems Manager Integration** | SSM Session Manager for secure access (alternative to SSH keys) |
-| **CloudWatch Agent** | Application-level metrics and log collection |
-| **Dynamic AMI Lookup** | SSM Parameter Store for latest Amazon Linux 2 AMI |
-| **No External Dependencies** | EC2 KeyPair created within template |
-| **Deletion Protection Disabled** | Clean stack deletion for dev/test environments |
-| **HTTP→HTTPS Redirect** | Security enhancement for web traffic |
+| **Auto Scaling Group**           | Dynamic scaling based on CPU utilization (70% target)                |
+| **Conditional HTTPS**            | HTTPS listener created only if SSL certificate provided              |
+| **Systems Manager Integration**  | SSM Session Manager for secure access (alternative to SSH keys)      |
+| **CloudWatch Agent**             | Application-level metrics and log collection                         |
+| **Dynamic AMI Lookup**           | SSM Parameter Store for latest Amazon Linux 2 AMI                    |
+| **No External Dependencies**     | EC2 KeyPair created within template                                  |
+| **Deletion Protection Disabled** | Clean stack deletion for dev/test environments                       |
+| **HTTP→HTTPS Redirect**          | Security enhancement for web traffic                                 |
 
 ---
 
