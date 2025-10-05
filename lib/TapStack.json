@@ -1,100 +1,425 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
-  "Metadata": {
-    "AWS::CloudFormation::Interface": {
-      "ParameterGroups": [
-        {
-          "Label": {
-            "default": "Environment Configuration"
-          },
-          "Parameters": [
-            "EnvironmentSuffix"
-          ]
-        }
-      ]
-    }
-  },
+  "Description": "Serverless Static Portfolio Website Infrastructure with Contact Form Backend",
   "Parameters": {
-    "EnvironmentSuffix": {
+    "DomainName": {
       "Type": "String",
-      "Default": "dev",
-      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-      "AllowedPattern": "^[a-zA-Z0-9]+$",
-      "ConstraintDescription": "Must contain only alphanumeric characters"
+      "Description": "Custom domain name for the portfolio website (e.g., portfolio.example.com)",
+      "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-\\.]*[a-zA-Z0-9]$",
+      "ConstraintDescription": "Must be a valid domain name"
+    },
+    "SenderEmail": {
+      "Type": "String",
+      "Description": "Verified SES sender email address for contact form submissions",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "ReceiverEmail": {
+      "Type": "String",
+      "Description": "Email address that will receive contact form submissions",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
     }
   },
   "Resources": {
-    "TurnAroundPromptTable": {
-      "Type": "AWS::DynamoDB::Table",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
+    "WebsiteBucket": {
+      "Type": "AWS::S3::Bucket",
       "Properties": {
-        "TableName": {
-          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        "BucketName": {
+          "Fn::Sub": "portfolio-website-${AWS::AccountId}-${AWS::Region}"
         },
-        "AttributeDefinitions": [
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html",
+          "ErrorDocument": "error.html"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        },
+        "Tags": [
           {
-            "AttributeName": "id",
-            "AttributeType": "S"
+            "Key": "Project",
+            "Value": "iac-rlhf-amazon"
+          }
+        ]
+      }
+    },
+    "WebsiteBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "WebsiteBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "PublicReadGetObject",
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${WebsiteBucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "DefaultRootObject": "index.html",
+          "Origins": [
+            {
+              "Id": "S3Origin",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "WebsiteBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "CustomOriginConfig": {
+                "HTTPPort": 80,
+                "HTTPSPort": 443,
+                "OriginProtocolPolicy": "http-only"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3Origin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": [
+              "GET",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "ForwardedValues": {
+              "QueryString": false,
+              "Cookies": {
+                "Forward": "none"
+              }
+            },
+            "Compress": true
+          },
+          "PriceClass": "PriceClass_100",
+          "ViewerCertificate": {
+            "CloudFrontDefaultCertificate": true
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "iac-rlhf-amazon"
+          }
+        ]
+      }
+    },
+    "Route53RecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName": {
+          "Fn::Sub": "${DomainName}."
+        },
+        "Name": {
+          "Ref": "DomainName"
+        },
+        "Type": "A",
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "CloudFrontDistribution",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": "Z2FDTNDATAQYW2",
+          "EvaluateTargetHealth": false
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "portfolio-lambda-execution-role-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SESEmailPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "ses:SendEmail",
+                  "Resource": "*"
+                }
+              ]
+            }
           }
         ],
-        "KeySchema": [
+        "Tags": [
           {
-            "AttributeName": "id",
-            "KeyType": "HASH"
+            "Key": "Project",
+            "Value": "iac-rlhf-amazon"
+          }
+        ]
+      }
+    },
+    "ContactFormLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "portfolio-contact-form-${AWS::Region}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "SENDER_EMAIL": {
+              "Ref": "SenderEmail"
+            },
+            "RECEIVER_EMAIL": {
+              "Ref": "ReceiverEmail"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\nses_client = boto3.client('ses', region_name='us-west-2')\n\ndef lambda_handler(event, context):\n    try:\n        # Parse the incoming JSON body\n        if 'body' in event:\n            body = json.loads(event['body'])\n        else:\n            body = event\n        \n        name = body.get('name', 'Unknown')\n        email = body.get('email', 'no-reply@example.com')\n        message = body.get('message', '')\n        \n        # Get environment variables\n        sender_email = os.environ['SENDER_EMAIL']\n        receiver_email = os.environ['RECEIVER_EMAIL']\n        \n        # Construct email\n        email_subject = f'Portfolio Contact Form Submission from {name}'\n        email_body = f\"\"\"You have received a new contact form submission:\n\nName: {name}\nEmail: {email}\n\nMessage:\n{message}\n\"\"\"\n        \n        # Send email via SES\n        response = ses_client.send_email(\n            Source=sender_email,\n            Destination={\n                'ToAddresses': [receiver_email]\n            },\n            Message={\n                'Subject': {\n                    'Data': email_subject,\n                    'Charset': 'UTF-8'\n                },\n                'Body': {\n                    'Text': {\n                        'Data': email_body,\n                        'Charset': 'UTF-8'\n                    }\n                }\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Contact form submission successful',\n                'messageId': response['MessageId']\n            })\n        }\n    \n    except ClientError as e:\n        print(f'SES Error: {e.response[\"Error\"][\"Message\"]}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'Failed to send email',\n                'error': e.response['Error']['Message']\n            })\n        }\n    \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type',\n                'Access-Control-Allow-Methods': 'POST, OPTIONS'\n            },\n            'body': json.dumps({\n                'message': 'An error occurred',\n                'error': str(e)\n            })\n        }\n"
+        },
+        "Timeout": 30,
+        "MemorySize": 128,
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "iac-rlhf-amazon"
+          }
+        ]
+      }
+    },
+    "ContactFormApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "portfolio-contact-api-${AWS::Region}"
+        },
+        "Description": "REST API for portfolio contact form submissions",
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "iac-rlhf-amazon"
+          }
+        ]
+      }
+    },
+    "ContactResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ContactFormApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ContactFormApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "contact"
+      }
+    },
+    "ContactPostMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ContactFormApi"
+        },
+        "ResourceId": {
+          "Ref": "ContactResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ContactFormLambda.Arn}/invocations"
+          }
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": "200",
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          }
+        ]
+      }
+    },
+    "ContactOptionsMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ContactFormApi"
+        },
+        "ResourceId": {
+          "Ref": "ContactResource"
+        },
+        "HttpMethod": "OPTIONS",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "StatusCode": "200",
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              }
+            }
+          ],
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": "200",
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          }
+        ]
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "ContactPostMethod",
+        "ContactOptionsMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ContactFormApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "LambdaApiGatewayPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ContactFormLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ContactFormApi}/*/*"
+        }
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "portfolio-lambda-errors-${AWS::Region}"
+        },
+        "AlarmDescription": "Alarm when Lambda function encounters errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ContactFormLambda"
+            }
           }
         ],
-        "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false
+        "TreatMissingData": "notBreaching"
       }
     }
   },
   "Outputs": {
-    "TurnAroundPromptTableName": {
-      "Description": "Name of the DynamoDB table",
+    "WebsiteURL": {
+      "Description": "URL of the CloudFront distribution for the portfolio website",
       "Value": {
-        "Ref": "TurnAroundPromptTable"
+        "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+          "Fn::Sub": "${AWS::StackName}-WebsiteURL"
         }
       }
     },
-    "TurnAroundPromptTableArn": {
-      "Description": "ARN of the DynamoDB table",
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL for contact form submissions",
       "Value": {
-        "Fn::GetAtt": [
-          "TurnAroundPromptTable",
-          "Arn"
-        ]
+        "Fn::Sub": "https://${ContactFormApi}.execute-api.${AWS::Region}.amazonaws.com/prod/contact"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
         }
       }
     },
-    "StackName": {
-      "Description": "Name of this CloudFormation stack",
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket hosting the website files",
       "Value": {
-        "Ref": "AWS::StackName"
+        "Ref": "WebsiteBucket"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-StackName"
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
         }
       }
     },
-    "EnvironmentSuffix": {
-      "Description": "Environment suffix used for this deployment",
+    "CloudFrontDistributionId": {
+      "Description": "ID of the CloudFront distribution",
       "Value": {
-        "Ref": "EnvironmentSuffix"
+        "Ref": "CloudFrontDistribution"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+          "Fn::Sub": "${AWS::StackName}-CloudFrontDistributionId"
         }
       }
     }

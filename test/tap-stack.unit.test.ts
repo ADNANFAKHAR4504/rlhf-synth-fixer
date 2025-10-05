@@ -1,23 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('Portfolio Website CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -25,135 +15,350 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have a descriptive title', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(template.Description).toContain('Portfolio Website');
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have DomainName parameter', () => {
+      expect(template.Parameters.DomainName).toBeDefined();
+      expect(template.Parameters.DomainName.Type).toBe('String');
+      expect(template.Parameters.DomainName.Description).toBeTruthy();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('should have SenderEmail parameter', () => {
+      expect(template.Parameters.SenderEmail).toBeDefined();
+      expect(template.Parameters.SenderEmail.Type).toBe('String');
+      expect(template.Parameters.SenderEmail.AllowedPattern).toBeTruthy();
+    });
+
+    test('should have ReceiverEmail parameter', () => {
+      expect(template.Parameters.ReceiverEmail).toBeDefined();
+      expect(template.Parameters.ReceiverEmail.Type).toBe('String');
+      expect(template.Parameters.ReceiverEmail.AllowedPattern).toBeTruthy();
+    });
+
+    test('should have exactly 3 parameters', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(3);
+    });
+  });
+
+  describe('S3 Storage Resources', () => {
+    test('should have WebsiteBucket resource', () => {
+      expect(template.Resources.WebsiteBucket).toBeDefined();
+      expect(template.Resources.WebsiteBucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('WebsiteBucket should have static website hosting configured', () => {
+      const bucket = template.Resources.WebsiteBucket;
+      expect(bucket.Properties.WebsiteConfiguration).toBeDefined();
+      expect(bucket.Properties.WebsiteConfiguration.IndexDocument).toBe(
+        'index.html'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+      expect(bucket.Properties.WebsiteConfiguration.ErrorDocument).toBe(
+        'error.html'
+      );
+    });
+
+    test('WebsiteBucket should have public access configuration', () => {
+      const bucket = template.Resources.WebsiteBucket;
+      const publicAccessBlock =
+        bucket.Properties.PublicAccessBlockConfiguration;
+      expect(publicAccessBlock).toBeDefined();
+      expect(publicAccessBlock.BlockPublicAcls).toBe(false);
+      expect(publicAccessBlock.BlockPublicPolicy).toBe(false);
+    });
+
+    test('should have WebsiteBucketPolicy with public read access', () => {
+      expect(template.Resources.WebsiteBucketPolicy).toBeDefined();
+      const policy = template.Resources.WebsiteBucketPolicy;
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(policy.Properties.PolicyDocument.Statement[0].Effect).toBe(
+        'Allow'
+      );
+      expect(policy.Properties.PolicyDocument.Statement[0].Action).toBe(
+        's3:GetObject'
       );
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('CloudFront Distribution', () => {
+    test('should have CloudFrontDistribution resource', () => {
+      expect(template.Resources.CloudFrontDistribution).toBeDefined();
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('CloudFront should be enabled', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(distribution.Properties.DistributionConfig.Enabled).toBe(true);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('CloudFront should enforce HTTPS', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const behavior =
+        distribution.Properties.DistributionConfig.DefaultCacheBehavior;
+      expect(behavior.ViewerProtocolPolicy).toBe('redirect-to-https');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('CloudFront should use S3 bucket as origin', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const origins = distribution.Properties.DistributionConfig.Origins;
+      expect(origins).toHaveLength(1);
+      expect(origins[0].DomainName).toBeDefined();
+      expect(origins[0].DomainName['Fn::GetAtt']).toEqual([
+        'WebsiteBucket',
+        'RegionalDomainName',
+      ]);
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('CloudFront should have default root object', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      expect(
+        distribution.Properties.DistributionConfig.DefaultRootObject
+      ).toBe('index.html');
+    });
+  });
+
+  describe('Route53 DNS Configuration', () => {
+    test('should have Route53RecordSet resource', () => {
+      expect(template.Resources.Route53RecordSet).toBeDefined();
+      const recordSet = template.Resources.Route53RecordSet;
+      expect(recordSet.Type).toBe('AWS::Route53::RecordSet');
+    });
+
+    test('Route53 should create A record', () => {
+      const recordSet = template.Resources.Route53RecordSet;
+      expect(recordSet.Properties.Type).toBe('A');
+    });
+
+    test('Route53 should alias to CloudFront distribution', () => {
+      const recordSet = template.Resources.Route53RecordSet;
+      expect(recordSet.Properties.AliasTarget).toBeDefined();
+      expect(recordSet.Properties.AliasTarget.DNSName).toBeDefined();
+      expect(recordSet.Properties.AliasTarget.HostedZoneId).toBe(
+        'Z2FDTNDATAQYW2'
+      );
+    });
+
+    test('Route53 should use DomainName parameter', () => {
+      const recordSet = template.Resources.Route53RecordSet;
+      expect(recordSet.Properties.Name).toEqual({ Ref: 'DomainName' });
+    });
+  });
+
+  describe('Lambda Function', () => {
+    test('should have LambdaExecutionRole', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('LambdaExecutionRole should have SES permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const policies = role.Properties.Policies;
+      expect(policies).toHaveLength(1);
+      expect(policies[0].PolicyName).toBe('SESEmailPolicy');
+      expect(policies[0].PolicyDocument.Statement[0].Action).toBe(
+        'ses:SendEmail'
+      );
+    });
+
+    test('should have ContactFormLambda function', () => {
+      expect(template.Resources.ContactFormLambda).toBeDefined();
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('Lambda should use Python 3.9 runtime', () => {
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Properties.Runtime).toBe('python3.9');
+    });
+
+    test('Lambda should have environment variables for email addresses', () => {
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Properties.Environment.Variables.SENDER_EMAIL).toEqual({
+        Ref: 'SenderEmail',
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(lambda.Properties.Environment.Variables.RECEIVER_EMAIL).toEqual({
+        Ref: 'ReceiverEmail',
+      });
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('Lambda should have inline code defined', () => {
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Properties.Code.ZipFile).toBeDefined();
+      expect(lambda.Properties.Code.ZipFile).toContain('lambda_handler');
+      expect(lambda.Properties.Code.ZipFile).toContain('ses_client');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('Lambda should have appropriate timeout and memory', () => {
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Properties.Timeout).toBe(30);
+      expect(lambda.Properties.MemorySize).toBe(128);
+    });
+  });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  describe('API Gateway Configuration', () => {
+    test('should have ContactFormApi REST API', () => {
+      expect(template.Resources.ContactFormApi).toBeDefined();
+      const api = template.Resources.ContactFormApi;
+      expect(api.Type).toBe('AWS::ApiGateway::RestApi');
+    });
+
+    test('should have ContactResource at /contact path', () => {
+      expect(template.Resources.ContactResource).toBeDefined();
+      const resource = template.Resources.ContactResource;
+      expect(resource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(resource.Properties.PathPart).toBe('contact');
+    });
+
+    test('should have POST method on /contact', () => {
+      expect(template.Resources.ContactPostMethod).toBeDefined();
+      const method = template.Resources.ContactPostMethod;
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('POST');
+    });
+
+    test('POST method should integrate with Lambda', () => {
+      const method = template.Resources.ContactPostMethod;
+      expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
+      expect(method.Properties.Integration.IntegrationHttpMethod).toBe('POST');
+      expect(method.Properties.Integration.Uri).toBeDefined();
+    });
+
+    test('should have OPTIONS method for CORS', () => {
+      expect(template.Resources.ContactOptionsMethod).toBeDefined();
+      const method = template.Resources.ContactOptionsMethod;
+      expect(method.Type).toBe('AWS::ApiGateway::Method');
+      expect(method.Properties.HttpMethod).toBe('OPTIONS');
+    });
+
+    test('OPTIONS method should configure CORS headers', () => {
+      const method = template.Resources.ContactOptionsMethod;
+      const response = method.Properties.Integration.IntegrationResponses[0];
+      expect(
+        response.ResponseParameters[
+          'method.response.header.Access-Control-Allow-Origin'
+        ]
+      ).toBe("'*'");
+      expect(
+        response.ResponseParameters[
+          'method.response.header.Access-Control-Allow-Methods'
+        ]
+      ).toBe("'POST,OPTIONS'");
+    });
+
+    test('should have API deployment', () => {
+      expect(template.Resources.ApiDeployment).toBeDefined();
+      const deployment = template.Resources.ApiDeployment;
+      expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+      expect(deployment.Properties.StageName).toBe('prod');
+    });
+
+    test('should have Lambda invocation permission', () => {
+      expect(template.Resources.LambdaApiGatewayPermission).toBeDefined();
+      const permission = template.Resources.LambdaApiGatewayPermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('should have LambdaErrorAlarm', () => {
+      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('alarm should monitor Lambda errors', () => {
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Properties.MetricName).toBe('Errors');
+      expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
+    });
+
+    test('alarm should trigger on errors greater than 0', () => {
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Properties.Threshold).toBe(0);
+      expect(alarm.Properties.ComparisonOperator).toBe(
+        'GreaterThanThreshold'
+      );
+    });
+
+    test('alarm should evaluate over 5 minutes', () => {
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Properties.Period).toBe(300);
+      expect(alarm.Properties.EvaluationPeriods).toBe(1);
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    const taggedResourceTypes = [
+      'WebsiteBucket',
+      'CloudFrontDistribution',
+      'LambdaExecutionRole',
+      'ContactFormLambda',
+      'ContactFormApi',
+    ];
+
+    taggedResourceTypes.forEach(resourceName => {
+      test(`${resourceName} should have Project tag`, () => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        const projectTag = resource.Properties.Tags.find(
+          (tag: any) => tag.Key === 'Project'
+        );
+        expect(projectTag).toBeDefined();
+        expect(projectTag.Value).toBe('iac-rlhf-amazon');
+      });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+    test('should have WebsiteURL output', () => {
+      expect(template.Outputs.WebsiteURL).toBeDefined();
+      const output = template.Outputs.WebsiteURL;
+      expect(output.Description).toBeTruthy();
+      expect(output.Value).toBeDefined();
+      expect(output.Export).toBeDefined();
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('should have ApiEndpoint output', () => {
+      expect(template.Outputs.ApiEndpoint).toBeDefined();
+      const output = template.Outputs.ApiEndpoint;
+      expect(output.Description).toBeTruthy();
+      expect(output.Value).toBeDefined();
+      expect(output.Export).toBeDefined();
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('should have S3BucketName output', () => {
+      expect(template.Outputs.S3BucketName).toBeDefined();
+      const output = template.Outputs.S3BucketName;
+      expect(output.Description).toBeTruthy();
+      expect(output.Value).toEqual({ Ref: 'WebsiteBucket' });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('should have CloudFrontDistributionId output', () => {
+      expect(template.Outputs.CloudFrontDistributionId).toBeDefined();
+      const output = template.Outputs.CloudFrontDistributionId;
+      expect(output.Description).toBeTruthy();
+      expect(output.Value).toEqual({ Ref: 'CloudFrontDistribution' });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('should have exactly 4 outputs', () => {
+      const outputCount = Object.keys(template.Outputs).length;
+      expect(outputCount).toBe(4);
+    });
+
+    test('all outputs should have exports with stack name prefix', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toBeDefined();
+        expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       });
     });
   });
@@ -172,39 +377,68 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have all required resources', () => {
+      const requiredResources = [
+        'WebsiteBucket',
+        'WebsiteBucketPolicy',
+        'CloudFrontDistribution',
+        'Route53RecordSet',
+        'LambdaExecutionRole',
+        'ContactFormLambda',
+        'ContactFormApi',
+        'ContactResource',
+        'ContactPostMethod',
+        'ContactOptionsMethod',
+        'ApiDeployment',
+        'LambdaApiGatewayPermission',
+        'LambdaErrorAlarm',
+      ];
+
+      requiredResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(resourceCount).toBe(13);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('Integration Requirements', () => {
+    test('Lambda should reference execution role', () => {
+      const lambda = template.Resources.ContactFormLambda;
+      expect(lambda.Properties.Role['Fn::GetAtt']).toEqual([
+        'LambdaExecutionRole',
+        'Arn',
+      ]);
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('API Gateway methods should reference contact resource', () => {
+      const postMethod = template.Resources.ContactPostMethod;
+      const optionsMethod = template.Resources.ContactOptionsMethod;
+
+      expect(postMethod.Properties.ResourceId).toEqual({
+        Ref: 'ContactResource',
+      });
+      expect(optionsMethod.Properties.ResourceId).toEqual({
+        Ref: 'ContactResource',
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('CloudWatch alarm should monitor correct Lambda function', () => {
+      const alarm = template.Resources.LambdaErrorAlarm;
+      const dimensions = alarm.Properties.Dimensions;
+      expect(dimensions).toHaveLength(1);
+      expect(dimensions[0].Name).toBe('FunctionName');
+      expect(dimensions[0].Value).toEqual({ Ref: 'ContactFormLambda' });
+    });
+
+    test('API deployment should depend on methods', () => {
+      const deployment = template.Resources.ApiDeployment;
+      expect(deployment.DependsOn).toBeDefined();
+      expect(deployment.DependsOn).toContain('ContactPostMethod');
+      expect(deployment.DependsOn).toContain('ContactOptionsMethod');
     });
   });
 });
