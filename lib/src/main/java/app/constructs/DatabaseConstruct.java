@@ -52,6 +52,7 @@ public class DatabaseConstruct extends Construct {
                 PasswordConfig.builder()
                         .length(32)
                         .special(true)
+                        .overrideSpecial("!#$%&*()-_=+[]{}:?")
                         .build());
 
         this.dbSecret = SecretsmanagerSecret.Builder.create(this, "db-secret")
