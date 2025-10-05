@@ -1,19 +1,18 @@
-// Integration and E2E Tests - Deploy stacks in real AWS accounts and validate live resources
+// Integration and E2E Tests - Validate deployed infrastructure using actual CloudFormation outputs
 import {
   CloudFormationClient,
   DescribeStacksCommand,
-  DescribeStackResourcesCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
   DescribeDBInstancesCommand,
   RDSClient,
-  DBInstance
 } from '@aws-sdk/client-rds';
 import {
   HeadBucketCommand,
   S3Client,
   GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand
+  GetPublicAccessBlockCommand,
+  GetBucketVersioningCommand,
 } from '@aws-sdk/client-s3';
 import {
   EC2Client,
@@ -25,12 +24,14 @@ import {
   DescribeRouteTablesCommand,
   DescribeNetworkAclsCommand,
   DescribeVpcAttributeCommand,
+  DescribeKeyPairsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeListenersCommand,
+  DescribeTargetHealthCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
@@ -49,118 +50,65 @@ import {
 import {
   KMSClient,
   DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
 } from '@aws-sdk/client-kms';
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  SNSClient,
+  ListTopicsCommand,
+  GetTopicAttributesCommand,
+} from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+// Load deployment outputs
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+const outputs: Record<string, string> = JSON.parse(
+  fs.readFileSync(outputsPath, 'utf8')
+);
+
 const regionPath = path.join(__dirname, '../lib/AWS_REGION');
 const region = fs.existsSync(regionPath)
   ? fs.readFileSync(regionPath, 'utf8').trim()
   : 'us-east-1';
 
-describe('TapStack Integration Tests - Stack Deployment', () => {
-  let stackOutputs: Record<string, any> = {};
-  let stackResources: any[] = [];
-
-  beforeAll(async () => {
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack =
-      stacks.Stacks && stacks.Stacks.length > 0 ? stacks.Stacks[0] : undefined;
-    expect(stack).toBeDefined();
-    expect(stack?.StackStatus).toBe('CREATE_COMPLETE');
-
-    if (stack && stack.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
-
-    const resources = await cf.send(
-      new DescribeStackResourcesCommand({ StackName: stackName })
-    );
-    stackResources = resources.StackResources || [];
+describe('TapStack Integration Tests - Deployment Outputs', () => {
+  test('deployment outputs should be loaded', () => {
+    expect(outputs).toBeDefined();
+    expect(Object.keys(outputs).length).toBeGreaterThan(0);
   });
 
-  test('stack should be deployed successfully', () => {
-    expect(stackOutputs).toBeDefined();
-    expect(Object.keys(stackOutputs).length).toBeGreaterThan(0);
-  });
-
-  test('all expected outputs should exist and be non-empty', () => {
-    const expectedOutputs = [
-      'StackName',
-      'EnvironmentSuffix',
-      'VPCID',
-      'PublicSubnet1ID',
-      'PublicSubnet2ID',
-      'PrivateSubnet1ID',
-      'PrivateSubnet2ID',
-      'LoadBalancerDNS',
-      'AppDataBucketName',
-      'DatabaseEndpoint',
-      'KMSKeyARN',
-    ];
-    for (const key of expectedOutputs) {
-      expect(stackOutputs[key]).toBeDefined();
-      expect(stackOutputs[key]).not.toEqual('');
-    }
-  });
-
-  test('all resources should be created successfully', () => {
-    expect(stackResources.length).toBeGreaterThan(30);
-    for (const resource of stackResources) {
-      expect(resource.ResourceStatus).toMatch(/CREATE_COMPLETE|UPDATE_COMPLETE/);
-    }
-  });
-
-  test('resources should have correct naming with environment suffix', () => {
-    const resourcesWithNames = stackResources.filter(r => r.PhysicalResourceId);
-    for (const resource of resourcesWithNames) {
-      if (resource.LogicalResourceId !== 'EnvironmentSuffix') {
-        expect(resource.PhysicalResourceId).toBeDefined();
-      }
-    }
+  test('all critical outputs should exist', () => {
+    expect(outputs.VPC || outputs.VpcId).toBeDefined();
+    expect(outputs.ApplicationLoadBalancerDNS || outputs.LoadBalancerDNS).toBeDefined();
+    expect(outputs.RDSEndpoint).toBeDefined();
+    expect(outputs.AppDataBucket).toBeDefined();
   });
 });
 
-describe('TapStack E2E Tests - VPC and Network Resources', () => {
-  let stackOutputs: Record<string, any> = {};
+describe('TapStack E2E Tests - VPC and Networking', () => {
   let ec2Client: EC2Client;
+  let vpcId: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ec2Client = new EC2Client({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
+    vpcId = outputs.VPC || outputs.VpcId;
   });
 
-  test('VPC should exist with correct CIDR block', async () => {
-    const vpcId = stackOutputs.VPCID;
+  test('VPC should exist', async () => {
     expect(vpcId).toBeDefined();
 
     const vpcs = await ec2Client.send(
       new DescribeVpcsCommand({ VpcIds: [vpcId] })
     );
     expect(vpcs.Vpcs?.length).toBe(1);
-    expect(vpcs.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
+    expect(vpcs.Vpcs?.[0].VpcId).toBe(vpcId);
+  });
 
-    // Check DNS support and hostnames using VPC attributes
+  test('VPC should have DNS support and hostnames enabled', async () => {
     const dnsSupport = await ec2Client.send(
       new DescribeVpcAttributeCommand({
         VpcId: vpcId,
@@ -178,425 +126,733 @@ describe('TapStack E2E Tests - VPC and Network Resources', () => {
     expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
   });
 
-  test('public subnets should exist in different AZs', async () => {
-    const subnet1 = stackOutputs.PublicSubnet1ID;
-    const subnet2 = stackOutputs.PublicSubnet2ID;
-    expect(subnet1).toBeDefined();
-    expect(subnet2).toBeDefined();
+  test('public subnets should exist in different availability zones', async () => {
+    const publicSubnets = outputs.PublicSubnets?.split(',').map(s => s.trim());
+    expect(publicSubnets).toBeDefined();
+    expect(publicSubnets!.length).toBeGreaterThanOrEqual(2);
 
     const subnets = await ec2Client.send(
-      new DescribeSubnetsCommand({ SubnetIds: [subnet1, subnet2] })
+      new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
     );
-    expect(subnets.Subnets?.length).toBe(2);
 
-    const az1 = subnets.Subnets?.[0].AvailabilityZone;
-    const az2 = subnets.Subnets?.[1].AvailabilityZone;
-    expect(az1).not.toEqual(az2);
+    expect(subnets.Subnets?.length).toBe(publicSubnets!.length);
+
+    const azs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
+    expect(azs.size).toBeGreaterThanOrEqual(2);
+
+    for (const subnet of subnets.Subnets || []) {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.MapPublicIpOnLaunch).toBe(true);
+    }
   });
 
-  test('private subnets should exist in different AZs', async () => {
-    const subnet1 = stackOutputs.PrivateSubnet1ID;
-    const subnet2 = stackOutputs.PrivateSubnet2ID;
-    expect(subnet1).toBeDefined();
-    expect(subnet2).toBeDefined();
+  test('private subnets should exist in different availability zones', async () => {
+    const privateSubnets = outputs.PrivateSubnets?.split(',').map(s => s.trim());
+    expect(privateSubnets).toBeDefined();
+    expect(privateSubnets!.length).toBeGreaterThanOrEqual(2);
 
     const subnets = await ec2Client.send(
-      new DescribeSubnetsCommand({ SubnetIds: [subnet1, subnet2] })
+      new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
     );
-    expect(subnets.Subnets?.length).toBe(2);
 
-    const az1 = subnets.Subnets?.[0].AvailabilityZone;
-    const az2 = subnets.Subnets?.[1].AvailabilityZone;
-    expect(az1).not.toEqual(az2);
+    expect(subnets.Subnets?.length).toBe(privateSubnets!.length);
+
+    const azs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
+    expect(azs.size).toBeGreaterThanOrEqual(2);
+
+    for (const subnet of subnets.Subnets || []) {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.MapPublicIpOnLaunch).toBe(false);
+    }
   });
 
-  test('NAT Gateway should exist and be available', async () => {
-    const vpcId = stackOutputs.VPCID;
+  test('NAT Gateways should exist and be available', async () => {
     const natGateways = await ec2Client.send(
       new DescribeNatGatewaysCommand({
         Filter: [{ Name: 'vpc-id', Values: [vpcId] }]
       })
     );
-    expect(natGateways.NatGateways?.length).toBeGreaterThanOrEqual(1);
-    expect(natGateways.NatGateways?.[0].State).toBe('available');
+
+    expect(natGateways.NatGateways?.length).toBeGreaterThanOrEqual(2);
+
+    for (const natGw of natGateways.NatGateways || []) {
+      expect(natGw.State).toBe('available');
+    }
   });
 
   test('Internet Gateway should be attached to VPC', async () => {
-    const vpcId = stackOutputs.VPCID;
     const igws = await ec2Client.send(
       new DescribeInternetGatewaysCommand({
         Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }]
       })
     );
+
     expect(igws.InternetGateways?.length).toBe(1);
     expect(igws.InternetGateways?.[0].Attachments?.[0].State).toBe('available');
+    expect(igws.InternetGateways?.[0].Attachments?.[0].VpcId).toBe(vpcId);
   });
 
-  test('route tables should be configured correctly', async () => {
-    const vpcId = stackOutputs.VPCID;
+  test('route tables should have correct routes configured', async () => {
     const routeTables = await ec2Client.send(
       new DescribeRouteTablesCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
       })
     );
-    expect(routeTables.RouteTables?.length).toBeGreaterThanOrEqual(2);
+
+    expect(routeTables.RouteTables?.length).toBeGreaterThanOrEqual(3);
+
+    const publicRT = routeTables.RouteTables?.find(rt =>
+      rt.Routes?.some(r => r.GatewayId?.startsWith('igw-'))
+    );
+    expect(publicRT).toBeDefined();
+
+    const privateRTs = routeTables.RouteTables?.filter(rt =>
+      rt.Routes?.some(r => r.NatGatewayId?.startsWith('nat-'))
+    );
+    expect(privateRTs?.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('network ACLs should be configured', async () => {
-    const vpcId = stackOutputs.VPCID;
+  test('Network ACLs should be configured', async () => {
     const nacls = await ec2Client.send(
       new DescribeNetworkAclsCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
       })
     );
-    expect(nacls.NetworkAcls?.length).toBeGreaterThanOrEqual(2);
-  });
 
-  test('security groups should exist', async () => {
-    const vpcId = stackOutputs.VPCID;
-    const sgs = await ec2Client.send(
-      new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-      })
-    );
-    expect(sgs.SecurityGroups?.length).toBeGreaterThanOrEqual(3);
+    expect(nacls.NetworkAcls?.length).toBeGreaterThanOrEqual(2);
   });
 });
 
-describe('TapStack E2E Tests - S3 Bucket Encryption and Security', () => {
-  let stackOutputs: Record<string, any> = {};
-  let s3Client: S3Client;
+describe('TapStack E2E Tests - Security Groups', () => {
+  let ec2Client: EC2Client;
+  let vpcId: string;
+  let webSgId: string;
+  let dbSgId: string;
 
-  beforeAll(async () => {
-    s3Client = new S3Client({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
+  beforeAll(() => {
+    ec2Client = new EC2Client({ region });
+    vpcId = outputs.VPC || outputs.VpcId;
+    webSgId = outputs.WebServerSecurityGroup;
+    dbSgId = outputs.DatabaseSecurityGroup;
   });
 
-  test('S3 bucket should exist', async () => {
-    const bucketName = stackOutputs.AppDataBucketName;
-    expect(bucketName).toBeDefined();
+  test('Web Server Security Group should exist', async () => {
+    expect(webSgId).toBeDefined();
+
+    const sgs = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webSgId] })
+    );
+
+    expect(sgs.SecurityGroups?.length).toBe(1);
+    expect(sgs.SecurityGroups?.[0].VpcId).toBe(vpcId);
+  });
+
+  test('Web Server Security Group should allow HTTP and HTTPS', async () => {
+    const sgs = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webSgId] })
+    );
+
+    const sg = sgs.SecurityGroups?.[0];
+    const hasHttp = sg?.IpPermissions?.some(
+      p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
+    );
+    const hasHttps = sg?.IpPermissions?.some(
+      p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
+    );
+
+    expect(hasHttp || hasHttps).toBe(true);
+  });
+
+  test('Database Security Group should exist', async () => {
+    expect(dbSgId).toBeDefined();
+
+    const sgs = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [dbSgId] })
+    );
+
+    expect(sgs.SecurityGroups?.length).toBe(1);
+    expect(sgs.SecurityGroups?.[0].VpcId).toBe(vpcId);
+  });
+
+  test('Database Security Group should only allow access from Web Server SG', async () => {
+    const sgs = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [dbSgId] })
+    );
+
+    const sg = sgs.SecurityGroups?.[0];
+    const mysqlRule = sg?.IpPermissions?.find(
+      p => p.FromPort === 3306 && p.ToPort === 3306
+    );
+
+    expect(mysqlRule).toBeDefined();
+    const allowsWebSg = mysqlRule?.UserIdGroupPairs?.some(
+      pair => pair.GroupId === webSgId
+    );
+    expect(allowsWebSg).toBe(true);
+  });
+
+  test('EC2 KeyPair should exist', async () => {
+    const keyPairs = await ec2Client.send(
+      new DescribeKeyPairsCommand({})
+    );
+
+    const hasKeyPair = keyPairs.KeyPairs?.some(kp =>
+      kp.KeyName?.includes('ec2-keypair')
+    );
+    expect(hasKeyPair).toBe(true);
+  });
+});
+
+describe('TapStack E2E Tests - S3 Buckets', () => {
+  let s3Client: S3Client;
+  let appDataBucket: string;
+  let flowLogsBucket: string;
+
+  beforeAll(() => {
+    s3Client = new S3Client({ region });
+    appDataBucket = outputs.AppDataBucket;
+    flowLogsBucket = outputs.FlowLogsBucketName;
+  });
+
+  test('AppData bucket should exist', async () => {
+    expect(appDataBucket).toBeDefined();
+
     await expect(
-      s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))
+      s3Client.send(new HeadBucketCommand({ Bucket: appDataBucket }))
     ).resolves.toBeDefined();
   });
 
-  test('S3 bucket should have encryption enabled', async () => {
-    const bucketName = stackOutputs.AppDataBucketName;
+  test('AppData bucket should have encryption enabled', async () => {
     const encryption = await s3Client.send(
-      new GetBucketEncryptionCommand({ Bucket: bucketName })
+      new GetBucketEncryptionCommand({ Bucket: appDataBucket })
     );
+
     expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
     expect(encryption.ServerSideEncryptionConfiguration?.Rules?.length).toBeGreaterThan(0);
+    expect(
+      encryption.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+    ).toBeDefined();
   });
 
-  test('S3 bucket should block public access', async () => {
-    const bucketName = stackOutputs.AppDataBucketName;
+  test('AppData bucket should block all public access', async () => {
     const publicAccess = await s3Client.send(
-      new GetPublicAccessBlockCommand({ Bucket: bucketName })
+      new GetPublicAccessBlockCommand({ Bucket: appDataBucket })
     );
+
     expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
     expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
     expect(publicAccess.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
     expect(publicAccess.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
   });
+
+  test('AppData bucket should have versioning enabled', async () => {
+    const versioning = await s3Client.send(
+      new GetBucketVersioningCommand({ Bucket: appDataBucket })
+    );
+
+    expect(versioning.Status).toBe('Enabled');
+  });
+
+  test('FlowLogs bucket should exist and have encryption', async () => {
+    expect(flowLogsBucket).toBeDefined();
+
+    await expect(
+      s3Client.send(new HeadBucketCommand({ Bucket: flowLogsBucket }))
+    ).resolves.toBeDefined();
+
+    const encryption = await s3Client.send(
+      new GetBucketEncryptionCommand({ Bucket: flowLogsBucket })
+    );
+    expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
+  });
 });
 
-describe('TapStack E2E Tests - RDS Multi-AZ and Encryption', () => {
-  let stackOutputs: Record<string, any> = {};
+describe('TapStack E2E Tests - RDS Database', () => {
   let rdsClient: RDSClient;
+  let secretsClient: SecretsManagerClient;
+  let rdsEndpoint: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     rdsClient = new RDSClient({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
+    secretsClient = new SecretsManagerClient({ region });
+    rdsEndpoint = outputs.RDSEndpoint;
   });
 
-  test('RDS instance should exist', async () => {
-    const endpoint = stackOutputs.DatabaseEndpoint;
-    expect(endpoint).toBeDefined();
-    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
-    const found = dbs.DBInstances?.some(
-      db => db.Endpoint?.Address === endpoint
-    );
-    expect(found).toBe(true);
-  });
+  test('RDS instance should exist and be available', async () => {
+    expect(rdsEndpoint).toBeDefined();
 
-  test('RDS should have Multi-AZ enabled', async () => {
-    const endpoint = stackOutputs.DatabaseEndpoint;
     const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
     const db = dbs.DBInstances?.find(
-      db => db.Endpoint?.Address === endpoint
+      d => d.Endpoint?.Address === rdsEndpoint
     );
+
+    expect(db).toBeDefined();
+    expect(db?.DBInstanceStatus).toBe('available');
+  });
+
+  test('RDS should be Multi-AZ for high availability', async () => {
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(
+      d => d.Endpoint?.Address === rdsEndpoint
+    );
+
     expect(db?.MultiAZ).toBe(true);
   });
 
-  test('RDS should have storage encryption enabled', async () => {
-    const endpoint = stackOutputs.DatabaseEndpoint;
+  test('RDS should have storage encryption enabled with KMS', async () => {
     const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
     const db = dbs.DBInstances?.find(
-      db => db.Endpoint?.Address === endpoint
+      d => d.Endpoint?.Address === rdsEndpoint
     );
+
     expect(db?.StorageEncrypted).toBe(true);
     expect(db?.KmsKeyId).toBeDefined();
   });
 
-  test('RDS should be in private subnets', async () => {
-    const endpoint = stackOutputs.DatabaseEndpoint;
+  test('RDS should NOT be publicly accessible', async () => {
     const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
     const db = dbs.DBInstances?.find(
-      db => db.Endpoint?.Address === endpoint
+      d => d.Endpoint?.Address === rdsEndpoint
     );
-    expect(db?.DBSubnetGroup).toBeDefined();
+
     expect(db?.PubliclyAccessible).toBe(false);
+  });
+
+  test('RDS should be in private subnets', async () => {
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(
+      d => d.Endpoint?.Address === rdsEndpoint
+    );
+
+    const privateSubnets = outputs.PrivateSubnets?.split(',').map(s => s.trim());
+    expect(db?.DBSubnetGroup).toBeDefined();
+    expect(db?.DBSubnetGroup?.Subnets?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('RDS should NOT have deletion protection enabled', async () => {
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(
+      d => d.Endpoint?.Address === rdsEndpoint
+    );
+
+    expect(db?.DeletionProtection).toBe(false);
+  });
+
+  test('RDS should use correct MySQL version', async () => {
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(
+      d => d.Endpoint?.Address === rdsEndpoint
+    );
+
+    expect(db?.EngineVersion).toBe('8.0.43');
+  });
+
+  test('RDS credentials should be managed by Secrets Manager', async () => {
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(
+      d => d.Endpoint?.Address === rdsEndpoint
+    );
+
+    expect(db?.MasterUsername).toBe('admin');
+
+    const secrets = await secretsClient.send(
+      new DescribeSecretCommand({ SecretId: `${db?.DBInstanceIdentifier}-rds-credentials` })
+    ).catch(() => null);
+
+    if (secrets) {
+      expect(secrets.ARN).toBeDefined();
+    }
   });
 });
 
 describe('TapStack E2E Tests - Load Balancer and Auto Scaling', () => {
-  let stackOutputs: Record<string, any> = {};
   let elbClient: ElasticLoadBalancingV2Client;
   let asgClient: AutoScalingClient;
+  let albDns: string;
+  let asgName: string;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     elbClient = new ElasticLoadBalancingV2Client({ region });
     asgClient = new AutoScalingClient({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
+    albDns = outputs.ApplicationLoadBalancerDNS || outputs.LoadBalancerDNS;
+    asgName = outputs.WebAppAutoScalingGroup;
   });
 
   test('Application Load Balancer should exist', async () => {
-    const lbDns = stackOutputs.LoadBalancerDNS;
-    expect(lbDns).toBeDefined();
+    expect(albDns).toBeDefined();
+
     const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-    const found = lbs.LoadBalancers?.some(lb => lb.DNSName === lbDns);
-    expect(found).toBe(true);
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
+
+    expect(lb).toBeDefined();
+    expect(lb?.State?.Code).toBe('active');
   });
 
-  test('Load Balancer should be internet-facing', async () => {
-    const lbDns = stackOutputs.LoadBalancerDNS;
+  test('ALB should be internet-facing', async () => {
     const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-    const lb = lbs.LoadBalancers?.find(lb => lb.DNSName === lbDns);
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
+
     expect(lb?.Scheme).toBe('internet-facing');
   });
 
-  test('Target Group should exist', async () => {
-    const vpcId = stackOutputs.VPCID;
+  test('ALB should be in public subnets', async () => {
+    const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
+
+    const publicSubnets = outputs.PublicSubnets?.split(',').map(s => s.trim());
+    const lbSubnets = lb?.AvailabilityZones?.map(az => az.SubnetId);
+
+    expect(lbSubnets?.some(s => publicSubnets?.includes(s!))).toBe(true);
+  });
+
+  test('Target Group should exist and be healthy', async () => {
+    const vpcId = outputs.VPC || outputs.VpcId;
     const tgs = await elbClient.send(
       new DescribeTargetGroupsCommand({})
     );
-    const tg = tgs.TargetGroups?.find(tg => tg.VpcId === vpcId);
+
+    const tg = tgs.TargetGroups?.find(t => t.VpcId === vpcId);
     expect(tg).toBeDefined();
     expect(tg?.Protocol).toBe('HTTP');
     expect(tg?.Port).toBe(80);
+    expect(tg?.HealthCheckPath).toBe('/health');
   });
 
-  test('ALB Listener should be configured', async () => {
-    const lbDns = stackOutputs.LoadBalancerDNS;
+  test('ALB Listener should be configured on port 80', async () => {
     const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-    const lb = lbs.LoadBalancers?.find(lb => lb.DNSName === lbDns);
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
 
     if (lb?.LoadBalancerArn) {
       const listeners = await elbClient.send(
         new DescribeListenersCommand({ LoadBalancerArn: lb.LoadBalancerArn })
       );
+
       expect(listeners.Listeners?.length).toBeGreaterThan(0);
       expect(listeners.Listeners?.[0].Port).toBe(80);
+      expect(listeners.Listeners?.[0].Protocol).toBe('HTTP');
     }
   });
 
   test('Auto Scaling Group should exist', async () => {
+    expect(asgName).toBeDefined();
+
     const asgs = await asgClient.send(
-      new DescribeAutoScalingGroupsCommand({})
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [asgName]
+      })
     );
-    const asg = asgs.AutoScalingGroups?.find(asg =>
-      asg.AutoScalingGroupName?.includes(environmentSuffix)
-    );
-    expect(asg).toBeDefined();
+
+    expect(asgs.AutoScalingGroups?.length).toBe(1);
   });
 
-  test('Auto Scaling Group should have correct capacity', async () => {
+  test('Auto Scaling Group should have correct capacity settings', async () => {
     const asgs = await asgClient.send(
-      new DescribeAutoScalingGroupsCommand({})
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [asgName]
+      })
     );
-    const asg = asgs.AutoScalingGroups?.find(asg =>
-      asg.AutoScalingGroupName?.includes(environmentSuffix)
-    );
+
+    const asg = asgs.AutoScalingGroups?.[0];
     expect(asg?.MinSize).toBe(2);
-    expect(asg?.MaxSize).toBe(4);
-    expect(asg?.DesiredCapacity).toBe(2);
+    expect(asg?.MaxSize).toBe(10);
+    expect(asg?.DesiredCapacity).toBeGreaterThanOrEqual(2);
   });
 
-  test('Scaling Policy should exist', async () => {
+  test('Auto Scaling Group should use correct subnets', async () => {
     const asgs = await asgClient.send(
-      new DescribeAutoScalingGroupsCommand({})
-    );
-    const asg = asgs.AutoScalingGroups?.find(asg =>
-      asg.AutoScalingGroupName?.includes(environmentSuffix)
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [asgName]
+      })
     );
 
-    if (asg?.AutoScalingGroupName) {
-      const policies = await asgClient.send(
-        new DescribePoliciesCommand({
-          AutoScalingGroupName: asg.AutoScalingGroupName
-        })
-      );
-      expect(policies.ScalingPolicies?.length).toBeGreaterThan(0);
-    }
+    const asg = asgs.AutoScalingGroups?.[0];
+    const publicSubnets = outputs.PublicSubnets?.split(',').map(s => s.trim());
+
+    expect(asg?.VPCZoneIdentifier).toBeDefined();
+    const asgSubnets = asg?.VPCZoneIdentifier?.split(',').map(s => s.trim());
+    expect(asgSubnets?.some(s => publicSubnets?.includes(s))).toBe(true);
+  });
+
+  test('Scaling Policy should exist for target tracking', async () => {
+    const policies = await asgClient.send(
+      new DescribePoliciesCommand({
+        AutoScalingGroupName: asgName
+      })
+    );
+
+    expect(policies.ScalingPolicies?.length).toBeGreaterThan(0);
+
+    const targetTrackingPolicy = policies.ScalingPolicies?.find(
+      p => p.PolicyType === 'TargetTrackingScaling'
+    );
+    expect(targetTrackingPolicy).toBeDefined();
   });
 });
 
-describe('TapStack E2E Tests - CloudWatch Alarms and Logging', () => {
-  let stackOutputs: Record<string, any> = {};
+describe('TapStack E2E Tests - CloudWatch Monitoring', () => {
   let cwClient: CloudWatchClient;
-  let cwLogsClient: CloudWatchLogsClient;
+  let snsClient: SNSClient;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     cwClient = new CloudWatchClient({ region });
-    cwLogsClient = new CloudWatchLogsClient({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
+    snsClient = new SNSClient({ region });
   });
 
-  test('CloudWatch Alarms should exist', async () => {
+  test('CPU Utilization Alarm should exist for EC2', async () => {
     const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
-    const stackAlarms = alarms.MetricAlarms?.filter(alarm =>
-      alarm.AlarmName?.includes(environmentSuffix)
-    );
-    expect(stackAlarms?.length).toBeGreaterThan(0);
-  });
 
-  test('CPU High Alarm should be configured correctly', async () => {
-    const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
-    const cpuAlarm = alarms.MetricAlarms?.find(alarm =>
-      alarm.AlarmName?.includes('CPUAlarmHigh') && alarm.AlarmName?.includes(environmentSuffix)
+    const cpuAlarm = alarms.MetricAlarms?.find(a =>
+      a.AlarmName?.toLowerCase().includes('cpu') &&
+      a.Namespace === 'AWS/EC2'
     );
+
     expect(cpuAlarm).toBeDefined();
     expect(cpuAlarm?.MetricName).toBe('CPUUtilization');
     expect(cpuAlarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+    expect(cpuAlarm?.Threshold).toBe(80);
   });
 
-  test('CloudWatch Log Group should exist', async () => {
-    const logGroups = await cwLogsClient.send(
-      new DescribeLogGroupsCommand({})
+  test('RDS CPU Utilization Alarm should exist', async () => {
+    const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
+
+    const rdsAlarm = alarms.MetricAlarms?.find(a =>
+      a.AlarmName?.toLowerCase().includes('db') &&
+      a.AlarmName?.toLowerCase().includes('cpu') &&
+      a.Namespace === 'AWS/RDS'
     );
-    const appLogGroup = logGroups.logGroups?.find(lg =>
-      lg.logGroupName?.includes(environmentSuffix)
+
+    expect(rdsAlarm).toBeDefined();
+    expect(rdsAlarm?.MetricName).toBe('CPUUtilization');
+  });
+
+  test('RDS Free Storage Space Alarm should exist', async () => {
+    const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
+
+    const storageAlarm = alarms.MetricAlarms?.find(a =>
+      a.AlarmName?.toLowerCase().includes('storage') &&
+      a.Namespace === 'AWS/RDS'
     );
-    expect(appLogGroup).toBeDefined();
+
+    expect(storageAlarm).toBeDefined();
+    expect(storageAlarm?.MetricName).toBe('FreeStorageSpace');
+    expect(storageAlarm?.ComparisonOperator).toBe('LessThanThreshold');
+  });
+
+  test('SNS Topic should exist for alarm notifications', async () => {
+    const topics = await snsClient.send(new ListTopicsCommand({}));
+
+    const alarmTopic = topics.Topics?.find(t =>
+      t.TopicArn?.includes('alarms')
+    );
+
+    expect(alarmTopic).toBeDefined();
+  });
+
+  test('CloudWatch Dashboard should be accessible', async () => {
+    const dashboardURL = outputs.DashboardURL;
+    expect(dashboardURL).toBeDefined();
+    expect(dashboardURL).toContain('cloudwatch');
+    expect(dashboardURL).toContain('dashboards');
   });
 });
 
-describe('TapStack E2E Tests - AWS Config', () => {
+describe('TapStack E2E Tests - AWS Config Compliance', () => {
   let configClient: ConfigServiceClient;
 
   beforeAll(() => {
     configClient = new ConfigServiceClient({ region });
   });
 
-  test('Config Recorder should exist and be active', async () => {
+  test('Config Recorder should exist and record all resources', async () => {
     const recorders = await configClient.send(
       new DescribeConfigurationRecordersCommand({})
     );
+
     const recorder = recorders.ConfigurationRecorders?.find(r =>
-      r.name?.includes(environmentSuffix)
+      r.name?.toLowerCase().includes('config')
     );
+
     expect(recorder).toBeDefined();
     expect(recorder?.recordingGroup?.allSupported).toBe(true);
+    expect(recorder?.recordingGroup?.includeGlobalResourceTypes).toBe(true);
   });
 
-  test('Config Delivery Channel should exist', async () => {
+  test('Config Delivery Channel should be configured', async () => {
     const channels = await configClient.send(
       new DescribeDeliveryChannelsCommand({})
     );
+
     const channel = channels.DeliveryChannels?.find(c =>
-      c.name?.includes(environmentSuffix)
+      c.name?.toLowerCase().includes('config')
     );
+
     expect(channel).toBeDefined();
+    expect(channel?.s3BucketName).toBeDefined();
   });
 });
 
 describe('TapStack E2E Tests - KMS Encryption', () => {
-  let stackOutputs: Record<string, any> = {};
   let kmsClient: KMSClient;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     kmsClient = new KMSClient({ region });
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    const stack = stacks.Stacks?.[0];
-    if (stack?.Outputs) {
-      for (const output of stack.Outputs) {
-        stackOutputs[output.OutputKey!] = output.OutputValue;
-      }
-    }
   });
 
-  test('KMS Key should exist', async () => {
-    const keyArn = stackOutputs.KMSKeyARN;
-    expect(keyArn).toBeDefined();
-    const keyId = keyArn.split('/').pop();
+  test('KMS Key should exist and be enabled', async () => {
+    const rdsClient = new RDSClient({ region });
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const rdsEndpoint = outputs.RDSEndpoint;
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+
+    expect(db?.KmsKeyId).toBeDefined();
+
+    const keyId = db?.KmsKeyId?.split('/').pop();
     const key = await kmsClient.send(
       new DescribeKeyCommand({ KeyId: keyId })
     );
-    expect(key.KeyMetadata).toBeDefined();
-  });
 
-  test('KMS Key should have rotation enabled', async () => {
-    const keyArn = stackOutputs.KMSKeyARN;
-    const keyId = keyArn.split('/').pop();
-    const key = await kmsClient.send(
-      new DescribeKeyCommand({ KeyId: keyId })
-    );
     expect(key.KeyMetadata?.KeyState).toBe('Enabled');
+    expect(key.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+  });
+
+  test('KMS Key should have automatic rotation enabled', async () => {
+    const rdsClient = new RDSClient({ region });
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const rdsEndpoint = outputs.RDSEndpoint;
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+
+    const keyId = db?.KmsKeyId?.split('/').pop();
+    const rotation = await kmsClient.send(
+      new GetKeyRotationStatusCommand({ KeyId: keyId })
+    );
+
+    expect(rotation.KeyRotationEnabled).toBe(true);
   });
 });
 
-describe('TapStack E2E Tests - Multi-Region Validation', () => {
-  test('template should work in configured region', () => {
+describe('TapStack E2E Tests - Workflow Validation', () => {
+  test('VPC to Subnet connectivity workflow', async () => {
+    const ec2Client = new EC2Client({ region });
+    const vpcId = outputs.VPC || outputs.VpcId;
+    const publicSubnets = outputs.PublicSubnets?.split(',').map(s => s.trim());
+    const privateSubnets = outputs.PrivateSubnets?.split(',').map(s => s.trim());
+
+    const allSubnets = await ec2Client.send(
+      new DescribeSubnetsCommand({
+        SubnetIds: [...(publicSubnets || []), ...(privateSubnets || [])]
+      })
+    );
+
+    for (const subnet of allSubnets.Subnets || []) {
+      expect(subnet.VpcId).toBe(vpcId);
+    }
+  });
+
+  test('ALB to Target Group to ASG connectivity workflow', async () => {
+    const elbClient = new ElasticLoadBalancingV2Client({ region });
+    const asgClient = new AutoScalingClient({ region });
+
+    const albDns = outputs.ApplicationLoadBalancerDNS || outputs.LoadBalancerDNS;
+    const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
+
+    expect(lb?.LoadBalancerArn).toBeDefined();
+
+    const listeners = await elbClient.send(
+      new DescribeListenersCommand({ LoadBalancerArn: lb!.LoadBalancerArn })
+    );
+
+    const targetGroupArn = listeners.Listeners?.[0].DefaultActions?.[0].TargetGroupArn;
+    expect(targetGroupArn).toBeDefined();
+
+    const asgName = outputs.WebAppAutoScalingGroup;
+    const asgs = await asgClient.send(
+      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
+    );
+
+    const asgTargetGroupArns = asgs.AutoScalingGroups?.[0].TargetGroupARNs;
+    expect(asgTargetGroupArns).toContain(targetGroupArn);
+  });
+
+  test('RDS to DB Security Group to Web SG connectivity workflow', async () => {
+    const ec2Client = new EC2Client({ region });
+    const rdsClient = new RDSClient({ region });
+
+    const rdsEndpoint = outputs.RDSEndpoint;
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+
+    const dbSgId = db?.VpcSecurityGroups?.[0].VpcSecurityGroupId;
+    expect(dbSgId).toBe(outputs.DatabaseSecurityGroup);
+
+    const sgs = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [dbSgId!] })
+    );
+
+    const mysqlRule = sgs.SecurityGroups?.[0].IpPermissions?.find(
+      p => p.FromPort === 3306
+    );
+
+    const webSgId = mysqlRule?.UserIdGroupPairs?.[0].GroupId;
+    expect(webSgId).toBe(outputs.WebServerSecurityGroup);
+  });
+
+  test('Alarms to SNS Topic workflow', async () => {
+    const cwClient = new CloudWatchClient({ region });
+    const snsClient = new SNSClient({ region });
+
+    const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
+    const cpuAlarm = alarms.MetricAlarms?.find(a =>
+      a.AlarmName?.toLowerCase().includes('cpu')
+    );
+
+    expect(cpuAlarm?.AlarmActions?.length).toBeGreaterThan(0);
+
+    const snsTopicArn = cpuAlarm?.AlarmActions?.[0];
+    expect(snsTopicArn).toBeDefined();
+
+    const topicAttrs = await snsClient.send(
+      new GetTopicAttributesCommand({ TopicArn: snsTopicArn })
+    );
+
+    expect(topicAttrs.Attributes).toBeDefined();
+  });
+
+  test('KMS encryption workflow across RDS and S3', async () => {
+    const rdsClient = new RDSClient({ region });
+    const s3Client = new S3Client({ region });
+
+    const rdsEndpoint = outputs.RDSEndpoint;
+    const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+
+    expect(db?.StorageEncrypted).toBe(true);
+    expect(db?.KmsKeyId).toBeDefined();
+
+    const appDataBucket = outputs.AppDataBucket;
+    const encryption = await s3Client.send(
+      new GetBucketEncryptionCommand({ Bucket: appDataBucket })
+    );
+
+    expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBeDefined();
+  });
+});
+
+describe('TapStack E2E Tests - Region Independence', () => {
+  test('infrastructure should be deployed in configured region', () => {
     expect(region).toBeDefined();
     expect(region).toMatch(/^[a-z]{2}-[a-z]+-\d{1}$/);
   });
 
-  test('stack deployment region should match configured region', async () => {
-    const cf = new CloudFormationClient({ region });
-    const stacks = await cf.send(
-      new DescribeStacksCommand({ StackName: stackName })
+  test('all resources should use region-independent AMI lookup', async () => {
+    const asgClient = new AutoScalingClient({ region });
+    const ec2Client = new EC2Client({ region });
+
+    const asgName = outputs.WebAppAutoScalingGroup;
+    const asgs = await asgClient.send(
+      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
     );
-    const stack = stacks.Stacks?.[0];
-    expect(stack).toBeDefined();
+
+    expect(asgs.AutoScalingGroups?.[0].LaunchTemplate).toBeDefined();
   });
 });

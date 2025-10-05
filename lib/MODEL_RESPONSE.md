@@ -1,212 +1,253 @@
-Reasoning Trace
-Based on the requirements, I'll create a comprehensive CloudFormation YAML template that follows best practices for security, scalability, and reliability. Let me analyze the requirements and develop the template systematically:
+### Reasoning Trace
 
-IAM Role and Policy - I'll define roles for the application and database with least privilege access.
-Encrypted S3 bucket - I'll set up an encrypted bucket with appropriate policies.
-VPC with subnets - I'll create a VPC with both private and public subnets across multiple AZs.
-Security Groups - I'll configure security groups with least privilege access.
-AWS KMS - I'll set up KMS for encryption.
-Logging and Monitoring - I'll configure CloudWatch for logging and monitoring.
-Resource Tagging - I'll ensure all resources have appropriate tags.
-ELB/ALB - I'll set up an Application Load Balancer.
-Auto Scaling - I'll configure Auto Scaling for the application.
-CloudWatch Alarms - I'll create alarms for resource utilization.
-NACLs - I'll implement Network ACLs for subnet security.
-RDS Multi-AZ - I'll set up a Multi-AZ RDS instance in the private subnet.
-VPC Peering - I'll include VPC Peering configuration (optional, based on connectivity needs).
-AWS Config - I'll set up AWS Config for change tracking.
-Cost Estimation - I'll consider cost aspects in the design.
-Now I'll proceed to create the CloudFormation template following the given structure:
+---
 
-For the VPC, I'll create:
+Alright, I need to create a comprehensive CloudFormation template that sets up a secure and scalable AWS environment for a web application. Let's break down what's required:
 
-1 VPC with CIDR block 10.0.0.0/16
-2 Public Subnets in different AZs (10.0.1.0/24 and 10.0.2.0/24)
-2 Private Subnets in different AZs (10.0.3.0/24 and 10.0.4.0/24)
-Internet Gateway for public internet access
-NAT Gateway for private subnet outbound traffic
-Route Tables for subnet routing
-For security:
+1. **Template Name**: secure-environment-setup.yaml
+2. **Region**: us-east-1
+3. **Network Setup**:
+   - Dedicated VPC
+   - Public subnets for web application (EC2 instances)
+   - Private subnets for RDS database
+   - Proper Network ACLs
 
-Security groups for web tier, application tier, and database
-NACLs for additional subnet security
-KMS for encryption
-IAM roles with least privilege
-For the application:
+4. **Security Components**:
+   - IAM roles with least privilege principle
+   - Encrypted S3 bucket with strict policies
+   - KMS-managed encryption keys
 
-Application Load Balancer in public subnets
-Auto Scaling Group for EC2 instances in public subnets
-RDS database in private subnets with Multi-AZ
-For monitoring:
+5. **Monitoring and Logging**:
+   - CloudWatch for logs, monitoring, and alerts
+   - Alarms for critical metrics
 
-CloudWatch Logs for application and system logs
-CloudWatch Alarms for resource utilization
-Let me now build the template in YAML format:
+6. **Scalability**:
+   - Auto Scaling for EC2 instances
+   - Elastic Load Balancer (ELB)
+
+7. **High Availability**:
+   - Multi-AZ RDS configuration
+
+8. **Compliance**:
+   - AWS Config for configuration tracking
+   - VPC peering if needed
+
+9. **Naming and Tagging**:
+   - "prod-" prefix
+   - Consistent tagging for all resources
+
+10. **Cost Optimization**:
+    - Efficient Auto Scaling policies
+
+Let me create a CloudFormation template that addresses all these requirements.
+
+First, I'll start with the template structure and then define the resources:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
+Description: 'Secure and Scalable Production Environment for Web Application'
 
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+  # Define parameters here
 
 Resources:
-  # KMS Key for encryption
-  EncryptionKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: KMS key for encryption of resources
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Allow administration of the key
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - 'kms:*'
-            Resource: '*'
-          - Sid: Allow use of the key
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-kms-key-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
+  # Define resources here
 
-  EncryptionKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/prod-kms-key-${EnvironmentSuffix}'
-      TargetKeyId: !Ref EncryptionKey
+Outputs:
+  # Define outputs here
+```
 
-  # VPC and Networking
+Now, let's flesh out each section of the template:
+
+### Parameters Section
+
+```yaml
+Parameters:
+  EnvironmentName:
+    Description: Environment name that is prefixed to resource names
+    Type: String
+    Default: prod
+
+  VpcCIDR:
+    Description: CIDR block for the VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: CIDR block for Public Subnet 1
+    Type: String
+    Default: 10.0.1.0/24
+
+  PublicSubnet2CIDR:
+    Description: CIDR block for Public Subnet 2
+    Type: String
+    Default: 10.0.2.0/24
+
+  PrivateSubnet1CIDR:
+    Description: CIDR block for Private Subnet 1
+    Type: String
+    Default: 10.0.3.0/24
+
+  PrivateSubnet2CIDR:
+    Description: CIDR block for Private Subnet 2
+    Type: String
+    Default: 10.0.4.0/24
+
+  DBInstanceClass:
+    Description: RDS instance class
+    Type: String
+    Default: db.t3.small
+
+  DBName:
+    Description: Database name
+    Type: String
+    Default: proddb
+
+  DBUsername:
+    Description: Database admin username
+    Type: String
+    NoEcho: true
+
+  DBPassword:
+    Description: Database admin password
+    Type: String
+    NoEcho: true
+
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.medium
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+```
+
+### Resources Section
+
+Let's define the resources one by one:
+
+1. **VPC and Network Resources**:
+
+```yaml
+Resources:
+  # VPC
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
+      CidrBlock: !Ref VpcCIDR
       EnableDnsHostnames: true
+      EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-vpc-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-vpc
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'prod-igw-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-igw
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  VPCGatewayAttachment:
+  InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
 
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet1CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-public-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-public-subnet-1
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet2CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-public-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-public-subnet-2
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet1CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'prod-private-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-private-subnet-1
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'prod-private-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-private-subnet-2
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  # NAT Gateway and Elastic IPs
-  NatGatewayEIP:
+  # NAT Gateways for private subnet internet access
+  NatGateway1EIP:
     Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
+    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-nat-eip-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
 
-  NatGateway:
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'prod-nat-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-nat-gateway-1
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-nat-gateway-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # Route Tables
   PublicRouteTable:
@@ -215,60 +256,1166 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'prod-public-rt-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-public-route-table
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-private-rt-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Routes
-  PublicRoute:
+  DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
+    DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-
-  # Subnet Route Table Associations
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-route-table-1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
+      RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-route-table-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
+      RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+```
+
+2. **Network ACLs**:
+
+```yaml
+# Network ACLs
+PublicNetworkAcl:
+  Type: AWS::EC2::NetworkAcl
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-public-nacl
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+PublicNetworkAclEntryIngressHTTP:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PublicNetworkAcl
+    RuleNumber: 100
+    Protocol: 6
+    RuleAction: allow
+    Egress: false
+    CidrBlock: 0.0.0.0/0
+    PortRange:
+      From: 80
+      To: 80
+
+PublicNetworkAclEntryIngressHTTPS:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PublicNetworkAcl
+    RuleNumber: 110
+    Protocol: 6
+    RuleAction: allow
+    Egress: false
+    CidrBlock: 0.0.0.0/0
+    PortRange:
+      From: 443
+      To: 443
+
+PublicNetworkAclEntryIngressSSH:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PublicNetworkAcl
+    RuleNumber: 120
+    Protocol: 6
+    RuleAction: allow
+    Egress: false
+    CidrBlock: 0.0.0.0/0
+    PortRange:
+      From: 22
+      To: 22
+
+PublicNetworkAclEntryIngressEphemeralTraffic:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PublicNetworkAcl
+    RuleNumber: 140
+    Protocol: 6
+    RuleAction: allow
+    Egress: false
+    CidrBlock: 0.0.0.0/0
+    PortRange:
+      From: 1024
+      To: 65535
+
+PublicNetworkAclEntryEgressAll:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PublicNetworkAcl
+    RuleNumber: 100
+    Protocol: -1
+    RuleAction: allow
+    Egress: true
+    CidrBlock: 0.0.0.0/0
+
+PublicSubnet1NetworkAclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref PublicSubnet1
+    NetworkAclId: !Ref PublicNetworkAcl
+
+PublicSubnet2NetworkAclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref PublicSubnet2
+    NetworkAclId: !Ref PublicNetworkAcl
+
+PrivateNetworkAcl:
+  Type: AWS::EC2::NetworkAcl
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-private-nacl
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+PrivateNetworkAclEntryIngressVPC:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PrivateNetworkAcl
+    RuleNumber: 100
+    Protocol: -1
+    RuleAction: allow
+    Egress: false
+    CidrBlock: !Ref VpcCIDR
+
+PrivateNetworkAclEntryEgressAll:
+  Type: AWS::EC2::NetworkAclEntry
+  Properties:
+    NetworkAclId: !Ref PrivateNetworkAcl
+    RuleNumber: 100
+    Protocol: -1
+    RuleAction: allow
+    Egress: true
+    CidrBlock: 0.0.0.0/0
+
+PrivateSubnet1NetworkAclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref PrivateSubnet1
+    NetworkAclId: !Ref PrivateNetworkAcl
+
+PrivateSubnet2NetworkAclAssociation:
+  Type: AWS::EC2::SubnetNetworkAclAssociation
+  Properties:
+    SubnetId: !Ref PrivateSubnet2
+    NetworkAclId: !Ref PrivateNetworkAcl
+```
+
+3. **Security Groups**:
+
+```yaml
+# Security Groups
+WebServerSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Allow HTTP/HTTPS and SSH access
+    VpcId: !Ref VPC
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+    SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-web-sg
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+DatabaseSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Allow database access from web servers
+    VpcId: !Ref VPC
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref WebServerSecurityGroup
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-db-sg
+      - Key: Environment
+        Value: !Ref EnvironmentName
+```
+
+4. **IAM Roles**:
+
+```yaml
+# IAM Roles and Policies
+WebAppRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+    Path: /
+    RoleName: !Sub ${EnvironmentName}-web-app-role
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-web-app-role
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+WebAppPolicy:
+  Type: AWS::IAM::Policy
+  Properties:
+    PolicyName: !Sub ${EnvironmentName}-web-app-policy
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:ListBucket
+          Resource:
+            - !Sub arn:aws:s3:::${AppDataBucket}
+            - !Sub arn:aws:s3:::${AppDataBucket}/*
+        - Effect: Allow
+          Action:
+            - cloudwatch:PutMetricData
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: '*'
+    Roles:
+      - !Ref WebAppRole
+
+WebAppInstanceProfile:
+  Type: AWS::IAM::InstanceProfile
+  Properties:
+    Path: /
+    Roles:
+      - !Ref WebAppRole
+
+DBAccessRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole
+    Path: /
+    RoleName: !Sub ${EnvironmentName}-db-access-role
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-db-access-role
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+DBAccessPolicy:
+  Type: AWS::IAM::Policy
+  Properties:
+    PolicyName: !Sub ${EnvironmentName}-db-access-policy
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Action:
+            - rds:Connect
+          Resource: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}
+    Roles:
+      - !Ref DBAccessRole
+```
+
+5. **KMS Key and S3 Bucket**:
+
+```yaml
+# KMS Key for encryption
+AppDataKey:
+  Type: AWS::KMS::Key
+  Properties:
+    Description: KMS key for encrypting app data
+    EnableKeyRotation: true
+    KeyPolicy:
+      Version: '2012-10-17'
+      Id: !Sub ${EnvironmentName}-key-policy
+      Statement:
+        - Sid: Allow root account full control
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+        - Sid: Allow use of the key by web app role
+          Effect: Allow
+          Principal:
+            AWS: !GetAtt WebAppRole.Arn
+          Action:
+            - kms:Encrypt
+            - kms:Decrypt
+            - kms:ReEncrypt*
+            - kms:GenerateDataKey*
+            - kms:DescribeKey
+          Resource: '*'
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-app-data-key
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+AppDataKeyAlias:
+  Type: AWS::KMS::Alias
+  Properties:
+    AliasName: !Sub alias/${EnvironmentName}-app-data-key
+    TargetKeyId: !Ref AppDataKey
+
+# S3 Bucket for app data
+AppDataBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketName: !Sub ${EnvironmentName}-app-data-${AWS::AccountId}
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: aws:kms
+            KMSMasterKeyID: !Ref AppDataKey
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
+    VersioningConfiguration:
+      Status: Enabled
+    LoggingConfiguration:
+      DestinationBucketName: !Ref LoggingBucket
+      LogFilePrefix: app-data-access-logs/
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-app-data
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+AppDataBucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket: !Ref AppDataBucket
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Sid: DenyUnEncryptedObjectUploads
+          Effect: Deny
+          Principal: '*'
+          Action: s3:PutObject
+          Resource: !Sub arn:aws:s3:::${AppDataBucket}/*
+          Condition:
+            StringNotEquals:
+              's3:x-amz-server-side-encryption': aws:kms
+        - Sid: DenyInsecureConnections
+          Effect: Deny
+          Principal: '*'
+          Action: s3:*
+          Resource: !Sub arn:aws:s3:::${AppDataBucket}/*
+          Condition:
+            Bool:
+              aws:SecureTransport: false
+
+LoggingBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketName: !Sub ${EnvironmentName}-logs-${AWS::AccountId}
+    AccessControl: LogDeliveryWrite
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
+    VersioningConfiguration:
+      Status: Enabled
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-logs
+      - Key: Environment
+        Value: !Ref EnvironmentName
+```
+
+6. **RDS Database**:
+
+```yaml
+# Database Subnet Group
+DBSubnetGroup:
+  Type: AWS::RDS::DBSubnetGroup
+  Properties:
+    DBSubnetGroupDescription: Subnet group for RDS database
+    SubnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-db-subnet-group
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+# RDS Database Instance
+RDSInstance:
+  Type: AWS::RDS::DBInstance
+  Properties:
+    DBName: !Ref DBName
+    AllocatedStorage: 20
+    DBInstanceClass: !Ref DBInstanceClass
+    Engine: mysql
+    EngineVersion: 8.0.28
+    MasterUsername: !Ref DBUsername
+    MasterUserPassword: !Ref DBPassword
+    MultiAZ: true
+    StorageType: gp2
+    StorageEncrypted: true
+    KmsKeyId: !Ref AppDataKey
+    DBSubnetGroupName: !Ref DBSubnetGroup
+    VPCSecurityGroups:
+      - !Ref DatabaseSecurityGroup
+    BackupRetentionPeriod: 7
+    DeleteAutomatedBackups: false
+    PubliclyAccessible: false
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-rds
+      - Key: Environment
+        Value: !Ref EnvironmentName
+```
+
+7. **Load Balancer and Auto Scaling**:
+
+```yaml
+# Load Balancer
+ApplicationLoadBalancer:
+  Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  Properties:
+    Name: !Sub ${EnvironmentName}-alb
+    Subnets:
+      - !Ref PublicSubnet1
+      - !Ref PublicSubnet2
+    SecurityGroups:
+      - !Ref WebServerSecurityGroup
+    Scheme: internet-facing
+    LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '60'
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-alb
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+ALBTargetGroup:
+  Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  Properties:
+    Name: !Sub ${EnvironmentName}-tg
+    Port: 80
+    Protocol: HTTP
+    VpcId: !Ref VPC
+    HealthCheckPath: /health
+    HealthCheckIntervalSeconds: 30
+    HealthCheckTimeoutSeconds: 5
+    HealthyThresholdCount: 2
+    UnhealthyThresholdCount: 5
+    TargetType: instance
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-tg
+      - Key: Environment
+        Value: !Ref EnvironmentName
+
+ALBListener:
+  Type: AWS::ElasticLoadBalancingV2::Listener
+  Properties:
+    DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref ALBTargetGroup
+    LoadBalancerArn: !Ref ApplicationLoadBalancer
+    Port: 80
+    Protocol: HTTP
+
+# Launch Template
+WebAppLaunchTemplate:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateName: !Sub ${EnvironmentName}-launch-template
+    VersionDescription: Initial version
+    LaunchTemplateData:
+      ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 - please replace with latest AMI ID
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      IamInstanceProfile:
+        Name: !Ref WebAppInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><body><h1>Hello World from ${EnvironmentName} Environment</h1></body></html>" > /var/www/html/index.html
+
+          # Set up CloudWatch Logs agent
+          yum install -y awslogs
+          cat > /etc/awslogs/awslogs.conf << EOF
+          [general]
+          state_file = /var/lib/awslogs/agent-state
+
+          [/var/log/httpd/access_log]
+          file = /var/log/httpd/access_log
+          log_group_name = ${EnvironmentName}-web-access-logs
+          log_stream_name = {instance_id}/access.log
+          datetime_format = %d/%b/%Y:%H:%M:%S %z
+
+          [/var/log/httpd/error_log]
+          file = /var/log/httpd/error_log
+          log_group_name = ${EnvironmentName}-web-error-logs
+          log_stream_name = {instance_id}/error.log
+          datetime_format = %d/%b/%Y:%H:%M:%S %z
+          EOF
+
+          # Start CloudWatch Logs agent
+          systemctl start awslogsd
+          systemctl enable awslogsd
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp2
+            DeleteOnTermination: true
+            Encrypted: true
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required # IMDSv2
+      TagSpecifications:
+        - ResourceType: instance
+          Tags:
+            - Key: Name
+              Value: !Sub ${EnvironmentName}-web-server
+            - Key: Environment
+              Value: !Ref EnvironmentName
+
+# Auto Scaling Group
+WebAppAutoScalingGroup:
+  Type: AWS::AutoScaling::AutoScalingGroup
+  Properties:
+    AutoScalingGroupName: !Sub ${EnvironmentName}-asg
+    LaunchTemplate:
+      LaunchTemplateId: !Ref WebAppLaunchTemplate
+      Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
+    MinSize: 2
+    MaxSize: 10
+    DesiredCapacity: 2
+    VPCZoneIdentifier:
+      - !Ref PublicSubnet1
+      - !Ref PublicSubnet2
+    TargetGroupARNs:
+      - !Ref ALBTargetGroup
+    HealthCheckType: ELB
+    HealthCheckGracePeriod: 300
+    Tags:
+      - Key: Name
+        Value: !Sub ${EnvironmentName}-web-server
+        PropagateAtLaunch: true
+      - Key: Environment
+        Value: !Ref EnvironmentName
+        PropagateAtLaunch: true
+
+# Scaling Policies
+WebAppScaleUpPolicy:
+  Type: AWS::AutoScaling::ScalingPolicy
+  Properties:
+    AutoScalingGroupName: !Ref WebAppAutoScalingGroup
+    PolicyType: TargetTrackingScaling
+    TargetTrackingConfiguration:
+      PredefinedMetricSpecification:
+        PredefinedMetricType: ASGAverageCPUUtilization
+      TargetValue: 70.0
+```
+
+8. **CloudWatch Monitoring**:
+
+```yaml
+# CloudWatch Alarms
+CPUUtilizationAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmName: !Sub ${EnvironmentName}-high-cpu-alarm
+    AlarmDescription: Alarm if CPU exceeds 80% for 5 minutes
+    MetricName: CPUUtilization
+    Namespace: AWS/EC2
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 80
+    AlarmActions:
+      - !Ref SNSTopic
+    Dimensions:
+      - Name: AutoScalingGroupName
+        Value: !Ref WebAppAutoScalingGroup
+    ComparisonOperator: GreaterThanThreshold
+
+RDSCPUUtilizationAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmName: !Sub ${EnvironmentName}-db-high-cpu-alarm
+    AlarmDescription: Alarm if RDS CPU exceeds 80% for 5 minutes
+    MetricName: CPUUtilization
+    Namespace: AWS/RDS
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 80
+    AlarmActions:
+      - !Ref SNSTopic
+    Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref RDSInstance
+    ComparisonOperator: GreaterThanThreshold
+
+RDSFreeStorageSpaceAlarm:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmName: !Sub ${EnvironmentName}-db-free-storage-alarm
+    AlarmDescription: Alarm if RDS free storage space is less than 1GB
+    MetricName: FreeStorageSpace
+    Namespace: AWS/RDS
+    Statistic: Average
+    Period: 300
+    EvaluationPeriods: 2
+    Threshold: 1000000000 # 1GB in bytes
+    AlarmActions:
+      - !Ref SNSTopic
+    Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref RDSInstance
+    ComparisonOperator: LessThanThreshold
+
+SNSTopic:
+  Type: AWS::SNS::Topic
+  Properties:
+    DisplayName: !Sub ${EnvironmentName}-alarms
+    TopicName: !Sub ${EnvironmentName}-alarms
+
+# CloudWatch Dashboard
+AppDashboard:
+  Type: AWS::CloudWatch::Dashboard
+  Properties:
+    DashboardName: !Sub ${EnvironmentName}-dashboard
+    DashboardBody: !Sub |
+      {
+        "widgets": [
+          {
+            "type": "metric",
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 6,
+            "properties": {
+              "metrics": [
+                [ "AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "${WebAppAutoScalingGroup}" ]
+              ],
+              "period": 300,
+              "stat": "Average",
+              "region": "${AWS::Region}",
+              "title": "EC2 CPU Utilization"
+            }
+          },
+          {
+            "type": "metric",
+            "x": 12,
+            "y": 0,
+            "width": 12,
+            "height": 6,
+            "properties": {
+              "metrics": [
+                [ "AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${RDSInstance}" ]
+              ],
+              "period": 300,
+              "stat": "Average",
+              "region": "${AWS::Region}",
+              "title": "RDS CPU Utilization"
+            }
+          },
+          {
+            "type": "metric",
+            "x": 0,
+            "y": 6,
+            "width": 12,
+            "height": 6,
+            "properties": {
+              "metrics": [
+                [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}" ]
+              ],
+              "period": 300,
+              "stat": "Sum",
+              "region": "${AWS::Region}",
+              "title": "ALB Request Count"
+            }
+          },
+          {
+            "type": "metric",
+            "x": 12,
+            "y": 6,
+            "width": 12,
+            "height": 6,
+            "properties": {
+              "metrics": [
+                [ "AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${RDSInstance}" ]
+              ],
+              "period": 300,
+              "stat": "Average",
+              "region": "${AWS::Region}",
+              "title": "RDS Free Storage Space"
+            }
+          }
+        ]
+      }
+```
+
+9. **AWS Config**:
+
+```yaml
+# AWS Config
+ConfigRecorder:
+  Type: AWS::Config::ConfigurationRecorder
+  Properties:
+    Name: !Sub ${EnvironmentName}-config-recorder
+    RecordingGroup:
+      AllSupported: true
+      IncludeGlobalResources: true
+    RoleARN: !GetAtt ConfigRole.Arn
+
+ConfigDeliveryChannel:
+  Type: AWS::Config::DeliveryChannel
+  Properties:
+    Name: !Sub ${EnvironmentName}-config-delivery
+    S3BucketName: !Ref LoggingBucket
+    S3KeyPrefix: config-snapshots
+    ConfigSnapshotDeliveryProperties:
+      DeliveryFrequency: Six_Hours
+
+ConfigRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: config.amazonaws.com
+          Action: sts:AssumeRole
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+    Policies:
+      - PolicyName: !Sub ${EnvironmentName}-config-s3-policy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${LoggingBucket}/config-snapshots/*
+              Condition:
+                StringLike:
+                  s3:x-amz-acl: bucket-owner-full-control
+            - Effect: Allow
+              Action:
+                - s3:GetBucketAcl
+              Resource: !Sub arn:aws:s3:::${LoggingBucket}
+```
+
+### Outputs Section
+
+```yaml
+Outputs:
+  VPC:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VPC
+
+  PublicSubnets:
+    Description: List of public subnets
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub ${EnvironmentName}-PublicSubnets
+
+  PrivateSubnets:
+    Description: List of private subnets
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub ${EnvironmentName}-PrivateSubnets
+
+  WebServerSecurityGroup:
+    Description: Security group for web servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-WebServerSecurityGroup
+
+  DatabaseSecurityGroup:
+    Description: Security group for database
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-DatabaseSecurityGroup
+
+  ApplicationLoadBalancerDNS:
+    Description: DNS name for the application load balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-ALBDNS
+
+  AppDataBucket:
+    Description: S3 bucket for application data
+    Value: !Ref AppDataBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-AppDataBucket
+
+  RDSEndpoint:
+    Description: Endpoint for the RDS database
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-RDSEndpoint
+
+  WebAppAutoScalingGroup:
+    Description: Auto Scaling Group for web application
+    Value: !Ref WebAppAutoScalingGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-ASG
+
+  DashboardURL:
+    Description: URL to the CloudWatch Dashboard
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${EnvironmentName}-dashboard
+    Export:
+      Name: !Sub ${EnvironmentName}-DashboardURL
+```
+
+Now, let's assemble the complete template:
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure and Scalable Production Environment for Web Application'
+
+Parameters:
+  EnvironmentName:
+    Description: Environment name that is prefixed to resource names
+    Type: String
+    Default: prod
+
+  VpcCIDR:
+    Description: CIDR block for the VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: CIDR block for Public Subnet 1
+    Type: String
+    Default: 10.0.1.0/24
+
+  PublicSubnet2CIDR:
+    Description: CIDR block for Public Subnet 2
+    Type: String
+    Default: 10.0.2.0/24
+
+  PrivateSubnet1CIDR:
+    Description: CIDR block for Private Subnet 1
+    Type: String
+    Default: 10.0.3.0/24
+
+  PrivateSubnet2CIDR:
+    Description: CIDR block for Private Subnet 2
+    Type: String
+    Default: 10.0.4.0/24
+
+  DBInstanceClass:
+    Description: RDS instance class
+    Type: String
+    Default: db.t3.small
+
+  DBName:
+    Description: Database name
+    Type: String
+    Default: proddb
+
+  DBUsername:
+    Description: Database admin username
+    Type: String
+    NoEcho: true
+
+  DBPassword:
+    Description: Database admin password
+    Type: String
+    NoEcho: true
+
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.medium
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+
+Resources:
+  # VPC and Network Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-igw
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet-1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-nat-gateway-1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-nat-gateway-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-route-table
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-route-table-1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-route-table-2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
 
   # Network ACLs
   PublicNetworkAcl:
@@ -277,22 +1424,11 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'prod-public-nacl-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-public-nacl
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  PrivateNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-private-nacl-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Public NACL Rules
-  PublicNetworkAclEntryInboundHTTP:
+  PublicNetworkAclEntryIngressHTTP:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
@@ -305,7 +1441,7 @@ Resources:
         From: 80
         To: 80
 
-  PublicNetworkAclEntryInboundHTTPS:
+  PublicNetworkAclEntryIngressHTTPS:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
@@ -318,7 +1454,7 @@ Resources:
         From: 443
         To: 443
 
-  PublicNetworkAclEntryInboundSSH:
+  PublicNetworkAclEntryIngressSSH:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
@@ -331,11 +1467,11 @@ Resources:
         From: 22
         To: 22
 
-  PublicNetworkAclEntryInboundEphemeral:
+  PublicNetworkAclEntryIngressEphemeralTraffic:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 130
+      RuleNumber: 140
       Protocol: 6
       RuleAction: allow
       Egress: false
@@ -344,7 +1480,7 @@ Resources:
         From: 1024
         To: 65535
 
-  PublicNetworkAclEntryOutbound:
+  PublicNetworkAclEntryEgressAll:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
@@ -354,28 +1490,6 @@ Resources:
       Egress: true
       CidrBlock: 0.0.0.0/0
 
-  # Private NACL Rules
-  PrivateNetworkAclEntryInboundVPC:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
-      Protocol: -1
-      RuleAction: allow
-      Egress: false
-      CidrBlock: 10.0.0.0/16
-
-  PrivateNetworkAclEntryOutbound:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
-      Protocol: -1
-      RuleAction: allow
-      Egress: true
-      CidrBlock: 0.0.0.0/0
-
-  # NACL Subnet Associations
   PublicSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -387,785 +1501,6 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet2
       NetworkAclId: !Ref PublicNetworkAcl
-
-  PrivateSubnet1NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  PrivateSubnet2NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  # S3 Bucket for Application Data (Encrypted)
-  AppDataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: !Sub 'prod-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref EncryptionKey
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-app-data-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  AppDataBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref AppDataBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowSSLRequestsOnly
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${AppDataBucket}'
-              - !Sub 'arn:aws:s3:::${AppDataBucket}/*'
-            Condition:
-              Bool:
-                'aws:SecureTransport': false
-
-  # Security Groups
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  WebAppSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Web Application instances
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0 # Ideally this should be restricted to specific IPs
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-webapp-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for RDS Database
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebAppSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-db-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # IAM Roles
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' # For Systems Manager
-      Policies:
-        - PolicyName: !Sub 'prod-ec2-app-policy-${EnvironmentSuffix}'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
-                  - 's3:ListBucket'
-                Resource:
-                  - !Sub 'arn:aws:s3:::${AppDataBucket}'
-                  - !Sub 'arn:aws:s3:::${AppDataBucket}/*'
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                Resource: !GetAtt EncryptionKey.Arn
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogStreams'
-                Resource: 'arn:aws:logs:*:*:*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-ec2-instance-role-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref EC2InstanceRole
-
-  # Application Load Balancer
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      Type: application
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      Port: 80
-      Protocol: HTTP
-      UnhealthyThresholdCount: 5
-      VpcId: !Ref VPC
-      TargetType: instance
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-tg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # Auto Scaling Configuration
-  WebAppLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub 'prod-webapp-lt-${EnvironmentSuffix}'
-      VersionDescription: Initial version
-      LaunchTemplateData:
-        ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI - Update with the latest AMI ID
-        InstanceType: t3.medium
-        SecurityGroupIds:
-          - !Ref WebAppSecurityGroup
-        IamInstanceProfile:
-          Name: !Ref EC2InstanceProfile
-        UserData:
-          Fn::Base64: |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            echo "Hello World from $(hostname -f)" > /var/www/html/index.html
-            # Install CloudWatch Logs agent
-            yum install -y awslogs
-            systemctl start awslogsd
-            systemctl enable awslogsd
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub 'prod-webapp-${EnvironmentSuffix}'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-
-  WebAppAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Sub 'prod-webapp-asg-${EnvironmentSuffix}'
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref WebAppLaunchTemplate
-        Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-webapp-asg-instance-${EnvironmentSuffix}'
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-          PropagateAtLaunch: true
-
-  ScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 70.0
-
-  # CloudWatch Alarms
-  CPUAlarmHigh:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Scale up if CPU > 70% for 3 minutes
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 3
-      Threshold: 70
-      AlarmActions:
-        - !Ref ScaleUpPolicy
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebAppAutoScalingGroup
-      ComparisonOperator: GreaterThanThreshold
-
-  # RDS Database (Multi-AZ)
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-db-subnet-group-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBName: appdb
-      AllocatedStorage: 20
-      DBInstanceClass: db.t3.medium
-      Engine: mysql
-      EngineVersion: 8.0
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
-      MultiAZ: true
-      StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref EncryptionKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 7
-      DeleteAutomatedBackups: false
-      DeletionProtection: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-mysql-db-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Database password in Secrets Manager
-  DBPassword:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${AWS::StackName}-db-password'
-      Description: 'Database master password'
-      KmsKeyId: !Ref EncryptionKey
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"admin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-db-secret-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # CloudWatch Logs Groups
-  AppLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/ec2/prod-webapp-${EnvironmentSuffix}'
-      RetentionInDays: 90
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-app-logs-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # AWS Config
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub 'prod-config-recorder-${EnvironmentSuffix}'
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResources: true
-      RoleARN: !GetAtt ConfigRole.Arn
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub 'prod-config-delivery-channel-${EnvironmentSuffix}'
-      S3BucketName: !Ref ConfigBucket
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour
-
-  ConfigBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'prod-config-${AWS::AccountId}-${EnvironmentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref EncryptionKey
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-config-bucket-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
-      Policies:
-        - PolicyName: !Sub 'prod-config-s3-policy-${EnvironmentSuffix}'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:PutObject'
-                Resource:
-                  - !Sub 'arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/*'
-                Condition:
-                  StringLike:
-                    's3:x-amz-acl': 'bucket-owner-full-control'
-              - Effect: Allow
-                Action:
-                  - 's3:GetBucketAcl'
-                Resource:
-                  - !Sub 'arn:aws:s3:::${ConfigBucket}'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-config-role-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # VPC Peering (Optional, uncomment if needed)
-  # VPCPeeringConnection:
-  #   Type: AWS::EC2::VPCPeeringConnection
-  #   Properties:
-  #     VpcId: !Ref VPC
-  #     PeerVpcId: vpc-12345678 # Replace with the ID of the VPC to peer with
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub 'prod-vpc-peering-${EnvironmentSuffix}'
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentSuffix
-
-Outputs:
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-
-  VPCID:
-    Description: 'ID of the VPC'
-    Value: !Ref VPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPCID'
-
-  PublicSubnet1ID:
-    Description: 'ID of Public Subnet 1'
-    Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1ID'
-
-  PublicSubnet2ID:
-    Description: 'ID of Public Subnet 2'
-    Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2ID'
-
-  PrivateSubnet1ID:
-    Description: 'ID of Private Subnet 1'
-    Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1ID'
-
-  PrivateSubnet2ID:
-    Description: 'ID of Private Subnet 2'
-    Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2ID'
-
-  LoadBalancerDNS:
-    Description: 'DNS Name of the Application Load Balancer'
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
-
-  AppDataBucketName:
-    Description: 'Name of the S3 Bucket for Application Data'
-    Value: !Ref AppDataBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-AppDataBucketName'
-
-  DatabaseEndpoint:
-    Description: 'Endpoint of the RDS Database'
-    Value: !GetAtt Database.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
-
-  KMSKeyARN:
-    Description: 'ARN of the KMS Key used for encryption'
-    Value: !GetAtt EncryptionKey.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyARN'
-```
-
-This is a comprehensive CloudFormation template that meets all the requirements. It creates a secure, scalable, and highly available infrastructure for a web application with appropriate networking, security, and monitoring configurations.
-
-The template follows AWS best practices including:
-
-Least privilege IAM roles and policies
-Encrypted S3 buckets with appropriate access controls
-VPC with public and private subnets across multiple availability zones
-Properly configured security groups and NACLs
-KMS for encryption of sensitive data
-CloudWatch for logging and monitoring
-Resource tagging for better management
-Load balancing and auto scaling
-Multi-AZ RDS for high availability
-AWS Config for tracking environment changes
-The resources are all properly named with the prefix "prod-" as specified in the requirements and tags are applied to all resources for better management.
-
-Answer
-
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
-Resources:
-  # KMS Key for encryption
-  EncryptionKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: KMS key for encryption of resources
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Allow administration of the key
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - 'kms:*'
-            Resource: '*'
-          - Sid: Allow use of the key
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-kms-key-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  EncryptionKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/prod-kms-key-${EnvironmentSuffix}'
-      TargetKeyId: !Ref EncryptionKey
-
-  # VPC and Networking
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-vpc-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-igw-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  VPCGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  # Public Subnets
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-public-subnet-1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-public-subnet-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Private Subnets
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-private-subnet-1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-private-subnet-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # NAT Gateway and Elastic IPs
-  NatGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-nat-eip-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-nat-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Route Tables
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-public-rt-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-private-rt-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Routes
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-
-  # Subnet Route Table Associations
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  PrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
-
-  # Network ACLs
-  PublicNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-public-nacl-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
 
   PrivateNetworkAcl:
     Type: AWS::EC2::NetworkAcl
@@ -1173,62 +1508,11 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'prod-private-nacl-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-private-nacl
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  # Public NACL Rules
-  PublicNetworkAclEntryInboundHTTP:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 100
-      Protocol: 6
-      RuleAction: allow
-      Egress: false
-      CidrBlock: 0.0.0.0/0
-      PortRange:
-        From: 80
-        To: 80
-
-  PublicNetworkAclEntryInboundHTTPS:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 110
-      Protocol: 6
-      RuleAction: allow
-      Egress: false
-      CidrBlock: 0.0.0.0/0
-      PortRange:
-        From: 443
-        To: 443
-
-  PublicNetworkAclEntryInboundEphemeral:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 130
-      Protocol: 6
-      RuleAction: allow
-      Egress: false
-      CidrBlock: 0.0.0.0/0
-      PortRange:
-        From: 1024
-        To: 65535
-
-  PublicNetworkAclEntryOutbound:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PublicNetworkAcl
-      RuleNumber: 100
-      Protocol: -1
-      RuleAction: allow
-      Egress: true
-      CidrBlock: 0.0.0.0/0
-
-  # Private NACL Rules
-  PrivateNetworkAclEntryInboundVPC:
+  PrivateNetworkAclEntryIngressVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
@@ -1236,9 +1520,9 @@ Resources:
       Protocol: -1
       RuleAction: allow
       Egress: false
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCIDR
 
-  PrivateNetworkAclEntryOutbound:
+  PrivateNetworkAclEntryEgressAll:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
@@ -1247,19 +1531,6 @@ Resources:
       RuleAction: allow
       Egress: true
       CidrBlock: 0.0.0.0/0
-
-  # NACL Subnet Associations
-  PublicSubnet1NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      NetworkAclId: !Ref PublicNetworkAcl
-
-  PublicSubnet2NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      NetworkAclId: !Ref PublicNetworkAcl
 
   PrivateSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
@@ -1273,17 +1544,179 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       NetworkAclId: !Ref PrivateNetworkAcl
 
-  # S3 Bucket for Application Data (Encrypted)
-  AppDataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
+  # Security Groups
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      BucketName: !Sub 'prod-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref EncryptionKey
+      GroupDescription: Allow HTTP/HTTPS and SSH access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-web-sg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow database access from web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-sg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # IAM Roles and Policies
+  WebAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Path: /
+      RoleName: !Sub ${EnvironmentName}-web-app-role
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-web-app-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  WebAppPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-web-app-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::${AppDataBucket}
+              - !Sub arn:aws:s3:::${AppDataBucket}/*
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+      Roles:
+        - !Ref WebAppRole
+
+  WebAppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref WebAppRole
+
+  DBAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      RoleName: !Sub ${EnvironmentName}-db-access-role
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-db-access-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  DBAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-db-access-policy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - rds:Connect
+            Resource: !Sub arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}
+      Roles:
+        - !Ref DBAccessRole
+
+  # KMS Key for encryption
+  AppDataKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting app data
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: !Sub ${EnvironmentName}-key-policy
+        Statement:
+          - Sid: Allow root account full control
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow use of the key by web app role
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt WebAppRole.Arn
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-app-data-key
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AppDataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${EnvironmentName}-app-data-key
+      TargetKeyId: !Ref AppDataKey
+
+  # S3 Bucket for app data
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-logs-${AWS::AccountId}
+      AccessControl: LogDeliveryWrite
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -1293,9 +1726,34 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: !Sub 'prod-app-data-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-logs
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
+
+  AppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-app-data-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref AppDataKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: app-data-access-logs/
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-app-data
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   AppDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1304,298 +1762,24 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: AllowSSLRequestsOnly
+          - Sid: DenyUnEncryptedObjectUploads
             Effect: Deny
             Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${AppDataBucket}'
-              - !Sub 'arn:aws:s3:::${AppDataBucket}/*'
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${AppDataBucket}/*
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': aws:kms
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource: !Sub arn:aws:s3:::${AppDataBucket}/*
             Condition:
               Bool:
-                'aws:SecureTransport': false
-          - Sid: AllowAppAccess
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
-            Action:
-              - 's3:GetObject'
-              - 's3:PutObject'
-              - 's3:ListBucket'
-            Resource:
-              - !Sub 'arn:aws:s3:::${AppDataBucket}'
-              - !Sub 'arn:aws:s3:::${AppDataBucket}/*'
+                aws:SecureTransport: false
 
-  # Security Groups
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  WebAppSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Web Application instances
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.0.0.0/16
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-webapp-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for RDS Database
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebAppSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-db-sg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # IAM Roles
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-      Policies:
-        - PolicyName: !Sub 'prod-ec2-app-policy-${EnvironmentSuffix}'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
-                  - 's3:ListBucket'
-                Resource:
-                  - !Sub 'arn:aws:s3:::${AppDataBucket}'
-                  - !Sub 'arn:aws:s3:::${AppDataBucket}/*'
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'logs:DescribeLogStreams'
-                Resource: 'arn:aws:logs:*:*:*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-ec2-instance-role-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref EC2InstanceRole
-
-  # Application Load Balancer
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      Type: application
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      Port: 80
-      Protocol: HTTP
-      UnhealthyThresholdCount: 5
-      VpcId: !Ref VPC
-      TargetType: instance
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-alb-tg-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # Auto Scaling Configuration
-  WebAppLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub 'prod-webapp-lt-${EnvironmentSuffix}'
-      VersionDescription: Initial version
-      LaunchTemplateData:
-        ImageId: ami-0ac019f4fcb7cb7e6
-        InstanceType: t3.medium
-        SecurityGroupIds:
-          - !Ref WebAppSecurityGroup
-        IamInstanceProfile:
-          Name: !Ref EC2InstanceProfile
-        UserData:
-          Fn::Base64: |
-            #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            echo "Hello from TAP Web Application" > /var/www/html/index.html
-            echo "OK" > /var/www/html/health
-            # Setup CloudWatch agent
-            yum install -y amazon-cloudwatch-agent
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub 'prod-webapp-${EnvironmentSuffix}'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-
-  WebAppAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Sub 'prod-webapp-asg-${EnvironmentSuffix}'
-      MinSize: 2
-      MaxSize: 6
-      DesiredCapacity: 2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref WebAppLaunchTemplate
-        Version: !GetAtt WebAppLaunchTemplate.LatestVersionNumber
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-webapp-asg-instance-${EnvironmentSuffix}'
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-          PropagateAtLaunch: true
-
-  CPUScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 70.0
-
-  RequestCountScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref WebAppAutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ALBRequestCountPerTarget
-          ResourceLabel: !Join
-            - '/'
-            - - !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
-              - !GetAtt ALBTargetGroup.TargetGroupFullName
-        TargetValue: 1000.0
-
-  # CloudWatch Alarms
-  CPUAlarmHigh:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Alarm if CPU utilization is high
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 2
-      Threshold: 85
-      AlarmActions:
-        - !Ref CPUScalingPolicy
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebAppAutoScalingGroup
-      ComparisonOperator: GreaterThanThreshold
-
-  MemoryAlarmHigh:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Alarm if memory utilization is high
-      MetricName: mem_used_percent
-      Namespace: CWAgent
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 2
-      Threshold: 80
-      AlarmActions:
-        - !Ref CPUScalingPolicy
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref WebAppAutoScalingGroup
-      ComparisonOperator: GreaterThanThreshold
-
-  # RDS Database (Multi-AZ)
+  # Database Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -1605,9 +1789,20 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'prod-db-subnet-group-${EnvironmentSuffix}'
+          Value: !Sub ${EnvironmentName}-db-subnet-group
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref EnvironmentName
 
-  DatabaseSecret: Type
+  # RDS Database Instance
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      AllocatedStorage: 20
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      Engine
+### Answer
+---
+
 ```

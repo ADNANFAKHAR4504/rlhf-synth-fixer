@@ -1,79 +1,14 @@
-Assume that you are an expert Cloud Engineer and Your task is to write me Infrastructure as Code (IaC) in AWS CloudFormation YAML based on the following requirements.
+I need to create a production-ready AWS environment using CloudFormation YAML that sets up a secure and scalable infrastructure for a web application deployment. The template should be named secure-environment-setup.yaml and should fully comply with AWS best practices for security, availability, and cost efficiency.
 
-## Problem
+Here’s the situation:
+We’re deploying a web application in the us-east-1 region, using a dedicated VPC to isolate resources from other environments. The application will run in public subnets, while its associated Amazon RDS database will be placed in private subnets for security. Each subnet should have proper network ACLs configured to further harden the environment.
 
-You are required to create a CloudFormation YAML template to set up a **secure cloud environment** for a web application deployment. Follow these requirements:
+Security and compliance are a top priority. The infrastructure must define IAM roles and policies following the principle of least privilege — one for the application and another for the database access layer. Any sensitive data should be stored in an encrypted S3 bucket, with strict bucket policies and KMS-managed encryption keys to ensure proper data protection.
 
-1. Define an **IAM Role and Policy** granting the least privilege to both the application and its connected database resources.
-2. Set up an **encrypted S3 bucket** for storing sensitive data, ensuring it has the correct policies attached for secure access.
-3. Implement a **VPC** with appropriately configured private and public subnets. Deploy the application resources in the public subnet while sensitive databases reside within the private subnet.
-4. Ensure **security groups** are properly configured to allow least privilege access to application resources.
-5. Use **AWS KMS** for managing encryption keys.
-6. Include configuration for **logging and monitoring** using CloudWatch.
-7. Ensure all **resources have tagging** applied for better management.
-8. Configure an **Elastic Load Balancer (ELB/ALB)** to distribute traffic to instances.
-9. Set up **Auto Scaling** for handling traffic variations efficiently.
-10. Create **CloudWatch alarms** for critical resource utilizations like CPU and Memory.
-11. Implement **Network ACLs (NACLs)** for improved subnet security.
-12. Configure **Amazon RDS** in the private subnet and ensure it's Multi-AZ for high availability.
-13. Set up **VPC Peering** if needed for connecting to other VPCs.
-14. Use **AWS Config** to track environment changes.
-15. Ensure cost estimation is considered by utilizing **AWS Pricing Calculator** effectively.
+The system must use CloudWatch for centralized logging, monitoring, and alerting, including alarms for critical metrics like CPU utilization and memory usage. To handle varying loads, set up Auto Scaling with an Elastic Load Balancer (ELB) distributing traffic across EC2 instances in the public subnet.
 
-## Expected Output
+All components, including VPC, subnets, EC2 instances, RDS, S3 buckets, IAM roles, and CloudWatch configurations, should have consistent naming conventions prefixed with prod- and include resource tagging for easy management. The RDS instance should be configured in multi-AZ mode for high availability and deployed exclusively in private subnets with no public access.
 
-- A single **CloudFormation YAML template** with the filename: `TapStack.yaml`.
-- All configurations must meet **adaptive billing, scalability, and security standards**.
-- The template must be validated to ensure it runs in AWS CloudFormation without errors.
-- The provided `TapStack.yaml` file should use the following code in it:
+Additionally, enable AWS Config to continuously track configuration changes and support compliance auditing. If required, configure VPC peering to connect securely to other VPCs within the same organization. All aspects of the setup should reflect AWS Security Configuration as Code principles — from encryption at rest to IAM role isolation.
 
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
-Resources:
-
-Outputs:
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
-```
-
-- Response should only include the single code file `TapStack.yaml` with the above content included.
-
-## Environment
-
-- Deploy in **AWS us-east-1 region**.
-- Use **naming conventions with the prefix `prod-`**.
-- Deploy within a **dedicated VPC** to isolate resources from other environments.
-
-## Constraints
-
-- The CloudFormation template must:
-  - Define **IAM roles** with least privilege for application and database access.
-  - Ensure **encrypted S3 buckets** for sensitive data storage with appropriate policies.
-  - Implement **VPC** with private and public subnets for application deployment.
+Finally, ensure the design remains cost-aware by optimizing Auto Scaling policies and referencing AWS Pricing Calculator estimates for major resources. The resulting CloudFormation stack should be fully validated and capable of being deployed without modification, following AWS’s security, scalability, and governance best practices.
