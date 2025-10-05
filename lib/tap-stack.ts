@@ -287,20 +287,37 @@ def handler(event, context):
                 's3:PutObject',
                 's3:GetBucketLocation',
                 's3:ListBucket',
-                's3:PutObjectAcl'
+                's3:PutObjectAcl',
               ],
               resources: [
                 `${iotDataBucket.bucketArn}`,
-                `${iotDataBucket.bucketArn}/*`
+                `${iotDataBucket.bucketArn}/*`,
               ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
+                'logs:CreateLogGroup',
                 'logs:CreateLogStream',
-                'logs:PutLogEvents'
+                'logs:PutLogEvents',
               ],
               resources: ['*'],
+            }),
+            // Glue schema read permissions for data format conversion
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'glue:GetTable',
+                'glue:GetTableVersion',
+                'glue:GetTableVersions',
+                'glue:GetDatabase',
+                'glue:GetPartitions',
+              ],
+              resources: [
+                `arn:aws:glue:${this.region}:${this.account}:catalog`,
+                `arn:aws:glue:${this.region}:${this.account}:database/iot_sensor_db_${environmentSuffix}`,
+                `arn:aws:glue:${this.region}:${this.account}:table/iot_sensor_db_${environmentSuffix}/sensor_data`,
+              ],
             }),
           ],
         }),
