@@ -12,6 +12,7 @@ import app.constructs.NetworkConstruct;
 import com.hashicorp.cdktf.TerraformOutput;
 import com.hashicorp.cdktf.providers.aws.acm_certificate.AcmCertificate;
 import com.hashicorp.cdktf.providers.aws.acm_certificate.AcmCertificateConfig;
+import com.hashicorp.cdktf.providers.aws.subnet.Subnet;
 import com.hashicorp.cdktf.providers.random_provider.provider.RandomProvider;
 import com.hashicorp.cdktf.providers.tls.private_key.PrivateKey;
 import com.hashicorp.cdktf.providers.tls.private_key.PrivateKeyConfig;
@@ -70,12 +71,12 @@ public class MainStack extends TerraformStack {
 
         // Create Compute Infrastructure
         ComputeConstruct compute = new ComputeConstruct(this, "compute", computeConfig, securityConfig,
-                network.getVpc().getId(), List.of(network.getPublicSubnet().getId()),
-                List.of(network.getPrivateSubnet().getId()));
+                network.getVpc().getId(), network.getPublicSubnets().stream().map(Subnet::getId).toList(),
+                network.getPrivateSubnets().stream().map(Subnet::getId).toList());
 
         // Create Database Infrastructure
         DatabaseConstruct database = new DatabaseConstruct(this, "database", databaseConfig,
-                network.getVpc().getId(), List.of(network.getPrivateSubnet().getId()),
+                network.getVpc().getId(), network.getPrivateSubnets().stream().map(Subnet::getId).toList(),
                 compute.getEc2SecurityGroup().getId());
 
         // Create Storage Infrastructure
@@ -184,15 +185,14 @@ public class MainStack extends TerraformStack {
                         .build());
 
         // Import to ACM
-        return new AcmCertificate(this, "acm-cert",
-                AcmCertificateConfig.builder()
-                        .privateKey(privateKey.getPrivateKeyPem())
-                        .certificateBody(selfSignedCert.getCertPem())
-                        .tags(Map.of(
-                                "Name", String.format("%s-%s-cert", "Web App Certificate", "Production"),
-                                "Environment", "Production"
-                        ))
-                        .build());
+        return new AcmCertificate(this, "acm-cert", AcmCertificateConfig.builder()
+                .privateKey(privateKey.getPrivateKeyPem())
+                .certificateBody(selfSignedCert.getCertPem())
+                .tags(Map.of(
+                        "Name", String.format("%s-%s-cert", "Web App Certificate", "Production"),
+                        "Environment", "Production"
+                ))
+                .build());
     }
 
     public String getStackId() {

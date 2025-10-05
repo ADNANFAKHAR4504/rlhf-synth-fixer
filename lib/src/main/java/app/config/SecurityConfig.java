@@ -11,7 +11,7 @@ public record SecurityConfig(List<String> allowedSshIpRanges, List<String> allow
                 true,
                 70,
                 1,
-                "" // Provide your SSL certificate ARN
+                "" // SSL certificate ARN
         );
     }
 }

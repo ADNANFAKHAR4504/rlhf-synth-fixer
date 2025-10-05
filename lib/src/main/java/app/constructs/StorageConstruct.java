@@ -2,6 +2,7 @@ package app.constructs;
 
 import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 import com.hashicorp.cdktf.providers.aws.s3_bucket_lifecycle_configuration.S3BucketLifecycleConfigurationRule;
+import com.hashicorp.cdktf.providers.aws.s3_bucket_lifecycle_configuration.S3BucketLifecycleConfigurationRuleFilter;
 import com.hashicorp.cdktf.providers.aws.s3_bucket_lifecycle_configuration.S3BucketLifecycleConfigurationRuleTransition;
 import com.hashicorp.cdktf.providers.aws.s3_bucket_lifecycle_configuration.S3BucketLifecycleConfigurationRuleExpiration;
 import com.hashicorp.cdktf.providers.aws.s3_bucket_lifecycle_configuration.S3BucketLifecycleConfigurationRuleNoncurrentVersionTransition;
@@ -89,6 +90,9 @@ public class StorageConstruct extends Construct {
             rule = S3BucketLifecycleConfigurationRule.builder()
                     .id("backup-lifecycle")
                     .status("Enabled")
+                    .filter(List.of(S3BucketLifecycleConfigurationRuleFilter.builder()
+                            .prefix("")
+                            .build()))
                     .transition(List.of(
                             S3BucketLifecycleConfigurationRuleTransition.builder()
                                     .days(30)
@@ -107,6 +111,9 @@ public class StorageConstruct extends Construct {
             rule = S3BucketLifecycleConfigurationRule.builder()
                     .id("assets-lifecycle")
                     .status("Enabled")
+                    .filter(List.of(S3BucketLifecycleConfigurationRuleFilter.builder()
+                            .prefix("")
+                            .build()))
                     .transition(List.of(
                             S3BucketLifecycleConfigurationRuleTransition.builder()
                                     .days(60)

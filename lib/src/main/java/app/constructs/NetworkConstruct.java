@@ -16,16 +16,18 @@ import com.hashicorp.cdktf.providers.aws.iam_role_policy.IamRolePolicy;
 import app.config.NetworkConfig;
 import app.config.SecurityConfig;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class NetworkConstruct extends Construct {
 
     private final Vpc vpc;
 
-    private final Subnet publicSubnet;
+    private final List<Subnet> publicSubnets;
 
-    private final Subnet privateSubnet;
+    private final List<Subnet> privateSubnets;
 
     private final InternetGateway internetGateway;
 
@@ -49,22 +51,30 @@ public class NetworkConstruct extends Construct {
                 .tags(config.tags())
                 .build();
 
-        // Create Public Subnet
-        this.publicSubnet = Subnet.Builder.create(this, "public-subnet")
-                .vpcId(vpc.getId())
-                .cidrBlock(config.publicSubnetCidr())
-                .availabilityZone(config.availabilityZone())
-                .mapPublicIpOnLaunch(true)
-                .tags(merge(config.tags(), Map.of("Name", "Public Subnet")))
-                .build();
+        // Create Public Subnets
+        this.publicSubnets = new ArrayList<>();
+        for (int i = 0; i < config.publicSubnetCidrs().size(); i++) {
+            Subnet subnet = Subnet.Builder.create(this, "public-subnet-" + i)
+                    .vpcId(vpc.getId())
+                    .cidrBlock(config.publicSubnetCidrs().get(i))
+                    .availabilityZone(config.availabilityZones().get(i))
+                    .mapPublicIpOnLaunch(true)
+                    .tags(merge(config.tags(), Map.of("Name", "Public Subnet " + (i + 1))))
+                    .build();
+            publicSubnets.add(subnet);
+        }
 
-        // Create Private Subnet
-        this.privateSubnet = Subnet.Builder.create(this, "private-subnet")
-                .vpcId(vpc.getId())
-                .cidrBlock(config.privateSubnetCidr())
-                .availabilityZone(config.availabilityZone())
-                .tags(merge(config.tags(), Map.of("Name", "Private Subnet")))
-                .build();
+        // Create Private Subnets
+        this.privateSubnets = new ArrayList<>();
+        for (int i = 0; i < config.privateSubnetCidrs().size(); i++) {
+            Subnet subnet = Subnet.Builder.create(this, "private-subnet-" + i)
+                    .vpcId(vpc.getId())
+                    .cidrBlock(config.privateSubnetCidrs().get(i))
+                    .availabilityZone(config.availabilityZones().get(i))
+                    .tags(merge(config.tags(), Map.of("Name", "Private Subnet " + (i + 1))))
+                    .build();
+            privateSubnets.add(subnet);
+        }
 
         // Create Elastic IP for NAT Gateway
         Eip natEip = Eip.Builder.create(this, "nat-eip")
@@ -72,10 +82,10 @@ public class NetworkConstruct extends Construct {
                 .tags(config.tags())
                 .build();
 
-        // Create NAT Gateway
+        // Create NAT Gateway (in first public subnet)
         this.natGateway = NatGateway.Builder.create(this, "nat-gateway")
                 .allocationId(natEip.getId())
-                .subnetId(publicSubnet.getId())
+                .subnetId(publicSubnets.get(0).getId())
                 .tags(config.tags())
                 .build();
 
@@ -100,10 +110,13 @@ public class NetworkConstruct extends Construct {
                 .gatewayId(internetGateway.getId())
                 .build();
 
-        RouteTableAssociation.Builder.create(this, "public-rta")
-                .subnetId(publicSubnet.getId())
-                .routeTableId(publicRouteTable.getId())
-                .build();
+        // Associate all public subnets
+        for (int i = 0; i < publicSubnets.size(); i++) {
+            RouteTableAssociation.Builder.create(this, "public-rta-" + i)
+                    .subnetId(publicSubnets.get(i).getId())
+                    .routeTableId(publicRouteTable.getId())
+                    .build();
+        }
 
         // Private Route Table
         RouteTable privateRouteTable = RouteTable.Builder.create(this, "private-rt")
@@ -117,10 +130,13 @@ public class NetworkConstruct extends Construct {
                 .natGatewayId(natGateway.getId())
                 .build();
 
-        RouteTableAssociation.Builder.create(this, "private-rta")
-                .subnetId(privateSubnet.getId())
-                .routeTableId(privateRouteTable.getId())
-                .build();
+        // Associate all private subnets
+        for (int i = 0; i < privateSubnets.size(); i++) {
+            RouteTableAssociation.Builder.create(this, "private-rta-" + i)
+                    .subnetId(privateSubnets.get(i).getId())
+                    .routeTableId(privateRouteTable.getId())
+                    .build();
+        }
     }
 
     private void setupVpcFlowLogs(final NetworkConfig config) {
@@ -193,12 +209,21 @@ public class NetworkConstruct extends Construct {
         return vpc;
     }
 
+    public List<Subnet> getPublicSubnets() {
+        return publicSubnets;
+    }
+
+    public List<Subnet> getPrivateSubnets() {
+        return privateSubnets;
+    }
+
+    // For backward compatibility - returns first subnet
     public Subnet getPublicSubnet() {
-        return publicSubnet;
+        return publicSubnets.get(0);
     }
 
     public Subnet getPrivateSubnet() {
-        return privateSubnet;
+        return privateSubnets.get(0);
     }
 
     public InternetGateway getInternetGateway() {

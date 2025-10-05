@@ -5,6 +5,7 @@ import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.alb.Alb;
 import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListener;
 import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListenerDefaultAction;
+import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListenerDefaultActionRedirect;
 import com.hashicorp.cdktf.providers.aws.alb_target_group.AlbTargetGroup;
 import com.hashicorp.cdktf.providers.aws.alb_target_group.AlbTargetGroupHealthCheck;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroup;
@@ -26,6 +27,7 @@ import com.hashicorp.cdktf.providers.aws.security_group.SecurityGroup;
 import com.hashicorp.cdktf.providers.aws.security_group_rule.SecurityGroupRule;
 import software.constructs.Construct;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -91,11 +93,28 @@ public class ComputeConstruct extends Construct {
                 .deregistrationDelay("30")
                 .build();
 
-        // Create ALB Listener
-        AlbListener.Builder.create(this, "alb-listener")
+        // Create HTTP Listener (redirects to HTTPS)
+        AlbListener.Builder.create(this, "alb-http-listener")
                 .loadBalancerArn(alb.getArn())
                 .port(80)
                 .protocol("HTTP")
+                .defaultAction(List.of(AlbListenerDefaultAction.builder()
+                        .type("redirect")
+                        .redirect(AlbListenerDefaultActionRedirect.builder()
+                                .port("443")
+                                .protocol("HTTPS")
+                                .statusCode("HTTP_301")
+                                .build())
+                        .build()))
+                .build();
+
+        // Create HTTPS Listener
+        AlbListener.Builder.create(this, "alb-https-listener")
+                .loadBalancerArn(alb.getArn())
+                .port(443)
+                .protocol("HTTPS")
+                .sslPolicy("ELBSecurityPolicy-TLS-1-2-2017-01")
+                .certificateArn(securityConfig.sslCertificateArn())
                 .defaultAction(List.of(AlbListenerDefaultAction.builder()
                         .type("forward")
                         .targetGroupArn(targetGroup.getArn())
@@ -270,19 +289,20 @@ public class ComputeConstruct extends Construct {
     }
 
     private String getEc2UserData() {
-        return """
+        String script = """
                 #!/bin/bash
                 yum update -y
                 yum install -y amazon-cloudwatch-agent
-                            
+
                 # Install web server
                 yum install -y nginx
                 systemctl start nginx
                 systemctl enable nginx
-                            
+
                 # Create health check endpoint
                 echo "OK" > /usr/share/nginx/html/health
                 """;
+        return Base64.getEncoder().encodeToString(script.getBytes());
     }
 
     private ElasticBeanstalkApplication setupElasticBeanstalkApplication(final ComputeConfig config) {
@@ -305,7 +325,7 @@ public class ComputeConstruct extends Construct {
         return ElasticBeanstalkEnvironment.Builder.create(this, "eb-env")
                 .name(config.environmentName())
                 .application(ebApp.getName())
-                .solutionStackName("64bit Amazon Linux 2 v5.5.0 running Node.js 14")
+                .solutionStackName("64bit Amazon Linux 2023 v6.1.6 running Python 3.11")
                 .tier("WebServer")
                 .setting(convertToEbSettings(settings))
                 .build();
