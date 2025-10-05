@@ -17,7 +17,7 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
 # Set default environment variables if not provided
-export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-secfix54729183}
+export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
 export AWS_REGION=${AWS_REGION:-us-east-1}
@@ -86,15 +86,11 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  npm run cfn:cleanup
-  echo "🚀 Starting CloudFormation YAML deployment..."
-  aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}
+  npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  npm run cfn:cleanup
-  echo "🚀 Starting CloudFormation JSON deployment..."
-  aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}
+  npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
