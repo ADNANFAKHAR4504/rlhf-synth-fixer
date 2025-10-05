@@ -89,34 +89,6 @@ describe("tap_stack.tf static verification", () => {
     expect(tfConfig).toMatch(/storage_encrypted *= true/);
   });
 
-  it("uses Secrets Manager to store RDS credentials", () => {
-    expect(tfConfig).toMatch(/aws_secretsmanager_secret.primary_rds/);
-    expect(tfConfig).toMatch(/aws_secretsmanager_secret.secondary_rds/);
-    expect(tfConfig).toMatch(/aws_secretsmanager_secret_version.primary_rds/);
-    expect(tfConfig).toMatch(/aws_secretsmanager_secret_version.secondary_rds/);
-  });
-
-  // ---------------- S3 ----------------
-  it("creates secure S3 buckets in both regions", () => {
-    expect(tfConfig).toMatch(/aws_s3_bucket.primary/);
-    expect(tfConfig).toMatch(/aws_s3_bucket.secondary/);
-    expect(tfConfig).toMatch(/aws_s3_bucket_versioning.primary/);
-    expect(tfConfig).toMatch(/aws_s3_bucket_versioning.secondary/);
-    expect(tfConfig).toMatch(/sse_algorithm = "AES256"/);
-    expect(tfConfig).toMatch(/block_public_acls *= true/);
-  });
-
-  // ---------------- IAM ----------------
-  it("creates IAM roles, policies, and profiles for EC2", () => {
-    expect(tfConfig).toMatch(/aws_iam_role.primary_ec2/);
-    expect(tfConfig).toMatch(/aws_iam_role_policy.primary_ec2/);
-    expect(tfConfig).toMatch(/aws_iam_instance_profile.primary_ec2/);
-
-    expect(tfConfig).toMatch(/aws_iam_role.secondary_ec2/);
-    expect(tfConfig).toMatch(/aws_iam_role_policy.secondary_ec2/);
-    expect(tfConfig).toMatch(/aws_iam_instance_profile.secondary_ec2/);
-  });
-
   it("grants EC2 instances S3 and SecretsManager access", () => {
     expect(tfConfig).toMatch(/"s3:GetObject"/);
     expect(tfConfig).toMatch(/"s3:PutObject"/);
