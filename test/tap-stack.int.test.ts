@@ -29,13 +29,14 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket Configuration', () => {
     it('should have S3 bucket created and accessible', async () => {
-      if (!deployedOutputs.BucketName) {
+      if (!deployedOutputs.bucketName && !deployedOutputs.BucketName) {
         console.log('Skipping test - no bucket name in outputs');
         return;
       }
 
+      const bucketName = deployedOutputs.bucketName || deployedOutputs.BucketName;
       const command = new HeadBucketCommand({
-        Bucket: deployedOutputs.BucketName,
+        Bucket: bucketName,
       });
 
       try {
@@ -52,13 +53,14 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have requester pays enabled on S3 bucket', async () => {
-      if (!deployedOutputs.BucketName) {
+      if (!deployedOutputs.bucketName && !deployedOutputs.BucketName) {
         console.log('Skipping test - no bucket name in outputs');
         return;
       }
 
+      const bucketName = deployedOutputs.bucketName || deployedOutputs.BucketName;
       const command = new GetBucketRequestPaymentCommand({
-        Bucket: deployedOutputs.BucketName,
+        Bucket: bucketName,
       });
 
       try {
@@ -77,13 +79,14 @@ describe('TapStack Integration Tests', () => {
 
   describe('DynamoDB Table Configuration', () => {
     it('should have DynamoDB table created with correct configuration', async () => {
-      if (!deployedOutputs.SubscriberTableName) {
+      if (!deployedOutputs.subscriberTableName && !deployedOutputs.SubscriberTableName) {
         console.log('Skipping test - no table name in outputs');
         return;
       }
 
+      const tableName = deployedOutputs.subscriberTableName || deployedOutputs.SubscriberTableName;
       const command = new DescribeTableCommand({
-        TableName: deployedOutputs.SubscriberTableName,
+        TableName: tableName,
       });
 
       const response = await dynamoClient.send(command);
@@ -103,13 +106,14 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have correct attributes in DynamoDB table', async () => {
-      if (!deployedOutputs.SubscriberTableName) {
+      if (!deployedOutputs.subscriberTableName && !deployedOutputs.SubscriberTableName) {
         console.log('Skipping test - no table name in outputs');
         return;
       }
 
+      const tableName = deployedOutputs.subscriberTableName || deployedOutputs.SubscriberTableName;
       const command = new DescribeTableCommand({
-        TableName: deployedOutputs.SubscriberTableName,
+        TableName: tableName,
       });
 
       const response = await dynamoClient.send(command);
@@ -127,7 +131,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudFront Distribution', () => {
     it('should have CloudFront distribution created and enabled', async () => {
-      if (!deployedOutputs.DistributionDomainName) {
+      if (!deployedOutputs.distributionDomainName && !deployedOutputs.DistributionDomainName) {
         console.log('Skipping test - no distribution domain in outputs');
         return;
       }
@@ -145,7 +149,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have CloudFront distribution with correct origin configuration', async () => {
-      if (!deployedOutputs.DistributionDomainName) {
+      if (!deployedOutputs.distributionDomainName && !deployedOutputs.DistributionDomainName) {
         console.log('Skipping test - no distribution domain in outputs');
         return;
       }
@@ -170,19 +174,20 @@ describe('TapStack Integration Tests', () => {
 
   describe('Route53 Hosted Zone', () => {
     it('should have Route53 hosted zone created', async () => {
-      if (!deployedOutputs.HostedZoneId) {
+      if (!deployedOutputs.hostedZoneId && !deployedOutputs.HostedZoneId) {
         console.log('Skipping test - no hosted zone ID in outputs');
         return;
       }
 
+      const hostedZoneId = deployedOutputs.hostedZoneId || deployedOutputs.HostedZoneId;
       const command = new GetHostedZoneCommand({
-        Id: deployedOutputs.HostedZoneId,
+        Id: hostedZoneId,
       });
 
       const response = await route53Client.send(command);
 
       expect(response.HostedZone).toBeDefined();
-      expect(response.HostedZone?.Id).toContain(deployedOutputs.HostedZoneId);
+      expect(response.HostedZone?.Id).toContain(hostedZoneId);
       expect(response.HostedZone?.Name).toBeDefined();
       expect(response.HostedZone?.ResourceRecordSetCount).toBeDefined();
     });
@@ -190,12 +195,13 @@ describe('TapStack Integration Tests', () => {
 
   describe('IAM Roles', () => {
     it('should have MediaConvert IAM role created with correct policies', async () => {
-      if (!deployedOutputs.MediaConvertRoleArn) {
+      if (!deployedOutputs.mediaConvertRoleArn && !deployedOutputs.MediaConvertRoleArn) {
         console.log('Skipping test - no MediaConvert role ARN in outputs');
         return;
       }
 
-      const roleName = deployedOutputs.MediaConvertRoleArn.split('/').pop();
+      const roleArn = deployedOutputs.mediaConvertRoleArn || deployedOutputs.MediaConvertRoleArn;
+      const roleName = roleArn.split('/').pop();
       const command = new GetRoleCommand({
         RoleName: roleName,
       });
@@ -310,20 +316,27 @@ describe('TapStack Integration Tests', () => {
 
   describe('End-to-End Validation', () => {
     it('should have all required outputs from deployment', () => {
-      expect(deployedOutputs.BucketName).toBeDefined();
-      expect(deployedOutputs.DistributionDomainName).toBeDefined();
-      expect(deployedOutputs.HostedZoneId).toBeDefined();
-      expect(deployedOutputs.SubscriberTableName).toBeDefined();
-      expect(deployedOutputs.MediaConvertRoleArn).toBeDefined();
+      // Support both camelCase (Pulumi) and PascalCase (CDK/CFN) output names
+      expect(deployedOutputs.bucketName || deployedOutputs.BucketName).toBeDefined();
+      expect(deployedOutputs.distributionDomainName || deployedOutputs.DistributionDomainName).toBeDefined();
+      expect(deployedOutputs.hostedZoneId || deployedOutputs.HostedZoneId).toBeDefined();
+      expect(deployedOutputs.subscriberTableName || deployedOutputs.SubscriberTableName).toBeDefined();
+      expect(deployedOutputs.mediaConvertRoleArn || deployedOutputs.MediaConvertRoleArn).toBeDefined();
     });
 
     it('should have resources properly connected', () => {
       // Validate that outputs follow expected patterns
-      expect(deployedOutputs.BucketName).toMatch(/^tap-podcast-audio-/);
-      expect(deployedOutputs.DistributionDomainName).toMatch(/\.cloudfront\.net$/);
-      expect(deployedOutputs.HostedZoneId).toMatch(/^Z/);
-      expect(deployedOutputs.SubscriberTableName).toMatch(/^tap-subscribers-/);
-      expect(deployedOutputs.MediaConvertRoleArn).toMatch(/^arn:aws:iam::/);
+      const bucketName = deployedOutputs.bucketName || deployedOutputs.BucketName;
+      const distributionDomainName = deployedOutputs.distributionDomainName || deployedOutputs.DistributionDomainName;
+      const hostedZoneId = deployedOutputs.hostedZoneId || deployedOutputs.HostedZoneId;
+      const subscriberTableName = deployedOutputs.subscriberTableName || deployedOutputs.SubscriberTableName;
+      const mediaConvertRoleArn = deployedOutputs.mediaConvertRoleArn || deployedOutputs.MediaConvertRoleArn;
+
+      expect(bucketName).toMatch(/^tap-podcast-audio-/);
+      expect(distributionDomainName).toMatch(/\.cloudfront\.net$/);
+      expect(hostedZoneId).toMatch(/^Z/);
+      expect(subscriberTableName).toMatch(/^tap-subscribers-/);
+      expect(mediaConvertRoleArn).toMatch(/^arn:aws:iam::/);
     });
   });
 });
