@@ -1,25 +1,17 @@
-# Cloud Environment Setup - Community Platform Web Application
+# Community Platform Web Application Infrastructure
 
-## Overview
+This is the complete CDK TypeScript implementation for deploying a web server infrastructure to support a community platform with 2,500 daily users.
 
-This solution implements a comprehensive **Cloud Environment Setup** using **AWS CDK (Cloud Development Kit)** with **TypeScript**. The infrastructure focuses on **Provisioning of Infrastructure Environments** for a scalable web application platform, featuring VPC networking, auto-scaling EC2 instances, S3 storage, and comprehensive monitoring capabilities.
+## Project Structure
 
-## 🏗️ Architecture Components
+The `lib/` directory contains all infrastructure code files:
 
-### Core Infrastructure Services:
+- `tap-stack.ts` - Main CDK stack implementation with all AWS resources
+- `AWS_REGION` - Region configuration file for deployment targeting
 
-- ✅ **VPC Network** with public and private subnets across multiple AZs
-- ✅ **Auto Scaling Group** with EC2 t3.micro instances (2-5 capacity)
-- ✅ **S3 Bucket** with intelligent tiering and versioning for static content
-- ✅ **Security Groups** with HTTP access controls
-- ✅ **IAM Roles** with least privilege access for EC2 instances
-- ✅ **CloudWatch Monitoring** with CPU and memory alarms
-- ✅ **SNS Notifications** for infrastructure alerts
-- ✅ **Apache Web Server** with automated deployment and configuration
+## Implementation Files
 
-## 📂 Implementation
-
-**File: `lib/tap-stack.ts`**
+### lib/tap-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -297,119 +289,67 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
----
+### lib/AWS_REGION
 
-## 🔧 Key Infrastructure Features
-
-### 🌐 Network Architecture
-
-- **VPC**: `10.3.0.0/16` CIDR with DNS support and multi-AZ deployment
-- **Public Subnets**: `/24` CIDR for internet-facing resources
-- **Private Subnets**: `/24` CIDR for isolated internal resources
-- **Internet Gateway**: Automatic internet access for public subnets
-- **Cost Optimization**: No NAT gateways (using public subnets for web servers)
-
-### 💻 Compute Infrastructure
-
-- **EC2 Instances**: `t3.micro` optimized for 2,500 daily users
-- **Auto Scaling**: 2-5 instances with CPU-based scaling (60% target)
-- **Apache Web Server**: Automatically installed and configured
-- **Launch Template**: Standardized instance configuration
-- **IMDSv2 Enforcement**: Enhanced security for instance metadata
-- **Detailed Monitoring**: Enabled for comprehensive metrics
-
-### 🗄️ Storage & Data Management
-
-- **S3 Bucket**: Versioned storage with intelligent tiering
-- **Lifecycle Management**: Automatic cost optimization
-- **Encryption**: S3-managed server-side encryption
-- **Public Access**: Completely blocked for security
-- **Naming Convention**: `community-static-${env}-${account}-${region}`
-
-### 🔐 Security & Access Control
-
-- **IAM Role**: Least privilege access for EC2 instances
-- **Managed Policies**: CloudWatch, Systems Manager, EC2 Instance Connect
-- **Security Group**: HTTP port 80 access with outbound allowed
-- **S3 Permissions**: Read-only access to static content bucket
-- **IMDS Security**: Version 2 enforcement on all instances
-
-### 📊 Monitoring & Alerting
-
-- **CPU Monitoring**: 80% threshold alarm with 2-period evaluation
-- **Memory Monitoring**: Custom CloudWatch agent with 80% threshold
-- **SNS Integration**: Automatic notifications for all alarms
-- **Health Checks**: EC2 health checking with 300-second grace period
-- **Custom Metrics**: Memory usage tracking via CloudWatch agent
-
-### 🚀 Automation & Configuration
-
-- **User Data**: Automated Apache installation and CloudWatch agent setup
-- **Auto Scaling Policies**: CPU utilization-based with 300-second cooldown
-- **Instance Configuration**: Automated web server deployment
-- **CloudWatch Agent**: Memory metrics collection and reporting
-
-## 📋 Resource Summary
-
-### Created AWS Resources:
-
-- **1 VPC** with public/private subnet configuration
-- **1 Auto Scaling Group** with t3.micro instances
-- **1 Launch Template** with standardized configuration
-- **1 S3 Bucket** with intelligent tiering and versioning
-- **1 Security Group** with HTTP access rules
-- **1 IAM Role** with managed policy attachments
-- **1 SNS Topic** for infrastructure alerts
-- **2 CloudWatch Alarms** (CPU and memory monitoring)
-- **4 Stack Outputs** for resource references
-
-### Compliance & Best Practices:
-
-- ✅ **Cost Optimization**: No NAT gateways, intelligent S3 tiering
-- ✅ **Security**: IMDSv2, blocked S3 public access, least privilege IAM
-- ✅ **Scalability**: Auto scaling group with configurable capacity
-- ✅ **Monitoring**: Comprehensive CloudWatch metrics and alarms
-- ✅ **Maintainability**: Proper resource tagging and outputs
-
-## 🌍 Deployment Configuration
-
-### Environment Variables:
-
-- **Region**: `us-east-1` (primary deployment region)
-- **Environment Suffix**: Configurable (dev, staging, prod, pr-numbers)
-- **Instance Type**: `t3.micro` (cost-effective for moderate traffic)
-- **Scaling Target**: 60% CPU utilization
-
-### Build & Deploy Commands:
-
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Run tests
-npm run test
-
-# Deploy infrastructure
-npm run cdk:deploy
+```
+us-east-1
 ```
 
-## 🎯 Use Cases
+## Infrastructure Components
 
-### Web Application Hosting
+### Network Configuration
 
-- **Community Platforms**: Scalable web hosting with auto-scaling
-- **Small to Medium Applications**: Cost-effective t3.micro instances
-- **Static Content Delivery**: S3-backed content with intelligent cost optimization
-- **Development Environments**: Quick provisioning with environment-specific naming
+- VPC with CIDR block 10.3.0.0/16
+- Public and private subnets across 2 availability zones
+- Internet Gateway for public subnet connectivity
+- No NAT gateways for cost optimization
 
-### Monitoring & Operations
+### Compute Resources
 
-- **Proactive Monitoring**: CPU and memory alerting before issues occur
-- **Cost Management**: Intelligent storage tiering and no NAT gateways
-- **Security Compliance**: IMDSv2, encrypted storage, restricted access
-- **Operational Visibility**: Comprehensive CloudWatch metrics and SNS notifications
+- EC2 t3.micro instances running Amazon Linux 2
+- Auto Scaling Group with capacity 2-5 instances
+- Launch template with detailed monitoring enabled
+- IMDSv2 enforcement for security
+- Apache web server installed via user data
 
-This infrastructure provides **production-ready Cloud Environment Setup** with comprehensive **Provisioning of Infrastructure Environments** for scalable web applications, optimized for cost-effectiveness while maintaining security and operational excellence in the **us-east-1** region.
+### Storage
+
+- S3 bucket for static content with versioning enabled
+- S3 Intelligent-Tiering for cost optimization
+- Server-side encryption with S3-managed keys
+- Public access blocked for security
+
+### Security
+
+- Security group allowing HTTP traffic on port 80
+- IAM role with managed policies for CloudWatch, SSM, and EC2 Instance Connect
+- S3 bucket read permissions granted to EC2 role
+
+### Monitoring
+
+- CloudWatch detailed monitoring enabled on instances
+- CPU utilization alarm at 80% threshold
+- Memory utilization alarm at 80% threshold using custom metrics
+- SNS topic for alert notifications
+- CloudWatch agent for custom memory metrics collection
+
+### Auto Scaling
+
+- CPU-based scaling with 60% target utilization
+- Scale-out and scale-in policies with 300-second cooldown
+- EC2 health checks with 300-second grace period
+
+## Deployment Configuration
+
+The stack supports environment-specific deployments through the `environmentSuffix` parameter. Resource naming includes this suffix to allow multiple environments in the same account.
+
+Default deployment target is us-east-1 region as specified in the `AWS_REGION` file, with configurable environment suffixes for development, staging, and production environments.
+
+## Design Decisions
+
+Two features are commented out in the implementation:
+
+1. CloudWatch Application Insights - Removed due to Resource Group configuration requirements that can cause deployment issues
+2. EC2 Instance Connect Endpoint - Removed to simplify deployment, can be re-enabled if browser-based SSH access is needed
+
+Both features can be uncommented and deployed once their prerequisites are configured properly.
