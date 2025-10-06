@@ -360,9 +360,7 @@ describe('Weather Monitoring System Integration Tests', () => {
       expect(extremeResponse.status).toBe(200);
       const timestamp2 = extremeResponse.data.timestamp;
 
-      // Step 3: Verify both entries in DynamoDB
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
+      // Step 3: Verify both entries in DynamoDB with retry logic
       const scanCommand = new ScanCommand({
         TableName: outputs.DynamoDBTableName,
         FilterExpression: 'sensorId = :sid',
@@ -371,7 +369,18 @@ describe('Weather Monitoring System Integration Tests', () => {
         }
       });
 
-      const scanResult = await dynamoDBClient.send(scanCommand);
+      // Retry logic to wait for both items to be written to DynamoDB
+      let scanResult;
+      let retryCount = 0;
+      const maxRetries = 10;
+      const retryDelay = 1000; // 1 second
+
+      do {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        scanResult = await dynamoDBClient.send(scanCommand);
+        retryCount++;
+      } while ((scanResult.Items?.length || 0) < 2 && retryCount < maxRetries);
+
       expect(scanResult.Items?.length).toBeGreaterThanOrEqual(2);
 
       // Verify the data integrity
@@ -386,7 +395,7 @@ describe('Weather Monitoring System Integration Tests', () => {
       );
       expect(extremeItem).toBeDefined();
       expect(parseFloat(extremeItem!.temperature.N || '0')).toBe(60);
-    });
+    }, 30000); // Increase timeout to 30 seconds
 
     test('Rate limiting should work as configured', async () => {
       // This test verifies that the rate limiting is in place
