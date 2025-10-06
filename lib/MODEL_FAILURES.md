@@ -313,6 +313,75 @@ This document analyzes the failures that required correction in IDEAL_RESPONSE.m
 
 **Required Fix**: Removed lifecycle config entirely in simplified notebook implementation.
 
+### 19. Missing AlertGenerator Event Source Mapping
+
+**Failure**: MODEL_RESPONSE defines `AlertGeneratorFunction` with code expecting Kinesis stream events, but provides no EventSourceMapping to trigger it:
+
+```json
+"AlertGeneratorFunction": {
+  "Type": "AWS::Lambda::Function",
+  "Properties": {
+    "Code": {
+      "ZipFile": "for record in event['Records']:\n    payload = json.loads(record['kinesis']['data'])\n    if payload.get('engineTemp', 0) > 110:\n        sns_client.publish(...)"
+    }
+  }
+}
+```
+
+**Impact**:
+- AlertGeneratorFunction is defined but never invoked
+- Critical vehicle alerts (engine failure, high temperature) are never sent
+- System cannot fulfill requirement for "Critical alert generation based on thresholds" (PROMPT.md line 44)
+- Operations team receives no notifications despite SNS topic and subscription being configured
+- Lambda function wastes reserved concurrency (50 executions) without ever being called
+
+**Required Fix**: Added `AlertGeneratorEventSourceMapping` to connect TelemetryStream to AlertGeneratorFunction:
+
+```json
+"AlertGeneratorEventSourceMapping": {
+  "Type": "AWS::Lambda::EventSourceMapping",
+  "Properties": {
+    "BatchSize": 100,
+    "Enabled": true,
+    "EventSourceArn": {"Fn::GetAtt": ["TelemetryStream", "Arn"]},
+    "FunctionName": {"Fn::GetAtt": ["AlertGeneratorFunction", "Arn"]},
+    "StartingPosition": "LATEST"
+  }
+}
+```
+
+This allows both TelemetryProcessorFunction (data storage) and AlertGeneratorFunction (alerting) to process the same stream in parallel.
+
+### 20. Incorrect Kinesis Data Decoding in AlertGeneratorFunction
+
+**Failure**: AlertGeneratorFunction attempts to parse Kinesis data directly without Base64 decoding:
+
+```python
+for record in event['Records']:
+    payload = json.loads(record['kinesis']['data'])  # WRONG - data is base64 encoded
+```
+
+**Impact**:
+- AlertGeneratorFunction fails with `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`
+- EventSourceMapping shows `PROBLEM: Function call failed`
+- All alert processing fails despite EventSourceMapping being correctly configured
+- TelemetryProcessorFunction works correctly (already has base64.b64decode)
+- Critical temperature alerts never reach operations team
+- Lambda wastes compute resources failing on every invocation
+
+**Required Fix**: Add base64 decoding before JSON parsing:
+
+```python
+import base64
+
+for record in event['Records']:
+    # Decode base64 Kinesis data first
+    data = base64.b64decode(record['kinesis']['data']).decode('utf-8')
+    payload = json.loads(data)
+```
+
+**Root Cause**: Kinesis stores record data as base64-encoded bytes. The `record['kinesis']['data']` field contains base64-encoded string that must be decoded before JSON parsing. MODEL_RESPONSE correctly implemented this in TelemetryProcessorFunction but failed to apply the same pattern to AlertGeneratorFunction.
+
 ## Summary
 
 The MODEL_RESPONSE demonstrated comprehensive understanding of fleet management requirements but suffered from critical implementation failures:
@@ -332,6 +401,8 @@ The MODEL_RESPONSE demonstrated comprehensive understanding of fleet management 
 8. Incorrect API Gateway integration type and missing stage configuration
 9. Overly complex Kinesis shard calculation logic
 10. Malformed Step Functions definition preventing dynamic references
+19. Missing AlertGenerator EventSourceMapping - function never triggered
+20. AlertGeneratorFunction missing base64 decode for Kinesis data - causes JSONDecodeError
 
 ### Unnecessary Complexity (Over-Engineering):
 
@@ -352,6 +423,8 @@ The IDEAL_RESPONSE corrected these failures by:
 - Adding EnvironmentSuffix parameter and consistent naming
 - Simplifying SageMaker to notebook-only implementation
 - Implementing working Python 3.11 Lambda functions with actual logic
+- Adding EventSourceMapping for AlertGeneratorFunction to enable critical alerting
+- **Fixing AlertGeneratorFunction to properly decode base64 Kinesis data before JSON parsing**
 - Using AWS_PROXY integration for API Gateway simplicity
 - Adding proper API stage with logging configuration
 - Including Lambda concurrency reservations for production scale

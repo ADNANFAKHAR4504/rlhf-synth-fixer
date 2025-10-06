@@ -507,7 +507,7 @@
           ]
         },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\nsns_client = boto3.client('sns')\n\ndef handler(event, context):\n    topic_arn = os.environ['ALERT_TOPIC_ARN']\n    \n    for record in event['Records']:\n        payload = json.loads(record['kinesis']['data'])\n        \n        if payload.get('engineTemp', 0) > 110:\n            sns_client.publish(\n                TopicArn=topic_arn,\n                Subject=f\"Critical Alert: Vehicle {payload.get('vehicleId')}\",\n                Message=f\"Engine temperature critically high: {payload.get('engineTemp')}C\"\n            )\n    \n    return {'statusCode': 200, 'body': json.dumps('Alerts processed')}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\nimport base64\n\nsns_client = boto3.client('sns')\n\ndef handler(event, context):\n    topic_arn = os.environ['ALERT_TOPIC_ARN']\n    \n    for record in event['Records']:\n        # Decode base64 Kinesis data\n        data = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n        payload = json.loads(data)\n        \n        if payload.get('engineTemp', 0) > 110:\n            sns_client.publish(\n                TopicArn=topic_arn,\n                Subject=f\"Critical Alert: Vehicle {payload.get('vehicleId')}\",\n                Message=f\"Engine temperature critically high: {payload.get('engineTemp')}C\"\n            )\n    \n    return {'statusCode': 200, 'body': json.dumps('Alerts processed')}\n"
         },
         "Runtime": "python3.11",
         "Timeout": 60,
@@ -611,6 +611,26 @@
         "FunctionName": {
           "Fn::GetAtt": [
             "TelemetryProcessorFunction",
+            "Arn"
+          ]
+        },
+        "StartingPosition": "LATEST"
+      }
+    },
+    "AlertGeneratorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "BatchSize": 100,
+        "Enabled": true,
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "TelemetryStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AlertGeneratorFunction",
             "Arn"
           ]
         },
