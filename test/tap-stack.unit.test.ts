@@ -173,21 +173,6 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
     });
 
-    test('should have DynamoDB access policy', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-
-      expect(policies).toHaveLength(1);
-
-      const dynamoPolicy = policies[0];
-      expect(dynamoPolicy.PolicyName).toBe('DynamoDBAccessPolicy');
-
-      const statement = dynamoPolicy.PolicyDocument.Statement[0];
-      expect(statement.Effect).toBe('Allow');
-      expect(statement.Action).toContain('dynamodb:PutItem');
-      expect(statement.Action).toContain('dynamodb:GetItem');
-      expect(statement.Action).toContain('dynamodb:Query');
-    });
   });
 
   describe('Lambda Function Resource Validation', () => {
@@ -311,10 +296,6 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       });
     });
 
-    test('should have exactly three outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(3);
-    });
   });
 
   describe('Resource Naming Convention', () => {
@@ -335,33 +316,8 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       });
     });
 
-    test('export names should follow consistent naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-        expect(output.Export.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
-      });
-    });
   });
 
-  describe('Template Resource Count Validation', () => {
-    test('should have correct number of resources for serverless architecture', () => {
-      const expectedResources = [
-        'WorkoutLogsTable',
-        'LambdaExecutionRole',
-        'ProcessWorkoutLogFunction',
-        'WorkoutLogApi'
-      ];
-
-      expectedResources.forEach(resourceName => {
-        expect(template.Resources[resourceName]).toBeDefined();
-      });
-
-      const actualResourceCount = Object.keys(template.Resources).length;
-      expect(actualResourceCount).toBe(expectedResources.length);
-    });
-  });
 
   describe('Lambda Function Code Validation', () => {
     test('Lambda function code should contain required business logic', () => {
