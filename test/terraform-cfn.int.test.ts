@@ -83,7 +83,7 @@ describe('Travel Platform API - CloudFormation Integration Tests', () => {
 
     test('API Gateway endpoint should be /search', () => {
       const apiUrl = outputs.api_gateway_url.value;
-      expect(apiUrl).toEndWith('/search');
+      expect(apiUrl).toMatch(/\/search$/);
     });
   });
 
