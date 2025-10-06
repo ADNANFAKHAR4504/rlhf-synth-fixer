@@ -1,7 +1,7 @@
 # Event Ticketing System - AWS CDK Java Implementation
 
 ## Task Overview
-Create a production-ready event ticketing system using **AWS CDK with Java**. Deploy all infrastructure to **us-west-2** region.
+I want you to create a production-ready event ticketing system using **AWS CDK with Java**. Deploy all infrastructure to **us-west-2** region.
 
 ## Required AWS Resources
 
@@ -100,14 +100,11 @@ import software.amazon.awscdk.services.apigateway.*;
 import software.amazon.awscdk.services.s3.*;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-// ... other imports
 
 public class TicketingSystemStack extends Stack {
     public TicketingSystemStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
         
-        // Complete implementation here with all resources
-        // Use proper CDK Java constructs and patterns
     }
 }
 ```
@@ -141,7 +138,6 @@ package com.ticketing.lambda;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-// QR code generation implementation
 ```
 
 ## Specific CDK Java Patterns to Use
