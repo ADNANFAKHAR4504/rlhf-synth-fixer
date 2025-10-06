@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import * as yaml from 'js-yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -8,10 +7,10 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load YAML template and convert to JSON for testing
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    // Load JSON template for testing (avoids YAML CloudFormation function parsing issues)
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent) as any;
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure', () => {
@@ -218,8 +217,8 @@ describe('TapStack CloudFormation Template', () => {
     test('Lambda should have VPC configuration', () => {
       const vpcConfig = template.Resources.CleanupLambdaFunction.Properties.VpcConfig;
       expect(vpcConfig).toBeDefined();
-      expect(vpcConfig.SubnetIds).toContain({ Ref: 'PrivateSubnet1' });
-      expect(vpcConfig.SubnetIds).toContain({ Ref: 'PrivateSubnet2' });
+      expect(vpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(vpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('Lambda should have environment variables', () => {
@@ -428,15 +427,15 @@ describe('TapStack CloudFormation Template', () => {
         if (template.Resources[resourceName]) {
           const resource = template.Resources[resourceName];
           if (resource.Properties.FunctionName ||
+            resource.Properties.RoleName ||
+            resource.Properties.AlarmName ||
+            resource.Properties.BackupVaultName ||
+            resource.Properties.Name) {
+            const nameProperty = resource.Properties.FunctionName ||
               resource.Properties.RoleName ||
               resource.Properties.AlarmName ||
               resource.Properties.BackupVaultName ||
-              resource.Properties.Name) {
-            const nameProperty = resource.Properties.FunctionName ||
-                                resource.Properties.RoleName ||
-                                resource.Properties.AlarmName ||
-                                resource.Properties.BackupVaultName ||
-                                resource.Properties.Name;
+              resource.Properties.Name;
             if (typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
               expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
             }
