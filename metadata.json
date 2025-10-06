@@ -12,7 +12,17 @@
     "Multi-AZ Infrastructure",
     "ECS Fargate Deployment"
   ],
-  "aws_services": "S3 Bucket, IGW, VPC, ECS, IAM, Dynamo DB, NAT-GW",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "IAM",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "ELB"
+  ],
+  "training_quality": 8,
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.883.0",
     "@aws-sdk/client-ecs": "^3.856.0",
