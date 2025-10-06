@@ -18,5 +18,20 @@
     "CloudWatch Logs",
     "CloudFormation"
   ],
+  "subtask": "healthcare-appointment-reminder-system",
+  "subject_labels": [
+    "healthcare",
+    "appointment-reminders",
+    "sms-notifications",
+    "serverless-architecture",
+    "lambda-functions",
+    "dynamodb-logging",
+    "sns-messaging",
+    "ses-email-fallback",
+    "cloudwatch-monitoring",
+    "retry-logic",
+    "delivery-tracking",
+    "notification-system"
+  ],
   "subtask_category": "serverless-infrastructure"
 }
