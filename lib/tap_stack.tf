@@ -98,8 +98,8 @@ locals {
     Owner       = var.owner
     Project     = var.project_name
   }
-  account_id  = data.aws_caller_identity.current.account_id
-  region      = data.aws_region.current.id
+  account_id = data.aws_caller_identity.current.account_id
+  region     = data.aws_region.current.id
 }
 
 # VPC and Networking
@@ -107,7 +107,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -121,7 +121,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = "${local.region}${count.index == 3 ? "c" : count.index == 2 ? "b" : "a"}"
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -136,7 +136,7 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = "${local.region}${count.index == 3 ? "c" : count.index == 2 ? "b" : "a"}"
   map_public_ip_on_launch = true
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -147,7 +147,7 @@ resource "aws_subnet" "public" {
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -158,12 +158,12 @@ resource "aws_internet_gateway" "main" {
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -192,7 +192,7 @@ resource "aws_eip" "nat" {
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -203,12 +203,12 @@ resource "aws_nat_gateway" "main" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main.id
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -228,14 +228,14 @@ resource "aws_security_group" "lambda" {
   name        = "${var.project_name}-lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -248,21 +248,21 @@ resource "aws_security_group" "elasticache" {
   name        = "${var.project_name}-elasticache-sg"
   description = "Security group for ElastiCache Redis"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -276,7 +276,7 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.project_name}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -296,7 +296,8 @@ resource "aws_kms_key" "main" {
           Service = [
             "dynamodb.amazonaws.com",
             "elasticache.amazonaws.com",
-            "lambda.amazonaws.com"
+            "lambda.amazonaws.com",
+            "logs.us-east-1.amazonaws.com"
           ]
         },
         Action = [
@@ -310,7 +311,7 @@ resource "aws_kms_key" "main" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -322,7 +323,7 @@ resource "aws_kms_alias" "main" {
 # IAM Roles and Policies
 resource "aws_iam_role" "lambda_role" {
   name = "${var.project_name}-lambda-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -335,14 +336,14 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "lambda_policy" {
   name        = "${var.project_name}-lambda-policy"
   description = "Policy for Lambda functions"
-  
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -418,7 +419,7 @@ resource "aws_iam_policy" "lambda_policy" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -433,35 +434,35 @@ resource "aws_dynamodb_table" "travel_search" {
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "search_id"
   range_key    = "timestamp"
-  
+
   attribute {
     name = "search_id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.main.arn
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   ttl {
     attribute_name = "expiration_time"
     enabled        = true
   }
-  
+
   lifecycle {
     prevent_destroy = true
   }
-  
+
   tags = local.common_tags
 }
 
@@ -471,12 +472,12 @@ resource "aws_ssm_parameter" "api_config" {
   description = "Configuration for travel platform API"
   type        = "SecureString"
   key_id      = aws_kms_key.main.key_id
-  value       = jsonencode({
+  value = jsonencode({
     database_name = aws_dynamodb_table.travel_search.name
     cache_host    = aws_elasticache_replication_group.redis.primary_endpoint_address
     cache_port    = 6379
   })
-  
+
   tags = local.common_tags
 }
 
@@ -484,72 +485,72 @@ resource "aws_ssm_parameter" "api_config" {
 resource "aws_elasticache_subnet_group" "redis" {
   name       = "${var.project_name}-redis-subnet-group"
   subnet_ids = aws_subnet.private.*.id
-  
+
   tags = local.common_tags
 }
 
 resource "aws_elasticache_parameter_group" "redis" {
   name   = "${var.project_name}-redis-params"
-  family = "redis6.x"
-  
+  family = "redis7"
+
   parameter {
     name  = "maxmemory-policy"
     value = "volatile-ttl"
   }
-  
+
   tags = local.common_tags
 }
 
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id          = "${var.project_name}-redis"
-  description                   = "Redis cluster for travel platform API"
-  node_type                     = var.redis_node_type
-  num_cache_clusters            = var.redis_num_nodes
-  parameter_group_name          = aws_elasticache_parameter_group.redis.name
-  subnet_group_name             = aws_elasticache_subnet_group.redis.name
-  security_group_ids            = [aws_security_group.elasticache.id]
-  port                          = 6379
-  at_rest_encryption_enabled    = true
-  transit_encryption_enabled    = true
-  automatic_failover_enabled    = true
-  snapshot_retention_limit      = 7
-  snapshot_window               = "03:00-05:00"
-  maintenance_window            = "sun:05:00-sun:07:00"
-  
+  replication_group_id       = "${var.project_name}-redis"
+  description                = "Redis cluster for travel platform API"
+  node_type                  = var.redis_node_type
+  num_cache_clusters         = var.redis_num_nodes
+  parameter_group_name       = aws_elasticache_parameter_group.redis.name
+  subnet_group_name          = aws_elasticache_subnet_group.redis.name
+  security_group_ids         = [aws_security_group.elasticache.id]
+  port                       = 6379
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  automatic_failover_enabled = true
+  snapshot_retention_limit   = 7
+  snapshot_window            = "03:00-05:00"
+  maintenance_window         = "sun:05:00-sun:07:00"
+
   tags = local.common_tags
 }
 
 # Lambda Functions
 resource "aws_lambda_function" "search_handler" {
-  function_name    = "${var.project_name}-search-handler"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
-  runtime          = "python3.10"
-  timeout          = var.lambda_timeout
-  memory_size      = var.lambda_memory_size
-  publish          = true
-  
+  function_name = "${var.project_name}-search-handler"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.10"
+  timeout       = var.lambda_timeout
+  memory_size   = var.lambda_memory_size
+  publish       = true
+
   # In a real scenario, you would use a proper deployment package
   filename         = "dummy_lambda_package.zip"
   source_code_hash = filebase64sha256("dummy_lambda_package.zip")
-  
+
   vpc_config {
     subnet_ids         = aws_subnet.private.*.id
     security_group_ids = [aws_security_group.lambda.id]
   }
-  
+
   environment {
     variables = {
       SSM_CONFIG_PATH = "/travel-platform-api/config"
     }
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = local.common_tags
-  
+
   depends_on = [
     aws_ssm_parameter.api_config,
     aws_elasticache_replication_group.redis,
@@ -569,11 +570,11 @@ resource "aws_lambda_permission" "api_gateway" {
 resource "aws_api_gateway_rest_api" "main" {
   name        = "${var.project_name}-api"
   description = "Travel platform API"
-  
+
   endpoint_configuration {
     types = ["EDGE"]
   }
-  
+
   tags = local.common_tags
 }
 
@@ -608,7 +609,7 @@ resource "aws_api_gateway_method_response" "search_post_response" {
   resource_id = aws_api_gateway_resource.search.id
   http_method = aws_api_gateway_method.search_post.http_method
   status_code = "200"
-  
+
   response_parameters = {
     "method.response.header.Content-Type" = true
   }
@@ -616,7 +617,7 @@ resource "aws_api_gateway_method_response" "search_post_response" {
 
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
-  
+
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.search.id,
@@ -624,7 +625,7 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.search_post.id
     ]))
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -634,12 +635,12 @@ resource "aws_api_gateway_stage" "main" {
   deployment_id = aws_api_gateway_deployment.main.id
   rest_api_id   = aws_api_gateway_rest_api.main.id
   stage_name    = var.environment
-  
+
   xray_tracing_enabled = true
-  
+
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-    format          = jsonencode({
+    format = jsonencode({
       requestId      = "$context.requestId",
       ip             = "$context.identity.sourceIp",
       caller         = "$context.identity.caller",
@@ -652,7 +653,7 @@ resource "aws_api_gateway_stage" "main" {
       responseLength = "$context.responseLength"
     })
   }
-  
+
   tags = local.common_tags
 }
 
@@ -660,7 +661,7 @@ resource "aws_api_gateway_method_settings" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   stage_name  = aws_api_gateway_stage.main.stage_name
   method_path = "*/*"
-  
+
   settings {
     metrics_enabled        = true
     logging_level          = var.api_gateway_log_level
@@ -674,65 +675,65 @@ resource "aws_api_gateway_method_settings" "main" {
 
 # WAF
 resource "aws_wafv2_web_acl" "api" {
-  name        = "${var.project_name}-waf"
+  name        = "${var.project_name}-waf-v2"
   description = "WAF for Travel Platform API"
   scope       = "REGIONAL"
-  
+
   default_action {
     allow {}
   }
-  
+
   rule {
     name     = "rate-limit"
     priority = 1
-    
+
     action {
       block {}
     }
-    
+
     statement {
       rate_based_statement {
         limit              = 3000
         aggregate_key_type = "IP"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.project_name}-rate-limit-rule"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "geo-restriction"
     priority = 2
-    
+
     action {
       block {}
     }
-    
+
     statement {
       geo_match_statement {
         country_codes = ["RU", "CN", "IR"]
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.project_name}-geo-restriction-rule"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "sql-injection"
     priority = 3
-    
+
     action {
       block {}
     }
-    
+
     statement {
       or_statement {
         statement {
@@ -767,20 +768,20 @@ resource "aws_wafv2_web_acl" "api" {
         }
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.project_name}-sql-injection-rule"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-waf"
+    metric_name                = "${var.project_name}-waf-v2"
     sampled_requests_enabled   = true
   }
-  
+
   tags = local.common_tags
 }
 
@@ -794,7 +795,7 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
   name              = "/aws/apigateway/${var.project_name}-${var.environment}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
-  
+
   tags = local.common_tags
 }
 
@@ -802,7 +803,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${aws_lambda_function.search_handler.function_name}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
-  
+
   tags = local.common_tags
 }
 
@@ -817,15 +818,15 @@ resource "aws_cloudwatch_metric_alarm" "api_error_rate" {
   statistic           = "Sum"
   threshold           = 5
   alarm_description   = "API 5XX errors exceeded threshold"
-  
+
   dimensions = {
     ApiName = aws_api_gateway_rest_api.main.name
     Stage   = aws_api_gateway_stage.main.stage_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  
+
   tags = local.common_tags
 }
 
@@ -839,15 +840,15 @@ resource "aws_cloudwatch_metric_alarm" "api_latency" {
   statistic           = "Average"
   threshold           = 1000
   alarm_description   = "API latency exceeded threshold"
-  
+
   dimensions = {
     ApiName = aws_api_gateway_rest_api.main.name
     Stage   = aws_api_gateway_stage.main.stage_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  
+
   tags = local.common_tags
 }
 
@@ -861,14 +862,14 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   statistic           = "Sum"
   threshold           = 2
   alarm_description   = "Lambda errors exceeded threshold"
-  
+
   dimensions = {
     FunctionName = aws_lambda_function.search_handler.function_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  
+
   tags = local.common_tags
 }
 
@@ -882,14 +883,14 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttled" {
   statistic           = "Sum"
   threshold           = 2
   alarm_description   = "DynamoDB throttled requests exceeded threshold"
-  
+
   dimensions = {
     TableName = aws_dynamodb_table.travel_search.name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  
+
   tags = local.common_tags
 }
 
@@ -903,14 +904,14 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu" {
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "Redis CPU utilization exceeded threshold"
-  
+
   dimensions = {
     ReplicationGroupId = aws_elasticache_replication_group.redis.id
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  
+
   tags = local.common_tags
 }
 
@@ -918,25 +919,26 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu" {
 resource "aws_sns_topic" "alerts" {
   name              = "${var.project_name}-alerts"
   kms_master_key_id = aws_kms_key.main.id
-  
+
   tags = local.common_tags
 }
 
 # QuickSight setup
-resource "aws_quicksight_data_source" "dynamodb" {
-  name            = "${var.project_name}-dynamodb-source"
-  data_source_id  = "${var.project_name}-dynamodb-source"
-  aws_account_id  = local.account_id
-  type            = "ATHENA"
-  
-  parameters {
-    athena {
-      work_group = "primary"
-    }
-  }
-  
-  tags = local.common_tags
-}
+# Commented out - QuickSight not enabled on this account
+# resource "aws_quicksight_data_source" "dynamodb" {
+#   name            = "${var.project_name}-dynamodb-source"
+#   data_source_id  = "${var.project_name}-dynamodb-source"
+#   aws_account_id  = local.account_id
+#   type            = "ATHENA"
+#   
+#   parameters {
+#     athena {
+#       work_group = "primary"
+#     }
+#   }
+#   
+#   tags = local.common_tags
+# }
 
 # Outputs
 output "api_gateway_url" {
