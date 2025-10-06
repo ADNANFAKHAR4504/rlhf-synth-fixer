@@ -644,7 +644,7 @@ data "archive_file" "inline_lambda" {
             const object = await s3.getObject({ Bucket: bucket, Key: key }).promise();
             objectBody = object?.Body?.toString("utf-8") ?? "";
           } catch (error) {
-            console.error(`Failed to read object s3://${bucket}/${key}`, error);
+            console.error(`Failed to read object s3://$${bucket}/$${key}`, error);
             continue;
           }
 
@@ -653,7 +653,7 @@ data "archive_file" "inline_lambda" {
           const sum = numbers.reduce((total, value) => total + value, 0);
           const avg = count ? sum / count : 0;
 
-          console.log(`Processed object s3://${bucket}/${key} -> count=${count}, sum=${sum}, avg=${avg}`);
+          console.log(`Processed object s3://$${bucket}/$${key} -> count=$${count}, sum=$${sum}, avg=$${avg}`);
           results.push({ bucket, key, count, sum, avg });
         }
 
