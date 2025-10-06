@@ -337,7 +337,10 @@ resource "aws_kms_key" "main" {
           Service = [
             "dynamodb.amazonaws.com",
             "elasticache.amazonaws.com",
-            "lambda.amazonaws.com"
+            "lambda.amazonaws.com",
+            "logs.us-east-1.amazonaws.com",
+            "cloudtrail.amazonaws.com",
+            "s3.amazonaws.com"
           ]
         },
         Action = [
@@ -604,6 +607,74 @@ resource "aws_lambda_permission" "api_gateway" {
   function_name = aws_lambda_function.search_handler.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*"
+}
+
+# GDPR Compliance Lambda Function
+resource "aws_lambda_function" "gdpr_anonymizer" {
+  function_name    = "${var.project_name}-gdpr-anonymizer"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "gdpr_anonymizer.handler"
+  runtime          = "python3.10"
+  timeout          = 300  # 5 minutes for batch processing
+  memory_size      = 1024  # More memory for processing large datasets
+  publish          = true
+
+  filename         = "dummy_lambda_package.zip"
+  source_code_hash = filebase64sha256("dummy_lambda_package.zip")
+
+  vpc_config {
+    subnet_ids         = aws_subnet.private.*.id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      SSM_PARAMETER_PREFIX = "/${var.project_name}"
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Purpose = "GDPR data anonymization"
+    }
+  )
+}
+
+# EventBridge rule for daily GDPR anonymization
+resource "aws_cloudwatch_event_rule" "gdpr_daily" {
+  name                = "${var.project_name}-gdpr-daily-anonymization"
+  description         = "Trigger GDPR anonymization daily at 2 AM UTC"
+  schedule_expression = "cron(0 2 * * ? *)"
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "gdpr_lambda" {
+  rule      = aws_cloudwatch_event_rule.gdpr_daily.name
+  target_id = "GdprAnonymizerLambda"
+  arn       = aws_lambda_function.gdpr_anonymizer.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_gdpr" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gdpr_anonymizer.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.gdpr_daily.arn
+}
+
+# CloudWatch Log Group for GDPR Lambda
+resource "aws_cloudwatch_log_group" "gdpr_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.gdpr_anonymizer.function_name}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
 }
 
 # API Gateway
@@ -963,21 +1034,157 @@ resource "aws_sns_topic" "alerts" {
   tags = local.common_tags
 }
 
-# QuickSight setup
-resource "aws_quicksight_data_source" "dynamodb" {
-  name            = "${var.project_name}-dynamodb-source"
-  data_source_id  = "${var.project_name}-dynamodb-source"
-  aws_account_id  = local.account_id
-  type            = "ATHENA"
+# CloudTrail for audit logging (GDPR compliance)
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket = "${var.project_name}-cloudtrail-logs-${local.account_id}"
 
-  parameters {
-    athena {
-      work_group = "primary"
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-cloudtrail-logs"
+      Purpose = "CloudTrail audit logs for GDPR compliance"
+    }
+  )
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.id
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    id     = "delete-old-logs"
+    status = "Enabled"
+
+    expiration {
+      days = 90  # GDPR compliance - 90 day retention
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  statement {
+    sid    = "AWSCloudTrailAclCheck"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:GetBucketAcl"]
+    resources = [aws_s3_bucket.cloudtrail.arn]
+  }
+
+  statement {
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.cloudtrail.arn}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
+}
+
+resource "aws_cloudtrail" "main" {
+  name                          = "${var.project_name}-audit-trail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+  kms_key_id                    = aws_kms_key.main.arn
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::*/*"]
+    }
+
+    data_resource {
+      type   = "AWS::DynamoDB::Table"
+      values = ["arn:aws:dynamodb:*:*:table/*"]
+    }
+
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:aws:lambda:*:*:function/*"]
     }
   }
 
-  tags = local.common_tags
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.project_name}-audit-trail"
+      Purpose = "GDPR compliance audit logging"
+    }
+  )
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
+
+# QuickSight setup
+# Note: This creates the data source for analytics. In production, you would:
+# 1. Enable QuickSight in your AWS account
+# 2. Create an Athena table that queries DynamoDB data
+# 3. Build dashboards for travel search analytics with GDPR-compliant aggregations
+# Commented out as QuickSight requires account-level enablement
+# resource "aws_quicksight_data_source" "dynamodb" {
+#   name            = "${var.project_name}-dynamodb-source"
+#   data_source_id  = "${var.project_name}-dynamodb-source"
+#   aws_account_id  = local.account_id
+#   type            = "ATHENA"
+#
+#   parameters {
+#     athena {
+#       work_group = "primary"
+#     }
+#   }
+#
+#   tags = local.common_tags
+# }
 
 # Outputs
 output "api_gateway_url" {
@@ -1014,6 +1221,304 @@ output "sns_topic_arn" {
   description = "ARN of the SNS topic for alerts"
   value       = aws_sns_topic.alerts.arn
 }
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail for audit logging"
+  value       = aws_cloudtrail.main.name
+}
+
+output "cloudtrail_s3_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail.id
+}
+
+output "gdpr_lambda_function_name" {
+  description = "Name of the GDPR anonymizer Lambda function"
+  value       = aws_lambda_function.gdpr_anonymizer.function_name
+}
+
+output "gdpr_lambda_arn" {
+  description = "ARN of the GDPR anonymizer Lambda function"
+  value       = aws_lambda_function.gdpr_anonymizer.arn
+}
+
+output "gdpr_event_rule_name" {
+  description = "Name of the EventBridge rule for GDPR anonymization"
+  value       = aws_cloudwatch_event_rule.gdpr_daily.name
+}
+```
+
+## Additional Infrastructure Files
+
+### provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+### lambda/index.py
+
+```python
+# lambda/index.py
+
+import json
+import os
+import boto3
+import logging
+from datetime import datetime
+from botocore.exceptions import ClientError
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
+ssm = boto3.client('ssm')
+elasticache = boto3.client('elasticache')
+
+def get_config_from_ssm():
+    """Retrieve configuration from SSM Parameter Store"""
+    try:
+        parameter_path = os.environ.get('SSM_CONFIG_PATH', '/travel-platform-api/config')
+        response = ssm.get_parameter(
+            Name=parameter_path,
+            WithDecryption=True
+        )
+        return json.loads(response['Parameter']['Value'])
+    except ClientError as e:
+        logger.error(f"Error retrieving SSM parameter: {e}")
+        raise
+
+def handler(event, context):
+    """
+    Main Lambda handler for travel search API
+    Processes search requests with caching and GDPR compliance
+    """
+    logger.info(f"Received event: {json.dumps(event)}")
+
+    try:
+        # Get configuration
+        config = get_config_from_ssm()
+        table_name = config['database_name']
+        cache_host = config['cache_host']
+        cache_port = config['cache_port']
+
+        # Parse request body
+        body = json.loads(event.get('body', '{}'))
+        search_query = body.get('query', '')
+        user_id = body.get('user_id', 'anonymous')
+
+        # GDPR compliance: Log search with anonymization
+        logger.info(f"Processing search for user: {user_id[:4]}****")
+
+        # Generate search ID
+        search_id = f"search_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{context.request_id}"
+
+        # Store search in DynamoDB with TTL for GDPR compliance
+        table = dynamodb.Table(table_name)
+        ttl_timestamp = int((datetime.utcnow().timestamp())) + (90 * 24 * 60 * 60)  # 90 days TTL
+
+        item = {
+            'search_id': search_id,
+            'timestamp': int(datetime.utcnow().timestamp()),
+            'query': search_query,
+            'user_id': user_id,
+            'expiry_time': ttl_timestamp,  # GDPR compliance: auto-delete after 90 days
+            'anonymized': False,
+            'request_id': context.request_id
+        }
+
+        table.put_item(Item=item)
+
+        # TODO: Implement Redis caching logic here
+        # TODO: Implement actual search logic here
+
+        # Sample response
+        response = {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'X-Request-ID': context.request_id
+            },
+            'body': json.dumps({
+                'search_id': search_id,
+                'results': [
+                    {
+                        'destination': 'Paris, France',
+                        'price': 499.99,
+                        'availability': 'Available'
+                    },
+                    {
+                        'destination': 'Tokyo, Japan',
+                        'price': 899.99,
+                        'availability': 'Limited'
+                    }
+                ],
+                'cached': False,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        }
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'error': 'Internal server error',
+                'message': 'An error occurred processing your request'
+            })
+        }
+```
+
+### lambda/gdpr_anonymizer.py
+
+```python
+# lambda/gdpr_anonymizer.py
+
+import json
+import boto3
+import logging
+from datetime import datetime, timedelta
+from botocore.exceptions import ClientError
+import hashlib
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
+ssm = boto3.client('ssm')
+
+def get_table_name():
+    """Retrieve DynamoDB table name from SSM"""
+    try:
+        response = ssm.get_parameter(
+            Name='/travel-platform-api/config',
+            WithDecryption=True
+        )
+        config = json.loads(response['Parameter']['Value'])
+        return config['database_name']
+    except ClientError as e:
+        logger.error(f"Error retrieving SSM parameter: {e}")
+        raise
+
+def anonymize_user_data(item):
+    """Anonymize user data for GDPR compliance"""
+    # Hash the user_id to maintain consistency but remove PII
+    if 'user_id' in item:
+        original_id = item['user_id']
+        item['user_id'] = hashlib.sha256(original_id.encode()).hexdigest()[:16]
+        item['anonymized'] = True
+        item['anonymized_date'] = datetime.utcnow().isoformat()
+        logger.info(f"Anonymized user data for record: {item['search_id']}")
+    return item
+
+def handler(event, context):
+    """
+    Lambda handler for GDPR data anonymization
+    Runs daily to anonymize data older than 30 days
+    """
+    logger.info("Starting GDPR anonymization process")
+
+    try:
+        table_name = get_table_name()
+        table = dynamodb.Table(table_name)
+
+        # Calculate timestamp for 30 days ago
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        cutoff_timestamp = int(thirty_days_ago.timestamp())
+
+        # Scan for items that need anonymization
+        response = table.scan(
+            FilterExpression='#ts < :cutoff AND #anon = :false',
+            ExpressionAttributeNames={
+                '#ts': 'timestamp',
+                '#anon': 'anonymized'
+            },
+            ExpressionAttributeValues={
+                ':cutoff': cutoff_timestamp,
+                ':false': False
+            }
+        )
+
+        items_to_anonymize = response.get('Items', [])
+        anonymized_count = 0
+
+        # Process items in batches
+        with table.batch_writer() as batch:
+            for item in items_to_anonymize:
+                anonymized_item = anonymize_user_data(item.copy())
+                batch.put_item(Item=anonymized_item)
+                anonymized_count += 1
+
+        # Handle pagination if needed
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(
+                FilterExpression='#ts < :cutoff AND #anon = :false',
+                ExpressionAttributeNames={
+                    '#ts': 'timestamp',
+                    '#anon': 'anonymized'
+                },
+                ExpressionAttributeValues={
+                    ':cutoff': cutoff_timestamp,
+                    ':false': False
+                },
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+
+            items_to_anonymize = response.get('Items', [])
+            with table.batch_writer() as batch:
+                for item in items_to_anonymize:
+                    anonymized_item = anonymize_user_data(item.copy())
+                    batch.put_item(Item=anonymized_item)
+                    anonymized_count += 1
+
+        logger.info(f"Successfully anonymized {anonymized_count} records")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'GDPR anonymization completed',
+                'records_anonymized': anonymized_count,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Error during anonymization: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': 'Anonymization process failed',
+                'message': str(e)
+            })
+        }
 ```
 
 ## Implementation Notes
@@ -1030,12 +1535,23 @@ The script references a `dummy_lambda_package.zip` file. In production, you'll n
 
 The table uses `PAY_PER_REQUEST` billing mode which automatically scales to handle up to 40,000 read/write request units per second, making it ideal for handling 1 million daily searches with unpredictable traffic spikes.
 
-### 4. **GDPR Compliance**
+### 4. **Enhanced GDPR Compliance**
 
-- TTL enabled on DynamoDB for automatic data expiration
-- All data encrypted at rest with KMS
-- Point-in-time recovery enabled for data protection
-- CloudWatch logs encrypted and retention set to 30 days
+- **Data Lifecycle Management**:
+  - TTL enabled on DynamoDB for automatic data expiration after 90 days
+  - Automated data anonymization Lambda function runs daily
+  - User data hashed after 30 days to remove PII while maintaining analytics
+- **Audit Logging**:
+  - AWS CloudTrail enabled for comprehensive audit trails
+  - All IAM access logged and monitored
+  - Multi-region trail with log file validation
+- **Data Protection**:
+  - All data encrypted at rest with KMS CMK
+  - Point-in-time recovery enabled
+  - S3 bucket lifecycle policies for audit log retention
+- **Right to be Forgotten**:
+  - TTL ensures automatic data deletion
+  - Anonymization process removes personal identifiers
 
 ### 5. **QuickSight Integration**
 

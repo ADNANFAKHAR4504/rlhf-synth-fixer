@@ -297,7 +297,9 @@ resource "aws_kms_key" "main" {
             "dynamodb.amazonaws.com",
             "elasticache.amazonaws.com",
             "lambda.amazonaws.com",
-            "logs.us-east-1.amazonaws.com"
+            "logs.us-east-1.amazonaws.com",
+            "cloudtrail.amazonaws.com",
+            "s3.amazonaws.com"
           ]
         },
         Action = [
@@ -477,6 +479,7 @@ resource "aws_ssm_parameter" "api_config" {
     cache_host    = aws_elasticache_replication_group.redis.primary_endpoint_address
     cache_port    = 6379
   })
+  overwrite = true # Force overwrite if parameter exists
 
   tags = local.common_tags
 }
@@ -564,6 +567,74 @@ resource "aws_lambda_permission" "api_gateway" {
   function_name = aws_lambda_function.search_handler.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*"
+}
+
+# GDPR Compliance Lambda Function
+resource "aws_lambda_function" "gdpr_anonymizer" {
+  function_name = "${var.project_name}-gdpr-anonymizer"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "gdpr_anonymizer.handler"
+  runtime       = "python3.10"
+  timeout       = 300  # 5 minutes for batch processing
+  memory_size   = 1024 # More memory for processing large datasets
+  publish       = true
+
+  filename         = "dummy_lambda_package.zip"
+  source_code_hash = filebase64sha256("dummy_lambda_package.zip")
+
+  vpc_config {
+    subnet_ids         = aws_subnet.private.*.id
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      SSM_PARAMETER_PREFIX = "/${var.project_name}"
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Purpose = "GDPR data anonymization"
+    }
+  )
+}
+
+# EventBridge rule for daily GDPR anonymization
+resource "aws_cloudwatch_event_rule" "gdpr_daily" {
+  name                = "${var.project_name}-gdpr-daily-anonymization"
+  description         = "Trigger GDPR anonymization daily at 2 AM UTC"
+  schedule_expression = "cron(0 2 * * ? *)"
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "gdpr_lambda" {
+  rule      = aws_cloudwatch_event_rule.gdpr_daily.name
+  target_id = "GdprAnonymizerLambda"
+  arn       = aws_lambda_function.gdpr_anonymizer.arn
+}
+
+resource "aws_lambda_permission" "eventbridge_gdpr" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gdpr_anonymizer.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.gdpr_daily.arn
+}
+
+# CloudWatch Log Group for GDPR Lambda
+resource "aws_cloudwatch_log_group" "gdpr_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.gdpr_anonymizer.function_name}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
 }
 
 # API Gateway
@@ -923,8 +994,143 @@ resource "aws_sns_topic" "alerts" {
   tags = local.common_tags
 }
 
+# CloudTrail for audit logging (GDPR compliance)
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket = "${var.project_name}-cloudtrail-logs-${local.account_id}"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name    = "${var.project_name}-cloudtrail-logs"
+      Purpose = "CloudTrail audit logs for GDPR compliance"
+    }
+  )
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.id
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    id     = "delete-old-logs"
+    status = "Enabled"
+
+    expiration {
+      days = 90 # GDPR compliance - 90 day retention
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  statement {
+    sid    = "AWSCloudTrailAclCheck"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:GetBucketAcl"]
+    resources = [aws_s3_bucket.cloudtrail.arn]
+  }
+
+  statement {
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.cloudtrail.arn}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
+}
+
+resource "aws_cloudtrail" "main" {
+  name                          = "${var.project_name}-audit-trail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+  kms_key_id                    = aws_kms_key.main.arn
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::*/*"]
+    }
+
+    data_resource {
+      type   = "AWS::DynamoDB::Table"
+      values = ["arn:aws:dynamodb:*:*:table/*"]
+    }
+
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:aws:lambda:*:*:function/*"]
+    }
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name    = "${var.project_name}-audit-trail"
+      Purpose = "GDPR compliance audit logging"
+    }
+  )
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
+}
+
 # QuickSight setup
-# Commented out - QuickSight not enabled on this account
+# Note: This creates the data source for analytics. In production, you would:
+# 1. Enable QuickSight in your AWS account
+# 2. Create an Athena table that queries DynamoDB data
+# 3. Build dashboards for travel search analytics with GDPR-compliant aggregations
+# Commented out as QuickSight requires account-level enablement
 # resource "aws_quicksight_data_source" "dynamodb" {
 #   name            = "${var.project_name}-dynamodb-source"
 #   data_source_id  = "${var.project_name}-dynamodb-source"
@@ -974,4 +1180,29 @@ output "cloudwatch_log_group_lambda" {
 output "sns_topic_arn" {
   description = "ARN of the SNS topic for alerts"
   value       = aws_sns_topic.alerts.arn
+}
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail for audit logging"
+  value       = aws_cloudtrail.main.name
+}
+
+output "cloudtrail_s3_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail.id
+}
+
+output "gdpr_lambda_function_name" {
+  description = "Name of the GDPR anonymizer Lambda function"
+  value       = aws_lambda_function.gdpr_anonymizer.function_name
+}
+
+output "gdpr_lambda_arn" {
+  description = "ARN of the GDPR anonymizer Lambda function"
+  value       = aws_lambda_function.gdpr_anonymizer.arn
+}
+
+output "gdpr_event_rule_name" {
+  description = "Name of the EventBridge rule for GDPR anonymization"
+  value       = aws_cloudwatch_event_rule.gdpr_daily.name
 }

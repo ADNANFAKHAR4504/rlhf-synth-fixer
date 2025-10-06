@@ -10,5 +10,6 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": "API Gateway, Lambda, ElastiCache, DynamoDB, CloudWatch, X-Ray, QuickSight, KMS, VPC, NAT Gateway, Internet Gateway, Security Groups, SSM Parameter Store, SNS, WAF, CloudTrail, S3, EventBridge"
+
 }
