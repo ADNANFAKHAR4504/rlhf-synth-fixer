@@ -16,62 +16,61 @@ export class DnsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DnsStackProps) {
     super(scope, id, props);
 
-    // Always create health checks for ALB monitoring (works without domain)
-    this.primaryHealthCheck = new route53.CfnHealthCheck(
-      this,
-      'PrimaryHealthCheck',
-      {
-        healthCheckConfig: {
-          type: 'HTTP',
-          resourcePath: '/health',
-          fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
-          port: 80,
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-        healthCheckTags: [
-          {
-            key: 'Name',
-            value: 'Primary ALB Health Check',
-          },
-        ],
-      }
-    );
-
-    this.standbyHealthCheck = new route53.CfnHealthCheck(
-      this,
-      'StandbyHealthCheck',
-      {
-        healthCheckConfig: {
-          type: 'HTTP',
-          resourcePath: '/health',
-          fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
-          port: 80,
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-        healthCheckTags: [
-          {
-            key: 'Name',
-            value: 'Standby ALB Health Check',
-          },
-        ],
-      }
-    );
-
-    // Output health check IDs for testing
-    new cdk.CfnOutput(this, 'PrimaryHealthCheckId', {
-      value: this.primaryHealthCheck.attrHealthCheckId,
-      description: 'Primary ALB Health Check ID',
-    });
-
-    new cdk.CfnOutput(this, 'StandbyHealthCheckId', {
-      value: this.standbyHealthCheck.attrHealthCheckId,
-      description: 'Standby ALB Health Check ID',
-    });
-
     // Only create hosted zone and DNS records if a real domain is provided
     if (props.domainName && props.domainName !== 'example.com') {
+      // Create health checks for ALB monitoring
+      this.primaryHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'PrimaryHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'HTTP',
+            resourcePath: '/health',
+            fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
+            port: 80,
+            requestInterval: 30,
+            failureThreshold: 3,
+          },
+          healthCheckTags: [
+            {
+              key: 'Name',
+              value: 'Primary ALB Health Check',
+            },
+          ],
+        }
+      );
+
+      this.standbyHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'StandbyHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'HTTP',
+            resourcePath: '/health',
+            fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
+            port: 80,
+            requestInterval: 30,
+            failureThreshold: 3,
+          },
+          healthCheckTags: [
+            {
+              key: 'Name',
+              value: 'Standby ALB Health Check',
+            },
+          ],
+        }
+      );
+
+      // Output health check IDs for testing
+      new cdk.CfnOutput(this, 'PrimaryHealthCheckId', {
+        value: this.primaryHealthCheck.attrHealthCheckId,
+        description: 'Primary ALB Health Check ID',
+      });
+
+      new cdk.CfnOutput(this, 'StandbyHealthCheckId', {
+        value: this.standbyHealthCheck.attrHealthCheckId,
+        description: 'Standby ALB Health Check ID',
+      });
       const domainName = props.domainName;
 
       // Create or import the hosted zone
