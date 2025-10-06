@@ -27,7 +27,7 @@ from tap_stack import TapStack, TapStackArgs
 config = Config()
 
 # Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+environment_suffix = config.get('environment_suffix') or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
@@ -46,20 +46,7 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
 
-# Export stack outputs for reference
-pulumi.export("image_processing_outputs", pulumi.Output.all(
-    stack.source_bucket.bucket,
-    stack.dest_bucket.bucket,
-    stack.processor_function.name,
-    stack.log_group.name
-).apply(lambda args: {
-    "source_bucket": args[0],
-    "dest_bucket": args[1],
-    "lambda_function": args[2],
-    "log_group": args[3],
-    "upload_prefix": "uploads/",
-    "instructions": "Upload images to the source bucket with prefix 'uploads/' to trigger processing"
-}))
+
 ```
 
 2. lib\tap_stack.py
@@ -192,13 +179,13 @@ class TapStack(pulumi.ComponentResource):
 
 ```
 
-3. lib\_\_init\_\_.py
+3. lib_init\_\_.py
 
 ```py
 # empty
 ```
 
-4. lib\_\_main\_\_.py
+4. lib_main\_\_.py
 
 ```py
 """
@@ -212,9 +199,6 @@ from infrastructure.main import create_infrastructure
 # Create the complete infrastructure
 infrastructure = create_infrastructure()
 
-# Export key information for reference
-pulumi.export("infrastructure_created", "Image processing pipeline deployed successfully")
-pulumi.export("components", list(infrastructure.keys()))
 
 ```
 
@@ -869,35 +853,6 @@ def create_dead_letter_queue(config: ImageProcessingConfig) -> aws.sqs.Queue:
 """
 Main infrastructure orchestrator for image processing pipeline.
 Coordinates all infrastructure components and addresses model failures.
-
-PROMPT REQUIREMENTS ALIGNMENT:
-- Serverless image processing pipeline using Pulumi with Python
-- Lambda functions to resize images into two versions: 800x600 (standard) and 150x150 (thumbnail)
-- Store resized images in separate destination S3 bucket optimized for web display
-- IAM roles with least privilege for Lambda access to S3 buckets and CloudWatch logging
-- CloudWatch Logs for monitoring processing success and errors
-- S3 event notifications to trigger processing Lambda automatically upon image upload
-- Modular, reusable infrastructure with inline comments
-- AWS best practices for security, efficiency, and scalability
-- Region agnostic with configurable default AWS region
-- Validates against AWS deployment standards and easily maintainable/extensible
-
-MODEL FAILURES ADDRESSED:
-- Region configuration mismatch: Dynamic region handling with us-west-2 default
-- Lambda VPC deployment missing: VPC configuration with subnets and security groups
-- IAM policy not fully least-privilege: Custom policies with specific S3 actions and KMS permissions
-- CloudWatch logging partially implemented: Comprehensive logging and monitoring with custom metrics
-- Dead-letter config incomplete: SQS DLQ configuration with proper error handling
-- Event trigger configuration not linked to bucket lifecycle: Proper dependency ordering
-- S3 encryption key type: KMS encryption instead of AES256
-- Destination bucket caching comment ambiguous: CORS and caching headers configured
-- Lambda concurrent execution hardcoded: Configurable concurrent execution limits
-- No explicit S3 notification filter test or condition: Proper filter configuration
-- CloudWatch alarms partial: Comprehensive alarms for errors, duration, invocations, throttles, timeouts
-- KMS key usage missing: KMS key creation and usage for S3 encryption
-- Lambda layer packaging assumes prebuilt directory: Automated layer creation
-- Bucket naming non-unique across regions/accounts: Unique naming with environment suffixes
-- No IAM policy for CloudWatch alarms or permissions: CloudWatch metrics permissions
 """
 
 import pulumi
