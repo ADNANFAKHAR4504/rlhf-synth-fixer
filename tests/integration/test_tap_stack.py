@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import uuid
 import boto3
@@ -19,7 +20,7 @@ class TestGiftCardPlatformIntegration:
         cls.cloudwatch = boto3.client('cloudwatch', region_name='us-west-2')
 
         # Get environment suffix from environment variable or default
-        cls.env_suffix = 'test'
+        cls.env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'test')
         cls.api_endpoint = None  # Will be populated from stack outputs
 
     def test_api_gateway_endpoint_exists(self):

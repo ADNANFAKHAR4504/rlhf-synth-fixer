@@ -6,6 +6,17 @@
   "po_id": "56218093",
   "team": "synth",
   "startedAt": "2025-10-03T21:19:45+05:30",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Serverless Architecture",
+    "API Development",
+    "Database Management",
+    "Security Configuration",
+    "Fraud Detection",
+    "Transaction Processing",
+    "Monitoring and Observability",
+    "Access Control"
+  ],
   "training_quality": 7,
   "aws_services": [
     "API Gateway",
