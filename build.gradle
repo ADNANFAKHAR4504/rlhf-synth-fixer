@@ -81,6 +81,12 @@ dependencies {
     implementation "com.hashicorp:cdktf-provider-archive:${hashicorpCdktfArchiveVersion}"
     implementation "com.hashicorp:cdktf-provider-tls:11.0.0"
     implementation 'com.pulumi:tls:5.2.0'
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.149.0'
+    implementation 'software.constructs:constructs:10.3.0'
+    implementation 'io.github.cdklabs:cdknag:2.37.40'
+    implementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
+    implementation 'software.amazon.awssdk:cloudwatchlogs'
+    implementation 'software.amazon.awssdk:ssm'
 
     // AWS CDK dependencies
     implementation "software.amazon.awscdk:aws-cdk-lib:${awsCdkVersion}"
@@ -140,8 +146,8 @@ sourceSets {
 
 // Configure integration test configurations
 configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+    integrationTestImplementation.extendsFrom implementation, testImplementation
+    integrationTestRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
 }
 
 // Integration test dependencies
@@ -168,9 +174,24 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:networkfirewall'
     integrationTestImplementation 'software.amazon.awssdk:config'
     integrationTestImplementation 'software.amazon.awssdk:secretsmanager'
+    integrationTestImplementation 'software.amazon.awssdk:ssm'
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
+    
+    // Additional AWS SDK dependencies for comprehensive integration tests
+    integrationTestImplementation 'software.amazon.awssdk:kendra'
+    integrationTestImplementation 'software.amazon.awssdk:sfn'
+    integrationTestImplementation 'software.amazon.awssdk:eventbridge'
+    integrationTestImplementation 'software.amazon.awssdk:auth'
+    integrationTestImplementation 'software.amazon.awssdk:regions'
+
+    // WebSocket client for testing
+    integrationTestImplementation 'javax.websocket:javax.websocket-api:1.1'
+    integrationTestImplementation 'org.glassfish.tyrus.bundles:tyrus-standalone-client:1.19'
+
+    // Cognito Identity Provider (you already have most AWS SDK services)
+    integrationTestImplementation 'software.amazon.awssdk:cognitoidentityprovider'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"

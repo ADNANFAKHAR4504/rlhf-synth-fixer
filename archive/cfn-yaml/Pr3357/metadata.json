@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "30364950",
+  "team": "1",
+  "startedAt": "2025-10-02T13:00:42.950Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "SQS",
+    "SNS",
+    "Step Functions",
+    "Textract",
+    "Comprehend",
+    "OpenSearch Service",
+    "DynamoDB",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "Secrets Manager"
+  ],
+  "training_quality": 1,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
