@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Secure, highly available web application infrastructure with ALB, WAF, CloudTrail, and monitoring"
+Description: "Secure, highly available web application infrastructure (us-east-1) with ALB+WAF, CloudTrail, and monitoring. NOTE: Deploy this stack in us-east-1."
 
 Parameters:
   ProjectName:
@@ -25,8 +25,8 @@ Parameters:
 
   SSLCertificateArn:
     Type: String
-    Description: "ARN of existing SSL certificate for HTTPS listener"
-    Default: "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+    Description: "Existing ACM certificate ARN in us-east-1 for the HTTPS listener"
+    Default: "arn:aws:acm:us-east-1:342597974367:certificate/7be3cdf7-f25f-47b6-826b-55cf8ca0f8c3"
     AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$"
     ConstraintDescription: "Must be a valid ACM certificate ARN"
 
@@ -388,7 +388,7 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-access-logs"
 
-  # ✅ NEW: Allow ALB log delivery to write to the access logs bucket (prefix = 'alb')
+  # Allow ALB (any region) to deliver access logs (prefix 'alb')
   AccessLogsBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
