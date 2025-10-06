@@ -10,5 +10,5 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "(VPC, IAM, CloudTrail, KMS, NAT)"
+  "aws_services": "VPC, IAM, CloudTrail, KMS, NAT"
 }
