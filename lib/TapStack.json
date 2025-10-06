@@ -317,7 +317,7 @@
         "FunctionName": {
           "Fn::Sub": "ParkingReservation-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [

@@ -98,7 +98,9 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
     test('ParkingBookingsTable should have streams enabled', () => {
       const table = template.Resources.ParkingBookingsTable;
       expect(table.Properties.StreamSpecification).toBeDefined();
-      expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+      expect(table.Properties.StreamSpecification.StreamViewType).toBe(
+        'NEW_AND_OLD_IMAGES'
+      );
     });
   });
 
@@ -111,7 +113,7 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
 
     test('Lambda should have correct runtime and handler', () => {
       const lambda = template.Resources.ParkingReservationLambda;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs22.x');
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
@@ -152,7 +154,9 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
 
       expect(assumePolicy.Version).toBe('2012-10-17');
       expect(assumePolicy.Statement[0].Effect).toBe('Allow');
-      expect(assumePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assumePolicy.Statement[0].Principal.Service).toBe(
+        'lambda.amazonaws.com'
+      );
       expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
     });
 
@@ -331,7 +335,9 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
       const role = template.Resources.IoTDynamoDBRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('iot.amazonaws.com');
+      expect(
+        role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service
+      ).toBe('iot.amazonaws.com');
     });
   });
 
@@ -381,7 +387,10 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
     test('S3 bucket should have encryption enabled', () => {
       const bucket = template.Resources.ParkingFacilityImagesBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
     });
 
     test('S3 bucket should have versioning enabled', () => {
@@ -415,14 +424,16 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
         'IoTDynamoDBRole',
         'ParkingOccupancyAlarm',
         'SESConfigurationSet',
-        'SESEmailIdentity'
+        'SESEmailIdentity',
       ];
 
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource) {
           expect(resource.Properties.Tags).toBeDefined();
-          const tag = resource.Properties.Tags.find((t: any) => t.Key === 'iac-rlhf-amazon');
+          const tag = resource.Properties.Tags.find(
+            (t: any) => t.Key === 'iac-rlhf-amazon'
+          );
           expect(tag).toBeDefined();
           expect(tag.Value).toBe('true');
         }
@@ -442,7 +453,7 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
         'ParkingFacilityImagesBucketName',
         'ParkingDashboardURL',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -501,7 +512,7 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
       const resources = [
         template.Resources.TurnAroundPromptTable,
         template.Resources.ParkingBookingsTable,
-        template.Resources.ParkingReservationLambda
+        template.Resources.ParkingReservationLambda,
       ];
 
       resources.forEach(resource => {

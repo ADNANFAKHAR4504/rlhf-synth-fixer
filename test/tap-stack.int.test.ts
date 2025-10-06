@@ -3,30 +3,34 @@ import {
   PutItemCommand,
   GetItemCommand,
   DeleteItemCommand,
-  QueryCommand
+  QueryCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   LambdaClient,
   InvokeCommand,
-  GetFunctionCommand
+  GetFunctionCommand,
 } from '@aws-sdk/client-lambda';
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
-  HeadBucketCommand
+  HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 import {
   SNSClient,
   ListSubscriptionsByTopicCommand,
-  GetTopicAttributesCommand
+  GetTopicAttributesCommand,
 } from '@aws-sdk/client-sns';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  GetDashboardCommand
+  GetDashboardCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { APIGatewayClient, GetRestApiCommand, GetStageCommand } from '@aws-sdk/client-api-gateway';
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+  GetStageCommand,
+} from '@aws-sdk/client-api-gateway';
 import fs from 'fs';
 
 // Read flat outputs
@@ -60,8 +64,8 @@ describe('Parking Management System - Integration Tests', () => {
       const putCommand = new PutItemCommand({
         TableName: tapTableName,
         Item: {
-          id: { S: `int-test-${Date.now()}` }
-        }
+          id: { S: `int-test-${Date.now()}` },
+        },
       });
 
       await expect(dynamoClient.send(putCommand)).resolves.not.toThrow();
@@ -77,12 +81,12 @@ describe('Parking Management System - Integration Tests', () => {
         endTime: { N: String(Date.now() + 3600000) },
         vehicleNumber: { S: 'TEST-123' },
         status: { S: 'CONFIRMED' },
-        createdAt: { N: String(Date.now()) }
+        createdAt: { N: String(Date.now()) },
       };
 
       const putCommand = new PutItemCommand({
         TableName: parkingTableName,
-        Item: testItem
+        Item: testItem,
       });
 
       await expect(dynamoClient.send(putCommand)).resolves.not.toThrow();
@@ -92,8 +96,8 @@ describe('Parking Management System - Integration Tests', () => {
       const getCommand = new GetItemCommand({
         TableName: parkingTableName,
         Key: {
-          bookingId: { S: testBookingId }
-        }
+          bookingId: { S: testBookingId },
+        },
       });
 
       const result = await dynamoClient.send(getCommand);
@@ -108,9 +112,9 @@ describe('Parking Management System - Integration Tests', () => {
         IndexName: 'FacilityTimeIndex',
         KeyConditionExpression: 'facilityId = :facilityId',
         ExpressionAttributeValues: {
-          ':facilityId': { S: 'facility-001' }
+          ':facilityId': { S: 'facility-001' },
         },
-        Limit: 10
+        Limit: 10,
       });
 
       const result = await dynamoClient.send(queryCommand);
@@ -124,9 +128,9 @@ describe('Parking Management System - Integration Tests', () => {
         IndexName: 'SpotTimeIndex',
         KeyConditionExpression: 'spotId = :spotId',
         ExpressionAttributeValues: {
-          ':spotId': { S: 'spot-A1' }
+          ':spotId': { S: 'spot-A1' },
         },
-        Limit: 10
+        Limit: 10,
       });
 
       const result = await dynamoClient.send(queryCommand);
@@ -137,18 +141,18 @@ describe('Parking Management System - Integration Tests', () => {
   describe('Lambda Function', () => {
     test('Lambda function should exist', async () => {
       const getFunctionCommand = new GetFunctionCommand({
-        FunctionName: lambdaFunctionArn
+        FunctionName: lambdaFunctionArn,
       });
 
       const result = await lambdaClient.send(getFunctionCommand);
       expect(result.Configuration).toBeDefined();
-      expect(result.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(result.Configuration?.Runtime).toBe('nodejs22.x');
       expect(result.Configuration?.Handler).toBe('index.handler');
     }, 30000);
 
     test('Lambda function should have correct environment variables', async () => {
       const getFunctionCommand = new GetFunctionCommand({
-        FunctionName: lambdaFunctionArn
+        FunctionName: lambdaFunctionArn,
       });
 
       const result = await lambdaClient.send(getFunctionCommand);
@@ -166,14 +170,14 @@ describe('Parking Management System - Integration Tests', () => {
         httpMethod: 'GET',
         path: '/parking/booking',
         queryStringParameters: {
-          bookingId: testBookingId
-        }
+          bookingId: testBookingId,
+        },
       };
 
       const invokeCommand = new InvokeCommand({
         FunctionName: lambdaFunctionArn,
         InvocationType: 'RequestResponse',
-        Payload: Buffer.from(JSON.stringify(testEvent))
+        Payload: Buffer.from(JSON.stringify(testEvent)),
       });
 
       const result = await lambdaClient.send(invokeCommand);
@@ -197,7 +201,7 @@ describe('Parking Management System - Integration Tests', () => {
   describe('S3 Bucket', () => {
     test('ParkingFacilityImagesBucket should exist', async () => {
       const headCommand = new HeadBucketCommand({
-        Bucket: bucketName
+        Bucket: bucketName,
       });
 
       await expect(s3Client.send(headCommand)).resolves.not.toThrow();
@@ -209,7 +213,7 @@ describe('Parking Management System - Integration Tests', () => {
         Bucket: bucketName,
         Key: `test-facility-${Date.now()}.jpg`,
         Body: testImageContent,
-        ContentType: 'image/jpeg'
+        ContentType: 'image/jpeg',
       });
 
       await expect(s3Client.send(putCommand)).resolves.not.toThrow();
@@ -224,14 +228,14 @@ describe('Parking Management System - Integration Tests', () => {
         new PutObjectCommand({
           Bucket: bucketName,
           Key: testKey,
-          Body: testContent
+          Body: testContent,
         })
       );
 
       // Retrieve
       const getCommand = new GetObjectCommand({
         Bucket: bucketName,
-        Key: testKey
+        Key: testKey,
       });
 
       const result = await s3Client.send(getCommand);
@@ -245,7 +249,7 @@ describe('Parking Management System - Integration Tests', () => {
   describe('SNS Topic', () => {
     test('BookingConfirmationTopic should exist', async () => {
       const getTopicCommand = new GetTopicAttributesCommand({
-        TopicArn: snsTopicArn
+        TopicArn: snsTopicArn,
       });
 
       const result = await snsClient.send(getTopicCommand);
@@ -255,7 +259,7 @@ describe('Parking Management System - Integration Tests', () => {
 
     test('Topic should have subscriptions', async () => {
       const listSubsCommand = new ListSubscriptionsByTopicCommand({
-        TopicArn: snsTopicArn
+        TopicArn: snsTopicArn,
       });
 
       const result = await snsClient.send(listSubsCommand);
@@ -275,7 +279,7 @@ describe('Parking Management System - Integration Tests', () => {
       const apiId = apiEndpoint.split('/')[2].split('.')[0];
       const getStageCommand = new GetStageCommand({
         restApiId: apiId,
-        stageName: environmentSuffix
+        stageName: environmentSuffix,
       });
 
       const result = await apiGatewayClient.send(getStageCommand);
@@ -286,7 +290,7 @@ describe('Parking Management System - Integration Tests', () => {
   describe('CloudWatch Resources', () => {
     test('ParkingHighOccupancy alarm should exist', async () => {
       const describeAlarmsCommand = new DescribeAlarmsCommand({
-        AlarmNames: [`ParkingHighOccupancy-${environmentSuffix}`]
+        AlarmNames: [`ParkingHighOccupancy-${environmentSuffix}`],
       });
 
       const result = await cloudwatchClient.send(describeAlarmsCommand);
@@ -302,7 +306,7 @@ describe('Parking Management System - Integration Tests', () => {
 
     test('ParkingOccupancy dashboard should exist', async () => {
       const getDashboardCommand = new GetDashboardCommand({
-        DashboardName: `ParkingOccupancy-${environmentSuffix}`
+        DashboardName: `ParkingOccupancy-${environmentSuffix}`,
       });
 
       const result = await cloudwatchClient.send(getDashboardCommand);
@@ -332,12 +336,12 @@ describe('Parking Management System - Integration Tests', () => {
         status: { S: 'CONFIRMED' },
         createdAt: { N: String(Date.now()) },
         checkInTime: { NULL: true },
-        checkOutTime: { NULL: true }
+        checkOutTime: { NULL: true },
       };
 
       const putCommand = new PutItemCommand({
         TableName: parkingTableName,
-        Item: booking
+        Item: booking,
       });
 
       await dynamoClient.send(putCommand);
@@ -345,7 +349,7 @@ describe('Parking Management System - Integration Tests', () => {
       // Verify creation
       const getCommand = new GetItemCommand({
         TableName: parkingTableName,
-        Key: { bookingId: { S: e2eBookingId } }
+        Key: { bookingId: { S: e2eBookingId } },
       });
 
       const result = await dynamoClient.send(getCommand);
@@ -361,8 +365,8 @@ describe('Parking Management System - Integration Tests', () => {
         IndexName: 'FacilityTimeIndex',
         KeyConditionExpression: 'facilityId = :facilityId',
         ExpressionAttributeValues: {
-          ':facilityId': { S: 'facility-e2e' }
-        }
+          ':facilityId': { S: 'facility-e2e' },
+        },
       });
 
       const facilityResult = await dynamoClient.send(facilityQuery);
@@ -378,8 +382,8 @@ describe('Parking Management System - Integration Tests', () => {
         IndexName: 'SpotTimeIndex',
         KeyConditionExpression: 'spotId = :spotId',
         ExpressionAttributeValues: {
-          ':spotId': { S: 'spot-E2E-1' }
-        }
+          ':spotId': { S: 'spot-E2E-1' },
+        },
       });
 
       const spotResult = await dynamoClient.send(spotQuery);
@@ -391,8 +395,8 @@ describe('Parking Management System - Integration Tests', () => {
         IndexName: 'UserBookingsIndex',
         KeyConditionExpression: 'userId = :userId',
         ExpressionAttributeValues: {
-          ':userId': { S: e2eUserId }
-        }
+          ':userId': { S: e2eUserId },
+        },
       });
 
       const userResult = await dynamoClient.send(userQuery);
@@ -414,7 +418,7 @@ describe('Parking Management System - Integration Tests', () => {
 
     test('Lambda function name should include environment suffix', async () => {
       const getFunctionCommand = new GetFunctionCommand({
-        FunctionName: lambdaFunctionArn
+        FunctionName: lambdaFunctionArn,
       });
 
       const result = await lambdaClient.send(getFunctionCommand);
@@ -441,14 +445,14 @@ describe('Parking Management System - Integration Tests', () => {
       await dynamoClient.send(
         new DeleteItemCommand({
           TableName: parkingTableName,
-          Key: { bookingId: { S: testBookingId } }
+          Key: { bookingId: { S: testBookingId } },
         })
       );
 
       await dynamoClient.send(
         new DeleteItemCommand({
           TableName: parkingTableName,
-          Key: { bookingId: { S: `e2e-booking-${Date.now()}` } }
+          Key: { bookingId: { S: `e2e-booking-${Date.now()}` } },
         })
       );
     } catch (error) {
