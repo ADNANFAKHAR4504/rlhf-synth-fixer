@@ -1,5 +1,7 @@
 ## Inventory Management API — Ideal Implementation (AWS CDK, Python)
 
+Note: Lambda runtime is Python 3.11 for improved performance and support.
+
 ### lib/tap_stack.py
 
 ```python
@@ -626,75 +628,7 @@ class ApiConstruct(Construct):
         )
 ```
 
-### lib/lambda/layer/python/utils.py
-
-```python
-"""Shared utilities for Lambda functions"""
-import json
-import logging
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Any
-
-logger = logging.getLogger()
-
-class DecimalEncoder(json.JSONEncoder):
-    """JSON encoder for Decimal types"""
-    def default(self, obj):
-        if isinstance(obj, Decimal):
-            return float(obj)
-        elif isinstance(obj, (datetime, date)):
-            return obj.isoformat()
-        return super(DecimalEncoder, self).default(obj)
-
-def validate_item_data(item_data: dict) -> tuple[bool, str]:
-    """Validate inventory item data"""
-    required_fields = ['sku', 'name', 'quantity', 'category']
-
-    for field in required_fields:
-        if field not in item_data:
-            return False, f"Missing required field: {field}"
-
-    # Validate quantity
-    try:
-        quantity = int(item_data['quantity'])
-        if quantity < 0:
-            return False, "Quantity must be non-negative"
-    except (ValueError, TypeError):
-        return False, "Invalid quantity value"
-
-    # Validate price if present
-    if 'price' in item_data:
-        try:
-            price = float(item_data['price'])
-            if price < 0:
-                return False, "Price must be non-negative"
-        except (ValueError, TypeError):
-            return False, "Invalid price value"
-
-    # Validate status if present
-    if 'status' in item_data:
-        valid_statuses = ['available', 'out_of_stock', 'discontinued']
-        if item_data['status'] not in valid_statuses:
-            return False, f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
-
-    return True, "Valid"
-
-def format_response(status_code: int, body: Any, headers: dict = None) -> dict:
-    """Format API response"""
-    response = {
-        'statusCode': status_code,
-        'headers': headers or {'Content-Type': 'application/json'},
-        'body': json.dumps(body, cls=DecimalEncoder)
-    }
-    return response
-```
-
-### lib/lambda/layer/requirements.txt
-
-```text
-boto3>=1.26.0
-```
+<!-- Shared layer content omitted intentionally; handlers include inline fallbacks so the API works without packaging a layer. -->
 
 ### lib/lambda/handlers/create_item.py
 
