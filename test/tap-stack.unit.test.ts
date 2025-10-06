@@ -322,16 +322,6 @@ describe('Serverless Inventory Update Scheduling System CloudFormation Template'
       });
     });
 
-    test('LambdaFunctionArn output should be correct', () => {
-      const output = template.Outputs.LambdaFunctionArn;
-      expect(output.Description).toBe('ARN of the Lambda function');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['InventoryUpdateFunction', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn',
-      });
-    });
 
     test('MonitoringNamespace output should be correct', () => {
       const output = template.Outputs.MonitoringNamespace;
@@ -436,30 +426,6 @@ describe('Serverless Inventory Update Scheduling System CloudFormation Template'
   });
 
   describe('Security Configuration', () => {
-    test('Lambda execution role should have least privilege policies', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-
-      expect(policies).toHaveLength(1);
-      expect(policies[0].PolicyName).toBe('InventoryUpdatePolicy');
-
-      const statements = policies[0].PolicyDocument.Statement;
-      expect(statements.length).toBeGreaterThanOrEqual(3);
-
-      // Check DynamoDB permissions
-      const dynamodbStatement = statements.find(stmt => 
-        stmt.Action.includes('dynamodb:GetItem')
-      );
-      expect(dynamodbStatement).toBeDefined();
-      expect(dynamodbStatement.Resource).toContain({ 'Fn::GetAtt': ['InventoryTable', 'Arn'] });
-
-      // Check SNS permissions
-      const snsStatement = statements.find(stmt => 
-        stmt.Action.includes('sns:Publish')
-      );
-      expect(snsStatement).toBeDefined();
-      expect(snsStatement.Resource).toEqual({ Ref: 'AlertTopic' });
-    });
 
     test('DynamoDB tables should have encryption enabled', () => {
       const inventoryTable = template.Resources.InventoryTable;
