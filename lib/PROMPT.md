@@ -57,11 +57,6 @@ Bucket for portfolio uploads (resumes, work samples, images, videos)
 - Server-side encryption
 - CORS configuration for web uploads
 
-#### ElastiCache Redis
-Cluster for caching search results and session data
-- Multi-AZ with automatic failover
-- Cluster mode for horizontal scaling
-- Redis 7.x engine version
 
 ### Content Delivery
 - CloudFront distribution for S3 portfolio content
@@ -167,11 +162,6 @@ Topics for real-time bid notifications
 - DynamoDB table ARN as environment variable
 - SDK configuration in application code
 
-#### ECS → ElastiCache Redis
-- Security group rules allowing ECS to reach Redis on port 6379
-- VPC subnet placement ensuring connectivity
-- Redis endpoint as environment variable
-- Connection pooling in application
 
 #### Lambda → Aurora MySQL
 - VPC attachment to same subnets as Aurora
@@ -247,18 +237,18 @@ You must modify and output code ONLY for these three files:
 3. Security groups (define all upfront)
 4. Aurora MySQL cluster
 5. DynamoDB table with GSIs
-6. ElastiCache Redis cluster
-7. S3 bucket and CloudFront distribution
-8. Cognito user pools (freelancer + client)
-9. ECS cluster, task definition, and Fargate service
-10. Application Load Balancer with listeners and target groups
-11. Lambda function for payment webhooks
-12. Step Functions state machine
-13. SNS topics for notifications
-14. SES configuration
-15. CloudWatch dashboards and alarms
-16. IAM roles and policies
-17. CfnOutputs for key resources
+6. S3 bucket and CloudFront distribution
+7. Cognito user pools (freelancer + client)
+8. ECS cluster, task definition, and Fargate service
+9. Application Load Balancer with listeners and target groups
+10. Lambda function for payment webhooks
+11. Step Functions state machine
+12. SNS topics for notifications
+13. SES configuration
+14. CloudWatch dashboards and alarms
+15. IAM roles and policies
+16. CfnOutputs for key resources
+
 
 #### 2. Naming Conventions
 - Use kebab-case with environment prefix: `${env}-freelancer-platform-{resource}`

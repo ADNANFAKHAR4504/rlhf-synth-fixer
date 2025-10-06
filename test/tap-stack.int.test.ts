@@ -467,11 +467,13 @@ describe('FreelancerPlatform Real Integration Tests', () => {
       const response = await cognito.describeUserPool(params).promise();
 
       expect(response.UserPool).toBeDefined();
-      expect(response.UserPool!.Status).toBe('Enabled');
+      expect(response.UserPool!.Id).toBe(DEPLOYMENT_OUTPUTS.FreelancerUserPoolId);
+      expect(response.UserPool!.Name).toContain('freelancer');
 
       console.log('✅ Freelancer pool validated:', response.UserPool!.Name);
-      console.log('   Status:', response.UserPool!.Status);
+      console.log('   Pool ID:', response.UserPool!.Id);
       console.log('   MFA:', response.UserPool!.MfaConfiguration);
+      console.log('   Password Policy Min Length:', response.UserPool!.Policies?.PasswordPolicy?.MinimumLength);
     });
 
     test('validates client user pool exists', async () => {
@@ -483,11 +485,33 @@ describe('FreelancerPlatform Real Integration Tests', () => {
       const response = await cognito.describeUserPool(params).promise();
 
       expect(response.UserPool).toBeDefined();
-      expect(response.UserPool!.Status).toBe('Enabled');
+      expect(response.UserPool!.Id).toBe(DEPLOYMENT_OUTPUTS.ClientUserPoolId);
+      expect(response.UserPool!.Name).toContain('client');
 
       console.log('✅ Client pool validated:', response.UserPool!.Name);
-      console.log('   Status:', response.UserPool!.Status);
+      console.log('   Pool ID:', response.UserPool!.Id);
       console.log('   MFA:', response.UserPool!.MfaConfiguration);
+      console.log('   Password Policy Min Length:', response.UserPool!.Policies?.PasswordPolicy?.MinimumLength);
+    });
+
+    test('validates user pool password policies are enforced', async () => {
+      console.log('🔍 Testing Cognito password policies...');
+      
+      const params = {
+        UserPoolId: DEPLOYMENT_OUTPUTS.FreelancerUserPoolId,
+      };
+      const response = await cognito.describeUserPool(params).promise();
+
+      expect(response.UserPool?.Policies?.PasswordPolicy).toBeDefined();
+      expect(response.UserPool!.Policies!.PasswordPolicy!.MinimumLength).toBeGreaterThanOrEqual(12);
+      expect(response.UserPool!.Policies!.PasswordPolicy!.RequireLowercase).toBe(true);
+      expect(response.UserPool!.Policies!.PasswordPolicy!.RequireUppercase).toBe(true);
+      expect(response.UserPool!.Policies!.PasswordPolicy!.RequireNumbers).toBe(true);
+      expect(response.UserPool!.Policies!.PasswordPolicy!.RequireSymbols).toBe(true);
+
+      console.log('✅ Password policies validated');
+      console.log('   Min length:', response.UserPool!.Policies!.PasswordPolicy!.MinimumLength);
+      console.log('   Requires: uppercase, lowercase, numbers, symbols');
     });
   });
 
