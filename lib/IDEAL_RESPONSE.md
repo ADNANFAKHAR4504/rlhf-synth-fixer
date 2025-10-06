@@ -1,3 +1,4 @@
+```python
 from typing import Optional
 import json
 
@@ -640,3 +641,4 @@ class TaskManagementStack(Stack):
         self.reminders_function = reminders_function
         self.api = api
         self.environment_suffix = environment_suffix
+```
