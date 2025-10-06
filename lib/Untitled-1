@@ -1,0 +1,425 @@
+Run ./scripts/deploy.sh
+🚀 Running deployment...
+Project: platform=cdk, language=ts
+Environment configuration:
+  Environment suffix: pr3647
+  Repository: TuringGpt/iac-test-automations
+  Commit author: Olatunjym
+  AWS region: us-east-1
+Using TF_VAR_db_username: (set)
+Using TF_VAR_db_password: (set)
+  Terraform state bucket: iac-rlhf-tf-states-***
+  Terraform state bucket region: us-east-1
+  Pulumi backend URL: s3://iac-rlhf-pulumi-states-***?region=us-east-1
+  Pulumi organization: organization
+=== Bootstrap Phase ===
+🚀 Bootstrapping infrastructure...
+Project: platform=cdk, language=ts
+Environment configuration:
+  Environment suffix: pr3647
+  Repository: TuringGpt/iac-test-automations
+  Commit author: Olatunjym
+Using TF_VAR_db_username: (set)
+Using TF_VAR_db_password: (set)
+✅ CDK project detected, running CDK bootstrap...
+> tap@0.1.0 cdk:bootstrap
+> npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#5 CACHED
+#6 [ 2/12] RUN npm install --global yarn@1.22.5
+#6 CACHED
+#7 [ 4/12] RUN npm install --global bun@1.1.30
+#7 CACHED
+#8 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#8 CACHED
+#9 [ 5/12] RUN npm install --global typescript
+#9 CACHED
+#10 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#10 CACHED
+#11 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#11 CACHED
+#12 [10/12] RUN npm config --global set update-notifier false
+#12 CACHED
+#13 [ 3/12] RUN npm install --global pnpm@7.30.5
+#13 CACHED
+#14 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [ 2/12] RUN npm install --global yarn@1.22.5
+#5 CACHED
+#6 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#6 CACHED
+#7 [ 3/12] RUN npm install --global pnpm@7.30.5
+#7 CACHED
+#8 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#8 CACHED
+#9 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#9 CACHED
+#10 [10/12] RUN npm config --global set update-notifier false
+#10 CACHED
+#11 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#11 CACHED
+#12 [ 5/12] RUN npm install --global typescript
+#12 CACHED
+#13 [ 4/12] RUN npm install --global bun@1.1.30
+#13 CACHED
+#14 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [ 5/12] RUN npm install --global typescript
+#5 CACHED
+#6 [ 2/12] RUN npm install --global yarn@1.22.5
+#6 CACHED
+#7 [ 4/12] RUN npm install --global bun@1.1.30
+#7 CACHED
+#8 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#8 CACHED
+#9 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#9 CACHED
+#10 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#10 CACHED
+#11 [ 3/12] RUN npm install --global pnpm@7.30.5
+#11 CACHED
+#12 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#12 CACHED
+#13 [10/12] RUN npm config --global set update-notifier false
+#13 CACHED
+#14 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+ ⏳  Bootstrapping environment aws://***/us-east-1...
+Trusted accounts for deployment: (none)
+Trusted accounts for lookup: (none)
+Using default execution policy of 'arn:aws:iam::aws:policy/AdministratorAccess'. Pass '--cloudformation-execution-policies' to customize.
+ ✅  Environment aws://***/us-east-1 bootstrapped (no changes).
+✅ Bootstrap completed successfully
+=== Deploy Phase ===
+✅ CDK project detected, running CDK deploy...
+> tap@0.1.0 cdk:deploy
+> npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
+  use `pointInTimeRecoverySpecification` instead
+  This API will be removed in the next major release.
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [ 3/12] RUN npm install --global pnpm@7.30.5
+#5 CACHED
+#6 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#6 CACHED
+#7 [ 4/12] RUN npm install --global bun@1.1.30
+#7 CACHED
+#8 [ 5/12] RUN npm install --global typescript
+#8 CACHED
+#9 [ 2/12] RUN npm install --global yarn@1.22.5
+#9 CACHED
+#10 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#10 CACHED
+#11 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#11 CACHED
+#12 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#12 CACHED
+#13 [10/12] RUN npm config --global set update-notifier false
+#13 CACHED
+#14 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+Bundling asset TapStackpr3647/UserServiceFunction/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+Warning: G] Duplicate key "@aws-sdk/client-dynamodb" in object literal [duplicate-object-key]
+    asset-input/package.json:185:4:
+      185 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The original key "@aws-sdk/client-dynamodb" is here:
+    asset-input/package.json:184:4:
+      184 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning
+  asset-output/index.js  4.0kb
+⚡ Done in 8ms
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [10/12] RUN npm config --global set update-notifier false
+#5 CACHED
+#6 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#6 CACHED
+#7 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#7 CACHED
+#8 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#8 CACHED
+#9 [ 5/12] RUN npm install --global typescript
+#9 CACHED
+#10 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#10 CACHED
+#11 [ 4/12] RUN npm install --global bun@1.1.30
+#11 CACHED
+#12 [ 2/12] RUN npm install --global yarn@1.22.5
+#12 CACHED
+#13 [ 3/12] RUN npm install --global pnpm@7.30.5
+#13 CACHED
+#14 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+Bundling asset TapStackpr3647/ProductServiceFunction/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+Warning: G] Duplicate key "@aws-sdk/client-dynamodb" in object literal [duplicate-object-key]
+    asset-input/package.json:185:4:
+      185 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The original key "@aws-sdk/client-dynamodb" is here:
+    asset-input/package.json:184:4:
+      184 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning
+  asset-output/index.js  4.2kb
+⚡ Done in 8ms
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+#0 building with "default" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.80kB done
+#1 DONE 0.0s
+#2 [internal] load metadata for public.ecr.aws/sam/build-nodejs18.x:latest
+#2 DONE 0.1s
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+#4 [ 1/12] FROM public.ecr.aws/sam/build-nodejs18.x:latest@sha256:713400e6e3083053d4ce4476ce85e47ad63e15603ee68a779dd7600e6b9b8d43
+#4 DONE 0.0s
+#5 [ 5/12] RUN npm install --global typescript
+#5 CACHED
+#6 [ 9/12] RUN mkdir /tmp/pnpm-cache &&     chmod -R 777 /tmp/pnpm-cache &&     pnpm config --global set store-dir /tmp/pnpm-cache
+#6 CACHED
+#7 [11/12] RUN /sbin/useradd -u 1000 user && chmod 711 /
+#7 CACHED
+#8 [ 7/12] RUN mkdir /tmp/npm-cache &&     chmod -R 777 /tmp/npm-cache &&     npm config --global set cache /tmp/npm-cache
+#8 CACHED
+#9 [10/12] RUN npm config --global set update-notifier false
+#9 CACHED
+#10 [ 8/12] RUN mkdir /tmp/yarn-cache &&     chmod -R 777 /tmp/yarn-cache &&     yarn config set cache-folder /tmp/yarn-cache
+#10 CACHED
+#11 [ 2/12] RUN npm install --global yarn@1.22.5
+#11 CACHED
+#12 [ 4/12] RUN npm install --global bun@1.1.30
+#12 CACHED
+#13 [ 6/12] RUN npm install --global --unsafe-perm=true esbuild@0.21
+#13 CACHED
+#14 [ 3/12] RUN npm install --global pnpm@7.30.5
+#14 CACHED
+#15 [12/12] RUN mkdir /tmp/bun-cache &&     chmod -R 777 /tmp/bun-cache &&     echo -e "[install.cache]\ndir = "/tmp/bun-cache"\ndisable = true" >> /home/user/.bunfig.toml
+#15 CACHED
+#16 exporting to image
+#16 exporting layers done
+#16 writing image sha256:a49a24d6f619f8c355094c37a288219835bd8a53a52e957d56a6b0e69db9f50f done
+#16 naming to docker.io/library/cdk-a3dc42a33742b3ae7d1db03bf84aee042adfc22c7c0f65ed95aea4a777ae89b3 done
+#16 DONE 0.0s
+Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+Bundling asset TapStackpr3647/OrderServiceFunction/Code/Stage...
+esbuild cannot run locally. Switching to Docker bundling.
+Warning: G] Duplicate key "@aws-sdk/client-dynamodb" in object literal [duplicate-object-key]
+    asset-input/package.json:185:4:
+      185 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The original key "@aws-sdk/client-dynamodb" is here:
+    asset-input/package.json:184:4:
+      184 │     "@aws-sdk/client-dynamodb": "^3.883.0",
+          ╵     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning
+  asset-output/index.js  4.0kb
+⚡ Done in 5ms
+✨  Synthesis time: 7.77s
+TapStackpr3647: start: Building UserServiceFunction/Code
+TapStackpr3647: success: Built UserServiceFunction/Code
+TapStackpr3647: start: Building ProductServiceFunction/Code
+TapStackpr3647: success: Built ProductServiceFunction/Code
+TapStackpr3647: start: Building OrderServiceFunction/Code
+TapStackpr3647: success: Built OrderServiceFunction/Code
+TapStackpr3647: start: Building TapStackpr3647 Template
+TapStackpr3647: success: Built TapStackpr3647 Template
+TapStackpr3647: start: Publishing UserServiceFunction/Code (***-us-east-1)
+TapStackpr3647: start: Publishing OrderServiceFunction/Code (***-us-east-1)
+TapStackpr3647: start: Publishing ProductServiceFunction/Code (***-us-east-1)
+TapStackpr3647: start: Publishing TapStackpr3647 Template (***-us-east-1)
+TapStackpr3647: success: Published UserServiceFunction/Code (***-us-east-1)
+TapStackpr3647: success: Published OrderServiceFunction/Code (***-us-east-1)
+TapStackpr3647: success: Published ProductServiceFunction/Code (***-us-east-1)
+TapStackpr3647: success: Published TapStackpr3647 Template (***-us-east-1)
+TapStackpr3647: deploying... [1/1]
+TapStackpr3647: creating CloudFormation changeset...
+TapStackpr3647 |  0/91 | 3:02:37 PM | REVIEW_IN_PROGRESS   | AWS::CloudFormation::Stack  | TapStackpr3647 User Initiated
+TapStackpr3647 |  0/91 | 3:02:48 PM | CREATE_IN_PROGRESS   | AWS::CloudFormation::Stack  | TapStackpr3647 User Initiated
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) 
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) 
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::CDK::Metadata          | CDKMetadata/Default (CDKMetadata) 
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) 
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) 
+TapStackpr3647 |  0/91 | 3:02:57 PM | CREATE_IN_PROGRESS   | AWS::ApiGateway::RestApi    | NovaRestApi (NovaRestApiE6CE7E5E) 
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) 2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: a957be42-f094-479c-9bf9-762b13909149) (SDK Attempt Count: 1)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) 2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 56b44d97-4a57-444f-8a5a-146e691d40b4) (SDK Attempt Count: 1)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) 2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 08cda5a4-d2a0-4258-b658-d6403736616e) (SDK Attempt Count: 1)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) Resource creation Initiated
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) 2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: c96f51d5-3e2a-4db0-906b-5b0fc0979aa6) (SDK Attempt Count: 1)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) Resource creation Initiated
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) Resource creation Initiated
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) Resource creation Initiated
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) 2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 08cda5a4-d2a0-4258-b658-d6403736616e) (SDK Attempt Count: 1)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 56b44d97-4a57-444f-8a5a-146e691d40b4) (SDK Attempt Count: 1)" (RequestToken: 8f099031-dd66-6e86-70c5-706fed08db70, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: a957be42-f094-479c-9bf9-762b13909149) (SDK Attempt Count: 1)" (RequestToken: 620c2f66-6e49-08f0-fad5-53326993cebe, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_IN_PROGRESS   | AWS::CDK::Metadata          | CDKMetadata/Default (CDKMetadata) Resource creation Initiated
+TapStackpr3647 |  0/91 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 08cda5a4-d2a0-4258-b658-d6403736616e) (SDK Attempt Count: 1)" (RequestToken: 9b4bb57b-cac4-84b5-5e80-b3a593452775, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 |  1/91 | 3:02:58 PM | CREATE_COMPLETE      | AWS::CDK::Metadata          | CDKMetadata/Default (CDKMetadata) 
+TapStackpr3647 |  1/91 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: c96f51d5-3e2a-4db0-906b-5b0fc0979aa6) (SDK Attempt Count: 1)" (RequestToken: e25c6429-910a-d927-0a29-61f9e08f1300, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 |  1/91 | 3:02:59 PM | CREATE_FAILED        | AWS::ApiGateway::RestApi    | NovaRestApi (NovaRestApiE6CE7E5E) Resource handler returned message: "Invalid tag key/value. Valid characters are [a-zA-Z+-=._:/]. Tag key can be up to 128 characters. Tag value can be up to 256 characters. (Service: ApiGateway, Status Code: 400, Request ID: b071f5af-ddd0-4b93-be7e-fc034ef40851) (SDK Attempt Count: 1)" (RequestToken: 867b5e9a-f09e-54bc-561c-199574230cd0, HandlerErrorCode: InvalidRequest)
+TapStackpr3647 |  1/91 | 3:02:59 PM | ROLLBACK_IN_PROGRESS | AWS::CloudFormation::Stack  | TapStackpr3647 The following resource(s) failed to create: [ProductServiceFunctionExecutionRoleDE54AE20, NovaRestApiE6CE7E5E, UserServiceFunctionExecutionRole96B2AC1A, LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB, OrderServiceFunctionExecutionRole0D7A55DB]. Rollback requested by user.
+TapStackpr3647 |  1/91 | 3:03:01 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) 
+TapStackpr3647 |  1/91 | 3:03:01 PM | DELETE_IN_PROGRESS   | AWS::CDK::Metadata          | CDKMetadata/Default (CDKMetadata) 
+TapStackpr3647 |  1/91 | 3:03:01 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) 
+TapStackpr3647 |  1/91 | 3:03:01 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) 
+TapStackpr3647 |  1/91 | 3:03:02 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) 
+TapStackpr3647 |  1/91 | 3:03:02 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) The role with name TapStackpr3647-UserServiceFunctionExecutionRole96B2-LqPWPQLfliYW cannot be found. (Service: Iam, Status Code: 404, Request ID: adedd79d-e2cb-445a-9b18-9fc6dd51eb1a) (SDK Attempt Count: 1)
+TapStackpr3647 |  1/91 | 3:03:02 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) The role with name TapStackpr3647-OrderServiceFunctionExecutionRole0D7-wnMJWjw7ufmx cannot be found. (Service: Iam, Status Code: 404, Request ID: bf2e47b8-3fb9-43aa-b77c-7b675c10a4ee) (SDK Attempt Count: 1)
+TapStackpr3647 |  1/91 | 3:03:02 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) The role with name TapStackpr3647-ProductServiceFunctionExecutionRoleD-49XP47107wEn cannot be found. (Service: Iam, Status Code: 404, Request ID: 5874d68b-094b-420f-b967-a206256ca0c5) (SDK Attempt Count: 1)
+TapStackpr3647 |  1/91 | 3:03:02 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) The role with name TapStackpr3647-LogRetentionaae0aa3c5b4d4f87b02d85b2-1yAzHeNzsabS cannot be found. (Service: Iam, Status Code: 404, Request ID: 74b5178f-b97f-43ab-8579-531193ceab97) (SDK Attempt Count: 1)
+TapStackpr3647 |  2/91 | 3:03:02 PM | DELETE_COMPLETE      | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) 
+TapStackpr3647 |  3/91 | 3:03:02 PM | DELETE_COMPLETE      | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) 
+TapStackpr3647 |  4/91 | 3:03:03 PM | DELETE_COMPLETE      | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) 
+TapStackpr3647 |  3/91 | 3:03:03 PM | DELETE_COMPLETE      | AWS::CDK::Metadata          | CDKMetadata/Default (CDKMetadata) 
+TapStackpr3647 |  4/91 | 3:03:03 PM | DELETE_COMPLETE      | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) 
+TapStackpr3647 |  5/91 | 3:05:17 PM | DELETE_COMPLETE      | AWS::ApiGateway::RestApi    | NovaRestApi (NovaRestApiE6CE7E5E) 
+TapStackpr3647 |  6/91 | 3:05:17 PM | ROLLBACK_COMPLETE    | AWS::CloudFormation::Stack  | TapStackpr3647 
+Failed resources:
+TapStackpr3647 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | UserServiceFunctionExecutionRole (UserServiceFunctionExecutionRole96B2AC1A) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 56b44d97-4a57-444f-8a5a-146e691d40b4) (SDK Attempt Count: 1)" (RequestToken: 8f099031-dd66-6e86-70c5-706fed08db70, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | ProductServiceFunctionExecutionRole (ProductServiceFunctionExecutionRoleDE54AE20) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: a957be42-f094-479c-9bf9-762b13909149) (SDK Attempt Count: 1)" (RequestToken: 620c2f66-6e49-08f0-fad5-53326993cebe, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8a/ServiceRole (LogRetentionaae0aa3c5b4d4f87b02d85b201efdd8aServiceRole9741ECFB) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 08cda5a4-d2a0-4258-b658-d6403736616e) (SDK Attempt Count: 1)" (RequestToken: 9b4bb57b-cac4-84b5-5e80-b3a593452775, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 | 3:02:58 PM | CREATE_FAILED        | AWS::IAM::Role              | OrderServiceFunctionExecutionRole (OrderServiceFunctionExecutionRole0D7A55DB) Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: c96f51d5-3e2a-4db0-906b-5b0fc0979aa6) (SDK Attempt Count: 1)" (RequestToken: e25c6429-910a-d927-0a29-61f9e08f1300, HandlerErrorCode: GeneralServiceException)
+TapStackpr3647 | 3:02:59 PM | CREATE_FAILED        | AWS::ApiGateway::RestApi    | NovaRestApi (NovaRestApiE6CE7E5E) Resource handler returned message: "Invalid tag key/value. Valid characters are [a-zA-Z+-=._:/]. Tag key can be up to 128 characters. Tag value can be up to 256 characters. (Service: ApiGateway, Status Code: 400, Request ID: b071f5af-ddd0-4b93-be7e-fc034ef40851) (SDK Attempt Count: 1)" (RequestToken: 867b5e9a-f09e-54bc-561c-199574230cd0, HandlerErrorCode: InvalidRequest)
+❌  TapStackpr3647 failed: ToolkitError: The stack named TapStackpr3647 failed creation, it may need to be manually deleted from the AWS console: ROLLBACK_COMPLETE: Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]* (Service: Iam, Status Code: 400, Request ID: 56b44d97-4a57-444f-8a5a-146e691d40b4) (SDK Attempt Count: 1)" (RequestToken: 8f099031-dd66-6e86-70c5-706fed08db70, HandlerErrorCode: GeneralServiceException), Resource handler returned message: "2 validation errors detected: Value at 'tags.1.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\p{L}\p{Z}\p{N}_.:/=+\-@]*; Value at 'tags.5.member.value' failed to satisfy constraint: Member must satisfy regular expression pattern: [\
+Error: Process completed with exit code 1.

@@ -13,7 +13,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 const sanitizeTagValue = (value: string): string =>
   value
-    .replace(/[^a-zA-Z0-9 ._/:=+\-@]/g, '_')
+    .replace(/[^a-zA-Z+\-=._:/]/g, '_')
     .trim()
     .slice(0, 256);
 
