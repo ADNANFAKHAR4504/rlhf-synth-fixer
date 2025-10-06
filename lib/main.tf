@@ -145,9 +145,10 @@ module "failover_mechanism" {
   providers = {
     aws.primary   = aws.primary
     aws.secondary = aws.secondary
-    aws.route53   = aws.route53
   }
 
+  primary_alb_arn       = module.primary_compute.alb_arn
+  secondary_alb_arn     = module.secondary_compute.alb_arn
   primary_alb_dns       = module.primary_compute.alb_dns
   secondary_alb_dns     = module.secondary_compute.alb_dns
   primary_alb_zone_id   = module.primary_compute.alb_zone_id
@@ -159,6 +160,7 @@ module "failover_mechanism" {
   secondary_db_arn      = module.secondary_database.db_arn
   primary_region        = var.primary_region
   secondary_region      = var.secondary_region
+  environment           = var.environment
 
   tags = merge(var.tags, {
     Type = "Failover"

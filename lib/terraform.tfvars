@@ -12,7 +12,7 @@ application_name = "webapp"
 
 # AWS regions
 primary_region = "eu-west-1"
-secondary_region = "ap-southeast-1"
+secondary_region = "eu-west-2"
 
 # Compute configuration
 instance_type = "t3.large"

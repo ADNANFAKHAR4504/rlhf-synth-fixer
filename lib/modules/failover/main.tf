@@ -2,92 +2,92 @@ terraform {
   required_providers {
     aws = {
       source                = "hashicorp/aws"
-      configuration_aliases = [aws.primary, aws.secondary, aws.route53]
+      configuration_aliases = [aws.primary, aws.secondary]
     }
   }
 }
 
-# Route 53 Hosted Zone (assuming it exists)
+# AWS Global Accelerator
+resource "aws_globalaccelerator_accelerator" "main" {
+  name            = "${var.environment}-global-accelerator"
+  ip_address_type = "IPV4"
+  enabled         = true
 
-data "aws_route53_zone" "main" {
-  provider     = aws.route53
-  name         = var.domain_name
-  private_zone = false
-}
-
-# Primary Health Check
-resource "aws_route53_health_check" "primary" {
-  provider          = aws.route53
-  fqdn              = var.primary_alb_dns
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
-  failure_threshold = var.failover_threshold
-  request_interval  = var.health_check_interval
+  attributes {
+    flow_logs_enabled   = true
+    flow_logs_s3_bucket = aws_s3_bucket.global_accelerator_logs.bucket
+    flow_logs_s3_prefix = "flow-logs/"
+  }
 
   tags = merge(var.tags, {
-    Name   = "primary-health-check"
-    Region = "primary"
+    Name = "${var.environment}-global-accelerator"
   })
 }
 
-# Secondary Health Check  
-resource "aws_route53_health_check" "secondary" {
-  provider          = aws.route53
-  fqdn              = var.secondary_alb_dns
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
-  failure_threshold = var.failover_threshold
-  request_interval  = var.health_check_interval
+# Global Accelerator Listener
+resource "aws_globalaccelerator_listener" "main" {
+  accelerator_arn = aws_globalaccelerator_accelerator.main.id
+  protocol        = "TCP"
+
+  port_range {
+    from_port = 443
+    to_port   = 443
+  }
+}
+
+# Primary Endpoint Group (Primary Region)
+resource "aws_globalaccelerator_endpoint_group" "primary" {
+  listener_arn = aws_globalaccelerator_listener.main.id
+
+  endpoint_configuration {
+    endpoint_id                    = var.primary_alb_arn
+    weight                         = 100
+    client_ip_preservation_enabled = true
+  }
+
+  endpoint_configuration {
+    endpoint_id                    = var.secondary_alb_arn
+    weight                         = 0
+    client_ip_preservation_enabled = true
+  }
+
+  health_check_interval_seconds = var.health_check_interval
+  health_check_path             = "/health"
+  health_check_port             = 443
+  health_check_protocol         = "HTTPS"
+  threshold_count               = var.failover_threshold
+  traffic_dial_percentage       = 100
+}
+
+# S3 Bucket for Global Accelerator Flow Logs
+resource "aws_s3_bucket" "global_accelerator_logs" {
+  bucket = "${var.environment}-global-accelerator-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.tags, {
-    Name   = "secondary-health-check"
-    Region = "secondary"
+    Name = "${var.environment}-global-accelerator-logs"
   })
 }
 
-# Primary Route53 Record
-resource "aws_route53_record" "primary" {
-  provider = aws.route53
-  zone_id  = data.aws_route53_zone.main.zone_id
-  name     = var.domain_name
-  type     = "A"
+resource "aws_s3_bucket_public_access_block" "global_accelerator_logs" {
+  bucket = aws_s3_bucket.global_accelerator_logs.id
 
-  alias {
-    name                   = var.primary_alb_dns
-    zone_id                = var.primary_alb_zone_id
-    evaluate_target_health = true
-  }
-
-  set_identifier = "Primary"
-  failover_routing_policy {
-    type = "PRIMARY"
-  }
-
-  health_check_id = aws_route53_health_check.primary.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-# Secondary Route53 Record
-resource "aws_route53_record" "secondary" {
-  provider = aws.route53
-  zone_id  = data.aws_route53_zone.main.zone_id
-  name     = var.domain_name
-  type     = "A"
+resource "aws_s3_bucket_server_side_encryption_configuration" "global_accelerator_logs" {
+  bucket = aws_s3_bucket.global_accelerator_logs.id
 
-  alias {
-    name                   = var.secondary_alb_dns
-    zone_id                = var.secondary_alb_zone_id
-    evaluate_target_health = true
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
   }
-
-  set_identifier = "Secondary"
-  failover_routing_policy {
-    type = "SECONDARY"
-  }
-
-  health_check_id = aws_route53_health_check.secondary.id
 }
+
+data "aws_caller_identity" "current" {}
 
 # Lambda Function for Automated Failover
 resource "aws_lambda_function" "failover" {
@@ -102,10 +102,13 @@ resource "aws_lambda_function" "failover" {
 
   environment {
     variables = {
-      PRIMARY_REGION   = var.primary_region
-      SECONDARY_REGION = var.secondary_region
-      PRIMARY_DB_ARN   = var.primary_db_arn
-      SECONDARY_DB_ARN = var.secondary_db_arn
+      PRIMARY_REGION    = var.primary_region
+      SECONDARY_REGION  = var.secondary_region
+      PRIMARY_DB_ARN    = var.primary_db_arn
+      SECONDARY_DB_ARN  = var.secondary_db_arn
+      ACCELERATOR_ARN   = aws_globalaccelerator_accelerator.main.arn
+      PRIMARY_ALB_ARN   = var.primary_alb_arn
+      SECONDARY_ALB_ARN = var.secondary_alb_arn
     }
   }
 
@@ -156,8 +159,8 @@ resource "aws_iam_role_policy" "lambda" {
           "rds:PromoteReadReplica",
           "rds:ModifyDBInstance",
           "rds:DescribeDBInstances",
-          "route53:ChangeResourceRecordSets",
-          "route53:GetHealthCheck",
+          "globalaccelerator:UpdateEndpointGroup",
+          "globalaccelerator:DescribeAccelerator",
           "autoscaling:UpdateAutoScalingGroup"
         ]
         Resource = "*"
@@ -172,16 +175,16 @@ resource "aws_cloudwatch_metric_alarm" "primary_health" {
   alarm_name          = "primary-region-health"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "HealthCheckStatus"
-  namespace           = "AWS/Route53"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
   period              = "60"
-  statistic           = "Minimum"
+  statistic           = "Average"
   threshold           = "1"
   alarm_description   = "Alarm when primary region is unhealthy"
   alarm_actions       = [aws_sns_topic.failover_alerts.arn]
 
   dimensions = {
-    HealthCheckId = aws_route53_health_check.primary.id
+    LoadBalancer = var.primary_alb_arn
   }
 
   tags = var.tags

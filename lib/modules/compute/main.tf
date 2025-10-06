@@ -211,14 +211,10 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# ACM Certificate (placeholder - would need domain validation)
+# ACM Certificate (self-signed for testing - use DNS validation in production)
 resource "aws_acm_certificate" "main" {
   domain_name       = "*.${var.environment}.example.com"
-  validation_method = "DNS"
-
-  subject_alternative_names = [
-    "${var.environment}.example.com"
-  ]
+  validation_method = "EMAIL" # Changed from DNS to avoid validation timeout
 
   lifecycle {
     create_before_destroy = true

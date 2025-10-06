@@ -1,11 +1,16 @@
-output "primary_health_check_id" {
-  description = "ID of the primary health check"
-  value       = aws_route53_health_check.primary.id
+output "global_accelerator_ip_addresses" {
+  description = "IP addresses of the Global Accelerator"
+  value       = aws_globalaccelerator_accelerator.main.ip_sets
 }
 
-output "secondary_health_check_id" {
-  description = "ID of the secondary health check"
-  value       = aws_route53_health_check.secondary.id
+output "global_accelerator_dns_name" {
+  description = "DNS name of the Global Accelerator"
+  value       = aws_globalaccelerator_accelerator.main.dns_name
+}
+
+output "global_accelerator_arn" {
+  description = "ARN of the Global Accelerator"
+  value       = aws_globalaccelerator_accelerator.main.arn
 }
 
 output "lambda_function_arn" {
@@ -18,7 +23,7 @@ output "sns_topic_arn" {
   value       = aws_sns_topic.failover_alerts.arn
 }
 
-output "route53_zone_id" {
-  description = "ID of the Route53 hosted zone"
-  value       = data.aws_route53_zone.main.zone_id
+output "endpoint_group_arn" {
+  description = "ARN of the primary endpoint group"
+  value       = aws_globalaccelerator_endpoint_group.primary.arn
 }

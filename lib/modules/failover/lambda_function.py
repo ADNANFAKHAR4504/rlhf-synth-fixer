@@ -7,14 +7,14 @@ import boto3
 
 def handler(event, context):
     """
-    Lambda function to handle automated failover
+    Lambda function to handle automated failover using Global Accelerator
     """
     primary_region = os.environ['PRIMARY_REGION']
     secondary_region = os.environ['SECONDARY_REGION']
     
     # Initialize clients
     rds_secondary = boto3.client('rds', region_name=secondary_region)
-    route53 = boto3.client('route53')
+    globalaccelerator = boto3.client('globalaccelerator')
     autoscaling_secondary = boto3.client('autoscaling', region_name=secondary_region)
     
     try:
@@ -39,14 +39,39 @@ def handler(event, context):
             )
             print(f"Auto Scaling Group updated: {response}")
             
-            # 3. Update Route53 weights (handled automatically by health checks)
+            # 3. Update Global Accelerator endpoint weights
+            # Set primary weight to 0 and secondary weight to 100
+            accelerator_arn = os.environ['ACCELERATOR_ARN']
+            primary_alb_arn = os.environ['PRIMARY_ALB_ARN']
+            secondary_alb_arn = os.environ['SECONDARY_ALB_ARN']
+            
+            # Get the endpoint group ARN
+            listener_arn = f"{accelerator_arn}/listener/443"
+            
+            response = globalaccelerator.update_endpoint_group(
+                EndpointGroupArn=f"{listener_arn}/endpointgroup/primary",
+                EndpointConfigurations=[
+                    {
+                        'EndpointId': primary_alb_arn,
+                        'Weight': 0,
+                        'ClientIPPreservationEnabled': True
+                    },
+                    {
+                        'EndpointId': secondary_alb_arn,
+                        'Weight': 100,
+                        'ClientIPPreservationEnabled': True
+                    }
+                ]
+            )
+            print(f"Global Accelerator endpoint weights updated: {response}")
             
             return {
                 'statusCode': 200,
                 'body': json.dumps({
                     'message': 'Failover completed successfully',
                     'timestamp': str(datetime.now()),
-                    'action': 'promoted_secondary'
+                    'action': 'promoted_secondary',
+                    'global_accelerator_updated': True
                 })
             }
             

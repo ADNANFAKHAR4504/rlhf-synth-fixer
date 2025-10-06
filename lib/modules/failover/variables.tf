@@ -1,3 +1,13 @@
+variable "primary_alb_arn" {
+  description = "ARN of the primary ALB"
+  type        = string
+}
+
+variable "secondary_alb_arn" {
+  description = "ARN of the secondary ALB"
+  type        = string
+}
+
 variable "primary_alb_dns" {
   description = "DNS name of the primary ALB"
   type        = string
@@ -50,6 +60,11 @@ variable "primary_region" {
 
 variable "secondary_region" {
   description = "Secondary AWS region"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
   type        = string
 }
 

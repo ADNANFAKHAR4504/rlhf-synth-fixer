@@ -21,8 +21,13 @@ output "secondary_db_endpoint" {
 }
 
 output "failover_endpoint" {
-  description = "Main application endpoint with failover"
-  value       = "https://${var.application_name}.${var.company_name}.com"
+  description = "Main application endpoint with Global Accelerator failover"
+  value       = length(module.failover_mechanism) > 0 ? "https://${module.failover_mechanism[0].global_accelerator_dns_name}" : null
+}
+
+output "global_accelerator_ips" {
+  description = "Global Accelerator IP addresses for direct access"
+  value       = length(module.failover_mechanism) > 0 ? module.failover_mechanism[0].global_accelerator_ip_addresses : null
 }
 
 output "health_check_urls" {

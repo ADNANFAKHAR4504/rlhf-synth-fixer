@@ -112,7 +112,8 @@ variable "failover_threshold" {
 
 # Feature toggles
 variable "enable_dns_failover" {
-  description = "Enable Route53-based DNS failover (requires an existing hosted zone)"
+  description = "Enable Global Accelerator-based failover (no DNS setup required)"
   type        = bool
-  default     = false
+  default     = true
 }
+
