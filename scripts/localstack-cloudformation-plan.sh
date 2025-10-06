@@ -31,12 +31,18 @@ export AWS_ENDPOINT_URL=http://localhost:4566
 cd "$(dirname "$0")/../lib"
 
 echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"
+TEMPLATE_FILE=null;
 
 # Check if CloudFormation template exists
-TEMPLATE_FILE="TapStack.yml"
-if [ ! -f "$TEMPLATE_FILE" ]; then
-    echo -e "${RED}❌ CloudFormation template not found: $TEMPLATE_FILE${NC}"
-    exit 1
+if [ -f "TapStack.yml" ]; then
+    echo -e "${GREEN}❌ CloudFormation yml template found: TapStack.yml${NC}"
+    TEMPLATE_FILE="TapStack.yml"
+elif [ -f "TapStack.json" ]; then
+    echo -e "${GREEN}✅ CloudFormation json template found: TapStack.json${NC}"
+    TEMPLATE_FILE="TapStack.json"
+else
+    echo -e "${RED}❌ No CloudFormation template found (TapStack.yml or TapStack.json)${NC}"
+    exit 1    
 fi
 
 echo -e "${GREEN}✅ CloudFormation template found: $TEMPLATE_FILE${NC}"
