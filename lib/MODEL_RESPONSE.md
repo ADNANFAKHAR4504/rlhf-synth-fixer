@@ -15,7 +15,7 @@ Let's create the Terraform configuration files for this setup:
 
 ```hcl
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
 
 terraform {
@@ -29,7 +29,7 @@ terraform {
   backend "s3" {
     bucket = "terraform-state-bucket-${var.resource_suffix}"
     key    = "terraform.tfstate"
-    region = "us-east-1"
+    region = "us-west-2"
   }
 }
 ```
@@ -96,7 +96,7 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
-  availability_zone       = "us-east-1a"
+  availability_zone       = "us-west-2a"
 
   tags = {
     Name = "public-subnet-${var.resource_suffix}"
@@ -106,7 +106,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
+  availability_zone       = "us-west-2b"
 
   tags = {
     Name = "private-subnet-${var.resource_suffix}"
@@ -117,7 +117,7 @@ resource "aws_subnet" "private" {
 resource "aws_subnet" "private_2" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.3.0/24"
-  availability_zone       = "us-east-1c"
+  availability_zone       = "us-west-2c"
 
   tags = {
     Name = "private-subnet-2-${var.resource_suffix}"
@@ -359,7 +359,7 @@ Let's adjust the Terraform configuration with these considerations in mind:
 
 ```hcl
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
 
 terraform {
@@ -371,7 +371,7 @@ terraform {
   }
 
   backend "s3" {
-    region = "us-east-1"
+    region = "us-west-2"
     # The bucket name and key will be provided via CLI or a separate backend.tf file
   }
 }
@@ -382,7 +382,7 @@ Now, let's put it all together with the necessary fixes and adjustments:
 main.tf:
 ```hcl
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
 
 terraform {
@@ -398,7 +398,7 @@ terraform {
   # backend "s3" {
   #   bucket = "terraform-state-bucket-SUFFIX"
   #   key    = "terraform.tfstate"
-  #   region = "us-east-1"
+  #   region = "us-west-2"
   # }
 }
 ```
@@ -468,7 +468,7 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
-  availability_zone       = "us-east-1a"
+  availability_zone       = "us-west-2a"
 
   tags = {
     Name = "public-subnet-${var.resource_suffix}"
@@ -478,7 +478,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
+  availability_zone       = "us-west-2b"
 
   tags = {
     Name = "private-subnet-${var.resource_suffix}"
@@ -489,7 +489,7 @@ resource "aws_subnet" "private" {
 resource "aws_subnet" "private_2" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.3.0/24"
-  availability_zone       = "us-east-1c"
+  availability_zone       = "us-west-2c"
 
   tags = {
     Name = "private-subnet-2-${var.resource_suffix}"
@@ -723,7 +723,7 @@ terraform {
   backend "s3" {
     bucket         = "terraform-state-bucket-REPLACE_WITH_SUFFIX"
     key            = "terraform.tfstate"
-    region         = "us-east-1"
+    region         = "us-west-2"
     encrypt        = true
   }
 }
@@ -764,7 +764,7 @@ ssh_public_key   = "ssh-rsa AAAAB3NzaC1yc2E... your-public-key"
    ```
 
 This configuration implements all requirements:
-- RDS MySQL database in us-east-1 with automated backups
+- RDS MySQL database in us-west-2 with automated backups
 - EC2 instance using the latest Amazon Linux 2 AMI in a public subnet
 - Security group allowing SSH from configurable IPs
 - Terraform state stored in S3 with versioning

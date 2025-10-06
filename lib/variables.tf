@@ -71,7 +71,7 @@ variable "use_ssm" {
 variable "region" {
   description = "AWS region for resources. Override with TF_VAR_region or set AWS_REGION in the environment."
   type        = string
-  default     = "us-east-1" # sensible default; TF_VAR_region will override in CI/deploy
+  default     = "us-west-2" # sensible default; TF_VAR_region will override in CI/deploy
 }
 
 variable "iac_rlhf_tag_value" {
