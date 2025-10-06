@@ -5,10 +5,10 @@
   "turn_type": "single",
   "po_id": "95423180",
   "team": "synth",
-  "subtask": [
-    "Serverless Infrastructure"
+  "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "Application Deployment"
   ],
-  "subject_label": "Application Deployment",
   "startedAt": "2025-10-03T17:14:00+05:30",
   "training_quality": 8,
   "aws_services": [
