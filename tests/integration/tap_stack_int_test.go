@@ -1168,12 +1168,29 @@ func verifyVPCConnectivity(ctx context.Context, ec2Client *ec2.Client, vpcId str
 		return fmt.Errorf("VPC not found: %s", vpcId)
 	}
 
-	vpc := result.Vpcs[0]
-	if vpc.EnableDnsSupport == nil || !*vpc.EnableDnsSupport {
+	// Check DNS support attribute
+	dnsSupportResult, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+		VpcId:     aws.String(vpcId),
+		Attribute: ec2types.VpcAttributeNameEnableDnsSupport,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to describe VPC DNS support: %w", err)
+	}
+
+	if dnsSupportResult.EnableDnsSupport == nil || !*dnsSupportResult.EnableDnsSupport.Value {
 		return fmt.Errorf("VPC DNS support should be enabled")
 	}
 
-	if vpc.EnableDnsHostnames == nil || !*vpc.EnableDnsHostnames {
+	// Check DNS hostnames attribute
+	dnsHostnamesResult, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+		VpcId:     aws.String(vpcId),
+		Attribute: ec2types.VpcAttributeNameEnableDnsHostnames,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to describe VPC DNS hostnames: %w", err)
+	}
+
+	if dnsHostnamesResult.EnableDnsHostnames == nil || !*dnsHostnamesResult.EnableDnsHostnames.Value {
 		return fmt.Errorf("VPC DNS hostnames should be enabled")
 	}
 
@@ -1228,7 +1245,7 @@ func verifyKMSKeyRotation(ctx context.Context, kmsClient *kms.Client, keyId stri
 		return fmt.Errorf("failed to get key rotation status: %w", err)
 	}
 
-	if result.KeyRotationEnabled == nil || !*result.KeyRotationEnabled {
+	if !result.KeyRotationEnabled {
 		return fmt.Errorf("KMS key rotation should be enabled")
 	}
 
