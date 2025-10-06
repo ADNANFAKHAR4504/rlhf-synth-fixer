@@ -1,14 +1,9 @@
-# AWS CDK Configuration Management Infrastructure with X-Ray and Step Functions
+# AWS CDK Configuration Management Infrastructure
 
-## Overview
-
-This solution implements a comprehensive configuration management system for mobile applications using AWS CDK with TypeScript. The infrastructure provides secure storage for secrets, centralized parameter management, feature flag capabilities, distributed tracing with X-Ray, and orchestrated deployment workflows using Step Functions Express.
-
-## Architecture Components
-
-### 1. Main Stack (tap-stack.ts)
+## Main Stack
 
 ```typescript
+// lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ConfigManagementStack } from './config-management-stack';
@@ -81,9 +76,10 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-### 2. Configuration Management Stack (config-management-stack.ts)
+## Configuration Management Stack
 
 ```typescript
+// lib/config-management-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -363,9 +359,10 @@ export class ConfigManagementStack extends cdk.Stack {
 }
 ```
 
-### 3. Step Functions Orchestration Stack (stepfunctions-orchestration-stack.ts)
+## Step Functions Orchestration Stack
 
 ```typescript
+// lib/stepfunctions-orchestration-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -698,9 +695,10 @@ exports.handler = async (event) => {
 }
 ```
 
-### 4. AppConfig Stack (appconfig-stack.ts)
+## AppConfig Stack
 
 ```typescript
+// lib/appconfig-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as appconfig from 'aws-cdk-lib/aws-appconfig';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -830,9 +828,10 @@ export class AppConfigStack extends cdk.Stack {
 }
 ```
 
-### 5. Parameter and Secrets Stack (parameter-secrets-stack.ts)
+## Parameter and Secrets Stack
 
 ```typescript
+// lib/parameter-secrets-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -978,94 +977,3 @@ export class ParameterSecretsStack extends cdk.Stack {
   }
 }
 ```
-
-## Key Features
-
-### 1. **Distributed Tracing with X-Ray**
-- All Lambda functions have X-Ray tracing enabled
-- Step Functions state machine has X-Ray tracing configured
-- Custom trace segments and annotations for deployment tracking
-- End-to-end visibility of configuration deployment pipeline
-
-### 2. **Step Functions Express Workflows**
-- High-performance orchestration for configuration deployments
-- Pre-deployment validation → Configuration validation → Bake time → Post-deployment monitoring
-- Automatic failure handling and state transitions
-- CloudWatch logging with full execution data
-
-### 3. **Security Best Practices**
-- Least privilege IAM roles for all services
-- Secrets stored in Secrets Manager (not SSM SecureString)
-- Encryption at rest for DynamoDB and S3
-- VPC endpoints support for private connectivity
-
-### 4. **Monitoring and Observability**
-- CloudWatch Dashboards for both infrastructure and deployment pipeline
-- Custom metrics for deployment success rates
-- Alarms for validation failures
-- Comprehensive logging for audit trails
-
-### 5. **High Availability and Scalability**
-- DynamoDB with on-demand billing and point-in-time recovery
-- S3 with versioning and lifecycle policies
-- Express Step Functions for low-latency executions
-- Support for 9,700+ daily active devices
-
-### 6. **Configuration Management**
-- AWS AppConfig for feature flags with gradual rollout
-- Parameter Store for non-sensitive configurations
-- Secrets Manager for sensitive data with rotation capability
-- Hierarchical parameter organization
-
-### 7. **Automated Operations**
-- Daily backup Lambda function triggered by EventBridge
-- Configuration validation before deployment
-- Automatic archival of old backups to Glacier
-- Self-cleaning resources with DESTROY removal policy
-
-## Deployment Instructions
-
-1. **Set Environment Variables**:
-   ```bash
-   export ENVIRONMENT_SUFFIX="synth19483756"
-   export AWS_REGION="us-east-2"
-   ```
-
-2. **Build the Project**:
-   ```bash
-   npm run build
-   ```
-
-3. **Synthesize CloudFormation Templates**:
-   ```bash
-   npm run cdk:synth
-   ```
-
-4. **Deploy to AWS**:
-   ```bash
-   npm run cdk:deploy
-   ```
-
-5. **Run Tests**:
-   ```bash
-   npm run test:unit    # Unit tests with 100% coverage
-   npm run test:integration  # Integration tests against deployed resources
-   ```
-
-6. **Cleanup Resources**:
-   ```bash
-   npm run cdk:destroy
-   ```
-
-## Best Practices Implemented
-
-1. **Infrastructure as Code**: Fully defined in CDK TypeScript
-2. **Environment Isolation**: Environment suffix for multi-deployment support
-3. **Cost Optimization**: On-demand DynamoDB, S3 lifecycle policies
-4. **Security**: Encryption, least privilege, secrets management
-5. **Observability**: X-Ray tracing, CloudWatch dashboards, logging
-6. **Reliability**: Error handling, retry logic, gradual rollouts
-7. **Testing**: 100% unit test coverage, comprehensive integration tests
-8. **Documentation**: Inline comments, clear naming conventions
-
-This solution provides a production-ready, scalable, and secure configuration management system for mobile applications with advanced monitoring and deployment orchestration capabilities.
