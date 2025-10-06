@@ -93,6 +93,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3_deployment from 'aws-cdk-lib/aws-s3-deployment';
@@ -131,6 +132,12 @@ class SecurityStack extends cdk.Stack {
         },
       }
     );
+
+    // Output the secrets ARN
+    new cdk.CfnOutput(this, 'AppSecretsArn', {
+      value: this.appSecrets.secretArn,
+      description: 'Secrets Manager ARN for application secrets',
+    });
   }
 }
 
@@ -325,7 +332,28 @@ class PipelineStack extends cdk.Stack {
       }
     );
 
-    // S3 Bucket for artifacts
+    // Create KMS keys for S3 bucket encryption
+    const artifactBucketKey = new kms.Key(
+      this,
+      `ArtifactBucketKey-${props.environmentSuffix}`,
+      {
+        description: `KMS key for artifact bucket encryption - ${props.environmentSuffix}`,
+        enableKeyRotation: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    const sourceBucketKey = new kms.Key(
+      this,
+      `SourceBucketKey-${props.environmentSuffix}`,
+      {
+        description: `KMS key for source bucket encryption - ${props.environmentSuffix}`,
+        enableKeyRotation: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    // S3 Bucket for artifacts with KMS encryption
     const artifactBucket = new s3.Bucket(
       this,
       `ArtifactBucket-${props.environmentSuffix}`,
@@ -334,11 +362,12 @@ class PipelineStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
         versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
+        encryption: s3.BucketEncryption.KMS,
+        encryptionKey: artifactBucketKey,
       }
     );
 
-    // S3 Bucket for source code
+    // S3 Bucket for source code with KMS encryption
     const sourceBucket = new s3.Bucket(
       this,
       `SourceBucket-${props.environmentSuffix}`,
@@ -347,6 +376,8 @@ class PipelineStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
         versioned: true,
+        encryption: s3.BucketEncryption.KMS,
+        encryptionKey: sourceBucketKey,
       }
     );
 
@@ -378,7 +409,9 @@ class PipelineStack extends cdk.Stack {
                   'logs:CreateLogStream',
                   'logs:PutLogEvents',
                 ],
-                resources: ['*'],
+                resources: [
+                  `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/*`,
+                ],
               }),
               new iam.PolicyStatement({
                 actions: [
@@ -386,11 +419,31 @@ class PipelineStack extends cdk.Stack {
                   's3:GetObjectVersion',
                   's3:PutObject',
                 ],
-                resources: ['*'],
+                resources: [
+                  artifactBucket.arnForObjects('*'),
+                  sourceBucket.arnForObjects('*'),
+                ],
+              }),
+              new iam.PolicyStatement({
+                actions: ['s3:GetBucketLocation', 's3:ListBucket'],
+                resources: [artifactBucket.bucketArn, sourceBucket.bucketArn],
               }),
               new iam.PolicyStatement({
                 actions: [
-                  'ecr:GetAuthorizationToken',
+                  'kms:Decrypt',
+                  'kms:DescribeKey',
+                  'kms:Encrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                ],
+                resources: [artifactBucketKey.keyArn, sourceBucketKey.keyArn],
+              }),
+              new iam.PolicyStatement({
+                actions: ['ecr:GetAuthorizationToken'],
+                resources: ['*'], // GetAuthorizationToken does not support resource-level permissions
+              }),
+              new iam.PolicyStatement({
+                actions: [
                   'ecr:BatchCheckLayerAvailability',
                   'ecr:GetDownloadUrlForLayer',
                   'ecr:PutImage',
@@ -398,7 +451,7 @@ class PipelineStack extends cdk.Stack {
                   'ecr:UploadLayerPart',
                   'ecr:CompleteLayerUpload',
                 ],
-                resources: ['*'],
+                resources: [this.ecrRepository.repositoryArn],
               }),
               new iam.PolicyStatement({
                 actions: ['secretsmanager:GetSecretValue'],
@@ -425,22 +478,55 @@ class PipelineStack extends cdk.Stack {
                   's3:GetObject',
                   's3:GetObjectVersion',
                   's3:PutObject',
-                  's3:GetBucketLocation',
-                  's3:ListBucket',
                 ],
-                resources: ['*'],
+                resources: [
+                  artifactBucket.arnForObjects('*'),
+                  sourceBucket.arnForObjects('*'),
+                ],
+              }),
+              new iam.PolicyStatement({
+                actions: ['s3:GetBucketLocation', 's3:ListBucket'],
+                resources: [artifactBucket.bucketArn, sourceBucket.bucketArn],
+              }),
+              new iam.PolicyStatement({
+                actions: [
+                  'kms:Decrypt',
+                  'kms:DescribeKey',
+                  'kms:Encrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                ],
+                resources: [artifactBucketKey.keyArn, sourceBucketKey.keyArn],
               }),
               new iam.PolicyStatement({
                 actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
-                resources: ['*'],
+                resources: [
+                  `arn:aws:codebuild:${this.region}:${this.account}:project/node-app-build-${props.environmentSuffix}`,
+                ],
               }),
               new iam.PolicyStatement({
-                actions: ['ecs:*', 'ecr:*'],
-                resources: ['*'],
+                actions: [
+                  'ecs:DescribeServices',
+                  'ecs:DescribeTaskDefinition',
+                  'ecs:DescribeTasks',
+                  'ecs:ListTasks',
+                  'ecs:RegisterTaskDefinition',
+                  'ecs:UpdateService',
+                ],
+                resources: ['*'], // ECS actions require wildcard or complex resource patterns
+              }),
+              new iam.PolicyStatement({
+                actions: ['iam:PassRole'],
+                resources: ['*'], // PassRole for ECS task execution roles
+                conditions: {
+                  StringEquals: {
+                    'iam:PassedToService': 'ecs-tasks.amazonaws.com',
+                  },
+                },
               }),
               new iam.PolicyStatement({
                 actions: ['sns:Publish'],
-                resources: ['*'],
+                resources: [props.notificationTopic.topicArn],
               }),
             ],
           }),
@@ -625,6 +711,16 @@ class PipelineStack extends cdk.Stack {
       value: this.pipeline.pipelineArn,
       description: 'Pipeline ARN',
     });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryArn', {
+      value: this.ecrRepository.repositoryArn,
+      description: 'ECR Repository ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryName', {
+      value: this.ecrRepository.repositoryName,
+      description: 'ECR Repository Name',
+    });
   }
 }
 
@@ -788,7 +884,6 @@ import {
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
-  GetSecretValueCommand,
 } from '@aws-sdk/client-secrets-manager';
 import {
   SNSClient,
@@ -813,27 +908,14 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'ap-northeast-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-// Extract resource names from outputs
-const extractRepoName = () => {
-  if (outputs.ExportsOutputFnGetAttNodeAppRepoTapStack2710A0E47Arn384A0B0C) {
-    const repoArn = outputs.ExportsOutputFnGetAttNodeAppRepoTapStack2710A0E47Arn384A0B0C;
-    return repoArn.split('/').pop();
-  }
-  return `node-app-${environmentSuffix.toLowerCase()}`;
-};
-
-const extractSecretArn = () => {
-  if (outputs.ExportsOutputRefAppSecretsTapStack27E3B7F6F281CE91A) {
-    return outputs.ExportsOutputRefAppSecretsTapStack27E3B7F6F281CE91A;
-  }
-  return null;
-};
-
-const repositoryName = extractRepoName();
+// Extract resource names from outputs - will fail if missing
+const sourceBucketName = outputs.SourceBucketName;
+const pipelineName = outputs.PipelineArn.split(':').pop();
 const notificationTopicArn = outputs.NotificationTopicArn;
-const secretArn = extractSecretArn();
+const secretArn = outputs.AppSecretsArn;
+const repositoryName = outputs.EcrRepositoryName;
 
 const ecsClient = new ECSClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
@@ -859,17 +941,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('S3 Storage', () => {
     test('should have source bucket with versioning enabled', async () => {
-      const sourceBucket = outputs.SourceBucketName;
-
-      expect(sourceBucket).toBeDefined();
+      expect(sourceBucketName).toBeDefined();
 
       const headCommand = new HeadBucketCommand({
-        Bucket: sourceBucket,
+        Bucket: sourceBucketName,
       });
       await s3Client.send(headCommand);
 
       const versioningCommand = new GetBucketVersioningCommand({
-        Bucket: sourceBucket,
+        Bucket: sourceBucketName,
       });
       const versioningResponse = await s3Client.send(versioningCommand);
 
@@ -879,15 +959,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
     test('should have pipeline artifact bucket created', async () => {
       // Pipeline artifact bucket is created automatically by CodePipeline
       // We verify this by checking that the pipeline itself exists
-      const pipelineArn = outputs.PipelineArn;
-      expect(pipelineArn).toBeDefined();
-      expect(pipelineArn).toContain('codepipeline');
+      expect(pipelineName).toBeDefined();
+      expect(outputs.PipelineArn).toBeDefined();
+      expect(outputs.PipelineArn).toContain('codepipeline');
     }, 30000);
   });
 
   describe('CodePipeline Configuration', () => {
     test('should have CI/CD pipeline with required stages', async () => {
-      const pipelineName = `node-app-pipeline-${environmentSuffix}`;
+      expect(pipelineName).toBeDefined();
 
       const command = new GetPipelineCommand({
         name: pipelineName,
@@ -930,7 +1010,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(secretArn).toContain('arn:aws:secretsmanager');
 
       const command = new DescribeSecretCommand({
-        SecretId: secretArn!,
+        SecretId: secretArn,
       });
 
       const response = await secretsClient.send(command);
