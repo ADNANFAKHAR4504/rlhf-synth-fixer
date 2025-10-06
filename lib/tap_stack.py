@@ -1569,6 +1569,50 @@ def notify_security_team(event: Dict, response: Dict):
             removal_policy=RemovalPolicy.DESTROY
         )
 
+        # Add bucket policy to allow Config service access
+        config_bucket_policy = s3.BucketPolicy(
+            self, "ConfigBucketPolicy",
+            bucket=config_bucket,
+            policy_document=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                        actions=["s3:GetBucketAcl", "s3:ListBucket"],
+                        resources=[config_bucket.bucket_arn],
+                        conditions={
+                            "StringEquals": {
+                                "AWS:SourceAccount": self.account
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                        actions=["s3:PutObject"],
+                        resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
+                        conditions={
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control",
+                                "AWS:SourceAccount": self.account
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                        actions=["s3:GetObject"],
+                        resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
+                        conditions={
+                            "StringEquals": {
+                                "AWS:SourceAccount": self.account
+                            }
+                        }
+                    )
+                ]
+            )
+        )
+
         # Create Lambda function to detect existing Config recorders  
         config_detector_lambda = lambda_.Function(
             self, "ConfigDetectorLambda",
@@ -1592,6 +1636,8 @@ def handler(event, context):
         
         bucket_name = event['ResourceProperties']['BucketName']
         role_arn = event['ResourceProperties']['RoleArn']
+        kms_key_id = event['ResourceProperties'].get('KmsKeyId', '')
+        s3_prefix = event['ResourceProperties'].get('S3Prefix', 'AWSConfig')
         
         # List existing configuration recorders
         response = config_client.describe_configuration_recorders()
@@ -1626,14 +1672,21 @@ def handler(event, context):
             if not delivery_response['DeliveryChannels']:
                 # Create delivery channel if none exists
                 try:
-                    config_client.put_delivery_channel(
-                        DeliveryChannel={
-                            'name': f'DeliveryChannel-{recorder_name}',
-                            's3BucketName': bucket_name,
-                            'configSnapshotDeliveryProperties': {
-                                'deliveryFrequency': 'TwentyFour_Hours'
-                            }
+                    delivery_channel = {
+                        'name': f'DeliveryChannel-{recorder_name}',
+                        's3BucketName': bucket_name,
+                        's3KeyPrefix': s3_prefix,
+                        'configSnapshotDeliveryProperties': {
+                            'deliveryFrequency': 'TwentyFour_Hours'
                         }
+                    }
+                    
+                    # Add KMS encryption if key is provided
+                    if kms_key_id:
+                        delivery_channel['s3KmsKeyArn'] = kms_key_id
+                    
+                    config_client.put_delivery_channel(
+                        DeliveryChannel=delivery_channel
                     )
                 except Exception as e:
                     print(f"Warning: Could not create delivery channel: {e}")
@@ -1665,14 +1718,21 @@ def handler(event, context):
             
             # Create delivery channel
             channel_name = f"ZeroTrustDelivery-{config_unique_id}"
-            config_client.put_delivery_channel(
-                DeliveryChannel={
-                    'name': channel_name,
-                    's3BucketName': bucket_name,
-                    'configSnapshotDeliveryProperties': {
-                        'deliveryFrequency': 'TwentyFour_Hours'
-                    }
+            delivery_channel = {
+                'name': channel_name,
+                's3BucketName': bucket_name,
+                's3KeyPrefix': s3_prefix,
+                'configSnapshotDeliveryProperties': {
+                    'deliveryFrequency': 'TwentyFour_Hours'
                 }
+            }
+            
+            # Add KMS encryption if key is provided
+            if kms_key_id:
+                delivery_channel['s3KmsKeyArn'] = kms_key_id
+            
+            config_client.put_delivery_channel(
+                DeliveryChannel=delivery_channel
             )
             
             # Start the recorder
@@ -1748,7 +1808,9 @@ def send_response(event, context, status, data, physical_id=None):
             service_token=config_detector_lambda.function_arn,
             properties={
                 "BucketName": config_bucket.bucket_name,
-                "RoleArn": config_role.role_arn
+                "RoleArn": config_role.role_arn,
+                "KmsKeyId": self.audit_key.key_arn,
+                "S3Prefix": "AWSConfig"
             }
         )
         

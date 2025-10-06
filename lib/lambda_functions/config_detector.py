@@ -33,6 +33,8 @@ def handler(event, context):
         
         bucket_name = event['ResourceProperties']['BucketName']
         role_arn = event['ResourceProperties']['RoleArn']
+        kms_key_id = event['ResourceProperties'].get('KmsKeyId', '')
+        s3_prefix = event['ResourceProperties'].get('S3Prefix', 'AWSConfig')
         
         # List existing configuration recorders
         response = config_client.describe_configuration_recorders()
@@ -67,14 +69,21 @@ def handler(event, context):
             if not delivery_response['DeliveryChannels']:
                 # Create delivery channel if none exists
                 try:
-                    config_client.put_delivery_channel(
-                        DeliveryChannel={
-                            'name': f'DeliveryChannel-{recorder_name}',
-                            's3BucketName': bucket_name,
-                            'configSnapshotDeliveryProperties': {
-                                'deliveryFrequency': 'TwentyFour_Hours'
-                            }
+                    delivery_channel = {
+                        'name': f'DeliveryChannel-{recorder_name}',
+                        's3BucketName': bucket_name,
+                        's3KeyPrefix': s3_prefix,
+                        'configSnapshotDeliveryProperties': {
+                            'deliveryFrequency': 'TwentyFour_Hours'
                         }
+                    }
+                    
+                    # Add KMS encryption if key is provided
+                    if kms_key_id:
+                        delivery_channel['s3KmsKeyArn'] = kms_key_id
+                    
+                    config_client.put_delivery_channel(
+                        DeliveryChannel=delivery_channel
                     )
                 except Exception as e:
                     print(f"Warning: Could not create delivery channel: {e}")
@@ -104,14 +113,21 @@ def handler(event, context):
             
             # Create delivery channel
             channel_name = f"ZeroTrustDelivery-{config_unique_id}"
-            config_client.put_delivery_channel(
-                DeliveryChannel={
-                    'name': channel_name,
-                    's3BucketName': bucket_name,
-                    'configSnapshotDeliveryProperties': {
-                        'deliveryFrequency': 'TwentyFour_Hours'
-                    }
+            delivery_channel = {
+                'name': channel_name,
+                's3BucketName': bucket_name,
+                's3KeyPrefix': s3_prefix,
+                'configSnapshotDeliveryProperties': {
+                    'deliveryFrequency': 'TwentyFour_Hours'
                 }
+            }
+            
+            # Add KMS encryption if key is provided
+            if kms_key_id:
+                delivery_channel['s3KmsKeyArn'] = kms_key_id
+            
+            config_client.put_delivery_channel(
+                DeliveryChannel=delivery_channel
             )
             
             # Start the recorder
