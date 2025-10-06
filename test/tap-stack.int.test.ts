@@ -105,6 +105,11 @@ describe('Serverless API integration workflow', () => {
       productId: createdProductId,
       quantity: 2,
     });
+    if (createOrderResponse.status !== 201) {
+      // Surface detailed response for easier debugging in CI logs
+      // eslint-disable-next-line no-console
+      console.error('Order creation failed', createOrderResponse);
+    }
     expect(createOrderResponse.status).toBe(201);
     createdOrderId = createOrderResponse.json?.orderId;
     expect(createdOrderId).toEqual(expect.any(String));

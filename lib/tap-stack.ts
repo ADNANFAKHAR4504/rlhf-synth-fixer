@@ -324,7 +324,7 @@ export class TapStack extends cdk.Stack {
     notificationTopic.grantPublish(productServiceFunction);
 
     orderTable.grantReadWriteData(orderServiceFunction);
-    productTable.grantReadData(orderServiceFunction);
+    productTable.grantReadWriteData(orderServiceFunction);
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
