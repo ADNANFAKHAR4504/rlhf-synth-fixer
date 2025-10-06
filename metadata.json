@@ -18,5 +18,9 @@
     "IAM",
     "SQS",
     "X-Ray"
+  ],
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
   ]
 }
