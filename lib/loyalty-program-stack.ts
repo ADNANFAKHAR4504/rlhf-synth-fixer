@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { TerraformOutput } from 'cdktf';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
@@ -431,6 +432,57 @@ export class LoyaltyProgramStack extends Construct {
           },
         ],
       }),
+    });
+
+    // Outputs
+    new TerraformOutput(this, 'members-table-name', {
+      value: membersTable.name,
+      description: 'DynamoDB table name for loyalty members',
+    });
+
+    new TerraformOutput(this, 'members-table-arn', {
+      value: membersTable.arn,
+      description: 'DynamoDB table ARN for loyalty members',
+    });
+
+    new TerraformOutput(this, 'api-endpoint', {
+      value: `${api.id}.execute-api.${api.region}.amazonaws.com/${props.environmentSuffix}`,
+      description: 'API Gateway endpoint',
+    });
+
+    new TerraformOutput(this, 'api-url', {
+      value: `https://${api.id}.execute-api.${api.region}.amazonaws.com/${props.environmentSuffix}/transactions`,
+      description: 'Full API URL for transactions endpoint',
+    });
+
+    new TerraformOutput(this, 'point-calc-lambda-name', {
+      value: pointCalcLambda.functionName,
+      description: 'Point calculation Lambda function name',
+    });
+
+    new TerraformOutput(this, 'point-calc-lambda-arn', {
+      value: pointCalcLambda.arn,
+      description: 'Point calculation Lambda function ARN',
+    });
+
+    new TerraformOutput(this, 'stream-processor-lambda-name', {
+      value: streamProcessorLambda.functionName,
+      description: 'Stream processor Lambda function name',
+    });
+
+    new TerraformOutput(this, 'stream-processor-lambda-arn', {
+      value: streamProcessorLambda.arn,
+      description: 'Stream processor Lambda function ARN',
+    });
+
+    new TerraformOutput(this, 'notification-topic-arn', {
+      value: notificationTopic.arn,
+      description: 'SNS topic ARN for notifications',
+    });
+
+    new TerraformOutput(this, 'dashboard-name', {
+      value: `loyalty-metrics-${props.environmentSuffix}`,
+      description: 'CloudWatch dashboard name',
     });
   }
 }
