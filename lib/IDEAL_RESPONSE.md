@@ -84,7 +84,7 @@ class TapStack(TerraformStack):
         attachments_bucket = S3Bucket(
             self,
             "form_attachments_bucket",
-            bucket=f"form-attachments-{environment_suffix}-{construct_id}",
+            bucket=f"form-attachments-{environment_suffix}-{construct_id.lower()}",
             force_destroy=True
         )
 
@@ -116,6 +116,9 @@ class TapStack(TerraformStack):
             rule=[{
                 "id": "archive_old_attachments",
                 "status": "Enabled",
+                "filter": {
+                    "prefix": ""
+                },
                 "transition": [{
                     "days": 90,
                     "storageClass": "GLACIER"
@@ -301,7 +304,7 @@ class TapStack(TerraformStack):
         )
 
         # Create Lambda integration
-        ApiGatewayIntegration(
+        lambda_integration = ApiGatewayIntegration(
             self,
             "lambda_integration",
             rest_api_id=api.id,
@@ -362,7 +365,7 @@ class TapStack(TerraformStack):
         )
 
         # Add integration response for OPTIONS
-        ApiGatewayIntegrationResponse(
+        options_integration_response = ApiGatewayIntegrationResponse(
             self,
             "options_integration_response",
             rest_api_id=api.id,
@@ -375,7 +378,8 @@ class TapStack(TerraformStack):
                 ),
                 "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
                 "method.response.header.Access-Control-Allow-Origin": "'*'"
-            }
+            },
+            depends_on=[options_integration]
         )
 
         # Create deployment
@@ -383,7 +387,7 @@ class TapStack(TerraformStack):
             self,
             "api_deployment",
             rest_api_id=api.id,
-            depends_on=[submit_method, options_method]
+            depends_on=[submit_method, options_method, lambda_integration, options_integration]
         )
 
         # Create stage
