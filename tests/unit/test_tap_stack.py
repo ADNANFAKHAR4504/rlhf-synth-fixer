@@ -65,7 +65,7 @@ class TestTapStack(unittest.TestCase):
         for func_name in lambda_functions:
             template.has_resource_properties("AWS::Lambda::Function", {
                 "FunctionName": func_name,
-                "Runtime": "python3.9"
+                "Runtime": "python3.11"
             })
 
         # ASSERT - API Gateway
