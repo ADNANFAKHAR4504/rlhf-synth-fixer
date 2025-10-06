@@ -10,5 +10,22 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "VPC, S3, IAM, RDS, Cloudtrail"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "RDS",
+    "KMS",
+    "WAF",
+    "ELB",
+    "DynamoDB"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
