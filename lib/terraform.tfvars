@@ -22,7 +22,7 @@ asg_desired_capacity = 2
 
 rds_instance_class    = "db.t3.medium"
 rds_engine            = "mysql"
-rds_engine_version    = "8.0.40"
+rds_engine_version    = "8.0.42"
 rds_allocated_storage = 100
 
 cloudtrail_retention_days = 90
