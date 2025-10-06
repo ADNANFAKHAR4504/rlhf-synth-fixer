@@ -1,8 +1,8 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, HeadBucketCommand, GetBucketVersioningCommand } from '@aws-sdk/client-s3';
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand as ASGDescribeCommand } from '@aws-sdk/client-auto-scaling';
+import { DescribeAutoScalingGroupsCommand as ASGDescribeCommand, AutoScalingClient } from '@aws-sdk/client-auto-scaling';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { GetBucketVersioningCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -11,7 +11,7 @@ const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json
 
 describe('TapStack Integration Tests', () => {
   let outputs: any = {};
-  const region = process.env.AWS_REGION || 'us-west-2';
+  const region = process.env.AWS_REGION || 'us-east-1';
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth90417528';
 
   const ec2Client = new EC2Client({ region });
@@ -337,9 +337,9 @@ describe('TapStack Integration Tests', () => {
 
       // Check if we have the minimum required outputs
       const hasRequiredOutputs = outputs.VpcId ||
-                                 outputs.StaticContentBucketName ||
-                                 outputs.AutoScalingGroupName ||
-                                 outputs.AlertTopicArn;
+        outputs.StaticContentBucketName ||
+        outputs.AutoScalingGroupName ||
+        outputs.AlertTopicArn;
 
       if (!hasRequiredOutputs) {
         console.warn('Skipping E2E test - no deployment outputs available');

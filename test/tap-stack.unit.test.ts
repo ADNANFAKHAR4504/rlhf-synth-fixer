@@ -43,13 +43,13 @@ describe('TapStack', () => {
       environmentSuffix: 'prod',
       env: {
         account: '123456789012',
-        region: 'us-west-2'
+        region: 'us-east-1'
       }
     });
 
     expect(stack.autoScalingGroup).toBeDefined();
     expect(stack.account).toBe('123456789012');
-    expect(stack.region).toBe('us-west-2');
+    expect(stack.region).toBe('us-east-1');
   });
 });
 
