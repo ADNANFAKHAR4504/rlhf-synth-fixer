@@ -46,3 +46,15 @@ The environment_suffix variable is automatically set by GitHub Actions:
 ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
 ```
 This ensures each PR gets isolated resources (e.g., pr123) while main branch uses 'dev'.
+
+## Testing
+
+### Unit Tests
+Verify Terraform configuration structure, resource definitions, and best practices without deployment.
+
+### Integration Tests
+The integration tests read deployment outputs from `cfn-outputs/all-outputs.json`, which is created by:
+1. `deploy.sh` calls `get-outputs.sh`
+2. `get-outputs.sh` runs `terraform output -json` and saves to `cfn-outputs/all-outputs.json`
+3. CI/CD uploads `cfn-outputs/` as artifact
+4. Integration tests download and read the outputs to verify live infrastructure

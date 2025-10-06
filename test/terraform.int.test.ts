@@ -61,11 +61,19 @@ interface TerraformOutputs {
 let outputs: TerraformOutputs;
 
 function loadTerraformOutputs(): TerraformOutputs {
+  // Primary path: CI/CD pipeline creates cfn-outputs/all-outputs.json via get-outputs.sh
+  const ciOutputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+  if (fs.existsSync(ciOutputPath)) {
+    return JSON.parse(fs.readFileSync(ciOutputPath, "utf8"));
+  }
+  
+  // Fallback 1: Direct terraform output JSON
   const outputPath = path.resolve(__dirname, "../terraform-outputs.json");
   if (fs.existsSync(outputPath)) {
     return JSON.parse(fs.readFileSync(outputPath, "utf8"));
   }
   
+  // Fallback 2: Terraform state file
   const altPath = path.resolve(__dirname, "../lib/terraform.tfstate");
   if (fs.existsSync(altPath)) {
     const state = JSON.parse(fs.readFileSync(altPath, "utf8"));
