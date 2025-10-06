@@ -135,6 +135,7 @@ export class TapStack extends TerraformStack {
       securityGroupId: securityGroupsModule.albSg.id,
       vpcId: vpcModule.vpc.id,
       logBucketName: s3Module.bucket.bucket,
+      logBucketPolicy: s3Module.bucketPolicy, // Add this line
       tags: commonTags,
       // certificateArn: 'arn:aws:acm:...', // Add ACM certificate ARN for HTTPS
     });

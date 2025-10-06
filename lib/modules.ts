@@ -812,7 +812,7 @@ export class RdsModule extends Construct {
  */
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
-  public readonly bucketPolicy: S3BucketPolicy; // Add this line
+  public readonly bucketPolicy: S3BucketPolicy;
 
   constructor(
     scope: Construct,
@@ -892,21 +892,17 @@ export class S3Module extends Construct {
     });
 
     // Lifecycle policies for cost optimization
-    // In S3Module constructor, update the lifecycle configuration:
     new S3BucketLifecycleConfiguration(this, 'lifecycle', {
       bucket: this.bucket.id,
       rule: [
         {
           id: 'alb-logs-lifecycle',
           status: 'Enabled',
-
-          // ✅ Correct way to define a prefix filter
           filter: [
             {
               prefix: 'alb-logs/',
             },
           ],
-
           transition: [
             {
               days: config.transitionDays,
@@ -917,13 +913,11 @@ export class S3Module extends Construct {
               storageClass: 'GLACIER',
             },
           ],
-
           expiration: [
             {
               days: config.expirationDays,
             },
           ],
-
           noncurrentVersionExpiration: [
             {
               noncurrentDays: 30,
@@ -931,24 +925,6 @@ export class S3Module extends Construct {
           ],
         },
       ],
-    });
-
-    // Bucket policy for ALB access logs
-    new S3BucketPolicy(this, 'bucket-policy', {
-      bucket: this.bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: 'arn:aws:iam::797873946194:root', // ELB service account for us-west-2
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.bucket.arn}/alb-logs/*`,
-          },
-        ],
-      }),
     });
   }
 }
