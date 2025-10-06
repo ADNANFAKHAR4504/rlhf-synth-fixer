@@ -13,6 +13,7 @@ from aws_cdk import (
     NestedStack,
     Duration,
     RemovalPolicy,
+    CfnOutput,
     aws_ec2 as ec2,
     aws_iam as iam,
     aws_s3 as s3,
@@ -121,6 +122,65 @@ class NestedEC2MonitoringStack(NestedStack):
         self.log_bucket = log_bucket
         self.log_group = log_group
         self.alarm_topic = alarm_topic
+
+        # Add CloudFormation outputs for integration testing
+        CfnOutput(
+            self,
+            "VpcId",
+            value=vpc.vpc_id,
+            description="VPC ID for the monitoring infrastructure",
+            export_name=f"TAP-VPC-ID-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "S3BucketName",
+            value=log_bucket.bucket_name,
+            description="S3 bucket name for storing logs",
+            export_name=f"TAP-S3-BUCKET-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "CloudWatchLogGroupName",
+            value=log_group.log_group_name,
+            description="CloudWatch log group name",
+            export_name=f"TAP-CLOUDWATCH-LOG-GROUP-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "SNSTopicArn",
+            value=alarm_topic.topic_arn,
+            description="SNS topic ARN for alarms",
+            export_name=f"TAP-SNS-TOPIC-ARN-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "SecurityGroupId",
+            value=security_group.security_group_id,
+            description="Security group ID for EC2 instances",
+            export_name=f"TAP-SECURITY-GROUP-ID-{environment_suffix}",
+        )
+
+        # Output EC2 instance IDs as a comma-separated list
+        instance_ids = [instance.instance_id for instance in instances]
+        CfnOutput(
+            self,
+            "EC2InstanceIds",
+            value=",".join(instance_ids),
+            description="Comma-separated list of EC2 instance IDs",
+            export_name=f"TAP-EC2-INSTANCE-IDS-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "InstanceCount",
+            value=str(instance_count),
+            description="Number of EC2 instances created",
+            export_name=f"TAP-INSTANCE-COUNT-{environment_suffix}",
+        )
 
     def create_vpc(self) -> ec2.Vpc:
         """Create VPC with public and private subnets"""
@@ -242,7 +302,8 @@ class NestedEC2MonitoringStack(NestedStack):
             # Update system
             "yum update -y",
             # Install CloudWatch agent
-            "wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm",
+            "wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/"
+            + "amazon-cloudwatch-agent.rpm",
             "rpm -U ./amazon-cloudwatch-agent.rpm",
             # Install collectd for additional metrics
             "yum install -y collectd",
@@ -522,6 +583,58 @@ class TapStack(cdk.Stack):
         Tags.of(self).add("Environment", f"TAP-{environment_suffix}")
         Tags.of(self).add("ManagedBy", "CDK")
         Tags.of(self).add("Project", "TAP")
+
+        # Add top-level CloudFormation outputs for integration testing
+        CfnOutput(
+            self,
+            "TapStackVpcId",
+            value=self.vpc.vpc_id,
+            description="VPC ID for TAP monitoring infrastructure",
+        )
+
+        CfnOutput(
+            self,
+            "TapStackS3BucketName",
+            value=self.log_bucket.bucket_name,
+            description="S3 bucket name for TAP log storage",
+        )
+
+        CfnOutput(
+            self,
+            "TapStackCloudWatchLogGroupName",
+            value=self.log_group.log_group_name,
+            description="CloudWatch log group name for TAP monitoring",
+        )
+
+        CfnOutput(
+            self,
+            "TapStackSNSTopicArn",
+            value=self.alarm_topic.topic_arn,
+            description="SNS topic ARN for TAP monitoring alarms",
+        )
+
+        # Output instance information for integration testing
+        instance_ids = [instance.instance_id for instance in self.instances]
+        CfnOutput(
+            self,
+            "TapStackEC2InstanceIds",
+            value=",".join(instance_ids),
+            description="Comma-separated list of TAP EC2 instance IDs",
+        )
+
+        CfnOutput(
+            self,
+            "TapStackInstanceCount",
+            value=str(len(self.instances)),
+            description="Total number of TAP EC2 instances",
+        )
+
+        CfnOutput(
+            self,
+            "TapStackEnvironmentSuffix",
+            value=environment_suffix,
+            description="Environment suffix used for this TAP deployment",
+        )
 
         # Example for future DynamoDB stack integration:
         # db_props = DynamoDBStackProps(
