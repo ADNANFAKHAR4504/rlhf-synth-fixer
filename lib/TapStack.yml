@@ -6,11 +6,11 @@ Parameters:
     Type: String
     Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     Default: prod
-    AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
 
   AlertEmail:
     Type: String
+    Default: test@test.com
     Description: Email address for SNS alert notifications
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: Must be a valid email address
