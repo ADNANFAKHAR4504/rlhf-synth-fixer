@@ -21,5 +21,11 @@
     "AWS Batch",
     "EC2"
   ],
-  "training_quality": 8.5
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
