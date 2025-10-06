@@ -182,7 +182,17 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Data source to check for existing EIP
+data "aws_eips" "existing" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-nat-eip"]
+  }
+}
+
+# Create EIP only if it doesn't exist
 resource "aws_eip" "nat" {
+  count  = length(data.aws_eips.existing.allocation_ids) == 0 ? 1 : 0
   domain = "vpc"
 
   tags = merge(
@@ -193,8 +203,13 @@ resource "aws_eip" "nat" {
   )
 }
 
+# Local value to get the EIP ID (either existing or newly created)
+locals {
+  eip_id = length(data.aws_eips.existing.allocation_ids) > 0 ? data.aws_eips.existing.allocation_ids[0] : aws_eip.nat[0].id
+}
+
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
+  allocation_id = local.eip_id
   subnet_id     = aws_subnet.public[0].id
 
   tags = merge(
@@ -246,6 +261,10 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   kms_key_id        = aws_kms_key.main.arn
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_iam_role" "flow_log_role" {
@@ -565,6 +584,10 @@ resource "aws_elasticache_parameter_group" "redis" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_elasticache_replication_group" "redis" {
@@ -899,6 +922,10 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
   kms_key_id        = aws_kms_key.main.arn
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
