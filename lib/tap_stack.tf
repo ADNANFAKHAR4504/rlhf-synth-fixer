@@ -339,7 +339,7 @@ resource "aws_security_group" "rds" {
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-new2"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
