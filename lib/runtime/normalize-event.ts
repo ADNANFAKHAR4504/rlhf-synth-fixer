@@ -35,6 +35,28 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function derivePathParameters(
+  path: string,
+  existing: Record<string, string> | null | undefined
+): Record<string, string> | null {
+  if (existing && Object.keys(existing).length > 0) {
+    return existing;
+  }
+
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 2) {
+    const [resourceSegment, identifier] = segments;
+    if (identifier) {
+      const key = resourceSegment.endsWith('s')
+        ? `${resourceSegment.slice(0, -1)}Id`
+        : `${resourceSegment}Id`;
+      return { [key]: decodeURIComponent(identifier) };
+    }
+  }
+
+  return existing ?? null;
+}
+
 function createEmptyEvent(method: string = 'GET'): APIGatewayProxyEvent {
   return {
     resource: '',
@@ -97,14 +119,17 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
       asString(incoming.path) ??
       normalized.path;
 
-    return {
+    const normalizedEvent = {
       ...normalized,
       headers: (incoming.headers ?? {}) as Headers,
       multiValueHeaders: (incoming.multiValueHeaders ??
         {}) as MultiValueHeaders,
       path: resolvedPath,
       resource: asString(incoming.resource) ?? normalized.resource,
-      pathParameters: incoming.pathParameters ?? null,
+      pathParameters: derivePathParameters(
+        resolvedPath,
+        incoming.pathParameters
+      ),
       queryStringParameters: incoming.queryStringParameters ?? null,
       multiValueQueryStringParameters:
         incoming.multiValueQueryStringParameters ?? null,
@@ -114,18 +139,28 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
         normalized.requestContext,
       body: coerceBody(incoming.body),
       isBase64Encoded: Boolean(incoming.isBase64Encoded),
-    };
+    } as APIGatewayProxyEvent;
+
+    normalizedEvent.pathParameters = derivePathParameters(
+      normalizedEvent.path,
+      normalizedEvent.pathParameters
+    );
+
+    return normalizedEvent;
   }
 
   const base = createEmptyEvent();
 
-  return {
+  const fallbackEvent = {
     ...base,
     headers: (incoming.headers ?? {}) as Headers,
     multiValueHeaders: (incoming.multiValueHeaders ?? {}) as MultiValueHeaders,
     path: asString(incoming.path) ?? base.path,
     resource: asString(incoming.resource) ?? base.resource,
-    pathParameters: incoming.pathParameters ?? null,
+    pathParameters: derivePathParameters(
+      asString(incoming.path) ?? base.path,
+      incoming.pathParameters
+    ),
     queryStringParameters: incoming.queryStringParameters ?? null,
     multiValueQueryStringParameters:
       incoming.multiValueQueryStringParameters ?? null,
@@ -135,5 +170,12 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
       base.requestContext,
     body: coerceBody(incoming.body),
     isBase64Encoded: Boolean(incoming.isBase64Encoded),
-  };
+  } as APIGatewayProxyEvent;
+
+  fallbackEvent.pathParameters = derivePathParameters(
+    fallbackEvent.path,
+    fallbackEvent.pathParameters
+  );
+
+  return fallbackEvent;
 }

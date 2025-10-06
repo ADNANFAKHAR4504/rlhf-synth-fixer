@@ -319,6 +319,7 @@ describe('normalizeEvent helper', () => {
     });
 
     expect(normalized.body).toBeNull();
+    expect(normalized.pathParameters).toEqual({ itemId: '1' });
   });
 
   it('ignores malformed serialized body content', () => {
@@ -330,6 +331,7 @@ describe('normalizeEvent helper', () => {
 
     expect(normalized.httpMethod).toBe('POST');
     expect(normalized.path).toBe('/malformed');
+    expect(normalized.pathParameters).toBeNull();
   });
 
   it('stringifies complex objects when no method is provided', () => {
@@ -348,6 +350,35 @@ describe('normalizeEvent helper', () => {
     expect(normalized.httpMethod).toBe('GET');
     expect(normalized.path).toBe('/fallback');
     expect(normalized.body).toBe('[object Object]');
+    expect(normalized.pathParameters).toBeNull();
+  });
+
+  it('retains provided pathParameters', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'get', path: '/orders/abc123' } },
+      rawPath: '/orders/abc123',
+      pathParameters: { orderId: 'custom-id' },
+    });
+
+    expect(normalized.pathParameters).toEqual({ orderId: 'custom-id' });
+  });
+
+  it('does not derive ids for nested resource paths', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'get', path: '/orders/abc/items' } },
+      rawPath: '/orders/abc/items',
+    });
+
+    expect(normalized.pathParameters).toBeNull();
+  });
+
+  it('derives identifier keys for singular resource segments', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'get', path: '/team/alpha' } },
+      rawPath: '/team/alpha',
+    });
+
+    expect(normalized.pathParameters).toEqual({ teamId: 'alpha' });
   });
 });
 
