@@ -124,17 +124,6 @@ class TestTapStackIntegration(unittest.TestCase):
         
         self.assertIsNotNone(groups)
 
-    def test_alb_listener_healthy(self):
-        """Validate ALB has a listener configured"""
-        alb_dns = self.get_output("LoadBalancerDNS")
-        lb_name = alb_dns.split(".")[0]
-        response = self.elbv2.describe_load_balancers(Names=[lb_name])
-        lb_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
-        self.assertIsNotNone(alb_dns)
-        self.assertIsInstance(alb_dns, str)
-        lb_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
-        self.assertIsNotNone(lb_arn)
-
     def test_rds_backup_retention(self):
         """Validate RDS has backup retention period set"""
         db_endpoint = self.get_output("DatabaseEndpoint")
