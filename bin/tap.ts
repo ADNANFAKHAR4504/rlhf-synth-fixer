@@ -5,8 +5,43 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const sanitizeSuffix = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32) || 'dev';
+
+const deriveEnvironmentSuffix = (): string => {
+  const baseContext =
+    (app.node.tryGetContext('environmentSuffix') as string | undefined) ||
+    process.env.ENVIRONMENT_SUFFIX ||
+    'dev';
+
+  const uniquenessHint =
+    process.env.DEPLOY_UNIQUE_ID ||
+    process.env.GITHUB_RUN_ATTEMPT ||
+    process.env.GITHUB_RUN_NUMBER ||
+    process.env.GITHUB_RUN_ID ||
+    process.env.CODEBUILD_BUILD_NUMBER ||
+    process.env.CODEBUILD_BUILD_ID ||
+    process.env.BUILD_ID ||
+    process.env.CI_PIPELINE_ID ||
+    process.env.CI_JOB_ID ||
+    process.env.BITBUCKET_BUILD_NUMBER ||
+    process.env.CIRCLE_WORKFLOW_ID ||
+    process.env.TRAVIS_BUILD_NUMBER ||
+    undefined;
+
+  const rawSuffix = uniquenessHint
+    ? `${baseContext}-${uniquenessHint}`
+    : baseContext;
+
+  return sanitizeSuffix(rawSuffix);
+};
+
+const environmentSuffix = deriveEnvironmentSuffix();
 const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';

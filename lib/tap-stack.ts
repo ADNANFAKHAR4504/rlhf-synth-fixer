@@ -59,6 +59,24 @@ export class TapStack extends cdk.Stack {
         .slice(0, maxLength);
       return sanitized.length > 0 ? sanitized : 'unknown';
     };
+    const sanitizeSuffix = (value: string): string =>
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 32) || 'dev';
+
+    const suffixSourceCandidates: (string | undefined)[] = [
+      props?.environmentSuffix,
+      this.node.tryGetContext('environmentSuffix') as string | undefined,
+      cdk.Stack.of(this).stackName.replace(/^tapstack/i, ''),
+    ];
+    const resolvedSuffixSource =
+      suffixSourceCandidates.find(value => value && value.trim().length > 0) ||
+      'dev';
+    const resolvedSuffix = sanitizeSuffix(resolvedSuffixSource);
+
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
       default: 'nova',
@@ -77,7 +95,7 @@ export class TapStack extends cdk.Stack {
 
     const suffixParam = new CfnParameter(this, 'UniqueSuffix', {
       type: 'String',
-      default: props?.environmentSuffix ?? 'dev',
+      default: resolvedSuffix,
       allowedPattern: '^[a-z0-9-]+$',
       description:
         'Unique, lowercase suffix appended to resource names to guarantee uniqueness across accounts.',
@@ -85,7 +103,7 @@ export class TapStack extends cdk.Stack {
 
     const appName = appNameParam.valueAsString.toLowerCase();
     const environmentName = environmentParam.valueAsString.toLowerCase();
-    const stringSuffix = suffixParam.valueAsString.toLowerCase();
+    const stringSuffix = sanitizeSuffix(suffixParam.valueAsString);
 
     const resourceName = (purpose: string): string =>
       `${appName}-${purpose}-${environmentName}-${stringSuffix}`.replace(

@@ -6,6 +6,7 @@
 - Publishes a RESTful API Gateway front door that wires CRUD resources to the Lambda functions, includes CORS, stage logging, access logs, and exposes key deployment outputs for downstream automation.
 - Runtime handlers implement business workflows end-to-end: user onboarding with secret-powered notifications, product catalog management with validation, and order orchestration that reserves inventory, emits high-severity events, and supports status transitions.
 - Introduces a shared `normalizeEvent` helper so Lambda handlers seamlessly accept API Gateway v1, HTTP API v2, and Function URL payloads without touching the business logic.
+- Derives a collision-resistant environment suffix from context, CI metadata, or the stack name so each deployment synthesizes unique DynamoDB table and S3 bucket names.
 
 ---
 
@@ -68,8 +69,25 @@ export class TapStack extends cdk.Stack {
         .slice(0, maxLength);
       return sanitized.length > 0 ? sanitized : 'unknown';
     };
+    const sanitizeSuffix = (value: string): string =>
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 32) || 'dev';
     const sanitizeStageName = (value: string): string =>
       value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
+
+    const suffixSourceCandidates: (string | undefined)[] = [
+      props?.environmentSuffix,
+      this.node.tryGetContext('environmentSuffix') as string | undefined,
+      cdk.Stack.of(this).stackName.replace(/^tapstack/i, ''),
+    ];
+    const resolvedSuffixSource =
+      suffixSourceCandidates.find(value => value && value.trim().length > 0) ||
+      'dev';
+    const resolvedSuffix = sanitizeSuffix(resolvedSuffixSource);
 
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
@@ -89,7 +107,7 @@ export class TapStack extends cdk.Stack {
 
     const suffixParam = new CfnParameter(this, 'UniqueSuffix', {
       type: 'String',
-      default: props?.environmentSuffix ?? 'dev',
+      default: resolvedSuffix,
       allowedPattern: '^[a-z0-9-]+$',
       description:
         'Unique, lowercase suffix appended to resource names to guarantee uniqueness across accounts.',
@@ -97,7 +115,7 @@ export class TapStack extends cdk.Stack {
 
     const appName = appNameParam.valueAsString.toLowerCase();
     const environmentName = environmentParam.valueAsString.toLowerCase();
-    const stringSuffix = suffixParam.valueAsString.toLowerCase();
+    const stringSuffix = sanitizeSuffix(suffixParam.valueAsString);
 
     const resourceName = (purpose: string): string =>
       `${appName}-${purpose}-${environmentName}-${stringSuffix}`.replace(
