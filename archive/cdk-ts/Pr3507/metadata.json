@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "65349218",
+  "team": "synth",
+  "startedAt": "2025-10-03T21:02:16+05:30",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "SageMaker",
+    "S3",
+    "ECR",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "AWS Batch",
+    "EC2"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
