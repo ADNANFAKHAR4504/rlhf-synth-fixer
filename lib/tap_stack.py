@@ -156,7 +156,6 @@ class TapStack(cdk.Stack):
                 stage_name="prod",
                 throttling_rate_limit=100,
                 throttling_burst_limit=200,
-                logging_level=apigateway.MethodLoggingLevel.INFO,
                 data_trace_enabled=True
             )
         )
@@ -221,6 +220,44 @@ class TapStack(cdk.Stack):
             self, "ApiKeyId",
             value=api_key.key_id,
             description="API Key ID (retrieve actual key from console)"
+        )
+
+        # ==========================================
+        # Additional Outputs
+        # ==========================================
+        CfnOutput(
+            self,
+            "S3BucketArn",
+            value=self.json_bucket.bucket_arn,
+            description="The ARN of the S3 bucket used to store JSON files",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionArn",
+            value=self.lambda_function.function_arn,
+            description="The ARN of the Lambda function handling API requests",
+        )
+
+        CfnOutput(
+            self,
+            "ApiGatewayRestApiId",
+            value=self.api.rest_api_id,
+            description="The ID of the API Gateway REST API",
+        )
+
+        CfnOutput(
+            self,
+            "ApiGatewayStageName",
+            value=self.api.deployment_stage.stage_name,
+            description="The stage name of the API Gateway",
+        )
+
+        CfnOutput(
+            self,
+            "CloudWatchLogGroupName",
+            value=f"/aws/apigateway/json-processor-api-{self.api.deployment_stage.stage_name}",
+            description="The name of the CloudWatch log group for API Gateway",
         )
 
     def _get_lambda_code(self) -> str:
