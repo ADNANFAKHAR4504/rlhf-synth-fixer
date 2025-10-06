@@ -9,7 +9,6 @@ Networking
 Create a VPC with CIDR block 10.0.0.0/16 in region us-west-2.
 Create public and private subnets across two availability zones.
 Deploy an Internet Gateway and attach it to the VPC.
-Create a NAT Gateway in each public subnet.
 Configure route tables and associate them with subnets.
 
 Compute & Scaling

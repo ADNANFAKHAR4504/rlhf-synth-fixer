@@ -5,9 +5,9 @@ Based on your requirements and here's the comprehensive `main.tf` file for a pro
 ```hcl
 # main.tf
 
-# ==========================================
+# 
 # Variables
-# ==========================================
+# 
 
 variable "aws_region" {
   description = "AWS region for resources"
@@ -45,9 +45,9 @@ variable "customer_gateway_ip" {
   default     = "203.0.113.100" # Replace with actual IP
 }
 
-# ==========================================
+# 
 # Data Sources
-# ==========================================
+# 
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -68,9 +68,9 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-# ==========================================
+# 
 # Networking - VPC
-# ==========================================
+# 
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -83,9 +83,9 @@ resource "aws_vpc" "main" {
   }
 }
 
-# ==========================================
+# 
 # Networking - Subnets
-# ==========================================
+# 
 
 resource "aws_subnet" "public" {
   count                   = 2
@@ -127,9 +127,9 @@ resource "aws_subnet" "database" {
   }
 }
 
-# ==========================================
+# 
 # Networking - Internet Gateway
-# ==========================================
+# 
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
@@ -140,9 +140,9 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# ==========================================
+# 
 # Networking - NAT Gateways
-# ==========================================
+# 
 
 resource "aws_eip" "nat" {
   count  = 2
@@ -154,22 +154,10 @@ resource "aws_eip" "nat" {
   }
 }
 
-resource "aws_nat_gateway" "main" {
-  count         = 2
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
 
-  tags = {
-    Name        = "nat-gateway-${count.index + 1}"
-    Environment = var.environment
-  }
-
-  depends_on = [aws_internet_gateway.main]
-}
-
-# ==========================================
+# 
 # Networking - Route Tables
-# ==========================================
+# 
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -185,20 +173,6 @@ resource "aws_route_table" "public" {
   }
 }
 
-resource "aws_route_table" "private" {
-  count  = 2
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
-
-  tags = {
-    Name        = "private-route-table-${count.index + 1}"
-    Environment = var.environment
-  }
-}
 
 resource "aws_route_table_association" "public" {
   count          = 2
@@ -212,9 +186,9 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# ==========================================
+# 
 # Security - Security Groups
-# ==========================================
+# 
 
 resource "aws_security_group" "alb" {
   name        = "production-alb-sg"
@@ -305,9 +279,9 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# ==========================================
+# 
 # IAM - Roles and Policies
-# ==========================================
+# 
 
 resource "aws_iam_role" "ec2_role" {
   name = "production-ec2-role"
@@ -401,9 +375,9 @@ resource "aws_iam_role_policy_attachment" "lambda_backup_policy" {
   policy_arn = aws_iam_policy.lambda_rds_backup.arn
 }
 
-# ==========================================
+# 
 # Compute - Application Load Balancer
-# ==========================================
+# 
 
 resource "aws_lb" "main" {
   name               = "production-alb"
@@ -455,9 +429,9 @@ resource "aws_lb_listener" "main" {
   }
 }
 
-# ==========================================
+# 
 # Compute - Launch Template
-# ==========================================
+# 
 
 resource "aws_launch_template" "main" {
   name_prefix   = "production-lt-"
@@ -505,9 +479,9 @@ resource "aws_launch_template" "main" {
   }
 }
 
-# ==========================================
+# 
 # Compute - Auto Scaling Group
-# ==========================================
+# 
 
 resource "aws_autoscaling_group" "main" {
   name               = "production-asg"
@@ -561,9 +535,9 @@ resource "aws_autoscaling_policy" "scale_down" {
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
-# ==========================================
+# 
 # Monitoring - CloudWatch Alarms
-# ==========================================
+# 
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "production-cpu-high"
@@ -607,9 +581,9 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   }
 }
 
-# ==========================================
+# 
 # Database - RDS
-# ==========================================
+# 
 
 resource "aws_db_subnet_group" "main" {
   name       = "production-db-subnet-group"
@@ -656,9 +630,9 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# ==========================================
+# 
 # Database - Lambda for Daily Backups
-# ==========================================
+# 
 
 resource "aws_lambda_function" "rds_backup" {
   filename         = "rds_backup_lambda.zip"
@@ -707,9 +681,9 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
   source_arn    = aws_cloudwatch_event_rule.daily_backup.arn
 }
 
-# ==========================================
+# 
 # Storage - S3 Bucket
-# ==========================================
+# 
 
 resource "aws_s3_bucket" "main" {
   bucket = "production-content-bucket-${random_string.bucket_suffix.result}"
@@ -776,9 +750,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
   }
 }
 
-# ==========================================
+# 
 # CDN - CloudFront Distribution
-# ==========================================
+# 
 
 resource "aws_cloudfront_origin_access_identity" "main" {
   comment = "OAI for production S3 bucket"
@@ -853,9 +827,9 @@ resource "aws_cloudfront_distribution" "main" {
   }
 }
 
-# ==========================================
+# 
 # Logging - VPC Flow Logs
-# ==========================================
+# 
 
 resource "aws_flow_log" "main" {
   iam_role_arn    = aws_iam_role.flow_log_role.arn
@@ -921,9 +895,9 @@ resource "aws_iam_role_policy" "flow_log_policy" {
   })
 }
 
-# ==========================================
+# 
 # VPN Connection
-# ==========================================
+# 
 
 resource "aws_customer_gateway" "main" {
   bgp_asn    = 65000
@@ -969,9 +943,9 @@ resource "aws_route" "vpn_route" {
   vpn_gateway_id        = aws_vpn_gateway.main.id
 }
 
-# ==========================================
+# 
 # CloudTrail
-# ==========================================
+# 
 
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "production-cloudtrail-logs-${random_string.trail_suffix.result}"
@@ -1055,9 +1029,9 @@ resource "aws_cloudtrail" "main" {
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
-# ==========================================
+# 
 # Outputs
-# ==========================================
+# 
 
 output "vpc_id" {
   value       = aws_vpc.main.id
@@ -1155,7 +1129,6 @@ terraform apply
 - Multi-AZ RDS: Only for production stability (can be disabled for dev/test)
 - S3 Lifecycle Policies: Transitions old data to cheaper storage classes
 - CloudFront: Reduces data transfer costs and improves performance
-- NAT Gateways: Consider using NAT instances for lower environments
 - Reserved Capacity: Consider purchasing Reserved Instances for predictable workloads
 
 This configuration provides a robust, production-ready AWS infrastructure with all the requested components while following AWS best practices for security, reliability, and cost optimization.
