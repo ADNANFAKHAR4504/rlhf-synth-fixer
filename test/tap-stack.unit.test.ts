@@ -683,7 +683,7 @@ describe("TapStack Unit Tests", () => {
       expect(Route53Module).toHaveBeenCalledTimes(1);
       expect(SsmModule).toHaveBeenCalledTimes(1);
       
-      // Verify the stack is properly constructed
+      // Verify the stack properly constructed
       expect(stack).toBeDefined();
       
       // Verify outputs are created (10 from main stack + 2 from RDS module)
