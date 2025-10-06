@@ -27,6 +27,7 @@ resource "aws_kms_key" "main" {
           ]
         }
         Action = [
+          "kms:Encrypt",
           "kms:CreateGrant",
           "kms:Decrypt",
           "kms:DescribeKey",
@@ -35,6 +36,31 @@ resource "aws_kms_key" "main" {
           "kms:ReEncrypt*"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow use of the key for EBS via EC2 in this account"
+        Effect = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService"    = "ec2.${var.region}.amazonaws.com",
+            "kms:CallerAccount" = "${data.aws_caller_identity.current.account_id}"
+          },
+          Bool = {
+            "kms:GrantIsForAWSResource" = true
+          }
+        }
       },
       {
         Sid    = "Allow CloudTrail to use the key"
@@ -116,7 +142,7 @@ resource "aws_iam_role_policy" "instance" {
           "kms:Decrypt",
           "kms:DescribeKey",
           "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlainText",
+          "kms:GenerateDataKeyWithoutPlaintext",
           "kms:ReEncrypt*"
         ]
         Resource = aws_kms_key.main.arn
