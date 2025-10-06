@@ -1570,46 +1570,49 @@ def notify_security_team(event: Dict, response: Dict):
         )
 
         # Add bucket policy to allow Config service access
-        config_bucket_policy = s3.BucketPolicy(
-            self, "ConfigBucketPolicy",
-            bucket=config_bucket,
-            policy_document=iam.PolicyDocument(
-                statements=[
-                    iam.PolicyStatement(
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-                        actions=["s3:GetBucketAcl", "s3:ListBucket"],
-                        resources=[config_bucket.bucket_arn],
-                        conditions={
-                            "StringEquals": {
-                                "AWS:SourceAccount": self.account
-                            }
-                        }
-                    ),
-                    iam.PolicyStatement(
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-                        actions=["s3:PutObject"],
-                        resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
-                        conditions={
-                            "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control",
-                                "AWS:SourceAccount": self.account
-                            }
-                        }
-                    ),
-                    iam.PolicyStatement(
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal("config.amazonaws.com")],
-                        actions=["s3:GetObject"],
-                        resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
-                        conditions={
-                            "StringEquals": {
-                                "AWS:SourceAccount": self.account
-                            }
-                        }
-                    )
-                ]
+        config_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSConfigBucketPermissionsCheck",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                actions=["s3:GetBucketAcl", "s3:ListBucket"],
+                resources=[config_bucket.bucket_arn],
+                conditions={
+                    "StringEquals": {
+                        "AWS:SourceAccount": self.account
+                    }
+                }
+            )
+        )
+        
+        config_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSConfigBucketDeliveryCheck",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                actions=["s3:PutObject"],
+                resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
+                conditions={
+                    "StringEquals": {
+                        "s3:x-amz-acl": "bucket-owner-full-control",
+                        "AWS:SourceAccount": self.account
+                    }
+                }
+            )
+        )
+        
+        config_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AWSConfigBucketExistenceCheck",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("config.amazonaws.com")],
+                actions=["s3:GetObject"],
+                resources=[f"{config_bucket.bucket_arn}/AWSConfig/*"],
+                conditions={
+                    "StringEquals": {
+                        "AWS:SourceAccount": self.account
+                    }
+                }
             )
         )
 
