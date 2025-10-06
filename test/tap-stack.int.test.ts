@@ -46,7 +46,29 @@ const outputsFile = JSON.parse(
 // CDKTF outputs are nested under the stack name
 // Find the stack key (e.g., 'TapStackpr3521' or similar)
 const stackKey = Object.keys(outputsFile).find(key => key.startsWith('TapStack')) || '';
-const outputs = outputsFile[stackKey] || outputsFile;
+const stackOutputs = outputsFile[stackKey] || outputsFile;
+
+// Helper function to get output value by searching for the key pattern
+function getOutput(keyPattern: string): string | undefined {
+  const matchingKey = Object.keys(stackOutputs).find(key =>
+    key.includes(keyPattern)
+  );
+  return matchingKey ? stackOutputs[matchingKey] : undefined;
+}
+
+// Create a convenient outputs object with clean keys
+const outputs = {
+  'members-table-name': getOutput('members-table-name'),
+  'members-table-arn': getOutput('members-table-arn'),
+  'api-endpoint': getOutput('api-endpoint'),
+  'api-url': getOutput('api-url'),
+  'point-calc-lambda-name': getOutput('point-calc-lambda-name'),
+  'point-calc-lambda-arn': getOutput('point-calc-lambda-arn'),
+  'stream-processor-lambda-name': getOutput('stream-processor-lambda-name'),
+  'stream-processor-lambda-arn': getOutput('stream-processor-lambda-arn'),
+  'notification-topic-arn': getOutput('notification-topic-arn'),
+  'dashboard-name': getOutput('dashboard-name'),
+};
 
 // Initialize AWS clients
 const dynamodb = new DynamoDBClient({ region });
