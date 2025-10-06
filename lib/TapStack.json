@@ -227,7 +227,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["DeviceTokensTable", "Arn"]
+                      "Fn::GetAtt": [
+                        "DeviceTokensTable",
+                        "Arn"
+                      ]
                     },
                     {
                       "Fn::Sub": "${DeviceTokensTable.Arn}/index/*"
@@ -252,7 +255,10 @@
                     "sqs:GetQueueAttributes"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+                    "Fn::GetAtt": [
+                      "DeadLetterQueue",
+                      "Arn"
+                    ]
                   }
                 },
                 {
@@ -308,14 +314,20 @@
         "Runtime": "python3.9",
         "Handler": "index.lambda_handler",
         "Role": {
-          "Fn::GetAtt": ["NotificationProcessorRole", "Arn"]
+          "Fn::GetAtt": [
+            "NotificationProcessorRole",
+            "Arn"
+          ]
         },
         "Timeout": 30,
         "MemorySize": 512,
         "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
-            "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+            "Fn::GetAtt": [
+              "DeadLetterQueue",
+              "Arn"
+            ]
           }
         },
         "Environment": {
@@ -373,7 +385,10 @@
           "Ref": "NotificationTopic"
         },
         "Endpoint": {
-          "Fn::GetAtt": ["NotificationProcessor", "Arn"]
+          "Fn::GetAtt": [
+            "NotificationProcessor",
+            "Arn"
+          ]
         }
       }
     },
@@ -432,7 +447,10 @@
             "Ref": "NotificationTopic"
           },
           "RoleArn": {
-            "Fn::GetAtt": ["SchedulerRole", "Arn"]
+            "Fn::GetAtt": [
+              "SchedulerRole",
+              "Arn"
+            ]
           },
           "Input": {
             "Fn::Sub": "{\"campaign\":\"daily\",\"environment\":\"${EnvironmentSuffix}\"}"
@@ -477,7 +495,10 @@
                     "dynamodb:ListStreams"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["DeviceTokensTable", "StreamArn"]
+                    "Fn::GetAtt": [
+                      "DeviceTokensTable",
+                      "StreamArn"
+                    ]
                   }
                 },
                 {
@@ -503,10 +524,16 @@
         },
         "Description": "Pipe from DynamoDB streams to SNS for real-time updates",
         "RoleArn": {
-          "Fn::GetAtt": ["EventBridgePipeRole", "Arn"]
+          "Fn::GetAtt": [
+            "EventBridgePipeRole",
+            "Arn"
+          ]
         },
         "Source": {
-          "Fn::GetAtt": ["DeviceTokensTable", "StreamArn"]
+          "Fn::GetAtt": [
+            "DeviceTokensTable",
+            "StreamArn"
+          ]
         },
         "SourceParameters": {
           "DynamoDBStreamParameters": {
@@ -566,7 +593,10 @@
     "DeviceTokensTableStreamArn": {
       "Description": "ARN of the DynamoDB stream",
       "Value": {
-        "Fn::GetAtt": ["DeviceTokensTable", "StreamArn"]
+        "Fn::GetAtt": [
+          "DeviceTokensTable",
+          "StreamArn"
+        ]
       },
       "Export": {
         "Name": {
@@ -577,7 +607,10 @@
     "NotificationProcessorFunctionArn": {
       "Description": "ARN of the notification processor Lambda function",
       "Value": {
-        "Fn::GetAtt": ["NotificationProcessor", "Arn"]
+        "Fn::GetAtt": [
+          "NotificationProcessor",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
