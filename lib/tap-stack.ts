@@ -125,7 +125,9 @@ export class TapStack extends TerraformStack {
     // Log bucket first, needed for other services
     const logBucket = new S3BucketModule(this, 'log-bucket', {
       bucketName: 'tap-logs-bucket',
+      allowCloudTrailAccess: true,
       kmsKeyId: kms.keyId,
+      cloudTrailPrefix: 'cloudtrail-logs/',
       tags,
     });
 
@@ -135,8 +137,7 @@ export class TapStack extends TerraformStack {
       kmsKeyId: kms.keyId,
       accessRoleArn: s3AccessRole.roleArn,
       loggingBucket: logBucket.bucketName,
-      allowCloudTrailAccess: true,
-      loggingPrefix: 'cloudtrail-logs/',
+      loggingPrefix: 'secure-bucket-logs/',
       tags,
     });
 
