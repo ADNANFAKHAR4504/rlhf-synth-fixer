@@ -381,7 +381,7 @@ describe('TapStack Unit Tests', () => {
 
       const lambda = findResource(synthesized.resource.aws_lambda_function, 'cleanup-function');
       expect(lambda).toBeDefined();
-      expect(lambda.runtime).toBe('nodejs20.x');
+      expect(lambda.runtime).toBe('nodejs22.x');
       expect(lambda.handler).toBe('cleanup.handler');
       expect(lambda.timeout).toBe(300);
       expect(lambda.memory_size).toBe(512);
