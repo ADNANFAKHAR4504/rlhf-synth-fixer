@@ -976,22 +976,42 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
     describe("CloudTrail Logging Validation", () => {
       test("CloudTrail is configured and logging", async () => {
 
-        for (const [region] of Object.entries(regionInfrastructure)) {
+        for (const [region, infra] of Object.entries(regionInfrastructure)) {
           const client = awsClients[region].cloudtrail;
 
           // Describe CloudTrail trails
           const trailsResponse = await client.send(new DescribeTrailsCommand({}));
 
           // Look for trails related to our infrastructure
-          const ourTrails = trailsResponse.trailList?.filter((trail: any) =>
-            trail.Name?.includes("prod-") ||
-            trail.Name?.includes("trail")
-          ) || [];
+          let ourTrails = trailsResponse.trailList || [];
+          // Prefer trails that log to our CloudTrail bucket for this region
+          if (infra.cloudtrail_bucket) {
+            const bucket = infra.cloudtrail_bucket;
+            const bucketMatches = ourTrails.filter((t: any) => t.S3BucketName === bucket);
+            if (bucketMatches.length > 0) {
+              ourTrails = bucketMatches;
+            }
+          } else {
+            // Fallback to naming filter if bucket output not present
+            ourTrails = ourTrails.filter((trail: any) =>
+              trail.Name?.includes("prod-") || trail.Name?.includes("trail")
+            );
+          }
 
           for (const trail of ourTrails) {
             expect(trail.Name).toBeDefined();
             // Use GetTrailStatus to verify logging state (static import)
-            const statusResp = await client.send(new GetTrailStatusCommand({ Name: trail.Name }));
+            let statusResp;
+            try {
+              statusResp = await client.send(new GetTrailStatusCommand({ Name: trail.Name }));
+            } catch (e: any) {
+              // Some SDKs return Name as ARN; if Name lookup fails, try TrailARN
+              if (trail.TrailARN) {
+                statusResp = await client.send(new GetTrailStatusCommand({ Name: trail.TrailARN }));
+              } else {
+                throw e;
+              }
+            }
             expect(statusResp.IsLogging).toBe(true);
             expect(trail.IncludeGlobalServiceEvents).toBe(true);
 
