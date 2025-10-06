@@ -135,7 +135,8 @@ export class TapStack extends TerraformStack {
       kmsKeyId: kms.keyId,
       accessRoleArn: s3AccessRole.roleArn,
       loggingBucket: logBucket.bucketName,
-      loggingPrefix: 'secure-bucket-logs/',
+      allowCloudTrailAccess: true,
+      loggingPrefix: 'cloudtrail-logs/',
       tags,
     });
 

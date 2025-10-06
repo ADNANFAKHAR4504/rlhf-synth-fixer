@@ -246,6 +246,8 @@ export interface S3BucketModuleProps {
   accessRoleArn?: string;
   loggingBucket?: string;
   loggingPrefix?: string;
+  allowCloudTrailAccess?: boolean;
+  cloudTrailPrefix?: string;
   tags?: { [key: string]: string };
 }
 
@@ -284,21 +286,55 @@ export class S3BucketModule extends Construct {
       });
     }
 
+    // Combine policies if needed
+    const policyStatements = [];
+
+    // Add access role policy statement if provided
     if (props.accessRoleArn) {
+      policyStatements.push({
+        Effect: 'Allow',
+        Principal: {
+          AWS: props.accessRoleArn,
+        },
+        Action: ['s3:GetObject', 's3:ListBucket'],
+        Resource: [bucket.arn, `${bucket.arn}/*`],
+      });
+    }
+
+    // Add CloudTrail policy statement if enabled
+    if (props.allowCloudTrailAccess) {
+      const prefix = props.cloudTrailPrefix || '';
+      policyStatements.push({
+        Effect: 'Allow',
+        Principal: {
+          Service: 'cloudtrail.amazonaws.com',
+        },
+        Action: 's3:GetBucketAcl',
+        Resource: bucket.arn,
+      });
+
+      policyStatements.push({
+        Effect: 'Allow',
+        Principal: {
+          Service: 'cloudtrail.amazonaws.com',
+        },
+        Action: 's3:PutObject',
+        Resource: `${bucket.arn}/${prefix}*`,
+        Condition: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
+      });
+    }
+
+    // Apply bucket policy if there are any statements
+    if (policyStatements.length > 0) {
       new S3BucketPolicy(this, 'policy', {
         bucket: bucket.id,
         policy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                AWS: props.accessRoleArn,
-              },
-              Action: ['s3:GetObject', 's3:ListBucket'],
-              Resource: [bucket.arn, `${bucket.arn}/*`],
-            },
-          ],
+          Statement: policyStatements,
         }),
       });
     }
