@@ -490,7 +490,7 @@ data_resource {
 
 data_resource {
   type   = "AWS::DynamoDB::Table"
-  values = ["arn:aws:dynamodb:${var.region}:*:table/${var.name_prefix}-table-${var.region}"]
+  values = ["arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/${var.name_prefix}-table-${var.region}"]
 }
 ```
 
