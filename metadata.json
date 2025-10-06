@@ -6,6 +6,10 @@
   "po_id": "81350627",
   "team": "synth",
   "startedAt": "2025-10-01T00:00:00Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Add RDS Aurora MySQL Serverless v2 infrastructure with CDK TypeScript"
+  ],
   "training_quality": 8,
   "aws_services": [
     "VPC",
