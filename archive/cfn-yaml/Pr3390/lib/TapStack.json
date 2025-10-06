@@ -1,0 +1,1917 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Enhanced SaaS staging environment mirroring production with advanced monitoring, security, and performance optimizations",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "ProductionDBSnapshotIdentifier"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPNCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Cost Control"
+                    },
+                    "Parameters": [
+                        "NotificationEmail",
+                        "MonthlyCostThreshold"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Performance Configuration"
+                    },
+                    "Parameters": [
+                        "ElastiCacheNodeType"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "AWS Config Configuration"
+                    },
+                    "Parameters": [
+                        "CreateConfigDeliveryChannel",
+                        "CreateConfigRecorder"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "ProductionDBSnapshotIdentifier": {
+            "Type": "String",
+            "Description": "The ARN of the production database snapshot to clone",
+            "Default": "arn:aws:rds:us-west-2:123456789012:cluster-snapshot:production-snapshot"
+        },
+        "VPNCidr": {
+            "Type": "String",
+            "Description": "CIDR block for VPN access",
+            "Default": "172.16.0.0/16"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for cost control and monitoring alarm notifications",
+            "Default": "admin@example.com"
+        },
+        "MonthlyCostThreshold": {
+            "Type": "Number",
+            "Description": "Threshold for monthly cost alarm in USD",
+            "Default": 1000
+        },
+        "ElastiCacheNodeType": {
+            "Type": "String",
+            "Description": "ElastiCache node type for performance optimization",
+            "Default": "cache.t3.micro",
+            "AllowedValues": [
+                "cache.t3.micro",
+                "cache.t3.small",
+                "cache.t3.medium"
+            ]
+        },
+        "CreateConfigDeliveryChannel": {
+            "Type": "String",
+            "Description": "Whether to create AWS Config delivery channel. \nIMPORTANT: AWS allows only 1 delivery channel per account per region.\nSet to 'false' if a delivery channel already exists in your account to avoid deployment errors.\nCheck existing channels with: aws configservice describe-delivery-channels\n",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Type": "String",
+            "Description": "Whether to create AWS Config configuration recorder.\nIMPORTANT: AWS allows only 1 configuration recorder per account per region.\nSet to 'false' if a configuration recorder already exists in your account to avoid deployment errors.\nCheck existing recorders with: aws configservice describe-configuration-recorders\n",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        }
+    },
+    "Conditions": {
+        "ShouldCreateConfigDeliveryChannel": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateConfigDeliveryChannel"
+                },
+                "true"
+            ]
+        },
+        "ShouldCreateConfigRecorder": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateConfigRecorder"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "StagingVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.25.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.25.10.0/24",
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.25.20.0/24",
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-private-route-table-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "DBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS Aurora MySQL",
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": {
+                            "Ref": "VPNCidr"
+                        },
+                        "Description": "VPN access to MySQL"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "Lambda access to MySQL"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ElastiCacheSecurityGroup"
+                        },
+                        "Description": "ElastiCache access to MySQL"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-db-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-lambda-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for ElastiCache Redis cluster",
+                "VpcId": {
+                    "Ref": "StagingVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "Lambda access to Redis"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "CidrIp": {
+                            "Ref": "VPNCidr"
+                        },
+                        "Description": "VPN access to Redis"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-elasticache-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "Description": "Subnet group for ElastiCache Redis cluster",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ]
+            }
+        },
+        "ElastiCacheCluster": {
+            "Type": "AWS::ElastiCache::ReplicationGroup",
+            "Properties": {
+                "ReplicationGroupId": {
+                    "Fn::Sub": "staging-redis-${EnvironmentSuffix}"
+                },
+                "ReplicationGroupDescription": "Redis cluster for application performance caching",
+                "Engine": "redis",
+                "EngineVersion": 7.0,
+                "CacheNodeType": {
+                    "Ref": "ElastiCacheNodeType"
+                },
+                "NumCacheClusters": 2,
+                "Port": 6379,
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "ElastiCacheSecurityGroup"
+                    }
+                ],
+                "CacheSubnetGroupName": {
+                    "Ref": "ElastiCacheSubnetGroup"
+                },
+                "AtRestEncryptionEnabled": true,
+                "TransitEncryptionEnabled": true,
+                "MultiAZEnabled": true,
+                "AutomaticFailoverEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-redis-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for Aurora MySQL",
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "staging-db-subnet-group-${EnvironmentSuffix}"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-db-subnet-group-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "staging/db/credentials-${EnvironmentSuffix}"
+                },
+                "Description": "RDS Aurora MySQL credentials for staging",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "EngineMode": "provisioned",
+                "EngineVersion": "8.0.mysql_aurora.3.04.4",
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "staging-aurora-cluster-${EnvironmentSuffix}"
+                },
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
+                },
+                "DatabaseName": "saasapp",
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "02:00-03:00",
+                "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "DBSecurityGroup"
+                    }
+                ],
+                "StorageEncrypted": true,
+                "DeletionProtection": false,
+                "EnableCloudwatchLogsExports": [
+                    "audit",
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "PerformanceInsightsEnabled": true,
+                "PerformanceInsightsRetentionPeriod": 7,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-aurora-cluster-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "staging-aurora-instance1-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": "db.r5.large",
+                "PubliclyAccessible": false,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSEnhancedMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-aurora-instance1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "BackupVault": {
+            "Type": "AWS::Backup::BackupVault",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": "staging-backup-vault-${EnvironmentSuffix}"
+                },
+                "EncryptionKeyArn": {
+                    "Fn::GetAtt": [
+                        "BackupKMSKey",
+                        "Arn"
+                    ]
+                },
+                "BackupVaultTags": {
+                    "Environment": "staging",
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                }
+            }
+        },
+        "BackupKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS Key for backup encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key for backup",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/staging-backup-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "BackupKMSKey"
+                }
+            }
+        },
+        "BackupPlan": {
+            "Type": "AWS::Backup::BackupPlan",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": "staging-backup-plan-${EnvironmentSuffix}"
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackups",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 4 ? * * *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 30
+                            },
+                            "CopyActions": [
+                                {
+                                    "DestinationBackupVaultArn": {
+                                        "Fn::Sub": "arn:aws:backup:us-east-1:${AWS::AccountId}:backup-vault:staging-backup-vault-${EnvironmentSuffix}-cross-region"
+                                    },
+                                    "Lifecycle": {
+                                        "DeleteAfterDays": 30
+                                    }
+                                }
+                            ],
+                            "RecoveryPointTags": {
+                                "Environment": "staging",
+                                "EnvironmentSuffix": {
+                                    "Ref": "EnvironmentSuffix"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "BackupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "staging-backup-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+                ]
+            }
+        },
+        "BackupSelection": {
+            "Type": "AWS::Backup::BackupSelection",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": "StagingDatabaseBackup",
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}"
+                        }
+                    ],
+                    "ListOfTags": [
+                        {
+                            "ConditionType": "STRINGEQUALS",
+                            "ConditionKey": "Environment",
+                            "ConditionValue": "staging"
+                        }
+                    ]
+                }
+            }
+        },
+        "TestDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "staging-test-data-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldTestData",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        },
+                        {
+                            "Id": "IntelligentTiering",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "INTELLIGENT_TIERING"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-test-data-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "TestDataBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "TestDataBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "TestDataBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${TestDataBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "staging-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaRDSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:DescribeDBSnapshots",
+                                        "rds:RestoreDBClusterFromSnapshot",
+                                        "rds:ModifyDBCluster",
+                                        "rds:CreateDBInstance",
+                                        "rds:DescribeDBInstances",
+                                        "rds:DescribeDBClusters",
+                                        "rds:DeleteDBInstance",
+                                        "rds:DeleteDBCluster",
+                                        "rds:CreateDBClusterSnapshot",
+                                        "rds:DescribeDBClusterSnapshots"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TestDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticache:DescribeReplicationGroups",
+                                        "elasticache:ModifyReplicationGroup"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:elasticache:${AWS::Region}:${AWS::AccountId}:replicationgroup:${ElastiCacheCluster}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AlertTopic"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "arn:aws:logs:*:*:*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DataMaskingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "staging-data-masking-${EnvironmentSuffix}"
+                },
+                "Description": "Enhanced data masking function with comprehensive error handling and monitoring",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport logging\nimport os\nimport time\nimport pymysql\nfrom botocore.exceptions import ClientError, BotoCoreError\nimport traceback\n\n# Enhanced logging configuration\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# CloudWatch custom metrics\ncloudwatch = boto3.client('cloudwatch')\n\ndef put_custom_metric(metric_name, value, unit='Count'):\n    \"\"\"Send custom metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace='SaaS/DataMasking',\n            MetricData=[{\n                'MetricName': metric_name,\n                'Value': value,\n                'Unit': unit\n            }]\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send custom metric {metric_name}: {str(e)}\")\n\ndef send_alert(message, subject=\"Data Masking Alert\"):\n    \"\"\"Send alert via SNS\"\"\"\n    try:\n        sns = boto3.client('sns')\n        sns.publish(\n            TopicArn=os.environ['SNS_TOPIC_ARN'],\n            Subject=subject,\n            Message=message\n        )\n    except Exception as e:\n        logger.error(f\"Failed to send SNS alert: {str(e)}\")\n\ndef handler(event, context):\n    start_time = time.time()\n    logger.info(\"Enhanced data masking process started\")\n    \n    try:\n        # Input validation\n        snapshot_identifier = event.get('snapshot_identifier') or os.environ.get('PRODUCTION_SNAPSHOT_ID')\n        if not snapshot_identifier:\n            error_msg = \"No snapshot identifier provided in event or environment\"\n            logger.error(error_msg)\n            put_custom_metric('MaskingErrors', 1)\n            send_alert(error_msg, \"Data Masking Error\")\n            raise ValueError(error_msg)\n        \n        # Initialize AWS clients with retry configuration\n        retry_config = {'retries': {'max_attempts': 3, 'mode': 'adaptive'}}\n        secrets_client = boto3.client('secretsmanager', config=boto3.session.Config(**retry_config))\n        rds_client = boto3.client('rds', config=boto3.session.Config(**retry_config))\n        \n        # Get database credentials with error handling\n        try:\n            secret_name = os.environ['DB_SECRET_NAME']\n            secret_response = secrets_client.get_secret_value(SecretId=secret_name)\n            credentials = json.loads(secret_response['SecretString'])\n        except (ClientError, KeyError, json.JSONDecodeError) as e:\n            error_msg = f\"Failed to retrieve database credentials: {str(e)}\"\n            logger.error(error_msg)\n            put_custom_metric('MaskingErrors', 1)\n            send_alert(error_msg, \"Data Masking Credential Error\")\n            raise\n        \n        temp_cluster_id = f\"staging-temp-{int(time.time())}-{context.aws_request_id[:8]}\"\n        \n        try:\n            # Restore snapshot with enhanced error handling\n            logger.info(f\"Restoring snapshot {snapshot_identifier} to {temp_cluster_id}\")\n            response = rds_client.restore_db_cluster_from_snapshot(\n                DBClusterIdentifier=temp_cluster_id,\n                SnapshotIdentifier=snapshot_identifier,\n                Engine='aurora-mysql',\n                VpcSecurityGroupIds=[os.environ['SECURITY_GROUP_ID']],\n                DBSubnetGroupName=os.environ['DB_SUBNET_GROUP_NAME']\n            )\n            put_custom_metric('ClusterRestores', 1)\n            \n            temp_instance_id = f\"{temp_cluster_id}-instance\"\n            rds_client.create_db_instance(\n                DBInstanceIdentifier=temp_instance_id,\n                DBClusterIdentifier=temp_cluster_id,\n                Engine='aurora-mysql',\n                DBInstanceClass='db.r5.large'\n            )\n            \n            # Enhanced waiting with timeout\n            logger.info(f\"Waiting for DB instance {temp_instance_id} to be available\")\n            waiter = rds_client.get_waiter('db_instance_available')\n            waiter.wait(\n                DBInstanceIdentifier=temp_instance_id,\n                WaiterConfig={'Delay': 30, 'MaxAttempts': 40}  # 20 minute timeout\n            )\n            \n            cluster_info = rds_client.describe_db_clusters(DBClusterIdentifier=temp_cluster_id)\n            endpoint = cluster_info['DBClusters'][0]['Endpoint']\n            \n            # Enhanced database connection with retry logic\n            max_retries = 5\n            for attempt in range(max_retries):\n                try:\n                    conn = pymysql.connect(\n                        host=endpoint,\n                        user=credentials['username'],\n                        password=credentials['password'],\n                        database='saasapp',\n                        connect_timeout=30,\n                        read_timeout=60,\n                        write_timeout=60\n                    )\n                    break\n                except pymysql.Error as e:\n                    if attempt == max_retries - 1:\n                        error_msg = f\"Failed to connect to database after {max_retries} attempts: {str(e)}\"\n                        logger.error(error_msg)\n                        put_custom_metric('ConnectionErrors', 1)\n                        send_alert(error_msg, \"Data Masking Connection Error\")\n                        raise\n                    logger.warning(f\"Database connection attempt {attempt + 1} failed, retrying...\")\n                    time.sleep(10 * (attempt + 1))  # Exponential backoff\n            \n            # Enhanced data masking with transaction management\n            try:\n                logger.info(\"Connected to DB, performing enhanced data masking\")\n                conn.autocommit(False)  # Use transactions\n                \n                with conn.cursor() as cur:\n                    # Count records before masking for metrics\n                    cur.execute(\"SELECT COUNT(*) FROM users\")\n                    user_count = cur.fetchone()[0]\n                    put_custom_metric('RecordsToMask', user_count)\n                    \n                    # Enhanced masking operations with better error handling\n                    masking_operations = [\n                        (\"UPDATE users SET email = CONCAT('masked_', MD5(email), '@example.com')\", \"Email masking\"),\n                        (\"UPDATE users SET phone = CONCAT('+1555', FLOOR(RAND() * 1000000))\", \"Phone masking\"),\n                        (\"UPDATE users SET address = '123 Test Street, Test City, TS 12345'\", \"Address masking\"),\n                        (\"UPDATE payment_info SET card_number = CONCAT('XXXX-XXXX-XXXX-', RIGHT(card_number, 4))\", \"Credit card masking\"),\n                        (\"UPDATE users SET ssn = MD5(ssn)\", \"SSN masking\"),\n                        (\"UPDATE users SET date_of_birth = '1990-01-01'\", \"DOB masking\")\n                    ]\n                    \n                    masked_operations = 0\n                    for operation, description in masking_operations:\n                        try:\n                            logger.info(f\"Performing {description}\")\n                            cur.execute(operation)\n                            affected_rows = cur.rowcount\n                            logger.info(f\"{description} completed: {affected_rows} rows affected\")\n                            masked_operations += 1\n                        except pymysql.Error as e:\n                            logger.warning(f\"{description} failed: {str(e)} - continuing with other operations\")\n                    \n                    conn.commit()\n                    put_custom_metric('MaskingOperationsCompleted', masked_operations)\n                    logger.info(f\"Data masking completed successfully: {masked_operations}/{len(masking_operations)} operations\")\n                    \n            except Exception as e:\n                conn.rollback()\n                error_msg = f\"Error during data masking operations: {str(e)}\"\n                logger.error(error_msg)\n                put_custom_metric('MaskingErrors', 1)\n                send_alert(error_msg, \"Data Masking Operation Error\")\n                raise\n            finally:\n                if 'conn' in locals() and conn:\n                    conn.close()\n            \n            # Create masked snapshot with enhanced naming\n            masked_snapshot_id = f\"staging-masked-{int(time.time())}-{os.environ.get('ENVIRONMENT_SUFFIX', 'dev')}\"\n            logger.info(f\"Creating snapshot {masked_snapshot_id} of masked database\")\n            rds_client.create_db_cluster_snapshot(\n                DBClusterSnapshotIdentifier=masked_snapshot_id,\n                DBClusterIdentifier=temp_cluster_id,\n                Tags=[\n                    {'Key': 'Environment', 'Value': 'staging'},\n                    {'Key': 'MaskingDate', 'Value': str(int(time.time()))},\n                    {'Key': 'SourceSnapshot', 'Value': snapshot_identifier}\n                ]\n            )\n            \n            # Wait for snapshot with timeout\n            waiter = rds_client.get_waiter('db_cluster_snapshot_available')\n            waiter.wait(\n                DBClusterSnapshotIdentifier=masked_snapshot_id,\n                WaiterConfig={'Delay': 30, 'MaxAttempts': 60}  # 30 minute timeout\n            )\n            put_custom_metric('SnapshotsCreated', 1)\n            \n        finally:\n            # Enhanced cleanup with better error handling\n            cleanup_errors = []\n            try:\n                logger.info(\"Cleaning up temporary database resources\")\n                if 'temp_instance_id' in locals():\n                    try:\n                        rds_client.delete_db_instance(\n                            DBInstanceIdentifier=temp_instance_id,\n                            SkipFinalSnapshot=True\n                        )\n                        waiter = rds_client.get_waiter('db_instance_deleted')\n                        waiter.wait(\n                            DBInstanceIdentifier=temp_instance_id,\n                            WaiterConfig={'Delay': 30, 'MaxAttempts': 40}\n                        )\n                    except Exception as e:\n                        cleanup_errors.append(f\"Instance cleanup: {str(e)}\")\n                \n                if 'temp_cluster_id' in locals():\n                    try:\n                        rds_client.delete_db_cluster(\n                            DBClusterIdentifier=temp_cluster_id,\n                            SkipFinalSnapshot=True\n                        )\n                    except Exception as e:\n                        cleanup_errors.append(f\"Cluster cleanup: {str(e)}\")\n                \n                if cleanup_errors:\n                    error_msg = f\"Cleanup warnings: {'; '.join(cleanup_errors)}\"\n                    logger.warning(error_msg)\n                    send_alert(error_msg, \"Data Masking Cleanup Warning\")\n                \n            except Exception as e:\n                logger.error(f\"Critical cleanup error: {str(e)}\")\n        \n        # Calculate execution time and send success metrics\n        execution_time = time.time() - start_time\n        put_custom_metric('ExecutionTime', execution_time, 'Seconds')\n        put_custom_metric('MaskingSuccess', 1)\n        \n        success_msg = f\"Data masking completed successfully in {execution_time:.2f} seconds\"\n        logger.info(success_msg)\n        send_alert(success_msg, \"Data Masking Success\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'status': 'success',\n                'masked_snapshot_id': masked_snapshot_id,\n                'execution_time': execution_time,\n                'records_processed': user_count if 'user_count' in locals() else 0\n            })\n        }\n            \n    except Exception as e:\n        error_msg = f\"Critical error during data masking: {str(e)}\"\n        logger.error(error_msg)\n        logger.error(traceback.format_exc())\n        put_custom_metric('MaskingErrors', 1)\n        send_alert(f\"{error_msg}\\n\\nStackTrace:\\n{traceback.format_exc()}\", \"Data Masking Critical Error\")\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'status': 'error',\n                'message': error_msg\n            })\n        }\n"
+                },
+                "Runtime": "python3.10",
+                "Timeout": 900,
+                "MemorySize": 1024,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "DB_SECRET_NAME": {
+                            "Ref": "DBSecret"
+                        },
+                        "PRODUCTION_SNAPSHOT_ID": {
+                            "Ref": "ProductionDBSnapshotIdentifier"
+                        },
+                        "SECURITY_GROUP_ID": {
+                            "Ref": "DBSecurityGroup"
+                        },
+                        "DB_SUBNET_GROUP_NAME": {
+                            "Ref": "DBSubnetGroup"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "AlertTopic"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "staging-data-masking-function-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "staging"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "DeveloperRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "StagingDeveloperRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DeveloperReadOnlyPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:DescribeDBInstances",
+                                        "rds:DescribeDBClusters",
+                                        "rds:DescribeDBSnapshots",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "cloudwatch:ListMetrics",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "logs:GetLogEvents"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "aws:ResourceTag/Environment": "staging"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "DevOpsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "StagingDevOpsRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Bool": {
+                                    "aws:MultiFactorAuthPresent": true
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DevOpsLimitedAdminPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:ModifyDBCluster",
+                                        "rds:ModifyDBInstance",
+                                        "rds:RebootDBInstance",
+                                        "lambda:InvokeFunction",
+                                        "lambda:UpdateFunctionCode",
+                                        "lambda:UpdateFunctionConfiguration",
+                                        "s3:*",
+                                        "cloudwatch:*",
+                                        "elasticache:ModifyReplicationGroup",
+                                        "elasticache:RebootCacheCluster"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "aws:ResourceTag/Environment": "staging"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "StagingAdminRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "StagingAdminRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "Bool": {
+                                    "aws:MultiFactorAuthPresent": true
+                                },
+                                "NumericLessThan": {
+                                    "aws:MultiFactorAuthAge": 3600
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/ReadOnlyAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "StagingFullAdminPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "*",
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "aws:ResourceTag/Environment": "staging"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSEnhancedMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ]
+            }
+        },
+        "ConfigurationRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "ShouldCreateConfigRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "staging-config-recorder-${EnvironmentSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ]
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "ShouldCreateConfigDeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "staging-config-delivery-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                }
+            }
+        },
+        "ConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "staging-config-${AWS::AccountId}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "RDSEncryptionRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Condition": "ShouldCreateConfigRecorder",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if storage encryption is enabled for RDS DB instances",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+                }
+            }
+        },
+        "S3EncryptionRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Condition": "ShouldCreateConfigRecorder",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if S3 bucket has server-side encryption enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+                }
+            }
+        },
+        "SecurityGroupRestrictiveRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Condition": "ShouldCreateConfigRecorder",
+            "DependsOn": "ConfigurationRecorder",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "ec2-security-group-attached-to-eni-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if security groups are attached to ENIs",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "EC2_SECURITY_GROUP_ATTACHED_TO_ENI"
+                }
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "staging-alert-topic-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Staging Environment Alerts",
+                "Subscription": [
+                    {
+                        "Protocol": "email",
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3AccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/staging-access-logs-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "ApplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/application/staging-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "Staging-Environment-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/RDS\", \"CPUUtilization\", \"DBInstanceIdentifier\", \"${AuroraDBInstance}\" ],\n          [ \".\", \"DatabaseConnections\", \".\", \".\" ],\n          [ \".\", \"ReadLatency\", \".\", \".\" ],\n          [ \".\", \"WriteLatency\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"RDS Performance Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ElastiCache\", \"CPUUtilization\", \"CacheClusterId\", \"${ElastiCacheCluster}\" ],\n          [ \".\", \"CacheHits\", \".\", \".\" ],\n          [ \".\", \"CacheMisses\", \".\", \".\" ],\n          [ \".\", \"NetworkBytesIn\", \".\", \".\" ],\n          [ \".\", \"NetworkBytesOut\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"ElastiCache Performance Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"SaaS/DataMasking\", \"MaskingSuccess\" ],\n          [ \".\", \"MaskingErrors\" ],\n          [ \".\", \"ExecutionTime\" ],\n          [ \".\", \"RecordsToMask\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Data Masking Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${TestDataBucket}\", \"StorageType\", \"StandardStorage\" ],\n          [ \".\", \"NumberOfObjects\", \".\", \".\", \".\", \".\" ]\n        ],\n        \"period\": 86400,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Metrics\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "DatabaseCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-db-high-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for high CPU utilization in staging database",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DatabaseConnectionsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-db-high-connections-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for high database connections",
+                "MetricName": "DatabaseConnections",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "ElastiCacheCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-elasticache-high-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for high ElastiCache CPU utilization",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/ElastiCache",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 75,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "CacheClusterId",
+                        "Value": {
+                            "Ref": "ElastiCacheCluster"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "DataMaskingErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-data-masking-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm for data masking errors",
+                "MetricName": "MaskingErrors",
+                "Namespace": "SaaS/DataMasking",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "MonthlySpendingAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-monthly-cost-alarm-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm if monthly costs exceed threshold",
+                "MetricName": "EstimatedCharges",
+                "Namespace": "AWS/Billing",
+                "Statistic": "Maximum",
+                "Period": 21600,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "MonthlyCostThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "Currency",
+                        "Value": "USD"
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DailyTransactionsMetricAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "staging-daily-transactions-alarm-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm if daily transactions exceed threshold",
+                "MetricName": "Transactions",
+                "Namespace": "SaaS/Application",
+                "Statistic": "Sum",
+                "Period": 86400,
+                "EvaluationPeriods": 1,
+                "Threshold": 6000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID of the staging environment",
+            "Value": {
+                "Ref": "StagingVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "AuroraClusterId": {
+            "Description": "Aurora MySQL Cluster Identifier",
+            "Value": {
+                "Ref": "AuroraDBCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AuroraClusterId"
+                }
+            }
+        },
+        "AuroraClusterEndpoint": {
+            "Description": "Aurora MySQL Cluster Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AuroraClusterEndpoint"
+                }
+            }
+        },
+        "ElastiCacheEndpoint": {
+            "Description": "ElastiCache Redis Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ElastiCacheCluster",
+                    "PrimaryEndPoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ElastiCacheEndpoint"
+                }
+            }
+        },
+        "ElastiCachePort": {
+            "Description": "ElastiCache Redis Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ElastiCacheCluster",
+                    "PrimaryEndPoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ElastiCachePort"
+                }
+            }
+        },
+        "TestDataBucketName": {
+            "Description": "S3 Bucket for test data",
+            "Value": {
+                "Ref": "TestDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestDataBucketName"
+                }
+            }
+        },
+        "ConfigBucketName": {
+            "Description": "S3 Bucket for AWS Config",
+            "Value": {
+                "Ref": "ConfigBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigBucketName"
+                }
+            }
+        },
+        "DataMaskingFunctionName": {
+            "Description": "Lambda function for data masking",
+            "Value": {
+                "Ref": "DataMaskingFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataMaskingFunctionName"
+                }
+            }
+        },
+        "DataMaskingFunctionArn": {
+            "Description": "ARN of the data masking Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataMaskingFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataMaskingFunctionArn"
+                }
+            }
+        },
+        "DBSecretARN": {
+            "Description": "ARN of the secret containing database credentials",
+            "Value": {
+                "Ref": "DBSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DBSecretARN"
+                }
+            }
+        },
+        "DeveloperRoleARN": {
+            "Description": "ARN of the developer role for read-only access",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DeveloperRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DeveloperRoleARN"
+                }
+            }
+        },
+        "DevOpsRoleARN": {
+            "Description": "ARN of the DevOps role for limited admin access",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DevOpsRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DevOpsRoleARN"
+                }
+            }
+        },
+        "StagingAdminRoleARN": {
+            "Description": "ARN of the staging admin role requiring MFA",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StagingAdminRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StagingAdminRoleARN"
+                }
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "SNS Topic ARN for alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopicArn"
+                }
+            }
+        },
+        "MonitoringDashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MonitoringDashboardURL"
+                }
+            }
+        },
+        "BackupVaultName": {
+            "Description": "AWS Backup Vault Name",
+            "Value": {
+                "Ref": "BackupVault"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupVaultName"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
