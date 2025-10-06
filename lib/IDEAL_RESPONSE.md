@@ -1,4 +1,4 @@
-````json
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CloudFormation template for a secure language learning application supporting 6,000 students across 20 languages with speech recognition, adaptive learning, and multi-language content",
@@ -7,22 +7,14 @@
       "Description": "Environment type",
       "Type": "String",
       "Default": "Production",
-      "AllowedValues": [
-        "Development",
-        "Testing",
-        "Production"
-      ],
+      "AllowedValues": ["Development", "Testing", "Production"],
       "ConstraintDescription": "Must be a valid environment type"
     },
     "PythonRuntime": {
       "Description": "Python runtime for Lambda functions",
       "Type": "String",
       "Default": "python3.10",
-      "AllowedValues": [
-        "python3.8",
-        "python3.9",
-        "python3.10"
-      ],
+      "AllowedValues": ["python3.8", "python3.9", "python3.10"],
       "ConstraintDescription": "Must be a supported Python runtime"
     },
     "ApiStageName": {
@@ -35,22 +27,7 @@
       "Type": "Number",
       "Default": 30,
       "AllowedValues": [
-        1,
-        3,
-        5,
-        7,
-        14,
-        30,
-        60,
-        90,
-        120,
-        150,
-        180,
-        365,
-        400,
-        545,
-        731,
-        1827,
+        1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827,
         3653
       ]
     }
@@ -66,6 +43,12 @@
           {
             "Key": "Name",
             "Value": "LanguageLearningVPC"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -84,6 +67,12 @@
           {
             "Key": "Name",
             "Value": "PrivateSubnet1"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -102,6 +91,12 @@
           {
             "Key": "Name",
             "Value": "PrivateSubnet2"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -115,9 +110,7 @@
             {
               "Effect": "Allow",
               "Principal": "*",
-              "Action": [
-                "dynamodb:*"
-              ],
+              "Action": ["dynamodb:*"],
               "Resource": "*"
             }
           ]
@@ -144,10 +137,7 @@
             {
               "Effect": "Allow",
               "Principal": "*",
-              "Action": [
-                "s3:GetObject",
-                "s3:PutObject"
-              ],
+              "Action": ["s3:GetObject", "s3:PutObject"],
               "Resource": [
                 {
                   "Fn::Sub": "arn:aws:s3:::${AudioBucket}/*"
@@ -182,6 +172,12 @@
           {
             "Key": "Name",
             "Value": "PrivateRouteTable"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -214,9 +210,7 @@
         "Name": "LanguageLearningApi",
         "Description": "API for Language Learning Application",
         "EndpointConfiguration": {
-          "Types": [
-            "REGIONAL"
-          ]
+          "Types": ["REGIONAL"]
         },
         "ApiKeySourceType": "HEADER",
         "MinimumCompressionSize": 1024
@@ -260,10 +254,7 @@
         ],
         "AccessLogSetting": {
           "DestinationArn": {
-            "Fn::GetAtt": [
-              "ApiGatewayAccessLogGroup",
-              "Arn"
-            ]
+            "Fn::GetAtt": ["ApiGatewayAccessLogGroup", "Arn"]
           },
           "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"routeKey\":\"$context.routeKey\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
         }
@@ -301,10 +292,7 @@
           "Ref": "ApiGateway"
         },
         "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
+          "Fn::GetAtt": ["ApiGateway", "RootResourceId"]
         },
         "PathPart": "lessons"
       }
@@ -339,10 +327,7 @@
           "Ref": "ApiGateway"
         },
         "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
+          "Fn::GetAtt": ["ApiGateway", "RootResourceId"]
         },
         "PathPart": "progress"
       }
@@ -377,10 +362,7 @@
           "Ref": "ApiGateway"
         },
         "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
+          "Fn::GetAtt": ["ApiGateway", "RootResourceId"]
         },
         "PathPart": "speech"
       }
@@ -415,10 +397,7 @@
           "Ref": "ApiGateway"
         },
         "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
+          "Fn::GetAtt": ["ApiGateway", "RootResourceId"]
         },
         "PathPart": "grammar"
       }
@@ -453,10 +432,7 @@
           "Ref": "ApiGateway"
         },
         "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
+          "Fn::GetAtt": ["ApiGateway", "RootResourceId"]
         },
         "PathPart": "recommendations"
       }
@@ -490,10 +466,7 @@
         "FunctionName": "LessonDeliveryFunction",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "LessonDeliveryFunctionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["LessonDeliveryFunctionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "def handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': '{\"message\": \"Lesson delivery function\"}',\n        'headers': {'Content-Type': 'application/json'}\n    }"
@@ -512,7 +485,7 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "LessonDeliveryDLQ"
+            "Fn::GetAtt": ["LessonDeliveryDLQ", "Arn"]
           }
         },
         "TracingConfig": {
@@ -522,6 +495,12 @@
           {
             "Key": "Application",
             "Value": "LanguageLearningApp"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -569,10 +548,7 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": [
-                        "LessonsTable",
-                        "Arn"
-                      ]
+                      "Fn::GetAtt": ["LessonsTable", "Arn"]
                     },
                     {
                       "Fn::Sub": "${LessonsTable.Arn}/index/*"
@@ -581,14 +557,9 @@
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "sqs:SendMessage"
-                  ],
+                  "Action": ["sqs:SendMessage"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "LessonDeliveryDLQ",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["LessonDeliveryDLQ", "Arn"]
                   }
                 }
               ]
@@ -597,16 +568,78 @@
         ]
       }
     },
+    "LessonDeliveryInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LessonDeliveryFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/lessons"
+        }
+      }
+    },
+    "UserProgressInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "UserProgressFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/progress"
+        }
+      }
+    },
+    "SpeechRecognitionInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SpeechRecognitionFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/speech"
+        }
+      }
+    },
+    "GrammarAnalysisInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GrammarAnalysisFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/grammar"
+        }
+      }
+    },
+    "RecommendationsInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RecommendationsFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/recommendations"
+        }
+      }
+    },
     "UserProgressFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": "UserProgressFunction",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "UserProgressFunctionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["UserProgressFunctionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "def handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': '{\"message\": \"User progress function\"}',\n        'headers': {'Content-Type': 'application/json'}\n    }"
@@ -625,7 +658,7 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "UserProgressDLQ"
+            "Fn::GetAtt": ["UserProgressDLQ", "Arn"]
           }
         },
         "TracingConfig": {
@@ -684,10 +717,7 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": [
-                        "UserProgressTable",
-                        "Arn"
-                      ]
+                      "Fn::GetAtt": ["UserProgressTable", "Arn"]
                     },
                     {
                       "Fn::Sub": "${UserProgressTable.Arn}/index/*"
@@ -696,14 +726,9 @@
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "sqs:SendMessage"
-                  ],
+                  "Action": ["sqs:SendMessage"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "UserProgressDLQ",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["UserProgressDLQ", "Arn"]
                   }
                 }
               ]
@@ -718,10 +743,7 @@
         "FunctionName": "SpeechRecognitionFunction",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "SpeechRecognitionFunctionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["SpeechRecognitionFunctionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "def handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': '{\"message\": \"Speech recognition function\"}',\n        'headers': {'Content-Type': 'application/json'}\n    }"
@@ -740,7 +762,7 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "SpeechRecognitionDLQ"
+            "Fn::GetAtt": ["SpeechRecognitionDLQ", "Arn"]
           }
         },
         "TracingConfig": {
@@ -790,10 +812,7 @@
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:PutObject"
-                  ],
+                  "Action": ["s3:GetObject", "s3:PutObject"],
                   "Resource": [
                     {
                       "Fn::Sub": "arn:aws:s3:::${AudioBucket}/*"
@@ -812,21 +831,14 @@
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "sqs:SendMessage"
-                  ],
+                  "Action": ["sqs:SendMessage"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "SpeechRecognitionDLQ",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["SpeechRecognitionDLQ", "Arn"]
                   }
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
+                  "Action": ["secretsmanager:GetSecretValue"],
                   "Resource": {
                     "Ref": "ApiSecrets"
                   }
@@ -843,10 +855,7 @@
         "FunctionName": "GrammarAnalysisFunction",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "GrammarAnalysisFunctionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["GrammarAnalysisFunctionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "def handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': '{\"message\": \"Grammar analysis function\"}',\n        'headers': {'Content-Type': 'application/json'}\n    }"
@@ -865,7 +874,7 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "GrammarAnalysisDLQ"
+            "Fn::GetAtt": ["GrammarAnalysisDLQ", "Arn"]
           }
         },
         "TracingConfig": {
@@ -924,33 +933,21 @@
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:UpdateItem"
-                  ],
+                  "Action": ["dynamodb:UpdateItem"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "UserProgressTable",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["UserProgressTable", "Arn"]
                   }
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "sqs:SendMessage"
-                  ],
+                  "Action": ["sqs:SendMessage"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "GrammarAnalysisDLQ",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["GrammarAnalysisDLQ", "Arn"]
                   }
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
+                  "Action": ["secretsmanager:GetSecretValue"],
                   "Resource": {
                     "Ref": "ApiSecrets"
                   }
@@ -967,10 +964,7 @@
         "FunctionName": "RecommendationsFunction",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "RecommendationsFunctionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["RecommendationsFunctionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "def handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': '{\"message\": \"Recommendations function\"}',\n        'headers': {'Content-Type': 'application/json'}\n    }"
@@ -992,7 +986,7 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "RecommendationsDLQ"
+            "Fn::GetAtt": ["RecommendationsDLQ", "Arn"]
           }
         },
         "TracingConfig": {
@@ -1049,16 +1043,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": [
-                        "UserProgressTable",
-                        "Arn"
-                      ]
+                      "Fn::GetAtt": ["UserProgressTable", "Arn"]
                     },
                     {
-                      "Fn::GetAtt": [
-                        "LessonsTable",
-                        "Arn"
-                      ]
+                      "Fn::GetAtt": ["LessonsTable", "Arn"]
                     },
                     {
                       "Fn::Sub": "${UserProgressTable.Arn}/index/*"
@@ -1072,20 +1060,15 @@
                   "Effect": "Allow",
                   "Action": [
                     "personalize:GetRecommendations",
-                    "personalize:RecordEvent"
+                    "personalize:PutEvents"
                   ],
                   "Resource": "*"
                 },
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "sqs:SendMessage"
-                  ],
+                  "Action": ["sqs:SendMessage"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "RecommendationsDLQ",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["RecommendationsDLQ", "Arn"]
                   }
                 }
               ]
@@ -1219,7 +1202,6 @@
     "AudioBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "AccessControl": "Private",
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -1229,6 +1211,19 @@
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256"
               }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
             }
           ]
         },
@@ -1277,7 +1272,7 @@
             {
               "Effect": "Allow",
               "Principal": {
-                "AWS": {
+                "CanonicalUser": {
                   "Fn::GetAtt": [
                     "CloudFrontOriginAccessIdentity",
                     "S3CanonicalUserId"
@@ -1296,7 +1291,6 @@
     "StaticContentBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "AccessControl": "Private",
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -1306,6 +1300,19 @@
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256"
               }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
             }
           ]
         },
@@ -1329,7 +1336,7 @@
             {
               "Effect": "Allow",
               "Principal": {
-                "AWS": {
+                "CanonicalUser": {
                   "Fn::GetAtt": [
                     "CloudFrontOriginAccessIdentity",
                     "S3CanonicalUserId"
@@ -1365,10 +1372,7 @@
             {
               "Id": "StaticContent",
               "DomainName": {
-                "Fn::GetAtt": [
-                  "StaticContentBucket",
-                  "DomainName"
-                ]
+                "Fn::GetAtt": ["StaticContentBucket", "DomainName"]
               },
               "S3OriginConfig": {
                 "OriginAccessIdentity": {
@@ -1379,10 +1383,7 @@
             {
               "Id": "AudioContent",
               "DomainName": {
-                "Fn::GetAtt": [
-                  "AudioBucket",
-                  "DomainName"
-                ]
+                "Fn::GetAtt": ["AudioBucket", "DomainName"]
               },
               "S3OriginConfig": {
                 "OriginAccessIdentity": {
@@ -1394,16 +1395,8 @@
           "DefaultCacheBehavior": {
             "TargetOriginId": "StaticContent",
             "ViewerProtocolPolicy": "redirect-to-https",
-            "AllowedMethods": [
-              "GET",
-              "HEAD",
-              "OPTIONS"
-            ],
-            "CachedMethods": [
-              "GET",
-              "HEAD",
-              "OPTIONS"
-            ],
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+            "CachedMethods": ["GET", "HEAD", "OPTIONS"],
             "ForwardedValues": {
               "QueryString": false,
               "Cookies": {
@@ -1420,16 +1413,8 @@
               "PathPattern": "audio/*",
               "TargetOriginId": "AudioContent",
               "ViewerProtocolPolicy": "redirect-to-https",
-              "AllowedMethods": [
-                "GET",
-                "HEAD",
-                "OPTIONS"
-              ],
-              "CachedMethods": [
-                "GET",
-                "HEAD",
-                "OPTIONS"
-              ],
+              "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+              "CachedMethods": ["GET", "HEAD", "OPTIONS"],
               "ForwardedValues": {
                 "QueryString": false,
                 "Cookies": {
@@ -1477,12 +1462,8 @@
         "Name": "LearningMilestoneRule",
         "Description": "Rule to detect learning milestones",
         "EventPattern": {
-          "source": [
-            "custom.languagelearning"
-          ],
-          "detail-type": [
-            "learning-milestone"
-          ],
+          "source": ["custom.languagelearning"],
+          "detail-type": ["learning-milestone"],
           "detail": {
             "type": [
               "level-completion",
@@ -1547,10 +1528,7 @@
               "Principal": {
                 "Service": "sns.amazonaws.com"
               },
-              "Action": [
-                "kms:GenerateDataKey*",
-                "kms:Decrypt"
-              ],
+              "Action": ["kms:GenerateDataKey*", "kms:Decrypt"],
               "Resource": "*"
             }
           ]
@@ -1647,10 +1625,7 @@
         },
         "ProviderARNs": [
           {
-            "Fn::GetAtt": [
-              "UserPool",
-              "Arn"
-            ]
+            "Fn::GetAtt": ["UserPool", "Arn"]
           }
         ]
       }
@@ -1659,9 +1634,7 @@
       "Type": "AWS::Cognito::UserPool",
       "Properties": {
         "UserPoolName": "LanguageLearningUserPool",
-        "AutoVerifiedAttributes": [
-          "email"
-        ],
+        "AutoVerifiedAttributes": ["email"],
         "MfaConfiguration": "OFF",
         "Schema": [
           {
@@ -1702,7 +1675,9 @@
         "GenerateSecret": false,
         "ExplicitAuthFlows": [
           "ALLOW_USER_SRP_AUTH",
-          "ALLOW_REFRESH_TOKEN_AUTH"
+          "ALLOW_REFRESH_TOKEN_AUTH",
+          "ALLOW_USER_PASSWORD_AUTH",
+          "ALLOW_ADMIN_USER_PASSWORD_AUTH"
         ],
         "PreventUserExistenceErrors": "ENABLED"
       }
@@ -1739,14 +1714,15 @@
           {
             "Name": "RateLimitRule",
             "Priority": 0,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "RateBasedStatement": {
                 "Limit": 7000,
+                "EvaluationWindowSec": 300,
                 "AggregateKeyType": "IP"
               }
+            },
+            "Action": {
+              "Block": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
@@ -1757,15 +1733,15 @@
           {
             "Name": "SQLiRule",
             "Priority": 1,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "ManagedRuleGroupStatement": {
                 "VendorName": "AWS",
                 "Name": "AWSManagedRulesSQLiRuleSet",
                 "ExcludedRules": []
               }
+            },
+            "OverrideAction": {
+              "None": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
@@ -1776,15 +1752,15 @@
           {
             "Name": "XSSRule",
             "Priority": 2,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "ManagedRuleGroupStatement": {
                 "VendorName": "AWS",
                 "Name": "AWSManagedRulesCommonRuleSet",
                 "ExcludedRules": []
               }
+            },
+            "OverrideAction": {
+              "None": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
@@ -1802,15 +1778,10 @@
           "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiStageName}"
         },
         "WebACLArn": {
-          "Fn::GetAtt": [
-            "WebApplicationFirewallAcl",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["WebApplicationFirewallAcl", "Arn"]
         }
       },
-      "DependsOn": [
-        "ApiGatewayStage"
-      ]
+      "DependsOn": ["ApiGatewayStage"]
     }
   },
   "Outputs": {
@@ -1865,19 +1836,31 @@
     "LessonDeliveryFunctionArn": {
       "Description": "ARN of the Lesson Delivery Lambda Function",
       "Value": {
-        "Fn::GetAtt": [
-          "LessonDeliveryFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["LessonDeliveryFunction", "Arn"]
       }
     },
     "SpeechRecognitionFunctionArn": {
       "Description": "ARN of the Speech Recognition Lambda Function",
       "Value": {
-        "Fn::GetAtt": [
-          "SpeechRecognitionFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["SpeechRecognitionFunction", "Arn"]
+      }
+    },
+    "UserProgressFunctionArn": {
+      "Description": "ARN of the User Progress Lambda Function",
+      "Value": {
+        "Fn::GetAtt": ["UserProgressFunction", "Arn"]
+      }
+    },
+    "GrammarAnalysisFunctionArn": {
+      "Description": "ARN of the Grammar Analysis Lambda Function",
+      "Value": {
+        "Fn::GetAtt": ["GrammarAnalysisFunction", "Arn"]
+      }
+    },
+    "RecommendationsFunctionArn": {
+      "Description": "ARN of the Recommendations Lambda Function",
+      "Value": {
+        "Fn::GetAtt": ["RecommendationsFunction", "Arn"]
       }
     },
     "DashboardUrl": {
@@ -1887,5 +1870,5 @@
       }
     }
   }
-}```
-````
+}
+```
