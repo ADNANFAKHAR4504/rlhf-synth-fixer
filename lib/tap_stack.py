@@ -1780,7 +1780,7 @@ def send_response(event, context, status, data, physical_id=None):
         ]
 
         for rule_name, source_identifier in compliance_rules:
-            config.CfnConfigRule(
+            config_rule = config.CfnConfigRule(
                 self, f"ConfigRule-{rule_name}",
                 config_rule_name=rule_name,
                 source=config.CfnConfigRule.SourceProperty(
@@ -1788,6 +1788,8 @@ def send_response(event, context, status, data, physical_id=None):
                     source_identifier=source_identifier
                 )
             )
+            # Add explicit dependency on Config Recorder custom resource
+            config_rule.node.add_dependency(config_resource)
 
         # Output important values
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
