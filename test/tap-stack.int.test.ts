@@ -166,7 +166,7 @@ describe('Quiz Platform Infrastructure Integration Tests', () => {
       expect(lifecycle.Rules).toBeDefined();
       expect(lifecycle.Rules?.length).toBeGreaterThan(0);
 
-      const transitionRule = lifecycle.Rules?.find((r: any) => r.Id === 'TransitionToIA');
+      const transitionRule = lifecycle.Rules?.find((r: any) => r.ID === 'TransitionToIA');
       expect(transitionRule).toBeDefined();
       expect(transitionRule?.Status).toBe('Enabled');
     });
