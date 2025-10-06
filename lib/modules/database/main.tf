@@ -142,6 +142,7 @@ resource "aws_db_instance" "replica" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
+  storage_encrypted          = true
   publicly_accessible        = false
   auto_minor_version_upgrade = false
 
