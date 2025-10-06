@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Secure, highly available web application infrastructure (us-east-1) with ALB+WAF, CloudTrail, and monitoring. NOTE: Deploy this stack in us-east-1."
+Description: "Secure, highly available web app in eu-central-1 with ALB+WAF (HTTP), CloudTrail, monitoring. NOTE: No ACM/HTTPS."
 
 Parameters:
   ProjectName:
@@ -22,13 +22,6 @@ Parameters:
     Description: "CIDR block for VPC"
     Default: "10.0.0.0/16"
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-
-  SSLCertificateArn:
-    Type: String
-    Description: "Existing ACM certificate ARN in us-east-1 for the HTTPS listener"
-    Default: "arn:aws:acm:us-east-1:342597974367:certificate/7be3cdf7-f25f-47b6-826b-55cf8ca0f8c3"
-    AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$"
-    ConstraintDescription: "Must be a valid ACM certificate ARN"
 
   InstanceType:
     Type: String
@@ -60,25 +53,19 @@ Mappings:
       CIDR: "10.0.11.0/24"
 
 Resources:
-  # ---------------------------
-  # Networking
-  # ---------------------------
+  # --- Networking ---
   VPC:
     Type: "AWS::EC2::VPC"
     Properties:
       CidrBlock: !Ref VPCCidr
       EnableDnsHostnames: true
       EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-vpc"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-vpc" }]
 
   InternetGateway:
     Type: "AWS::EC2::InternetGateway"
     Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-igw"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-igw" }]
 
   AttachGateway:
     Type: "AWS::EC2::VPCGatewayAttachment"
@@ -94,10 +81,8 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-public-a"
-        - Key: Tier
-          Value: public
+        - { Key: Name, Value: !Sub "${ProjectName}-${Environment}-public-a" }
+        - { Key: Tier, Value: public }
 
   PublicSubnet2:
     Type: "AWS::EC2::Subnet"
@@ -107,10 +92,8 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-public-b"
-        - Key: Tier
-          Value: public
+        - { Key: Name, Value: !Sub "${ProjectName}-${Environment}-public-b" }
+        - { Key: Tier, Value: public }
 
   PrivateSubnet1:
     Type: "AWS::EC2::Subnet"
@@ -119,10 +102,8 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
       AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-private-a"
-        - Key: Tier
-          Value: private
+        - { Key: Name, Value: !Sub "${ProjectName}-${Environment}-private-a" }
+        - { Key: Tier, Value: private }
 
   PrivateSubnet2:
     Type: "AWS::EC2::Subnet"
@@ -131,10 +112,8 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
       AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-private-b"
-        - Key: Tier
-          Value: private
+        - { Key: Name, Value: !Sub "${ProjectName}-${Environment}-private-b" }
+        - { Key: Tier, Value: private }
 
   EIPForNATGateway1:
     Type: "AWS::EC2::EIP"
@@ -142,8 +121,7 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-eip-nat-a"
+        [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-eip-nat-a" }]
 
   EIPForNATGateway2:
     Type: "AWS::EC2::EIP"
@@ -151,34 +129,28 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-eip-nat-b"
+        [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-eip-nat-b" }]
 
   NATGateway1:
     Type: "AWS::EC2::NatGateway"
     Properties:
       AllocationId: !GetAtt EIPForNATGateway1.AllocationId
       SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-nat-a"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-nat-a" }]
 
   NATGateway2:
     Type: "AWS::EC2::NatGateway"
     Properties:
       AllocationId: !GetAtt EIPForNATGateway2.AllocationId
       SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-nat-b"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-nat-b" }]
 
   PublicRouteTable:
     Type: "AWS::EC2::RouteTable"
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-rtb-public"
+        [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-rtb-public" }]
 
   PublicRoute:
     Type: "AWS::EC2::Route"
@@ -205,8 +177,12 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-rtb-private-a"
+        [
+          {
+            Key: Name,
+            Value: !Sub "${ProjectName}-${Environment}-rtb-private-a",
+          },
+        ]
 
   PrivateRoute1:
     Type: "AWS::EC2::Route"
@@ -226,8 +202,12 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-rtb-private-b"
+        [
+          {
+            Key: Name,
+            Value: !Sub "${ProjectName}-${Environment}-rtb-private-b",
+          },
+        ]
 
   PrivateRoute2:
     Type: "AWS::EC2::Route"
@@ -242,32 +222,26 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  # ---------------------------
-  # Security Groups
-  # ---------------------------
+  # --- Security Groups ---
   ALBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
-      GroupDescription: "ALB SG - allow HTTPS only"
+      GroupDescription: "ALB SG - allow HTTP only (no ACM/HTTPS)"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 80
+          ToPort: 80
           CidrIp: "0.0.0.0/0"
-          Description: "Allow HTTPS from anywhere"
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-alb-sg"
+          Description: "Allow HTTP from anywhere"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-alb-sg" }]
 
   EC2SecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
       GroupDescription: "EC2 SG - only from ALB on 80"
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-ec2-sg"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-ec2-sg" }]
 
   EC2SecurityGroupIngressFromALB:
     Type: "AWS::EC2::SecurityGroupIngress"
@@ -289,57 +263,59 @@ Resources:
       DestinationSecurityGroupId: !Ref EC2SecurityGroup
       Description: "Allow HTTP egress to EC2 instances"
 
-  # ---------------------------
-  # S3 (encrypted + server-access-logged)
-  # ---------------------------
+  # --- S3 (encrypted + server-access-logged) ---
   CentralLogsBucket:
     Type: "AWS::S3::Bucket"
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: "AES256"
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
+      VersioningConfiguration: { Status: Enabled }
       LifecycleConfiguration:
         Rules:
           - Id: "ExpireOldCentralLogs"
             Status: Enabled
             ExpirationInDays: 180
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-central-logs"
+        [
+          {
+            Key: Name,
+            Value: !Sub "${ProjectName}-${Environment}-central-logs",
+          },
+        ]
 
   CloudTrailLogsBucket:
     Type: "AWS::S3::Bucket"
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: "AES256"
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: "Enabled"
+      VersioningConfiguration: { Status: Enabled }
       LifecycleConfiguration:
         Rules:
           - Id: "DeleteOldLogs"
-            Status: "Enabled"
+            Status: Enabled
             ExpirationInDays: 90
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
         LogFilePrefix: "cloudtrail-bucket/"
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-cloudtrail-logs"
+        [
+          {
+            Key: Name,
+            Value: !Sub "${ProjectName}-${Environment}-cloudtrail-logs",
+          },
+        ]
 
   CloudTrailLogsBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
@@ -350,27 +326,23 @@ Resources:
         Statement:
           - Sid: "AWSCloudTrailAclCheck"
             Effect: "Allow"
-            Principal:
-              Service: "cloudtrail.amazonaws.com"
+            Principal: { Service: "cloudtrail.amazonaws.com" }
             Action: "s3:GetBucketAcl"
             Resource: !GetAtt CloudTrailLogsBucket.Arn
           - Sid: "AWSCloudTrailWrite"
             Effect: "Allow"
-            Principal:
-              Service: "cloudtrail.amazonaws.com"
+            Principal: { Service: "cloudtrail.amazonaws.com" }
             Action: "s3:PutObject"
             Resource: !Sub "${CloudTrailLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
-              StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+              StringEquals: { "s3:x-amz-acl": "bucket-owner-full-control" }
 
   AccessLogsBucket:
     Type: "AWS::S3::Bucket"
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: "AES256"
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -379,16 +351,14 @@ Resources:
       LifecycleConfiguration:
         Rules:
           - Id: "DeleteOldAccessLogs"
-            Status: "Enabled"
+            Status: Enabled
             ExpirationInDays: 30
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
         LogFilePrefix: "access-bucket/"
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-access-logs"
+        [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-access-logs" }]
 
-  # Allow ALB (any region) to deliver access logs (prefix 'alb')
   AccessLogsBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
@@ -403,9 +373,7 @@ Resources:
             Action: "s3:PutObject"
             Resource: !Sub "${AccessLogsBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*"
 
-  # ---------------------------
-  # IAM (least-privilege, no fixed names)
-  # ---------------------------
+  # --- IAM (least privilege) ---
   EC2InstanceRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -413,8 +381,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            Principal:
-              Service: "ec2.amazonaws.com"
+            Principal: { Service: "ec2.amazonaws.com" }
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
@@ -435,8 +402,7 @@ Resources:
                 Action: "s3:GetObject"
                 Resource: !Sub "arn:aws:s3:::${ProjectName}-${Environment}-*/*"
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-ec2-role"
+        [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-ec2-role" }]
 
   EC2InstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
@@ -457,8 +423,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            Principal:
-              Service: "cloudtrail.amazonaws.com"
+            Principal: { Service: "cloudtrail.amazonaws.com" }
             Action: "sts:AssumeRole"
       Policies:
         - PolicyName: "CloudTrailLogPolicy"
@@ -471,37 +436,29 @@ Resources:
                   - "logs:PutLogEvents"
                 Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
       Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-cloudtrail-role"
+        [
+          {
+            Key: Name,
+            Value: !Sub "${ProjectName}-${Environment}-cloudtrail-role",
+          },
+        ]
 
-  # ---------------------------
-  # Load Balancer + Target Group + HTTPS
-  # ---------------------------
+  # --- ALB (HTTP only) + TG ---
   ApplicationLoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
       Type: "application"
       Scheme: "internet-facing"
       IpAddressType: "ipv4"
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref ALBSecurityGroup]
       LoadBalancerAttributes:
-        - Key: "idle_timeout.timeout_seconds"
-          Value: "60"
-        - Key: "deletion_protection.enabled"
-          Value: "false"
-        - Key: "access_logs.s3.enabled"
-          Value: "true"
-        - Key: "access_logs.s3.bucket"
-          Value: !Ref AccessLogsBucket
-        - Key: "access_logs.s3.prefix"
-          Value: "alb" # must not start or end with '/'
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-alb"
+        - { Key: "idle_timeout.timeout_seconds", Value: "60" }
+        - { Key: "deletion_protection.enabled", Value: "false" }
+        - { Key: "access_logs.s3.enabled", Value: "true" }
+        - { Key: "access_logs.s3.bucket", Value: !Ref AccessLogsBucket }
+        - { Key: "access_logs.s3.prefix", Value: "alb" } # no leading/trailing '/'
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-alb" }]
 
   TargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -517,27 +474,20 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
-      Matcher:
-        HttpCode: "200"
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-tg"
+      Matcher: { HttpCode: "200" }
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-tg" }]
 
-  HTTPSListener:
+  HTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: "HTTPS"
-      Certificates:
-        - CertificateArn: !Ref SSLCertificateArn
+      Port: 80
+      Protocol: "HTTP"
       DefaultActions:
         - Type: "forward"
           TargetGroupArn: !Ref TargetGroup
 
-  # ---------------------------
-  # AWS WAFv2
-  # ---------------------------
+  # --- WAFv2 (attached to ALB) ---
   WAFWebACL:
     Type: "AWS::WAFv2::WebACL"
     Properties:
@@ -582,9 +532,7 @@ Resources:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
         MetricName: !Sub "${ProjectName}-${Environment}-webacl"
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webacl"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-webacl" }]
 
   WAFAssociation:
     Type: "AWS::WAFv2::WebACLAssociation"
@@ -592,9 +540,7 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WAFWebACL.Arn
 
-  # ---------------------------
-  # Compute (Launch Template + ASG)
-  # ---------------------------
+  # --- Compute (LT + ASG) ---
   EC2LaunchTemplate:
     Type: "AWS::EC2::LaunchTemplate"
     Properties:
@@ -602,8 +548,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
+        IamInstanceProfile: { Arn: !GetAtt EC2InstanceProfile.Arn }
         SecurityGroupIds: [!Ref EC2SecurityGroup]
         UserData:
           Fn::Base64: !Sub |
@@ -617,8 +562,7 @@ Resources:
         TagSpecifications:
           - ResourceType: "instance"
             Tags:
-              - Key: Name
-                Value: !Sub "${ProjectName}-${Environment}-ec2"
+              - { Key: Name, Value: !Sub "${ProjectName}-${Environment}-ec2" }
 
   AutoScalingGroup:
     Type: "AWS::AutoScaling::AutoScalingGroup"
@@ -629,9 +573,7 @@ Resources:
       MinSize: "2"
       MaxSize: "4"
       DesiredCapacity: "2"
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
       TargetGroupARNs: [!Ref TargetGroup]
       HealthCheckType: "ELB"
       HealthCheckGracePeriod: 300
@@ -640,13 +582,10 @@ Resources:
           Value: !Sub "${ProjectName}-${Environment}-asg-ec2"
           PropagateAtLaunch: true
 
-  # ---------------------------
-  # CloudTrail + Monitoring
-  # ---------------------------
+  # --- CloudTrail + Monitoring ---
   CloudTrail:
     Type: "AWS::CloudTrail::Trail"
-    DependsOn:
-      - CloudTrailLogsBucketPolicy
+    DependsOn: [CloudTrailLogsBucketPolicy]
     Properties:
       TrailName: !Sub "${ProjectName}-${Environment}-trail"
       S3BucketName: !Ref CloudTrailLogsBucket
@@ -659,9 +598,7 @@ Resources:
       EventSelectors:
         - IncludeManagementEvents: true
           ReadWriteType: "All"
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-trail"
+      Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-trail" }]
 
   AlertTopic:
     Type: "AWS::SNS::Topic"
@@ -669,8 +606,7 @@ Resources:
       TopicName: !Sub "${ProjectName}-${Environment}-security-alerts"
       DisplayName: "Security Alerts"
       Subscription:
-        - Endpoint: !Ref AlertEmail
-          Protocol: "email"
+        - { Endpoint: !Ref AlertEmail, Protocol: "email" }
 
   UnauthorizedAPICallsMetricFilter:
     Type: "AWS::Logs::MetricFilter"
@@ -679,10 +615,12 @@ Resources:
       FilterName: "UnauthorizedAPICalls"
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
       MetricTransformations:
-        - MetricName: "UnauthorizedAPICalls"
-          MetricNamespace: !Sub "${ProjectName}/Security"
-          MetricValue: "1"
-          DefaultValue: 0
+        - {
+            MetricName: "UnauthorizedAPICalls",
+            MetricNamespace: !Sub "${ProjectName}/Security",
+            MetricValue: "1",
+            DefaultValue: 0,
+          }
 
   UnauthorizedAPICallsAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -706,10 +644,12 @@ Resources:
       FilterName: "BruteForceAttempts"
       FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.errorMessage = "Failed authentication") }'
       MetricTransformations:
-        - MetricName: "BruteForceAttempts"
-          MetricNamespace: !Sub "${ProjectName}/Security"
-          MetricValue: "1"
-          DefaultValue: 0
+        - {
+            MetricName: "BruteForceAttempts",
+            MetricNamespace: !Sub "${ProjectName}/Security",
+            MetricValue: "1",
+            DefaultValue: 0,
+          }
 
   AWSBruteForceReportAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -730,69 +670,58 @@ Outputs:
   VPCId:
     Description: "VPC ID"
     Value: !Ref VPC
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-vpc-id"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-vpc-id" }
 
   ALBDNSName:
     Description: "Application Load Balancer DNS Name"
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-alb-dns"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-alb-dns" }
 
   ALBUrl:
-    Description: "Application Load Balancer HTTPS URL"
-    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
+    Description: "Application Load Balancer URL (HTTP)"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
 
   CloudTrailBucket:
     Description: "CloudTrail S3 Bucket Name"
     Value: !Ref CloudTrailLogsBucket
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-cloudtrail-bucket"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-cloudtrail-bucket" }
 
   AccessLogsBucketName:
     Description: "ALB/S3 Access Logs Bucket Name"
     Value: !Ref AccessLogsBucket
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-access-logs-bucket"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-access-logs-bucket" }
 
   CentralLogsBucketName:
-    Description: "Central Logs Bucket (server access logs target)"
+    Description: "Central Logs Bucket"
     Value: !Ref CentralLogsBucket
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-central-logs-bucket"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-central-logs-bucket" }
 
   WAFWebACLArn:
     Description: "WAF Web ACL ARN"
     Value: !GetAtt WAFWebACL.Arn
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-waf-acl-arn"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-waf-acl-arn" }
 
   AlertTopicArn:
     Description: "SNS Alert Topic ARN"
     Value: !Ref AlertTopic
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-alert-topic-arn"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-alert-topic-arn" }
 
   PublicSubnet1Id:
     Description: "Public Subnet 1 ID"
     Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-public-a-id"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-public-a-id" }
 
   PublicSubnet2Id:
     Description: "Public Subnet 2 ID"
     Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-public-b-id"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-public-b-id" }
 
   PrivateSubnet1Id:
     Description: "Private Subnet 1 ID"
     Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-private-a-id"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-private-a-id" }
 
   PrivateSubnet2Id:
     Description: "Private Subnet 2 ID"
     Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub "${ProjectName}-${Environment}-private-b-id"
+    Export: { Name: !Sub "${ProjectName}-${Environment}-private-b-id" }
