@@ -9,8 +9,11 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+// Get environment suffix from environment variable
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 // Set AWS region from deployment
-const AWS_REGION = 'us-east-1';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 AWS.config.update({ region: AWS_REGION });
 
 // AWS Service clients
@@ -445,9 +448,9 @@ describe('Quiz Platform Infrastructure Integration Tests', () => {
     test('should verify all resources have delete policies', () => {
       // This is more of a sanity check that our deployed resources
       // are configured for proper cleanup
-      expect(questionsTableName).toContain('pr3526');
-      expect(resultsTableName).toContain('pr3526');
-      expect(bucketName).toContain('pr3526');
+      expect(questionsTableName).toContain(ENVIRONMENT_SUFFIX);
+      expect(resultsTableName).toContain(ENVIRONMENT_SUFFIX);
+      expect(bucketName).toContain(ENVIRONMENT_SUFFIX);
     });
 
     test('should clean up test data from DynamoDB', async () => {
