@@ -98,23 +98,23 @@ describe('Referral Management System Integration Tests', () => {
       const sortKey = keySchema.find((key) => key.KeyType === 'RANGE');
 
       expect(partitionKey).toBeDefined();
-      expect(partitionKey?.AttributeName).toBe('userId');
+      expect(partitionKey?.AttributeName).toBe('user_id');
       expect(sortKey).toBeDefined();
-      expect(sortKey?.AttributeName).toBe('referralTimestamp');
+      expect(sortKey?.AttributeName).toBe('referral_timestamp');
     });
 
     test('should write and read data from referral table', async () => {
       const testUserId = `test-user-${Date.now()}`;
-      const testTimestamp = new Date().toISOString();
+      const testTimestamp = Date.now().toString();
 
       // Write test item
       const putCommand = new PutItemCommand({
         TableName: referralTableName,
         Item: {
-          userId: { S: testUserId },
-          referralTimestamp: { S: testTimestamp },
-          referralCode: { S: 'TEST123' },
-          rewardAmount: { N: '10' },
+          user_id: { S: testUserId },
+          referral_timestamp: { N: testTimestamp },
+          referral_code: { S: 'TEST123' },
+          reward_amount: { N: '10' },
         },
       });
       await dynamoClient.send(putCommand);
@@ -123,22 +123,22 @@ describe('Referral Management System Integration Tests', () => {
       const getCommand = new GetItemCommand({
         TableName: referralTableName,
         Key: {
-          userId: { S: testUserId },
-          referralTimestamp: { S: testTimestamp },
+          user_id: { S: testUserId },
+          referral_timestamp: { N: testTimestamp },
         },
       });
       const response = await dynamoClient.send(getCommand);
 
       expect(response.Item).toBeDefined();
-      expect(response.Item?.userId.S).toBe(testUserId);
-      expect(response.Item?.referralCode.S).toBe('TEST123');
+      expect(response.Item?.user_id.S).toBe(testUserId);
+      expect(response.Item?.referral_code.S).toBe('TEST123');
 
       // Cleanup
       const deleteCommand = new DeleteItemCommand({
         TableName: referralTableName,
         Key: {
-          userId: { S: testUserId },
-          referralTimestamp: { S: testTimestamp },
+          user_id: { S: testUserId },
+          referral_timestamp: { N: testTimestamp },
         },
       });
       await dynamoClient.send(deleteCommand);
@@ -313,7 +313,7 @@ describe('Referral Management System Integration Tests', () => {
   describe('EventBridge Scheduler', () => {
     test('should verify monthly payout schedule exists', async () => {
       const scheduleName = `monthly-payout-${envSuffix}`;
-      const scheduleGroupName = `referral-schedules-${envSuffix}`;
+      const scheduleGroupName = `payout-schedules-${envSuffix}`;
 
       const command = new GetScheduleCommand({
         Name: scheduleName,
@@ -327,7 +327,7 @@ describe('Referral Management System Integration Tests', () => {
 
     test('should verify schedule has correct cron expression for monthly execution', async () => {
       const scheduleName = `monthly-payout-${envSuffix}`;
-      const scheduleGroupName = `referral-schedules-${envSuffix}`;
+      const scheduleGroupName = `payout-schedules-${envSuffix}`;
 
       const command = new GetScheduleCommand({
         Name: scheduleName,
@@ -350,14 +350,14 @@ describe('Referral Management System Integration Tests', () => {
       expect(response.name).toBeDefined();
     });
 
-    test('should verify API has prod stage deployed', async () => {
+    test('should verify API has environment stage deployed', async () => {
       const command = new GetStageCommand({
         restApiId: apiGatewayId,
-        stageName: 'prod',
+        stageName: envSuffix,
       });
 
       const response = await apiGatewayClient.send(command);
-      expect(response.stageName).toBe('prod');
+      expect(response.stageName).toBe(envSuffix);
     });
   });
 
