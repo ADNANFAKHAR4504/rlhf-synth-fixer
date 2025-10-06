@@ -61,6 +61,12 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
+
+variable "lambda_name" {
+  description = "Name of the Lambda function"
+  default     = "${var.unique_id}-app-processor"
+}
+
 data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 
@@ -81,11 +87,6 @@ locals {
   common_tags = merge(var.tags, {
     ManagedBy = "Terraform"
   })
-}
-
-variable "lambda_name" {
-  description = "Name of the Lambda function"
-  default     = "${local.name_prefix}app-processor"
 }
 
 # =============================================================================
