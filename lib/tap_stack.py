@@ -351,7 +351,7 @@ class TapStack(cdk.Stack):
         # Create Lambda function for monitoring
         monitoring_lambda = _lambda.Function(
             self,
-            f"MonitoringLambda{environment_suffix}",
+            f"MonitorLambdaFunc{environment_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="index.lambda_handler",
             role=lambda_role,
