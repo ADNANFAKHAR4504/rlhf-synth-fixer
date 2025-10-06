@@ -10,5 +10,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Lambda, Dynamo, Iam"
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "CloudWatch",
+    "Application Auto Scaling",
+    "SSM Parameter Store",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
