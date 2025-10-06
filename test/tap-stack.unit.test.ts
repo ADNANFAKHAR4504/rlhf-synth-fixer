@@ -39,7 +39,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have EnvironmentSuffix parameter with correct configuration', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      
+
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe(
@@ -75,11 +75,11 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       const attributeDefinitions = table.Properties.AttributeDefinitions;
 
       expect(attributeDefinitions).toHaveLength(3);
-      
-      const userIdAttr = attributeDefinitions.find(attr => attr.AttributeName === 'userId');
-      const timestampAttr = attributeDefinitions.find(attr => attr.AttributeName === 'workoutTimestamp');
-      const typeAttr = attributeDefinitions.find(attr => attr.AttributeName === 'workoutType');
-      
+
+      const userIdAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'userId');
+      const timestampAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'workoutTimestamp');
+      const typeAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'workoutType');
+
       expect(userIdAttr.AttributeType).toBe('S');
       expect(timestampAttr.AttributeType).toBe('N');
       expect(typeAttr.AttributeType).toBe('S');
@@ -90,10 +90,10 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       const keySchema = table.Properties.KeySchema;
 
       expect(keySchema).toHaveLength(2);
-      
-      const hashKey = keySchema.find(key => key.KeyType === 'HASH');
-      const rangeKey = keySchema.find(key => key.KeyType === 'RANGE');
-      
+
+      const hashKey = keySchema.find((key: any) => key.KeyType === 'HASH');
+      const rangeKey = keySchema.find((key: any) => key.KeyType === 'RANGE');
+
       expect(hashKey.AttributeName).toBe('userId');
       expect(rangeKey.AttributeName).toBe('workoutTimestamp');
     });
@@ -103,17 +103,17 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       const gsiArray = table.Properties.GlobalSecondaryIndexes;
 
       expect(gsiArray).toHaveLength(1);
-      
+
       const workoutTypeIndex = gsiArray[0];
       expect(workoutTypeIndex.IndexName).toBe('WorkoutTypeIndex');
       expect(workoutTypeIndex.Projection.ProjectionType).toBe('ALL');
-      
+
       const gsiKeySchema = workoutTypeIndex.KeySchema;
       expect(gsiKeySchema).toHaveLength(2);
-      
-      const gsiHashKey = gsiKeySchema.find(key => key.KeyType === 'HASH');
-      const gsiRangeKey = gsiKeySchema.find(key => key.KeyType === 'RANGE');
-      
+
+      const gsiHashKey = gsiKeySchema.find((key: any) => key.KeyType === 'HASH');
+      const gsiRangeKey = gsiKeySchema.find((key: any) => key.KeyType === 'RANGE');
+
       expect(gsiHashKey.AttributeName).toBe('workoutType');
       expect(gsiRangeKey.AttributeName).toBe('workoutTimestamp');
     });
@@ -124,7 +124,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
 
       expect(throughput.ReadCapacityUnits).toBe(10);
       expect(throughput.WriteCapacityUnits).toBe(10);
-      
+
       const gsiThroughput = table.Properties.GlobalSecondaryIndexes[0].ProvisionedThroughput;
       expect(gsiThroughput.ReadCapacityUnits).toBe(5);
       expect(gsiThroughput.WriteCapacityUnits).toBe(5);
@@ -143,10 +143,10 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
       const tags = table.Properties.Tags;
 
       expect(tags).toHaveLength(2);
-      
-      const envTag = tags.find(tag => tag.Key === 'Environment');
-      const appTag = tags.find(tag => tag.Key === 'Application');
-      
+
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+      const appTag = tags.find((tag: any) => tag.Key === 'Application');
+
       expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
       expect(appTag.Value).toBe('WorkoutLogSystem');
     });
@@ -156,10 +156,10 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have Lambda execution role with correct configuration', () => {
       expect(template.Resources.LambdaExecutionRole).toBeDefined();
       const role = template.Resources.LambdaExecutionRole;
-      
+
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.AssumeRolePolicyDocument.Version).toBe('2012-10-17');
-      
+
       const statement = role.Properties.AssumeRolePolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Allow');
       expect(statement.Principal.Service).toBe('lambda.amazonaws.com');
@@ -169,19 +169,19 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have correct managed policies attached', () => {
       const role = template.Resources.LambdaExecutionRole;
       const managedPolicies = role.Properties.ManagedPolicyArns;
-      
+
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
     });
 
     test('should have DynamoDB access policy', () => {
       const role = template.Resources.LambdaExecutionRole;
       const policies = role.Properties.Policies;
-      
+
       expect(policies).toHaveLength(1);
-      
+
       const dynamoPolicy = policies[0];
       expect(dynamoPolicy.PolicyName).toBe('DynamoDBAccessPolicy');
-      
+
       const statement = dynamoPolicy.PolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Allow');
       expect(statement.Action).toContain('dynamodb:PutItem');
@@ -194,9 +194,9 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have ProcessWorkoutLogFunction with correct configuration', () => {
       expect(template.Resources.ProcessWorkoutLogFunction).toBeDefined();
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
-      
+
       expect(lambdaFunction.Type).toBe('AWS::Lambda::Function');
-      
+
       const properties = lambdaFunction.Properties;
       expect(properties.Runtime).toBe('python3.10');
       expect(properties.Handler).toBe('index.lambda_handler');
@@ -207,7 +207,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have correct function name with environment suffix', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const functionName = lambdaFunction.Properties.FunctionName;
-      
+
       expect(functionName).toEqual({
         'Fn::Sub': 'ProcessWorkoutLog-${EnvironmentSuffix}'
       });
@@ -216,7 +216,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have correct environment variables', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const environment = lambdaFunction.Properties.Environment.Variables;
-      
+
       expect(environment.TABLE_NAME).toEqual({ Ref: 'WorkoutLogsTable' });
       expect(environment.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
     });
@@ -224,7 +224,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have correct IAM role reference', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const role = lambdaFunction.Properties.Role;
-      
+
       expect(role).toEqual({
         'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
       });
@@ -233,7 +233,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have inline code for Lambda function', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const code = lambdaFunction.Properties.Code.ZipFile;
-      
+
       expect(code).toBeDefined();
       expect(typeof code).toBe('string');
       expect(code).toContain('import json');
@@ -246,9 +246,9 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have WorkoutLogApi with correct configuration', () => {
       expect(template.Resources.WorkoutLogApi).toBeDefined();
       const api = template.Resources.WorkoutLogApi;
-      
+
       expect(api.Type).toBe('AWS::ApiGateway::RestApi');
-      
+
       const properties = api.Properties;
       expect(properties.Name).toEqual({
         'Fn::Sub': 'WorkoutLogAPI-${EnvironmentSuffix}'
@@ -260,7 +260,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('should have proper API Gateway tags', () => {
       const api = template.Resources.WorkoutLogApi;
       const tags = api.Properties.Tags;
-      
+
       expect(tags).toHaveLength(1);
       expect(tags[0].Key).toBe('Environment');
       expect(tags[0].Value).toEqual({ Ref: 'EnvironmentSuffix' });
@@ -367,24 +367,24 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('Lambda function code should contain required business logic', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const code = lambdaFunction.Properties.Code.ZipFile;
-      
+
       // Check for required imports
       expect(code).toContain('import json');
       expect(code).toContain('import boto3');
       expect(code).toContain('from datetime import datetime');
       expect(code).toContain('from decimal import Decimal');
-      
+
       // Check for AWS service clients
       expect(code).toContain('dynamodb = boto3.resource');
       expect(code).toContain('cloudwatch = boto3.client');
-      
+
       // Check for validation logic
       expect(code).toContain('required_fields');
       expect(code).toContain('userId');
       expect(code).toContain('workoutType');
       expect(code).toContain('duration');
       expect(code).toContain('caloriesBurned');
-      
+
       // Check for error handling
       expect(code).toContain('try:');
       expect(code).toContain('except Exception as e:');
@@ -394,7 +394,7 @@ describe('Serverless Workout Log Processing System - CloudFormation Template Uni
     test('Lambda function should publish CloudWatch metrics', () => {
       const lambdaFunction = template.Resources.ProcessWorkoutLogFunction;
       const code = lambdaFunction.Properties.Code.ZipFile;
-      
+
       expect(code).toContain('cloudwatch.put_metric_data');
       expect(code).toContain('WorkoutApp');
       expect(code).toContain('WorkoutLogsProcessed');
