@@ -462,7 +462,7 @@ resource "aws_db_instance" "postgres" {
 # =============================================================================
 
 resource "aws_lb" "app" {
-  name                        = "${local.name_prefix}app-load-balancer"
+  name                        = "${local.name_prefix}app-lb"
   internal                    = false
   load_balancer_type          = "application"
   security_groups             = [aws_security_group.alb.id]
