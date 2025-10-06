@@ -1,4 +1,12 @@
 # Security Group for ALB
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+}
+
 resource "aws_security_group" "alb" {
   name_prefix = "${var.environment}-alb-sg-"
   vpc_id      = var.vpc_id

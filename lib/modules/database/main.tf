@@ -1,4 +1,12 @@
 # DB Subnet Group
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+}
+
 resource "aws_db_subnet_group" "main" {
   name       = "${var.environment}-db-subnet-group-${var.region}"
   subnet_ids = var.subnet_ids
