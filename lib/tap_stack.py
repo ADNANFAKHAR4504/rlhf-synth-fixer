@@ -974,7 +974,7 @@ def handler(event, context):
             response = client.describe_hub()
             
             # Hub already exists, use it and update configuration
-            hub_arn = response['HubArn']
+            hub_arn = response.get('HubArn', f"arn:aws:securityhub:{{context.invoked_function_arn.split(':')[3]}}:{{context.invoked_function_arn.split(':')[4]}}:hub/default")
             
             # Update hub settings to match our requirements if needed
             try:
@@ -999,7 +999,7 @@ def handler(event, context):
                 ControlFindingGenerator='SECURITY_CONTROL'
             )
             
-            hub_arn = response['HubArn']
+            hub_arn = response.get('HubArn', f"arn:aws:securityhub:{{context.invoked_function_arn.split(':')[3]}}:{{context.invoked_function_arn.split(':')[4]}}:hub/default")
             mode = 'new'
             
         except Exception as e:
@@ -1008,7 +1008,7 @@ def handler(event, context):
                 # Get hub details
                 try:
                     response = client.describe_hub()
-                    hub_arn = response['HubArn']
+                    hub_arn = response.get('HubArn', f"arn:aws:securityhub:{{context.invoked_function_arn.split(':')[3]}}:{{context.invoked_function_arn.split(':')[4]}}:hub/default")
                     mode = 'existing'
                 except:
                     # Fallback ARN format if describe fails

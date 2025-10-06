@@ -5,6 +5,7 @@ Handles detection and setup of Security Hub with proper subscription handling.
 import boto3
 import json
 import urllib3
+import os
 
 
 def handler(event, context):
@@ -21,8 +22,8 @@ def handler(event, context):
     try:
         client = boto3.client('securityhub')
         
-        # Get configuration from environment variables
-        environment_suffix = event['ResourceProperties']['EnvironmentSuffix']
+        # Get configuration from environment variables or event properties
+        environment_suffix = event.get('ResourceProperties', {}).get('EnvironmentSuffix') or os.environ.get('ENVIRONMENT_SUFFIX', 'default')
         
         if event['RequestType'] == 'Delete':
             # Don't disable existing Security Hub on stack deletion
