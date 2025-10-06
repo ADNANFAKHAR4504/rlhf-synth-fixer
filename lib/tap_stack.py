@@ -7,10 +7,17 @@ Main Pulumi ComponentResource for the IoT data pipeline infrastructure.
 from typing import Optional
 import pulumi
 from pulumi import ResourceOptions
-from .iot_stack import IoTStack
-from .storage_stack import StorageStack
-from .compute_stack import ComputeStack
-from .monitoring_stack import MonitoringStack
+try:
+    from .iot_stack import IoTStack
+    from .storage_stack import StorageStack
+    from .compute_stack import ComputeStack
+    from .monitoring_stack import MonitoringStack
+except ImportError:
+    # Fallback for direct imports
+    from iot_stack import IoTStack
+    from storage_stack import StorageStack
+    from compute_stack import ComputeStack
+    from monitoring_stack import MonitoringStack
 
 
 class TapStackArgs:
