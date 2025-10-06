@@ -92,7 +92,7 @@ resource "aws_db_instance" "primary" {
 
   identifier     = "${var.environment}-mysql-primary"
   engine         = "mysql"
-  engine_version = "8.0.35"
+  engine_version = "8.0.42"
 
   instance_class    = var.instance_class
   allocated_storage = 100
