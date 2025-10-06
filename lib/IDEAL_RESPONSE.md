@@ -1046,18 +1046,3 @@ exports.handler = async (event) => {
   }
 };
 ```
-
-## Key Features
-
-1. **Complete serverless architecture** processing 4,100 daily sign-ups
-2. **DynamoDB tables** with transactions for atomic reward updates and idempotency
-3. **Lambda functions** with Node.js 20 runtime and AWS SDK v3
-4. **API Gateway** with request validation and throttling
-5. **EventBridge scheduler** for monthly payout processing
-6. **SNS notifications** for reward and payout events
-7. **S3 bucket** with lifecycle policies for report archival
-8. **CloudWatch dashboard** for monitoring all components
-9. **Dead letter queue** for failed payout processing
-10. **IAM roles** with least privilege access
-11. **X-Ray tracing** enabled via Lambda Insights
-12. **Cost optimization** with on-demand DynamoDB and S3 Glacier transition
