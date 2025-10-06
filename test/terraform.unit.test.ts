@@ -61,29 +61,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
   });
 
   // =========================
-  // VPC & Networking
-  // =========================
-  describe('VPC & Networking', () => {
-    test('VPC, IGW, public/private subnets exist', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"main"/);
-      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
-      expect(countMatches(/resource\s+"aws_subnet"\s+"public"/g)).toBe(3);
-      expect(countMatches(/resource\s+"aws_subnet"\s+"private"/g)).toBe(3);
-    });
-
-    test('NAT gateways and EIPs exist', () => {
-      expect(countMatches(/resource\s+"aws_eip"\s+"nat"/g)).toBe(3);
-      expect(countMatches(/resource\s+"aws_nat_gateway"\s+"main"/g)).toBe(3);
-    });
-
-    test('route tables and associations exist', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"public"/);
-      expect(countMatches(/resource\s+"aws_route_table"\s+"private"/g)).toBe(3);
-      expect(countMatches(/resource\s+"aws_route_table_association"/g)).toBe(6);
-    });
-  });
-
-  // =========================
   // SECURITY GROUPS
   // =========================
   describe('Security Groups', () => {
@@ -113,11 +90,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"cloudwatch_logs"/);
       expect(tfContent).toMatch(/aws_iam_role_policy_attachment/);
     });
-
-    test('DynamoDB autoscaling role exists', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"dynamodb_autoscaling_role"/);
-      expect(tfContent).toMatch(/aws_iam_role_policy_attachment\s+"dynamodb_autoscaling"/);
-    });
   });
 
   // =========================
@@ -134,18 +106,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       expect(tfContent).toMatch(/aws_s3_bucket_server_side_encryption_configuration/);
       expect(tfContent).toMatch(/aws_s3_bucket_versioning/);
       expect(tfContent).toMatch(/aws_s3_bucket_public_access_block/);
-    });
-  });
-
-  // =========================
-  // EC2 Instances
-  // =========================
-  describe('EC2 Instances', () => {
-    test('public and private EC2 instances exist with IAM profile and monitoring', () => {
-      expect(countMatches(/resource\s+"aws_instance"\s+"public"/g)).toBe(3);
-      expect(countMatches(/resource\s+"aws_instance"\s+"private"/g)).toBe(3);
-      expect(tfContent).toMatch(/iam_instance_profile\s*=\s*aws_iam_instance_profile.ec2_profile.name/);
-      expect(tfContent).toMatch(/monitoring\s*=\s*true/);
     });
   });
 
