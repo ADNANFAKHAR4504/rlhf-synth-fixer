@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "348974",
+  "team": "5",
+  "startedAt": "2025-10-02T16:06:19.870Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "ACM",
+    "WAF",
+    "SNS",
+    "CloudTrail"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}
