@@ -259,8 +259,8 @@ describe('Fleet Management Platform - Integration Tests', () => {
       expect(response.Configuration?.Environment?.Variables?.TELEMETRY_TABLE).toBe(outputs.TelemetryDataTableName);
 
       // ReservedConcurrentExecutions may not be set if using default account limits
-      if (response.Configuration?.ReservedConcurrentExecutions !== undefined) {
-        expect(response.Configuration?.ReservedConcurrentExecutions).toBe(100);
+      if ((response.Configuration as any)?.ReservedConcurrentExecutions !== undefined) {
+        expect((response.Configuration as any)?.ReservedConcurrentExecutions).toBe(100);
       }
     });
 
@@ -277,8 +277,8 @@ describe('Fleet Management Platform - Integration Tests', () => {
       expect(response.Configuration?.Environment?.Variables?.ALERT_TOPIC_ARN).toBe(outputs.OperationsAlertTopicArn);
 
       // ReservedConcurrentExecutions may not be set if using default account limits
-      if (response.Configuration?.ReservedConcurrentExecutions !== undefined) {
-        expect(response.Configuration?.ReservedConcurrentExecutions).toBe(50);
+      if ((response.Configuration as any)?.ReservedConcurrentExecutions !== undefined) {
+        expect((response.Configuration as any)?.ReservedConcurrentExecutions).toBe(50);
       }
     });
 
@@ -295,8 +295,8 @@ describe('Fleet Management Platform - Integration Tests', () => {
       expect(response.Configuration?.MemorySize).toBe(1024);
 
       // ReservedConcurrentExecutions may not be set if using default account limits
-      if (response.Configuration?.ReservedConcurrentExecutions !== undefined) {
-        expect(response.Configuration?.ReservedConcurrentExecutions).toBe(25);
+      if ((response.Configuration as any)?.ReservedConcurrentExecutions !== undefined) {
+        expect((response.Configuration as any)?.ReservedConcurrentExecutions).toBe(25);
       }
     });
 
@@ -312,8 +312,8 @@ describe('Fleet Management Platform - Integration Tests', () => {
       expect(response.Configuration?.Environment?.Variables?.VEHICLE_PROFILE_TABLE).toBe(outputs.VehicleProfileTableName);
 
       // ReservedConcurrentExecutions may not be set if using default account limits
-      if (response.Configuration?.ReservedConcurrentExecutions !== undefined) {
-        expect(response.Configuration?.ReservedConcurrentExecutions).toBe(50);
+      if ((response.Configuration as any)?.ReservedConcurrentExecutions !== undefined) {
+        expect((response.Configuration as any)?.ReservedConcurrentExecutions).toBe(50);
       }
     });
 
