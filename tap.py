@@ -43,17 +43,3 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
 
-# Export stack outputs for reference
-pulumi.export("image_processing_outputs", pulumi.Output.all(
-    stack.source_bucket.bucket,
-    stack.dest_bucket.bucket,
-    stack.processor_function.name,
-    stack.log_group.name
-).apply(lambda args: {
-    "source_bucket": args[0],
-    "dest_bucket": args[1],
-    "lambda_function": args[2],
-    "log_group": args[3],
-    "upload_prefix": "uploads/",
-    "instructions": "Upload images to the source bucket with prefix 'uploads/' to trigger processing"
-}))
