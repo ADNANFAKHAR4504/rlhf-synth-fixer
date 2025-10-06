@@ -548,7 +548,7 @@ echo "Initialization completed at $(date)"
       instanceRefresh: {
         strategy: 'Rolling',
         preferences: {
-          minHealthyPercentage: 50, // Reduce from 90 to allow more flexibility during deployment
+          minHealthyPercentage: 0, // Reduce from 90 to allow more flexibility during deployment
           instanceWarmup: '180', // Add warmup period
         },
       },
@@ -613,7 +613,7 @@ export class AlbModule extends Construct {
         path: '/health',
         protocol: 'HTTP',
         healthyThreshold: 2,
-        unhealthyThreshold: 3,
+        unhealthyThreshold: 2,
         timeout: 5,
         interval: 30,
         matcher: '200',

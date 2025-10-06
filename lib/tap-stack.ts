@@ -151,7 +151,7 @@ export class TapStack extends TerraformStack {
       instanceType: 't3.micro',
       minSize: 1,
       maxSize: 4,
-      desiredCapacity: 2,
+      desiredCapacity: 1,
       tags: commonTags,
     });
     // 9. CloudWatch Dashboard Module - Monitoring dashboard
