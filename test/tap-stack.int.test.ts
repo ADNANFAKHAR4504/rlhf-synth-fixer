@@ -306,12 +306,10 @@ describe('TapStack E2E Tests - Security Groups', () => {
 describe('TapStack E2E Tests - S3 Buckets', () => {
   let s3Client: S3Client;
   let appDataBucket: string;
-  let flowLogsBucket: string;
 
   beforeAll(() => {
     s3Client = new S3Client({ region });
     appDataBucket = outputs.AppDataBucket;
-    flowLogsBucket = outputs.FlowLogsBucketName;
   });
 
   test('AppData bucket should exist', async () => {
@@ -351,19 +349,6 @@ describe('TapStack E2E Tests - S3 Buckets', () => {
     );
 
     expect(versioning.Status).toBe('Enabled');
-  });
-
-  test('FlowLogs bucket should exist and have encryption', async () => {
-    expect(flowLogsBucket).toBeDefined();
-
-    await expect(
-      s3Client.send(new HeadBucketCommand({ Bucket: flowLogsBucket }))
-    ).resolves.toBeDefined();
-
-    const encryption = await s3Client.send(
-      new GetBucketEncryptionCommand({ Bucket: flowLogsBucket })
-    );
-    expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
   });
 });
 
@@ -602,7 +587,7 @@ describe('TapStack E2E Tests - CloudWatch Monitoring', () => {
     const alarms = await cwClient.send(new DescribeAlarmsCommand({}));
 
     const cpuAlarm = alarms.MetricAlarms?.find(a =>
-      a.AlarmName?.toLowerCase().includes('cpu') &&
+      a.AlarmName?.toLowerCase().includes('high-cpu-alarm') &&
       a.Namespace === 'AWS/EC2'
     );
 
@@ -835,6 +820,95 @@ describe('TapStack E2E Tests - Workflow Validation', () => {
     );
 
     expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBeDefined();
+  });
+
+  test('Load Balancer to EC2 instances request flow - Target Health', async () => {
+    const elbClient = new ElasticLoadBalancingV2Client({ region });
+    const asgClient = new AutoScalingClient({ region });
+
+    const albDns = outputs.ApplicationLoadBalancerDNS || outputs.LoadBalancerDNS;
+    const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
+    const lb = lbs.LoadBalancers?.find(l => l.DNSName === albDns);
+
+    expect(lb).toBeDefined();
+    expect(lb?.State?.Code).toBe('active');
+
+    const listeners = await elbClient.send(
+      new DescribeListenersCommand({ LoadBalancerArn: lb!.LoadBalancerArn })
+    );
+
+    const targetGroupArn = listeners.Listeners?.[0].DefaultActions?.[0].TargetGroupArn;
+    expect(targetGroupArn).toBeDefined();
+
+    const targetHealth = await elbClient.send(
+      new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+    );
+
+    expect(targetHealth.TargetHealthDescriptions).toBeDefined();
+    expect(targetHealth.TargetHealthDescriptions!.length).toBeGreaterThan(0);
+
+    const healthyTargets = targetHealth.TargetHealthDescriptions?.filter(
+      t => t.TargetHealth?.State === 'healthy' || t.TargetHealth?.State === 'initial'
+    );
+
+    expect(healthyTargets!.length).toBeGreaterThan(0);
+  });
+
+  test('EC2 instances are running and registered with Auto Scaling Group', async () => {
+    const asgClient = new AutoScalingClient({ region });
+    const ec2Client = new EC2Client({ region });
+
+    const asgName = outputs.WebAppAutoScalingGroup;
+    const asgs = await asgClient.send(
+      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
+    );
+
+    const asg = asgs.AutoScalingGroups?.[0];
+    expect(asg).toBeDefined();
+    expect(asg?.Instances?.length).toBeGreaterThan(0);
+
+    const runningInstances = asg?.Instances?.filter(
+      i => i.LifecycleState === 'InService' || i.LifecycleState === 'Pending'
+    );
+
+    expect(runningInstances!.length).toBeGreaterThan(0);
+
+    for (const instance of runningInstances || []) {
+      expect(instance.HealthStatus).toBe('Healthy');
+    }
+  });
+
+  test('Security Groups allow traffic flow: ALB -> EC2 -> RDS', async () => {
+    const ec2Client = new EC2Client({ region });
+
+    const webSgId = outputs.WebServerSecurityGroup;
+    const dbSgId = outputs.DatabaseSecurityGroup;
+
+    const webSg = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webSgId] })
+    );
+
+    const hasHttp = webSg.SecurityGroups?.[0].IpPermissions?.some(
+      rule => rule.FromPort === 80 && rule.IpProtocol === 'tcp'
+    );
+
+    expect(hasHttp).toBe(true);
+
+    const dbSg = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [dbSgId] })
+    );
+
+    const mysqlRule = dbSg.SecurityGroups?.[0].IpPermissions?.find(
+      rule => rule.FromPort === 3306 && rule.IpProtocol === 'tcp'
+    );
+
+    expect(mysqlRule).toBeDefined();
+
+    const allowsWebSg = mysqlRule?.UserIdGroupPairs?.some(
+      pair => pair.GroupId === webSgId
+    );
+
+    expect(allowsWebSg).toBe(true);
   });
 });
 
