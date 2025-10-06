@@ -382,7 +382,89 @@ curl -f http://localhost/health || echo "Health endpoint test failed"
 echo "User data script completed at $(date)"
 ```
 
-### 9. File Structure Issues
+### 9. Missing CloudTrail KMS Permissions
+
+**Model Response Problem:**
+```hcl
+# WRONG - Missing CloudTrail permissions in KMS key policy
+resource "aws_kms_key" "main" {
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 services to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = ["ec2.amazonaws.com", "autoscaling.amazonaws.com"]
+        }
+        Action = ["kms:CreateGrant", "kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:ReEncrypt*"]
+        Resource = "*"
+      }
+      # Missing CloudTrail permissions
+    ]
+  })
+}
+```
+
+**Issue:** CloudTrail requires specific KMS permissions to encrypt log files. Without these permissions, CloudTrail creation fails with `InsufficientEncryptionPolicyException`.
+
+**Ideal Solution:**
+```hcl
+# CORRECT - Complete KMS key policy with CloudTrail permissions
+resource "aws_kms_key" "main" {
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 services to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = ["ec2.amazonaws.com", "autoscaling.amazonaws.com"]
+        }
+        Action = ["kms:CreateGrant", "kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:ReEncrypt*"]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/*"
+          }
+        }
+      }
+    ]
+  })
+}
+```
+
+### 10. File Structure Issues
 
 **Model Response Problem:**
 ```
@@ -401,3 +483,16 @@ lib/
 ├── terraform.tfvars  # Actual values, not example
 └── modules/
 ```
+
+## Summary
+
+The original `MODEL_RESPONSE.md` contained several critical failures that would prevent successful deployment:
+
+1. **Fatal Errors:** Provider `for_each` usage, invalid module provider references
+2. **Configuration Issues:** Empty backend, missing KMS policies, invalid flow log configuration
+3. **Security Issues:** Incomplete S3 bucket policies, missing conditions
+4. **Functional Issues:** Missing health checks
+5. **Permission Issues:** Missing CloudTrail KMS permissions
+6. **Structural Issues:** Unnecessary file separation, wrong naming conventions
+
+The `IDEAL_RESPONSE.md` addresses all these issues with working, tested configurations that successfully deploy and pass integration tests.
