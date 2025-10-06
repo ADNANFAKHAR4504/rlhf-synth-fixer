@@ -6,6 +6,12 @@
   "po_id": "27619483",
   "team": "synth",
   "startedAt": "2025-10-03T16:48:34+05:30",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "IoT Data Pipeline",
+    "Real-time Analytics",
+    "Anomaly Detection"
+  ],
   "training_quality": 7,
   "aws_services": [
     "IoT Core",
