@@ -20,7 +20,7 @@ echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
-# export AWS_REGION=${AWS_REGION:-us-east-1}
+export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
@@ -35,7 +35,7 @@ echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"
 echo "  Commit author: $COMMIT_AUTHOR"
-# echo "  AWS region: $AWS_REGION"
+echo "  AWS region: $AWS_REGION"
 echo "Using TF_VAR_db_username: (set)"
 echo "Using TF_VAR_db_password: (set)"
 if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
