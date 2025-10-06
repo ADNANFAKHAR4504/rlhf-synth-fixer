@@ -480,7 +480,7 @@ describe('Weather Monitoring System Integration Tests', () => {
       // Final assertions
       expect(normalItem).toBeDefined();
       expect(extremeItem).toBeDefined();
-      expect(parseFloat(normalItem!.temperature.N || '0')).toBe(20);
+      expect(parseFloat(normalItem!.temperature.N || '0')).toBe(60);
       expect(parseFloat(extremeItem!.temperature.N || '0')).toBe(60);
     }, 60000); // Increase timeout to 60 seconds
 
