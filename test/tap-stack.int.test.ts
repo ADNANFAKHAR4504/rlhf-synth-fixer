@@ -1,5 +1,5 @@
 // Integration tests will use actual AWS outputs after deployment
-import { APIGatewayClient, GetApiKeyCommand } from '@aws-sdk/client-api-gateway';
+import { APIGatewayClient, GetApiKeyCommand, GetApiKeysCommand } from '@aws-sdk/client-api-gateway';
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import axios from 'axios';
@@ -64,7 +64,6 @@ describe('Serverless API Integration Tests', () => {
         console.log('Direct API key retrieval failed, trying alternative approach...');
 
         // Alternative approach: List all API keys and find one matching the environment suffix
-        const { GetApiKeysCommand } = await import('@aws-sdk/client-api-gateway');
         const listKeysCommand = new GetApiKeysCommand({
           includeValues: true
         });
