@@ -474,11 +474,11 @@ data_resource {
 }
 ```
 
-**Issue:** CloudTrail doesn't allow overly broad S3 resource patterns like `arn:aws:s3:::*/*`. This causes `InvalidEventSelectorsException` when creating CloudTrail trails.
+**Issue:** CloudTrail doesn't allow overly broad resource patterns like `arn:aws:s3:::*/*` or `arn:aws:dynamodb:*:*:table/*`. This causes `InvalidEventSelectorsException` when creating CloudTrail trails.
 
 **Ideal Solution:**
 ```hcl
-# CORRECT - Specific S3 resource patterns
+# CORRECT - Specific S3 and DynamoDB resource patterns
 data_resource {
   type   = "AWS::S3::Object"
   values = [
@@ -486,6 +486,11 @@ data_resource {
     "arn:aws:s3:::${var.name_prefix}-app-data-${var.region}/*",
     "arn:aws:s3:::${var.name_prefix}-alb-logs-${var.region}/*"
   ]
+}
+
+data_resource {
+  type   = "AWS::DynamoDB::Table"
+  values = ["arn:aws:dynamodb:${var.region}:*:table/${var.name_prefix}-table-${var.region}"]
 }
 ```
 

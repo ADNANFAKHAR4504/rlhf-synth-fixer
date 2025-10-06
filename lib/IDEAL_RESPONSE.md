@@ -2254,7 +2254,7 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::DynamoDB::Table"
-      values = ["arn:aws:dynamodb:*:*:table/*"]
+      values = ["arn:aws:dynamodb:${var.region}:*:table/${var.name_prefix}-table-${var.region}"]
     }
   }
 
