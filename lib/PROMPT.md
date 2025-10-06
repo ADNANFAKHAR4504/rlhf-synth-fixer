@@ -20,6 +20,6 @@ Technical requirements:
 - Create SES email template for fallback notifications
 
 Provide the complete infrastructure code with one code block per file:
-1. CloudFormation template (template.json)
+1. CloudFormation template (TapStack.json)
 2. Lambda function code (notification_handler.py)
 3. Unit tests for Lambda function (test_notification_handler.py)
