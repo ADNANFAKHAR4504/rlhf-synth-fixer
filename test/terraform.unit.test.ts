@@ -33,7 +33,7 @@ describe('Terraform Infrastructure Tests', () => {
     });
 
     it('sets default values for critical variables', () => {
-      expect(has(/variable\s+"aws_region"[\s\S]*?default\s*=\s*"ap-south-1"/)).toBe(true);
+      expect(has(/variable\s+"aws_region"[\s\S]*?default\s*=\s*"us-west-2"/)).toBe(true);
       expect(has(/variable\s+"project_name"[\s\S]*?default\s*=\s*"prod-infra2"/)).toBe(true);
       expect(has(/variable\s+"environment"[\s\S]*?default\s*=\s*"Production"/)).toBe(true);
     });

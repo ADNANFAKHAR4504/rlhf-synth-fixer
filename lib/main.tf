@@ -118,6 +118,8 @@ resource "aws_eip" "nat" {
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-eip-${count.index + 1}"
   })
+
+   depends_on = [aws_internet_gateway.main]
 }
 
 # NAT Gateways
@@ -130,7 +132,20 @@ resource "aws_nat_gateway" "main" {
     Name = "${var.project_name}-nat-gateway-${count.index + 1}"
   })
 
-  depends_on = [aws_internet_gateway.main]
+  depends_on = [
+    aws_internet_gateway.main,
+    aws_eip.nat
+  ]
+}
+
+output "eip_ids" {
+  value = aws_eip.nat[*].id
+  description = "Elastic IP allocation IDs"
+}
+
+output "nat_gateway_ids" {
+  value = aws_nat_gateway.main[*].id
+  description = "NAT Gateway IDs"
 }
 
 # Route Table for Public Subnets
