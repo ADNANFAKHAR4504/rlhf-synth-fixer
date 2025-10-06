@@ -124,22 +124,64 @@ export class VpcPeeringStack extends cdk.Stack {
       });
     });
 
-    // Standby to primary
+    // Standby to primary routes (must be created in standby region using custom resource)
     props.standbyVpc.publicSubnets.forEach((subnet, i) => {
       const routeTable = subnet.routeTable;
-      new ec2.CfnRoute(this, `StandbyToPrimaryRoute-Public${i}`, {
-        routeTableId: routeTable.routeTableId,
-        destinationCidrBlock: props.primaryVpc.vpcCidrBlock,
-        vpcPeeringConnectionId: peeringConnectionId
+      new cr.AwsCustomResource(this, `StandbyToPrimaryRoutePublic${i}`, {
+        onCreate: {
+          service: 'EC2',
+          action: 'createRoute',
+          parameters: {
+            RouteTableId: routeTable.routeTableId,
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
+            VpcPeeringConnectionId: peeringConnectionId
+          },
+          region: props.standbyRegion,
+          physicalResourceId: cr.PhysicalResourceId.of(`standby-public-route-${i}`)
+        },
+        onDelete: {
+          service: 'EC2',
+          action: 'deleteRoute',
+          parameters: {
+            RouteTableId: routeTable.routeTableId,
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock
+          },
+          region: props.standbyRegion
+        },
+        policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+        }),
+        role: crossRegionRole
       });
     });
 
     props.standbyVpc.privateSubnets.forEach((subnet, i) => {
       const routeTable = subnet.routeTable;
-      new ec2.CfnRoute(this, `StandbyToPrimaryRoute-Private${i}`, {
-        routeTableId: routeTable.routeTableId,
-        destinationCidrBlock: props.primaryVpc.vpcCidrBlock,
-        vpcPeeringConnectionId: peeringConnectionId
+      new cr.AwsCustomResource(this, `StandbyToPrimaryRoutePrivate${i}`, {
+        onCreate: {
+          service: 'EC2',
+          action: 'createRoute',
+          parameters: {
+            RouteTableId: routeTable.routeTableId,
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
+            VpcPeeringConnectionId: peeringConnectionId
+          },
+          region: props.standbyRegion,
+          physicalResourceId: cr.PhysicalResourceId.of(`standby-private-route-${i}`)
+        },
+        onDelete: {
+          service: 'EC2',
+          action: 'deleteRoute',
+          parameters: {
+            RouteTableId: routeTable.routeTableId,
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock
+          },
+          region: props.standbyRegion
+        },
+        policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+        }),
+        role: crossRegionRole
       });
     });
 

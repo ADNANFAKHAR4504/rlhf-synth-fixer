@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
     // Define regions
     const primaryRegion = 'eu-west-2';
     const standbyRegion = 'eu-west-3';
-    const domainName = this.node.tryGetContext('domainName') || 'example.com';
+    const domainName = this.node.tryGetContext('domainName');
 
     // Primary region stacks
     const primaryEnv = {
@@ -133,6 +133,7 @@ export class TapStack extends cdk.Stack {
       kmsKey: standbySecurityStack.kmsKey,
       isReplica: true,
       replicationSourceIdentifier: `db-primary-${environmentSuffix}`,
+      sourceDatabaseInstance: primaryDatabaseStack.dbInstance,
       description: 'Standby database resources (read replica)',
       stackName: `${this.stackName}-DatabaseStandby`,
       crossRegionReferences: true,

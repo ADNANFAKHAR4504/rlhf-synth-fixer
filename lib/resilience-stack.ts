@@ -7,6 +7,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as cr from 'aws-cdk-lib/custom-resources';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
 interface ResilienceStackProps extends cdk.StackProps {
   primaryVpc: ec2.Vpc;
@@ -33,42 +34,58 @@ export class ResilienceStack extends cdk.Stack {
     fisRole.addToPolicy(
       new iam.PolicyStatement({
         actions: [
-          'elasticloadbalancing:DeregisterTargets',
-          'elasticloadbalancing:DescribeTargetHealth',
-          'elasticloadbalancing:DescribeTargetGroups',
-          'elasticloadbalancing:DescribeLoadBalancers',
+          'ec2:StopInstances',
+          'ec2:StartInstances',
+          'ec2:DescribeInstances',
+          'ec2:DescribeTags',
         ],
         resources: ['*'],
       })
     );
 
-    // Create an experiment template that simulates a failure of the primary ALB
+    // Create a CloudWatch alarm as a stop condition for FIS experiments
+    const stopConditionAlarm = new cloudwatch.Alarm(this, 'FisStopConditionAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/FIS',
+        metricName: 'ExperimentCount',
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 100,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Stop condition for FIS experiments',
+    });
+
+    // Create an experiment template that simulates a failure by stopping primary EC2 instances
+    // This will make the ALB unhealthy and trigger Route 53 failover
     new fis.CfnExperimentTemplate(this, 'AlbFailureExperiment', {
       description:
-        'Experiment to test Route 53 failover by simulating a primary ALB failure',
+        'Experiment to test Route 53 failover by stopping primary region EC2 instances',
       roleArn: fisRole.roleArn,
       stopConditions: [
         {
           source: 'aws:cloudwatch:alarm',
-          value:
-            'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:FisExperimentStopper',
+          value: stopConditionAlarm.alarmArn,
         },
       ],
       targets: {
-        ALB: {
-          resourceType: 'aws:elasticloadbalancing:loadbalancer',
-          resourceArns: [props.primaryAlb.loadBalancerArn],
+        Instances: {
+          resourceType: 'aws:ec2:instance',
+          resourceTags: {
+            'aws:autoscaling:groupName': props.primaryAsg.autoScalingGroupName,
+          },
           selectionMode: 'ALL',
         },
       },
       actions: {
-        DisableAlb: {
-          actionId: 'aws:elasticloadbalancing:deregister-target-group',
+        StopInstances: {
+          actionId: 'aws:ec2:stop-instances',
           parameters: {
-            duration: 'PT5M',
+            startInstancesAfterDuration: 'PT10M', // Auto-restart after 10 minutes
           },
           targets: {
-            LoadBalancer: 'ALB',
+            Instances: 'Instances',
           },
         },
       },

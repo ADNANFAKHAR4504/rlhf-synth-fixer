@@ -593,6 +593,7 @@ interface DatabaseStackProps extends cdk.StackProps {
   kmsKey: kms.Key;
   isReplica: boolean;
   replicationSourceIdentifier?: string;
+  sourceDatabaseInstance?: rds.IDatabaseInstance;
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -618,32 +619,22 @@ export class DatabaseStack extends cdk.Stack {
     // Create a parameter group
     const parameterGroup = new rds.ParameterGroup(this, 'DbParameterGroup', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_13_4,
+        version: rds.PostgresEngineVersion.VER_15_8,
       }),
-      description: 'Parameter group for PostgreSQL 13.4',
+      description: 'Parameter group for PostgreSQL 15.8',
       parameters: {
         log_statement: 'all', // Log all SQL statements for debugging
         log_min_duration_statement: '1000', // Log statements running longer than 1s
       },
     });
 
-    if (props.isReplica && props.replicationSourceIdentifier) {
+    if (props.isReplica && props.sourceDatabaseInstance) {
       // Create a read replica in the standby region
       this.dbInstance = new rds.DatabaseInstanceReadReplica(
         this,
         'DbReadReplica',
         {
-          sourceDatabaseInstance:
-            rds.DatabaseInstance.fromDatabaseInstanceAttributes(
-              this,
-              'SourceDb',
-              {
-                instanceIdentifier: props.replicationSourceIdentifier,
-                instanceEndpointAddress: 'dummy-address', // This is actually not used in the construct but required
-                port: 5432,
-                securityGroups: [],
-              }
-            ),
+          sourceDatabaseInstance: props.sourceDatabaseInstance,
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.BURSTABLE3,
             ec2.InstanceSize.MEDIUM
@@ -656,8 +647,6 @@ export class DatabaseStack extends cdk.Stack {
           parameterGroup,
           storageEncrypted: true,
           storageEncryptionKey: props.kmsKey,
-          backupRetention: cdk.Duration.days(7),
-          deleteAutomatedBackups: false,
           removalPolicy: cdk.RemovalPolicy.RETAIN,
         }
       );
@@ -665,7 +654,7 @@ export class DatabaseStack extends cdk.Stack {
       // Create the primary database instance
       this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_13_4,
+          version: rds.PostgresEngineVersion.VER_15_8,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.BURSTABLE3,
