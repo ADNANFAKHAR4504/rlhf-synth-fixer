@@ -4,3 +4,4 @@ I also want an API Gateway in front so the Lambda can be triggered over HTTP too
 
 The Lambda code itself should be simple Python that reads JSON, writes results back to the bucket, and logs to CloudWatch. Make sure it has error handling in case the uploaded file isn’t valid JSON. I want all of this implemented in CDK with Python constructs, with the stack containing the bucket, Lambda, API Gateway, IAM role, and any policies needed.
 
+
