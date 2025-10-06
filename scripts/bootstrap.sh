@@ -40,7 +40,17 @@ echo "Using TF_VAR_db_password: (set)"
 
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
-  npm run cdk:bootstrap
+  export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
+
+  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-1..."
+  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-1 --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+  
+
+  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."
+  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-west-2 --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+  echo "✅ both regions bootstrapped successfully"
+
+  # npm run cdk:bootstrap
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, setting up environment..."
