@@ -109,9 +109,9 @@ class TapStack(TerraformStack):
             rule=[{
                 "id": "archive_old_attachments",
                 "status": "Enabled",
-                "filter": {
+                "filter": [{
                     "prefix": ""
-                },
+                }],
                 "transition": [{
                     "days": 90,
                     "storageClass": "GLACIER"
