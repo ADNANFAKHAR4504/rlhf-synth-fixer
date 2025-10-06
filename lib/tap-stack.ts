@@ -79,7 +79,7 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.0.0/16',
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
       privateSubnetCidrs: ['10.0.3.0/24', '10.0.4.0/24'],
-      availabilityZones: ['us-east-1a', 'us-east-1b'],
+      availabilityZones: ['us-east-2a', 'us-east-2b'],
       tags,
     });
 
@@ -144,7 +144,7 @@ export class TapStack extends TerraformStack {
       trailName: 'tap-cloudtrail',
       s3BucketName: logBucket.bucketName,
       s3KeyPrefix: 'cloudtrail-logs',
-      kmsKeyId: kms.keyId,
+      kmsKeyId: kms.keyArn,
       tags,
     });
 
