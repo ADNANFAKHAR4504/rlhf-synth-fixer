@@ -47,7 +47,7 @@ class LambdaConstruct(Construct):
                 self,
                 "SharedLayer",
                 entry="lib/lambda/layer",
-                compatible_runtimes=[lambda_.Runtime.PYTHON_3_9],
+                compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
                 description="Shared utilities and dependencies"
             )
         elif not is_docker_available():
@@ -135,7 +135,7 @@ class LambdaConstruct(Construct):
                 self,
                 f"{func_name.replace('_', '-').title()}Function",
                 function_name=f"inventory-{env_name}-{func_name.replace('_', '-')}",
-                runtime=lambda_.Runtime.PYTHON_3_9,
+                runtime=lambda_.Runtime.PYTHON_3_11,
                 code=lambda_.Code.from_asset("lib/lambda/handlers"),
                 handler=config["handler"],
                 timeout=config["timeout"],
