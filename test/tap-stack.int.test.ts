@@ -57,17 +57,17 @@ function getOutput(keyPattern: string): string | undefined {
 }
 
 // Create a convenient outputs object with clean keys
-const outputs = {
-  'members-table-name': getOutput('members-table-name'),
-  'members-table-arn': getOutput('members-table-arn'),
-  'api-endpoint': getOutput('api-endpoint'),
-  'api-url': getOutput('api-url'),
-  'point-calc-lambda-name': getOutput('point-calc-lambda-name'),
-  'point-calc-lambda-arn': getOutput('point-calc-lambda-arn'),
-  'stream-processor-lambda-name': getOutput('stream-processor-lambda-name'),
-  'stream-processor-lambda-arn': getOutput('stream-processor-lambda-arn'),
-  'notification-topic-arn': getOutput('notification-topic-arn'),
-  'dashboard-name': getOutput('dashboard-name'),
+const outputs: Record<string, string> = {
+  'members-table-name': getOutput('members-table-name') || '',
+  'members-table-arn': getOutput('members-table-arn') || '',
+  'api-endpoint': getOutput('api-endpoint') || '',
+  'api-url': getOutput('api-url') || '',
+  'point-calc-lambda-name': getOutput('point-calc-lambda-name') || '',
+  'point-calc-lambda-arn': getOutput('point-calc-lambda-arn') || '',
+  'stream-processor-lambda-name': getOutput('stream-processor-lambda-name') || '',
+  'stream-processor-lambda-arn': getOutput('stream-processor-lambda-arn') || '',
+  'notification-topic-arn': getOutput('notification-topic-arn') || '',
+  'dashboard-name': getOutput('dashboard-name') || '',
 };
 
 // Initialize AWS clients
@@ -348,6 +348,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
 
     test('API should have transactions resource', async () => {
       const apiEndpoint = outputs['api-endpoint'];
+      expect(apiEndpoint).toBeDefined();
       const apiId = apiEndpoint.split('.')[0];
 
       const response = await apigateway.send(
@@ -366,6 +367,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
 
     test('API stage should exist with correct name', async () => {
       const apiEndpoint = outputs['api-endpoint'];
+      expect(apiEndpoint).toBeDefined();
       const apiId = apiEndpoint.split('.')[0];
       const stageName = apiEndpoint.split('/')[1];
 
@@ -387,7 +389,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
       try {
         // Try POST with invalid data to verify API is accessible
         const response = await axios.post(
-          apiUrl,
+          apiUrl || '',
           {
             memberId: 'TEST',
             transactionAmount: 50,
@@ -479,7 +481,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
 
       const response = await cloudwatch.send(
         new GetDashboardCommand({
-          DashboardName: dashboardName,
+          DashboardName: dashboardName || '',
         })
       );
 
