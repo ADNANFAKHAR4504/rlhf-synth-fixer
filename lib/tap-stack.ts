@@ -6,16 +6,16 @@ import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
-// import {
-//   VpcModule,
-//   IamModule,
-//   S3Module,
-//   Ec2Module,
-//   RdsModule,
-//   CloudTrailModule,
-//   ConfigModule,
-//   KmsModule,
-// } from './modules';
+import {
+  VpcModule,
+  IamModule,
+  S3Module,
+  Ec2Module,
+  RdsModule,
+  CloudTrailModule,
+  ConfigModule,
+  KmsModule,
+} from './modules';
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -61,130 +61,130 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
-    // // Global environment tags
-    // const tags = {
-    //   Environment: 'Production',
-    //   Project: 'TAP',
-    //   ManagedBy: 'CDKTF',
-    // };
+    // Global environment tags
+    const tags = {
+      Environment: 'Production',
+      Project: 'TAP',
+      ManagedBy: 'CDKTF',
+    };
 
-    // // Create KMS keys
-    // const mainKms = new KmsModule(this, 'main-kms', {
-    //   description: 'Main KMS key for encryption',
-    //   tags,
-    // });
+    // Create KMS keys
+    const mainKms = new KmsModule(this, 'main-kms', {
+      description: 'Main KMS key for encryption',
+      tags,
+    });
 
-    // const rdsKms = new KmsModule(this, 'rds-kms', {
-    //   description: 'KMS key for RDS encryption',
-    //   tags,
-    // });
+    const rdsKms = new KmsModule(this, 'rds-kms', {
+      description: 'KMS key for RDS encryption',
+      tags,
+    });
 
-    // // Create S3 buckets
-    // const s3 = new S3Module(this, 's3', {
-    //   bucketName: 'tap-production-data-bucket',
-    //   logBucketName: 'tap-production-logs-bucket',
-    //   kmsKeyId: mainKms.key.id,
-    //   tags,
-    // });
+    // Create S3 buckets
+    const s3 = new S3Module(this, 's3', {
+      bucketName: 'tap-production-data-bucket',
+      logBucketName: 'tap-production-logs-bucket',
+      kmsKeyId: mainKms.key.id,
+      tags,
+    });
 
-    // // Create VPC infrastructure
-    // const vpc = new VpcModule(this, 'vpc', {
-    //   vpcCidrBlock: '10.0.0.0/16',
-    //   publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
-    //   privateSubnetCidrs: ['10.0.3.0/24', '10.0.4.0/24'],
-    //   availabilityZones: ['eu-north-1a', 'eu-north-1b'],
-    //   flowLogBucketArn: s3.logBucket.arn,
-    //   tags,
-    // });
+    // Create VPC infrastructure
+    const vpc = new VpcModule(this, 'vpc', {
+      vpcCidrBlock: '10.0.0.0/16',
+      publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
+      privateSubnetCidrs: ['10.0.3.0/24', '10.0.4.0/24'],
+      availabilityZones: ['eu-north-1a', 'eu-north-1b'],
+      flowLogBucketArn: s3.logBucket.arn,
+      tags,
+    });
 
-    // // Create IAM roles and policies
-    // const iam = new IamModule(this, 'iam', {
-    //   vpcId: vpc.vpcId,
-    //   tags,
-    // });
+    // Create IAM roles and policies
+    const iam = new IamModule(this, 'iam', {
+      vpcId: vpc.vpcId,
+      tags,
+    });
 
-    // // Create EC2 instances with Auto Scaling
-    // new Ec2Module(this, 'ec2', {
-    //   vpcId: vpc.vpcId,
-    //   subnetIds: vpc.privateSubnetIds,
-    //   securityGroupIds: [],
-    //   instanceType: 't3.micro',
-    //   iamInstanceProfileName: iam.ec2InstanceProfile.name,
-    //   sshCidr: '10.0.0.0/24', // Replace with actual admin IP range
-    //   minCapacity: 2,
-    //   maxCapacity: 5,
-    //   tags,
-    // });
+    // Create EC2 instances with Auto Scaling
+    new Ec2Module(this, 'ec2', {
+      vpcId: vpc.vpcId,
+      subnetIds: vpc.privateSubnetIds,
+      securityGroupIds: [],
+      instanceType: 't3.micro',
+      iamInstanceProfileName: iam.ec2InstanceProfile.name,
+      sshCidr: '10.0.0.0/24', // Replace with actual admin IP range
+      minCapacity: 2,
+      maxCapacity: 5,
+      tags,
+    });
 
-    // // Create RDS database
-    // const rds = new RdsModule(this, 'rds', {
-    //   vpcId: vpc.vpcId,
-    //   subnetIds: vpc.privateSubnetIds,
-    //   securityGroupIds: [],
-    //   instanceClass: 'db.t3.small',
-    //   engine: 'mysql',
-    //   engineVersion: '8.0',
-    //   dbName: 'productiondb',
-    //   username: 'admin',
-    //   password: 'StrongPasswordToBeReplaced', // Should be replaced with a secret
-    //   kmsKeyId: rdsKms.key.id,
-    //   tags,
-    // });
+    // Create RDS database
+    const rds = new RdsModule(this, 'rds', {
+      vpcId: vpc.vpcId,
+      subnetIds: vpc.privateSubnetIds,
+      securityGroupIds: [],
+      instanceClass: 'db.t3.small',
+      engine: 'mysql',
+      engineVersion: '8.0',
+      dbName: 'productiondb',
+      username: 'admin',
+      password: 'StrongPasswordToBeReplaced', // Should be replaced with a secret
+      kmsKeyId: rdsKms.key.id,
+      tags,
+    });
 
-    // // Enable CloudTrail for logging
-    // new CloudTrailModule(this, 'cloudtrail', {
-    //   s3BucketName: s3.logBucket.bucket,
-    //   kmsKeyId: mainKms.key.id,
-    //   tags,
-    // });
+    // Enable CloudTrail for logging
+    new CloudTrailModule(this, 'cloudtrail', {
+      s3BucketName: s3.logBucket.bucket,
+      kmsKeyId: mainKms.key.id,
+      tags,
+    });
 
-    // // Enable AWS Config for compliance monitoring
-    // new ConfigModule(this, 'config', {
-    //   s3BucketName: s3.logBucket.bucket,
-    //   iamRoleArn: iam.configRole.arn,
-    //   tags,
-    // });
+    // Enable AWS Config for compliance monitoring
+    new ConfigModule(this, 'config', {
+      s3BucketName: s3.logBucket.bucket,
+      iamRoleArn: iam.configRole.arn,
+      tags,
+    });
 
-    // // Outputs
-    // new TerraformOutput(this, 'vpc_id', {
-    //   value: vpc.vpcId,
-    //   description: 'The ID of the VPC',
-    // });
+    // Outputs
+    new TerraformOutput(this, 'vpc_id', {
+      value: vpc.vpcId,
+      description: 'The ID of the VPC',
+    });
 
-    // new TerraformOutput(this, 'public_subnet_ids', {
-    //   value: vpc.publicSubnetIds,
-    //   description: 'The IDs of the public subnets',
-    // });
+    new TerraformOutput(this, 'public_subnet_ids', {
+      value: vpc.publicSubnetIds,
+      description: 'The IDs of the public subnets',
+    });
 
-    // new TerraformOutput(this, 'private_subnet_ids', {
-    //   value: vpc.privateSubnetIds,
-    //   description: 'The IDs of the private subnets',
-    // });
+    new TerraformOutput(this, 'private_subnet_ids', {
+      value: vpc.privateSubnetIds,
+      description: 'The IDs of the private subnets',
+    });
 
-    // new TerraformOutput(this, 'main_bucket_name', {
-    //   value: s3.mainBucket.bucket,
-    //   description: 'The name of the main S3 bucket',
-    // });
+    new TerraformOutput(this, 'main_bucket_name', {
+      value: s3.mainBucket.bucket,
+      description: 'The name of the main S3 bucket',
+    });
 
-    // new TerraformOutput(this, 'log_bucket_name', {
-    //   value: s3.logBucket.bucket,
-    //   description: 'The name of the log S3 bucket',
-    // });
+    new TerraformOutput(this, 'log_bucket_name', {
+      value: s3.logBucket.bucket,
+      description: 'The name of the log S3 bucket',
+    });
 
-    // new TerraformOutput(this, 'rds_instance_endpoint', {
-    //   value: rds.dbInstance.endpoint,
-    //   description: 'The connection endpoint for the RDS instance',
-    // });
+    new TerraformOutput(this, 'rds_instance_endpoint', {
+      value: rds.dbInstance.endpoint,
+      description: 'The connection endpoint for the RDS instance',
+    });
 
-    // new TerraformOutput(this, 'main_kms_key_arn', {
-    //   value: mainKms.key.arn,
-    //   description: 'The ARN of the main KMS key',
-    // });
+    new TerraformOutput(this, 'main_kms_key_arn', {
+      value: mainKms.key.arn,
+      description: 'The ARN of the main KMS key',
+    });
 
-    // new TerraformOutput(this, 'rds_kms_key_arn', {
-    //   value: rdsKms.key.arn,
-    //   description: 'The ARN of the RDS KMS key',
-    // });
+    new TerraformOutput(this, 'rds_kms_key_arn', {
+      value: rdsKms.key.arn,
+      description: 'The ARN of the RDS KMS key',
+    });
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
