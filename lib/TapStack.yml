@@ -31,7 +31,8 @@ Parameters:
     Default: 'crowdfunding-athena-results'
     Description: 'Base name for S3 bucket storing Athena query results'
     AllowedPattern: '^[a-z0-9-]+$'
-    ConstraintConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
 
 Resources:
   # ==================== Security - KMS Encryption Key ====================
