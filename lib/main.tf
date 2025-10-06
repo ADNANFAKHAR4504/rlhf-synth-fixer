@@ -140,6 +140,7 @@ module "secondary_database" {
 
 # Failover Module
 module "failover_mechanism" {
+  count  = var.enable_dns_failover ? 1 : 0
   source = "./modules/failover"
   providers = {
     aws.primary   = aws.primary

@@ -109,3 +109,10 @@ variable "failover_threshold" {
   type        = number
   default     = 3
 }
+
+# Feature toggles
+variable "enable_dns_failover" {
+  description = "Enable Route53-based DNS failover (requires an existing hosted zone)"
+  type        = bool
+  default     = false
+}
