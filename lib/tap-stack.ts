@@ -131,7 +131,7 @@ export class TapStack extends TerraformStack {
 
     // S3 Bucket for payout reports
     const payoutReportsBucket = new S3Bucket(this, 'payout-reports-bucket', {
-      bucket: `payout-reports-${environmentSuffix}-${Date.now()}`,
+      bucket: `payout-reports-${environmentSuffix}`,
       tags: commonTags,
     });
 
