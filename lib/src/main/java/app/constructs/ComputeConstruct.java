@@ -45,6 +45,8 @@ public class ComputeConstruct extends Construct {
 
     private final ElasticBeanstalkEnvironment ebEnv;
 
+    private final IamInstanceProfile instanceProfile;
+
     public ComputeConstruct(final Construct scope, final String id, final ComputeConfig config,
                             final SecurityConfig securityConfig, final String vpcId, final List<String> publicSubnetIds,
                             final List<String> privateSubnetIds) {
@@ -57,7 +59,7 @@ public class ComputeConstruct extends Construct {
         // Create IAM role for EC2 instances
         IamRole ec2Role = createEc2Role();
 
-        IamInstanceProfile instanceProfile = new IamInstanceProfile(this, "ec2-instance-profile",
+        this.instanceProfile = new IamInstanceProfile(this, "ec2-instance-profile",
                 IamInstanceProfileConfig.builder()
                         .name("ec2-instance-profile")
                         .role(ec2Role.getName())
@@ -325,6 +327,12 @@ public class ComputeConstruct extends Construct {
                         .namespace("aws:ec2:vpc")
                         .name("Subnets")
                         .value(String.join(",", subnetIds))
+                        .build(),
+                // IAM Instance Profile
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:autoscaling:launchconfiguration")
+                        .name("IamInstanceProfile")
+                        .value(instanceProfile.getName())
                         .build(),
                 // Instance type settings
                 ElasticBeanstalkEnvironmentSetting.builder()
