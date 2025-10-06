@@ -756,27 +756,32 @@ Resources:
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
+
+            # Create main index page
             echo "<html><body><h1>Hello World from ${EnvironmentSuffix} Environment</h1></body></html>" > /var/www/html/index.html
-            
+
+            # Create health check endpoint
+            echo "OK" > /var/www/html/health
+
             # Set up CloudWatch Logs agent
             yum install -y awslogs
             cat > /etc/awslogs/awslogs.conf << EOF
             [general]
             state_file = /var/lib/awslogs/agent-state
-            
+
             [/var/log/httpd/access_log]
             file = /var/log/httpd/access_log
             log_group_name = ${EnvironmentSuffix}-web-access-logs
             log_stream_name = {instance_id}/access.log
             datetime_format = %d/%b/%Y:%H:%M:%S %z
-            
+
             [/var/log/httpd/error_log]
             file = /var/log/httpd/error_log
             log_group_name = ${EnvironmentSuffix}-web-error-logs
             log_stream_name = {instance_id}/error.log
             datetime_format = %d/%b/%Y:%H:%M:%S %z
             EOF
-            
+
             # Start CloudWatch Logs agent
             systemctl start awslogsd
             systemctl enable awslogsd
