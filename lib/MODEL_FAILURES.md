@@ -43,7 +43,7 @@ The infrastructure has been successfully enhanced with two additional AWS servic
 ### 2. Lambda Environment Variables
 **Issue**: Lambda function hardcoded SSM parameter paths
 **Fix**: Added SSM_PARAMETER_PREFIX environment variable to Lambda configuration
-- Added X-Ray context variable: `_X_AMZN_TRACE_ID`
+- Added X-Ray context variable: `XRAY_TRACE_ID`
 
 ### 3. Backend Configuration
 **Issue**: S3 backend configuration required interactive input

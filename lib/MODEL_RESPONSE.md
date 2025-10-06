@@ -2,25 +2,280 @@
 
 Here is the complete Terraform infrastructure code for the serverless fintech API with AWS X-Ray distributed tracing and AWS WAF security features:
 
+## main.tf
 ```hcl
-# main.tf
-# The complete main.tf file with all resources including X-Ray and WAF configurations
-# This file is already implemented in lib/main.tf with all 722 lines of infrastructure code
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+  required_version = ">= 1.5"
+}
+
+provider "aws" {
+  region = var.aws_region
+  default_tags {
+    tags = var.common_tags
+  }
+}
+
+# DynamoDB Table for transactions
+resource "aws_dynamodb_table" "transactions" {
+  name           = "fintech-transactions-${var.environment_suffix}"
+  billing_mode   = "ON_DEMAND"
+  hash_key       = "transaction_id"
+  range_key      = "timestamp"
+  stream_enabled = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
+
+  attribute {
+    name = "transaction_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "timestamp"
+    type = "N"
+  }
+
+  attribute {
+    name = "customer_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name     = "CustomerIndex"
+    hash_key = "customer_id"
+    projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "fintech-transactions-${var.environment_suffix}"
+  })
+}
+
+# Lambda function
+resource "aws_lambda_function" "api_processor" {
+  filename         = "lambda_function.zip"
+  function_name    = "fintech-api-processor-${var.environment_suffix}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  runtime         = "nodejs18.x"
+  memory_size     = 512
+  timeout         = 30
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE       = aws_dynamodb_table.transactions.name
+      REGION               = var.aws_region
+      ENVIRONMENT          = "Production"
+      ENVIRONMENT_SUFFIX   = var.environment_suffix
+      SSM_PARAMETER_PREFIX = "/fintech-api-${var.environment_suffix}"
+      XRAY_TRACE_ID        = "" # X-Ray tracing context
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_logs,
+    aws_iam_role_policy_attachment.lambda_xray,
+    aws_cloudwatch_log_group.lambda_logs
+  ]
+
+  tags = merge(var.common_tags, {
+    Name = "fintech-api-processor"
+  })
+}
+
+# API Gateway
+resource "aws_apigatewayv2_api" "fintech_api" {
+  name          = "fintech-api-${var.environment_suffix}"
+  protocol_type = "HTTP"
+  description   = "Serverless Fintech API with X-Ray and WAF"
+
+  cors_configuration {
+    allow_credentials = false
+    allow_headers     = ["content-type", "x-amz-date", "authorization", "x-api-key", "x-amz-security-token"]
+    allow_methods     = ["*"]
+    allow_origins     = ["*"]
+    expose_headers    = ["date", "keep-alive"]
+    max_age           = 86400
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "fintech-api-${var.environment_suffix}"
+  })
+}
 ```
 
+## variables.tf
 ```hcl
-# variables.tf
-# This file is already implemented in lib/variables.tf
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
+
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default = {
+    Environment = "Development"
+    Project     = "FintechAPI"
+    ManagedBy   = "Terraform"
+  }
+}
 ```
 
+## outputs.tf
 ```hcl
-# outputs.tf
-# This file is already implemented in lib/outputs.tf with X-Ray and WAF outputs
+output "api_gateway_url" {
+  description = "API Gateway URL"
+  value       = aws_apigatewayv2_stage.prod.invoke_url
+}
+
+output "dynamodb_table_name" {
+  description = "DynamoDB table name"
+  value       = aws_dynamodb_table.transactions.name
+}
+
+output "xray_sampling_rule_arn" {
+  description = "X-Ray sampling rule ARN"
+  value       = aws_xray_sampling_rule.fintech_sampling.arn
+}
+
+output "waf_web_acl_arn" {
+  description = "WAF Web ACL ARN"
+  value       = aws_wafv2_web_acl.fintech_waf.arn
+}
 ```
 
+## lambda/index.js
 ```javascript
-// lambda/index.js
-// This file is already implemented in lib/lambda/index.js with X-Ray integration
+const AWSXRay = require('aws-xray-sdk-core');
+const AWS = AWSXRay.captureAWS(require('aws-sdk'));
+const { Logger, Metrics, Tracer } = require('@aws-lambda-powertools/logger');
+
+// Initialize AWS services with X-Ray tracing
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const ssm = new AWS.SSM();
+
+// Initialize Powertools
+const logger = new Logger({ serviceName: 'fintech-api' });
+const metrics = new Metrics({ namespace: 'FintechAPI', serviceName: 'transaction-processor' });
+const tracer = new Tracer({ serviceName: 'fintech-api' });
+
+const TABLE_NAME = process.env.DYNAMODB_TABLE;
+const SSM_PARAMETER_PREFIX = process.env.SSM_PARAMETER_PREFIX || '/fintech-api';
+
+exports.handler = async (event) => {
+  const segment = tracer.getSegment();
+  const subsegment = segment.addNewSubsegment('processRequest');
+
+  try {
+    logger.info('Received event', { event });
+
+    const method = event.requestContext?.http?.method || event.httpMethod;
+    const path = event.requestContext?.http?.path || event.path;
+
+    if (method === 'POST' && path === '/transactions') {
+      const body = JSON.parse(event.body || '{}');
+      
+      if (!body.customer_id || !body.amount) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: 'Missing required fields: customer_id, amount' })
+        };
+      }
+
+      const result = await processTransaction(body);
+      return {
+        statusCode: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result)
+      };
+    }
+
+    return {
+      statusCode: 404,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Not found' })
+    };
+
+  } catch (error) {
+    logger.error('Handler error', { error: error.message, stack: error.stack });
+    metrics.addMetric('HandlerError', 'Count', 1);
+    
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Internal server error' })
+    };
+  } finally {
+    subsegment.close();
+    metrics.publishStoredMetrics();
+  }
+};
+
+async function processTransaction(transaction) {
+  const subsegment = AWSXRay.getSegment().addNewSubsegment('processTransaction');
+  
+  try {
+    const timestamp = Date.now();
+    const transactionId = `txn-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const item = {
+      transaction_id: transactionId,
+      timestamp: timestamp,
+      customer_id: transaction.customer_id,
+      amount: transaction.amount,
+      currency: transaction.currency || 'USD',
+      status: 'COMPLETED',
+      created_at: new Date().toISOString()
+    };
+
+    await dynamodb.put({
+      TableName: TABLE_NAME,
+      Item: item
+    }).promise();
+
+    metrics.addMetric('TransactionCreated', 'Count', 1);
+    logger.info('Transaction created', { transactionId, customerId: transaction.customer_id });
+
+    return {
+      transactionId,
+      status: 'COMPLETED',
+      timestamp: new Date(timestamp).toISOString()
+    };
+  } catch (error) {
+    logger.error('Transaction processing failed', { error });
+    subsegment.addError(error);
+    throw error;
+  } finally {
+    subsegment.close();
+  }
+}
 ```
 
 ```json

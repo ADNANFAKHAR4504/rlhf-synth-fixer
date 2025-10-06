@@ -178,7 +178,7 @@ resource "aws_lambda_function" "transaction_processor" {
       ENVIRONMENT          = "Production"
       ENVIRONMENT_SUFFIX   = var.environment_suffix
       SSM_PARAMETER_PREFIX = "/fintech-api-${var.environment_suffix}"
-      _X_AMZN_TRACE_ID     = "" # Required for X-Ray context
+      XRAY_TRACE_ID        = "" # X-Ray tracing context
     }
   }
 
@@ -1257,23 +1257,6 @@ terraform -chdir=lib output -json > cfn-outputs/flat-outputs.json
 ```bash
 terraform -chdir=lib destroy -auto-approve
 ```
-
-## Testing
-
-### Unit Tests
-- Infrastructure validation tests
-- Resource naming convention tests
-- Configuration compliance tests
-
-### Integration Tests
-- API endpoint functionality
-- DynamoDB operations
-- SSM parameter retrieval
-- EventBridge scheduler triggers
-- CloudWatch alarm functionality
-- X-Ray trace collection and sampling
-- WAF rule effectiveness (rate limiting, bot detection)
-- WAF geo-blocking verification
 
 ## Production Considerations
 
