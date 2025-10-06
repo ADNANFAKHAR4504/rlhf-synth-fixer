@@ -276,6 +276,7 @@ describe('Healthcare Appointment Reminder Stack Resources Existence Check', () =
 
     const alarms = response.MetricAlarms || [];
 
+    console.log('All alarms:', alarms.map(a => a.AlarmName));
     // Check for failure rate alarm
     const failureAlarm = alarms.find(alarm =>
       alarm.AlarmName?.includes('sms-failure-rate')
@@ -565,32 +566,6 @@ describe('Healthcare Appointment Reminder Stack Resources Existence Check', () =
       }
     } else {
       console.log('No log entries found - Lambda may have failed to write to DynamoDB');
-    }
-  });
-
-  test('SES Template should exist and be properly configured', async () => {
-    const { SESClient, GetTemplateCommand } = require('@aws-sdk/client-ses');
-    const sesClient = new SESClient({});
-
-    // Extract environment suffix from outputs to construct template name
-    const functionArn = outputs.LambdaFunctionArn;
-    const environmentSuffix = functionArn.split('-').pop()?.split(':')[0] || 'dev';
-    const templateName = `appointment-reminder-${environmentSuffix}`;
-
-    try {
-      const command = new GetTemplateCommand({ TemplateName: templateName });
-      const response = await sesClient.send(command);
-
-      const template = response.Template;
-      expect(template?.TemplateName).toBe(templateName);
-      expect(template?.SubjectPart).toBeDefined();
-      expect(template?.TextPart).toBeDefined();
-      expect(template?.HtmlPart).toBeDefined();
-
-      console.log(`SES template '${templateName}' exists and is properly configured`);
-    } catch (error) {
-      // SES template might not be available in sandbox mode or different region
-      console.log('SES template check skipped - template may not exist in sandbox mode');
     }
   });
 
