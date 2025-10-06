@@ -622,15 +622,16 @@ public class MainIntegrationTest {
 
         Optional<MetricAlarm> asgAlarm = alarms.metricAlarms().stream()
             .filter(alarm -> alarm.dimensions().stream()
-                .anyMatch(d -> d.value().equals(asgName) || d.name().equals("AutoScalingGroupName")))
+                .anyMatch(d -> d.value().equals(asgName) && d.name().equals("AutoScalingGroupName")))
             .findFirst();
 
-        if (asgAlarm.isPresent()) {
-            // Verify alarm actions include SNS topic
-            List<String> alarmActions = asgAlarm.get().alarmActions();
-            boolean usesSns = alarmActions.stream().anyMatch(action -> action.contains(":sns:"));
-            assertThat(usesSns).isTrue();
-        }
+        // Verify alarm exists
+        assertThat(asgAlarm).isPresent();
+
+        // Verify alarm actions include SNS topic
+        List<String> alarmActions = asgAlarm.get().alarmActions();
+        boolean usesSns = alarmActions.stream().anyMatch(action -> action.contains(":sns:"));
+        assertThat(usesSns).isTrue();
     }
 
     @Test
