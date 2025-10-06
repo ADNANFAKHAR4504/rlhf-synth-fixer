@@ -45,16 +45,18 @@ export class TapStack extends cdk.Stack {
       'eight',
       'nine',
     ];
-    const sanitizeTagValue = (value: string): string => {
+    const sanitizeTagValue = (value: string, maxLength = 256): string => {
       const digitExpanded = value.replace(
         /[0-9]/g,
         digit => digitWords[Number(digit)]
       );
       const sanitized = digitExpanded
         .replace(/[^a-zA-Z+\-=._:/]/g, '_')
-        .slice(0, 256);
+        .slice(0, maxLength);
       return sanitized.length > 0 ? sanitized : 'unknown';
     };
+    const sanitizeStageName = (value: string): string =>
+      value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
 
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
@@ -326,11 +328,13 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
+    const apiStageName = sanitizeStageName(environmentName);
+
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
       description: 'Serverless API for the Nova microservices platform.',
       deployOptions: {
-        stageName: environmentName,
+        stageName: apiStageName,
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
