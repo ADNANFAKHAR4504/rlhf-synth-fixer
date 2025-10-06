@@ -10,5 +10,24 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "IoT Core",
+    "IoT Policy",
+    "IoT TopicRule",
+    "Kinesis Data Streams",
+    "DynamoDB",
+    "SageMaker",
+    "Lambda",
+    "Location Service",
+    "S3",
+    "Glue",
+    "Athena",
+    "Step Functions",
+    "EventBridge",
+    "SNS",
+    "SES",
+    "CloudWatch",
+    "API Gateway"
+  ],
+  "training_quality": 8
 }
