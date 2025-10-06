@@ -1,0 +1,2190 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Multi-region deployable CloudFormation template with comprehensive AWS services",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Description": "The deployment environment suffix",
+            "Type": "String",
+            "Default": "dev"
+        },
+        "VpcCidr": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16"
+        },
+        "CrossRegionReplicationBuckets": {
+            "Description": "Comma-separated list of ARNs of S3 buckets in other regions for cross-region replication",
+            "Type": "CommaDelimitedList",
+            "Default": ""
+        },
+        "DBInstanceClass": {
+            "Description": "RDS instance class",
+            "Type": "String",
+            "Default": "db.t3.small"
+        },
+        "DBName": {
+            "Description": "Database name",
+            "Type": "String",
+            "Default": "mydb",
+            "MinLength": 1,
+            "MaxLength": 64,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "DBBackupRetentionPeriod": {
+            "Description": "The number of days for which automated backups are retained",
+            "Type": "Number",
+            "Default": 7,
+            "MinValue": 7
+        },
+        "WAFScope": {
+            "Description": "The scope of the WAF (REGIONAL or CLOUDFRONT)",
+            "Type": "String",
+            "Default": "REGIONAL",
+            "AllowedValues": [
+                "REGIONAL",
+                "CLOUDFRONT"
+            ]
+        },
+        "RandomSuffix": {
+            "Description": "5-digit random number suffix for unique resource naming",
+            "Type": "String",
+            "Default": "12345",
+            "AllowedPattern": "[0-9]{5}",
+            "ConstraintDescription": "Must be exactly 5 digits"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "PublicSubnet1CIDR": "10.0.1.0/24",
+                "PublicSubnet2CIDR": "10.0.2.0/24",
+                "PrivateSubnet1CIDR": "10.0.3.0/24",
+                "PrivateSubnet2CIDR": "10.0.4.0/24"
+            },
+            "us-east-2": {
+                "PublicSubnet1CIDR": "10.1.1.0/24",
+                "PublicSubnet2CIDR": "10.1.2.0/24",
+                "PrivateSubnet1CIDR": "10.1.3.0/24",
+                "PrivateSubnet2CIDR": "10.1.4.0/24"
+            },
+            "us-west-1": {
+                "PublicSubnet1CIDR": "10.2.1.0/24",
+                "PublicSubnet2CIDR": "10.2.2.0/24",
+                "PrivateSubnet1CIDR": "10.2.3.0/24",
+                "PrivateSubnet2CIDR": "10.2.4.0/24"
+            },
+            "us-west-2": {
+                "PublicSubnet1CIDR": "10.3.1.0/24",
+                "PublicSubnet2CIDR": "10.3.2.0/24",
+                "PrivateSubnet1CIDR": "10.3.3.0/24",
+                "PrivateSubnet2CIDR": "10.3.4.0/24"
+            },
+            "eu-west-1": {
+                "PublicSubnet1CIDR": "10.4.1.0/24",
+                "PublicSubnet2CIDR": "10.4.2.0/24",
+                "PrivateSubnet1CIDR": "10.4.3.0/24",
+                "PrivateSubnet2CIDR": "10.4.4.0/24"
+            },
+            "eu-central-1": {
+                "PublicSubnet1CIDR": "10.5.1.0/24",
+                "PublicSubnet2CIDR": "10.5.2.0/24",
+                "PrivateSubnet1CIDR": "10.5.3.0/24",
+                "PrivateSubnet2CIDR": "10.5.4.0/24"
+            },
+            "ap-northeast-1": {
+                "PublicSubnet1CIDR": "10.6.1.0/24",
+                "PublicSubnet2CIDR": "10.6.2.0/24",
+                "PrivateSubnet1CIDR": "10.6.3.0/24",
+                "PrivateSubnet2CIDR": "10.6.4.0/24"
+            },
+            "ap-southeast-1": {
+                "PublicSubnet1CIDR": "10.7.1.0/24",
+                "PublicSubnet2CIDR": "10.7.2.0/24",
+                "PrivateSubnet1CIDR": "10.7.3.0/24",
+                "PrivateSubnet2CIDR": "10.7.4.0/24"
+            }
+        }
+    },
+    "Conditions": {
+        "HasReplicationBuckets": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Join": [
+                                "",
+                                {
+                                    "Ref": "CrossRegionReplicationBuckets"
+                                }
+                            ]
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "S3BucketKMSKey",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ReplicationConfiguration": {
+                    "Fn::If": [
+                        "HasReplicationBuckets",
+                        {
+                            "Role": {
+                                "Fn::GetAtt": [
+                                    "S3ReplicationRole",
+                                    "Arn"
+                                ]
+                            },
+                            "Rules": [
+                                {
+                                    "Status": "Enabled",
+                                    "Destination": {
+                                        "Bucket": {
+                                            "Fn::Select": [
+                                                0,
+                                                {
+                                                    "Ref": "CrossRegionReplicationBuckets"
+                                                }
+                                            ]
+                                        },
+                                        "EncryptionConfiguration": {
+                                            "ReplicaKmsKeyID": "arn:aws:kms:*:*:alias/aws/s3"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3BucketKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for S3 bucket encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-policy",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "S3ReplicationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3ReplicationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetReplicationConfiguration",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObjectVersionForReplication",
+                                        "s3:GetObjectVersionAcl",
+                                        "s3:GetObjectVersionTagging"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}/*"
+                                    }
+                                },
+                                {
+                                    "Fn::If": [
+                                        "HasReplicationBuckets",
+                                        {
+                                            "Effect": "Allow",
+                                            "Action": [
+                                                "s3:ReplicateObject",
+                                                "s3:ReplicateDelete",
+                                                "s3:ReplicateTags"
+                                            ],
+                                            "Resource": {
+                                                "Fn::Join": [
+                                                    "",
+                                                    [
+                                                        "arn:aws:s3:::",
+                                                        {
+                                                            "Fn::Select": [
+                                                                0,
+                                                                {
+                                                                    "Ref": "CrossRegionReplicationBuckets"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "/*"
+                                                    ]
+                                                ]
+                                            }
+                                        },
+                                        {
+                                            "Ref": "AWS::NoValue"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "S3BucketKMSKey",
+                                            "Arn"
+                                        ]
+                                    },
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": {
+                                                "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt"
+                                    ],
+                                    "Resource": "arn:aws:kms:*:*:alias/aws/s3",
+                                    "Condition": {
+                                        "StringLike": {
+                                            "kms:ViaService": "s3.*.amazonaws.com"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-vpc"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PublicSubnet1CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-public-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PublicSubnet2CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-public-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrivateSubnet1CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-private-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrivateSubnet2CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-private-subnet-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-nat-gateway-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-nat-gateway-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-public-routes"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-private-routes-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-private-routes-2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for application servers",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP to anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS to anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": {
+                            "Ref": "VpcCidr"
+                        },
+                        "Description": "Allow MySQL to VPC CIDR"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-app-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for database instances",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": {
+                            "Ref": "VpcCidr"
+                        },
+                        "Description": "Allow MySQL from VPC CIDR"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-db-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EC2MinimalAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "S3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${S3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DbSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "{{resolve:ssm:/aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
+                    "InstanceType": "t3.micro",
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    ],
+                    "IamInstanceProfile": {
+                        "Name": {
+                            "Ref": "EC2InstanceProfile"
+                        }
+                    },
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash -xe\napt-get update\napt-get install -y nginx\nsystemctl enable nginx\nsystemctl start nginx\n"
+                    }
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-asg"
+                },
+                "MinSize": 2,
+                "MaxSize": 4,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-app-instance"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScaleOutPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "TargetTrackingConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue": 70.0
+                }
+            }
+        },
+        "ALB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-alb"
+                },
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "AppSecurityGroup"
+                    }
+                ],
+                "Type": "application",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-alb"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ALB"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Port": 80,
+                "Protocol": "HTTP",
+                "TargetType": "instance",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-alb-tg"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS DB instances",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbParameterGroup": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Properties": {
+                "Description": "Parameter group for RDS MySQL instances",
+                "Family": "mysql8.0",
+                "Parameters": {
+                    "max_connections": "100",
+                    "character_set_server": "utf8mb4",
+                    "collation_server": "utf8mb4_general_ci"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-db-parameter-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-db-credentials"
+                },
+                "Description": "RDS database credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-db-secret"
+                        }
+                    }
+                ]
+            }
+        },
+        "DbInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${EnvironmentSuffix}-db"
+                },
+                "DBName": {
+                    "Ref": "DBName"
+                },
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "AllocatedStorage": 20,
+                "MaxAllocatedStorage": 100,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "BackupRetentionPeriod": {
+                    "Ref": "DBBackupRetentionPeriod"
+                },
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+                "MultiAZ": true,
+                "PubliclyAccessible": false,
+                "DBSubnetGroupName": {
+                    "Ref": "DbSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DbSecurityGroup"
+                    }
+                ],
+                "DBParameterGroupName": {
+                    "Ref": "DbParameterGroup"
+                },
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DbSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DbSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
+                },
+                "EnableIAMDatabaseAuthentication": true,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-db-instance"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ]
+            }
+        },
+        "SecretRotationSchedule": {
+            "Type": "AWS::SecretsManager::RotationSchedule",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DbSecret"
+                },
+                "RotationLambdaARN": {
+                    "Fn::GetAtt": [
+                        "SecretRotationLambda",
+                        "Arn"
+                    ]
+                },
+                "RotationRules": {
+                    "AutomaticallyAfterDays": 30
+                }
+            }
+        },
+        "SecretRotationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-secret-rotation-lambda"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "SecretRotationLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "SECRET_ID": {
+                            "Ref": "DbSecret"
+                        },
+                        "DB_INSTANCE": {
+                            "Ref": "DbInstance"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport os\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    # Note: This is a placeholder for a real rotation function\n    # Actual implementation would handle secret rotation logic\n    return {\n        'statusCode': 200,\n        'body': 'Secret rotation processed'\n    }\n"
+                }
+            }
+        },
+        "SecretRotationLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SecretRotationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret",
+                                        "secretsmanager:PutSecretValue",
+                                        "secretsmanager:UpdateSecretVersionStage"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DbSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "rds:ModifyDBInstance"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DbInstance}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "WebAppLambdaPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DbSecret"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${S3Bucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "WebAppLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-webapp-lambda"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "WebAppLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "DB_SECRET_ARN": {
+                            "Ref": "DbSecret"
+                        },
+                        "S3_BUCKET": {
+                            "Ref": "S3Bucket"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    return {\n        'statusCode': 200,\n        'headers': {'Content-Type': 'application/json'},\n        'body': json.dumps({'message': 'Hello from Lambda!'})\n    }\n"
+                }
+            }
+        },
+        "WebAppLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "WebAppLambda"
+                },
+                "Principal": "apigateway.amazonaws.com"
+            }
+        },
+        "ApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-api"
+                },
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-api"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayRootMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "AuthorizationType": "NONE",
+                "HttpMethod": "GET",
+                "Integration": {
+                    "IntegrationHttpMethod": "POST",
+                    "Type": "AWS_PROXY",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebAppLambda.Arn}/invocations"
+                    }
+                },
+                "ResourceId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                }
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiGatewayRootMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                }
+            }
+        },
+        "ApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "DeploymentId": {
+                    "Ref": "ApiGatewayDeployment"
+                },
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "MetricsEnabled": true,
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true
+                    }
+                ]
+            }
+        },
+        "CloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+                "IsLogging": true,
+                "S3BucketName": {
+                    "Ref": "CloudTrailS3Bucket"
+                },
+                "TrailName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-cloudtrail"
+                },
+                "EnableLogFileValidation": true,
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "CloudWatchLogsLogGroupArn": {
+                    "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
+                },
+                "CloudWatchLogsRoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailLogsRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-cloudtrail"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-cloudtrail-logs-${RandomSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "CloudTrailS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 90
+            }
+        },
+        "CloudTrailLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudTrailLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CloudTrailLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "AppLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${EnvironmentSuffix}-app"
+                },
+                "RetentionInDays": 90
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${EnvironmentSuffix}-webapp-lambda"
+                },
+                "RetentionInDays": 90
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": "ConfigDeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-config-recorder"
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRecorderRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ConfigRecorderRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+                ]
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "Six_Hours"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigS3Bucket"
+                },
+                "S3KeyPrefix": "config"
+            }
+        },
+        "ConfigS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "ConfigS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigS3Bucket.Arn}/config/AWSLogs/${AWS::AccountId}/Config/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "RequiredTagsConfigRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-required-tags"
+                },
+                "Description": "Checks if resources have the required tags",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::Instance",
+                        "AWS::S3::Bucket",
+                        "AWS::RDS::DBInstance",
+                        "AWS::AutoScaling::AutoScalingGroup"
+                    ]
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "REQUIRED_TAGS"
+                },
+                "InputParameters": {
+                    "tag1Key": "Environment",
+                    "tag2Key": "Name",
+                    "tag3Key": "Owner"
+                }
+            }
+        },
+        "WebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-web-acl"
+                },
+                "Scope": {
+                    "Ref": "WAFScope"
+                },
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "VisibilityConfig": {
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${EnvironmentSuffix}WebACLMetric"
+                    },
+                    "SampledRequestsEnabled": true
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 0,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": {
+                                "Fn::Sub": "${EnvironmentSuffix}AWSManagedRulesCommonRuleSetMetric"
+                            },
+                            "SampledRequestsEnabled": true
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        }
+                    },
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 1,
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": {
+                                "Fn::Sub": "${EnvironmentSuffix}RateLimitRuleMetric"
+                            },
+                            "SampledRequestsEnabled": true
+                        },
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 100,
+                                "AggregateKeyType": "IP"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "WebACLAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Properties": {
+                "ResourceArn": {
+                    "Ref": "ALB"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WebACL",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
+                }
+            }
+        },
+        "S3BucketArn": {
+            "Description": "ARN of the S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3Bucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketArn"
+                }
+            }
+        },
+        "S3ReplicationRoleArn": {
+            "Description": "ARN of the IAM role used for S3 replication",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3ReplicationRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3ReplicationRoleArn"
+                }
+            }
+        },
+        "S3BucketKMSKeyArn": {
+            "Description": "ARN of the KMS key used for S3 bucket encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3BucketKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketKMSKeyArn"
+                }
+            }
+        },
+        "VpcId": {
+            "Description": "ID of the VPC",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VpcId"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "ID of the public subnet in the first availability zone",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "ID of the public subnet in the second availability zone",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "ID of the private subnet in the first availability zone",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "ID of the private subnet in the second availability zone",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "AppSecurityGroupId": {
+            "Description": "ID of the security group for the application servers",
+            "Value": {
+                "Ref": "AppSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppSecurityGroupId"
+                }
+            }
+        },
+        "DbSecurityGroupId": {
+            "Description": "ID of the security group for the database servers",
+            "Value": {
+                "Ref": "DbSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DbSecurityGroupId"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Name of the auto scaling group",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AutoScalingGroupName"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "ID of the launch template",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LaunchTemplateId"
+                }
+            }
+        },
+        "EC2InstanceRoleArn": {
+            "Description": "ARN of the IAM role for EC2 instances",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceRoleArn"
+                }
+            }
+        },
+        "LoadBalancerDnsName": {
+            "Description": "DNS name of the load balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ALB",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoadBalancerDnsName"
+                }
+            }
+        },
+        "LoadBalancerArn": {
+            "Description": "ARN of the load balancer",
+            "Value": {
+                "Ref": "ALB"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoadBalancerArn"
+                }
+            }
+        },
+        "DbInstanceEndpoint": {
+            "Description": "Connection endpoint for the RDS instance",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DbInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DbInstanceEndpoint"
+                }
+            }
+        },
+        "DbSecretArn": {
+            "Description": "ARN of the secret storing database credentials",
+            "Value": {
+                "Ref": "DbSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DbSecretArn"
+                }
+            }
+        },
+        "WebAppLambdaArn": {
+            "Description": "ARN of the Lambda function for web application",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebAppLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebAppLambdaArn"
+                }
+            }
+        },
+        "ApiGatewayUrl": {
+            "Description": "URL of the API Gateway endpoint",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+                }
+            }
+        },
+        "WebsiteUrl": {
+            "Description": "URL of the website (ALB endpoint)",
+            "Value": {
+                "Fn::Sub": "http://${ALB.DNSName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebsiteUrl"
+                }
+            }
+        },
+        "ApiUrl": {
+            "Description": "URL of the API (API Gateway endpoint)",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiUrl"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "Name of the CloudTrail trail",
+            "Value": {
+                "Ref": "CloudTrail"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+                }
+            }
+        },
+        "CloudTrailS3BucketName": {
+            "Description": "Name of the S3 bucket for CloudTrail logs",
+            "Value": {
+                "Ref": "CloudTrailS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailS3BucketName"
+                }
+            }
+        },
+        "WebACLArn": {
+            "Description": "ARN of the WAF web ACL",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebACLArn"
+                }
+            }
+        },
+        "ConfigRuleName": {
+            "Description": "Name of the AWS Config rule for required tags",
+            "Value": {
+                "Ref": "RequiredTagsConfigRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRuleName"
+                }
+            }
+        }
+    }
+}
