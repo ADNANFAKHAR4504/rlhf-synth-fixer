@@ -119,6 +119,11 @@ export class LoyaltyProgramStack extends Construct {
           },
           {
             Effect: 'Allow',
+            Action: ['sns:Publish'],
+            Resource: notificationTopic.arn,
+          },
+          {
+            Effect: 'Allow',
             Action: [
               'logs:CreateLogGroup',
               'logs:CreateLogStream',

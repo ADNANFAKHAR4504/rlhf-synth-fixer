@@ -328,6 +328,12 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
       expect(response.FunctionError).toBeUndefined();
 
       const result = JSON.parse(Buffer.from(response.Payload!).toString());
+
+      // Log the result for debugging if it fails
+      if (result.statusCode !== 200) {
+        console.error('Lambda invocation failed:', result);
+      }
+
       expect(result.statusCode).toBe(200);
 
       const body = JSON.parse(result.body);
