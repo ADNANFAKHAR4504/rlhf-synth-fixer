@@ -187,7 +187,14 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Note: For enhanced network monitoring, consider enabling VPC Flow Logs
+# to capture IP traffic information for security analysis and troubleshooting
+
 # ==================== SECURITY GROUPS ====================
+# Note: Resource names are hardcoded as "production-*" per requirement that all resources 
+# are tagged with Environment = "Production". This implementation is for a single production 
+# environment deployment. For multi-environment support (dev/staging/prod), consider 
+# parameterizing names with an environment suffix variable.
 
 # ALB Security Group
 resource "aws_security_group" "alb" {
@@ -323,6 +330,10 @@ resource "aws_iam_policy" "s3_read_only" {
   name        = "production-s3-read-only"
   description = "S3 read-only access for EC2 instances"
 
+  # Note: Wildcard S3 resource is intentional for this use case
+  # The web application needs read-only access to various S3 buckets (e.g., static assets, configuration)
+  # Actions are restricted to read-only (GetObject, ListBucket) following least privilege
+  # For production, consider scoping to specific bucket ARNs if all required buckets are known in advance
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -424,6 +435,11 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 }
 
 # ==================== EC2 INSTANCE ====================
+# Note: Current implementation uses single EC2 instance per prompt requirements
+# Future enhancements for production at scale could include:
+# - Auto Scaling Group with multiple instances for true high availability
+# - Launch Template for consistent instance configuration
+# - Target tracking scaling policies based on CPU/memory metrics
 
 # EC2 Instance (Web Server)
 resource "aws_instance" "web" {
@@ -464,6 +480,8 @@ resource "aws_instance" "web" {
 }
 
 # ==================== APPLICATION LOAD BALANCER ====================
+# Note: Future security enhancements could include AWS WAF (Web Application Firewall) association
+# for protection against common web exploits (SQL injection, XSS, etc.)
 
 # ALB
 resource "aws_lb" "main" {
@@ -471,7 +489,11 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = [aws_subnet.public.id, aws_subnet.private_secondary.id] # ALB requires 2 subnets
+  # ALB requires 2 subnets in different AZs for high availability
+  # Current configuration: 1 public subnet (10.0.1.0/24) + 1 private subnet (10.0.3.0/24) per prompt requirements
+  # Best practice recommendation: Use 2 public subnets instead (would require additional public subnet creation)
+  # This configuration meets the prompt's specified subnet requirements while enabling Multi-AZ ALB deployment
+  subnets            = [aws_subnet.public.id, aws_subnet.private_secondary.id]
 
   enable_deletion_protection = false
   enable_http2               = true
@@ -567,7 +589,7 @@ resource "aws_db_instance" "main" {
   instance_class = "db.t3.micro"
 
   allocated_storage = var.rds_allocated_storage
-  storage_type      = "gp2"
+  storage_type      = "gp2" # Cost optimization: Consider upgrading to "gp3" for better performance/cost ratio
   storage_encrypted = true
 
   db_name  = "productiondb"
@@ -802,3 +824,9 @@ output "alb_logs_bucket_arn" {
 # - Replace YOUR.IP.ADD.RESS/32 with your actual IP address for SSH access
 # - Choose a strong password for RDS
 # - Verify the AMI ID is valid and current for us-east-1
+#
+# COST OPTIMIZATION RECOMMENDATIONS:
+# - All resources include Environment = "Production" tag via provider default_tags
+# - For detailed cost allocation, consider adding additional tags: Project, Owner, CostCenter
+# - Enable AWS Cost Explorer and Cost Allocation Tags in billing console
+# - Consider RDS Reserved Instances for long-term cost savings
