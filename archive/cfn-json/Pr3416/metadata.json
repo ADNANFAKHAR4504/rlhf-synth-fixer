@@ -33,5 +33,11 @@
     "delivery-tracking",
     "notification-system"
   ],
-  "subtask_category": "serverless-infrastructure"
+  "subtask_category": "serverless-infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
