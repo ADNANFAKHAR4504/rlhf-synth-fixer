@@ -4,6 +4,7 @@ import boto3
 import logging
 from typing import Dict, Any
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Attr
 
 dynamodb = boto3.resource('dynamodb')
 logger = logging.getLogger()
@@ -31,15 +32,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
 
-        # Build key
-        key = {'item_id': item_id}
         if sku:
-            key['sku'] = sku
+            # Get specific item using both keys
+            response = table.get_item(
+                Key={
+                    'item_id': item_id,
+                    'sku': sku
+                }
+            )
+
+            if 'Item' not in response:
+                return {
+                    'statusCode': 404,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'error': 'Item not found'})
+                }
+
+            item = response['Item']
         else:
-            # If no SKU provided, we need to query to find the item
-            response = table.query(
-                KeyConditionExpression='item_id = :item_id',
-                ExpressionAttributeValues={':item_id': item_id},
+            # If no SKU provided, scan to find item by item_id (less efficient)
+            response = table.scan(
+                FilterExpression=Attr('item_id').eq(item_id),
                 Limit=1
             )
 
@@ -51,18 +64,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
 
             item = response['Items'][0]
-        else:
-            # Get specific item
-            response = table.get_item(Key=key)
-
-            if 'Item' not in response:
-                return {
-                    'statusCode': 404,
-                    'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': 'Item not found'})
-                }
-
-            item = response['Item']
 
         logger.info(f"Retrieved item: {item_id}")
 

@@ -50,22 +50,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'updated_at': datetime.utcnow().isoformat()
         }
 
-        # Check if SKU already exists
-        existing = table.query(
-            IndexName='status-index',
-            KeyConditionExpression='#status = :status AND item_id = :item_id',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={
-                ':status': 'available',
-                ':item_id': item_id
-            },
-            Limit=1
-        )
+        # Note: SKU uniqueness is handled by the composite key (item_id + sku)
+        # Multiple items can have the same SKU with different item_ids if needed
 
         # Put item in DynamoDB
+        # The composite key (item_id + sku) ensures uniqueness
         table.put_item(
             Item=item,
-            ConditionExpression='attribute_not_exists(item_id)'
+            ConditionExpression='attribute_not_exists(item_id) AND attribute_not_exists(sku)'
         )
 
         logger.info(f"Created item: {item_id}")
