@@ -288,6 +288,16 @@ resource "aws_autoscaling_group" "main" {
     "GroupTotalInstances"
   ]
 
+  instance_refresh {
+    strategy = "Rolling"
+    triggers = ["launch_template"]
+
+    preferences {
+      min_healthy_percentage = 80
+      instance_warmup        = 300
+    }
+  }
+
   tag {
     key                 = "Name"
     value               = "${var.name_prefix}-asg-instance-${var.region}"

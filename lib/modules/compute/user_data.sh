@@ -34,6 +34,7 @@ yum install -y httpd
 systemctl enable httpd
 systemctl start httpd
 
+
 # Create a simple health check endpoint
 cat <<EOF > /var/www/html/health
 <!DOCTYPE html>
