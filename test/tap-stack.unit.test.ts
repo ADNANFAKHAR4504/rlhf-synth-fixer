@@ -436,7 +436,7 @@ describe('Crowdfunding Platform CloudFormation Template - Comprehensive Unit Tes
     test('alarm should trigger SNS notification', () => {
       const alarm = template.Resources.HighErrorRateAlarm;
       expect(alarm.Properties.AlarmActions).toBeDefined();
-      expect(alarm.Properties.AlarmActions).toContain({ Ref: 'CampaignDeadlinesTopic' });
+      expect(alarm.Properties.AlarmActions).toContainEqual({ Ref: 'CampaignDeadlinesTopic' });
     });
   });
 
@@ -485,7 +485,8 @@ describe('Crowdfunding Platform CloudFormation Template - Comprehensive Unit Tes
       expect(role).toBeDefined();
       const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBTransactions');
       expect(policy).toBeDefined();
-      expect(policy.PolicyDocument.Statement[0].Action).toContain('dynamodb:TransactWriteItems');
+      // Updated to check for BatchWriteItem instead of TransactWriteItems
+      expect(policy.PolicyDocument.Statement[0].Action).toContain('dynamodb:BatchWriteItem');
     });
 
     test('PaymentProcessingLambdaRole should have Fraud Detector permissions', () => {
@@ -536,9 +537,9 @@ describe('Crowdfunding Platform CloudFormation Template - Comprehensive Unit Tes
       expect(fn.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('CampaignManagementFunction should use Node.js 18', () => {
+    test('CampaignManagementFunction should use Node.js 22', () => {
       const fn = template.Resources.CampaignManagementFunction;
-      expect(fn.Properties.Runtime).toBe('nodejs18.x');
+      expect(fn.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('CampaignManagementFunction should have correct environment variables', () => {
@@ -560,7 +561,7 @@ describe('Crowdfunding Platform CloudFormation Template - Comprehensive Unit Tes
     test('should have PaymentProcessingFunction with higher resources', () => {
       const fn = template.Resources.PaymentProcessingFunction;
       expect(fn).toBeDefined();
-      expect(fn.Properties.Runtime).toBe('nodejs18.x');
+      expect(fn.Properties.Runtime).toBe('nodejs22.x');
       expect(fn.Properties.Timeout).toBe(60);
       expect(fn.Properties.MemorySize).toBe(1024);
     });
@@ -682,7 +683,7 @@ describe('Crowdfunding Platform CloudFormation Template - Comprehensive Unit Tes
 
     test('authorizer should reference Cognito User Pool', () => {
       const auth = template.Resources.ApiGatewayAuthorizer;
-      expect(auth.Properties.ProviderARNs).toContain({ 'Fn::GetAtt': ['CrowdfundingUserPool', 'Arn'] });
+      expect(auth.Properties.ProviderARNs).toContainEqual({ 'Fn::GetAtt': ['CrowdfundingUserPool', 'Arn'] });
     });
 
     test('should have campaigns resource', () => {
