@@ -153,7 +153,6 @@ module "failover_mechanism" {
   secondary_alb_dns     = module.secondary_compute.alb_dns
   primary_alb_zone_id   = module.primary_compute.alb_zone_id
   secondary_alb_zone_id = module.secondary_compute.alb_zone_id
-  domain_name           = "${var.application_name}.${var.company_name}.com"
   health_check_interval = var.health_check_interval
   failover_threshold    = var.failover_threshold
   primary_db_arn        = module.primary_database.db_arn

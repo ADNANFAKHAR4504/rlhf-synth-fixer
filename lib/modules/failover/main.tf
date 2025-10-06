@@ -30,8 +30,8 @@ resource "aws_globalaccelerator_listener" "main" {
   protocol        = "TCP"
 
   port_range {
-    from_port = 443
-    to_port   = 443
+    from_port = 80
+    to_port   = 80
   }
 }
 
@@ -53,8 +53,8 @@ resource "aws_globalaccelerator_endpoint_group" "primary" {
 
   health_check_interval_seconds = var.health_check_interval
   health_check_path             = "/health"
-  health_check_port             = 443
-  health_check_protocol         = "HTTPS"
+  health_check_port             = 80
+  health_check_protocol         = "HTTP"
   threshold_count               = var.failover_threshold
   traffic_dial_percentage       = 100
 }

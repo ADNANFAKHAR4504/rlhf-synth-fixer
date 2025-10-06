@@ -28,10 +28,6 @@ variable "secondary_alb_zone_id" {
   type        = string
 }
 
-variable "domain_name" {
-  description = "Domain name for the application"
-  type        = string
-}
 
 variable "health_check_interval" {
   description = "Health check interval in seconds"
