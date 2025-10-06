@@ -7,5 +7,18 @@
   "team": "synth",
   "startedAt": "2025-10-03T22:37:30+05:30",
   "training_quality": 8,
-  "aws_services": ["ECR", "Lambda", "EventBridge", "SNS", "DynamoDB", "CloudWatch", "IAM", "EventBridge Scheduler"]
+  "aws_services": [
+    "ECR",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "EventBridge Scheduler"
+  ],
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ]
 }
