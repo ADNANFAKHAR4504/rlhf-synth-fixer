@@ -33,11 +33,6 @@ export class TapStack extends cdk.Stack {
 
     Tags.of(this).add('iac-rlhf-amazon', 'true');
 
-    const sanitizeTagValue = (value: string): string => {
-      const sanitized = value.replace(/[^a-zA-Z+\-=._:/]/g, '_').slice(0, 256);
-      return sanitized.length > 0 ? sanitized : 'unknown';
-    };
-
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
       default: 'nova',
@@ -72,8 +67,8 @@ export class TapStack extends cdk.Stack {
         ''
       );
 
-    Tags.of(this).add('Application', sanitizeTagValue(appName));
-    Tags.of(this).add('Environment', sanitizeTagValue(environmentName));
+    Tags.of(this).add('Application', appName);
+    Tags.of(this).add('Environment', environmentName);
 
     const encryptionKey = new kms.Key(this, 'DataProtectionKey', {
       alias: `alias/${resourceName('kms')}`,
@@ -82,6 +77,28 @@ export class TapStack extends cdk.Stack {
       description:
         'KMS key securing secrets, logs, and data for the Nova serverless platform.',
     });
+
+    encryptionKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchLogsUse',
+        principals: [
+          new iam.ServicePrincipal(`logs.${cdk.Aws.REGION}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnLike: {
+            'kms:EncryptionContext:aws:logs:arn': `arn:${cdk.Aws.PARTITION}:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:*`,
+          },
+        },
+      })
+    );
 
     const notificationTopic = new sns.Topic(this, 'NotificationTopic', {
       topicName: resourceName('notifications'),
