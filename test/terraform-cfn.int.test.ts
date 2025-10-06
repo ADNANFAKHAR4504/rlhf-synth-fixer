@@ -19,6 +19,7 @@ describe('Travel Platform API - CloudFormation Integration Tests', () => {
     cloudwatch_log_group_api: StackOutput;
     cloudwatch_log_group_lambda: StackOutput;
     dynamodb_table_name: StackOutput;
+    gdpr_lambda_function_name?: StackOutput;
     lambda_function_name: StackOutput;
     redis_endpoint: StackOutput;
     sns_topic_arn: StackOutput;
@@ -34,6 +35,7 @@ describe('Travel Platform API - CloudFormation Integration Tests', () => {
     cloudwatch_log_group_api: string;
     cloudwatch_log_group_lambda: string;
     dynamodb_table_name: string;
+    gdpr_lambda_function_name?: string;
     lambda_function_name: string;
     redis_endpoint: string;
     sns_topic_arn: string;
@@ -284,7 +286,7 @@ describe('Travel Platform API - CloudFormation Integration Tests', () => {
     test('Flat outputs should match structured outputs', () => {
       if (flatOutputs) {
         Object.keys(flatOutputs).forEach(key => {
-          expect(flatOutputs[key as keyof FlatOutputs]).toBe(outputs[key as keyof StackOutputs].value);
+          expect(flatOutputs[key as keyof FlatOutputs]).toBe(outputs[key as keyof StackOutputs]?.value);
         });
       }
     });
@@ -315,7 +317,7 @@ describe('Travel Platform API - CloudFormation Integration Tests', () => {
       requiredOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
         expect(outputs[output as keyof StackOutputs]).toHaveProperty('value');
-        expect(outputs[output as keyof StackOutputs].value).toBeTruthy();
+        expect(outputs[output as keyof StackOutputs]?.value).toBeTruthy();
       });
 
       // Check optional outputs if they exist
