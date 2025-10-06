@@ -111,7 +111,10 @@ class TestTapStack:
         lambdas = synthesis['resource'].get('aws_lambda_function', {})
         assert len(lambdas) >= 2  # Should have validation and workflow functions
 
-        # Check environment variables
+        # Check environment variables - validation Lambda has both, workflow Lambda has S3_BUCKET
+        validation_lambda_found = False
+        workflow_lambda_found = False
+
         for lambda_config in lambdas.values():
             if 'environment' in lambda_config:
                 env = lambda_config['environment']
@@ -121,8 +124,16 @@ class TestTapStack:
                     env_vars = env[0]['variables']
                 else:
                     continue
-                assert 'DYNAMODB_TABLE' in env_vars
-                assert 'S3_BUCKET' in env_vars
+
+                # Check if this is validation Lambda (has DYNAMODB_TABLE)
+                if 'DYNAMODB_TABLE' in env_vars and 'S3_BUCKET' in env_vars:
+                    validation_lambda_found = True
+                # Check if this is workflow Lambda (has S3_BUCKET only)
+                elif 'S3_BUCKET' in env_vars:
+                    workflow_lambda_found = True
+
+        assert validation_lambda_found, "Validation Lambda with DYNAMODB_TABLE and S3_BUCKET not found"
+        assert workflow_lambda_found, "Workflow Lambda with S3_BUCKET not found"
 
     def test_cloudwatch_alarms_created(self):
         """Test that CloudWatch alarms are created."""

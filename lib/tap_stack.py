@@ -384,7 +384,7 @@ class TapStack(TerraformStack):
         )
 
         # Create stage
-        ApiGatewayStage(
+        api_stage = ApiGatewayStage(
             self,
             "api_stage",
             stage_name="prod",
@@ -412,7 +412,8 @@ class TapStack(TerraformStack):
             throttle_settings={
                 "rate_limit": 500,
                 "burst_limit": 1000
-            }
+            },
+            depends_on=[api_stage]
         )
 
         # Link API key to usage plan
@@ -464,6 +465,14 @@ class TapStack(TerraformStack):
             assume_role_policy=sfn_assume_role_policy.json
         )
 
+        # Create CloudWatch Log Group for Step Functions
+        sfn_log_group = CloudwatchLogGroup(
+            self,
+            "sfn_log_group",
+            name=f"/aws/states/form-processor-{environment_suffix}",
+            retention_in_days=7
+        )
+
         # Create policy for Step Functions
         sfn_policy_document = DataAwsIamPolicyDocument(
             self,
@@ -482,11 +491,23 @@ class TapStack(TerraformStack):
                 },
                 {
                     "actions": [
-                        "logs:CreateLogGroup",
+                        "logs:CreateLogDelivery",
+                        "logs:GetLogDelivery",
+                        "logs:UpdateLogDelivery",
+                        "logs:DeleteLogDelivery",
+                        "logs:ListLogDeliveries",
+                        "logs:PutResourcePolicy",
+                        "logs:DescribeResourcePolicies",
+                        "logs:DescribeLogGroups"
+                    ],
+                    "resources": ["*"]
+                },
+                {
+                    "actions": [
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "resources": ["*"]
+                    "resources": [f"{sfn_log_group.arn}:*"]
                 }
             ]
         )
@@ -503,14 +524,6 @@ class TapStack(TerraformStack):
             "sfn_policy_attachment",
             role=sfn_role.name,
             policy_arn=sfn_policy.arn
-        )
-
-        # Create CloudWatch Log Group for Step Functions
-        sfn_log_group = CloudwatchLogGroup(
-            self,
-            "sfn_log_group",
-            name=f"/aws/states/form-processor-{environment_suffix}",
-            retention_in_days=7
         )
 
         # Package Step Functions Lambda code
