@@ -136,6 +136,14 @@ describe('TapStack Integration Tests', () => {
         lb.DNSName === stackOutputs.ALBDnsName
       );
       
+      expect(alb).toBeDefined();
+      if (!alb) {
+        throw new Error(`ALB with DNS name ${stackOutputs.ALBDnsName} not found`);
+      }
+      
+      expect(alb.State!.Code).toBe('active');
+      expect(alb.Type).toBe('application');
+      expect(alb.Scheme).toBe('internet-facing');
       console.log(`✓ ALB validated: ${stackOutputs.ALBDnsName}`);
     });
 
