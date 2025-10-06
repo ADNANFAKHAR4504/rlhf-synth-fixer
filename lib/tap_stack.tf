@@ -602,6 +602,13 @@ resource "aws_autoscaling_policy" "scale_down" {
 # LAMBDA RESOURCES
 # =============================================================================
 
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.app.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
 data "archive_file" "inline_lambda" {
   type        = "zip"
   output_path = "${path.module}/lambda_inline.zip"
@@ -641,6 +648,7 @@ resource "aws_lambda_function" "app" {
   runtime       = "nodejs18.x"
   filename         = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
+  depends_on     = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
 
   environment {
     variables = {
@@ -673,12 +681,6 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 # =============================================================================
 # CLOUDWATCH RESOURCES
 # =============================================================================
-
-resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.app.function_name}"
-  retention_in_days = 14
-  tags              = local.common_tags
-}
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${local.name_prefix}high-cpu-utilization"
