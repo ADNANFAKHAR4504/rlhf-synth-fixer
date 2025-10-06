@@ -1,8 +1,3 @@
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
@@ -12,12 +7,15 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import {
-  SecretsManagerClient,
   GetSecretValueCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import { normalizeEvent } from './normalize-event';
 
 const dynamoDocumentClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({}),
@@ -72,9 +70,10 @@ async function resolveApiKey(secretArn: string): Promise<string> {
 }
 
 export const handler = async (
-  event: APIGatewayProxyEvent,
+  event: unknown,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
   const tableName = process.env.USER_TABLE_NAME;
   const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
   const apiSecretArn = process.env.API_SECRET_ARN;
@@ -89,8 +88,8 @@ export const handler = async (
   }
 
   try {
-    const method = event.httpMethod?.toUpperCase();
-    const userId = event.pathParameters?.userId;
+    const method = normalized.httpMethod?.toUpperCase();
+    const userId = normalized.pathParameters?.userId;
 
     switch (method) {
       case 'GET': {
@@ -119,11 +118,11 @@ export const handler = async (
         return respond(200, list.Items ?? []);
       }
       case 'POST': {
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
 
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           name?: string;
           email?: string;
         };
@@ -178,11 +177,11 @@ export const handler = async (
             message: 'userId path parameter is required.',
           });
         }
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
 
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           name?: string;
           email?: string;
         };

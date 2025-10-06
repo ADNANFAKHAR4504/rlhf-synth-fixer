@@ -1,8 +1,3 @@
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DeleteCommand,
@@ -12,8 +7,10 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { normalizeEvent } from './normalize-event';
 
 const dynamoDocumentClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({}),
@@ -38,9 +35,10 @@ const respond = (
 });
 
 export const handler = async (
-  event: APIGatewayProxyEvent,
+  event: unknown,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
   const tableName = process.env.PRODUCT_TABLE_NAME;
   const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
 
@@ -56,8 +54,8 @@ export const handler = async (
   }
 
   try {
-    const method = event.httpMethod?.toUpperCase();
-    const productId = event.pathParameters?.productId;
+    const method = normalized.httpMethod?.toUpperCase();
+    const productId = normalized.pathParameters?.productId;
 
     switch (method) {
       case 'GET': {
@@ -86,11 +84,11 @@ export const handler = async (
         return respond(200, list.Items ?? []);
       }
       case 'POST': {
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
 
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           name?: string;
           description?: string;
           price?: number;
@@ -156,11 +154,11 @@ export const handler = async (
             message: 'productId path parameter is required.',
           });
         }
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
 
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           name?: string;
           description?: string;
           price?: number;
@@ -265,3 +263,6 @@ export const handler = async (
     return respond(500, { message: 'Internal server error.' });
   }
 };
+
+// Duplicate local test handler removed to avoid redeclaration of `handler`.
+// The module exports the full Lambda handler implemented above.

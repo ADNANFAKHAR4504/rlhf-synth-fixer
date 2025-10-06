@@ -1,8 +1,3 @@
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -11,8 +6,10 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { normalizeEvent } from './normalize-event';
 
 const dynamoDocumentClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({}),
@@ -37,9 +34,10 @@ const respond = (
 });
 
 export const handler = async (
-  event: APIGatewayProxyEvent,
+  event: unknown,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
   const orderTableName = process.env.ORDER_TABLE_NAME;
   const productTableName = process.env.PRODUCT_TABLE_NAME;
   const userTableName = process.env.USER_TABLE_NAME;
@@ -59,8 +57,8 @@ export const handler = async (
   }
 
   try {
-    const method = event.httpMethod?.toUpperCase();
-    const orderId = event.pathParameters?.orderId;
+    const method = normalized.httpMethod?.toUpperCase();
+    const orderId = normalized.pathParameters?.orderId;
 
     switch (method) {
       case 'GET': {
@@ -89,10 +87,10 @@ export const handler = async (
         return respond(200, list.Items ?? []);
       }
       case 'POST': {
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           userId?: string;
           productId?: string;
           quantity?: number;
@@ -206,11 +204,11 @@ export const handler = async (
             message: 'orderId path parameter is required.',
           });
         }
-        if (!event.body) {
+        if (!normalized.body) {
           return respond(400, { message: 'Missing request body.' });
         }
 
-        const payload = JSON.parse(event.body) as {
+        const payload = JSON.parse(normalized.body) as {
           status?: 'SHIPPED' | 'CANCELLED';
         };
         if (!payload.status) {
