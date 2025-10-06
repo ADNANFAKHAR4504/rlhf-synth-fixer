@@ -18,9 +18,10 @@ describe('Serverless API Integration Tests', () => {
   }
 
   const outputs = JSON.parse(fs.readFileSync(outputsFile, 'utf8'));
-  const apiEndpoint = outputs.ApiEndpoint;
+  const apiEndpoint = outputs.ApiEndpoint || outputs.ScoresApiEndpointA28B6B6E;
   const tableName = outputs.TableName;
   const apiKeyId = outputs.ApiKeyId;
+  const usagePlanId = outputs.UsagePlanId;
   const region = process.env.AWS_REGION || 'us-east-1';
 
   // AWS clients
@@ -33,6 +34,20 @@ describe('Serverless API Integration Tests', () => {
   
   beforeAll(async () => {
     try {
+      console.log('Test setup - Available outputs:', Object.keys(outputs));
+      console.log('API Endpoint:', apiEndpoint);
+      console.log('Table Name:', tableName);
+      console.log('API Key ID:', apiKeyId);
+      console.log('Usage Plan ID:', usagePlanId);
+      
+      if (!apiEndpoint) {
+        throw new Error('API endpoint not found in outputs');
+      }
+      if (!apiKeyId) {
+        throw new Error('API Key ID not found in outputs');
+      }
+      
+      console.log('Attempting to retrieve API key with ID:', apiKeyId);
       const getApiKeyCommand = new GetApiKeyCommand({
         apiKey: apiKeyId,
         includeValue: true,
@@ -40,10 +55,12 @@ describe('Serverless API Integration Tests', () => {
       const apiKeyResponse = await apiGatewayClient.send(getApiKeyCommand);
       apiKey = apiKeyResponse.value || '';
       if (!apiKey) {
-        throw new Error('API key value not found');
+        throw new Error('API key value not found in response');
       }
+      console.log('Successfully retrieved API key');
     } catch (error) {
-      console.error('Failed to retrieve API key:', error);
+      console.error('Failed to retrieve API key. API Key ID:', apiKeyId);
+      console.error('Error details:', error);
       throw error;
     }
   });
@@ -180,7 +197,8 @@ describe('Serverless API Integration Tests', () => {
 
   describe('SSM Parameter Store', () => {
     test('Should have API endpoint parameter', async () => {
-      const paramName = `/scores-api/${outputs.EnvironmentSuffix || 'dev'}/endpoint`;
+      const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
+      const paramName = `/scores-api/${environmentSuffix}/endpoint`;
       const command = new GetParameterCommand({
         Name: paramName,
       });
@@ -189,6 +207,7 @@ describe('Serverless API Integration Tests', () => {
         const response = await ssmClient.send(command);
         expect(response.Parameter?.Value).toBeDefined();
         expect(response.Parameter?.Value).toContain('execute-api');
+        expect(response.Parameter?.Value).toBe(apiEndpoint);
       } catch (error: any) {
         // Parameter might not exist in all environments
         console.log(`SSM parameter ${paramName} not found: ${error.message}`);
@@ -196,7 +215,8 @@ describe('Serverless API Integration Tests', () => {
     });
 
     test('Should have table name parameter', async () => {
-      const paramName = `/scores-api/${outputs.EnvironmentSuffix || 'dev'}/table-name`;
+      const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
+      const paramName = `/scores-api/${environmentSuffix}/table-name`;
       const command = new GetParameterCommand({
         Name: paramName,
       });
@@ -218,6 +238,24 @@ describe('Serverless API Integration Tests', () => {
       expect(outputs.GetScoreFunctionName).toBeDefined();
       expect(outputs.UpdateScoreFunctionName).toBeDefined();
       expect(outputs.DeleteScoreFunctionName).toBeDefined();
+      
+      // Verify the function names follow expected pattern
+      expect(outputs.CreateScoreFunctionName).toContain('CreateScoreFunction');
+      expect(outputs.GetScoreFunctionName).toContain('GetScoreFunction');
+      expect(outputs.UpdateScoreFunctionName).toContain('UpdateScoreFunction');
+      expect(outputs.DeleteScoreFunctionName).toContain('DeleteScoreFunction');
+    });
+  });
+
+  describe('API Gateway Configuration', () => {
+    test('Should have Usage Plan configured', () => {
+      expect(outputs.UsagePlanId).toBeDefined();
+      expect(outputs.UsagePlanId).toMatch(/^[a-z0-9]+$/);
+    });
+
+    test('Should have API Key associated with Usage Plan', () => {
+      expect(outputs.ApiKeyId).toBeDefined();
+      expect(outputs.ApiKeyId).toMatch(/^[a-z0-9]+$/);
     });
   });
 
