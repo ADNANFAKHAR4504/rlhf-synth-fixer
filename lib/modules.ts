@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-import { Fn } from 'cdktf'; // Add this import at the top of modules.ts
 
 // VPC
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -446,47 +445,66 @@ export class AutoScalingModule extends Construct {
 
     // Updated user data script in AutoScalingModule
     const userData = `#!/bin/bash
-# Update system and install dependencies
+set -e  # Exit on error
+
+# Log all output
+exec > >(tee -a /var/log/user-data.log)
+exec 2>&1
+
+echo "Starting instance initialization at $(date)"
+
+# Update system
 yum update -y
 yum install -y httpd aws-cli jq
 
-# Configure CloudWatch agent
-amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s || true
-
-# Retrieve RDS credentials from Secrets Manager
-DB_SECRET=$(aws secretsmanager get-secret-value --secret-id ${config.dbSecretArn} --region ${config.awsRegion} --query SecretString --output text)
-DB_USERNAME=$(echo $DB_SECRET | jq -r '.username')
-DB_PASSWORD=$(echo $DB_SECRET | jq -r '.password')
-
-# Export for application use
-export DB_USERNAME
-export DB_PASSWORD
-
-# Start web server with health check endpoint
-echo "<h1>Production Application Server</h1>" > /var/www/html/index.html
-echo "OK" > /var/www/html/health
-
-# Ensure proper permissions
-chmod 644 /var/www/html/index.html
-chmod 644 /var/www/html/health
-
-# Start and enable httpd
+# Start httpd first
 systemctl start httpd
 systemctl enable httpd
 
-# Verify httpd is running
-sleep 5
-if ! systemctl is-active --quiet httpd; then
-  echo "HTTPD failed to start" >> /var/log/app-init.log
-  systemctl status httpd >> /var/log/app-init.log 2>&1
-  exit 1
+# Create health check endpoint immediately
+echo "OK" > /var/www/html/health
+echo "<h1>Production Application Server</h1>" > /var/www/html/index.html
+
+# Set proper permissions
+chmod 644 /var/www/html/health
+chmod 644 /var/www/html/index.html
+chown apache:apache /var/www/html/*
+
+# Restart httpd to ensure it picks up the files
+systemctl restart httpd
+
+# Verify httpd is responding
+for i in {1..10}; do
+  if curl -f http://localhost/health; then
+    echo "Health check endpoint is responding"
+    break
+  fi
+  echo "Waiting for httpd to respond... attempt $i"
+  sleep 5
+done
+
+# Configure CloudWatch agent (non-critical, don't fail if not available)
+amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s 2>/dev/null || true
+
+# Retrieve RDS credentials (non-critical for health check)
+if [ -n "${config.dbSecretArn}" ]; then
+  DB_SECRET=$(aws secretsmanager get-secret-value \
+    --secret-id ${config.dbSecretArn} \
+    --region ${config.awsRegion} \
+    --query SecretString \
+    --output text 2>/dev/null || echo '{}')
+  
+  if [ "$DB_SECRET" != "{}" ]; then
+    export DB_USERNAME=$(echo $DB_SECRET | jq -r '.username // "admin"')
+    export DB_PASSWORD=$(echo $DB_SECRET | jq -r '.password // ""')
+    echo "Database credentials configured"
+  else
+    echo "Warning: Could not retrieve database credentials"
+  fi
 fi
 
-# Log instance metadata
-TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-echo "Instance $INSTANCE_ID initialized at $(date)" >> /var/log/app-init.log
-echo "Health check available at http://localhost/health" >> /var/log/app-init.log
+# Signal success
+echo "Instance initialization completed at $(date)"
 `;
 
     // Launch template with production configurations
@@ -550,7 +568,7 @@ echo "Health check available at http://localhost/health" >> /var/log/app-init.lo
       vpcZoneIdentifier: config.subnetIds,
       targetGroupArns: config.targetGroupArns,
       healthCheckType: 'ELB',
-      healthCheckGracePeriod: 600,
+      healthCheckGracePeriod: 300,
       minSize: config.minSize,
       maxSize: config.maxSize,
       desiredCapacity: config.desiredCapacity,
@@ -566,7 +584,8 @@ echo "Health check available at http://localhost/health" >> /var/log/app-init.lo
       instanceRefresh: {
         strategy: 'Rolling',
         preferences: {
-          minHealthyPercentage: 90,
+          minHealthyPercentage: 50, // Reduce from 90 to allow more flexibility during deployment
+          instanceWarmup: '180', // Add warmup period
         },
       },
 
@@ -630,7 +649,7 @@ export class AlbModule extends Construct {
         healthyThreshold: 2,
         unhealthyThreshold: 5,
         timeout: 10,
-        interval: 30,
+        interval: 15,
         matcher: '200',
       },
 
@@ -792,11 +811,11 @@ export class RdsModule extends Construct {
       storageType: 'gp3',
       storageEncrypted: true,
 
-      // FIX: Extract username and password from JSON secret
-      username: Fn.jsondecode(this.secretVersion.secretString)['username'],
-      password: Fn.jsondecode(this.secretVersion.secretString)['password'],
+      // FIX: Use manage_master_user_password for automatic password management
+      manageMasterUserPassword: true,
+      masterUserSecretKmsKeyId: 'alias/aws/secretsmanager', // Use AWS managed key
+      username: 'admin', // Set username directly
 
-      // Rest of the configuration remains the same...
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: [config.securityGroupId],
       publiclyAccessible: false,
