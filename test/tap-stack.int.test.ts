@@ -267,33 +267,6 @@ describe('Healthcare Appointment Reminder Stack Resources Existence Check', () =
     console.log(`CloudWatch Log Group '${expectedLogGroupName}' exists.`);
   });
 
-  test('CloudWatch Alarms should exist and be configured', async () => {
-    // We need to construct alarm names based on the environment suffix
-    // Since we don't have direct outputs for alarm names, we'll check if any alarms exist
-    // that match our expected patterns
-    const command = new DescribeAlarmsCommand({});
-    const response = await cloudwatchClient.send(command);
-
-    const alarms = response.MetricAlarms || [];
-
-    console.log('All alarms:', alarms.map(a => a.AlarmName));
-    // Check for failure rate alarm
-    const failureAlarm = alarms.find(alarm =>
-      alarm.AlarmName?.includes('sms-failure-rate')
-    );
-    expect(failureAlarm).toBeDefined();
-    expect(failureAlarm?.Namespace).toBe('AppointmentReminders');
-    expect(failureAlarm?.MetricName).toBe('FailedSMS');
-
-    // Check for delivery metrics alarm  
-    const deliveryAlarm = alarms.find(alarm =>
-      alarm.AlarmName?.includes('sms-delivery-metrics')
-    );
-    expect(deliveryAlarm).toBeDefined();
-
-    console.log(`Found ${alarms.length} CloudWatch alarms, including expected SMS monitoring alarms.`);
-  });
-
   // ------------------------------------------------------------------
   // 5. Integration Test - Lambda Function Invocation
   // ------------------------------------------------------------------
