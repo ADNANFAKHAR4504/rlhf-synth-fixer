@@ -7,7 +7,7 @@ Implements comprehensive security controls with automated threat response
 import json
 from typing import Any, Dict, List
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags, CfnCondition, Fn, CfnDeletionPolicy, CustomResource
+from aws_cdk import CfnOutput, CfnParameter, Duration, RemovalPolicy, Stack, Tags, CfnCondition, Fn, CfnDeletionPolicy, CustomResource
 from aws_cdk import aws_cloudtrail as cloudtrail
 from aws_cdk import aws_config as config
 from aws_cdk import aws_ec2 as ec2
@@ -25,6 +25,7 @@ from aws_cdk import aws_securityhub as securityhub
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
+from aws_cdk import aws_cloudwatch as cloudwatch
 from constructs import Construct
 
 
@@ -67,6 +68,9 @@ class TapStack(Stack):
         for key, value in self.compliance_tags.items():
             Tags.of(self).add(key, value)
         
+        # Create CDK parameters for flexible configuration
+        self._create_parameters()
+        
         # Generate unique identifier for resources to prevent conflicts
         import hashlib
         import random
@@ -105,6 +109,9 @@ class TapStack(Stack):
         
         # Set up AWS Config for compliance monitoring
         self._create_config_rules()
+        
+        # Create resource monitoring and quotas
+        self._create_resource_monitoring()
 
     def _create_encryption_keys(self):
         """Create KMS keys for encryption at rest"""
@@ -198,6 +205,95 @@ class TapStack(Stack):
             )
         )
 
+    def _calculate_subnet_cidr(self, vpc_cidr: str, subnet_index: int, subnet_mask: int) -> str:
+        """Calculate subnet CIDR based on VPC CIDR and subnet parameters"""
+        import ipaddress
+        
+        # Parse VPC network
+        vpc_network = ipaddress.ip_network(vpc_cidr)
+        
+        # Calculate subnet size
+        subnet_size = 32 - subnet_mask
+        host_bits = 32 - vpc_network.prefixlen
+        
+        # Generate subnet
+        subnets = list(vpc_network.subnets(new_prefix=subnet_mask))
+        if subnet_index < len(subnets):
+            return str(subnets[subnet_index])
+        else:
+            # Fallback for dynamic calculation
+            base_address = int(vpc_network.network_address)
+            subnet_address = base_address + (subnet_index << (host_bits - (subnet_mask - vpc_network.prefixlen)))
+            return f"{ipaddress.ip_address(subnet_address)}/{subnet_mask}"
+    
+    def _create_parameters(self):
+        """Create CDK parameters for flexible infrastructure configuration"""
+        
+        # VPC CIDR parameter
+        self.vpc_cidr = CfnParameter(
+            self, "VPCCidr",
+            type="String",
+            default="10.0.0.0/16",
+            description="CIDR block for the main VPC",
+            allowed_pattern="^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$"
+        )
+        
+        # Subnet mask parameters
+        self.dmz_subnet_mask = CfnParameter(
+            self, "DMZSubnetMask",
+            type="Number",
+            default=24,
+            min_value=20,
+            max_value=28,
+            description="Subnet mask for DMZ subnets"
+        )
+        
+        self.app_subnet_mask = CfnParameter(
+            self, "ApplicationSubnetMask", 
+            type="Number",
+            default=24,
+            min_value=20,
+            max_value=28,
+            description="Subnet mask for Application subnets"
+        )
+        
+        self.data_subnet_mask = CfnParameter(
+            self, "DataSubnetMask",
+            type="Number",
+            default=24,
+            min_value=20,
+            max_value=28,
+            description="Subnet mask for Data subnets"
+        )
+        
+        self.mgmt_subnet_mask = CfnParameter(
+            self, "ManagementSubnetMask",
+            type="Number",
+            default=24,
+            min_value=20,
+            max_value=28,
+            description="Subnet mask for Management subnets"
+        )
+        
+        # Resource limit parameters
+        self.max_ec2_instances = CfnParameter(
+            self, "MaxEC2Instances",
+            type="Number",
+            default=50,
+            min_value=1,
+            max_value=500,
+            description="Maximum number of EC2 instances allowed"
+        )
+        
+        self.max_s3_buckets = CfnParameter(
+            self, "MaxS3Buckets", 
+            type="Number",
+            default=20,
+            min_value=1,
+            max_value=100,
+            description="Maximum number of S3 buckets allowed"
+        )
+
     def _create_network_infrastructure(self):
         """Create isolated VPC architecture with security zones"""
         
@@ -205,7 +301,7 @@ class TapStack(Stack):
         self.vpc = ec2.Vpc(
             self, "ZeroTrustVPC",
             max_azs=3,
-            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
+            ip_addresses=ec2.IpAddresses.cidr(self.vpc_cidr.value_as_string),
             enable_dns_hostnames=True,
             enable_dns_support=True,
             nat_gateways=0,  # No NAT by default, will add with strict controls
@@ -214,25 +310,25 @@ class TapStack(Stack):
                 ec2.SubnetConfiguration(
                     name="DMZ",
                     subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24
+                    cidr_mask=self.dmz_subnet_mask.value_as_number
                 ),
                 # Application subnet for workloads
                 ec2.SubnetConfiguration(
                     name="Application",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.app_subnet_mask.value_as_number
                 ),
                 # Data subnet for databases
                 ec2.SubnetConfiguration(
                     name="Data",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.data_subnet_mask.value_as_number
                 ),
                 # Management subnet for administration
                 ec2.SubnetConfiguration(
                     name="Management",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.mgmt_subnet_mask.value_as_number
                 )
             ],
             flow_logs={
@@ -722,257 +818,12 @@ class TapStack(Stack):
         guardduty_detector_lambda = lambda_.Function(
             self, "GuardDutyDetectorLambda",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="index.handler",
-            code=lambda_.Code.from_inline(f"""
-import boto3
-import json
-import urllib3
-from botocore.exceptions import ClientError
-
-def handler(event, context):
-    try:
-        client = boto3.client('guardduty')
-        s3_client = boto3.client('s3')
-        
-        if event['RequestType'] == 'Delete':
-            # Clean up ThreatIntelSet and IPSet if we created them
-            detector_id = event.get('PhysicalResourceId', 'not-found')
-            if detector_id != 'not-found':
-                try:
-                    # List and delete ThreatIntelSets
-                    threat_intel_response = client.list_threat_intel_sets(DetectorId=detector_id)
-                    for threat_intel_id in threat_intel_response.get('ThreatIntelSetIds', []):
-                        threat_intel_details = client.get_threat_intel_set(
-                            DetectorId=detector_id, 
-                            ThreatIntelSetId=threat_intel_id
-                        )
-                        if threat_intel_details['Name'].startswith('BankingThreatIntel-{self.unique_suffix}'):
-                            client.delete_threat_intel_set(
-                                DetectorId=detector_id,
-                                ThreatIntelSetId=threat_intel_id
-                            )
-                    
-                    # List and delete IPSets
-                    ip_set_response = client.list_ip_sets(DetectorId=detector_id)
-                    for ip_set_id in ip_set_response.get('IpSetIds', []):
-                        ip_set_details = client.get_ip_set(
-                            DetectorId=detector_id,
-                            IpSetId=ip_set_id
-                        )
-                        if ip_set_details['Name'].startswith('TrustedBankingIPs-{self.unique_suffix}'):
-                            client.delete_ip_set(
-                                DetectorId=detector_id,
-                                IpSetId=ip_set_id
-                            )
-                except Exception as e:
-                    print(f"Warning: Could not clean up GuardDuty resources: {{e}}")
-            
-            return send_response(event, context, 'SUCCESS', {{
-                'DetectorId': detector_id,
-                'ThreatIntelSetId': 'deleted',
-                'IPSetId': 'deleted'
-            }})
-        
-        # List existing detectors
-        response = client.list_detectors()
-        
-        if response['DetectorIds']:
-            # Use existing detector
-            detector_id = response['DetectorIds'][0]
-            
-            # Update detector settings to match our requirements
-            try:
-                client.update_detector(
-                    DetectorId=detector_id,
-                    Enable=True,
-                    FindingPublishingFrequency='FIFTEEN_MINUTES'
-                )
-            except Exception as e:
-                print(f"Warning: Could not update detector settings: {{e}}")
-            
-            mode = 'existing'
-        else:
-            # Create new detector
-            response = client.create_detector(
-                Enable=True,
-                FindingPublishingFrequency='FIFTEEN_MINUTES',
-                Tags={{
-                    'Name': f'ZeroTrust-AutoCreated',
-                    'Environment': 'production',
-                    'ManagedBy': 'CDK-AutoDetection'
-                }}
-            )
-            
-            detector_id = response['DetectorId']
-            mode = 'new'
-        
-        # Ensure S3 files exist for ThreatIntelSet and IPSet
-        bucket_name = '{self.trail_bucket.bucket_name}'
-        
-        # Create threat intel file if it doesn't exist
-        try:
-            s3_client.head_object(Bucket=bucket_name, Key='threat-intel/bad-ips.txt')
-            print("Threat intel file already exists")
-        except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                print("Creating threat intel file - does not exist")
-                # Create a basic threat intel file
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key='threat-intel/bad-ips.txt',
-                    Body='# Threat Intelligence IP List\\n# Add malicious IPs here (one per line)\\n# Example: 1.2.3.4\\n',
-                    ContentType='text/plain'
-                )
-            else:
-                print(f"Error checking threat intel file: {{e}}")
-                raise e
-        
-        # Create trusted IPs file if it doesn't exist
-        try:
-            s3_client.head_object(Bucket=bucket_name, Key='trusted-ips/whitelist.txt')
-            print("Trusted IPs file already exists")
-        except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                print("Creating trusted IPs file - does not exist")
-                # Create a basic trusted IPs file
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key='trusted-ips/whitelist.txt',
-                    Body='# Trusted IP List\\n# Add trusted IPs here (one per line)\\n# Example: 10.0.0.0/8\\n',
-                    ContentType='text/plain'
-                )
-            else:
-                print(f"Error checking trusted IPs file: {{e}}")
-                raise e
-        
-        # Check for existing ThreatIntelSets and create only if needed
-        threat_intel_name = f'BankingThreatIntel-{self.unique_suffix}'
-        existing_threat_intel = None
-        
-        try:
-            # List existing ThreatIntelSets
-            threat_intel_list = client.list_threat_intel_sets(DetectorId=detector_id)
-            for threat_intel_id in threat_intel_list.get('ThreatIntelSetIds', []):
-                threat_intel_details = client.get_threat_intel_set(
-                    DetectorId=detector_id,
-                    ThreatIntelSetId=threat_intel_id
-                )
-                if threat_intel_details['Name'] == threat_intel_name:
-                    existing_threat_intel = threat_intel_id
-                    print(f"Using existing ThreatIntelSet: {{threat_intel_name}}")
-                    break
-        except Exception as e:
-            print(f"Warning: Could not list existing ThreatIntelSets: {{e}}")
-        
-        if existing_threat_intel:
-            # Use existing ThreatIntelSet
-            threat_intel_response = {{'ThreatIntelSetId': existing_threat_intel}}
-        else:
-            # Create new ThreatIntelSet
-            try:
-                threat_intel_response = client.create_threat_intel_set(
-                    DetectorId=detector_id,
-                    Name=threat_intel_name,
-                    Format='TXT',
-                    Location=f's3://{{bucket_name}}/threat-intel/bad-ips.txt',
-                    Activate=True,
-                    Tags={{
-                        'Name': threat_intel_name,
-                        'ManagedBy': 'ZeroTrust-CDK'
-                    }}
-                )
-                print(f"Created new ThreatIntelSet: {{threat_intel_name}}")
-            except Exception as e:
-                if 'LimitExceeded' in str(e) or 'limit' in str(e).lower():
-                    print(f"ThreatIntelSet limit reached, using existing resources: {{e}}")
-                    # Try to use any existing ThreatIntelSet as fallback
-                    if threat_intel_list.get('ThreatIntelSetIds'):
-                        threat_intel_response = {{'ThreatIntelSetId': threat_intel_list['ThreatIntelSetIds'][0]}}
-                    else:
-                        raise e
-                else:
-                    raise e
-        
-        # Check for existing IPSets and create only if needed
-        ip_set_name = f'TrustedBankingIPs-{self.unique_suffix}'
-        existing_ip_set = None
-        
-        try:
-            # List existing IPSets
-            ip_set_list = client.list_ip_sets(DetectorId=detector_id)
-            for ip_set_id in ip_set_list.get('IpSetIds', []):
-                ip_set_details = client.get_ip_set(
-                    DetectorId=detector_id,
-                    IpSetId=ip_set_id
-                )
-                if ip_set_details['Name'] == ip_set_name:
-                    existing_ip_set = ip_set_id
-                    print(f"Using existing IPSet: {{ip_set_name}}")
-                    break
-        except Exception as e:
-            print(f"Warning: Could not list existing IPSets: {{e}}")
-        
-        if existing_ip_set:
-            # Use existing IPSet
-            ip_set_response = {{'IpSetId': existing_ip_set}}
-        else:
-            # Create new IPSet
-            try:
-                ip_set_response = client.create_ip_set(
-                    DetectorId=detector_id,
-                    Name=ip_set_name,
-                    Format='TXT',
-                    Location=f's3://{{bucket_name}}/trusted-ips/whitelist.txt',
-                    Activate=True,
-                    Tags={{
-                        'Name': ip_set_name,
-                        'ManagedBy': 'ZeroTrust-CDK'
-                    }}
-                )
-                print(f"Created new IPSet: {{ip_set_name}}")
-            except Exception as e:
-                if 'LimitExceeded' in str(e) or 'limit' in str(e).lower():
-                    print(f"IPSet limit reached, using existing resources: {{e}}")
-                    # Try to use any existing IPSet as fallback
-                    if ip_set_list.get('IpSetIds'):
-                        ip_set_response = {{'IpSetId': ip_set_list['IpSetIds'][0]}}
-                    else:
-                        raise e
-                else:
-                    raise e
-        
-        return send_response(event, context, 'SUCCESS', {{
-            'DetectorId': detector_id,
-            'Mode': mode,
-            'ThreatIntelSetId': threat_intel_response['ThreatIntelSetId'],
-            'IPSetId': ip_set_response['IpSetId']
-        }}, detector_id)
-            
-    except Exception as e:
-        print(f"Error: {{str(e)}}")
-        return send_response(event, context, 'FAILED', {{'Error': str(e)}})
-
-def send_response(event, context, status, data, physical_id=None):
-    response_body = json.dumps({{
-        'Status': status,
-        'Reason': f'See CloudWatch Log Stream: {{context.log_stream_name}}',
-        'PhysicalResourceId': physical_id or context.log_stream_name,
-        'StackId': event['StackId'],
-        'RequestId': event['RequestId'],
-        'LogicalResourceId': event['LogicalResourceId'],
-        'Data': data
-    }})
-    
-    http = urllib3.PoolManager()
-    try:
-        response = http.request('PUT', event['ResponseURL'], body=response_body,
-                              headers={{'Content-Type': 'application/json'}})
-        print(f"Response status: {{response.status}}")
-    except Exception as e:
-        print(f"Failed to send response: {{e}}")
-    
-    return {{'statusCode': 200, 'body': 'Complete'}}
-"""),
+            handler="guardduty_detector.handler",
+            code=lambda_.Code.from_asset("./lib/lambda_functions", exclude=["*.pyc"]),
+            environment={
+                "BUCKET_NAME": self.trail_bucket.bucket_name,
+                "UNIQUE_SUFFIX": self.unique_suffix
+            },
             timeout=Duration.minutes(5),
             role=iam.Role(
                 self, "GuardDutyDetectorLambdaRole",
@@ -1048,7 +899,11 @@ def send_response(event, context, status, data, physical_id=None):
         # Custom resource to handle GuardDuty detector detection
         guardduty_resource = CustomResource(
             self, "GuardDutyDetectorResource",
-            service_token=guardduty_detector_lambda.function_arn
+            service_token=guardduty_detector_lambda.function_arn,
+            properties={
+                "BucketName": self.trail_bucket.bucket_name,
+                "UniqueSuffix": self.unique_suffix
+            }
         )
         
         # Get detector ID and other resources from custom resource
@@ -1950,3 +1805,117 @@ def send_response(event, context, status, data, physical_id=None):
         CfnOutput(self, "AuditorRoleArn", value=self.auditor_role.role_arn)
         CfnOutput(self, "IncidentResponseRoleArn", value=self.incident_response_role.role_arn)
         CfnOutput(self, "IncidentResponseAlertTopicArn", value=self.alert_topic.topic_arn)
+
+    def _create_resource_monitoring(self):
+        """Create resource monitoring and quota enforcement with CloudWatch alarms"""
+        
+        # Create CloudWatch dashboard for resource monitoring
+        resource_dashboard = cloudwatch.Dashboard(
+            self, "ResourceMonitoringDashboard",
+            dashboard_name=f"ZeroTrust-ResourceMonitoring-{self.unique_suffix}",
+            widgets=[
+                [
+                    cloudwatch.SingleValueWidget(
+                        title="EC2 Instance Usage",
+                        metrics=[
+                            cloudwatch.Metric(
+                                namespace="AWS/Usage",
+                                metric_name="ResourceCount",
+                                dimensions_map={
+                                    "Type": "Resource",
+                                    "Resource": "RunningOnDemand",
+                                    "Service": "EC2-Instance",
+                                    "Class": "Standard/OnDemand"
+                                },
+                                statistic="Maximum"
+                            )
+                        ],
+                        width=12
+                    )
+                ],
+                [
+                    cloudwatch.SingleValueWidget(
+                        title="S3 Bucket Usage", 
+                        metrics=[
+                            cloudwatch.Metric(
+                                namespace="AWS/Usage",
+                                metric_name="ResourceCount",
+                                dimensions_map={
+                                    "Type": "Resource",
+                                    "Resource": "BucketCount",
+                                    "Service": "S3",
+                                    "Class": "None"
+                                },
+                                statistic="Maximum"
+                            )
+                        ],
+                        width=12
+                    )
+                ]
+            ]
+        )
+        
+        # Create CloudWatch alarms for resource usage
+        ec2_usage_alarm = cloudwatch.Alarm(
+            self, "EC2InstanceUsageAlarm",
+            alarm_name=f"ZeroTrust-EC2-Usage-{self.unique_suffix}",
+            alarm_description="Alert when EC2 instance usage approaches limit",
+            metric=cloudwatch.Metric(
+                namespace="AWS/Usage",
+                metric_name="ResourceCount",
+                dimensions_map={
+                    "Type": "Resource", 
+                    "Resource": "RunningOnDemand",
+                    "Service": "EC2-Instance",
+                    "Class": "Standard/OnDemand"
+                },
+                statistic="Maximum"
+            ),
+            threshold=self.max_ec2_instances.value_as_number * 0.8,  # Alert at 80% of limit
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            evaluation_periods=2,
+            datapoints_to_alarm=1
+        )
+        
+        s3_usage_alarm = cloudwatch.Alarm(
+            self, "S3BucketUsageAlarm", 
+            alarm_name=f"ZeroTrust-S3-Usage-{self.unique_suffix}",
+            alarm_description="Alert when S3 bucket usage approaches limit",
+            metric=cloudwatch.Metric(
+                namespace="AWS/Usage",
+                metric_name="ResourceCount",
+                dimensions_map={
+                    "Type": "Resource",
+                    "Resource": "BucketCount", 
+                    "Service": "S3",
+                    "Class": "None"
+                },
+                statistic="Maximum"
+            ),
+            threshold=self.max_s3_buckets.value_as_number * 0.8,  # Alert at 80% of limit
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            evaluation_periods=2,
+            datapoints_to_alarm=1
+        )
+        
+        # Add alarms to SNS topic for notifications
+        ec2_usage_alarm.add_alarm_action(
+            cloudwatch.SnsAction(self.alert_topic)
+        )
+        
+        s3_usage_alarm.add_alarm_action(
+            cloudwatch.SnsAction(self.alert_topic)
+        )
+        
+        # Output resource limits for reference
+        CfnOutput(
+            self, "MaxEC2InstancesLimit",
+            value=self.max_ec2_instances.value_as_string,
+            description="Maximum EC2 instances allowed"
+        )
+        
+        CfnOutput(
+            self, "MaxS3BucketsLimit", 
+            value=self.max_s3_buckets.value_as_string,
+            description="Maximum S3 buckets allowed"
+        )
