@@ -1099,18 +1099,13 @@ resource "aws_cloudtrail" "main" {
     include_management_events = true
 
     data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
       type   = "AWS::DynamoDB::Table"
-      values = ["arn:aws:dynamodb:*:*:table/*"]
+      values = ["arn:aws:dynamodb:${data.aws_region.current.name}:${local.account_id}:table/${var.project_name}-*"]
     }
 
     data_resource {
       type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:*:*:function/*"]
+      values = ["arn:aws:lambda:${data.aws_region.current.name}:${local.account_id}:function/${var.project_name}-*"]
     }
   }
 
