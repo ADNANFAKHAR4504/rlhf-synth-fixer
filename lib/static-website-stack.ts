@@ -8,6 +8,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import * as crypto from 'crypto';
 
 export interface StaticWebsiteStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -28,9 +29,17 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     const siteDomain = `${props.subDomain}-${props.environmentSuffix}.${props.domainName}`;
 
+    // Generate a unique suffix to avoid bucket name conflicts
+    // Using stack ID hash to ensure deterministic but unique naming
+    const stackIdHash = crypto
+      .createHash('md5')
+      .update(this.stackId)
+      .digest('hex')
+      .substring(0, 6);
+
     // S3 bucket for website content with environment suffix
     this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
-      bucketName: `portfolio-website-${props.environmentSuffix}-${this.account}-${this.region}`,
+      bucketName: `pf-web-${props.environmentSuffix}-${this.account}-${this.region}-${stackIdHash}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -48,7 +57,7 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     // S3 bucket for CloudFront logs with environment suffix
     this.logsBucket = new s3.Bucket(this, 'LogsBucket', {
-      bucketName: `portfolio-logs-${props.environmentSuffix}-${this.account}-${this.region}`,
+      bucketName: `pf-logs-${props.environmentSuffix}-${this.account}-${this.region}-${stackIdHash}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       lifecycleRules: [

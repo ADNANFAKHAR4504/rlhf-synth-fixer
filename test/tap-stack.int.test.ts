@@ -1,6 +1,6 @@
 // Integration tests for Static Website Infrastructure
-import fs from 'fs';
 import * as aws from 'aws-sdk';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -37,9 +37,9 @@ describe('Static Website Infrastructure Integration Tests', () => {
     });
 
     test('outputs should have correct format', () => {
-      // Check bucket names include environment suffix
-      expect(outputs.WebsiteBucketName).toMatch(new RegExp(environmentSuffix));
-      expect(outputs.LogsBucketName).toMatch(new RegExp(environmentSuffix));
+      // Check bucket names include environment suffix and follow expected pattern
+      expect(outputs.WebsiteBucketName).toMatch(new RegExp(`pf-web-${environmentSuffix}-.*-${region}-[a-z0-9]{6}`));
+      expect(outputs.LogsBucketName).toMatch(new RegExp(`pf-logs-${environmentSuffix}-.*-${region}-[a-z0-9]{6}`));
 
       // Check CloudFront distribution ID format
       expect(outputs.CloudFrontDistributionId).toMatch(/^E[A-Z0-9]+$/);
@@ -52,6 +52,25 @@ describe('Static Website Infrastructure Integration Tests', () => {
 
       // Check website URL format
       expect(outputs.WebsiteUrl).toMatch(/^https:\/\//);
+    });
+
+    test('bucket names should include unique hash for collision avoidance', () => {
+      // Extract hash suffixes from bucket names
+      const websiteHash = outputs.WebsiteBucketName.split('-').pop();
+      const logsHash = outputs.LogsBucketName.split('-').pop();
+
+      // Verify hash format (6 character alphanumeric)
+      expect(websiteHash).toMatch(/^[a-z0-9]{6}$/);
+      expect(logsHash).toMatch(/^[a-z0-9]{6}$/);
+
+      // Both buckets should have the same hash (from same stack)
+      expect(websiteHash).toBe(logsHash);
+
+      // Verify bucket names contain all expected components
+      expect(outputs.WebsiteBucketName).toContain(environmentSuffix);
+      expect(outputs.WebsiteBucketName).toContain(region);
+      expect(outputs.LogsBucketName).toContain(environmentSuffix);
+      expect(outputs.LogsBucketName).toContain(region);
     });
   });
 

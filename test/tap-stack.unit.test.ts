@@ -170,7 +170,7 @@ describe('StaticWebsiteStack', () => {
 
     test('creates website S3 bucket with correct properties', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'portfolio-website-test-123456789012-us-west-1',
+        BucketName: Match.stringLikeRegexp('pf-web-test-.*-us-west-1-[a-z0-9]{6}'),
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -194,7 +194,7 @@ describe('StaticWebsiteStack', () => {
 
     test('creates logs S3 bucket with correct properties', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'portfolio-logs-test-123456789012-us-west-1',
+        BucketName: Match.stringLikeRegexp('pf-logs-test-.*-us-west-1-[a-z0-9]{6}'),
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
@@ -222,7 +222,7 @@ describe('StaticWebsiteStack', () => {
 
     test('configures lifecycle rules for logs bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'portfolio-logs-test-123456789012-us-west-1',
+        BucketName: Match.stringLikeRegexp('pf-logs-test-.*-us-west-1-[a-z0-9]{6}'),
         LifecycleConfiguration: {
           Rules: Match.arrayWith([
             Match.objectLike({
@@ -242,6 +242,28 @@ describe('StaticWebsiteStack', () => {
         expect(bucket.DeletionPolicy).toBe('Delete');
         expect(bucket.UpdateReplacePolicy).toBe('Delete');
       });
+    });
+
+    test('bucket names include unique stack ID hash for collision avoidance', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucketNames = Object.values(buckets).map(bucket => bucket.Properties.BucketName);
+
+      // Both buckets should have names that include the stack ID hash
+      bucketNames.forEach(bucketName => {
+        // Should match pattern: prefix-envSuffix-account-region-hash
+        expect(bucketName).toMatch(/^pf-(web|logs)-test-.*-us-west-1-[a-z0-9]{6}$/);
+      });
+
+      // Verify we have both website and logs buckets
+      const websiteBucket = bucketNames.find(name => name.includes('web'));
+      const logsBucket = bucketNames.find(name => name.includes('logs'));
+      expect(websiteBucket).toBeDefined();
+      expect(logsBucket).toBeDefined();
+
+      // Both buckets should have the same hash suffix (from same stack)
+      const websiteHash = websiteBucket?.split('-').pop();
+      const logsHash = logsBucket?.split('-').pop();
+      expect(websiteHash).toBe(logsHash);
     });
   });
 
