@@ -154,6 +154,7 @@ export class VpcModule extends Construct {
           ...tags,
           Name: `${id}-nat-gw-${az}`,
         },
+        dependsOn: [eip, publicSubnet], // Add explicit dependencies
       });
       this.natGateways.push(natGateway);
 
@@ -558,6 +559,8 @@ echo "Health check available at http://localhost/health" >> /var/log/app-init.lo
         version: '$Latest',
       },
 
+      dependsOn: [this.launchTemplate],
+
       // Enable instance refresh for rolling updates
       instanceRefresh: {
         strategy: 'Rolling',
@@ -781,7 +784,7 @@ export class RdsModule extends Construct {
 
     // RDS MySQL instance with Secrets Manager integration - Use direct reference
     this.dbInstance = new DbInstance(this, 'mysql', {
-      identifier: `${id.toLowerCase()}-mysql-db`, // ← Add .toLowerCase() here
+      identifier: `${id.toLowerCase()}-mysql-db`,
       engine: 'mysql',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
@@ -789,8 +792,8 @@ export class RdsModule extends Construct {
       storageEncrypted: true,
 
       // Use direct reference to the secret version
-      username: `\${jsondecode(${this.secretVersion.secretString})["username"]}`,
-      password: `\${jsondecode(${this.secretVersion.secretString})["password"]}`,
+      username: 'admin',
+      password: this.secretVersion.secretString,
 
       // Rest of the configuration remains the same...
       dbSubnetGroupName: this.subnetGroup.name,
