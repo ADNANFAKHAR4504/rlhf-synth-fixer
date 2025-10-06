@@ -1,6 +1,7 @@
 import json
 import os
 import boto3
+from decimal import Decimal
 from datetime import datetime
 import logging
 from typing import Dict, Any
@@ -79,7 +80,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if field == 'quantity':
                     expression_attribute_values[value_placeholder] = int(body[field])
                 elif field == 'price':
-                    expression_attribute_values[value_placeholder] = float(body[field])
+                    expression_attribute_values[value_placeholder] = Decimal(str(body[field]))
                 else:
                     expression_attribute_values[value_placeholder] = body[field]
 

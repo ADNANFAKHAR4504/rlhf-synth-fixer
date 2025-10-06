@@ -1,6 +1,7 @@
 import json
 import os
 import boto3
+from decimal import Decimal
 import uuid
 from datetime import datetime
 from typing import Dict, Any
@@ -64,7 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'name': body['name'],
             'description': body.get('description', ''),
             'quantity': int(body['quantity']),
-            'price': float(body.get('price', 0)),
+            'price': Decimal(str(body.get('price', 0))) if body.get('price') is not None else Decimal('0'),
             'category': body['category'],
             'status': body.get('status', 'available'),
             'created_at': datetime.utcnow().isoformat(),
