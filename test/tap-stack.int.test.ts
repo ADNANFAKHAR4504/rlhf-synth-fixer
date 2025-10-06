@@ -766,10 +766,10 @@ describe('TAP Stack Integration Tests - Full Infrastructure Validation', () => {
         
         // Verify outputs match expected structure and naming
         const outputStructure = {
-          stackName: expect.any(String),
-          tableName: expect.any(String),
-          tableArn: expect.any(String),
-          environmentSuffix: expect.any(String)
+          StackName: expect.any(String),
+          TurnAroundPromptTableName: expect.any(String),
+          TurnAroundPromptTableArn: expect.any(String),
+          EnvironmentSuffix: expect.any(String)
         };
         
         if (Object.keys(outputs).length > 0) {
