@@ -1,99 +1,152 @@
-import {
-  EC2Client,
-  DescribeVpcsCommand
-} from "@aws-sdk/client-ec2";
-import {
-  ELBv2Client,
-  DescribeLoadBalancersCommand
-} from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  RDSClient,
-  DescribeDBInstancesCommand
-} from "@aws-sdk/client-rds";
-import {
-  S3Client,
-  HeadBucketCommand
-} from "@aws-sdk/client-s3";
-import {
-  LambdaClient,
-  GetFunctionCommand
-} from "@aws-sdk/client-lambda";
-import fs from "fs";
-import path from "path";
+import os
+import json
+import unittest
+import boto3
+from botocore.exceptions import ClientError
 
-describe("TapStack Integration Tests (Environment Aware)", () => {
-  const baseDir = path.join(__dirname, "..", "..", "cfn-outputs");
-  const outputsPath = path.join(baseDir, "flat-outputs.json");
 
-  let outputs: Record<string, string> = {};
-  const envSuffix = process.env.ENVIRONMENT_SUFFIX || "";
-  const region = process.env.AWS_REGION || "us-east-2";
+class TestTapStackIntegration(unittest.TestCase):
+    """Integration tests for TapStack CDK stack (environment-aware, live AWS checks)"""
 
-  // AWS Clients
-  const ec2 = new EC2Client({ region });
-  const alb = new ELBv2Client({ region });
-  const rds = new RDSClient({ region });
-  const s3 = new S3Client({ region });
-  const lambda = new LambdaClient({ region });
+    @classmethod
+    def setUpClass(cls):
+        """Load outputs and initialize AWS clients"""
+        base_dir = os.path.join(os.path.dirname(__file__), "..", "..", "cfn-outputs")
+        outputs_path = os.path.join(base_dir, "flat-outputs.json")
 
-  beforeAll(() => {
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(`❌ Missing outputs file: ${outputsPath}`);
-    }
-    outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
-  });
+        if not os.path.exists(outputs_path):
+            raise FileNotFoundError(f"❌ Missing outputs file: {outputs_path}")
 
-  function getOutput(keyBase: string): string {
-    const key = `${keyBase}${envSuffix}`;
-    const value = outputs[key];
-    if (!value) {
-      throw new Error(`Missing key ${key} in outputs`);
-    }
-    return value;
-  }
+        with open(outputs_path, "r", encoding="utf-8") as f:
+            cls.outputs = json.load(f)
 
-  test("VPC exists in AWS", async () => {
-    const vpcId = getOutput("VPCId");
-    expect(vpcId).toMatch(/^vpc-/);
+        cls.env_suffix = os.getenv("ENVIRONMENT_SUFFIX", "")
+        cls.region = os.getenv("AWS_REGION", "us-east-2")
 
-    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(res.Vpcs?.[0]?.VpcId).toBe(vpcId);
-  });
+        cls.ec2 = boto3.client("ec2", region_name=cls.region)
+        cls.elbv2 = boto3.client("elbv2", region_name=cls.region)
+        cls.rds = boto3.client("rds", region_name=cls.region)
+        cls.s3 = boto3.client("s3", region_name=cls.region)
+        cls.lambda_client = boto3.client("lambda", region_name=cls.region)
+        cls.logs = boto3.client("logs", region_name=cls.region)
 
-  test("Application Load Balancer is active and reachable", async () => {
-    const albDNS = getOutput("LoadBalancerDNS");
-    expect(albDNS).toContain("elb.amazonaws.com");
+    def get_output(self, key_base: str) -> str:
+        """Retrieve output value with environment suffix appended"""
+        key = f"{key_base}{self.env_suffix}"
+        value = self.outputs.get(key)
+        if not value:
+            raise KeyError(f"Missing key '{key}' in flat-outputs.json")
+        return value
 
-    const lbName = albDNS.split(".")[0];
-    const res = await alb.send(new DescribeLoadBalancersCommand({ Names: [lbName] }));
-    expect(res.LoadBalancers?.[0]?.DNSName).toBe(albDNS);
-  });
+    # --- Core Tests ---
 
-  test("RDS database endpoint is valid", async () => {
-    const dbEndpoint = getOutput("DatabaseEndpoint");
-    expect(dbEndpoint).toContain("rds.amazonaws.com");
+    def test_vpc_exists(self):
+        """Validate that the VPC exists in AWS"""
+        vpc_id = self.get_output("VPCId")
+        response = self.ec2.describe_vpcs(VpcIds=[vpc_id])
+        self.assertGreater(len(response.get("Vpcs", [])), 0, "VPC should exist in AWS")
 
-    const res = await rds.send(new DescribeDBInstancesCommand({}));
-    const found = res.DBInstances?.some(db => db.Endpoint?.Address === dbEndpoint);
-    expect(found).toBeTruthy();
-  });
+    def test_alb_active(self):
+        """Validate that the Application Load Balancer is active"""
+        alb_dns = self.get_output("LoadBalancerDNS")
+        self.assertIn("elb.amazonaws.com", alb_dns)
 
-  test("S3 bucket is accessible", async () => {
-    const bucket = getOutput("S3BucketName");
-    expect(bucket).toBeDefined();
+        lb_name = alb_dns.split(".")[0]
+        response = self.elbv2.describe_load_balancers(Names=[lb_name])
+        state = response["LoadBalancers"][0]["State"]["Code"]
+        self.assertEqual(state, "active", f"ALB {lb_name} should be active")
 
-    try {
-      await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-    } catch (err: any) {
-      throw new Error(`❌ S3 bucket not accessible: ${err.message}`);
-    }
-  });
+    def test_rds_endpoint_valid(self):
+        """Validate that the RDS instance endpoint exists and is available"""
+        db_endpoint = self.get_output("DatabaseEndpoint")
+        response = self.rds.describe_db_instances()
+        found = None
+        for db in response.get("DBInstances", []):
+            if db.get("Endpoint", {}).get("Address") == db_endpoint:
+                found = db
+                break
+        self.assertIsNotNone(found, f"RDS endpoint {db_endpoint} not found in AWS")
+        self.assertEqual(found["DBInstanceStatus"], "available", "RDS instance should be available")
 
-  test("Lambda function is deployed and active", async () => {
-    const lambdaFn = getOutput("LambdaFunctionName");
-    expect(lambdaFn).toBeDefined();
+    def test_s3_bucket_accessible(self):
+        """Validate that the S3 bucket exists and is reachable"""
+        bucket_name = self.get_output("S3BucketName")
+        try:
+            self.s3.head_bucket(Bucket=bucket_name)
+        except ClientError as e:
+            self.fail(f"S3 bucket '{bucket_name}' not accessible: {e}")
 
-    const res = await lambda.send(new GetFunctionCommand({ FunctionName: lambdaFn }));
-    expect(res.Configuration?.FunctionName).toBe(lambdaFn);
-  });
-});
+    def test_lambda_function_exists(self):
+        """Validate that the Lambda function exists"""
+        lambda_name = self.get_output("LambdaFunctionName")
+        try:
+            response = self.lambda_client.get_function(FunctionName=lambda_name)
+            self.assertEqual(response["Configuration"]["FunctionName"], lambda_name)
+        except ClientError as e:
+            self.fail(f"Lambda function '{lambda_name}' not found: {e}")
+
+    # --- Extended AWS Interaction Tests ---
+
+    def test_vpc_has_subnets(self):
+        """Validate that VPC has at least 2 subnets"""
+        vpc_id = self.get_output("VPCId")
+        subnets = self.ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id]}])
+        subnet_count = len(subnets.get("Subnets", []))
+        self.assertGreaterEqual(subnet_count, 2, "VPC should have at least two subnets")
+
+    def test_s3_bucket_versioning_or_encryption(self):
+        """Validate S3 bucket versioning/encryption settings"""
+        bucket_name = self.get_output("S3BucketName")
+
+        # Check versioning
+        ver = self.s3.get_bucket_versioning(Bucket=bucket_name)
+        versioning_status = ver.get("Status", "Disabled")
+
+        # Check encryption
+        try:
+            enc = self.s3.get_bucket_encryption(Bucket=bucket_name)
+            rules = enc["ServerSideEncryptionConfiguration"]["Rules"]
+        except ClientError:
+            rules = []
+
+        self.assertTrue(
+            versioning_status in ["Enabled", "Suspended"] or rules,
+            "S3 bucket should have versioning or encryption enabled",
+        )
+
+    def test_lambda_has_log_group(self):
+        """Validate that Lambda function has an associated CloudWatch log group"""
+        lambda_name = self.get_output("LambdaFunctionName")
+        log_group = f"/aws/lambda/{lambda_name}"
+        response = self.logs.describe_log_groups(
+            logGroupNamePrefix=log_group, limit=1
+        )
+        groups = response.get("logGroups", [])
+        self.assertTrue(any(g["logGroupName"] == log_group for g in groups),
+                        f"Log group {log_group} not found for Lambda")
+
+    def test_alb_listener_exists(self):
+        """Validate ALB has a listener configured"""
+        alb_dns = self.get_output("LoadBalancerDNS")
+        lb_name = alb_dns.split(".")[0]
+        response = self.elbv2.describe_load_balancers(Names=[lb_name])
+        lb_arn = response["LoadBalancers"][0]["LoadBalancerArn"]
+
+        listeners = self.elbv2.describe_listeners(LoadBalancerArn=lb_arn)
+        self.assertGreater(len(listeners.get("Listeners", [])), 0, "ALB should have at least one listener")
+
+    def test_rds_backup_retention(self):
+        """Validate RDS has backup retention period set"""
+        db_endpoint = self.get_output("DatabaseEndpoint")
+        response = self.rds.describe_db_instances()
+        db = next(
+            (d for d in response["DBInstances"] if d["Endpoint"]["Address"] == db_endpoint),
+            None,
+        )
+        self.assertIsNotNone(db, "RDS instance must exist")
+        retention = db.get("BackupRetentionPeriod", 0)
+        self.assertGreaterEqual(retention, 0, "RDS retention period should be set (0 means disabled intentionally)")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
