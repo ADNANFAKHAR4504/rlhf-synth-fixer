@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348867B",
+  "team": "1",
+  "startedAt": "2025-09-30T15:44:18.573Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "ElastiCache",
+    "DynamoDB",
+    "CloudWatch",
+    "X-Ray",
+    "EventBridge",
+    "IAM",
+    "VPC",
+    "SNS"
+  ],
+  "training_quality": 7,
+  "training_quality_justification": "This training data provides significant value for model retraining (7/10) due to: (1) Complex multi-service AWS architecture requiring proper integration between 8+ services, (2) Critical fixes documented in MODEL_FAILURES.md including module structure issues, missing variables, deprecated syntax, and Lambda implementation, (3) Complete working implementation with actual Lambda function code, not just infrastructure declarations, (4) Demonstrates proper VPC networking, security groups, and IAM policies, (5) Shows real-world X-Ray tracing and EventBridge event patterns. Quality is not higher (8-10) because: (1) The original prompt was relatively straightforward without complex business logic, (2) Some fixes were structural/syntactic rather than architectural insights, (3) Missing Lambda code in IDEAL_RESPONSE.md reduces training completeness.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}
