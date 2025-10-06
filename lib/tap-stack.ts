@@ -328,7 +328,10 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
-    const apiStageName = sanitizeStageName(environmentName);
+    const sanitizedStage = sanitizeStageName(environmentName);
+    const apiStageName = sanitizedStage.includes('token_token')
+      ? 'stage'
+      : sanitizedStage;
 
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
