@@ -1,8 +1,6 @@
 ## Inventory Management API — Ideal Implementation (AWS CDK, Python)
 
-This document presents the ideal, production-ready implementation for the serverless Inventory Management API using AWS CDK (Python). It includes all core source files under `lib/` as code listings to serve as the canonical reference for model training.
-
-### tap_stack.py
+### lib/tap_stack.py
 
 ```python
 """tap_stack.py
@@ -148,7 +146,20 @@ class TapStack(cdk.Stack):
     )
 ```
 
-### constructs/database_construct.py
+### lib/constructs/**init**.py
+
+```python
+"""
+Constructs package for the TAP (Test Automation Platform) inventory management system.
+
+This package contains reusable CDK constructs for building a serverless inventory API:
+- DatabaseConstruct: DynamoDB table with auto-scaling and GSIs
+- LambdaConstruct: Lambda functions for CRUD operations
+- ApiConstruct: API Gateway REST API with proper validation and security
+"""
+```
+
+### lib/constructs/database_construct.py
 
 ```python
 from aws_cdk import (
@@ -227,9 +238,11 @@ class DatabaseConstruct(Construct):
             description=f"DynamoDB table name for {env_name} environment"
         )
 
-        # Provisioned capacity autoscaling (optional, commented)
+        # If using provisioned capacity (alternative for predictable workloads)
+        # Uncomment below for auto-scaling configuration
         """
         if env_name == "prod":
+            # Configure auto-scaling for read capacity
             read_scaling = self.table.auto_scale_read_capacity(
                 min_capacity=5,
                 max_capacity=100
@@ -238,6 +251,7 @@ class DatabaseConstruct(Construct):
                 target_utilization_percent=70
             )
 
+            # Configure auto-scaling for write capacity
             write_scaling = self.table.auto_scale_write_capacity(
                 min_capacity=5,
                 max_capacity=100
@@ -248,7 +262,7 @@ class DatabaseConstruct(Construct):
         """
 ```
 
-### constructs/lambda_construct.py
+### lib/constructs/lambda_construct.py
 
 ```python
 from aws_cdk import (
@@ -404,7 +418,7 @@ class LambdaConstruct(Construct):
             self.functions[func_name] = function
 ```
 
-### constructs/api_construct.py
+### lib/constructs/api_construct.py
 
 ```python
 from aws_cdk import (
@@ -612,7 +626,7 @@ class ApiConstruct(Construct):
         )
 ```
 
-### lambda/layer/python/utils.py
+### lib/lambda/layer/python/utils.py
 
 ```python
 """Shared utilities for Lambda functions"""
@@ -676,7 +690,13 @@ def format_response(status_code: int, body: Any, headers: dict = None) -> dict:
     return response
 ```
 
-### lambda/handlers/create_item.py
+### lib/lambda/layer/requirements.txt
+
+```text
+boto3>=1.26.0
+```
+
+### lib/lambda/handlers/create_item.py
 
 ```python
 import json
@@ -684,7 +704,7 @@ import os
 import boto3
 from decimal import Decimal
 import uuid
-from datetime as datetime
+from datetime import datetime
 from typing import Dict, Any
 import logging
 from botocore.exceptions import ClientError
@@ -724,14 +744,22 @@ logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Create a new inventory item"""
     try:
+        # Parse request body
         body = json.loads(event.get('body', '{}'))
+
+        # Validate request data
         is_valid, validation_message = validate_item_data(body)
         if not is_valid:
             return format_response(400, {'error': validation_message})
 
+        # Get table name from environment
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
+
+        # Generate item_id
         item_id = str(uuid.uuid4())
+
+        # Prepare item
         item = {
             'item_id': item_id,
             'sku': body['sku'],
@@ -744,9 +772,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'created_at': datetime.utcnow().isoformat(),
             'updated_at': datetime.utcnow().isoformat()
         }
+
+        # Note: SKU uniqueness is handled by the composite key (item_id + sku)
+        # Multiple items can have the same SKU with different item_ids if needed
+
+        # Put item in DynamoDB
+        # UUID collision is extremely unlikely, so no condition expression needed
         table.put_item(Item=item)
+
         logger.info(f"Created item: {item_id}")
-        return format_response(201, {'message': 'Item created successfully', 'item': item})
+
+        return format_response(201, {
+            'message': 'Item created successfully',
+            'item': item
+        })
+
     except ClientError as e:
         logger.error(f"DynamoDB error: {str(e)}")
         return format_response(500, {'error': 'Internal server error'})
@@ -755,7 +795,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return format_response(500, {'error': 'Internal server error'})
 ```
 
-### lambda/handlers/get_item.py
+### lib/lambda/handlers/get_item.py
 
 ```python
 import json
@@ -766,9 +806,11 @@ from typing import Dict, Any
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr
 
+# Import utilities from layer
 try:
     from utils import DecimalEncoder, format_response
 except ImportError:
+    # Fallback if layer is not available
     class DecimalEncoder(json.JSONEncoder):
         def default(self, obj):
             from decimal import Decimal
@@ -788,27 +830,52 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Get an inventory item by ID and optionally SKU"""
     try:
+        # Get path parameters
         path_params = event.get('pathParameters', {})
         item_id = path_params.get('item_id')
+
         if not item_id:
             return format_response(400, {'error': 'Missing item_id parameter'})
+
+        # Get query parameters
         query_params = event.get('queryStringParameters', {}) or {}
         sku = query_params.get('sku')
+
+        # Get table
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
+
         if sku:
-            response = table.get_item(Key={'item_id': item_id, 'sku': sku})
+            # Get specific item using both keys
+            response = table.get_item(
+                Key={
+                    'item_id': item_id,
+                    'sku': sku
+                }
+            )
+
             if 'Item' not in response:
                 return format_response(404, {'error': 'Item not found'})
+
             item = response['Item']
         else:
-            response = table.scan(FilterExpression=Attr('item_id').eq(item_id), Limit=1)
+            # If no SKU provided, scan to find item by item_id (less efficient)
+            response = table.scan(
+                FilterExpression=Attr('item_id').eq(item_id),
+                Limit=1
+            )
+
             if not response.get('Items'):
                 return format_response(404, {'error': 'Item not found'})
+
             item = response['Items'][0]
+
         logger.info(f"Retrieved item: {item_id}")
+
         return format_response(200, {'item': item})
+
     except ClientError as e:
         logger.error(f"DynamoDB error: {str(e)}")
         return format_response(500, {'error': 'Internal server error'})
@@ -817,21 +884,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return format_response(500, {'error': 'Internal server error'})
 ```
 
-### lambda/handlers/update_item.py
+### lib/lambda/handlers/update_item.py
 
 ```python
 import json
 import os
 import boto3
-from decimal as Decimal
 from datetime import datetime
 import logging
 from typing import Dict, Any
 from botocore.exceptions import ClientError
+from decimal import Decimal
 
+# Import utilities from layer
 try:
     from utils import DecimalEncoder, format_response
 except ImportError:
+    # Fallback if layer is not available
     class DecimalEncoder(json.JSONEncoder):
         def default(self, obj):
             from decimal import Decimal
@@ -851,29 +920,43 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Update an existing inventory item"""
     try:
+        # Get path parameters
         path_params = event.get('pathParameters', {})
         item_id = path_params.get('item_id')
+
         if not item_id:
             return {
                 'statusCode': 400,
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'Missing item_id parameter'})
             }
+
+        # Parse request body
         body = json.loads(event.get('body', '{}'))
+
         if not body or 'sku' not in body:
             return {
                 'statusCode': 400,
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'Missing SKU in request body'})
             }
+
+        # Get table
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
+
+        # Build update expression
         update_expression_parts = []
         expression_attribute_names = {}
         expression_attribute_values = {':updated_at': datetime.utcnow().isoformat()}
+
+        # Add updated_at
         update_expression_parts.append('#updated_at = :updated_at')
         expression_attribute_names['#updated_at'] = 'updated_at'
+
+        # Update fields if provided
         updateable_fields = ['name', 'description', 'quantity', 'price', 'category', 'status']
         for field in updateable_fields:
             if field in body:
@@ -881,22 +964,35 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 value_placeholder = f':{field}'
                 update_expression_parts.append(f'{placeholder} = {value_placeholder}')
                 expression_attribute_names[placeholder] = field
+
+                # Handle numeric types
                 if field == 'quantity':
                     expression_attribute_values[value_placeholder] = int(body[field])
                 elif field == 'price':
                     expression_attribute_values[value_placeholder] = Decimal(str(body[field]))
                 else:
                     expression_attribute_values[value_placeholder] = body[field]
+
+        # Perform update
         response = table.update_item(
-            Key={'item_id': item_id, 'sku': body['sku']},
+            Key={
+                'item_id': item_id,
+                'sku': body['sku']
+            },
             UpdateExpression='SET ' + ', '.join(update_expression_parts),
             ExpressionAttributeNames=expression_attribute_names,
             ExpressionAttributeValues=expression_attribute_values,
             ConditionExpression='attribute_exists(item_id)',
             ReturnValues='ALL_NEW'
         )
+
         logger.info(f"Updated item: {item_id}")
-        return format_response(200, {'message': 'Item updated successfully', 'item': response['Attributes']})
+
+        return format_response(200, {
+            'message': 'Item updated successfully',
+            'item': response['Attributes']
+        })
+
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             return {
@@ -919,7 +1015,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 ```
 
-### lambda/handlers/delete_item.py
+### lib/lambda/handlers/delete_item.py
 
 ```python
 import json
@@ -929,9 +1025,11 @@ import logging
 from typing import Dict, Any
 from botocore.exceptions import ClientError
 
+# Import utilities from layer
 try:
     from utils import DecimalEncoder, format_response
 except ImportError:
+    # Fallback if layer is not available
     class DecimalEncoder(json.JSONEncoder):
         def default(self, obj):
             from decimal import Decimal
@@ -951,32 +1049,50 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Delete an inventory item"""
     try:
+        # Get parameters
         path_params = event.get('pathParameters', {})
         query_params = event.get('queryStringParameters', {}) or {}
+
         item_id = path_params.get('item_id')
         sku = query_params.get('sku')
+
         if not item_id or not sku:
             return {
                 'statusCode': 400,
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'Missing item_id or sku parameter'})
             }
+
+        # Get table
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
+
+        # Delete item
         response = table.delete_item(
-            Key={'item_id': item_id, 'sku': sku},
+            Key={
+                'item_id': item_id,
+                'sku': sku
+            },
             ConditionExpression='attribute_exists(item_id)',
             ReturnValues='ALL_OLD'
         )
+
         if 'Attributes' not in response:
             return {
                 'statusCode': 404,
                 'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'Item not found'})
             }
+
         logger.info(f"Deleted item: {item_id} with SKU: {sku}")
-        return format_response(200, {'message': 'Item deleted successfully', 'deleted_item': response['Attributes']})
+
+        return format_response(200, {
+            'message': 'Item deleted successfully',
+            'deleted_item': response['Attributes']
+        })
+
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             return {
@@ -999,7 +1115,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 ```
 
-### lambda/handlers/list_items.py
+### lib/lambda/handlers/list_items.py
 
 ```python
 import json
@@ -1010,9 +1126,11 @@ from typing import Dict, Any, Optional
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 
+# Import utilities from layer
 try:
     from utils import DecimalEncoder, format_response
 except ImportError:
+    # Fallback if layer is not available
     class DecimalEncoder(json.JSONEncoder):
         def default(self, obj):
             from decimal import Decimal
@@ -1023,7 +1141,7 @@ except ImportError:
     def format_response(status_code, body, headers=None):
         return {
             'statusCode': status_code,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': headers or {'Content-Type': 'application/json'},
             'body': json.dumps(body, cls=DecimalEncoder)
         }
 
@@ -1033,6 +1151,7 @@ logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
 
 def get_config():
+    """Get configuration from Parameter Store"""
     try:
         param_name = os.environ.get('CONFIG_PARAMETER')
         if param_name:
@@ -1040,40 +1159,76 @@ def get_config():
             return json.loads(response['Parameter']['Value'])
     except Exception as e:
         logger.error(f"Error getting config: {str(e)}")
+
     return {'max_items_per_page': 50, 'default_page_size': 20}
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """List inventory items with pagination and filtering"""
     try:
+        # Get configuration
         config = get_config()
+
+        # Get query parameters
         query_params = event.get('queryStringParameters', {}) or {}
         category = query_params.get('category')
         status = query_params.get('status')
-        page_size = min(int(query_params.get('page_size', config['default_page_size'])), config['max_items_per_page'])
+        page_size = min(
+            int(query_params.get('page_size', config['default_page_size'])),
+            config['max_items_per_page']
+        )
         last_evaluated_key = query_params.get('last_evaluated_key')
+
+        # Get table
         table_name = os.environ['TABLE_NAME']
         table = dynamodb.Table(table_name)
+
+        # Build query parameters
         query_kwargs = {'Limit': page_size}
+
         if last_evaluated_key:
             query_kwargs['ExclusiveStartKey'] = json.loads(last_evaluated_key)
+
+        # Query based on filters
         if category:
+            # Use category index
             query_kwargs['IndexName'] = 'category-index'
             query_kwargs['KeyConditionExpression'] = Key('category').eq(category)
             response = table.query(**query_kwargs)
         elif status:
+            # Use status index
             query_kwargs['IndexName'] = 'status-index'
             query_kwargs['KeyConditionExpression'] = Key('status').eq(status)
             response = table.query(**query_kwargs)
         else:
+            # Scan table (less efficient but necessary for unfiltered listing)
             response = table.scan(**query_kwargs)
-        result = {'items': response.get('Items', []), 'count': response.get('Count', 0)}
+
+        # Prepare response
+        result = {
+            'items': response.get('Items', []),
+            'count': response.get('Count', 0)
+        }
+
+        # Add pagination token if there are more results
         if 'LastEvaluatedKey' in response:
             result['next_page_token'] = json.dumps(response['LastEvaluatedKey'])
+
         logger.info(f"Listed {result['count']} items")
+
         return format_response(200, result)
+
     except ClientError as e:
         logger.error(f"DynamoDB error: {str(e)}")
-        return {'statusCode': 500, 'headers': {'Content-Type': 'application/json'}, 'body': json.dumps({'error': 'Internal server error'})}
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': 'Internal server error'})
+        }
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        return {'statusCode': 500, 'headers': {'Content-Type': 'application/json'}, 'body': json.dumps({'error': 'Internal server error'})}
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': 'Internal server error'})
+        }
 ```
