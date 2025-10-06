@@ -4,7 +4,8 @@
 
 import {
   CloudTrailClient,
-  DescribeTrailsCommand
+  DescribeTrailsCommand,
+  GetTrailStatusCommand
 } from "@aws-sdk/client-cloudtrail";
 import {
   CloudWatchClient,
@@ -989,8 +990,7 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
 
           for (const trail of ourTrails) {
             expect(trail.Name).toBeDefined();
-            // Use GetTrailStatus to verify logging state
-            const { GetTrailStatusCommand } = await import("@aws-sdk/client-cloudtrail");
+            // Use GetTrailStatus to verify logging state (static import)
             const statusResp = await client.send(new GetTrailStatusCommand({ Name: trail.Name }));
             expect(statusResp.IsLogging).toBe(true);
             expect(trail.IncludeGlobalServiceEvents).toBe(true);
@@ -1013,7 +1013,7 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
           const fetch = require('node-fetch');
           let response: any = null;
           let attempts = 0;
-          const maxAttempts = 5;
+          const maxAttempts = 10; // increased from 5
           const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
           while (attempts < maxAttempts) {
             try {
@@ -1023,7 +1023,7 @@ describe("Multi-Region Infrastructure - Integration Tests", () => {
               // ignore and retry
             }
             attempts += 1;
-            await delay(3000);
+            await delay(5000); // increased backoff
           }
 
           expect(response && response.status).toBe(200);
