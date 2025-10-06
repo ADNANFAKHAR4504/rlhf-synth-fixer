@@ -113,7 +113,17 @@ class TapStack(pulumi.ComponentResource):
             function_arn=self.processor_function.arn
         )
 
-        # Register outputs
+        # Export key outputs for external consumption
+        pulumi.export("source_bucket_name", self.source_bucket.bucket)
+        pulumi.export("destination_bucket_name", self.dest_bucket.bucket)
+        pulumi.export("lambda_function_name", self.processor_function.name)
+        pulumi.export("lambda_function_arn", self.processor_function.arn)
+        pulumi.export("log_group_name", self.log_group.name)
+        pulumi.export("kms_key_id", self.kms_key.id)
+        pulumi.export("upload_prefix", "uploads/")
+        pulumi.export("instructions", "Upload images to the source bucket with prefix 'uploads/' to trigger processing")
+        
+        # Register outputs for component communication
         self.register_outputs({
             "source_bucket": self.source_bucket.bucket,
             "dest_bucket": self.dest_bucket.bucket,
