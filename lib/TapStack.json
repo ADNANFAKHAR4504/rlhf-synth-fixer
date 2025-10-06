@@ -629,6 +629,71 @@
         ]
       }
     },
+    "LessonDeliveryInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LessonDeliveryFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/lessons"
+        }
+      }
+    },
+    "UserProgressInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "UserProgressFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/progress"
+        }
+      }
+    },
+    "SpeechRecognitionInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SpeechRecognitionFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/speech"
+        }
+      }
+    },
+    "GrammarAnalysisInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "GrammarAnalysisFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/grammar"
+        }
+      }
+    },
+    "RecommendationsInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RecommendationsFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/recommendations"
+        }
+      }
+    },
     "UserProgressFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -1770,7 +1835,9 @@
         "GenerateSecret": false,
         "ExplicitAuthFlows": [
           "ALLOW_USER_SRP_AUTH",
-          "ALLOW_REFRESH_TOKEN_AUTH"
+          "ALLOW_REFRESH_TOKEN_AUTH",
+          "ALLOW_USER_PASSWORD_AUTH",
+          "ALLOW_ADMIN_USER_PASSWORD_AUTH"
         ],
         "PreventUserExistenceErrors": "ENABLED"
       }
@@ -1945,6 +2012,33 @@
       "Value": {
         "Fn::GetAtt": [
           "SpeechRecognitionFunction",
+          "Arn"
+        ]
+      }
+    },
+    "UserProgressFunctionArn": {
+      "Description": "ARN of the User Progress Lambda Function",
+      "Value": {
+        "Fn::GetAtt": [
+          "UserProgressFunction",
+          "Arn"
+        ]
+      }
+    },
+    "GrammarAnalysisFunctionArn": {
+      "Description": "ARN of the Grammar Analysis Lambda Function",
+      "Value": {
+        "Fn::GetAtt": [
+          "GrammarAnalysisFunction",
+          "Arn"
+        ]
+      }
+    },
+    "RecommendationsFunctionArn": {
+      "Description": "ARN of the Recommendations Lambda Function",
+      "Value": {
+        "Fn::GetAtt": [
+          "RecommendationsFunction",
           "Arn"
         ]
       }
