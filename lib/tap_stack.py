@@ -64,7 +64,7 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend with native state locking
+        # Configure S3 Backend
         S3Backend(
             self,
             bucket=state_bucket,
@@ -72,9 +72,6 @@ class TapStack(TerraformStack):
             region=state_bucket_region,
             encrypt=True,
         )
-
-        # Add S3 state locking using escape hatch
-        self.add_override("terraform.backend.s3.dynamodb_table", f"terraform-locks-{environment_suffix}")
 
         # Create S3 bucket for file attachments
         attachments_bucket = S3Bucket(

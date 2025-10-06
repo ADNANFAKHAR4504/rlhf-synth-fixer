@@ -53,7 +53,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         s3_buckets = [r for r in synthesis['resource'].get('aws_s3_bucket', {}).values()]
         assert len(s3_buckets) > 0
 
@@ -69,7 +69,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         tables = synthesis['resource'].get('aws_dynamodb_table', {})
         assert len(tables) > 0
 
@@ -88,7 +88,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
 
         # Check API Gateway REST API exists
         apis = synthesis['resource'].get('aws_api_gateway_rest_api', {})
@@ -107,7 +107,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         lambdas = synthesis['resource'].get('aws_lambda_function', {})
         assert len(lambdas) >= 2  # Should have validation and workflow functions
 
@@ -126,7 +126,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         alarms = synthesis['resource'].get('aws_cloudwatch_metric_alarm', {})
         assert len(alarms) > 0
 
@@ -144,7 +144,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
 
         # Check SES email identity
         email_identities = synthesis['resource'].get('aws_ses_email_identity', {})
@@ -162,7 +162,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         state_machines = synthesis['resource'].get('aws_sfn_state_machine', {})
         assert len(state_machines) > 0
 
@@ -181,7 +181,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
 
         # Check IAM roles
         roles = synthesis['resource'].get('aws_iam_role', {})
@@ -199,7 +199,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
 
         # Check usage plan
         usage_plans = synthesis['resource'].get('aws_api_gateway_usage_plan', {})
@@ -220,7 +220,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         outputs = synthesis.get('output', {})
 
         # Check key outputs exist
@@ -236,7 +236,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         lifecycle_configs = synthesis['resource'].get('aws_s3_bucket_lifecycle_configuration', {})
         assert len(lifecycle_configs) > 0
 
@@ -255,7 +255,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
         log_groups = synthesis['resource'].get('aws_cloudwatch_log_group', {})
         assert len(log_groups) >= 3  # Lambda logs and Step Functions logs
 
@@ -271,7 +271,7 @@ class TestTapStack:
             environment_suffix=self.test_env_suffix
         )
 
-        synthesis = Testing.synth(stack)
+        synthesis = json.loads(Testing.synth(stack))
 
         # Check S3 bucket name includes suffix
         buckets = synthesis['resource'].get('aws_s3_bucket', {})
