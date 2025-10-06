@@ -177,7 +177,7 @@ func TestNetworkingStackIntegration(t *testing.T) {
 		// Gateway endpoints should have route table associations
 		// Match_AnyValue just checks that at least one exists
 		endpoints := template.FindResources(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), &map[string]interface{}{})
-		assert.NotEmpty(t, *endpoints.(*map[string]map[string]interface{}), "Should have VPC endpoint route table associations")
+		assert.NotEmpty(t, *endpoints, "Should have VPC endpoint route table associations")
 	})
 }
 
@@ -638,7 +638,7 @@ func TestCrossServiceInteractions(t *testing.T) {
 		})
 
 		endpoints := template.FindResources(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), &map[string]interface{}{})
-		assert.NotEmpty(t, *endpoints.(*map[string]map[string]interface{}), "Should have VPC endpoint route table associations")
+		assert.NotEmpty(t, *endpoints, "Should have VPC endpoint route table associations")
 	})
 
 	t.Run("KMS key encrypts RDS storage", func(t *testing.T) {
@@ -658,7 +658,7 @@ func TestCrossServiceInteractions(t *testing.T) {
 				"StorageEncrypted": true,
 			},
 		})
-		assert.NotEmpty(t, *rdsProps.(*map[string]map[string]interface{}))
+		assert.NotEmpty(t, *rdsProps)
 	})
 
 	t.Run("RDS is completely isolated with no internet access", func(t *testing.T) {
@@ -680,8 +680,8 @@ func TestCrossServiceInteractions(t *testing.T) {
 		})
 
 		rdsPublicAccess := 0
-		for _, rule := range *ingressRules.(*map[string]map[string]interface{}) {
-			props := rule["Properties"].(map[string]interface{})
+		for _, rule := range *ingressRules {
+			props := (*rule)["Properties"].(map[string]interface{})
 			if fromPort, ok := props["FromPort"]; ok {
 				if fromPort == float64(3306) {
 					rdsPublicAccess++
@@ -723,13 +723,13 @@ func TestCrossServiceInteractions(t *testing.T) {
 
 		// Multiple security groups for different tiers
 		securityGroups := template.FindResources(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{})
-		sgMap := *securityGroups.(*map[string]map[string]interface{})
+		sgMap := *securityGroups
 
 		assert.GreaterOrEqual(t, len(sgMap), 2, "Should have multiple security groups (ALB, RDS)")
 
 		// Verify each SG has a description
 		for logicalId, sg := range sgMap {
-			props := sg["Properties"].(map[string]interface{})
+			props := (*sg)["Properties"].(map[string]interface{})
 			desc, hasDesc := props["GroupDescription"]
 			assert.True(t, hasDesc, fmt.Sprintf("SG %s must have description", logicalId))
 			assert.NotEmpty(t, desc, fmt.Sprintf("SG %s description must not be empty", logicalId))
@@ -749,7 +749,7 @@ func TestCrossServiceInteractions(t *testing.T) {
 
 		// Should have 6 subnets (3 types × 2 AZs)
 		subnets := template.FindResources(jsii.String("AWS::EC2::Subnet"), &map[string]interface{}{})
-		subnetMap := *subnets.(*map[string]map[string]interface{})
+		subnetMap := *subnets
 
 		assert.Equal(t, 6, len(subnetMap), "Should have 6 subnets for proper segmentation")
 	})
@@ -770,7 +770,7 @@ func TestCrossServiceInteractions(t *testing.T) {
 
 		// NAT requires EIP
 		eips := template.FindResources(jsii.String("AWS::EC2::EIP"), &map[string]interface{}{})
-		assert.NotEmpty(t, *eips.(*map[string]map[string]interface{}), "NAT Gateway should have Elastic IP")
+		assert.NotEmpty(t, *eips, "NAT Gateway should have Elastic IP")
 	})
 }
 
@@ -813,7 +813,7 @@ func TestEndToEndWorkflows(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		nestedStacks := template.FindResources(jsii.String("AWS::CloudFormation::Stack"), &map[string]interface{}{})
-		nestedStackMap := *nestedStacks.(*map[string]map[string]interface{})
+		nestedStackMap := *nestedStacks
 
 		assert.GreaterOrEqual(t, len(nestedStackMap), 4, "Should have 4 nested stacks")
 
@@ -835,7 +835,7 @@ func TestEndToEndWorkflows(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		outputs := template.FindOutputs(jsii.String("*"), &map[string]interface{}{})
-		outputMap := *outputs.(*map[string]map[string]interface{})
+		outputMap := *outputs
 
 		requiredOutputs := []string{
 			"VpcId",
@@ -853,7 +853,7 @@ func TestEndToEndWorkflows(t *testing.T) {
 		exportedOutputs := []string{"VpcId", "KmsKeyId", "RdsEndpoint", "AlbDnsName"}
 		for _, outputName := range exportedOutputs {
 			if output, ok := outputMap[outputName]; ok {
-				assert.Contains(t, output, "Export", fmt.Sprintf("Output %s should have Export", outputName))
+				assert.Contains(t, *output, "Export", fmt.Sprintf("Output %s should have Export", outputName))
 			}
 		}
 	})
@@ -891,23 +891,23 @@ func TestEndToEndWorkflows(t *testing.T) {
 
 		// Networking resources
 		vpcs := template.FindResources(jsii.String("AWS::EC2::VPC"), &map[string]interface{}{})
-		assert.NotEmpty(t, *vpcs.(*map[string]map[string]interface{}), "Should have VPC")
+		assert.NotEmpty(t, *vpcs, "Should have VPC")
 
 		// Security resources
 		keys := template.FindResources(jsii.String("AWS::KMS::Key"), &map[string]interface{}{})
-		assert.NotEmpty(t, *keys.(*map[string]map[string]interface{}), "Should have KMS key")
+		assert.NotEmpty(t, *keys, "Should have KMS key")
 		buckets := template.FindResources(jsii.String("AWS::S3::Bucket"), &map[string]interface{}{})
-		assert.NotEmpty(t, *buckets.(*map[string]map[string]interface{}), "Should have S3 bucket")
+		assert.NotEmpty(t, *buckets, "Should have S3 bucket")
 
 		// Data resources (depends on Networking + Security)
 		rdss := template.FindResources(jsii.String("AWS::RDS::DBInstance"), &map[string]interface{}{})
-		assert.NotEmpty(t, *rdss.(*map[string]map[string]interface{}), "Should have RDS instance")
+		assert.NotEmpty(t, *rdss, "Should have RDS instance")
 
 		// Application resources (depends on Networking)
 		albs := template.FindResources(jsii.String("AWS::ElasticLoadBalancingV2::LoadBalancer"), &map[string]interface{}{})
-		assert.NotEmpty(t, *albs.(*map[string]map[string]interface{}), "Should have ALB")
+		assert.NotEmpty(t, *albs, "Should have ALB")
 		wafs := template.FindResources(jsii.String("AWS::WAFv2::WebACL"), &map[string]interface{}{})
-		assert.NotEmpty(t, *wafs.(*map[string]map[string]interface{}), "Should have WAF")
+		assert.NotEmpty(t, *wafs, "Should have WAF")
 	})
 }
 
@@ -937,12 +937,12 @@ func TestSecurityCompliance(t *testing.T) {
 			},
 		})
 
-		publicRulesMap := *publicIngressRules.(*map[string]map[string]interface{})
+		publicRulesMap := *publicIngressRules
 
 		// Sensitive database/SSH ports should never be open to 0.0.0.0/0
 		sensitivePorts := []float64{22, 3306, 5432, 3389, 1433}
 		for _, rule := range publicRulesMap {
-			props := rule["Properties"].(map[string]interface{})
+			props := (*rule)["Properties"].(map[string]interface{})
 			if fromPort, ok := props["FromPort"]; ok {
 				fromPortNum := fromPort.(float64)
 				for _, sensitivePort := range sensitivePorts {
@@ -965,10 +965,10 @@ func TestSecurityCompliance(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		securityGroups := template.FindResources(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{})
-		sgMap := *securityGroups.(*map[string]map[string]interface{})
+		sgMap := *securityGroups
 
 		for logicalId, sg := range sgMap {
-			props := sg["Properties"].(map[string]interface{})
+			props := (*sg)["Properties"].(map[string]interface{})
 			desc, hasDesc := props["GroupDescription"]
 			assert.True(t, hasDesc, fmt.Sprintf("Security group %s must have a description", logicalId))
 			assert.NotEmpty(t, desc, fmt.Sprintf("Security group %s description cannot be empty", logicalId))
@@ -1005,10 +1005,10 @@ func TestSecurityCompliance(t *testing.T) {
 
 		for _, resourceType := range resourceTypesWithTags {
 			resources := template.FindResources(jsii.String(resourceType), &map[string]interface{}{})
-			resourceMap := *resources.(*map[string]map[string]interface{})
+			resourceMap := *resources
 
 			for logicalId, resource := range resourceMap {
-				props := resource["Properties"].(map[string]interface{})
+				props := (*resource)["Properties"].(map[string]interface{})
 
 				if tags, hasTags := props["Tags"]; hasTags {
 					tagList := tags.([]interface{})
@@ -1050,13 +1050,13 @@ func TestSecurityCompliance(t *testing.T) {
 
 		// S3 encryption
 		s3Buckets := template.FindResources(jsii.String("AWS::S3::Bucket"), &map[string]interface{}{})
-		s3Map := *s3Buckets.(*map[string]map[string]interface{})
+		s3Map := *s3Buckets
 		assert.NotEmpty(t, s3Map, "Should have S3 buckets")
 
 		// Verify at least one bucket has encryption
 		hasEncryption := false
 		for _, bucket := range s3Map {
-			props := bucket["Properties"].(map[string]interface{})
+			props := (*bucket)["Properties"].(map[string]interface{})
 			if _, ok := props["BucketEncryption"]; ok {
 				hasEncryption = true
 				break
@@ -1077,10 +1077,10 @@ func TestSecurityCompliance(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		policies := template.FindResources(jsii.String("AWS::IAM::Policy"), &map[string]interface{}{})
-		policyMap := *policies.(*map[string]map[string]interface{})
+		policyMap := *policies
 
 		for logicalId, policy := range policyMap {
-			props := policy["Properties"].(map[string]interface{})
+			props := (*policy)["Properties"].(map[string]interface{})
 			policyDoc := props["PolicyDocument"].(map[string]interface{})
 			statements := policyDoc["Statement"].([]interface{})
 
@@ -1117,21 +1117,21 @@ func TestSecurityCompliance(t *testing.T) {
 
 		// Multiple security groups (defense layer 1)
 		securityGroups := template.FindResources(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{})
-		sgMap := *securityGroups.(*map[string]map[string]interface{})
+		sgMap := *securityGroups
 		assert.GreaterOrEqual(t, len(sgMap), 2, "Should have multiple security groups")
 
 		// Isolated subnets (defense layer 2)
 		subnets := template.FindResources(jsii.String("AWS::EC2::Subnet"), &map[string]interface{}{})
-		subnetMap := *subnets.(*map[string]map[string]interface{})
+		subnetMap := *subnets
 		assert.GreaterOrEqual(t, len(subnetMap), 6, "Should have segmented subnets")
 
 		// WAF protection (defense layer 3)
 		wafs := template.FindResources(jsii.String("AWS::WAFv2::WebACL"), &map[string]interface{}{})
-		assert.NotEmpty(t, *wafs.(*map[string]map[string]interface{}), "Should have WAF ACL")
+		assert.NotEmpty(t, *wafs, "Should have WAF ACL")
 
 		// Encryption (defense layer 4)
 		kmsKeys := template.FindResources(jsii.String("AWS::KMS::Key"), &map[string]interface{}{})
-		assert.NotEmpty(t, *kmsKeys.(*map[string]map[string]interface{}), "Should have KMS key")
+		assert.NotEmpty(t, *kmsKeys, "Should have KMS key")
 	})
 
 	t.Run("RDS uses MySQL 8.0 for security updates", func(t *testing.T) {
