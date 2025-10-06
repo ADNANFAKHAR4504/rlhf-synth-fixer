@@ -28,9 +28,6 @@
     "UploadBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "photo-uploads-${AWS::StackName}-${AWS::AccountId}"
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -75,9 +72,6 @@
     "ProcessedBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "photo-processed-${AWS::StackName}-${AWS::AccountId}"
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -192,7 +186,7 @@
                     "s3:GetObjectVersion"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}/*"
+                    "Fn::Sub": "${UploadBucket.Arn}/*"
                   }
                 },
                 {
@@ -340,7 +334,7 @@
           "Ref": "AWS::AccountId"
         },
         "SourceArn": {
-          "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
+          "Fn::GetAtt": ["UploadBucket", "Arn"]
         }
       }
     },
@@ -365,10 +359,10 @@
                   {
                     "Name": "suffix",
                     "Value": ".jpg"
-                  }
-                ]
-              }
-            },
+          }
+        ]
+      }
+    },
             "Function": {
               "Fn::GetAtt": [
                 "ImageProcessorFunction",
@@ -399,8 +393,8 @@
             "Event": "s3:ObjectCreated:*",
             "Filter": {
               "S3Key": {
-                "Rules": [
-                  {
+        "Rules": [
+          {
                     "Name": "suffix",
                     "Value": ".png"
                   }
@@ -468,7 +462,7 @@
                     "s3:GetBucketNotification"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:s3:::photo-uploads-${AWS::StackName}-${AWS::AccountId}"
+                    "Fn::GetAtt": ["UploadBucket", "Arn"]
                   }
                 }
               ]
