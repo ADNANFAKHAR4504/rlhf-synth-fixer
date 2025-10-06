@@ -11,10 +11,20 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+const sanitizeTagValue = (value: string): string =>
+  value
+    .replace(/[^a-zA-Z0-9 ._/:=+\-@]/g, '_')
+    .trim()
+    .slice(0, 256);
+
+const sanitizedEnvironment = sanitizeTagValue(environmentSuffix);
+const sanitizedRepository = sanitizeTagValue(repositoryName);
+const sanitizedAuthor = sanitizeTagValue(commitAuthor);
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
+Tags.of(app).add('Environment', sanitizedEnvironment || 'unknown');
+Tags.of(app).add('Repository', sanitizedRepository || 'unknown');
+Tags.of(app).add('Author', sanitizedAuthor || 'unknown');
 
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix

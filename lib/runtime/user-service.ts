@@ -12,7 +12,8 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { SNS } from 'aws-sdk';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import {
   SecretsManagerClient,
   GetSecretValueCommand,
@@ -26,7 +27,7 @@ const dynamoDocumentClient = DynamoDBDocumentClient.from(
     },
   }
 );
-const snsClient = new SNS({});
+const snsClient = new SNSClient({});
 const secretsClient = new SecretsManagerClient({});
 
 let cachedSecret: string | undefined;
@@ -151,8 +152,8 @@ export const handler = async (
         );
 
         const apiKey = await resolveApiKey(apiSecretArn);
-        await snsClient
-          .publish({
+        await snsClient.send(
+          new PublishCommand({
             TopicArn: notificationTopicArn,
             Subject: 'user.created',
             Message: JSON.stringify({
@@ -167,7 +168,7 @@ export const handler = async (
               },
             },
           })
-          .promise();
+        );
 
         return respond(201, { userId: userItem.userId });
       }

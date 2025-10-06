@@ -11,7 +11,8 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { SNS } from 'aws-sdk';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
 const dynamoDocumentClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({}),
@@ -21,7 +22,7 @@ const dynamoDocumentClient = DynamoDBDocumentClient.from(
     },
   }
 );
-const snsClient = new SNS({});
+const snsClient = new SNSClient({});
 
 const respond = (
   statusCode: number,
@@ -181,8 +182,8 @@ export const handler = async (
           })
         );
 
-        await snsClient
-          .publish({
+        await snsClient.send(
+          new PublishCommand({
             TopicArn: topicArn,
             Subject: 'order.created',
             Message: JSON.stringify({
@@ -195,7 +196,7 @@ export const handler = async (
               severity: { DataType: 'String', StringValue: 'high' },
             },
           })
-          .promise();
+        );
 
         return respond(201, { orderId: orderRecord.orderId });
       }
