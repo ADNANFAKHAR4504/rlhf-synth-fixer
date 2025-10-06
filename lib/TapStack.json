@@ -65,6 +65,12 @@
           {
             "Key": "Name",
             "Value": "LanguageLearningVPC"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -83,6 +89,12 @@
           {
             "Key": "Name",
             "Value": "PrivateSubnet1"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -101,6 +113,12 @@
           {
             "Key": "Name",
             "Value": "PrivateSubnet2"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -181,6 +199,12 @@
           {
             "Key": "Name",
             "Value": "PrivateRouteTable"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -511,7 +535,10 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "LessonDeliveryDLQ"
+            "Fn::GetAtt": [
+              "LessonDeliveryDLQ",
+              "Arn"
+            ]
           }
         },
         "TracingConfig": {
@@ -521,6 +548,12 @@
           {
             "Key": "Application",
             "Value": "LanguageLearningApp"
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -624,7 +657,10 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "UserProgressDLQ"
+            "Fn::GetAtt": [
+              "UserProgressDLQ",
+              "Arn"
+            ]
           }
         },
         "TracingConfig": {
@@ -739,7 +775,10 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "SpeechRecognitionDLQ"
+            "Fn::GetAtt": [
+              "SpeechRecognitionDLQ",
+              "Arn"
+            ]
           }
         },
         "TracingConfig": {
@@ -864,7 +903,10 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "GrammarAnalysisDLQ"
+            "Fn::GetAtt": [
+              "GrammarAnalysisDLQ",
+              "Arn"
+            ]
           }
         },
         "TracingConfig": {
@@ -991,7 +1033,10 @@
         },
         "DeadLetterConfig": {
           "TargetArn": {
-            "Ref": "RecommendationsDLQ"
+            "Fn::GetAtt": [
+              "RecommendationsDLQ",
+              "Arn"
+            ]
           }
         },
         "TracingConfig": {
@@ -1071,7 +1116,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "personalize:GetRecommendations",
-                    "personalize:RecordEvent"
+                    "personalize:PutEvents"
                   ],
                   "Resource": "*"
                 },
@@ -1218,7 +1263,6 @@
     "AudioBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "AccessControl": "Private",
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -1228,6 +1272,19 @@
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256"
               }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
             }
           ]
         },
@@ -1276,7 +1333,7 @@
             {
               "Effect": "Allow",
               "Principal": {
-                "AWS": {
+                "CanonicalUser": {
                   "Fn::GetAtt": [
                     "CloudFrontOriginAccessIdentity",
                     "S3CanonicalUserId"
@@ -1295,7 +1352,6 @@
     "StaticContentBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "AccessControl": "Private",
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -1305,6 +1361,19 @@
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256"
               }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
             }
           ]
         },
@@ -1328,7 +1397,7 @@
             {
               "Effect": "Allow",
               "Principal": {
-                "AWS": {
+                "CanonicalUser": {
                   "Fn::GetAtt": [
                     "CloudFrontOriginAccessIdentity",
                     "S3CanonicalUserId"
@@ -1738,14 +1807,15 @@
           {
             "Name": "RateLimitRule",
             "Priority": 0,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "RateBasedStatement": {
                 "Limit": 7000,
+                "EvaluationWindowSec": 300,
                 "AggregateKeyType": "IP"
               }
+            },
+            "Action": {
+              "Block": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
@@ -1756,15 +1826,15 @@
           {
             "Name": "SQLiRule",
             "Priority": 1,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "ManagedRuleGroupStatement": {
                 "VendorName": "AWS",
                 "Name": "AWSManagedRulesSQLiRuleSet",
                 "ExcludedRules": []
               }
+            },
+            "OverrideAction": {
+              "None": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
@@ -1775,15 +1845,15 @@
           {
             "Name": "XSSRule",
             "Priority": 2,
-            "Action": {
-              "Block": {}
-            },
             "Statement": {
               "ManagedRuleGroupStatement": {
                 "VendorName": "AWS",
                 "Name": "AWSManagedRulesCommonRuleSet",
                 "ExcludedRules": []
               }
+            },
+            "OverrideAction": {
+              "None": {}
             },
             "VisibilityConfig": {
               "SampledRequestsEnabled": true,
