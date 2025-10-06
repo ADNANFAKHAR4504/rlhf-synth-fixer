@@ -20,5 +20,15 @@
     "Secrets Manager",
     "CloudFormation"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "reviewed_at": "2025-10-05T19:06:00.000Z",
+  "review_status": "approved",
+  "compliance_percentage": 100,
+  "test_coverage": "comprehensive",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
