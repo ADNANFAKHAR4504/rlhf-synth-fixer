@@ -10,7 +10,7 @@ const outputs = JSON.parse(
 );
 
 // Set AWS region from deployment
-const AWS_REGION = 'us-west-1';
+const AWS_REGION = 'us-east-1';
 AWS.config.update({ region: AWS_REGION });
 
 // AWS Service clients
@@ -445,9 +445,9 @@ describe('Quiz Platform Infrastructure Integration Tests', () => {
     test('should verify all resources have delete policies', () => {
       // This is more of a sanity check that our deployed resources
       // are configured for proper cleanup
-      expect(questionsTableName).toContain('synth74918362');
-      expect(resultsTableName).toContain('synth74918362');
-      expect(bucketName).toContain('synth74918362');
+      expect(questionsTableName).toContain('pr3526');
+      expect(resultsTableName).toContain('pr3526');
+      expect(bucketName).toContain('pr3526');
     });
 
     test('should clean up test data from DynamoDB', async () => {
