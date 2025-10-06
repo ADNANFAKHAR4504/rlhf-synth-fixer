@@ -10,5 +10,15 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, EC2, Lambda, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM",
+    "Security Groups"
+  ],
+  "training_quality": 9
 }
