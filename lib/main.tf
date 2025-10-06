@@ -123,30 +123,30 @@ resource "aws_eip" "nat" {
 }
 
 # NAT Gateways
-resource "aws_nat_gateway" "main" {
-  count         = 2
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+# resource "aws_nat_gateway" "main" {
+#   count         = 2
+#   allocation_id = aws_eip.nat[count.index].id
+#   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-gateway-${count.index + 1}"
-  })
+#   tags = merge(local.common_tags, {
+#     Name = "${var.project_name}-nat-gateway-${count.index + 1}"
+#   })
 
-  depends_on = [
-    aws_internet_gateway.main,
-    aws_eip.nat
-  ]
-}
+#   depends_on = [
+#     aws_internet_gateway.main,
+#     aws_eip.nat
+#   ]
+# }
 
 output "eip_ids" {
   value = aws_eip.nat[*].id
   description = "Elastic IP allocation IDs"
 }
 
-output "nat_gateway_ids" {
-  value = aws_nat_gateway.main[*].id
-  description = "NAT Gateway IDs"
-}
+# output "nat_gateway_ids" {
+#   value = aws_nat_gateway.main[*].id
+#   description = "NAT Gateway IDs"
+# }
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
@@ -182,12 +182,12 @@ resource "aws_route_table" "private" {
 }
 
 # Routes to NAT Gateways
-resource "aws_route" "private_nat" {
-  count                  = 2
-  route_table_id         = aws_route_table.private[count.index].id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.main[count.index].id
-}
+# resource "aws_route" "private_nat" {
+#   count                  = 2
+#   route_table_id         = aws_route_table.private[count.index].id
+#   destination_cidr_block = "0.0.0.0/0"
+#   nat_gateway_id         = aws_nat_gateway.main[count.index].id
+# }
 
 # Associate Private Subnets with Private Route Tables
 resource "aws_route_table_association" "private" {
