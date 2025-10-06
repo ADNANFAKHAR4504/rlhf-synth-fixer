@@ -172,12 +172,13 @@ describe('LoyaltyProgramStack Unit Tests', () => {
         l.function_name === 'loyalty-point-calc-test'
       );
       expect((pointCalcLambda as any).environment).toBeDefined();
-      expect((pointCalcLambda as any).environment.variables.TABLE_NAME).toBeDefined();
+      expect((pointCalcLambda as any).environment.variables.LOYALTY_TABLE_NAME).toBeDefined();
 
       const streamLambda = Object.values(lambdas).find((l: any) =>
         l.function_name === 'loyalty-stream-processor-test'
       );
       expect((streamLambda as any).environment).toBeDefined();
+      expect((streamLambda as any).environment.variables.LOYALTY_TABLE_NAME).toBeDefined();
       expect((streamLambda as any).environment.variables.SNS_TOPIC_ARN).toBeDefined();
     });
   });

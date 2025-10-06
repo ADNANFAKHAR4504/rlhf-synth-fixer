@@ -14,16 +14,13 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags[];
 }
 
-const AWS_REGION_OVERRIDE = 'us-west-2';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // Always use us-west-2 as per requirements
+    const awsRegion = 'us-west-2';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];

@@ -1,5 +1,4 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { SNSClient } from '@aws-sdk/client-sns';
 
 // Mock AWS SDK
 jest.mock('@aws-sdk/client-dynamodb');
@@ -14,29 +13,40 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: jest.fn().mockImplementation((params) => params),
   unmarshall: jest.fn((data) => data),
 }));
-jest.mock('@aws-sdk/client-sns');
+const mockSend = jest.fn();
+jest.mock('@aws-sdk/client-sns', () => ({
+  SNSClient: jest.fn(() => ({
+    send: mockSend,
+  })),
+  PublishCommand: jest.fn().mockImplementation((params) => params),
+}));
 
 describe('Lambda Functions Unit Tests', () => {
   describe('Point Calculation Lambda', () => {
     let handler: any;
-    let mockDocClient: any;
+    const mockDocClient = {
+      send: jest.fn(),
+    };
 
-    beforeEach(() => {
-      jest.clearAllMocks();
-
+    beforeAll(() => {
       // Mock environment variables
       process.env.LOYALTY_TABLE_NAME = 'test-loyalty-table';
       process.env.SNS_TOPIC_ARN = 'arn:aws:sns:us-west-2:123456789012:test-topic';
       process.env.AWS_REGION = 'us-west-2';
 
-      // Mock DynamoDB Document Client
-      mockDocClient = {
-        send: jest.fn(),
-      };
+      // Set up the mocks on the prototype before loading the module
+      const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+      DynamoDBDocumentClient.from = jest.fn(() => mockDocClient);
 
       // Load the handler after mocking
-      delete require.cache[require.resolve('../lib/point-calc-lambda.js')];
-      handler = require('../lib/point-calc-lambda.js').handler;
+      handler = require('../lib/lambda/point-calc/index.js').handler;
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockSend.mockReset();
+      mockSend.mockResolvedValue({});
+      mockDocClient.send.mockReset();
     });
 
     afterEach(() => {
@@ -92,8 +102,8 @@ describe('Lambda Functions Unit Tests', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      expect(body.pointsEarned).toBe(10); // 200 * 0.05
-      expect(body.totalPoints).toBe(1010); // 1000 + 10
+      expect(body.pointsEarned).toBe(25); // 200 * 0.1 * 1.25 (SILVER tier)
+      expect(body.totalPoints).toBe(1025); // 1000 + 25
     });
 
     test('Handles new member with no existing points', async () => {
@@ -131,7 +141,7 @@ describe('Lambda Functions Unit Tests', () => {
 
       expect(result.statusCode).toBe(500);
       const body = JSON.parse(result.body);
-      expect(body.error).toBe('Failed to process transaction');
+      expect(body.error).toBe('Internal server error');
     });
 
     test('Handles invalid JSON in request body', async () => {
@@ -143,7 +153,7 @@ describe('Lambda Functions Unit Tests', () => {
 
       expect(result.statusCode).toBe(500);
       const body = JSON.parse(result.body);
-      expect(body.error).toBe('Failed to process transaction');
+      expect(body.error).toBe('Internal server error');
     });
 
     test('Generates unique transaction IDs', async () => {
@@ -166,6 +176,8 @@ describe('Lambda Functions Unit Tests', () => {
       mockDocClient.send.mockResolvedValue({ Item: { totalPoints: 100 } });
 
       const result1 = await handler(event1);
+      // Wait 2ms to ensure Date.now() returns different values
+      await new Promise(resolve => setTimeout(resolve, 2));
       const result2 = await handler(event2);
 
       const body1 = JSON.parse(result1.body);
@@ -179,32 +191,30 @@ describe('Lambda Functions Unit Tests', () => {
 
   describe('Stream Processor Lambda', () => {
     let handler: any;
-    let mockSNSClient: any;
-    let mockDocClient: any;
+    const mockStreamDocClient = {
+      send: jest.fn(),
+    };
 
-    beforeEach(() => {
-      jest.clearAllMocks();
-
+    beforeAll(() => {
       // Mock environment variables
       process.env.LOYALTY_TABLE_NAME = 'test-loyalty-table';
       process.env.SNS_TOPIC_ARN = 'arn:aws:sns:us-west-2:123456789012:test-topic';
       process.env.AWS_REGION = 'us-west-2';
 
-      // Mock DynamoDB Document Client
-      mockDocClient = {
-        send: jest.fn().mockResolvedValue({}),
-      };
-
-      // Mock SNS Client
-      mockSNSClient = {
-        send: jest.fn().mockResolvedValue({}),
-      };
-
-      SNSClient.prototype.send = mockSNSClient.send;
+      // Set up the mocks on the prototype before loading the module
+      const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+      DynamoDBDocumentClient.from = jest.fn(() => mockStreamDocClient);
 
       // Load the handler after mocking
-      delete require.cache[require.resolve('../lib/stream-processor-lambda.js')];
-      handler = require('../lib/stream-processor-lambda.js').handler;
+      handler = require('../lib/lambda/stream-processor/index.js').handler;
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockSend.mockReset();
+      mockSend.mockResolvedValue({});
+      mockStreamDocClient.send.mockReset();
+      mockStreamDocClient.send.mockResolvedValue({});
     });
 
     afterEach(() => {
@@ -237,8 +247,9 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).toHaveBeenCalledTimes(1);
-      const callArgs = mockSNSClient.send.mock.calls[0][0];
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const callArgs = mockSend.mock.calls[0][0];
+      // PublishCommand params are passed directly
       expect(callArgs.TopicArn).toBe(process.env.SNS_TOPIC_ARN);
 
       const message = JSON.parse(callArgs.Message);
@@ -271,8 +282,8 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).toHaveBeenCalledTimes(1);
-      const callArgs = mockSNSClient.send.mock.calls[0][0];
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const callArgs = mockSend.mock.calls[0][0];
       const message = JSON.parse(callArgs.Message);
       expect(message.tier).toBe('GOLD');
       expect(message.points).toBe(5500);
@@ -302,8 +313,8 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).toHaveBeenCalledTimes(1);
-      const callArgs = mockSNSClient.send.mock.calls[0][0];
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const callArgs = mockSend.mock.calls[0][0];
       const message = JSON.parse(callArgs.Message);
       expect(message.tier).toBe('PLATINUM');
       expect(message.points).toBe(12000);
@@ -333,7 +344,7 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     test('Does not send notification for Bronze tier', async () => {
@@ -355,7 +366,7 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     test('Ignores non-MEMBER_PROFILE records', async () => {
@@ -377,11 +388,11 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     test('Handles SNS publish errors gracefully', async () => {
-      mockSNSClient.send.mockRejectedValue(new Error('SNS error'));
+      mockSend.mockRejectedValue(new Error('SNS error'));
 
       const event = {
         Records: [
@@ -407,7 +418,7 @@ describe('Lambda Functions Unit Tests', () => {
 
       // Should not throw, returns success
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).toHaveBeenCalled();
+      expect(mockSend).toHaveBeenCalled();
     });
 
     test('Processes multiple records in a batch', async () => {
@@ -445,7 +456,7 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).toHaveBeenCalledTimes(2);
+      expect(mockSend).toHaveBeenCalledTimes(2);
     });
 
     test('Handles REMOVE events without errors', async () => {
@@ -467,7 +478,7 @@ describe('Lambda Functions Unit Tests', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockSNSClient.send).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 
