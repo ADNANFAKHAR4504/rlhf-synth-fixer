@@ -1,9 +1,9 @@
 // Integration tests will use actual AWS outputs after deployment
-import fs from 'fs';
-import axios from 'axios';
-import { DynamoDBClient, GetItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { APIGatewayClient, GetApiKeyCommand } from '@aws-sdk/client-api-gateway';
+import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
+import axios from 'axios';
+import fs from 'fs';
 
 // Skip integration tests if outputs don't exist yet
 const outputsFile = 'cfn-outputs/flat-outputs.json';
@@ -31,7 +31,7 @@ describe('Serverless API Integration Tests', () => {
 
   // Get API Key value
   let apiKey: string;
-  
+
   beforeAll(async () => {
     try {
       console.log('Test setup - Available outputs:', Object.keys(outputs));
@@ -39,25 +39,61 @@ describe('Serverless API Integration Tests', () => {
       console.log('Table Name:', tableName);
       console.log('API Key ID:', apiKeyId);
       console.log('Usage Plan ID:', usagePlanId);
-      
+
       if (!apiEndpoint) {
         throw new Error('API endpoint not found in outputs');
       }
       if (!apiKeyId) {
         throw new Error('API Key ID not found in outputs');
       }
-      
+
+      // First, try to get the API key by ID
       console.log('Attempting to retrieve API key with ID:', apiKeyId);
-      const getApiKeyCommand = new GetApiKeyCommand({
-        apiKey: apiKeyId,
-        includeValue: true,
-      });
-      const apiKeyResponse = await apiGatewayClient.send(getApiKeyCommand);
-      apiKey = apiKeyResponse.value || '';
-      if (!apiKey) {
-        throw new Error('API key value not found in response');
+      try {
+        const getApiKeyCommand = new GetApiKeyCommand({
+          apiKey: apiKeyId,
+          includeValue: true,
+        });
+        const apiKeyResponse = await apiGatewayClient.send(getApiKeyCommand);
+        apiKey = apiKeyResponse.value || '';
+        if (!apiKey) {
+          throw new Error('API key value not found in response');
+        }
+        console.log('Successfully retrieved API key');
+      } catch (keyError: any) {
+        console.log('Direct API key retrieval failed, trying alternative approach...');
+
+        // Alternative approach: List all API keys and find one matching the environment suffix
+        const { GetApiKeysCommand } = await import('@aws-sdk/client-api-gateway');
+        const listKeysCommand = new GetApiKeysCommand({
+          includeValues: true
+        });
+
+        const listResponse = await apiGatewayClient.send(listKeysCommand);
+        const environmentSuffix = outputs.EnvironmentSuffix || 'pr3240';
+
+        console.log('Environment suffix:', environmentSuffix);
+        console.log('Total API keys found:', listResponse.items?.length || 0);
+
+        // Look for an API key with name matching our environment
+        const matchingKey = listResponse.items?.find(key =>
+          key.name?.includes(`ScoresApiKey-${environmentSuffix}`) ||
+          key.name?.includes(environmentSuffix) ||
+          key.id === apiKeyId
+        );
+
+        if (matchingKey && matchingKey.value) {
+          apiKey = matchingKey.value;
+          console.log('Found API key using alternative method:', matchingKey.name || matchingKey.id);
+        } else {
+          console.log('Available API keys:', listResponse.items?.map(k => ({ id: k.id, name: k.name, enabled: k.enabled })));
+          console.error('DEPLOYMENT ISSUE: The API Key ID in outputs does not match any existing API key in AWS.');
+          console.error('Expected API Key ID:', apiKeyId);
+          console.error('Expected API Key Name: ScoresApiKey-' + environmentSuffix);
+          console.error('This indicates the CDK deployment may have failed or rolled back.');
+          throw new Error(`Deployment verification failed: API Key ID ${apiKeyId} does not exist in AWS API Gateway. This suggests a deployment issue.`);
+        }
       }
-      console.log('Successfully retrieved API key');
     } catch (error) {
       console.error('Failed to retrieve API key. API Key ID:', apiKeyId);
       console.error('Error details:', error);
@@ -85,7 +121,7 @@ describe('Serverless API Integration Tests', () => {
           gameId: testGameId,
         },
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
           },
@@ -119,7 +155,7 @@ describe('Serverless API Integration Tests', () => {
           score: newScore,
         },
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
           },
@@ -165,7 +201,7 @@ describe('Serverless API Integration Tests', () => {
             // Missing score and gameId
           },
           {
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'x-api-key': apiKey,
             },
@@ -238,7 +274,7 @@ describe('Serverless API Integration Tests', () => {
       expect(outputs.GetScoreFunctionName).toBeDefined();
       expect(outputs.UpdateScoreFunctionName).toBeDefined();
       expect(outputs.DeleteScoreFunctionName).toBeDefined();
-      
+
       // Verify the function names follow expected pattern
       expect(outputs.CreateScoreFunctionName).toContain('CreateScoreFunction');
       expect(outputs.GetScoreFunctionName).toContain('GetScoreFunction');
@@ -272,7 +308,7 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'workflow-game',
         },
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
           },
@@ -297,7 +333,7 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'updated-game',
         },
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
           },
@@ -350,7 +386,7 @@ describe('Serverless API Integration Tests', () => {
               gameId: 'concurrent-game',
             },
             {
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': apiKey,
               },
@@ -386,7 +422,7 @@ describe('Serverless API Integration Tests', () => {
           `${apiEndpoint}scores`,
           'invalid json',
           {
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'x-api-key': apiKey,
             },
@@ -410,7 +446,7 @@ describe('Serverless API Integration Tests', () => {
           gameId: 'duplicate-test',
         },
         {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-api-key': apiKey,
           },
@@ -427,7 +463,7 @@ describe('Serverless API Integration Tests', () => {
             gameId: 'duplicate-test-2',
           },
           {
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'x-api-key': apiKey,
             },
