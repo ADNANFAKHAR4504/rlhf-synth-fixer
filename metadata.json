@@ -1,0 +1,17 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "52819405",
+  "team": "1",
+  "startedAt": "2025-10-06T11:42:00.616Z",
+  "subtask": "Conversational AI Platform Infrastructure",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Conversational AI & NLP",
+    "Real-time Analytics & Monitoring",
+    "Multi-service Integration"
+  ],
+  "aws_services": "Lambda, DynamoDB, ElastiCache Redis, S3, Kinesis, Kinesis Firehose, Lex V2, CloudWatch, CloudWatch Logs, VPC, EC2, IAM, X-Ray, Comprehend, Translate, Polly, Transcribe, Kendra, Personalize, SageMaker, Athena, QuickSight, EventBridge, Step Functions, SNS, Pinpoint"
+}
