@@ -5,6 +5,7 @@ import {
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
+import { TerraformVariable } from 'cdktf';
 import {
   NetworkingConstruct,
   SecureComputeConstruct,
@@ -74,12 +75,22 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
+    const instanceTypeVariable = new TerraformVariable(
+      this,
+      'ec2_instance_type',
+      {
+        type: 'string',
+        default: 't3.medium',
+        description: 'EC2 instance type for the compute instance',
+      }
+    );
+
     // Create Secure Compute Instance in Private Subnet
     const secureComputeModule = new SecureComputeConstruct(
       this,
       'secure-compute',
       {
-        instanceType: 't3.medium',
+        instanceType: instanceTypeVariable.stringValue,
         subnetId: networkingModule.privateSubnet.id,
         vpcId: networkingModule.vpc.id,
         secretArn: secretsModule.secret.arn,

@@ -1,6 +1,13 @@
-```typescript
-// --- modules.ts ---
+# Production-Ready CDKTF Infrastructure Implementation
 
+This implementation provides a secure, scalable, and maintainable infrastructure using AWS CDK for Terraform (CDKTF) with TypeScript.
+
+## File Structure
+
+### modules.ts
+Contains reusable infrastructure constructs for networking, compute, and secrets management.
+
+```typescript
 // --- modules.ts ---
 
 // Core Libraries
@@ -31,6 +38,9 @@ import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmana
 
 // Data Sources
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+
+// Terraform Variables
+import { TerraformVariable } from 'cdktf';
 
 interface NetworkingConstructProps {
   tags: { [key: string]: string };
@@ -100,7 +110,7 @@ export class NetworkingConstruct extends Construct {
       },
     });
 
-    // Create NAT Gateway in public subnet
+    // Create NAT Gateway in public subnet with explicit dependency
     this.natGateway = new NatGateway(this, "nat-gateway", {
       subnetId: this.publicSubnet.id,
       allocationId: natEip.id,
@@ -108,6 +118,7 @@ export class NetworkingConstruct extends Construct {
         ...props.tags,
         Name: "production-nat-gateway",
       },
+      dependsOn: [natEip],
     });
 
     // Create route table for public subnet
@@ -161,6 +172,7 @@ interface SecureComputeConstructProps {
   subnetId: string;
   vpcId: string;
   secretArn: string;
+  kmsKeyArn?: string;
   tags: { [key: string]: string };
 }
 
@@ -209,7 +221,7 @@ export class SecureComputeConstruct extends Construct {
           {
             Effect: "Allow",
             Action: ["kms:Decrypt"],
-            Resource: "*",
+            Resource: props.kmsKeyArn || `arn:aws:kms:us-east-1:*:key/*`,
             Condition: {
               StringEquals: {
                 "kms:ViaService": `secretsmanager.us-east-1.amazonaws.com`,
@@ -273,18 +285,22 @@ export class SecureComputeConstruct extends Construct {
       description: "Allow HTTP outbound for package updates",
     });
 
-    // Get latest Amazon Linux 2 AMI
-    const ami = new DataAwsAmi(this, "amazon-linux-2", {
+    // Get latest Amazon Linux 2023 AMI with more specific filter
+    const ami = new DataAwsAmi(this, "amazon-linux-2023", {
       mostRecent: true,
       owners: ["amazon"],
       filter: [
         {
           name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
+          values: ["al2023-ami-2023.*-kernel-6.1-x86_64"],
         },
         {
           name: "virtualization-type",
           values: ["hvm"],
+        },
+        {
+          name: "architecture",
+          values: ["x86_64"],
         },
       ],
     });
@@ -363,96 +379,3 @@ export class SecretsConstruct extends Construct {
     );
   }
 }
-```
-
-```typescript
-// --- taps-stack.ts ---
-
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-import { TerraformOutput } from 'cdktf';
-import { 
-  NetworkingConstruct, 
-  SecureComputeConstruct, 
-  SecretsConstruct 
-} from './modules';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags;
-}
-
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = '';
-
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id);
-
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
-
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
-    });
-
-    // Configure S3 Backend with native state locking
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
-    // Define common tags for all resources
-    const commonTags = {
-      Environment: environmentSuffix,
-      ManagedBy: 'CDKTF',
-      Project: 'Production-Infrastructure',
-      Owner: 'Platform-Team',
-    };
-
-    // Create Networking Infrastructure
-    const networkingModule = new NetworkingConstruct(this, 'networking', {
-      tags: commonTags,
-    });
-
-    // Create Secrets Management
-    const secretsModule = new SecretsConstruct(this, 'secrets', {
-      tags: commonTags,
-    });
-
-    // Create Secure Compute Instance in Private Subnet
-    const secureComputeModule = new SecureComputeConstruct(this, 'secure-compute', {
-      instanceType: 't3.medium',
-      subnetId: networkingModule.privateSubnet.id,
-      vpcId: networkingModule.vpc.id,
-      secretArn: secretsModule.secret.arn,
-      tags: commonTags,
-    });
-
-  }
-}
-```
