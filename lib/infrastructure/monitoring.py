@@ -146,13 +146,11 @@ def create_cloudwatch_alarms(function_name: pulumi.Output[str], function_arn: pu
     
     return alarms
 
-def create_s3_event_alarms(config: ImageProcessingConfig, source_bucket_name: str) -> Dict[str, aws.cloudwatch.MetricAlarm]:
+def create_s3_event_alarms(source_bucket_name: str) -> Dict[str, aws.cloudwatch.MetricAlarm]:
     """
     Creates CloudWatch alarms for S3 event processing.
-    Addresses model failure: CloudWatch logging partially implemented.
     
     Args:
-        config: Image processing configuration
         source_bucket_name: Name of the source S3 bucket
         
     Returns:
@@ -163,8 +161,8 @@ def create_s3_event_alarms(config: ImageProcessingConfig, source_bucket_name: st
     
     # S3 object creation alarm
     alarms['s3_object_creation_alarm'] = aws.cloudwatch.MetricAlarm(
-        f"{function_name}-s3-object-creation-alarm",
-        name=f"{function_name}-s3-object-creation",
+        "img-proc-s3-object-creation-alarm",
+        name="img-proc-s3-object-creation",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=1,
         metric_name="NumberOfObjects",
@@ -183,13 +181,13 @@ def create_s3_event_alarms(config: ImageProcessingConfig, source_bucket_name: st
     
     return alarms
 
-def create_custom_metrics(config: ImageProcessingConfig) -> Dict[str, aws.cloudwatch.MetricAlarm]:
+def create_custom_metrics(function_name: pulumi.Output[str]) -> Dict[str, aws.cloudwatch.MetricAlarm]:
     """
     Creates custom CloudWatch metrics for image processing.
     Addresses model failure: No custom metrics to CloudWatch.
     
     Args:
-        config: Image processing configuration
+        function_name: Name of the Lambda function
         
     Returns:
         Dictionary of custom metric alarm resources
@@ -199,8 +197,8 @@ def create_custom_metrics(config: ImageProcessingConfig) -> Dict[str, aws.cloudw
     
     # Image processing success rate alarm
     alarms['processing_success_alarm'] = aws.cloudwatch.MetricAlarm(
-        f"{function_name}-processing-success-alarm",
-        name=f"{function_name}-processing-success-rate",
+        "img-proc-processing-success-alarm",
+        name="img-proc-processing-success-rate",
         comparison_operator="LessThanThreshold",
         evaluation_periods=2,
         metric_name="ProcessingSuccessRate",
@@ -209,17 +207,17 @@ def create_custom_metrics(config: ImageProcessingConfig) -> Dict[str, aws.cloudw
         statistic="Average",
         threshold=0.95,  # Alert if success rate drops below 95%
         alarm_description="Alarm when image processing success rate is too low",
-                dimensions=function_name.apply(lambda name: {
-                    "FunctionName": name
-                }),
+        dimensions=function_name.apply(lambda name: {
+            "FunctionName": name
+        }),
         tags={"Project": "ImageProcessingPipeline", "ManagedBy": "Pulumi"},
         opts=pulumi.ResourceOptions()
     )
     
     # Image processing duration alarm
     alarms['processing_duration_alarm'] = aws.cloudwatch.MetricAlarm(
-        f"{function_name}-processing-duration-alarm",
-        name=f"{function_name}-processing-duration",
+        "img-proc-processing-duration-alarm",
+        name="img-proc-processing-duration",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=2,
         metric_name="ProcessingDuration",
@@ -228,9 +226,9 @@ def create_custom_metrics(config: ImageProcessingConfig) -> Dict[str, aws.cloudw
         statistic="Average",
         threshold=10000,  # 10 seconds
         alarm_description="Alarm when image processing duration is too long",
-                dimensions=function_name.apply(lambda name: {
-                    "FunctionName": name
-                }),
+        dimensions=function_name.apply(lambda name: {
+            "FunctionName": name
+        }),
         tags={"Project": "ImageProcessingPipeline", "ManagedBy": "Pulumi"},
         opts=pulumi.ResourceOptions()
     )
