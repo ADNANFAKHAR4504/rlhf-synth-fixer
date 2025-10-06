@@ -20,5 +20,11 @@
   "subtask": "Cloud Environment Setup",
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
