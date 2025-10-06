@@ -4,16 +4,17 @@ Resizes images to predefined sizes and stores them in the destination bucket.
 Addresses model failures around image processing and error handling.
 """
 
-import json
-import os
 import io
+import json
+import logging
+import os
+import time
+import traceback
 import urllib.parse
+from typing import Any, Dict, Tuple
+
 import boto3
 from PIL import Image
-import logging
-from typing import Dict, Any, Tuple
-import traceback
-import time
 
 # Configure logging
 logger = logging.getLogger()

@@ -5,10 +5,11 @@ Addresses model failures around region configuration and resource naming.
 """
 
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List, Any
-from dataclasses import dataclass
 
 # Get configuration from Pulumi config or use defaults
 config = pulumi.Config()
