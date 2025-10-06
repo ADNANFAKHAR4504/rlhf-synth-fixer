@@ -221,6 +221,8 @@ class PipelineStack extends cdk.Stack {
   public readonly ecrRepository: ecr.Repository;
   public readonly pipeline: codepipeline.Pipeline;
   public readonly buildOutput: codepipeline.Artifact;
+  public readonly sourceBucket: s3.Bucket;
+  public readonly artifactBucket: s3.Bucket;
 
   constructor(
     scope: Construct,
@@ -268,7 +270,7 @@ class PipelineStack extends cdk.Stack {
     );
 
     // S3 Bucket for artifacts with KMS encryption
-    const artifactBucket = new s3.Bucket(
+    this.artifactBucket = new s3.Bucket(
       this,
       `ArtifactBucket-${props.environmentSuffix}`,
       {
@@ -282,7 +284,7 @@ class PipelineStack extends cdk.Stack {
     );
 
     // S3 Bucket for source code with KMS encryption
-    const sourceBucket = new s3.Bucket(
+    this.sourceBucket = new s3.Bucket(
       this,
       `SourceBucket-${props.environmentSuffix}`,
       {
@@ -301,7 +303,7 @@ class PipelineStack extends cdk.Stack {
       `DeploySourceCode-${props.environmentSuffix}`,
       {
         sources: [s3_deployment.Source.asset(path.join(__dirname, 'app'))],
-        destinationBucket: sourceBucket,
+        destinationBucket: this.sourceBucket,
         destinationKeyPrefix: '',
         prune: false,
       }
@@ -334,13 +336,16 @@ class PipelineStack extends cdk.Stack {
                   's3:PutObject',
                 ],
                 resources: [
-                  artifactBucket.arnForObjects('*'),
-                  sourceBucket.arnForObjects('*'),
+                  this.artifactBucket.arnForObjects('*'),
+                  this.sourceBucket.arnForObjects('*'),
                 ],
               }),
               new iam.PolicyStatement({
                 actions: ['s3:GetBucketLocation', 's3:ListBucket'],
-                resources: [artifactBucket.bucketArn, sourceBucket.bucketArn],
+                resources: [
+                  this.artifactBucket.bucketArn,
+                  this.sourceBucket.bucketArn,
+                ],
               }),
               new iam.PolicyStatement({
                 actions: [
@@ -394,13 +399,16 @@ class PipelineStack extends cdk.Stack {
                   's3:PutObject',
                 ],
                 resources: [
-                  artifactBucket.arnForObjects('*'),
-                  sourceBucket.arnForObjects('*'),
+                  this.artifactBucket.arnForObjects('*'),
+                  this.sourceBucket.arnForObjects('*'),
                 ],
               }),
               new iam.PolicyStatement({
                 actions: ['s3:GetBucketLocation', 's3:ListBucket'],
-                resources: [artifactBucket.bucketArn, sourceBucket.bucketArn],
+                resources: [
+                  this.artifactBucket.bucketArn,
+                  this.sourceBucket.bucketArn,
+                ],
               }),
               new iam.PolicyStatement({
                 actions: [
@@ -524,7 +532,7 @@ class PipelineStack extends cdk.Stack {
       {
         pipelineName: `node-app-pipeline-${props.environmentSuffix}`,
         role: pipelineRole,
-        artifactBucket,
+        artifactBucket: this.artifactBucket,
         restartExecutionOnUpdate: true,
       }
     );
@@ -533,7 +541,7 @@ class PipelineStack extends cdk.Stack {
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
     const sourceAction = new codepipeline_actions.S3SourceAction({
       actionName: 'S3_Source',
-      bucket: sourceBucket,
+      bucket: this.sourceBucket,
       bucketKey: 'source.zip',
       output: sourceOutput,
       trigger: codepipeline_actions.S3Trigger.EVENTS,
@@ -617,7 +625,7 @@ class PipelineStack extends cdk.Stack {
 
     // Output important values
     new cdk.CfnOutput(this, 'SourceBucketName', {
-      value: sourceBucket.bucketName,
+      value: this.sourceBucket.bucketName,
       description: 'S3 bucket for source code',
     });
 
@@ -763,7 +771,67 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(stack).add('Application', 'NodeJsApp');
     });
 
-    // Output summary information
+    // Output all important resource information from TapStack
+    new cdk.CfnOutput(this, 'AppSecretsArn', {
+      value: securityStack.appSecrets.secretArn,
+      description: 'Secrets Manager ARN for application secrets',
+    });
+
+    new cdk.CfnOutput(this, 'NotificationTopicArn', {
+      value: notificationStack.pipelineTopic.topicArn,
+      description: 'SNS Topic ARN for pipeline notifications',
+    });
+
+    new cdk.CfnOutput(this, 'SourceBucketName', {
+      value: pipelineStack.sourceBucket.bucketName,
+      description: 'S3 bucket for source code',
+    });
+
+    new cdk.CfnOutput(this, 'ArtifactBucketName', {
+      value: pipelineStack.artifactBucket.bucketName,
+      description: 'S3 bucket for pipeline artifacts',
+    });
+
+    new cdk.CfnOutput(this, 'PipelineArn', {
+      value: pipelineStack.pipeline.pipelineArn,
+      description: 'Pipeline ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryArn', {
+      value: pipelineStack.ecrRepository.repositoryArn,
+      description: 'ECR Repository ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryName', {
+      value: pipelineStack.ecrRepository.repositoryName,
+      description: 'ECR Repository Name',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryUri', {
+      value: pipelineStack.ecrRepository.repositoryUri,
+      description: 'ECR Repository URI',
+    });
+
+    new cdk.CfnOutput(this, 'EcsClusterName', {
+      value: ecsStackPrimary.cluster.clusterName,
+      description: 'ECS Cluster Name (Primary Region)',
+    });
+
+    new cdk.CfnOutput(this, 'EcsClusterArn', {
+      value: ecsStackPrimary.cluster.clusterArn,
+      description: 'ECS Cluster ARN (Primary Region)',
+    });
+
+    new cdk.CfnOutput(this, 'EcsServiceName', {
+      value: ecsStackPrimary.service.serviceName,
+      description: 'ECS Service Name (Primary Region)',
+    });
+
+    new cdk.CfnOutput(this, 'EcsServiceArn', {
+      value: ecsStackPrimary.service.serviceArn,
+      description: 'ECS Service ARN (Primary Region)',
+    });
+
     new cdk.CfnOutput(this, 'DeploymentSummary', {
       value: JSON.stringify({
         environment: environmentSuffix,

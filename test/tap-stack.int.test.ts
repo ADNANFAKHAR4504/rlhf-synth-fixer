@@ -32,7 +32,7 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'ap-northeast-1';
 
 // Extract resource names from outputs - will fail if missing
 const sourceBucketName = outputs.SourceBucketName;
@@ -40,6 +40,8 @@ const pipelineName = outputs.PipelineArn.split(':').pop();
 const notificationTopicArn = outputs.NotificationTopicArn;
 const secretArn = outputs.AppSecretsArn;
 const repositoryName = outputs.EcrRepositoryName;
+const ecsClusterName = outputs.EcsClusterName;
+const ecsServiceName = outputs.EcsServiceName;
 
 const ecsClient = new ECSClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
@@ -146,10 +148,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('ECS Infrastructure', () => {
     test('should have ECS cluster created', async () => {
-      const clusterName = `ecs-stack-primary-${environmentSuffix}-EcsCluster-${environmentSuffix}`;
+      expect(ecsClusterName).toBeDefined();
 
       const command = new DescribeClustersCommand({
-        clusters: [clusterName],
+        clusters: [ecsClusterName],
         include: ['SETTINGS'],
       });
 
@@ -166,10 +168,11 @@ describe('CI/CD Pipeline Integration Tests', () => {
     }, 30000);
 
     test('should have Fargate service configured', async () => {
-      const clusterName = `ecs-stack-primary-${environmentSuffix}-EcsCluster-${environmentSuffix}`;
+      expect(ecsClusterName).toBeDefined();
+      expect(ecsServiceName).toBeDefined();
 
       const listCommand = new ListServicesCommand({
-        cluster: clusterName,
+        cluster: ecsClusterName,
       });
 
       try {
@@ -181,7 +184,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         }
       } catch (error: any) {
         if (error.name === 'ClusterNotFoundException') {
-          console.warn(`ECS Cluster not found: ${clusterName}`);
+          console.warn(`ECS Cluster not found: ${ecsClusterName}`);
         }
       }
     }, 30000);
