@@ -24,19 +24,35 @@ const elbv2 = new AWS.ELBv2();
 const rds = new AWS.RDS();
 
 describe('TapStack Integration Tests', () => {
-  let stackOutputs: any = {};
+  let stackOutputs: any = outputs; // Use the loaded outputs from the file
 
   // Set timeout for integration tests
   jest.setTimeout(60000);
 
+  beforeAll(() => {
+    // Validate that all required outputs are present
+    const requiredOutputs = ['VpcId', 'PublicSubnets', 'PrivateSubnets', 'DBSubnets', 
+                           'WebServerSecurityGroup', 'AppServerSecurityGroup', 'DBSecurityGroup', 
+                           'ALBDnsName', 'RDSEndpoint'];
+    
+    for (const output of requiredOutputs) {
+      if (!stackOutputs[output]) {
+        throw new Error(`Missing required output: ${output}`);
+      }
+    }
+    
+    console.log('Loaded CloudFormation outputs:', stackOutputs);
+  });
+
   describe('AWS Resource Existence Tests', () => {
     test('VPC should exist and be available', async () => {
-      const result = await ec2.describeVpcs({ 
-        VpcIds: [stackOutputs.VpcId] 
+      const result = await ec2.describeVpcs({
+        VpcIds: [stackOutputs.VpcId]
       }).promise();
       
       expect(result.Vpcs).toHaveLength(1);
       expect(result.Vpcs![0].State).toBe('available');
+      expect(result.Vpcs![0].VpcId).toBe(stackOutputs.VpcId);
       console.log(`✓ VPC ${stackOutputs.VpcId} is available`);
     });
 
@@ -121,23 +137,31 @@ describe('TapStack Integration Tests', () => {
       );
       
       expect(alb).toBeDefined();
-      expect(alb!.State!.Code).toBe('active');
-      expect(alb!.Type).toBe('application');
-      expect(alb!.Scheme).toBe('internet-facing');
+      if (!alb) {
+        throw new Error(`ALB with DNS name ${stackOutputs.ALBDnsName} not found`);
+      }
+      
+      expect(alb.State!.Code).toBe('active');
+      expect(alb.Type).toBe('application');
+      expect(alb.Scheme).toBe('internet-facing');
       console.log(`✓ ALB validated: ${stackOutputs.ALBDnsName}`);
     });
 
     test('RDS instance should exist and be available', async () => {
       const result = await rds.describeDBInstances().promise();
       const dbInstance = result.DBInstances!.find(db => 
-        db.Endpoint!.Address === stackOutputs.RDSEndpoint
+        db.Endpoint?.Address === stackOutputs.RDSEndpoint
       );
       
       expect(dbInstance).toBeDefined();
-      expect(dbInstance!.DBInstanceStatus).toBe('available');
-      expect(dbInstance!.Engine).toBe('mysql');
-      expect(dbInstance!.MultiAZ).toBe(true);
-      expect(dbInstance!.StorageEncrypted).toBe(true);
+      if (!dbInstance) {
+        throw new Error(`RDS instance with endpoint ${stackOutputs.RDSEndpoint} not found`);
+      }
+      
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.Engine).toBe('mysql');
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.StorageEncrypted).toBe(true);
       console.log(`✓ RDS instance validated: ${stackOutputs.RDSEndpoint}`);
     });
   });
