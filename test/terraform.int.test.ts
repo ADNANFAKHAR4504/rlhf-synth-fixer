@@ -270,7 +270,6 @@ describe("Terraform infrastructure integration", () => {
   test("CloudWatch alarms trigger scaling policies on CPU thresholds", async () => {
     const policiesResult = await asgClient.send(new DescribePoliciesCommand({
       AutoScalingGroupName: asgName,
-      PolicyNames: ["scale-up", "scale-down"]
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
     const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
