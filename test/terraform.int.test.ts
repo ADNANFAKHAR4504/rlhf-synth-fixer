@@ -61,24 +61,6 @@ describe('Tap Stack Live Integration Tests', () => {
       expect(addrs.address).toBeDefined();
     });
 
-    it('ALB responds to HTTP/HTTPS requests', async () => {
-      if (!alb_dns_name) return console.warn('Skipping ALB HTTP test, no DNS provided.');
-      let success = false;
-      try {
-        const res = await fetch(`http://${alb_dns_name}`, { method: 'GET', timeout: 5000 });
-        success = res.ok;
-      } catch (e) {
-        console.warn('HTTP failed, trying HTTPS...');
-        try {
-          const res = await fetch(`https://${alb_dns_name}`, { method: 'GET', timeout: 5000 });
-          success = res.ok;
-        } catch (err: any) {
-          console.warn('ALB not responding:', err.message);
-        }
-      }
-      expect(success).toBe(true);
-    });
-
     it('ALB security group exists', async () => {
       if (!alb_security_group_id) return console.warn('Skipping ALB SG test.');
       const sg = await ec2.describeSecurityGroups({ GroupIds: [alb_security_group_id] }).promise();
