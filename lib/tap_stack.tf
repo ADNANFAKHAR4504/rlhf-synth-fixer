@@ -668,16 +668,72 @@ resource "aws_cloudwatch_metric_alarm" "ec2_high_cpu" {
 
 # ==================== OUTPUTS ====================
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
+# VPC Outputs
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
 }
 
+# Subnet Outputs
+output "public_subnet_id" {
+  description = "ID of the public subnet"
+  value       = aws_subnet.public.id
+}
+
+output "private_subnet_primary_id" {
+  description = "ID of the primary private subnet"
+  value       = aws_subnet.private_primary.id
+}
+
+output "private_subnet_secondary_id" {
+  description = "ID of the secondary private subnet"
+  value       = aws_subnet.private_secondary.id
+}
+
+# Security Group Outputs
+output "alb_security_group_id" {
+  description = "ID of the ALB security group"
+  value       = aws_security_group.alb.id
+}
+
+output "web_security_group_id" {
+  description = "ID of the web server security group"
+  value       = aws_security_group.web.id
+}
+
+output "db_security_group_id" {
+  description = "ID of the database security group"
+  value       = aws_security_group.db.id
+}
+
+# EC2 Outputs
 output "web_instance_public_ip" {
   description = "Public IP address of the web server"
   value       = aws_instance.web.public_ip
 }
 
+output "web_instance_id" {
+  description = "ID of the web server instance"
+  value       = aws_instance.web.id
+}
+
+# ALB Outputs
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.main.arn
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.web.arn
+}
+
+# RDS Outputs
 output "rds_endpoint_address" {
   description = "RDS instance endpoint address"
   value       = aws_db_instance.main.address
@@ -686,6 +742,22 @@ output "rds_endpoint_address" {
 output "rds_endpoint_port" {
   description = "RDS instance endpoint port"
   value       = aws_db_instance.main.port
+}
+
+output "rds_instance_id" {
+  description = "ID of the RDS instance"
+  value       = aws_db_instance.main.id
+}
+
+# S3 Outputs
+output "alb_logs_bucket_name" {
+  description = "Name of the S3 bucket for ALB access logs"
+  value       = aws_s3_bucket.alb_logs.id
+}
+
+output "alb_logs_bucket_arn" {
+  description = "ARN of the S3 bucket for ALB access logs"
+  value       = aws_s3_bucket.alb_logs.arn
 }
 
 # ==================== OPTIONAL SANITY CHECK ====================

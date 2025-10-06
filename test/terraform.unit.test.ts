@@ -38,7 +38,7 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
 
   test("declares required variables", () => {
     const content = fs.readFileSync(stackPath, "utf8");
-    
+
     // Check for required variables
     expect(content).toMatch(/variable\s+"vpc_cidr"/);
     expect(content).toMatch(/variable\s+"acm_certificate_arn"/);

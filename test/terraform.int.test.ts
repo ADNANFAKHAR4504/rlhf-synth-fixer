@@ -1,31 +1,30 @@
 // Integration tests for deployed Terraform infrastructure
 // These tests validate that the actual AWS resources are working correctly
 
-import { 
-  EC2Client, 
-  DescribeInstancesCommand,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand 
-} from '@aws-sdk/client-ec2';
-import { 
-  RDSClient, 
-  DescribeDBInstancesCommand 
-} from '@aws-sdk/client-rds';
-import { 
-  ElasticLoadBalancingV2Client, 
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand 
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import { 
-  CloudWatchClient, 
-  DescribeAlarmsCommand 
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
-import { 
-  S3Client, 
+import {
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketPolicyCommand,
   HeadBucketCommand,
-  GetBucketPolicyCommand 
+  S3Client
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
@@ -46,7 +45,7 @@ const cloudWatchClient = new CloudWatchClient({ region });
 const s3Client = new S3Client({ region });
 
 describe('Terraform Infrastructure Integration Tests', () => {
-  
+
   describe('VPC and Networking', () => {
     test('VPC should exist with correct CIDR block', async () => {
       if (!tfOutputs.vpc_id) {
@@ -57,12 +56,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [tfOutputs.vpc_id]
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(response.Vpcs![0].State).toBe('available');
-      
+
       // Check tags
       const envTag = response.Vpcs![0].Tags?.find(tag => tag.Key === 'Environment');
       expect(envTag?.Value).toBe('Production');
@@ -81,18 +80,18 @@ describe('Terraform Infrastructure Integration Tests', () => {
           tfOutputs.private_subnet_secondary_id
         ]
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.Subnets).toHaveLength(3);
-      
+
       const publicSubnet = response.Subnets!.find(s => s.SubnetId === tfOutputs.public_subnet_id);
       const privateSubnet1 = response.Subnets!.find(s => s.SubnetId === tfOutputs.private_subnet_primary_id);
       const privateSubnet2 = response.Subnets!.find(s => s.SubnetId === tfOutputs.private_subnet_secondary_id);
-      
+
       expect(publicSubnet?.CidrBlock).toBe('10.0.1.0/24');
       expect(privateSubnet1?.CidrBlock).toBe('10.0.2.0/24');
       expect(privateSubnet2?.CidrBlock).toBe('10.0.3.0/24');
-      
+
       expect(publicSubnet?.MapPublicIpOnLaunch).toBe(true);
       expect(privateSubnet1?.MapPublicIpOnLaunch).toBe(false);
       expect(privateSubnet2?.MapPublicIpOnLaunch).toBe(false);
@@ -113,23 +112,23 @@ describe('Terraform Infrastructure Integration Tests', () => {
           tfOutputs.db_security_group_id
         ]
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups).toHaveLength(3);
-      
+
       const albSg = response.SecurityGroups!.find(sg => sg.GroupId === tfOutputs.alb_security_group_id);
       const webSg = response.SecurityGroups!.find(sg => sg.GroupId === tfOutputs.web_security_group_id);
       const dbSg = response.SecurityGroups!.find(sg => sg.GroupId === tfOutputs.db_security_group_id);
-      
+
       // ALB security group should allow HTTPS from internet
-      expect(albSg?.IpPermissions?.some(rule => 
-        rule.FromPort === 443 && 
+      expect(albSg?.IpPermissions?.some(rule =>
+        rule.FromPort === 443 &&
         rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
       )).toBe(true);
-      
+
       // DB security group should only allow access from web server
-      expect(dbSg?.IpPermissions?.some(rule => 
-        rule.FromPort === 5432 && 
+      expect(dbSg?.IpPermissions?.some(rule =>
+        rule.FromPort === 5432 &&
         rule.UserIdGroupPairs?.some(pair => pair.GroupId === tfOutputs.web_security_group_id)
       )).toBe(true);
     });
@@ -144,7 +143,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       const command = new DescribeInstancesCommand({});
       const response = await ec2Client.send(command);
-      
+
       let webInstance = null;
       for (const reservation of response.Reservations || []) {
         for (const instance of reservation.Instances || []) {
@@ -154,11 +153,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
           }
         }
       }
-      
+
       expect(webInstance).not.toBeNull();
       expect(webInstance?.State?.Name).toBe('running');
       expect(webInstance?.InstanceType).toMatch(/^t3\.(micro|small)$/);
-      
+
       // Check tags
       const envTag = webInstance?.Tags?.find(tag => tag.Key === 'Environment');
       expect(envTag?.Value).toBe('Production');
@@ -174,11 +173,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       const command = new DescribeLoadBalancersCommand({});
       const response = await elbClient.send(command);
-      
-      const alb = response.LoadBalancers?.find(lb => 
+
+      const alb = response.LoadBalancers?.find(lb =>
         lb.DNSName === tfOutputs.alb_dns_name
       );
-      
+
       expect(alb).not.toBeNull();
       expect(alb?.State?.Code).toBe('active');
       expect(alb?.Type).toBe('application');
@@ -194,12 +193,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const command = new DescribeTargetHealthCommand({
         TargetGroupArn: tfOutputs.target_group_arn
       });
-      
+
       const response = await elbClient.send(command);
-      
+
       expect(response.TargetHealthDescriptions).toBeDefined();
       expect(response.TargetHealthDescriptions!.length).toBeGreaterThan(0);
-      
+
       // Check if at least one target is healthy
       const hasHealthyTarget = response.TargetHealthDescriptions!.some(
         target => target.TargetHealth?.State === 'healthy'
@@ -217,11 +216,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       const command = new DescribeDBInstancesCommand({});
       const response = await rdsClient.send(command);
-      
-      const dbInstance = response.DBInstances?.find(db => 
+
+      const dbInstance = response.DBInstances?.find(db =>
         db.Endpoint?.Address === tfOutputs.rds_endpoint_address
       );
-      
+
       expect(dbInstance).not.toBeNull();
       expect(dbInstance?.DBInstanceStatus).toBe('available');
       expect(dbInstance?.Engine).toBe('postgres');
@@ -236,30 +235,30 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         const command = new DescribeAlarmsCommand({});
         const response = await cloudWatchClient.send(command);
-        
-        const alarms = response.MetricAlarms?.filter(alarm => 
+
+        const alarms = response.MetricAlarms?.filter(alarm =>
           alarm.AlarmName?.includes('production')
         );
-        
+
         expect(alarms).toBeDefined();
-        
+
         // If no alarms found, it means infrastructure is not deployed yet
         if (!alarms || alarms.length === 0) {
           console.warn('CloudWatch alarms not found - infrastructure may not be deployed yet');
           return;
         }
-        
+
         expect(alarms.length).toBeGreaterThan(0);
-        
+
         // Check for specific alarms
-        const hasRdsCpuAlarm = alarms.some(alarm => 
+        const hasRdsCpuAlarm = alarms.some(alarm =>
           alarm.AlarmName?.includes('rds') && alarm.MetricName === 'CPUUtilization'
         );
         expect(hasRdsCpuAlarm).toBe(true);
       } catch (error: any) {
-        if (error.name === 'UnauthorizedOperation' || 
-            error.name === 'AccessDenied' || 
-            error.message?.includes('AWS SDK error wrapper')) {
+        if (error.name === 'UnauthorizedOperation' ||
+          error.name === 'AccessDenied' ||
+          error.message?.includes('AWS SDK error wrapper')) {
           console.warn('CloudWatch alarms test skipped - AWS credentials not available');
           return;
         }
@@ -279,7 +278,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const headCommand = new HeadBucketCommand({
         Bucket: tfOutputs.alb_logs_bucket_name
       });
-      
+
       try {
         await s3Client.send(headCommand);
       } catch (error: any) {
@@ -294,13 +293,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const policyCommand = new GetBucketPolicyCommand({
           Bucket: tfOutputs.alb_logs_bucket_name
         });
-        
+
         const policyResponse = await s3Client.send(policyCommand);
         expect(policyResponse.Policy).toBeDefined();
-        
+
         const policy = JSON.parse(policyResponse.Policy!);
-        const hasAlbStatement = policy.Statement.some((statement: any) => 
-          statement.Action?.includes('s3:PutObject') && 
+        const hasAlbStatement = policy.Statement.some((statement: any) =>
+          statement.Action?.includes('s3:PutObject') &&
           statement.Principal?.AWS
         );
         expect(hasAlbStatement).toBe(true);
@@ -324,14 +323,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
+
         const response = await fetch(`http://${tfOutputs.alb_dns_name}`, {
           method: 'HEAD',
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         // Should redirect to HTTPS or return success
         expect([200, 301, 302, 307, 308]).toContain(response.status);
       } catch (error) {
