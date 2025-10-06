@@ -4,6 +4,7 @@ import unittest
 import uuid
 import time
 import boto3
+import requests
 from botocore.exceptions import ClientError
 from pytest import mark
 
@@ -33,6 +34,8 @@ class TestTapStack(unittest.TestCase):
         
         # Extract resource information from outputs
         cls.api_url = cls.outputs.get('ApiUrl', '')
+        cls.cloudfront_url = cls.outputs.get('CloudFrontUrl', '')
+        cls.cloudfront_domain = cls.outputs.get('CloudFrontDomainName', '')
         cls.lambda_function_arn = cls.outputs.get('LambdaFunctionArn', '')
         cls.lambda_function_name = cls.outputs.get('LambdaFunctionName', '')
         cls.s3_bucket_name = cls.outputs.get('LogBucketName', '')
@@ -43,6 +46,13 @@ class TestTapStack(unittest.TestCase):
         cls.dlq_arn = cls.outputs.get('DLQArn', '')
         cls.cloudwatch_log_group_name = cls.outputs.get('CloudWatchLogGroupName', '')
         cls.api_stage_name = cls.outputs.get('ApiStageName', 'prod')
+        
+        # CloudWatch Alarm Names
+        cls.lambda_duration_alarm_name = cls.outputs.get('LambdaDurationAlarmName', '')
+        cls.lambda_error_alarm_name = cls.outputs.get('LambdaErrorAlarmName', '')
+        cls.dlq_message_alarm_name = cls.outputs.get('DLQMessageAlarmName', '')
+        cls.api_4xx_alarm_name = cls.outputs.get('ApiGateway4XXAlarmName', '')
+        cls.api_5xx_alarm_name = cls.outputs.get('ApiGateway5XXAlarmName', '')
         
         # Extract region from Lambda ARN
         if cls.lambda_function_arn:
@@ -58,6 +68,9 @@ class TestTapStack(unittest.TestCase):
         cls.dynamodb_resource = boto3.resource('dynamodb', region_name=cls.region)
         cls.sqs_client = boto3.client('sqs', region_name=cls.region)
         cls.logs_client = boto3.client('logs', region_name=cls.region)
+        cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.region)
+        cls.apigateway_client = boto3.client('apigateway', region_name=cls.region)
+        cls.cloudfront_client = boto3.client('cloudfront', region_name='us-east-1')  # CloudFront is global
         
         # Test items for cleanup
         cls.created_users = []
@@ -94,6 +107,8 @@ class TestTapStack(unittest.TestCase):
         """Test that all required stack outputs are present"""
         required_outputs = [
             'ApiUrl',
+            'CloudFrontUrl',
+            'CloudFrontDomainName',
             'LambdaFunctionArn',
             'LambdaFunctionName',
             'LogBucketName',
@@ -103,7 +118,12 @@ class TestTapStack(unittest.TestCase):
             'DLQUrl',
             'DLQArn',
             'CloudWatchLogGroupName',
-            'ApiStageName'
+            'ApiStageName',
+            'LambdaDurationAlarmName',
+            'LambdaErrorAlarmName',
+            'DLQMessageAlarmName',
+            'ApiGateway4XXAlarmName',
+            'ApiGateway5XXAlarmName'
         ]
         
         for output in required_outputs:
@@ -138,8 +158,150 @@ class TestTapStack(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Lambda function not found or error occurred: {e}")
 
+    @mark.it("validates API Gateway HTTP endpoint - POST /users")
+    def test_api_gateway_http_post_endpoint(self):
+        """Test API Gateway HTTP POST endpoint functionality"""
+        test_user_data = {
+            "userId": f"http-test-user-{uuid.uuid4()}",
+            "name": "HTTP Test User",
+            "email": "http-test@example.com",
+            "department": "Testing"
+        }
+        
+        try:
+            # Send HTTP POST request to API Gateway
+            response = requests.post(
+                f"{self.api_url}users",
+                json=test_user_data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout=30
+            )
+            
+            # Validate response
+            self.assertEqual(response.status_code, 201)
+            
+            response_body = response.json()
+            self.assertEqual(response_body['message'], 'User created successfully')
+            self.assertIn('userId', response_body)
+            self.assertIn('createdDate', response_body)
+            
+            # Track for cleanup
+            self.created_users.append((response_body['userId'], response_body['createdDate']))
+            
+        except requests.RequestException as e:
+            self.fail(f"Error testing API Gateway HTTP endpoint: {e}")
+
+    @mark.it("validates API Gateway CORS functionality")
+    def test_api_gateway_cors_headers(self):
+        """Test API Gateway CORS headers"""
+        try:
+            # Send OPTIONS request to check CORS
+            response = requests.options(
+                f"{self.api_url}users",
+                headers={
+                    "Origin": "https://example.com",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "Content-Type"
+                },
+                timeout=30
+            )
+            
+            # Validate CORS headers are present
+            self.assertIn('access-control-allow-origin', [h.lower() for h in response.headers.keys()])
+            
+        except requests.RequestException as e:
+            self.fail(f"Error testing API Gateway CORS: {e}")
+
+    @mark.it("validates CloudFront distribution exists and functionality")
+    def test_cloudfront_distribution_functionality(self):
+        """Test CloudFront distribution functionality"""
+        test_user_data = {
+            "userId": f"cf-test-user-{uuid.uuid4()}",
+            "name": "CloudFront Test User",
+            "email": "cf-test@example.com"
+        }
+        
+        try:
+            # Test HTTP request through CloudFront using the actual domain from outputs
+            cloudfront_url = f"https://{self.cloudfront_domain}/"
+            response = requests.post(
+                f"{cloudfront_url}users",
+                json=test_user_data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout=60  # CloudFront may take longer
+            )
+            
+            # Validate response
+            self.assertEqual(response.status_code, 201)
+            response_body = response.json()
+            self.assertEqual(response_body['message'], 'User created successfully')
+            
+            # Track for cleanup
+            self.created_users.append((response_body['userId'], response_body['createdDate']))
+            
+        except requests.RequestException as e:
+            self.fail(f"Error testing CloudFront distribution: {e}")
+
+    @mark.it("validates CloudWatch alarms exist and are configured correctly")
+    def test_cloudwatch_alarms_configuration(self):
+        """Test CloudWatch alarms configuration"""
+        try:
+            # Test Lambda Duration Alarm
+            response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[self.lambda_duration_alarm_name]
+            )
+            alarms = response.get('MetricAlarms', [])
+            self.assertTrue(len(alarms) > 0, f"Lambda duration alarm {self.lambda_duration_alarm_name} not found")
+            
+            alarm = alarms[0]
+            self.assertEqual(alarm['AlarmName'], self.lambda_duration_alarm_name)
+            self.assertEqual(alarm['Threshold'], 25000.0)  # 25 seconds in milliseconds
+            self.assertEqual(alarm['ComparisonOperator'], 'GreaterThanThreshold')
+            self.assertEqual(alarm['EvaluationPeriods'], 2)
+            
+            # Test Lambda Error Alarm
+            response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[self.lambda_error_alarm_name]
+            )
+            alarms = response.get('MetricAlarms', [])
+            self.assertTrue(len(alarms) > 0, f"Lambda error alarm {self.lambda_error_alarm_name} not found")
+            
+            alarm = alarms[0]
+            self.assertEqual(alarm['AlarmName'], self.lambda_error_alarm_name)
+            self.assertEqual(alarm['Threshold'], 1.0)
+            
+            # Test DLQ Message Alarm
+            response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[self.dlq_message_alarm_name]
+            )
+            alarms = response.get('MetricAlarms', [])
+            self.assertTrue(len(alarms) > 0, f"DLQ message alarm {self.dlq_message_alarm_name} not found")
+            
+            # Test API Gateway 4XX Alarm
+            response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[self.api_4xx_alarm_name]
+            )
+            alarms = response.get('MetricAlarms', [])
+            self.assertTrue(len(alarms) > 0, f"API Gateway 4XX alarm {self.api_4xx_alarm_name} not found")
+            
+            # Test API Gateway 5XX Alarm
+            response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[self.api_5xx_alarm_name]
+            )
+            alarms = response.get('MetricAlarms', [])
+            self.assertTrue(len(alarms) > 0, f"API Gateway 5XX alarm {self.api_5xx_alarm_name} not found")
+            
+        except ClientError as e:
+            self.fail(f"Error testing CloudWatch alarms: {e}")
+
     @mark.it("validates S3 bucket exists with correct configuration")
-    def test_s3_bucket_exists(self):
+    def test_s3_bucket_configuration(self):
         """Test that the S3 bucket exists with correct configuration"""
         try:
             # Check bucket exists
@@ -167,7 +329,7 @@ class TestTapStack(unittest.TestCase):
             self.fail(f"S3 bucket not found or error occurred: {e}")
 
     @mark.it("validates DynamoDB table exists with correct configuration")
-    def test_dynamodb_table_exists(self):
+    def test_dynamodb_table_configuration(self):
         """Test that the DynamoDB table exists with correct configuration"""
         try:
             response = self.dynamodb_client.describe_table(TableName=self.dynamodb_table_name)
@@ -197,8 +359,8 @@ class TestTapStack(unittest.TestCase):
         except ClientError as e:
             self.fail(f"DynamoDB table not found or error occurred: {e}")
 
-    @mark.it("validates SQS dead letter queue exists with correct configuration")
-    def test_sqs_dlq_exists(self):
+    @mark.it("validates SQS dead letter queue configuration")
+    def test_sqs_dlq_configuration(self):
         """Test that the SQS dead letter queue exists with correct configuration"""
         try:
             response = self.sqs_client.get_queue_attributes(
@@ -217,187 +379,35 @@ class TestTapStack(unittest.TestCase):
         except ClientError as e:
             self.fail(f"SQS dead letter queue not found or error occurred: {e}")
 
-    @mark.it("validates CloudWatch log group exists")
-    def test_cloudwatch_log_group_exists(self):
-        """Test that the CloudWatch log group exists"""
-        try:
-            response = self.logs_client.describe_log_groups(
-                logGroupNamePrefix=self.cloudwatch_log_group_name
-            )
-            
-            log_groups = response['logGroups']
-            self.assertTrue(len(log_groups) > 0, "CloudWatch log group not found")
-            
-            # Find the specific log group
-            log_group = next((lg for lg in log_groups if lg['logGroupName'] == self.cloudwatch_log_group_name), None)
-            self.assertIsNotNone(log_group, f"Log group {self.cloudwatch_log_group_name} not found")
-            
-        except ClientError as e:
-            # Log group might not exist yet if no requests have been made
-            self.skipTest(f"CloudWatch log group not found (may not be created yet): {e}")
-
-    @mark.it("validates Lambda function can be invoked directly")
-    def test_lambda_direct_invocation(self):
-        """Test direct Lambda function invocation"""
-        test_event = {
-            "body": json.dumps({
-                "userId": f"test-user-{uuid.uuid4()}",
-                "name": "Test User",
-                "email": "test@example.com"
-            }),
-            "httpMethod": "POST",
-            "path": "/users"
-        }
-        
-        try:
-            response = self.lambda_client.invoke(
-                FunctionName=self.lambda_function_name,
-                Payload=json.dumps(test_event)
-            )
-            
-            self.assertEqual(response['StatusCode'], 200)
-            
-            # Parse response payload
-            payload = json.loads(response['Payload'].read())
-            self.assertEqual(payload['statusCode'], 201)
-            
-            # Parse body
-            body = json.loads(payload['body'])
-            self.assertEqual(body['message'], 'User created successfully')
-            self.assertIn('userId', body)
-            self.assertIn('createdDate', body)
-            
-            # Track for cleanup
-            user_data = json.loads(test_event['body'])
-            self.created_users.append((body['userId'], body['createdDate']))
-            
-        except ClientError as e:
-            self.fail(f"Error invoking Lambda function: {e}")
-
-    @mark.it("validates DynamoDB operations work correctly")
-    def test_dynamodb_operations(self):
-        """Test direct DynamoDB operations"""
-        test_user_id = f"test-user-{uuid.uuid4()}"
-        test_created_date = "2023-01-01T00:00:00Z"
-        test_data = {
-            "userId": test_user_id,
-            "createdDate": test_created_date,
-            "name": "DynamoDB Test User",
-            "email": "dynamodb@example.com"
-        }
-        
-        try:
-            table = self.dynamodb_resource.Table(self.dynamodb_table_name)
-            
-            # PUT item
-            table.put_item(Item=test_data)
-            self.created_users.append((test_user_id, test_created_date))
-            
-            # GET item
-            response = table.get_item(
-                Key={'userId': test_user_id, 'createdDate': test_created_date}
-            )
-            
-            self.assertIn('Item', response)
-            item = response['Item']
-            self.assertEqual(item['userId'], test_user_id)
-            self.assertEqual(item['name'], test_data['name'])
-            self.assertEqual(item['email'], test_data['email'])
-            
-            # UPDATE item
-            table.update_item(
-                Key={'userId': test_user_id, 'createdDate': test_created_date},
-                UpdateExpression='SET #n = :name',
-                ExpressionAttributeNames={'#n': 'name'},
-                ExpressionAttributeValues={':name': 'Updated DynamoDB Test User'}
-            )
-            
-            # Verify update
-            response = table.get_item(
-                Key={'userId': test_user_id, 'createdDate': test_created_date}
-            )
-            updated_item = response['Item']
-            self.assertEqual(updated_item['name'], 'Updated DynamoDB Test User')
-            
-        except ClientError as e:
-            self.fail(f"Error with DynamoDB operations: {e}")
-
-    @mark.it("validates S3 operations work correctly")
-    def test_s3_operations(self):
-        """Test direct S3 operations"""
-        test_object_key = f"test-logs/test-{uuid.uuid4()}.json"
-        test_data = {
-            "operation": "TEST",
-            "userId": f"test-user-{uuid.uuid4()}",
-            "timestamp": "2023-01-01T00:00:00Z"
-        }
-        
-        try:
-            # PUT object
-            self.s3_client.put_object(
-                Bucket=self.s3_bucket_name,
-                Key=test_object_key,
-                Body=json.dumps(test_data),
-                ContentType='application/json'
-            )
-            self.created_s3_objects.append(test_object_key)
-            
-            # GET object
-            response = self.s3_client.get_object(Bucket=self.s3_bucket_name, Key=test_object_key)
-            retrieved_data = json.loads(response['Body'].read())
-            
-            self.assertEqual(retrieved_data['operation'], test_data['operation'])
-            self.assertEqual(retrieved_data['userId'], test_data['userId'])
-            
-            # LIST objects
-            list_response = self.s3_client.list_objects_v2(
-                Bucket=self.s3_bucket_name,
-                Prefix='test-logs/'
-            )
-            
-            self.assertIn('Contents', list_response)
-            object_keys = [obj['Key'] for obj in list_response['Contents']]
-            self.assertIn(test_object_key, object_keys)
-            
-        except ClientError as e:
-            self.fail(f"Error with S3 operations: {e}")
-
-    @mark.it("validates end-to-end user creation flow")
-    def test_end_to_end_user_creation(self):
-        """Test complete end-to-end flow of user creation"""
+    @mark.it("validates end-to-end user creation flow with real resources")
+    def test_end_to_end_user_creation_flow(self):
+        """Test complete end-to-end flow using real deployed resources"""
         test_user_data = {
-            "userId": f"e2e-user-{uuid.uuid4()}",
+            "userId": f"e2e-test-{uuid.uuid4()}",
             "name": "End-to-End Test User",
             "email": "e2e@example.com",
-            "department": "Testing"
-        }
-        
-        # Invoke Lambda function
-        test_event = {
-            "body": json.dumps(test_user_data),
-            "httpMethod": "POST",
-            "path": "/users"
+            "department": "Integration Testing"
         }
         
         try:
-            # 1. Invoke Lambda function
-            response = self.lambda_client.invoke(
-                FunctionName=self.lambda_function_name,
-                Payload=json.dumps(test_event)
+            # Step 1: Create user via API Gateway
+            response = requests.post(
+                f"{self.api_url}users",
+                json=test_user_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
             )
             
-            payload = json.loads(response['Payload'].read())
-            self.assertEqual(payload['statusCode'], 201)
-            
-            body = json.loads(payload['body'])
-            created_user_id = body['userId']
-            created_date = body['createdDate']
+            self.assertEqual(response.status_code, 201)
+            response_body = response.json()
+            created_user_id = response_body['userId']
+            created_date = response_body['createdDate']
             
             # Track for cleanup
             self.created_users.append((created_user_id, created_date))
             
-            # 2. Verify user was created in DynamoDB
-            time.sleep(2)  # Allow time for eventual consistency
+            # Step 2: Verify user exists in DynamoDB
+            time.sleep(2)  # Allow for eventual consistency
             table = self.dynamodb_resource.Table(self.dynamodb_table_name)
             db_response = table.get_item(
                 Key={'userId': created_user_id, 'createdDate': created_date}
@@ -405,10 +415,11 @@ class TestTapStack(unittest.TestCase):
             
             self.assertIn('Item', db_response)
             db_item = db_response['Item']
+            self.assertEqual(db_item['userId'], created_user_id)
             self.assertEqual(db_item['name'], test_user_data['name'])
             self.assertEqual(db_item['email'], test_user_data['email'])
             
-            # 3. Verify log was created in S3
+            # Step 3: Verify log was created in S3
             time.sleep(3)  # Allow time for S3 operation
             list_response = self.s3_client.list_objects_v2(
                 Bucket=self.s3_bucket_name,
@@ -433,36 +444,113 @@ class TestTapStack(unittest.TestCase):
             # Track S3 object for cleanup
             self.created_s3_objects.append(log_object['Key'])
             
-        except ClientError as e:
+        except (requests.RequestException, ClientError) as e:
             self.fail(f"Error in end-to-end test: {e}")
 
-    @mark.it("validates error handling and dead letter queue")
-    def test_error_handling_and_dlq(self):
-        """Test error handling and dead letter queue functionality"""
-        # Create an invalid event that should cause an error
-        invalid_event = {
-            "body": "invalid-json-string",  # This will cause JSON parsing to fail
-            "httpMethod": "POST",
-            "path": "/users"
+    @mark.it("validates error handling returns proper HTTP status codes")
+    def test_api_error_handling(self):
+        """Test API error handling with invalid data"""
+        try:
+            # Send invalid JSON data
+            response = requests.post(
+                f"{self.api_url}users",
+                data="invalid-json-data",
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout=30
+            )
+            
+            # Should return 500 for invalid JSON
+            self.assertEqual(response.status_code, 500)
+            
+            response_body = response.json()
+            self.assertEqual(response_body['message'], 'Internal server error')
+            self.assertIn('error', response_body)
+            
+        except requests.RequestException as e:
+            self.fail(f"Error testing API error handling: {e}")
+
+    @mark.it("validates CloudWatch log group exists for Lambda function")
+    def test_cloudwatch_log_group_exists(self):
+        """Test that the CloudWatch log group exists for the Lambda function"""
+        try:
+            response = self.logs_client.describe_log_groups(
+                logGroupNamePrefix=self.cloudwatch_log_group_name
+            )
+            
+            log_groups = response['logGroups']
+            
+            # Find the specific log group
+            log_group = next((lg for lg in log_groups if lg['logGroupName'] == self.cloudwatch_log_group_name), None)
+            self.assertIsNotNone(log_group, f"Log group {self.cloudwatch_log_group_name} not found")
+            
+        except ClientError as e:
+            # Log group might not exist yet if no requests have been made
+            self.skipTest(f"CloudWatch log group not found (may not be created yet): {e}")
+
+    @mark.it("validates resource tagging is applied correctly")
+    def test_resource_tagging(self):
+        """Test that resources have correct tags applied"""
+        try:
+            # Check Lambda function tags
+            response = self.lambda_client.list_tags(Resource=self.lambda_function_arn)
+            lambda_tags = response.get('Tags', {})
+            
+            # Verify environment-specific tags exist
+            self.assertIn('Environment', lambda_tags)
+            self.assertIn('Project', lambda_tags)
+            
+            # Check S3 bucket tags
+            try:
+                response = self.s3_client.get_bucket_tagging(Bucket=self.s3_bucket_name)
+                s3_tags = {tag['Key']: tag['Value'] for tag in response.get('TagSet', [])}
+                
+                self.assertIn('Environment', s3_tags)
+                self.assertIn('Project', s3_tags)
+                
+            except ClientError:
+                # Tags might not be applied to S3 bucket
+                pass
+            
+        except ClientError as e:
+            self.skipTest(f"Resource tagging test skipped: {e}")
+
+    @mark.it("validates performance by measuring response times")
+    def test_api_performance(self):
+        """Test API performance by measuring response times"""
+        test_user_data = {
+            "userId": f"perf-test-{uuid.uuid4()}",
+            "name": "Performance Test User",
+            "email": "perf@example.com"
         }
         
         try:
-            response = self.lambda_client.invoke(
-                FunctionName=self.lambda_function_name,
-                Payload=json.dumps(invalid_event)
+            start_time = time.time()
+            
+            response = requests.post(
+                f"{self.api_url}users",
+                json=test_user_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30
             )
             
-            payload = json.loads(response['Payload'].read())
+            end_time = time.time()
+            response_time = end_time - start_time
             
-            # Lambda should handle the error gracefully and return 500
-            self.assertEqual(payload['statusCode'], 500)
+            # Validate response
+            self.assertEqual(response.status_code, 201)
             
-            body = json.loads(payload['body'])
-            self.assertEqual(body['message'], 'Internal server error')
-            self.assertIn('error', body)
+            # Performance assertion: API should respond within 5 seconds
+            self.assertLess(response_time, 5.0, f"API response time {response_time:.2f}s exceeds 5 seconds")
             
-        except ClientError as e:
-            self.fail(f"Error testing error handling: {e}")
+            # Track for cleanup
+            response_body = response.json()
+            self.created_users.append((response_body['userId'], response_body['createdDate']))
+            
+        except requests.RequestException as e:
+            self.fail(f"Error in performance test: {e}")
 
 
 if __name__ == "__main__":

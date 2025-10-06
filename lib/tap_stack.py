@@ -215,8 +215,121 @@ def lambda_handler(event, context):
             apigateway.LambdaIntegration(create_user_lambda),
         )
 
+        # ==================== CloudFront Distribution ====================
+        cf_distribution = cloudfront.Distribution(
+            self, "UserManagementDistribution",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.RestApiOrigin(api),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,  # Disable caching for API
+                origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD,
+            ),
+            comment=f"CloudFront distribution for UserManagement API - {environment_suffix}",
+            enabled=True,
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # Use only US and Europe edge locations
+            default_root_object="",  # No default root object for API
+        )
+
+        # ==================== CloudWatch Alarms ====================
+        # Alarm for Lambda execution duration
+        lambda_duration_alarm = cloudwatch.Alarm(
+            self, "CreateUserDurationAlarm",
+            alarm_name=f"CreateUserDurationAlarm-{environment_suffix}",
+            alarm_description="Alarm when Lambda execution time exceeds 25 seconds",
+            metric=create_user_lambda.metric_duration(statistic="Average"),
+            threshold=25000,  # 25 seconds in milliseconds
+            evaluation_periods=2,
+            datapoints_to_alarm=2,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+        # Alarm for Lambda errors
+        lambda_error_alarm = cloudwatch.Alarm(
+            self, "CreateUserErrorAlarm",
+            alarm_name=f"CreateUserErrorAlarm-{environment_suffix}",
+            alarm_description="Alarm when Lambda function has errors",
+            metric=create_user_lambda.metric_errors(statistic="Sum"),
+            threshold=1,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+        # Alarm for DLQ messages
+        dlq_message_alarm = cloudwatch.Alarm(
+            self, "DLQMessageAlarm",
+            alarm_name=f"DLQMessageAlarm-{environment_suffix}",
+            alarm_description="Alarm when messages appear in Dead Letter Queue",
+            metric=cloudwatch.Metric(
+                namespace="AWS/SQS",
+                metric_name="ApproximateNumberOfVisibleMessages",
+                dimensions_map={"QueueName": dlq.queue_name},
+                statistic="Average"
+            ),
+            threshold=1,
+            evaluation_periods=1,
+            datapoints_to_alarm=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+        # Alarm for API Gateway 4XX errors
+        api_4xx_alarm = cloudwatch.Alarm(
+            self, "ApiGateway4XXAlarm",
+            alarm_name=f"ApiGateway4XXAlarm-{environment_suffix}",
+            alarm_description="Alarm when API Gateway has high 4XX error rate",
+            metric=cloudwatch.Metric(
+                namespace="AWS/ApiGateway",
+                metric_name="4XXError",
+                dimensions_map={
+                    "ApiName": api.rest_api_name,
+                    "Stage": "prod"
+                },
+                statistic="Sum"
+            ),
+            threshold=10,
+            evaluation_periods=2,
+            datapoints_to_alarm=2,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+        # Alarm for API Gateway 5XX errors
+        api_5xx_alarm = cloudwatch.Alarm(
+            self, "ApiGateway5XXAlarm",
+            alarm_name=f"ApiGateway5XXAlarm-{environment_suffix}",
+            alarm_description="Alarm when API Gateway has high 5XX error rate",
+            metric=cloudwatch.Metric(
+                namespace="AWS/ApiGateway",
+                metric_name="5XXError",
+                dimensions_map={
+                    "ApiName": api.rest_api_name,
+                    "Stage": "prod"
+                },
+                statistic="Sum"
+            ),
+            threshold=5,
+            evaluation_periods=2,
+            datapoints_to_alarm=2,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+        )
+
+        # ==================== Resource Tags ====================
+        # Add tags to all resources
+        cdk.Tags.of(self).add("Environment", f"{environment_suffix.title()}")
+        cdk.Tags.of(self).add("Project", "UserManagement")
+        cdk.Tags.of(self).add("Owner", "DevOps-Team")
+        cdk.Tags.of(self).add("CostCenter", "Engineering")
+
         # ==================== Outputs ====================
         CfnOutput(self, "ApiUrl", value=api.url, description="API Gateway URL")
+        CfnOutput(self, "CloudFrontUrl", value=f"https://{cf_distribution.domain_name}", description="CloudFront Distribution URL")
+        CfnOutput(self, "CloudFrontDomainName", value=cf_distribution.domain_name, description="CloudFront Domain Name")
         CfnOutput(self, "DynamoDBTableName", value=users_table.table_name, description="DynamoDB Table Name")
         CfnOutput(self, "LogBucketName", value=log_bucket.bucket_name, description="S3 Log Bucket Name")
         CfnOutput(self, "DLQUrl", value=dlq.queue_url, description="Dead Letter Queue URL")
@@ -229,3 +342,10 @@ def lambda_handler(event, context):
         CfnOutput(self, "S3BucketArn", value=log_bucket.bucket_arn, description="S3 Bucket ARN")
         CfnOutput(self, "DynamoDBTableArn", value=users_table.table_arn, description="DynamoDB Table ARN")
         CfnOutput(self, "DLQArn", value=dlq.queue_arn, description="Dead Letter Queue ARN")
+
+        # CloudWatch Alarms Outputs
+        CfnOutput(self, "LambdaDurationAlarmName", value=lambda_duration_alarm.alarm_name, description="Lambda Duration Alarm Name")
+        CfnOutput(self, "LambdaErrorAlarmName", value=lambda_error_alarm.alarm_name, description="Lambda Error Alarm Name")
+        CfnOutput(self, "DLQMessageAlarmName", value=dlq_message_alarm.alarm_name, description="DLQ Message Alarm Name")
+        CfnOutput(self, "ApiGateway4XXAlarmName", value=api_4xx_alarm.alarm_name, description="API Gateway 4XX Alarm Name")
+        CfnOutput(self, "ApiGateway5XXAlarmName", value=api_5xx_alarm.alarm_name, description="API Gateway 5XX Alarm Name")

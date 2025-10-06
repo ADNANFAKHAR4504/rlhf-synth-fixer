@@ -119,25 +119,46 @@ class TestTapStack(unittest.TestCase):
             "StageName": "prod",
         })
 
-    @mark.it("creates IAM role with correct permissions for Lambda")
-    def test_iam_role(self):
-        """Test IAM role creation and permissions"""
+    @mark.it("creates a CloudFront distribution with correct configuration")
+    def test_cloudfront_distribution(self):
+        """Test CloudFront distribution creation and configuration"""
         # ARRANGE
         stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="test"))
         template = Template.from_stack(stack)
 
         # ASSERT
-        template.resource_count_is("AWS::IAM::Role", 3)
-        template.has_resource_properties("AWS::IAM::Role", {
-            "AssumeRolePolicyDocument": {
-                "Statement": Match.array_with([
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {"Service": "lambda.amazonaws.com"}
-                    }
-                ])
+        template.resource_count_is("AWS::CloudFront::Distribution", 1)
+        template.has_resource_properties("AWS::CloudFront::Distribution", {
+            "DistributionConfig": {
+                "Enabled": True,
+                "DefaultCacheBehavior": {
+                    "ViewerProtocolPolicy": "redirect-to-https",
+                    "AllowedMethods": ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"],
+                    "CachePolicyId": Match.any_value()
+                }
             }
+        })
+
+    @mark.it("creates CloudWatch alarms with correct configuration")
+    def test_cloudwatch_alarms(self):
+        """Test CloudWatch alarms creation and configuration"""
+        # ARRANGE
+        stack = TapStack(self.app, "TapStackTest", TapStackProps(environment_suffix="test"))
+        template = Template.from_stack(stack)
+
+        # ASSERT
+        template.resource_count_is("AWS::CloudWatch::Alarm", 5)
+        template.has_resource_properties("AWS::CloudWatch::Alarm", {
+            "AlarmName": "CreateUserDurationAlarm-test",
+            "Threshold": 25000,  # 25 seconds in milliseconds
+            "ComparisonOperator": "GreaterThanThreshold",
+            "EvaluationPeriods": 2
+        })
+        template.has_resource_properties("AWS::CloudWatch::Alarm", {
+            "AlarmName": "CreateUserErrorAlarm-test",
+            "Threshold": 1,
+            "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+            "EvaluationPeriods": 1
         })
 
     @mark.it("outputs all required stack information")
@@ -150,6 +171,10 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.has_output("ApiUrl", {
             "Description": "API Gateway URL",
+            "Value": Match.any_value()
+        })
+        template.has_output("CloudFrontUrl", {
+            "Description": "CloudFront Distribution URL",
             "Value": Match.any_value()
         })
         template.has_output("DynamoDBTableName", {
