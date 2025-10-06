@@ -416,6 +416,7 @@ Resources:
       LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}-${Environment}"
       RetentionInDays: 90
 
+  # ✅ FIXED: CloudTrail delivery role now has required logs permissions
   CloudTrailRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -426,14 +427,22 @@ Resources:
             Principal: { Service: "cloudtrail.amazonaws.com" }
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "CloudTrailLogPolicy"
+        - PolicyName: "CloudTrailToCloudWatchLogs"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: "Allow"
+              # CloudTrail needs these on * (no resource-level restriction)
+              - Effect: Allow
                 Action:
-                  - "logs:CreateLogStream"
-                  - "logs:PutLogEvents"
+                  - logs:CreateLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+              # Stream-level permissions for the specified log group
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
       Tags:
         [
@@ -585,7 +594,10 @@ Resources:
   # --- CloudTrail + Monitoring ---
   CloudTrail:
     Type: "AWS::CloudTrail::Trail"
-    DependsOn: [CloudTrailLogsBucketPolicy]
+    DependsOn:
+      - CloudTrailLogsBucketPolicy
+      - CloudTrailRole # ensure role ready
+      - CloudTrailLogGroup # ensure log group ready
     Properties:
       TrailName: !Sub "${ProjectName}-${Environment}-trail"
       S3BucketName: !Ref CloudTrailLogsBucket
