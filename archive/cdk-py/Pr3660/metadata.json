@@ -17,5 +17,12 @@
     "CloudWatch",
     "Systems Manager Parameter Store",
     "IAM"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
