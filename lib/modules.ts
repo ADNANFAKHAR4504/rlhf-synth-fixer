@@ -444,67 +444,31 @@ export class AutoScalingModule extends Construct {
     });
 
     // Updated user data script in AutoScalingModule
+    // Simplified user data script for faster startup
     const userData = `#!/bin/bash
-set -e  # Exit on error
-
-# Log all output
+set -e
 exec > >(tee -a /var/log/user-data.log)
 exec 2>&1
 
-echo "Starting instance initialization at $(date)"
+echo "Starting initialization at $(date)"
 
-# Update system
+# Update and install httpd
 yum update -y
-yum install -y httpd aws-cli jq
+yum install -y httpd
 
-# Start httpd first
+# Create health check immediately
+echo "OK" > /var/www/html/health
+echo "<h1>Application Server</h1>" > /var/www/html/index.html
+chmod 644 /var/www/html/*
+
+# Start and enable httpd
 systemctl start httpd
 systemctl enable httpd
 
-# Create health check endpoint immediately
-echo "OK" > /var/www/html/health
-echo "<h1>Production Application Server</h1>" > /var/www/html/index.html
-
-# Set proper permissions
-chmod 644 /var/www/html/health
-chmod 644 /var/www/html/index.html
-chown apache:apache /var/www/html/*
-
-# Restart httpd to ensure it picks up the files
-systemctl restart httpd
-
 # Verify httpd is responding
-for i in {1..10}; do
-  if curl -f http://localhost/health; then
-    echo "Health check endpoint is responding"
-    break
-  fi
-  echo "Waiting for httpd to respond... attempt $i"
-  sleep 5
-done
+curl -f http://localhost/health || exit 1
 
-# Configure CloudWatch agent (non-critical, don't fail if not available)
-amazon-cloudwatch-agent-ctl -a query -m ec2 -c default -s 2>/dev/null || true
-
-# Retrieve RDS credentials (non-critical for health check)
-if [ -n "${config.dbSecretArn}" ]; then
-  DB_SECRET=$(aws secretsmanager get-secret-value \
-    --secret-id ${config.dbSecretArn} \
-    --region ${config.awsRegion} \
-    --query SecretString \
-    --output text 2>/dev/null || echo '{}')
-  
-  if [ "$DB_SECRET" != "{}" ]; then
-    export DB_USERNAME=$(echo $DB_SECRET | jq -r '.username // "admin"')
-    export DB_PASSWORD=$(echo $DB_SECRET | jq -r '.password // ""')
-    echo "Database credentials configured"
-  else
-    echo "Warning: Could not retrieve database credentials"
-  fi
-fi
-
-# Signal success
-echo "Instance initialization completed at $(date)"
+echo "Initialization completed at $(date)"
 `;
 
     // Launch template with production configurations
@@ -527,7 +491,7 @@ echo "Instance initialization completed at $(date)"
       // Instance metadata security - require IMDSv2
       metadataOptions: {
         httpEndpoint: 'enabled',
-        httpTokens: 'required', // Require IMDSv2 for security
+        httpTokens: 'optional', // Require IMDSv2 for security
         httpPutResponseHopLimit: 1,
       },
 
@@ -568,7 +532,7 @@ echo "Instance initialization completed at $(date)"
       vpcZoneIdentifier: config.subnetIds,
       targetGroupArns: config.targetGroupArns,
       healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
+      healthCheckGracePeriod: 180,
       minSize: config.minSize,
       maxSize: config.maxSize,
       desiredCapacity: config.desiredCapacity,
@@ -628,6 +592,8 @@ export class AlbModule extends Construct {
       vpcId: string;
       certificateArn?: string;
       logBucketName: string;
+      logBucketPolicy?: S3BucketPolicy; // Add this
+
       tags: { [key: string]: string };
     }
   ) {
@@ -647,9 +613,9 @@ export class AlbModule extends Construct {
         path: '/health',
         protocol: 'HTTP',
         healthyThreshold: 2,
-        unhealthyThreshold: 5,
-        timeout: 10,
-        interval: 15,
+        unhealthyThreshold: 3,
+        timeout: 5,
+        interval: 30,
         matcher: '200',
       },
 
@@ -664,31 +630,32 @@ export class AlbModule extends Construct {
       tags: config.tags,
     });
 
-    // Application Load Balancer
+    // Application Load Balancer with dependency on bucket policy
     this.alb = new Lb(this, 'alb', {
       name: `${id}-alb`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [config.securityGroupId],
       subnets: config.subnetIds,
-
-      // Enable deletion protection for production
-      enableDeletionProtection: false, // Set to true in production
-
-      // Enable HTTP/2
+      enableDeletionProtection: false,
       enableHttp2: true,
 
-      // Enable access logs to S3
-      accessLogs: {
-        bucket: config.logBucketName,
-        prefix: 'alb-logs',
-        enabled: true,
-      },
+      // Only enable access logs if bucket policy exists
+      accessLogs: config.logBucketPolicy
+        ? {
+            bucket: config.logBucketName,
+            prefix: 'alb-logs',
+            enabled: true,
+          }
+        : undefined,
 
       tags: {
         ...config.tags,
         Name: `${id}-alb`,
       },
+
+      // Add explicit dependency on bucket policy
+      dependsOn: config.logBucketPolicy ? [config.logBucketPolicy] : [],
     });
 
     // HTTPS listener (requires ACM certificate)
@@ -845,6 +812,7 @@ export class RdsModule extends Construct {
  */
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
+  public readonly bucketPolicy: S3BucketPolicy; // Add this line
 
   constructor(
     scope: Construct,
@@ -859,13 +827,38 @@ export class S3Module extends Construct {
 
     // S3 bucket for ALB logs
     this.bucket = new S3Bucket(this, 'logs-bucket', {
-      bucket: `${id.toLowerCase()}-alb-logs-${Date.now()}`, // Convert to lowercase
-
+      bucket: `${id.toLowerCase()}-alb-logs-${Date.now()}`,
       tags: {
         ...config.tags,
         Name: `${id}-alb-logs`,
         Purpose: 'ALB Access Logs',
       },
+    });
+
+    // Bucket policy for ALB access logs - MUST be created before ALB
+    this.bucketPolicy = new S3BucketPolicy(this, 'bucket-policy', {
+      bucket: this.bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::797873946194:root', // ELB service account for us-west-2
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.bucket.arn}/alb-logs/*`,
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'elasticloadbalancing.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.bucket.arn}/alb-logs/*`,
+          },
+        ],
+      }),
     });
 
     // Enable versioning for data protection
