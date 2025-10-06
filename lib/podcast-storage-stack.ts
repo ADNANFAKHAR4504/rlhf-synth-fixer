@@ -12,7 +12,7 @@ export class PodcastStorageStack extends Construct {
   constructor(scope: Construct, id: string, props: PodcastStorageStackProps) {
     super(scope, id);
 
-    // S3 bucket for audio files with requester pays and intelligent tiering
+    // S3 bucket for audio files with intelligent tiering
     this.audioBucket = new s3.Bucket(this, 'AudioBucket', {
       bucketName: `podcast-audio-${props.environmentSuffix}-${cdk.Stack.of(this).account}`,
       versioned: false,
@@ -42,13 +42,6 @@ export class PodcastStorageStack extends Construct {
         },
       ],
     });
-
-    // Enable requester pays
-    const cfnBucket = this.audioBucket.node.defaultChild as s3.CfnBucket;
-    cfnBucket.addPropertyOverride(
-      'RequestPaymentConfiguration.Payer',
-      'Requester'
-    );
 
     new cdk.CfnOutput(this, 'AudioBucketName', {
       value: this.audioBucket.bucketName,
