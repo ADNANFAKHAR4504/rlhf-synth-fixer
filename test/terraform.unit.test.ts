@@ -428,8 +428,8 @@ describe("Terraform Media Pipeline Stack - Unit Tests", () => {
       expect(stackContent).toMatch(/depends_on\s*=\s*\[aws_sqs_queue_policy\.processing_queue_policy\]/);
     });
 
-    test("Lambda depends on log group and policies", () => {
-      expect(stackContent).toMatch(/depends_on\s*=\s*\[[^\]]*aws_cloudwatch_log_group\.lambda_log_group/s);
+    test("Lambda depends on IAM policies", () => {
+      expect(stackContent).toMatch(/depends_on\s*=\s*\[[^\]]*aws_iam_role_policy_attachment\.lambda_logs_attachment/s);
     });
   });
 });
