@@ -360,42 +360,102 @@ describe('Weather Monitoring System Integration Tests', () => {
       expect(extremeResponse.status).toBe(200);
       const timestamp2 = extremeResponse.data.timestamp;
 
-      // Step 3: Verify both entries in DynamoDB with retry logic
-      const scanCommand = new ScanCommand({
-        TableName: outputs.DynamoDBTableName,
-        FilterExpression: 'sensorId = :sid',
-        ExpressionAttributeValues: {
-          ':sid': { S: workflowSensorId }
-        }
-      });
+      // Step 3: Verify both entries in DynamoDB with robust retry logic
+      // Use individual GetItem calls for strong consistency instead of Scan
+      const verifyItemsExist = async (): Promise<{ normalItem: any; extremeItem: any }> => {
+        const getCommand1 = new GetItemCommand({
+          TableName: outputs.DynamoDBTableName,
+          Key: {
+            sensorId: { S: workflowSensorId },
+            timestamp: { N: timestamp1.toString() }
+          },
+          ConsistentRead: true // Strong consistency
+        });
 
-      // Retry logic to wait for both items to be written to DynamoDB
-      let scanResult;
+        const getCommand2 = new GetItemCommand({
+          TableName: outputs.DynamoDBTableName,
+          Key: {
+            sensorId: { S: workflowSensorId },
+            timestamp: { N: timestamp2.toString() }
+          },
+          ConsistentRead: true // Strong consistency
+        });
+
+        const [result1, result2] = await Promise.all([
+          dynamoDBClient.send(getCommand1),
+          dynamoDBClient.send(getCommand2)
+        ]);
+
+        return {
+          normalItem: result1.Item,
+          extremeItem: result2.Item
+        };
+      };
+
+      // Retry logic with exponential backoff
       let retryCount = 0;
-      const maxRetries = 10;
-      const retryDelay = 1000; // 1 second
+      const maxRetries = 15;
+      let normalItem: any;
+      let extremeItem: any;
 
-      do {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        scanResult = await dynamoDBClient.send(scanCommand);
-        retryCount++;
-      } while ((scanResult.Items?.length || 0) < 2 && retryCount < maxRetries);
+      while (retryCount < maxRetries) {
+        try {
+          const results = await verifyItemsExist();
+          normalItem = results.normalItem;
+          extremeItem = results.extremeItem;
 
-      expect(scanResult.Items?.length).toBeGreaterThanOrEqual(2);
+          if (normalItem && extremeItem) {
+            console.log(`Both items found after ${retryCount + 1} attempts`);
+            break;
+          }
 
-      // Verify the data integrity
-      const normalItem = scanResult.Items?.find(
-        item => parseInt(item.timestamp.N || '0') === timestamp1
-      );
+          console.log(`Attempt ${retryCount + 1}: normalItem=${!!normalItem}, extremeItem=${!!extremeItem}`);
+
+          // Exponential backoff: 500ms, 1s, 2s, 4s, etc.
+          const delay = Math.min(500 * Math.pow(2, retryCount), 5000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          retryCount++;
+        } catch (error) {
+          console.log(`Error on attempt ${retryCount + 1}:`, error);
+          retryCount++;
+          if (retryCount >= maxRetries) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      // Fallback: If GetItem doesn't work, try Scan with ConsistentRead
+      if (!normalItem || !extremeItem) {
+        console.log('Falling back to Scan operation...');
+        const scanCommand = new ScanCommand({
+          TableName: outputs.DynamoDBTableName,
+          FilterExpression: 'sensorId = :sid',
+          ExpressionAttributeValues: {
+            ':sid': { S: workflowSensorId }
+          },
+          ConsistentRead: true
+        });
+
+        const scanResult = await dynamoDBClient.send(scanCommand);
+        console.log(`Scan found ${scanResult.Items?.length || 0} items`);
+
+        if (!normalItem) {
+          normalItem = scanResult.Items?.find(
+            item => parseInt(item.timestamp.N || '0') === timestamp1
+          );
+        }
+        if (!extremeItem) {
+          extremeItem = scanResult.Items?.find(
+            item => parseInt(item.timestamp.N || '0') === timestamp2
+          );
+        }
+      }
+
+      // Final assertions
       expect(normalItem).toBeDefined();
-      expect(parseFloat(normalItem!.temperature.N || '0')).toBe(20);
-
-      const extremeItem = scanResult.Items?.find(
-        item => parseInt(item.timestamp.N || '0') === timestamp2
-      );
       expect(extremeItem).toBeDefined();
+      expect(parseFloat(normalItem!.temperature.N || '0')).toBe(20);
       expect(parseFloat(extremeItem!.temperature.N || '0')).toBe(60);
-    }, 30000); // Increase timeout to 30 seconds
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Rate limiting should work as configured', async () => {
       // This test verifies that the rate limiting is in place
