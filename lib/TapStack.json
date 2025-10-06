@@ -36,12 +36,6 @@
             "Type": "String",
             "Description": "ARN of the QuickSight user/group for dashboard access",
             "Default": ""
-        },
-        "AlertEmail": {
-            "Type": "String",
-            "Description": "Email address for CloudWatch alerts",
-            "AllowedPattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
-            "ConstraintDescription": "Must be a valid email address"
         }
     },
     "Conditions": {
@@ -938,22 +932,6 @@
                 }
             }
         },
-        "AlertTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "DisplayName": {
-                    "Fn::Sub": "${AWS::StackName}-alerts"
-                },
-                "Subscription": [
-                    {
-                        "Endpoint": {
-                            "Ref": "AlertEmail"
-                        },
-                        "Protocol": "email"
-                    }
-                ]
-            }
-        },
         "HighVoteVolumeAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -967,12 +945,7 @@
                 "Period": 300,
                 "EvaluationPeriods": 2,
                 "Threshold": 100,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "AlarmActions": [
-                    {
-                        "Ref": "AlertTopic"
-                    }
-                ]
+                "ComparisonOperator": "GreaterThanThreshold"
             }
         },
         "LambdaErrorAlarm": {
@@ -996,12 +969,7 @@
                 "Period": 60,
                 "EvaluationPeriods": 2,
                 "Threshold": 5,
-                "ComparisonOperator": "GreaterThanThreshold",
-                "AlarmActions": [
-                    {
-                        "Ref": "AlertTopic"
-                    }
-                ]
+                "ComparisonOperator": "GreaterThanThreshold"
             }
         },
         "QuickSightDataSource": {

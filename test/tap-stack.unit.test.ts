@@ -58,12 +58,6 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       );
     });
 
-    test('should have AlertEmail parameter for CloudWatch', () => {
-      expect(template.Parameters.AlertEmail).toBeDefined();
-      expect(template.Parameters.AlertEmail.Type).toBe('String');
-      expect(template.Parameters.AlertEmail.AllowedPattern).toBeDefined();
-    });
-
     test('should have QuickSightUserArn parameter', () => {
       expect(template.Parameters.QuickSightUserArn).toBeDefined();
       expect(template.Parameters.QuickSightUserArn.Type).toBe('String');
@@ -420,19 +414,6 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
   });
 
   describe('CloudWatch Monitoring', () => {
-    test('should have SNS topic for alerts', () => {
-      expect(template.Resources.AlertTopic).toBeDefined();
-      expect(template.Resources.AlertTopic.Type).toBe('AWS::SNS::Topic');
-    });
-
-    test('SNS topic should have email subscription', () => {
-      const topic = template.Resources.AlertTopic;
-      expect(topic.Properties.Subscription).toHaveLength(1);
-      expect(topic.Properties.Subscription[0].Protocol).toBe('email');
-      expect(topic.Properties.Subscription[0].Endpoint).toEqual({
-        Ref: 'AlertEmail',
-      });
-    });
 
     test('should have high vote volume alarm', () => {
       expect(template.Resources.HighVoteVolumeAlarm).toBeDefined();
@@ -448,15 +429,13 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       expect(alarm.Properties.Namespace).toBe('AWS/Lambda');
     });
 
-    test('alarms should notify via SNS', () => {
+    test('alarms should be configured for monitoring', () => {
       const highVolumeAlarm = template.Resources.HighVoteVolumeAlarm;
       const errorAlarm = template.Resources.LambdaErrorAlarm;
-      expect(highVolumeAlarm.Properties.AlarmActions).toContainEqual({
-        Ref: 'AlertTopic',
-      });
-      expect(errorAlarm.Properties.AlarmActions).toContainEqual({
-        Ref: 'AlertTopic',
-      });
+      expect(highVolumeAlarm.Properties.AlarmDescription).toBeDefined();
+      expect(errorAlarm.Properties.AlarmDescription).toBeDefined();
+      expect(highVolumeAlarm.Properties.Threshold).toBeDefined();
+      expect(errorAlarm.Properties.Threshold).toBeDefined();
     });
   });
 
@@ -575,7 +554,6 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
         'ApiGatewayInvokePermission',
         'ResultsExportSchedule',
         'SchedulePermission',
-        'AlertTopic',
         'HighVoteVolumeAlarm',
         'LambdaErrorAlarm',
         'QuickSightDataSource',
@@ -587,14 +565,14 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       });
     });
 
-    test('should have 31 resources total', () => {
+    test('should have 30 resources total', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(31);
+      expect(resourceCount).toBe(30);
     });
 
-    test('should have 6 parameters', () => {
+    test('should have 5 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(5);
     });
 
     test('should have 6 outputs', () => {
