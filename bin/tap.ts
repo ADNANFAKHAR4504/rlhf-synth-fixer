@@ -11,9 +11,26 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+const digitWords = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+];
+
 const sanitizeTagValue = (value: string): string => {
-  const sanitized = value
-    .replace(/[^a-zA-Z0-9+\-=._:/]/g, '_')
+  const digitExpanded = value.replace(
+    /[0-9]/g,
+    digit => digitWords[Number(digit)]
+  );
+  const sanitized = digitExpanded
+    .replace(/[^a-zA-Z+\-=._:/]/g, '_')
     .trim()
     .slice(0, 256);
   return sanitized.length > 0 ? sanitized : 'unknown';

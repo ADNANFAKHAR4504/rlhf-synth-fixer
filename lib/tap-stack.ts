@@ -33,6 +33,29 @@ export class TapStack extends cdk.Stack {
 
     Tags.of(this).add('iac-rlhf-amazon', 'true');
 
+    const digitWords = [
+      'zero',
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+      'nine',
+    ];
+    const sanitizeTagValue = (value: string): string => {
+      const digitExpanded = value.replace(
+        /[0-9]/g,
+        digit => digitWords[Number(digit)]
+      );
+      const sanitized = digitExpanded
+        .replace(/[^a-zA-Z+\-=._:/]/g, '_')
+        .slice(0, 256);
+      return sanitized.length > 0 ? sanitized : 'unknown';
+    };
+
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
       default: 'nova',
@@ -67,8 +90,8 @@ export class TapStack extends cdk.Stack {
         ''
       );
 
-    Tags.of(this).add('Application', appName);
-    Tags.of(this).add('Environment', environmentName);
+    Tags.of(this).add('Application', sanitizeTagValue(appName));
+    Tags.of(this).add('Environment', sanitizeTagValue(environmentName));
 
     const encryptionKey = new kms.Key(this, 'DataProtectionKey', {
       alias: `alias/${resourceName('kms')}`,
