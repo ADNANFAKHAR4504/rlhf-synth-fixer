@@ -314,12 +314,35 @@ public class ComputeConstruct extends Construct {
 
     private ElasticBeanstalkEnvironment setupElasticBeanstalkEnvironment(final ComputeConfig config, final String vpcId,
                                                                          final List<String> subnetIds) {
-        Map<String, String> settings = Map.of(
-                "VPCId", vpcId,
-                "Subnets", String.join(",", subnetIds),
-                "InstanceTypes", config.instanceType(),
-                "MinSize", String.valueOf(config.minSize()),
-                "MaxSize", String.valueOf(config.maxSize())
+        List<ElasticBeanstalkEnvironmentSetting> settings = List.of(
+                // VPC settings
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:ec2:vpc")
+                        .name("VPCId")
+                        .value(vpcId)
+                        .build(),
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:ec2:vpc")
+                        .name("Subnets")
+                        .value(String.join(",", subnetIds))
+                        .build(),
+                // Instance type settings
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:autoscaling:launchconfiguration")
+                        .name("InstanceType")
+                        .value(config.instanceType())
+                        .build(),
+                // Auto Scaling settings
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:autoscaling:asg")
+                        .name("MinSize")
+                        .value(String.valueOf(config.minSize()))
+                        .build(),
+                ElasticBeanstalkEnvironmentSetting.builder()
+                        .namespace("aws:autoscaling:asg")
+                        .name("MaxSize")
+                        .value(String.valueOf(config.maxSize()))
+                        .build()
         );
 
         return ElasticBeanstalkEnvironment.Builder.create(this, "eb-env")
@@ -327,18 +350,8 @@ public class ComputeConstruct extends Construct {
                 .application(ebApp.getName())
                 .solutionStackName("64bit Amazon Linux 2023 v4.7.2 running Python 3.11")
                 .tier("WebServer")
-                .setting(convertToEbSettings(settings))
+                .setting(settings)
                 .build();
-    }
-
-    private List<ElasticBeanstalkEnvironmentSetting> convertToEbSettings(final Map<String, String> settings) {
-        return settings.entrySet().stream()
-                .map(entry -> ElasticBeanstalkEnvironmentSetting.builder()
-                        .namespace("aws:ec2:vpc")
-                        .name(entry.getKey())
-                        .value(entry.getValue())
-                        .build())
-                .toList();
     }
 
     // Getters
