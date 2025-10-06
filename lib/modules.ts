@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { Fn } from 'cdktf'; // Add this import at the top of modules.ts
 
 // VPC
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -715,7 +716,7 @@ export class AlbModule extends Construct {
 export class RdsModule extends Construct {
   public readonly dbInstance: DbInstance;
   public readonly subnetGroup: DbSubnetGroup;
-  private readonly secretVersion: DataAwsSecretsmanagerSecretVersion; // Add this
+  private readonly secretVersion: DataAwsSecretsmanagerSecretVersion;
 
   constructor(
     scope: Construct,
@@ -743,7 +744,7 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Get secret data - Store the reference
+    // Get secret data
     const secretData = new DataAwsSecretsmanagerSecret(this, 'db-secret-data', {
       arn: config.secretArn,
     });
@@ -782,7 +783,7 @@ export class RdsModule extends Construct {
         'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
     });
 
-    // RDS MySQL instance with Secrets Manager integration - Use direct reference
+    // RDS MySQL instance with Secrets Manager integration - Extract password from JSON
     this.dbInstance = new DbInstance(this, 'mysql', {
       identifier: `${id.toLowerCase()}-mysql-db`,
       engine: 'mysql',
@@ -791,9 +792,9 @@ export class RdsModule extends Construct {
       storageType: 'gp3',
       storageEncrypted: true,
 
-      // Use direct reference to the secret version
-      username: 'admin',
-      password: this.secretVersion.secretString,
+      // FIX: Extract username and password from JSON secret
+      username: Fn.jsondecode(this.secretVersion.secretString)['username'],
+      password: Fn.jsondecode(this.secretVersion.secretString)['password'],
 
       // Rest of the configuration remains the same...
       dbSubnetGroupName: this.subnetGroup.name,
@@ -805,7 +806,6 @@ export class RdsModule extends Construct {
       maintenanceWindow: 'sun:04:00-sun:05:00',
       autoMinorVersionUpgrade: true,
       performanceInsightsEnabled: false,
-      // performanceInsightsRetentionPeriod: 7,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       monitoringInterval: 60,
       monitoringRoleArn: monitoringRole.arn,
