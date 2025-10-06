@@ -1,23 +1,13 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import AWS from 'aws-sdk';
 
-// const outputs = JSON.parse(
-//   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-// );
-
-const outputs = {
-  "InventoryTableName": "inventory-data-pr63",
-  "JobExecutionTableName": "job-execution-pr63",
-  "ScheduleRuleName": "inventory-update-schedule-pr63",
-  "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:149536495831:function:inventory-update-processor-pr63",
-  "MonitoringNamespace": "InventoryScheduler/pr63",
-  "AlertTopicArn": "arn:aws:sns:ap-south-1:149536495831:inventory-scheduler-alerts-pr63",
-  "LambdaFunctionName": "inventory-update-processor-pr63",
-  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=inventory-scheduler-pr63"
-}
+import fs from 'fs';
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr63';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
 const dynamodb = new AWS.DynamoDB.DocumentClient();
