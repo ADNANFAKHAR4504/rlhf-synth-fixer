@@ -24,7 +24,7 @@ from tap_stack import TapStack, TapStackArgs
 config = Config()
 
 # Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+environment_suffix = config.get('environment_suffix') or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
