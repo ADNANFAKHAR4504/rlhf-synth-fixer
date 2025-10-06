@@ -11,5 +11,4 @@
     "Provisioning of Infrastructure Environments"
   ],
   "aws_services": "API Gateway, Lambda, ElastiCache, DynamoDB, CloudWatch, X-Ray, QuickSight, KMS, VPC, NAT Gateway, Internet Gateway, Security Groups, SSM Parameter Store, SNS, WAF, CloudTrail, S3, EventBridge"
-
 }

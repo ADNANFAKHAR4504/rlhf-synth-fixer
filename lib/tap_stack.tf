@@ -1193,3 +1193,13 @@ output "gdpr_event_rule_name" {
   description = "Name of the EventBridge rule for GDPR anonymization"
   value       = aws_cloudwatch_event_rule.gdpr_daily.name
 }
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "waf_web_acl_arn" {
+  description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.api.arn
+}
