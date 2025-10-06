@@ -57,6 +57,16 @@ export class KmsModule extends Construct {
             Action: 'kms:*',
             Resource: '*',
           },
+          // Add CloudTrail permissions here
+          {
+            Sid: 'Allow CloudTrail to encrypt logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:GenerateDataKey*', 'kms:Decrypt', 'kms:DescribeKey'],
+            Resource: '*',
+          },
         ],
       }),
       tags: props.tags,
@@ -286,7 +296,6 @@ export class S3BucketModule extends Construct {
       });
     }
 
-    // Combine policies if needed
     const policyStatements = [];
 
     // Add access role policy statement if provided
@@ -330,17 +339,8 @@ export class S3BucketModule extends Construct {
         },
       });
 
-      // Add KMS permissions if using KMS
-      if (props.kmsKeyId) {
-        policyStatements.push({
-          Effect: 'Allow',
-          Principal: {
-            Service: 'cloudtrail.amazonaws.com',
-          },
-          Action: ['kms:GenerateDataKey*', 'kms:Decrypt'],
-          Resource: `arn:aws:kms:*:*:key/${props.kmsKeyId}`,
-        });
-      }
+      // REMOVED: KMS permissions from S3 bucket policy
+      // These should be in the KMS key policy instead
     }
 
     // Apply bucket policy if there are any statements
