@@ -93,7 +93,8 @@ describe('Weather Monitoring System Integration Tests', () => {
         await axios.post(outputs.APIEndpoint, 'not-valid-json', {
           headers: {
             'Content-Type': 'application/json'
-          }
+          },
+          transformRequest: [(data) => data] // prevent auto-serialization
         });
         fail('Request should have failed');
       } catch (error: any) {
