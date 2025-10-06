@@ -3,7 +3,17 @@ import { SNSClient } from '@aws-sdk/client-sns';
 
 // Mock AWS SDK
 jest.mock('@aws-sdk/client-dynamodb');
-jest.mock('@aws-sdk/lib-dynamodb');
+jest.mock('@aws-sdk/lib-dynamodb', () => ({
+  DynamoDBDocumentClient: {
+    from: jest.fn(() => ({
+      send: jest.fn(),
+    })),
+  },
+  TransactWriteCommand: jest.fn().mockImplementation((params) => params),
+  UpdateCommand: jest.fn().mockImplementation((params) => params),
+  GetCommand: jest.fn().mockImplementation((params) => params),
+  unmarshall: jest.fn((data) => data),
+}));
 jest.mock('@aws-sdk/client-sns');
 
 describe('Lambda Functions Unit Tests', () => {
@@ -15,7 +25,8 @@ describe('Lambda Functions Unit Tests', () => {
       jest.clearAllMocks();
 
       // Mock environment variables
-      process.env.TABLE_NAME = 'test-loyalty-table';
+      process.env.LOYALTY_TABLE_NAME = 'test-loyalty-table';
+      process.env.SNS_TOPIC_ARN = 'arn:aws:sns:us-west-2:123456789012:test-topic';
       process.env.AWS_REGION = 'us-west-2';
 
       // Mock DynamoDB Document Client
@@ -23,23 +34,14 @@ describe('Lambda Functions Unit Tests', () => {
         send: jest.fn(),
       };
 
-      // Mock the Document Client creation
-      const mockFrom = jest.fn(() => mockDocClient);
-      jest.doMock('@aws-sdk/lib-dynamodb', () => ({
-        DynamoDBDocumentClient: {
-          from: mockFrom,
-        },
-        GetCommand: jest.fn((params) => params),
-        TransactWriteCommand: jest.fn((params) => params),
-      }));
-
       // Load the handler after mocking
       delete require.cache[require.resolve('../lib/point-calc-lambda.js')];
       handler = require('../lib/point-calc-lambda.js').handler;
     });
 
     afterEach(() => {
-      delete process.env.TABLE_NAME;
+      delete process.env.LOYALTY_TABLE_NAME;
+      delete process.env.SNS_TOPIC_ARN;
       delete process.env.AWS_REGION;
     });
 
@@ -178,13 +180,20 @@ describe('Lambda Functions Unit Tests', () => {
   describe('Stream Processor Lambda', () => {
     let handler: any;
     let mockSNSClient: any;
+    let mockDocClient: any;
 
     beforeEach(() => {
       jest.clearAllMocks();
 
       // Mock environment variables
+      process.env.LOYALTY_TABLE_NAME = 'test-loyalty-table';
       process.env.SNS_TOPIC_ARN = 'arn:aws:sns:us-west-2:123456789012:test-topic';
       process.env.AWS_REGION = 'us-west-2';
+
+      // Mock DynamoDB Document Client
+      mockDocClient = {
+        send: jest.fn().mockResolvedValue({}),
+      };
 
       // Mock SNS Client
       mockSNSClient = {
@@ -199,6 +208,7 @@ describe('Lambda Functions Unit Tests', () => {
     });
 
     afterEach(() => {
+      delete process.env.LOYALTY_TABLE_NAME;
       delete process.env.SNS_TOPIC_ARN;
       delete process.env.AWS_REGION;
     });
