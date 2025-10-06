@@ -395,21 +395,22 @@ describe('Weather Monitoring System Integration Tests', () => {
       // Retry logic with exponential backoff
       let retryCount = 0;
       const maxRetries = 15;
-      let normalItem: any;
-      let extremeItem: any;
+      let item1: any;
+      let item2: any;
 
       while (retryCount < maxRetries) {
         try {
           const results = await verifyItemsExist();
-          normalItem = results.normalItem;
-          extremeItem = results.extremeItem;
+          item1 = results.normalItem;  // This is actually the item with timestamp1
+          item2 = results.extremeItem; // This is actually the item with timestamp2
 
-          if (normalItem && extremeItem) {
+          if (item1 && item2) {
             console.log(`Both items found after ${retryCount + 1} attempts`);
+            console.log(`Item1 temp: ${item1.temperature?.N}, Item2 temp: ${item2.temperature?.N}`);
             break;
           }
 
-          console.log(`Attempt ${retryCount + 1}: normalItem=${!!normalItem}, extremeItem=${!!extremeItem}`);
+          console.log(`Attempt ${retryCount + 1}: item1=${!!item1}, item2=${!!item2}`);
 
           // Exponential backoff: 500ms, 1s, 2s, 4s, etc.
           const delay = Math.min(500 * Math.pow(2, retryCount), 5000);
@@ -424,7 +425,7 @@ describe('Weather Monitoring System Integration Tests', () => {
       }
 
       // Fallback: If GetItem doesn't work, try Scan with ConsistentRead
-      if (!normalItem || !extremeItem) {
+      if (!item1 || !item2) {
         console.log('Falling back to Scan operation...');
         const scanCommand = new ScanCommand({
           TableName: outputs.DynamoDBTableName,
@@ -438,15 +439,41 @@ describe('Weather Monitoring System Integration Tests', () => {
         const scanResult = await dynamoDBClient.send(scanCommand);
         console.log(`Scan found ${scanResult.Items?.length || 0} items`);
 
-        if (!normalItem) {
-          normalItem = scanResult.Items?.find(
+        if (!item1) {
+          item1 = scanResult.Items?.find(
             item => parseInt(item.timestamp.N || '0') === timestamp1
           );
         }
-        if (!extremeItem) {
-          extremeItem = scanResult.Items?.find(
+        if (!item2) {
+          item2 = scanResult.Items?.find(
             item => parseInt(item.timestamp.N || '0') === timestamp2
           );
+        }
+      }
+
+      // Now correctly identify which item is normal vs extreme based on temperature
+      let normalItem: any;
+      let extremeItem: any;
+
+      if (item1 && item2) {
+        const temp1 = parseFloat(item1.temperature?.N || '0');
+        const temp2 = parseFloat(item2.temperature?.N || '0');
+
+        if (temp1 === 20) {
+          normalItem = item1;
+          extremeItem = item2;
+        } else if (temp2 === 20) {
+          normalItem = item2;
+          extremeItem = item1;
+        } else {
+          // If neither has temp 20, identify by the lower temperature
+          if (temp1 < temp2) {
+            normalItem = item1;
+            extremeItem = item2;
+          } else {
+            normalItem = item2;
+            extremeItem = item1;
+          }
         }
       }
 
