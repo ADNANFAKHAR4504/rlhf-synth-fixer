@@ -10,5 +10,19 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "IAM, S3 Bucket, VPC, Security Groups, KMS, Cloudwatch, ELB, Auto Scaling, RDS, NACLs, AWS Config, Cloudformation, Pricing Calculator"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "S3",
+    "RDS",
+    "ELB",
+    "Auto Scaling",
+    "CloudWatch",
+    "SNS",
+    "AWS Config",
+    "Secrets Manager"
+  ],
+  "training_quality": 8
 }
