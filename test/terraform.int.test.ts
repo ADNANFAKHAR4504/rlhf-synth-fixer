@@ -64,18 +64,39 @@ function loadTerraformOutputs(): TerraformOutputs {
   // Primary path: CI/CD pipeline creates cfn-outputs/all-outputs.json via get-outputs.sh
   const ciOutputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
   if (fs.existsSync(ciOutputPath)) {
-    return JSON.parse(fs.readFileSync(ciOutputPath, "utf8"));
+    const content = fs.readFileSync(ciOutputPath, "utf8");
+    console.log("Loading outputs from:", ciOutputPath);
+    console.log("Output file content:", content.substring(0, 500)); // Log first 500 chars
+    const outputs = JSON.parse(content);
+    console.log("Parsed outputs keys:", Object.keys(outputs));
+    return outputs;
   }
   
-  // Fallback 1: Direct terraform output JSON
+  // Fallback 1.5: Check flat outputs (key-value pairs)
+  const flatOutputPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
+  if (fs.existsSync(flatOutputPath)) {
+    console.log("Loading flat outputs from:", flatOutputPath);
+    const flatOutputs = JSON.parse(fs.readFileSync(flatOutputPath, "utf8"));
+    console.log("Flat outputs:", flatOutputs);
+    // Convert flat format to expected format
+    const converted: any = {};
+    for (const [key, value] of Object.entries(flatOutputs)) {
+      converted[key] = { value };
+    }
+    return converted;
+  }
+  
+  // Fallback 2: Direct terraform output JSON
   const outputPath = path.resolve(__dirname, "../terraform-outputs.json");
   if (fs.existsSync(outputPath)) {
+    console.log("Loading outputs from:", outputPath);
     return JSON.parse(fs.readFileSync(outputPath, "utf8"));
   }
   
-  // Fallback 2: Terraform state file
+  // Fallback 3: Terraform state file
   const altPath = path.resolve(__dirname, "../lib/terraform.tfstate");
   if (fs.existsSync(altPath)) {
+    console.log("Loading outputs from state file:", altPath);
     const state = JSON.parse(fs.readFileSync(altPath, "utf8"));
     return state.outputs;
   }
