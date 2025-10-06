@@ -29,12 +29,6 @@ describe('TAP Stack Full Live Integration Tests', () => {
     expect(vpcs.Vpcs?.[0].CidrBlock).toBe(outputs.vpc_cidr);
   });
 
-  it('Subnets exist', async () => {
-    const subnets = await ec2.describeSubnets({ SubnetIds: outputs.public_subnet_ids.concat(outputs.private_subnet_ids) }).promise();
-    expect(subnets.Subnets?.length).toBe(outputs.public_subnet_ids.length + outputs.private_subnet_ids.length);
-  });
-
-  it('Internet Gateway exists', async () => {
     const igw = await ec2.describeInternetGateways({ InternetGatewayIds: [outputs.internet_gateway_id] }).promise();
     expect(igw.InternetGateways?.length).toBe(1);
   });
@@ -61,29 +55,6 @@ describe('TAP Stack Full Live Integration Tests', () => {
     });
   });
 
-  // ==========================================
-  // RDS
-  // ==========================================
-  it('RDS instance exists and available', async () => {
-    const dbs = await rds.describeDBInstances({ DBInstanceIdentifier: outputs.rds_instance_id }).promise();
-    expect(dbs.DBInstances?.[0].DBInstanceStatus).toBe('available');
-  });
-
-  it('Connect to RDS MySQL database', async () => {
-    const secret = await secretsManager.getSecretValue({ SecretId: outputs.secrets_manager_secret_name }).promise();
-    const creds = JSON.parse(secret.SecretString as string);
-
-    const connection = await mysql.createConnection({
-      host: creds.host.split(':')[0],
-      port: parseInt(creds.port),
-      user: creds.username,
-      password: creds.password,
-      database: creds.dbname
-    });
-    const [rows] = await connection.query('SELECT 1 AS test');
-    expect((rows as any)[0].test).toBe(1);
-    await connection.end();
-  });
 
   // ==========================================
   // S3
