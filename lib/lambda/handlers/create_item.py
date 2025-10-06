@@ -75,11 +75,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Multiple items can have the same SKU with different item_ids if needed
 
         # Put item in DynamoDB
-        # The composite key (item_id + sku) ensures uniqueness
-        table.put_item(
-            Item=item,
-            ConditionExpression='attribute_not_exists(item_id) AND attribute_not_exists(sku)'
-        )
+        # UUID collision is extremely unlikely, so no condition expression needed
+        table.put_item(Item=item)
 
         logger.info(f"Created item: {item_id}")
 
@@ -89,8 +86,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         })
 
     except ClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            return format_response(409, {'error': 'Item with this SKU already exists'})
         logger.error(f"DynamoDB error: {str(e)}")
         return format_response(500, {'error': 'Internal server error'})
     except Exception as e:
