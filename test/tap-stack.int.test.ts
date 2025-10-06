@@ -42,9 +42,12 @@ import {
 } from '@aws-sdk/client-api-gateway';
 
 // Read actual deployment outputs
-const outputs = JSON.parse(
+const outputsFile = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// CDKTF outputs are nested under the stack name
+const outputs = outputsFile['tap-stack'];
 
 // Set AWS region from deployment
 const AWS_REGION = 'us-east-2';
