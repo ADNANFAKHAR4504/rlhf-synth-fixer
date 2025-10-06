@@ -325,7 +325,7 @@ public class ComputeConstruct extends Construct {
         return ElasticBeanstalkEnvironment.Builder.create(this, "eb-env")
                 .name(config.environmentName())
                 .application(ebApp.getName())
-                .solutionStackName("64bit Amazon Linux 2 v3.8.3 running Python 3.9")
+                .solutionStackName("64bit Amazon Linux 2023 v4.7.2 running Python 3.11")
                 .tier("WebServer")
                 .setting(convertToEbSettings(settings))
                 .build();

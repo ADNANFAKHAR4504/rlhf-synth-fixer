@@ -17,9 +17,13 @@ import java.util.List;
 import java.util.Map;
 
 public class DatabaseConstruct extends Construct {
+
     private final DbInstance database;
+
     private final SecretsmanagerSecret dbSecret;
+
     private final KmsKey kmsKey;
+
     private final SecurityGroup dbSecurityGroup;
 
     public DatabaseConstruct(final Construct scope, final String id, final DatabaseConfig config, final String vpcId,
