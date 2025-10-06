@@ -304,6 +304,8 @@ export class S3BucketModule extends Construct {
     // Add CloudTrail policy statement if enabled
     if (props.allowCloudTrailAccess) {
       const prefix = props.cloudTrailPrefix || '';
+
+      // Allow CloudTrail to check the bucket ACL
       policyStatements.push({
         Effect: 'Allow',
         Principal: {
@@ -313,6 +315,7 @@ export class S3BucketModule extends Construct {
         Resource: bucket.arn,
       });
 
+      // Allow CloudTrail to put objects in the bucket
       policyStatements.push({
         Effect: 'Allow',
         Principal: {
@@ -326,6 +329,18 @@ export class S3BucketModule extends Construct {
           },
         },
       });
+
+      // Add KMS permissions if using KMS
+      if (props.kmsKeyId) {
+        policyStatements.push({
+          Effect: 'Allow',
+          Principal: {
+            Service: 'cloudtrail.amazonaws.com',
+          },
+          Action: ['kms:GenerateDataKey*', 'kms:Decrypt'],
+          Resource: `arn:aws:kms:*:*:key/${props.kmsKeyId}`,
+        });
+      }
     }
 
     // Apply bucket policy if there are any statements

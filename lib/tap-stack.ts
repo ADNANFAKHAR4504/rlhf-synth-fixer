@@ -145,7 +145,7 @@ export class TapStack extends TerraformStack {
     const cloudTrail = new CloudTrailModule(this, 'cloudtrail', {
       trailName: 'tap-cloudtrail',
       s3BucketName: logBucket.bucketName,
-      s3KeyPrefix: 'cloudtrail-logs',
+      s3KeyPrefix: 'cloudtrail-logs/',
       kmsKeyId: kms.keyArn,
       tags,
     });
