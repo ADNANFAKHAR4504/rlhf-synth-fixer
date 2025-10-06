@@ -1,7 +1,7 @@
 You need to build a secure and scalable AWS setup using Python and AWS CDK (Cloud Development Kit).
 Your goal is to automate the setup of important AWS resources with CloudFormation.
 
-Here’s what you need to do:
+Here’s what you need to do: 
 
 Create a highly available architecture using EC2, RDS, and an Elastic Load Balancer.
 
