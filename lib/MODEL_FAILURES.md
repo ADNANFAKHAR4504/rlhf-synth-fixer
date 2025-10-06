@@ -144,7 +144,6 @@ runtime: lambda.Runtime.NODEJS_20_X
 **Fix**: Use explicit import:
 ```typescript
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
-// Then use:
 new s3n.LambdaDestination(uploadHandlerFunction)
 ```
 
