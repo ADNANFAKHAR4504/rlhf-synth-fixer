@@ -19,5 +19,9 @@
     "EventBridge",
     "X-Ray",
     "Step Functions Express"
+  ],
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
   ]
 }
