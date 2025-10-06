@@ -149,7 +149,7 @@ func TestNetworkingStackIntegration(t *testing.T) {
 
 		// DynamoDB endpoint is a Gateway endpoint
 		template.HasResourceProperties(jsii.String("AWS::EC2::VPCEndpoint"), map[string]interface{}{
-			"ServiceName":     assertions.Match_StringLikeRegexp("com.amazonaws.us-east-1.dynamodb"),
+			"ServiceName":     assertions.Match_StringLikeRegexp(jsii.String("com.amazonaws.us-east-1.dynamodb")),
 			"VpcEndpointType": "Gateway",
 		})
 
@@ -175,7 +175,9 @@ func TestNetworkingStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		// Gateway endpoints should have route table associations
-		template.ResourceCountIs(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), assertions.Match_AnyValue())
+		// Match_AnyValue just checks that at least one exists
+		endpoints := template.FindResources(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), &map[string]interface{}{})
+		assert.NotEmpty(t, *endpoints.(*map[string]map[string]interface{}), "Should have VPC endpoint route table associations")
 	})
 }
 
@@ -206,7 +208,7 @@ func TestSecurityStackIntegration(t *testing.T) {
 
 		template.HasResourceProperties(jsii.String("AWS::KMS::Key"), map[string]interface{}{
 			"EnableKeyRotation":   true,
-			"Description":         assertions.Match_StringLikeRegexp("Customer-managed KMS key for RDS encryption"),
+			"Description":         assertions.Match_StringLikeRegexp(jsii.String("Customer-managed KMS key for RDS encryption")),
 			"PendingWindowInDays": 30,
 		})
 
@@ -232,7 +234,7 @@ func TestSecurityStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::KMS::Alias"), map[string]interface{}{
-			"AliasName": assertions.Match_StringLikeRegexp(fmt.Sprintf("alias/tap-rds-key-%s", testEnvironmentSuffix)),
+			"AliasName": assertions.Match_StringLikeRegexp(jsii.String(fmt.Sprintf("alias/tap-rds-key-%s", testEnvironmentSuffix))),
 		})
 	})
 
@@ -309,7 +311,7 @@ func TestSecurityStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-			"BucketName": assertions.Match_StringLikeRegexp(".*no-public-access.*"),
+			"BucketName": assertions.Match_StringLikeRegexp(jsii.String(".*no-public-access.*")),
 		})
 	})
 }
@@ -340,7 +342,7 @@ func TestDataStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::RDS::DBSubnetGroup"), map[string]interface{}{
-			"DBSubnetGroupDescription": assertions.Match_StringLikeRegexp("Subnet group for RDS instance"),
+			"DBSubnetGroupDescription": assertions.Match_StringLikeRegexp(jsii.String("Subnet group for RDS instance")),
 		})
 	})
 
@@ -357,9 +359,9 @@ func TestDataStackIntegration(t *testing.T) {
 
 		template.HasResourceProperties(jsii.String("AWS::RDS::DBInstance"), map[string]interface{}{
 			"StorageEncrypted": true,
-			"KmsKeyId": assertions.Match_ObjectLike(map[string]interface{}{
+			"KmsKeyId": assertions.Match_ObjectLike(&map[string]interface{}{
 				"Fn::GetAtt": assertions.Match_ArrayWith(&[]interface{}{
-					assertions.Match_StringLikeRegexp(".*RdsKmsKey.*"),
+					assertions.Match_StringLikeRegexp(jsii.String(".*RdsKmsKey.*")),
 				}),
 			}),
 		})
@@ -377,7 +379,7 @@ func TestDataStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), map[string]interface{}{
-			"GroupDescription": assertions.Match_StringLikeRegexp("Security group for RDS database instance"),
+			"GroupDescription": assertions.Match_StringLikeRegexp(jsii.String("Security group for RDS database instance")),
 		})
 
 		// Verify MySQL port is restricted to VPC CIDR
@@ -421,7 +423,7 @@ func TestDataStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::SecretsManager::Secret"), map[string]interface{}{
-			"Name": assertions.Match_StringLikeRegexp(fmt.Sprintf("tap-rds-credentials-%s", testEnvironmentSuffix)),
+			"Name": assertions.Match_StringLikeRegexp(jsii.String(fmt.Sprintf("tap-rds-credentials-%s", testEnvironmentSuffix))),
 		})
 
 		template.HasResourceProperties(jsii.String("AWS::SecretsManager::SecretTargetAttachment"), map[string]interface{}{
@@ -492,7 +494,7 @@ func TestApplicationStackIntegration(t *testing.T) {
 		template := assertions.Template_FromStack(stack, nil)
 
 		template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), map[string]interface{}{
-			"GroupDescription": assertions.Match_StringLikeRegexp("Security group for Application Load Balancer"),
+			"GroupDescription": assertions.Match_StringLikeRegexp(jsii.String("Security group for Application Load Balancer")),
 		})
 
 		// Verify ingress is restricted to specific IP (not 0.0.0.0/0)
@@ -632,10 +634,11 @@ func TestCrossServiceInteractions(t *testing.T) {
 
 		// VPC endpoint routes to private subnets via route tables
 		template.HasResourceProperties(jsii.String("AWS::EC2::VPCEndpoint"), map[string]interface{}{
-			"ServiceName": assertions.Match_StringLikeRegexp("dynamodb"),
+			"ServiceName": assertions.Match_StringLikeRegexp(jsii.String("dynamodb")),
 		})
 
-		template.ResourceCountIs(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), assertions.Match_AnyValue())
+		endpoints := template.FindResources(jsii.String("AWS::EC2::VPCEndpointRouteTableAssociation"), &map[string]interface{}{})
+		assert.NotEmpty(t, *endpoints.(*map[string]map[string]interface{}), "Should have VPC endpoint route table associations")
 	})
 
 	t.Run("KMS key encrypts RDS storage", func(t *testing.T) {
@@ -766,7 +769,8 @@ func TestCrossServiceInteractions(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::EC2::NatGateway"), jsii.Number(1))
 
 		// NAT requires EIP
-		template.ResourceCountIs(jsii.String("AWS::EC2::EIP"), assertions.Match_AnyValue())
+		eips := template.FindResources(jsii.String("AWS::EC2::EIP"), &map[string]interface{}{})
+		assert.NotEmpty(t, *eips.(*map[string]map[string]interface{}), "NAT Gateway should have Elastic IP")
 	})
 }
 
@@ -867,7 +871,7 @@ func TestEndToEndWorkflows(t *testing.T) {
 
 		// Verify DynamoDB endpoint service name includes us-east-1
 		template.HasResourceProperties(jsii.String("AWS::EC2::VPCEndpoint"), map[string]interface{}{
-			"ServiceName": assertions.Match_StringLikeRegexp("com.amazonaws.us-east-1.dynamodb"),
+			"ServiceName": assertions.Match_StringLikeRegexp(jsii.String("com.amazonaws.us-east-1.dynamodb")),
 		})
 	})
 
@@ -886,18 +890,24 @@ func TestEndToEndWorkflows(t *testing.T) {
 		// This is implicit in dependencies via nested stacks
 
 		// Networking resources
-		template.ResourceCountIs(jsii.String("AWS::EC2::VPC"), assertions.Match_AnyValue())
+		vpcs := template.FindResources(jsii.String("AWS::EC2::VPC"), &map[string]interface{}{})
+		assert.NotEmpty(t, *vpcs.(*map[string]map[string]interface{}), "Should have VPC")
 
 		// Security resources
-		template.ResourceCountIs(jsii.String("AWS::KMS::Key"), assertions.Match_AnyValue())
-		template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), assertions.Match_AnyValue())
+		keys := template.FindResources(jsii.String("AWS::KMS::Key"), &map[string]interface{}{})
+		assert.NotEmpty(t, *keys.(*map[string]map[string]interface{}), "Should have KMS key")
+		buckets := template.FindResources(jsii.String("AWS::S3::Bucket"), &map[string]interface{}{})
+		assert.NotEmpty(t, *buckets.(*map[string]map[string]interface{}), "Should have S3 bucket")
 
 		// Data resources (depends on Networking + Security)
-		template.ResourceCountIs(jsii.String("AWS::RDS::DBInstance"), assertions.Match_AnyValue())
+		rdss := template.FindResources(jsii.String("AWS::RDS::DBInstance"), &map[string]interface{}{})
+		assert.NotEmpty(t, *rdss.(*map[string]map[string]interface{}), "Should have RDS instance")
 
 		// Application resources (depends on Networking)
-		template.ResourceCountIs(jsii.String("AWS::ElasticLoadBalancingV2::LoadBalancer"), assertions.Match_AnyValue())
-		template.ResourceCountIs(jsii.String("AWS::WAFv2::WebACL"), assertions.Match_AnyValue())
+		albs := template.FindResources(jsii.String("AWS::ElasticLoadBalancingV2::LoadBalancer"), &map[string]interface{}{})
+		assert.NotEmpty(t, *albs.(*map[string]map[string]interface{}), "Should have ALB")
+		wafs := template.FindResources(jsii.String("AWS::WAFv2::WebACL"), &map[string]interface{}{})
+		assert.NotEmpty(t, *wafs.(*map[string]map[string]interface{}), "Should have WAF")
 	})
 }
 
@@ -1039,11 +1049,20 @@ func TestSecurityCompliance(t *testing.T) {
 		})
 
 		// S3 encryption
-		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-			"BucketEncryption": assertions.Match_ObjectLike(map[string]interface{}{
-				"ServerSideEncryptionConfiguration": assertions.Match_AnyValue(),
-			}),
-		})
+		s3Buckets := template.FindResources(jsii.String("AWS::S3::Bucket"), &map[string]interface{}{})
+		s3Map := *s3Buckets.(*map[string]map[string]interface{})
+		assert.NotEmpty(t, s3Map, "Should have S3 buckets")
+
+		// Verify at least one bucket has encryption
+		hasEncryption := false
+		for _, bucket := range s3Map {
+			props := bucket["Properties"].(map[string]interface{})
+			if _, ok := props["BucketEncryption"]; ok {
+				hasEncryption = true
+				break
+			}
+		}
+		assert.True(t, hasEncryption, "At least one S3 bucket should have encryption configured")
 	})
 
 	t.Run("IAM policies follow least privilege principle", func(t *testing.T) {
@@ -1107,10 +1126,12 @@ func TestSecurityCompliance(t *testing.T) {
 		assert.GreaterOrEqual(t, len(subnetMap), 6, "Should have segmented subnets")
 
 		// WAF protection (defense layer 3)
-		template.ResourceCountIs(jsii.String("AWS::WAFv2::WebACL"), assertions.Match_AnyValue())
+		wafs := template.FindResources(jsii.String("AWS::WAFv2::WebACL"), &map[string]interface{}{})
+		assert.NotEmpty(t, *wafs.(*map[string]map[string]interface{}), "Should have WAF ACL")
 
 		// Encryption (defense layer 4)
-		template.ResourceCountIs(jsii.String("AWS::KMS::Key"), assertions.Match_AnyValue())
+		kmsKeys := template.FindResources(jsii.String("AWS::KMS::Key"), &map[string]interface{}{})
+		assert.NotEmpty(t, *kmsKeys.(*map[string]map[string]interface{}), "Should have KMS key")
 	})
 
 	t.Run("RDS uses MySQL 8.0 for security updates", func(t *testing.T) {
