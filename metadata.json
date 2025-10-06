@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348989",
+  "team": "4",
+  "startedAt": "2025-10-06T11:14:50.010Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, Sunet, EC2, Dynamo DB, RDS"
+}
