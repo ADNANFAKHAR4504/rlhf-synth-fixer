@@ -45,7 +45,7 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
         cls.kms_client = boto3.client('kms', region_name=cls.aws_region)
         
         # Get deployment outputs (these would be set by CI/CD)
-        # Using actual deployed bucket names from dep.txt - should use environment suffix
+        # Using dynamic naming with environment suffix
         cls.source_bucket = os.getenv('SOURCE_BUCKET', f'image-uploads-{cls.environment_suffix}-organization-tapstack')
         cls.dest_bucket = os.getenv('DEST_BUCKET', f'processed-images-{cls.environment_suffix}-organization-tapstack')
         cls.lambda_function_name = os.getenv('LAMBDA_FUNCTION', 'img-proc-processor')
@@ -190,24 +190,27 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
         time.sleep(10)
         
         # Check CloudWatch logs for error handling
-        log_streams = self.cloudwatch_logs_client.describe_log_streams(
-            logGroupName=self.log_group_name,
-            orderBy='LastEventTime',
-            descending=True,
-            limit=5
-        )
-        
-        # Verify Lambda attempted to process (logs should exist)
-        self.assertGreater(len(log_streams['logStreams']), 0, "No log streams found")
+        try:
+            log_streams = self.cloudwatch_logs_client.describe_log_streams(
+                logGroupName=self.log_group_name,
+                orderBy='LastEventTime',
+                descending=True,
+                limit=5
+            )
+            
+            # Verify Lambda attempted to process (logs should exist)
+            self.assertGreater(len(log_streams['logStreams']), 0, f"No log streams found in {self.log_group_name}. This suggests Lambda function was not invoked.")
+        except ClientError as e:
+            self.fail(f"Failed to access CloudWatch logs: {e}")
     
     def test_s3_event_notification_configuration(self):
         """Test that S3 event notifications are properly configured."""
         # Get bucket notification configuration
         try:
             response = self.s3_client.get_bucket_notification_configuration(Bucket=self.source_bucket)
-            self.assertIn('LambdaConfigurations', response, "Lambda notification not configured")
+            self.assertIn('LambdaFunctionConfigurations', response, "Lambda notification not configured")
             
-            lambda_configs = response['LambdaConfigurations']
+            lambda_configs = response['LambdaFunctionConfigurations']
             self.assertGreater(len(lambda_configs), 0, "No Lambda configurations found")
             
             # Verify notification is for our Lambda function
@@ -338,12 +341,13 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
             
             for alarm in response['MetricAlarms']:
                 alarm_name = alarm['AlarmName']
-                if any(pattern in alarm_name for pattern in ['img-proc', 'error', 'duration', 'invocation', 'timeout', 'throttle']):
+                # Look for alarms with our specific naming pattern
+                if 'img-proc' in alarm_name:
                     found_alarms.append(alarm_name)
                     self.assertEqual(alarm['Namespace'], 'AWS/Lambda', f"Alarm {alarm_name} has wrong namespace")
             
             # Verify we found at least some alarms
-            self.assertGreater(len(found_alarms), 0, f"No CloudWatch alarms found for image processing pipeline")
+            self.assertGreater(len(found_alarms), 0, f"No CloudWatch alarms found for image processing pipeline. Available alarms: {[a['AlarmName'] for a in response['MetricAlarms']]}")
             self.assertGreaterEqual(len(found_alarms), 3, f"Expected at least 3 alarms, found {len(found_alarms)}: {found_alarms}")
             
         except ClientError as e:
