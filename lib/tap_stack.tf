@@ -73,38 +73,48 @@ data "aws_rds_engine_version" "postgresql" {
 # =============================================================================
 
 locals {
-  s3_bucket_name         = "secure-app-bucket-${var.unique_id}"
-  cloudtrail_bucket_name = "secure-cloudtrail-logs-${var.unique_id}"
-  availability_zones     = slice(data.aws_availability_zones.available.names, 0, 2)
-  common_tags = merge(var.tags, {
-    ManagedBy = "Terraform"
-  })
+  # Standardized tags to apply to all resources
+  common_tags = merge(
+    {
+      Environment = "Production"
+    },
+    var.additional_tags
+  )
+  
+  # Naming conventions
+  name_prefix = "IAC-350039-${var.unique_id}"
+  
+  # Availability Zones
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  
+  # S3 bucket names with globally unique suffix
+  s3_app_bucket_name         = "IAC-350039-${var.resource_prefix}-app-${var.unique_suffix}"
+  s3_lb_logs_bucket_name     = "IAC-350039-${var.resource_prefix}-lb-logs-${var.unique_suffix}"
+  
+  # KMS key rotation period (days)
+  kms_rotation_period = 365
 }
 
-# =============================================================================
-# VPC RESOURCES
-# =============================================================================
-
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-
-  tags = merge(local.common_tags, { Name = "main-vpc" })
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags   = merge(local.common_tags, { Name = "main-igw" })
+# Example resource with updated prefix
+resource "aws_kms_alias" "main" {
+  name          = "alias/${local.name_prefix}-key"
+  target_key_id = aws_kms_key.main.key_id
 }
 
 resource "aws_subnet" "public" {
-  count                   = length(var.public_subnet_cidrs)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = element(local.availability_zones, count.index)
+  count                   = length(var.cidr_blocks.public)
+  vpc_id                  = var.vpc_id
+  cidr_block              = var.cidr_blocks.public[count.index]
+  availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = true
-  tags                    = merge(local.common_tags, { Name = "public-subnet-${count.index + 1}" })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+      Tier = "Public"
+    }
+  )
 }
 
 resource "aws_route_table" "public" {
@@ -125,12 +135,19 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_subnet" "private" {
-  count                   = length(var.private_subnet_cidrs)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.private_subnet_cidrs[count.index]
-  availability_zone       = element(local.availability_zones, count.index)
+  count                   = length(var.cidr_blocks.private)
+  vpc_id                  = var.vpc_id
+  cidr_block              = var.cidr_blocks.private[count.index]
+  availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = false
-  tags                    = merge(local.common_tags, { Name = "private-subnet-${count.index + 1}" })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+      Tier = "Private"
+    }
+  )
 }
 
 resource "aws_route_table" "private" {
@@ -143,10 +160,6 @@ resource "aws_route_table_association" "private" {
   subnet_id      = element(aws_subnet.private.*.id, count.index)
   route_table_id = aws_route_table.private.id
 }
-
-# =============================================================================
-# SECURITY GROUPS
-# =============================================================================
 
 resource "aws_security_group" "web" {
   name        = "web-sg"
@@ -228,12 +241,8 @@ resource "aws_security_group" "alb" {
   tags = merge(local.common_tags, { Name = "alb-sg" })
 }
 
-# =============================================================================
-# S3 RESOURCES
-# =============================================================================
-
 resource "aws_s3_bucket" "app" {
-  bucket = local.s3_bucket_name
+  bucket = local.s3_app_bucket_name
   tags   = local.common_tags
 }
 
@@ -296,12 +305,8 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
-# =============================================================================
-# IAM RESOURCES
-# =============================================================================
-
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2-s3-access-role"
+  name = "${local.name_prefix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -312,7 +317,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name        = "s3-bucket-access"
+  name        = "${local.name_prefix}-ec2-s3-access"
   description = "Policy that grants access to specific S3 bucket"
 
   policy = jsonencode({
@@ -331,12 +336,12 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-s3-profile"
+  name = "${local.name_prefix}-ec2-instance-profile"
   role = aws_iam_role.ec2_role.name
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "lambda-s3-role"
+  name = "${local.name_prefix}-lambda-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -347,7 +352,7 @@ resource "aws_iam_role" "lambda_role" {
 }
 
 resource "aws_iam_policy" "lambda_s3_policy" {
-  name        = "lambda-s3-policy"
+  name        = "${local.name_prefix}-lambda-s3-policy"
   description = "Allow Lambda to access S3"
 
   policy = jsonencode({
@@ -386,10 +391,6 @@ resource "aws_iam_role_policy_attachment" "config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-# =============================================================================
-# RDS RESOURCES
-# =============================================================================
-
 resource "aws_kms_key" "rds" {
   description         = "KMS key for RDS encryption"
   enable_key_rotation = true
@@ -402,7 +403,7 @@ resource "aws_kms_alias" "rds" {
 }
 
 resource "aws_db_subnet_group" "default" {
-  name       = "main-db-subnet-group"
+  name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private.*.id
   tags       = local.common_tags
 }
@@ -419,8 +420,6 @@ resource "aws_db_parameter_group" "postgres" {
   tags = local.common_tags
 }
 
-# ── Generate a strong random DB password (no manual input).
-#    RDS forbids certain characters in master password; we use a safe set.
 resource "random_password" "db_master" {
   length           = 24
   special          = true
@@ -455,12 +454,8 @@ resource "aws_db_instance" "postgres" {
   tags = local.common_tags
 }
 
-# =============================================================================
-# ALB AND AUTO SCALING RESOURCES
-# =============================================================================
-
 resource "aws_lb" "app" {
-  name                        = "app-load-balancer"
+  name = "${local.name_prefix}-alb"
   internal                    = false
   load_balancer_type          = "application"
   security_groups             = [aws_security_group.alb.id]
@@ -471,7 +466,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "app-target-group"
+  name = "${local.name_prefix}-tg"
   port     = 443
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -556,7 +551,7 @@ resource "aws_launch_template" "app" {
 }
 
 resource "aws_autoscaling_group" "app" {
-  name                = "app-asg"
+  name = "${local.name_prefix}-asg"
   desired_capacity    = 2
   min_size            = 1
   max_size            = 4
@@ -595,10 +590,6 @@ resource "aws_autoscaling_policy" "scale_down" {
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.app.name
 }
-
-# =============================================================================
-# LAMBDA RESOURCES
-# =============================================================================
 
 data "archive_file" "inline_lambda" {
   type        = "zip"
@@ -665,7 +656,7 @@ data "archive_file" "inline_lambda" {
 }
 
 resource "aws_lambda_function" "app" {
-  function_name = "app-processor"
+  function_name = "${local.name_prefix}-lambda"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
@@ -700,10 +691,6 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   depends_on = [aws_lambda_permission.allow_bucket]
 }
 
-# =============================================================================
-# CLOUDWATCH RESOURCES
-# =============================================================================
-
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${aws_lambda_function.app.function_name}"
   retention_in_days = 14
@@ -711,7 +698,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "high-cpu-utilization"
+  alarm_name          = "${local.name_prefix}-cpu-utilization-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -739,10 +726,6 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   dimensions          = { AutoScalingGroupName = aws_autoscaling_group.app.name }
   tags                = local.common_tags
 }
-
-# =============================================================================
-# API GATEWAY RESOURCES
-# =============================================================================
 
 resource "aws_api_gateway_rest_api" "app" {
   name        = "app-api"
@@ -780,10 +763,6 @@ resource "aws_api_gateway_deployment" "app" {
   lifecycle { create_before_destroy = true }
 }
 
-# =============================================================================
-# CLOUDTRAIL RESOURCES
-# =============================================================================
-
 resource "aws_cloudtrail" "main" {
   name                          = "org-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
@@ -793,10 +772,6 @@ resource "aws_cloudtrail" "main" {
   depends_on                    = [aws_s3_bucket_policy.cloudtrail]
   tags                          = local.common_tags
 }
-
-# =============================================================================
-# OUTPUTS
-# =============================================================================
 
 output "vpc_id" {
   description = "ID of the VPC"
