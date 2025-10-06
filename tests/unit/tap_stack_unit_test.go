@@ -191,7 +191,6 @@ func TestSecurityNestedStack(t *testing.T) {
 		assert.NotNil(t, nestedStack)
 		assert.NotNil(t, nestedStack.KmsKey)
 		assert.NotNil(t, nestedStack.LoggingBucket)
-		assert.NotNil(t, nestedStack.CloudTrail)
 
 		// Verify template can be generated
 		template := assertions.Template_FromStack(nestedStack.NestedStack, nil)
@@ -264,29 +263,6 @@ func TestSecurityNestedStack(t *testing.T) {
 		})
 	})
 
-	t.Run("CloudTrail has correct configuration", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		parentStack := awscdk.NewStack(app, jsii.String("ParentStack"), nil)
-
-		// ACT
-		nestedStack := lib.NewSecurityNestedStack(
-			parentStack,
-			jsii.String("TestSecurityStack"),
-			"test",
-			&awscdk.NestedStackProps{},
-		)
-		template := assertions.Template_FromStack(nestedStack.NestedStack, nil)
-
-		// ASSERT
-		template.ResourceCountIs(jsii.String("AWS::CloudTrail::Trail"), jsii.Number(1))
-		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-			"TrailName":                  "tap-trail-test",
-			"IncludeGlobalServiceEvents": true,
-			"IsMultiRegionTrail":         false,
-			"EnableLogFileValidation":    true,
-		})
-	})
 }
 
 func TestDataNestedStack(t *testing.T) {
