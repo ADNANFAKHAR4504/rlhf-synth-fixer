@@ -16,10 +16,48 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "media_encryption" {
   description             = "KMS key for media pipeline encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_kms_alias" "media_encryption" {
@@ -489,7 +527,11 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
     queue_arn = aws_sqs_queue.processing_queue.arn
     events    = ["s3:ObjectCreated:*"]
   }
-  depends_on = [aws_sqs_queue_policy.processing_queue_policy]
+  depends_on = [
+    aws_sqs_queue_policy.processing_queue_policy,
+    aws_sqs_queue.processing_queue,
+    aws_s3_bucket.input_bucket
+  ]
 }
 
 resource "aws_cloudwatch_event_rule" "mediaconvert_status_change" {
@@ -504,6 +546,8 @@ resource "aws_cloudwatch_event_target" "mediaconvert_status_target" {
   rule      = aws_cloudwatch_event_rule.mediaconvert_status_change.name
   target_id = "SendToSQS"
   arn       = aws_sqs_queue.status_update_queue.arn
+  
+  depends_on = [aws_sqs_queue_policy.status_queue_policy]
 }
 
 resource "aws_sqs_queue_policy" "status_queue_policy" {

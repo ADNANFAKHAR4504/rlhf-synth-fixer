@@ -425,7 +425,7 @@ describe("Terraform Media Pipeline Stack - Unit Tests", () => {
 
   describe("Resource Dependencies", () => {
     test("S3 notification depends on SQS policy", () => {
-      expect(stackContent).toMatch(/depends_on\s*=\s*\[aws_sqs_queue_policy\.processing_queue_policy\]/);
+      expect(stackContent).toMatch(/depends_on\s*=\s*\[[^\]]*aws_sqs_queue_policy\.processing_queue_policy/s);
     });
 
     test("Lambda depends on IAM policies", () => {
