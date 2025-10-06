@@ -26,7 +26,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Description: "ARN of existing SSL certificate for HTTPS listener"
-    Default: "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+    Default: "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
     AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$"
     ConstraintDescription: "Must be a valid ACM certificate ARN"
 
@@ -336,8 +336,7 @@ Resources:
             ExpirationInDays: 90
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
-        LogFilePrefix: "cloudtrail-bucket/" # S3 logging prefix can end with '/'
-
+        LogFilePrefix: "cloudtrail-bucket/"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-cloudtrail-logs"
@@ -384,11 +383,25 @@ Resources:
             ExpirationInDays: 30
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
-        LogFilePrefix: "access-bucket/" # S3 logging prefix can end with '/'
-
+        LogFilePrefix: "access-bucket/"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-access-logs"
+
+  # ✅ NEW: Allow ALB log delivery to write to the access logs bucket (prefix = 'alb')
+  AccessLogsBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowALBLogDelivery"
+            Effect: "Allow"
+            Principal:
+              Service: "logdelivery.elasticloadbalancing.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "${AccessLogsBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*"
 
   # ---------------------------
   # IAM (least-privilege, no fixed names)
@@ -485,7 +498,7 @@ Resources:
         - Key: "access_logs.s3.bucket"
           Value: !Ref AccessLogsBucket
         - Key: "access_logs.s3.prefix"
-          Value: "alb" # <-- FIXED: must NOT start/end with '/'
+          Value: "alb" # must not start or end with '/'
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-alb"
@@ -599,7 +612,6 @@ Resources:
             yum install -y httpd
             systemctl enable --now httpd
             echo "<h1>Hello from ${ProjectName} ${Environment}</h1>" > /var/www/html/index.html
-            # CloudWatch Agent (optional)
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -Uvh ./amazon-cloudwatch-agent.rpm
         TagSpecifications:
