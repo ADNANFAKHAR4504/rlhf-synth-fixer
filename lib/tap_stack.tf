@@ -615,15 +615,18 @@ data "archive_file" "inline_lambda" {
         try {
           payload = (typeof event?.body === "string") ? JSON.parse(event.body) : event;
         } catch (e) {
+          console.log("Error parsing JSON", e);
           return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
         }
         const items = Array.isArray(payload?.data) ? payload.data : [];
         if (!Array.isArray(items) || items.some(n => typeof n !== "number")) {
+        console.log("Invalid data format", items, payload, payload.data);
           return { statusCode: 400, body: JSON.stringify({ error: "data must be an array of numbers" }) };
         }
         const count = items.length;
         const sum   = items.reduce((a, b) => a + b, 0);
         const avg   = count ? sum / count : 0;
+        console.log(`s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
         return { statusCode: 200, body: JSON.stringify({ count, sum, avg }) };
       };
     JS

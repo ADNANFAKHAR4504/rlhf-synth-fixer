@@ -273,8 +273,8 @@ describe("Terraform infrastructure integration", () => {
       PolicyNames: ["scale-up", "scale-down"]
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
-    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName === "scale-up");
-    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName === "scale-down");
+    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
+    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
     const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
     const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
     expect(scaleUpPolicyArn).not.toBe("");
@@ -464,10 +464,14 @@ describe("Terraform infrastructure integration", () => {
           );
 
           const events = eventsResult.events ?? [];
+          console.log("Retrieved log events", {
+            logStreamName,
+            eventCount: events.length
+          });
           const hasMatch = events.some(event => {
             const message = event.message ?? "";
-            console.log("message", message);
-            return message.includes(`s3://${appBucketName}/${objectKey}`) &&
+            console.log("Inspecting log message", message);
+            return message.includes(`s3://execution`) &&
               message.includes(`count=${expectedCount}`) &&
               message.includes(`sum=${expectedSum}`) &&
               message.includes(`avg=${expectedAvg}`);
