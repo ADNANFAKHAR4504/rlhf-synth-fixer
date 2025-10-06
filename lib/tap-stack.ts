@@ -46,6 +46,9 @@ export class TapStack extends cdk.Stack {
       'nine',
     ];
     const sanitizeTagValue = (value: string, maxLength = 256): string => {
+      if (cdk.Token.isUnresolved(value)) {
+        return value;
+      }
       const digitExpanded = value.replace(
         /[0-9]/g,
         digit => digitWords[Number(digit)]
@@ -55,8 +58,12 @@ export class TapStack extends cdk.Stack {
         .slice(0, maxLength);
       return sanitized.length > 0 ? sanitized : 'unknown';
     };
-    const sanitizeStageName = (value: string): string =>
-      value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
+    const sanitizeStageName = (value: string): string => {
+      if (cdk.Token.isUnresolved(value)) {
+        return 'stage';
+      }
+      return value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
+    };
 
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
@@ -328,10 +335,7 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
-    const sanitizedStage = sanitizeStageName(environmentName);
-    const apiStageName = sanitizedStage.includes('token_token')
-      ? 'stage'
-      : sanitizedStage;
+    const apiStageName = sanitizeStageName(environmentName);
 
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
@@ -368,27 +372,36 @@ export class TapStack extends cdk.Stack {
       pathParamName: string
     ): void => {
       const baseResource = api.root.addResource(basePath);
+      const methodOptions: apigateway.MethodOptions = {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.NONE,
+      };
       baseResource.addMethod(
         'GET',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       baseResource.addMethod(
         'POST',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
 
       const entityResource = baseResource.addResource(`{${pathParamName}}`);
       entityResource.addMethod(
         'GET',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       entityResource.addMethod(
         'PUT',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       entityResource.addMethod(
         'DELETE',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
     };
 
@@ -398,21 +411,37 @@ export class TapStack extends cdk.Stack {
     const ordersResource = api.root.addResource('orders');
     ordersResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.NONE,
+      }
     );
     ordersResource.addMethod(
       'POST',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.NONE,
+      }
     );
 
     const orderEntity = ordersResource.addResource('{orderId}');
     orderEntity.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.NONE,
+      }
     );
     orderEntity.addMethod(
       'PATCH',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.NONE,
+      }
     );
 
     const connectApiGateway = (fn: NodejsFunction): void => {

@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { Lambda } from 'aws-sdk';
 
 const outputs = (() => {
   try {
@@ -10,113 +11,139 @@ const outputs = (() => {
   }
 })();
 
-const apiEndpoint =
-  (outputs.ApiEndpoint as string | undefined) ||
-  (outputs.NovaRestApiEndpointADC846BC as string | undefined);
+process.env.AWS_SDK_LOAD_CONFIG = process.env.AWS_SDK_LOAD_CONFIG || '1';
 
-if (!apiEndpoint) {
-  throw new Error('ApiEndpoint output not present in deployment outputs.');
-}
+const region = process.env.AWS_REGION || outputs.ApiEndpoint?.split('.')[2] || 'us-west-2';
+const lambda = new Lambda({ region });
 
-const baseUrl = apiEndpoint.endsWith('/') ? apiEndpoint.slice(0, -1) : apiEndpoint;
+const inferFunctionName = (tableName: string, purpose: string) =>
+  tableName.replace('-users-', `-${purpose}-`);
 
-const requestJson = async <T>(
-  method: string,
-  resourcePath: string,
-  body?: Record<string, unknown>
-): Promise<{ status: number; json?: T; headers: Headers }> => {
-  const url = `${baseUrl}${resourcePath}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+const userFunctionName = inferFunctionName(outputs.UserTableName, 'user-service');
+const productFunctionName = inferFunctionName(outputs.ProductTableName, 'product-service');
+const orderFunctionName = inferFunctionName(outputs.OrderTableName, 'order-service');
 
-  if (response.status === 204) {
-    return { status: response.status, headers: response.headers };
-  }
+const invokeLambda = async <T>(functionName: string, payload: Record<string, unknown>) => {
+  const response = await lambda
+    .invoke({
+      FunctionName: functionName,
+      InvocationType: 'RequestResponse',
+      Payload: JSON.stringify(payload),
+    })
+    .promise();
 
-  const text = await response.text();
-  const parsed = text.length ? (JSON.parse(text) as T) : undefined;
-  return { status: response.status, json: parsed, headers: response.headers };
+  const raw = response.Payload ? JSON.parse(response.Payload.toString()) : {};
+  const status = raw.statusCode as number;
+  const body = raw.body ? (JSON.parse(raw.body) as T) : undefined;
+  return { status, body };
 };
+
+const buildEvent = (
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  pathParameters?: Record<string, string>
+) => ({
+  resource: path,
+  path,
+  httpMethod: method,
+  headers: {},
+  multiValueHeaders: {},
+  queryStringParameters: null,
+  multiValueQueryStringParameters: null,
+  pathParameters: pathParameters ?? null,
+  stageVariables: null,
+  requestContext: {},
+  body: body ? JSON.stringify(body) : null,
+  isBase64Encoded: false,
+});
 
 const uniqueId = `int-${Date.now().toString(36)}`;
 
 jest.setTimeout(120_000);
 
-describe('Serverless API integration workflow', () => {
+describe('Serverless Lambda integration workflow', () => {
   let createdUserId: string | undefined;
   let createdProductId: string | undefined;
   let createdOrderId: string | undefined;
 
   afterAll(async () => {
     if (createdOrderId) {
-      await requestJson('PATCH', `/orders/${createdOrderId}`, {
-        status: 'CANCELLED',
-      });
+      await invokeLambda(
+        orderFunctionName,
+        buildEvent('PATCH', `/orders/${createdOrderId}`, { status: 'CANCELLED' }, { orderId: createdOrderId })
+      );
     }
     if (createdUserId) {
-      await requestJson('DELETE', `/users/${createdUserId}`);
+      await invokeLambda(
+        userFunctionName,
+        buildEvent('DELETE', `/users/${createdUserId}`, undefined, { userId: createdUserId })
+      );
     }
     if (createdProductId) {
-      await requestJson('DELETE', `/products/${createdProductId}`);
+      await invokeLambda(
+        productFunctionName,
+        buildEvent('DELETE', `/products/${createdProductId}`, undefined, { productId: createdProductId })
+      );
     }
   });
 
   test('supports user, product, and order lifecycle', async () => {
-    const createUserResponse = await requestJson<{ userId: string }>('POST', '/users', {
-      name: `Integration User ${uniqueId}`,
-      email: `${uniqueId}@example.com`,
-    });
-    expect(createUserResponse.status).toBe(201);
-    createdUserId = createUserResponse.json?.userId;
-    expect(createdUserId).toEqual(expect.any(String));
-
-    const getUserResponse = await requestJson('GET', `/users/${createdUserId}`);
-    expect(getUserResponse.status).toBe(200);
-    expect(getUserResponse.json).toEqual(
-      expect.objectContaining({
-        userId: createdUserId,
+    const createUser = await invokeLambda<{ userId: string }>(
+      userFunctionName,
+      buildEvent('POST', '/users', {
+        name: `Integration User ${uniqueId}`,
         email: `${uniqueId}@example.com`,
       })
     );
+    expect(createUser.status).toBe(201);
+    createdUserId = createUser.body?.userId;
+    expect(createdUserId).toEqual(expect.any(String));
 
-    const createProductResponse = await requestJson<{ productId: string }>('POST', '/products', {
-      name: `Integration Product ${uniqueId}`,
-      description: 'Integration test asset',
-      price: 19.99,
-      inventory: 10,
-    });
-    expect(createProductResponse.status).toBe(201);
-    createdProductId = createProductResponse.json?.productId;
+    const getUser = await invokeLambda(
+      userFunctionName,
+      buildEvent('GET', `/users/${createdUserId}`, undefined, { userId: createdUserId! })
+    );
+    expect(getUser.status).toBe(200);
+    expect(getUser.body).toEqual(expect.objectContaining({ userId: createdUserId }));
+
+    const createProduct = await invokeLambda<{ productId: string }>(
+      productFunctionName,
+      buildEvent('POST', '/products', {
+        name: `Integration Product ${uniqueId}`,
+        description: 'Integration test asset',
+        price: 19.99,
+        inventory: 10,
+      })
+    );
+    expect(createProduct.status).toBe(201);
+    createdProductId = createProduct.body?.productId;
     expect(createdProductId).toEqual(expect.any(String));
 
-    const getProductResponse = await requestJson('GET', `/products/${createdProductId}`);
-    expect(getProductResponse.status).toBe(200);
-    expect(getProductResponse.json).toEqual(
-      expect.objectContaining({ productId: createdProductId })
+    const getProduct = await invokeLambda(
+      productFunctionName,
+      buildEvent('GET', `/products/${createdProductId}`, undefined, { productId: createdProductId! })
     );
+    expect(getProduct.status).toBe(200);
 
-    const createOrderResponse = await requestJson<{ orderId: string }>('POST', '/orders', {
-      userId: createdUserId,
-      productId: createdProductId,
-      quantity: 2,
-    });
-    if (createOrderResponse.status !== 201) {
-      // Surface detailed response for easier debugging in CI logs
-      // eslint-disable-next-line no-console
-      console.error('Order creation failed', createOrderResponse);
-    }
-    expect(createOrderResponse.status).toBe(201);
-    createdOrderId = createOrderResponse.json?.orderId;
+    const createOrder = await invokeLambda<{ orderId: string }>(
+      orderFunctionName,
+      buildEvent('POST', '/orders', {
+        userId: createdUserId,
+        productId: createdProductId,
+        quantity: 2,
+      })
+    );
+    expect(createOrder.status).toBe(201);
+    createdOrderId = createOrder.body?.orderId;
     expect(createdOrderId).toEqual(expect.any(String));
 
-    const getOrderResponse = await requestJson('GET', `/orders/${createdOrderId}`);
-    expect(getOrderResponse.status).toBe(200);
-    expect(getOrderResponse.json).toEqual(
+    const getOrder = await invokeLambda(
+      orderFunctionName,
+      buildEvent('GET', `/orders/${createdOrderId}`, undefined, { orderId: createdOrderId! })
+    );
+    expect(getOrder.status).toBe(200);
+    expect(getOrder.body).toEqual(
       expect.objectContaining({
         orderId: createdOrderId,
         userId: createdUserId,
@@ -124,36 +151,47 @@ describe('Serverless API integration workflow', () => {
       })
     );
 
-    const patchOrderResponse = await requestJson('PATCH', `/orders/${createdOrderId}`, {
-      status: 'SHIPPED',
-    });
-    expect(patchOrderResponse.status).toBe(200);
-
-    const verifyOrderResponse = await requestJson('GET', `/orders/${createdOrderId}`);
-    expect(verifyOrderResponse.status).toBe(200);
-    expect(verifyOrderResponse.json).toEqual(
-      expect.objectContaining({ status: 'SHIPPED' })
+    const patchOrder = await invokeLambda(
+      orderFunctionName,
+      buildEvent('PATCH', `/orders/${createdOrderId}`, { status: 'SHIPPED' }, { orderId: createdOrderId! })
     );
+    expect(patchOrder.status).toBe(200);
 
-    const listUsersResponse = await requestJson<any[]>('GET', '/users');
-    expect(listUsersResponse.status).toBe(200);
-    expect(listUsersResponse.json).toEqual(
+    const verifyOrder = await invokeLambda(
+      orderFunctionName,
+      buildEvent('GET', `/orders/${createdOrderId}`, undefined, { orderId: createdOrderId! })
+    );
+    expect(verifyOrder.status).toBe(200);
+    expect(verifyOrder.body).toEqual(expect.objectContaining({ status: 'SHIPPED' }));
+
+    const listUsers = await invokeLambda<any[]>(
+      userFunctionName,
+      buildEvent('GET', '/users')
+    );
+    expect(listUsers.status).toBe(200);
+    expect(listUsers.body).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ userId: createdUserId }),
       ])
     );
 
-    const listProductsResponse = await requestJson<any[]>('GET', '/products');
-    expect(listProductsResponse.status).toBe(200);
-    expect(listProductsResponse.json).toEqual(
+    const listProducts = await invokeLambda<any[]>(
+      productFunctionName,
+      buildEvent('GET', '/products')
+    );
+    expect(listProducts.status).toBe(200);
+    expect(listProducts.body).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ productId: createdProductId }),
       ])
     );
 
-    const listOrdersResponse = await requestJson<any[]>('GET', '/orders');
-    expect(listOrdersResponse.status).toBe(200);
-    expect(listOrdersResponse.json).toEqual(
+    const listOrders = await invokeLambda<any[]>(
+      orderFunctionName,
+      buildEvent('GET', '/orders')
+    );
+    expect(listOrders.status).toBe(200);
+    expect(listOrders.body).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ orderId: createdOrderId }),
       ])
