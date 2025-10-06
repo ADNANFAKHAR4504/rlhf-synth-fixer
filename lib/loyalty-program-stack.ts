@@ -21,7 +21,6 @@ import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-
 import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import * as path from 'path';
-import * as fs from 'fs';
 
 interface LoyaltyProgramStackProps {
   environmentSuffix: string;
@@ -136,22 +135,13 @@ export class LoyaltyProgramStack extends Construct {
     });
 
     // Package Lambda Functions
-    const pointCalcLambdaCode = fs.readFileSync(
-      path.join(__dirname, 'point-calc-lambda.js'),
-      'utf8'
-    );
     const pointCalcLambdaAsset = new DataArchiveFile(
       this,
       'point-calc-lambda-zip',
       {
         type: 'zip',
         outputPath: 'point-calc-lambda.zip',
-        source: [
-          {
-            content: pointCalcLambdaCode,
-            filename: 'index.js',
-          },
-        ],
+        sourceDir: path.join(__dirname, 'lambda', 'point-calc'),
       }
     );
 
@@ -167,7 +157,7 @@ export class LoyaltyProgramStack extends Construct {
       memorySize: 256,
       environment: {
         variables: {
-          TABLE_NAME: membersTable.name,
+          LOYALTY_TABLE_NAME: membersTable.name,
         },
       },
     });
@@ -233,22 +223,13 @@ export class LoyaltyProgramStack extends Construct {
     });
 
     // Stream Processing Lambda Asset
-    const streamProcessorLambdaCode = fs.readFileSync(
-      path.join(__dirname, 'stream-processor-lambda.js'),
-      'utf8'
-    );
     const streamProcessorLambdaAsset = new DataArchiveFile(
       this,
       'stream-processor-lambda-zip',
       {
         type: 'zip',
         outputPath: 'stream-processor-lambda.zip',
-        source: [
-          {
-            content: streamProcessorLambdaCode,
-            filename: 'index.js',
-          },
-        ],
+        sourceDir: path.join(__dirname, 'lambda', 'stream-processor'),
       }
     );
 
@@ -267,6 +248,7 @@ export class LoyaltyProgramStack extends Construct {
         memorySize: 256,
         environment: {
           variables: {
+            LOYALTY_TABLE_NAME: membersTable.name,
             SNS_TOPIC_ARN: notificationTopic.arn,
           },
         },
