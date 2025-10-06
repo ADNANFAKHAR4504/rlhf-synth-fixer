@@ -646,14 +646,13 @@ resource "aws_kms_key" "main" {
         }
         Action = [
           "kms:GenerateDataKey*",
-          "kms:Decrypt"
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:GetKeyPolicy",
+          "kms:ListAliases",
+          "kms:ListKeys"
         ]
         Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/*"
-          }
-        }
       }
     ]
   })
