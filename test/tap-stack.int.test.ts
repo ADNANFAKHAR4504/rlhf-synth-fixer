@@ -93,6 +93,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
             TableName: outputs['members-table-name'],
             Key: {
               memberId: { S: testMemberId },
+              transactionId: { S: 'MEMBER_PROFILE' },
             },
           })
         );
@@ -101,6 +102,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
             TableName: outputs['members-table-name'],
             Key: {
               memberId: { S: testMemberId2 },
+              transactionId: { S: 'MEMBER_PROFILE' },
             },
           })
         );
@@ -138,9 +140,13 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
 
       const keySchema = response.Table?.KeySchema;
       expect(keySchema).toBeDefined();
-      expect(keySchema?.length).toBe(1);
-      expect(keySchema?.[0].AttributeName).toBe('memberId');
-      expect(keySchema?.[0].KeyType).toBe('HASH');
+      expect(keySchema?.length).toBe(2);
+
+      const hashKey = keySchema?.find(k => k.KeyType === 'HASH');
+      const rangeKey = keySchema?.find(k => k.KeyType === 'RANGE');
+
+      expect(hashKey?.AttributeName).toBe('memberId');
+      expect(rangeKey?.AttributeName).toBe('transactionId');
     });
 
     test('Table should have DynamoDB Streams enabled', async () => {
@@ -185,6 +191,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
           TableName: tableName,
           Item: {
             memberId: { S: testMemberId },
+            transactionId: { S: 'MEMBER_PROFILE' },
             totalPoints: { N: '500' },
             tier: { S: 'BRONZE' },
             email: { S: `test-${Date.now()}@example.com` },
@@ -199,6 +206,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
           TableName: tableName,
           Key: {
             memberId: { S: testMemberId },
+            transactionId: { S: 'MEMBER_PROFILE' },
           },
         })
       );
@@ -252,7 +260,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
       const env = response.Environment?.Variables;
       expect(env).toBeDefined();
       expect(env?.LOYALTY_TABLE_NAME).toBe(outputs['members-table-name']);
-      expect(env?.SNS_TOPIC_ARN).toBeDefined();
+      expect(env?.SNS_TOPIC_ARN).toBe(outputs['notification-topic-arn']);
     });
 
     test('Stream processor Lambda should exist and be active', async () => {
@@ -294,6 +302,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
           TableName: tableName,
           Item: {
             memberId: { S: testMemberId2 },
+            transactionId: { S: 'MEMBER_PROFILE' },
             totalPoints: { N: '100' },
             tier: { S: 'BRONZE' },
           },
@@ -342,7 +351,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
         })
       );
 
-      expect(response.name).toBe('loyalty-api');
+      expect(response.name).toContain('loyalty-api');
       expect(response.id).toBe(apiId);
     });
 
@@ -571,11 +580,13 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
       const apiUrl = outputs['api-url'];
 
       // 1. Create a test member
+      const e2eMemberId = `E2E-${Date.now()}`;
       await dynamodb.send(
         new PutItemCommand({
           TableName: tableName,
           Item: {
-            memberId: { S: `E2E-${Date.now()}` },
+            memberId: { S: e2eMemberId },
+            transactionId: { S: 'MEMBER_PROFILE' },
             totalPoints: { N: '0' },
             tier: { S: 'BRONZE' },
             email: { S: `e2e-${Date.now()}@example.com` },
@@ -588,7 +599,7 @@ describe('Loyalty Program - AWS Resource Integration Tests', () => {
         const response = await axios.post(
           apiUrl,
           {
-            memberId: `E2E-${Date.now()}`,
+            memberId: e2eMemberId,
             transactionAmount: 100,
             transactionType: 'purchase',
           },

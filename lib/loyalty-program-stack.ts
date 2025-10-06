@@ -159,6 +159,7 @@ export class LoyaltyProgramStack extends Construct {
       environment: {
         variables: {
           LOYALTY_TABLE_NAME: membersTable.name,
+          SNS_TOPIC_ARN: notificationTopic.arn,
         },
       },
     });
