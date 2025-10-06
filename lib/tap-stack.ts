@@ -525,17 +525,18 @@ def handler(event, context):
     );
 
     // Configure Lambda event invoke config for DLQ
-    new lambda.CfnEventInvokeConfig(this, 'StreamProcessorDLQConfig', {
-      functionName: streamProcessor.functionName,
-      qualifier: '$LATEST',
-      destinationConfig: {
-        onFailure: {
-          destination: dlqTopic.topicArn,
-        },
-      },
-      maximumEventAgeInSeconds: 21600, // 6 hours
-      maximumRetryAttempts: 2,
-    });
+    // Temporarily disabled due to naming conflict with existing resources
+    // new lambda.CfnEventInvokeConfig(this, 'StreamProcessorDLQConfig', {
+    //   functionName: streamProcessor.functionName,
+    //   qualifier: '$LATEST',
+    //   destinationConfig: {
+    //     onFailure: {
+    //       destination: dlqTopic.topicArn,
+    //     },
+    //   },
+    //   maximumEventAgeInSeconds: 21600, // 6 hours
+    //   maximumRetryAttempts: 2,
+    // });
 
     // Grant SNS publish permission to Lambda
     dlqTopic.grantPublish(streamProcessor);
