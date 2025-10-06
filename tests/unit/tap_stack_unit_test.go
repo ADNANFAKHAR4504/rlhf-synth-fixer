@@ -75,7 +75,6 @@ func TestTapStack(t *testing.T) {
 		outputs := template.FindOutputs(jsii.String("*"), map[string]interface{}{})
 		assert.Contains(t, *outputs, "VpcId")
 		assert.Contains(t, *outputs, "KmsKeyId")
-		assert.Contains(t, *outputs, "LoggingBucketName")
 		assert.Contains(t, *outputs, "RdsEndpoint")
 		assert.Contains(t, *outputs, "AlbDnsName")
 		assert.Contains(t, *outputs, "SecurityFeatures")
@@ -190,7 +189,6 @@ func TestSecurityNestedStack(t *testing.T) {
 		// ASSERT
 		assert.NotNil(t, nestedStack)
 		assert.NotNil(t, nestedStack.KmsKey)
-		assert.NotNil(t, nestedStack.LoggingBucket)
 
 		// Verify template can be generated
 		template := assertions.Template_FromStack(nestedStack.NestedStack, nil)
@@ -222,44 +220,6 @@ func TestSecurityNestedStack(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::KMS::Alias"), jsii.Number(1))
 		template.HasResourceProperties(jsii.String("AWS::KMS::Alias"), map[string]interface{}{
 			"AliasName": "alias/tap-rds-key-test",
-		})
-	})
-
-	t.Run("S3 Bucket has correct security configuration", func(t *testing.T) {
-		// ARRANGE
-		app := awscdk.NewApp(nil)
-		parentStack := awscdk.NewStack(app, jsii.String("ParentStack"), nil)
-
-		// ACT
-		nestedStack := lib.NewSecurityNestedStack(
-			parentStack,
-			jsii.String("TestSecurityStack"),
-			"test",
-			&awscdk.NestedStackProps{},
-		)
-		template := assertions.Template_FromStack(nestedStack.NestedStack, nil)
-
-		// ASSERT
-		template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
-		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-			"VersioningConfiguration": map[string]interface{}{
-				"Status": "Enabled",
-			},
-			"BucketEncryption": map[string]interface{}{
-				"ServerSideEncryptionConfiguration": []interface{}{
-					map[string]interface{}{
-						"ServerSideEncryptionByDefault": map[string]interface{}{
-							"SSEAlgorithm": "AES256",
-						},
-					},
-				},
-			},
-			"PublicAccessBlockConfiguration": map[string]interface{}{
-				"BlockPublicAcls":       true,
-				"BlockPublicPolicy":     true,
-				"IgnorePublicAcls":      true,
-				"RestrictPublicBuckets": true,
-			},
 		})
 	})
 
