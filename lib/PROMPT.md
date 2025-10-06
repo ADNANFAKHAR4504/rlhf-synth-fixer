@@ -1,4 +1,3 @@
-# AWS CDK Go Infrastructure Prompt
 
 Using AWS CDK with Go, create a secure infrastructure for a critical web application.
 Deploy all resources to the us-east-1 region. Please focus on security best practices throughout the stack.
@@ -9,12 +8,12 @@ Set up a new VPC.
 Include a VPC endpoint for DynamoDB to ensure private access.
 
 2. IAM Roles and Policies:
-Follow the principle of least privilege. Do not use wildcard `*` permissions in any IAM policies.
+Follow the principle of least privilege. Do not use wildcard(*) permissions in any IAM policies.
 Create a unique and narrowly scoped IAM role for each Lambda function.
 
 3. Security Groups:
 All security groups must have a clear Description.
-Ingress rules should be restricted to specific IP addresses, not open to the world `0.0.0.0/0`.
+Ingress rules should be restricted to specific IP addresses, not open to the world(0.0.0.0/0).
 Egress rules must also be restricted to only necessary outbound traffic.
 
 4. Data Security:
