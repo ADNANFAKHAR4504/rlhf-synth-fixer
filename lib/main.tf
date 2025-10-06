@@ -10,7 +10,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "prod-infra1"
+  default     = "prod-infra2"
 }
 
 variable "environment" {
@@ -650,7 +650,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "proddb"
   username = "admin"
-  password = "changeme123!" # Use AWS Secrets Manager in production
+  password = "changeme123!" 
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name

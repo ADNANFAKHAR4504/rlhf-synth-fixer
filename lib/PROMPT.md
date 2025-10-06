@@ -1,25 +1,33 @@
-ROLE: You are a senior Terraform engineer.
+Generate Terraform code in HCL that provisions a production-ready AWS environment with the following requirements. The solution must be split into only two files:
 
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+provider.tf → contains the AWS provider configuration and remote backend (if required).
 
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+main.tf → contains all AWS resources.
 
-DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+Requirements:
+Networking
+Create a VPC with CIDR block 10.0.0.0/16 in region us-west-2.
+Create public and private subnets across two availability zones.
+Deploy an Internet Gateway and attach it to the VPC.
+Create a NAT Gateway in each public subnet.
+Configure route tables and associate them with subnets.
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
+Compute & Scaling
+Deploy EC2 instances in each private subnet.
+Attach them to an Application Load Balancer (ALB).
+Configure an Auto Scaling Group for EC2.
+Set up CloudWatch Alarms to monitor CPU utilization.
+
+Database
+Create an RDS instance with Multi-AZ deployment.
+Ensure daily automated backups using AWS Lambda.
+Storage & Content Delivery
+Deploy an S3 bucket with versioning enabled.
+Configure a CloudFront distribution linked to the S3 bucket.
+
+Security & Governance
+Create IAM roles and policies needed for EC2, RDS, Lambda, and CloudWatch.
+Define Security Groups with specific inbound/outbound rules.
+Enable VPC Flow Logs.
+Configure a VPN connection for secure access to the on-premises network.
+Enable CloudTrail to log all API activity.
