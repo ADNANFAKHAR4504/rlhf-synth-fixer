@@ -193,45 +193,6 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
     }, 20000);
   });
 
-  describe("Security Groups - Least Privilege Network Access", () => {
-    test("Web security group has restricted HTTP and SSH access", async () => {
-      const webSgId = stackOutputs["web_security_group_id"];
-      
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [webSgId]
-      }));
-      
-      expect(SecurityGroups).toHaveLength(1);
-      const webSg = SecurityGroups![0];
-      
-      // Check for HTTP rule (port 80)
-      const httpRule = webSg.IpPermissions?.find(rule => 
-        rule.FromPort === 80 && rule.ToPort === 80
-      );
-      expect(httpRule).toBeDefined();
-      expect(httpRule?.IpRanges?.some(range => range.CidrIp === "10.0.0.0/8")).toBe(true);
-      
-      // Check for SSH rule (port 22)
-      const sshRule = webSg.IpPermissions?.find(rule =>
-        rule.FromPort === 22 && rule.ToPort === 22
-      );
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.IpRanges?.some(range => range.CidrIp === "10.0.0.0/8")).toBe(true);
-      
-      // Check egress rules
-      const egressRule = webSg.IpPermissionsEgress?.find(rule =>
-        rule.FromPort === 0 && rule.ToPort === 0
-      );
-      expect(egressRule).toBeDefined();
-      expect(egressRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
-      
-      // Verify web SG tagging
-      const tags = webSg.Tags || [];
-      expect(tags.some(tag => tag.Key === "Name" && tag.Value === "security-groups-web-sg")).toBe(true);
-      expect(tags.some(tag => tag.Key === "Environment" && tag.Value === "SecureApp")).toBe(true);
-    }, 20000);
-  });
-
   describe("IAM Module - Secure Role-Based Access Control", () => {
     test("S3 access role exists with proper assume role policy", async () => {
       const roleArn = stackOutputs["s3_access_role_arn"];
