@@ -1,264 +1,183 @@
-### Reasoning Trace
----
+# AWS CDK Infrastructure Response
 
-The user wants me to create a comprehensive AWS CDK Python script that sets up a secure and scalable AWS infrastructure. Let me break down the requirements:
+Based on the requirements, here's a comprehensive Python CDK solution that creates a secure and scalable AWS infrastructure setup with high availability.
 
-1. **Highly available architecture**:
-   - EC2 instances (multiple for HA)
-   - RDS (with Multi-AZ for HA)
-   - Elastic Load Balancer (Application Load Balancer)
+## Infrastructure Components
 
-2. **IAM roles with least-privilege**:
-   - Various roles with specific permissions
-   - One specific role with read-only EC2 permissions
+The solution includes:
+- VPC with public and private subnets across multiple AZs
+- EC2 instances with Auto Scaling Group for high availability
+- RDS Multi-AZ database for data persistence
+- Application Load Balancer for traffic distribution
+- S3 bucket with versioning and encryption
+- Lambda function for monitoring
+- IAM roles with least privilege access
+- Security groups with minimal exposure
+- CloudWatch monitoring and logging
+- Proper resource tagging
 
-3. **S3 bucket**:
-   - Versioning enabled
-   - Proper security (encryption, bucket policies)
+## Code Implementation
 
-4. **AWS SDK (boto3)**:
-   - Use boto3 to create some resources programmatically
-   - Lambda function for monitoring
-
-5. **Security groups**:
-   - Minimal exposure
-   - Properly configured
-
-6. **Tags and logging**:
-   - Proper tagging strategy
-   - CloudWatch logging
-
-7. **Output requirements**:
-   - Stack verification results
-   - Security best practices
-   - Clear logs of all actions
-
-I'll create a comprehensive CDK application that includes all these components.
-### Answer 
----
-
-I'll help you create a secure and scalable AWS infrastructure using Python CDK. Here's a comprehensive solution that addresses all your requirements:
-
-## AWS CDK Infrastructure Script
+### lib/tap_stack.py
 
 ```python
-#!/usr/bin/env python3
-import os
-import json
-from typing import Dict, List
+"""tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for 
+the TAP (Test Automation Platform) project.
+It orchestrates the instantiation of other resource-specific stacks and 
+manages environment-specific configurations.
+"""
+
+from typing import Optional
+import aws_cdk as cdk
 from aws_cdk import (
-    App,
     Stack,
-    Environment,
     Duration,
     RemovalPolicy,
     CfnOutput,
-    Tags,
     aws_ec2 as ec2,
     aws_rds as rds,
     aws_elasticloadbalancingv2 as elbv2,
-    aws_elasticloadbalancingv2_targets as targets,
-    aws_iam as iam,
+    aws_autoscaling as autoscaling,
     aws_s3 as s3,
     aws_lambda as _lambda,
+    aws_iam as iam,
     aws_logs as logs,
     aws_cloudwatch as cloudwatch,
-    aws_kms as kms,
-    aws_autoscaling as autoscaling,
+    aws_events as events,
+    aws_events_targets as targets,
 )
 from constructs import Construct
-import boto3
-import logging
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
-class SecureScalableStack(Stack):
-    """Main CDK Stack for secure and scalable AWS infrastructure"""
+class TapStackProps(cdk.StackProps):
+    """
+    TapStackProps defines the properties for the TapStack CDK stack.
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    Args:
+      environment_suffix (Optional[str]): An optional suffix to identify the 
+      deployment environment (e.g., 'dev', 'prod').
+      **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+
+    Attributes:
+      environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+    """
+
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
+
+
+class TapStack(cdk.Stack):
+    """
+    Represents the main CDK stack for the Tap project.
+
+    This stack creates a comprehensive AWS infrastructure with:
+    - VPC with public/private subnets
+    - EC2 Auto Scaling Group with Application Load Balancer
+    - RDS Multi-AZ database
+    - S3 bucket with encryption and versioning
+    - Lambda monitoring function
+    - IAM roles with least privilege
+    - Security groups and CloudWatch monitoring
+    """
+
+    def __init__(
+            self,
+            scope: Construct,
+            construct_id: str, 
+            props: Optional[TapStackProps] = None, 
+            **kwargs
+    ):
         super().__init__(scope, construct_id, **kwargs)
-        
-        logger.info("Starting infrastructure deployment...")
-        
-        # Create KMS key for encryption
-        self.kms_key = self._create_kms_key()
-        
+
+        # Get environment suffix from props, context, or use 'dev' as default
+        environment_suffix = (
+            props.environment_suffix if props else None
+        ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
         # Create VPC with public and private subnets across multiple AZs
-        self.vpc = self._create_vpc()
-        
-        # Create security groups
-        self.security_groups = self._create_security_groups()
-        
-        # Create IAM roles
-        self.iam_roles = self._create_iam_roles()
-        
-        # Create S3 bucket with versioning and encryption
-        self.s3_bucket = self._create_s3_bucket()
-        
-        # Create RDS instance with Multi-AZ
-        self.rds_instance = self._create_rds_instance()
-        
-        # Create Auto Scaling Group with EC2 instances
-        self.asg = self._create_auto_scaling_group()
-        
-        # Create Application Load Balancer
-        self.alb = self._create_load_balancer()
-        
-        # Create Lambda function for monitoring
-        self.monitoring_lambda = self._create_monitoring_lambda()
-        
-        # Add tags to all resources
-        self._apply_tags()
-        
-        # Create outputs
-        self._create_outputs()
-        
-        logger.info("Infrastructure deployment completed successfully!")
-
-    def _create_kms_key(self) -> kms.Key:
-        """Create KMS key for encryption"""
-        logger.info("Creating KMS key for encryption...")
-        
-        key = kms.Key(
-            self, "MasterKey",
-            description="Master key for infrastructure encryption",
-            enable_key_rotation=True,
-            removal_policy=RemovalPolicy.RETAIN,
-            policy=iam.PolicyDocument(
-                statements=[
-                    iam.PolicyStatement(
-                        principals=[iam.AccountRootPrincipal()],
-                        actions=["kms:*"],
-                        resources=["*"]
-                    )
-                ]
-            )
-        )
-        
-        logger.info("✓ KMS key created successfully")
-        return key
-
-    def _create_vpc(self) -> ec2.Vpc:
-        """Create VPC with public and private subnets"""
-        logger.info("Creating VPC with multi-AZ setup...")
-        
         vpc = ec2.Vpc(
-            self, "SecureVPC",
-            max_azs=2,  # Multi-AZ for high availability
-            nat_gateways=2,  # NAT gateway in each AZ
+            self,
+            f"VPC{environment_suffix}",
+            max_azs=2,
+            nat_gateways=1,
             subnet_configuration=[
                 ec2.SubnetConfiguration(
+                    name=f"Public{environment_suffix}",
                     subnet_type=ec2.SubnetType.PUBLIC,
-                    name="Public",
                     cidr_mask=24
                 ),
                 ec2.SubnetConfiguration(
+                    name=f"Private{environment_suffix}",
                     subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-                    name="Private",
                     cidr_mask=24
                 ),
                 ec2.SubnetConfiguration(
+                    name=f"Database{environment_suffix}",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    name="Database",
                     cidr_mask=24
                 )
-            ],
-            enable_dns_hostnames=True,
-            enable_dns_support=True
+            ]
         )
-        
-        # Enable VPC Flow Logs
-        vpc.add_flow_log(
-            "VPCFlowLog",
-            destination=ec2.FlowLogDestination.to_cloud_watch_logs(
-                log_group=logs.LogGroup(
-                    self, "VPCFlowLogGroup",
-                    retention=logs.RetentionDays.THIRTY_DAYS,
-                    encryption_key=self.kms_key
-                )
-            )
-        )
-        
-        logger.info("✓ VPC created with 2 AZs and flow logs enabled")
-        return vpc
 
-    def _create_security_groups(self) -> Dict[str, ec2.SecurityGroup]:
-        """Create security groups with minimal exposure"""
-        logger.info("Creating security groups...")
-        
-        security_groups = {}
-        
-        # ALB Security Group
-        security_groups['alb'] = ec2.SecurityGroup(
-            self, "ALBSecurityGroup",
-            vpc=self.vpc,
+        # Create security groups with minimal exposure
+        alb_sg = ec2.SecurityGroup(
+            self,
+            f"ALBSecurityGroup{environment_suffix}",
+            vpc=vpc,
             description="Security group for Application Load Balancer",
             allow_all_outbound=False
         )
-        security_groups['alb'].add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(443),
-            description="Allow HTTPS from anywhere"
+        alb_sg.add_ingress_rule(
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(80),
+            "Allow HTTP traffic from anywhere"
         )
-        security_groups['alb'].add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(80),
-            description="Allow HTTP from anywhere (redirect to HTTPS)"
+        alb_sg.add_egress_rule(
+            ec2.Peer.ipv4(vpc.vpc_cidr_block),
+            ec2.Port.tcp(8080),
+            "Allow traffic to EC2 instances"
         )
-        
-        # EC2 Security Group
-        security_groups['ec2'] = ec2.SecurityGroup(
-            self, "EC2SecurityGroup",
-            vpc=self.vpc,
+
+        ec2_sg = ec2.SecurityGroup(
+            self,
+            f"EC2SecurityGroup{environment_suffix}",
+            vpc=vpc,
             description="Security group for EC2 instances",
             allow_all_outbound=True
         )
-        security_groups['ec2'].add_ingress_rule(
-            peer=security_groups['alb'],
-            connection=ec2.Port.tcp(80),
-            description="Allow HTTP from ALB only"
+        ec2_sg.add_ingress_rule(
+            alb_sg,
+            ec2.Port.tcp(8080),
+            "Allow traffic from ALB"
         )
-        
-        # RDS Security Group
-        security_groups['rds'] = ec2.SecurityGroup(
-            self, "RDSSecurityGroup",
-            vpc=self.vpc,
+
+        rds_sg = ec2.SecurityGroup(
+            self,
+            f"RDSSecurityGroup{environment_suffix}",
+            vpc=vpc,
             description="Security group for RDS database",
             allow_all_outbound=False
         )
-        security_groups['rds'].add_ingress_rule(
-            peer=security_groups['ec2'],
-            connection=ec2.Port.tcp(3306),
-            description="Allow MySQL from EC2 instances only"
+        rds_sg.add_ingress_rule(
+            ec2_sg,
+            ec2.Port.tcp(3306),
+            "Allow MySQL traffic from EC2 instances"
         )
-        
-        logger.info("✓ Security groups created with least privilege access")
-        return security_groups
 
-    def _create_iam_roles(self) -> Dict[str, iam.Role]:
-        """Create IAM roles with least-privilege access"""
-        logger.info("Creating IAM roles...")
-        
-        roles = {}
-        
-        # EC2 Instance Role
-        roles['ec2'] = iam.Role(
-            self, "EC2InstanceRole",
+        # Create IAM role for EC2 instances with minimal permissions
+        ec2_role = iam.Role(
+            self,
+            f"EC2Role{environment_suffix}",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="Role for EC2 instances",
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
             ]
         )
-        
-        # Add S3 read permissions for application
-        roles['ec2'].add_to_policy(
+
+        # Add custom policy for S3 access (read-only to our bucket)
+        ec2_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=[
@@ -266,286 +185,227 @@ class SecureScalableStack(Stack):
                     "s3:ListBucket"
                 ],
                 resources=[
-                    self.s3_bucket.bucket_arn,
-                    f"{self.s3_bucket.bucket_arn}/*"
+                    f"arn:aws:s3:::tap-secure-bucket-{environment_suffix}",
+                    f"arn:aws:s3:::tap-secure-bucket-{environment_suffix}/*"
                 ]
             )
         )
-        
-        # Read-only EC2 Role (as requested)
-        roles['ec2_readonly'] = iam.Role(
-            self, "EC2ReadOnlyRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="Read-only access to EC2 resources",
+
+        # Create read-only EC2 role as requested
+        ec2_readonly_role = iam.Role(
+            self,
+            f"EC2ReadOnlyRole{environment_suffix}",
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2ReadOnlyAccess")
             ]
         )
-        
-        # Lambda Monitoring Role
-        roles['lambda_monitoring'] = iam.Role(
-            self, "LambdaMonitoringRole",
+
+        # Create Launch Template for EC2 instances
+        user_data = ec2.UserData.for_linux()
+        user_data.add_commands(
+            "yum update -y",
+            "yum install -y python3 python3-pip",
+            "pip3 install flask boto3",
+            "cat > /home/ec2-user/app.py << 'EOF'",
+            "from flask import Flask, jsonify",
+            "import boto3",
+            "import logging",
+            "",
+            "app = Flask(__name__)",
+            "logging.basicConfig(level=logging.INFO)",
+            "",
+            "@app.route('/')",
+            "def health_check():",
+            "    return jsonify({'status': 'healthy', 'message': 'TAP Infrastructure Running'})",
+            "",
+            "@app.route('/health')",
+            "def detailed_health():",
+            "    try:",
+            "        # Simple health check",
+            "        return jsonify({",
+            "            'status': 'healthy',",
+            "            'timestamp': str(__import__('datetime').datetime.now()),",
+            "            'environment': 'AWS EC2'",
+            "        })",
+            "    except Exception as e:",
+            "        return jsonify({'status': 'error', 'message': str(e)}), 500",
+            "",
+            "if __name__ == '__main__':",
+            "    app.run(host='0.0.0.0', port=8080)",
+            "EOF",
+            "python3 /home/ec2-user/app.py &"
+        )
+
+        launch_template = ec2.LaunchTemplate(
+            self,
+            f"LaunchTemplate{environment_suffix}",
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.BURSTABLE3,
+                ec2.InstanceSize.MICRO
+            ),
+            machine_image=ec2.AmazonLinuxImage(
+                generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
+            ),
+            security_group=ec2_sg,
+            role=ec2_role,
+            user_data=user_data
+        )
+
+        # Create Auto Scaling Group
+        asg = autoscaling.AutoScalingGroup(
+            self,
+            f"AutoScalingGroup{environment_suffix}",
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            launch_template=launch_template,
+            min_capacity=1,
+            max_capacity=3,
+            desired_capacity=2,
+            health_check=autoscaling.HealthCheck.elb(Duration.minutes(5))
+        )
+
+        # Create Application Load Balancer
+        alb = elbv2.ApplicationLoadBalancer(
+            self,
+            f"ApplicationLoadBalancer{environment_suffix}",
+            vpc=vpc,
+            internet_facing=True,
+            security_group=alb_sg,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
+        )
+
+        # Create Target Group and Listener
+        target_group = elbv2.ApplicationTargetGroup(
+            self,
+            f"TargetGroup{environment_suffix}",
+            vpc=vpc,
+            port=8080,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            target_type=elbv2.TargetType.INSTANCE,
+            health_check=elbv2.HealthCheck(
+                enabled=True,
+                healthy_http_codes="200",
+                path="/health",
+                port="8080"
+            )
+        )
+
+        alb.add_listener(
+            f"ALBListener{environment_suffix}",
+            port=80,
+            default_target_groups=[target_group]
+        )
+
+        # Attach Auto Scaling Group to Target Group
+        asg.attach_to_application_target_group(target_group)
+
+        # Create RDS Subnet Group
+        db_subnet_group = rds.SubnetGroup(
+            self,
+            f"DBSubnetGroup{environment_suffix}",
+            description="Subnet group for RDS database",
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
+        )
+
+        # Create RDS Multi-AZ Database
+        database = rds.DatabaseInstance(
+            self,
+            f"Database{environment_suffix}",
+            engine=rds.DatabaseInstanceEngine.mysql(
+                version=rds.MysqlEngineVersion.VER_8_0
+            ),
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.BURSTABLE3,
+                ec2.InstanceSize.MICRO
+            ),
+            vpc=vpc,
+            subnet_group=db_subnet_group,
+            security_groups=[rds_sg],
+            database_name="tapdb",
+            credentials=rds.Credentials.from_generated_secret("admin"),
+            multi_az=True,
+            storage_encrypted=True,
+            backup_retention=Duration.days(1),
+            deletion_protection=False,
+            removal_policy=RemovalPolicy.DESTROY,
+            allocated_storage=20,
+            storage_type=rds.StorageType.GP3
+        )
+
+        # Create S3 bucket with versioning and encryption
+        s3_bucket = s3.Bucket(
+            self,
+            f"SecureBucket{environment_suffix}",
+            bucket_name=f"tap-secure-bucket-{environment_suffix}",
+            versioned=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            server_access_logs_prefix="access-logs/"
+        )
+
+        # Create Lambda execution role
+        lambda_role = iam.Role(
+            self,
+            f"LambdaRole{environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="Role for monitoring Lambda function",
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
             ]
         )
-        
-        # Add CloudWatch and EC2 read permissions
-        roles['lambda_monitoring'].add_to_policy(
+
+        # Add CloudWatch permissions to Lambda role
+        lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=[
                     "cloudwatch:PutMetricData",
                     "ec2:DescribeInstances",
                     "rds:DescribeDBInstances",
+                    "elasticloadbalancing:DescribeLoadBalancers",
                     "elasticloadbalancing:DescribeTargetHealth"
                 ],
                 resources=["*"]
             )
         )
-        
-        logger.info("✓ IAM roles created with least-privilege access")
-        return roles
 
-    def _create_s3_bucket(self) -> s3.Bucket:
-        """Create S3 bucket with versioning and encryption"""
-        logger.info("Creating S3 bucket with security features...")
-        
-        bucket = s3.Bucket(
-            self, "SecureApplicationBucket",
-            bucket_name=f"secure-app-bucket-{self.account}-{self.region}",
-            versioned=True,
-            encryption=s3.BucketEncryption.KMS,
-            encryption_key=self.kms_key,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,
-            lifecycle_rules=[
-                s3.LifecycleRule(
-                    id="DeleteOldVersions",
-                    noncurrent_version_expiration=Duration.days(90),
-                    abort_incomplete_multipart_upload_after=Duration.days(7)
-                )
-            ],
-            server_access_logs_bucket=None,  # Would create separate logging bucket in production
-            enforce_ssl=True
-        )
-        
-        # Add bucket policy to enforce SSL
-        bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.DENY,
-                principals=[iam.AnyPrincipal()],
-                actions=["s3:*"],
-                resources=[
-                    bucket.bucket_arn,
-                    f"{bucket.bucket_arn}/*"
-                ],
-                conditions={
-                    "Bool": {"aws:SecureTransport": "false"}
-                }
-            )
-        )
-        
-        logger.info("✓ S3 bucket created with versioning, encryption, and SSL enforcement")
-        return bucket
-
-    def _create_rds_instance(self) -> rds.DatabaseInstance:
-        """Create RDS instance with Multi-AZ for high availability"""
-        logger.info("Creating RDS instance with Multi-AZ...")
-        
-        # Create DB subnet group
-        db_subnet_group = rds.SubnetGroup(
-            self, "DBSubnetGroup",
-            description="Subnet group for RDS",
-            vpc=self.vpc,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-            )
-        )
-        
-        # Create parameter group for MySQL
-        parameter_group = rds.ParameterGroup(
-            self, "DBParameterGroup",
-            engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0
-            ),
-            parameters={
-                "slow_query_log": "1",
-                "log_queries_not_using_indexes": "1"
-            }
-        )
-        
-        # Create RDS instance
-        db_instance = rds.DatabaseInstance(
-            self, "SecureDatabase",
-            engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0
-            ),
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.T3,
-                ec2.InstanceSize.MICRO
-            ),
-            vpc=self.vpc,
-            subnet_group=db_subnet_group,
-            security_groups=[self.security_groups['rds']],
-            multi_az=True,  # Enable Multi-AZ for high availability
-            allocated_storage=20,
-            storage_encrypted=True,
-            storage_encryption_key=self.kms_key,
-            backup_retention=Duration.days(7),
-            deletion_protection=True,
-            cloudwatch_logs_exports=["error", "general", "slowquery"],
-            auto_minor_version_upgrade=True,
-            parameter_group=parameter_group,
-            credentials=rds.Credentials.from_generated_secret("admin")
-        )
-        
-        logger.info("✓ RDS instance created with Multi-AZ, encryption, and automated backups")
-        return db_instance
-
-    def _create_auto_scaling_group(self) -> autoscaling.AutoScalingGroup:
-        """Create Auto Scaling Group with EC2 instances"""
-        logger.info("Creating Auto Scaling Group...")
-        
-        # Create user data script
-        user_data = ec2.UserData.for_linux()
-        user_data.add_commands(
-            "yum update -y",
-            "yum install -y httpd",
-            "systemctl start httpd",
-            "systemctl enable httpd",
-            "echo '<h1>Secure Scalable App</h1>' > /var/www/html/index.html",
-            # Install CloudWatch agent
-            "wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm",
-            "rpm -U ./amazon-cloudwatch-agent.rpm"
-        )
-        
-        # Create launch template
-        launch_template = ec2.LaunchTemplate(
-            self, "AppLaunchTemplate",
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.T3,
-                ec2.InstanceSize.MICRO
-            ),
-            machine_image=ec2.MachineImage.latest_amazon_linux2(),
-            user_data=user_data,
-            role=self.iam_roles['ec2'],
-            security_group=self.security_groups['ec2'],
-            block_devices=[
-                ec2.BlockDevice(
-                    device_name="/dev/xvda",
-                    volume=ec2.BlockDeviceVolume.ebs(
-                        volume_size=20,
-                        encrypted=True,
-                        kms_key=self.kms_key,
-                        delete_on_termination=True
-                    )
-                )
-            ]
-        )
-        
-        # Create Auto Scaling Group
-        asg = autoscaling.AutoScalingGroup(
-            self, "AppAutoScalingGroup",
-            vpc=self.vpc,
-            launch_template=launch_template,
-            min_capacity=2,  # Minimum 2 instances for high availability
-            max_capacity=6,
-            desired_capacity=2,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-            ),
-            health_check=autoscaling.HealthCheck.elb(
-                grace=Duration.minutes(5)
-            )
-        )
-        
-        # Add scaling policies
-        asg.scale_on_cpu_utilization(
-            "CpuScaling",
-            target_utilization_percent=70
-        )
-        
-        logger.info("✓ Auto Scaling Group created with 2-6 instances")
-        return asg
-
-    def _create_load_balancer(self) -> elbv2.ApplicationLoadBalancer:
-        """Create Application Load Balancer"""
-        logger.info("Creating Application Load Balancer...")
-        
-        # Create ALB
-        alb = elbv2.ApplicationLoadBalancer(
-            self, "AppLoadBalancer",
-            vpc=self.vpc,
-            internet_facing=True,
-            security_group=self.security_groups['alb'],
-            drop_invalid_header_fields=True,
-            deletion_protection=True
-        )
-        
-        # Create target group
-        target_group = elbv2.ApplicationTargetGroup(
-            self, "AppTargetGroup",
-            vpc=self.vpc,
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            targets=[self.asg],
-            health_check=elbv2.HealthCheck(
-                path="/",
-                healthy_http_codes="200",
-                interval=Duration.seconds(30),
-                timeout=Duration.seconds(5),
-                healthy_threshold_count=2,
-                unhealthy_threshold_count=3
-            ),
-            deregistration_delay=Duration.seconds(30)
-        )
-        
-        # Add HTTP listener (redirect to HTTPS in production)
-        alb.add_listener(
-            "HttpListener",
-            port=80,
-            default_target_groups=[target_group]
-        )
-        
-        # Enable ALB access logs (would configure S3 bucket in production)
-        # alb.log_access_logs(bucket=log_bucket)
-        
-        logger.info("✓ Application Load Balancer created and configured")
-        return alb
-
-    def _create_monitoring_lambda(self) -> _lambda.Function:
-        """Create Lambda function for monitoring"""
-        logger.info("Creating monitoring Lambda function...")
-        
-        # Lambda function code
-        lambda_code = """
+        # Create Lambda function for monitoring
+        monitoring_lambda = _lambda.Function(
+            self,
+            f"MonitoringLambda{environment_suffix}",
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            handler="index.lambda_handler",
+            role=lambda_role,
+            timeout=Duration.minutes(5),
+            code=_lambda.Code.from_inline("""
 import json
 import boto3
-import os
+import logging
 from datetime import datetime
 
-ec2 = boto3.client('ec2')
-rds = boto3.client('rds')
-elb = boto3.client('elbv2')
-cloudwatch = boto3.client('cloudwatch')
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-def handler(event, context):
-    print("Starting infrastructure monitoring...")
+def lambda_handler(event, context):
+    cloudwatch = boto3.client('cloudwatch')
+    ec2 = boto3.client('ec2')
     
-    # Monitor EC2 instances
     try:
-        ec2_response = ec2.describe_instances(
-            Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
-        )
-        running_instances = sum(len(r['Instances']) for r in ec2_response['Reservations'])
-        print(f"Running EC2 instances: {running_instances}")
+        # Get EC2 instance information
+        instances = ec2.describe_instances()
+        running_instances = 0
         
-        # Send metric to CloudWatch
+        for reservation in instances['Reservations']:
+            for instance in reservation['Instances']:
+                if instance['State']['Name'] == 'running':
+                    running_instances += 1
+        
+        # Put custom metric to CloudWatch
         cloudwatch.put_metric_data(
-            Namespace='CustomApp/Monitoring',
+            Namespace='TAP/Infrastructure',
             MetricData=[
                 {
                     'MetricName': 'RunningInstances',
@@ -555,350 +415,172 @@ def handler(event, context):
                 }
             ]
         )
+        
+        logger.info(f"Successfully published metrics. Running instances: {running_instances}")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Monitoring completed successfully',
+                'running_instances': running_instances,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        }
+        
     except Exception as e:
-        print(f"Error monitoring EC2: {str(e)}")
-    
-    # Monitor RDS instances
-    try:
-        rds_response = rds.describe_db_instances()
-        available_databases = sum(1 for db in rds_response['DBInstances'] 
-                                if db['DBInstanceStatus'] == 'available')
-        print(f"Available RDS instances: {available_databases}")
-        
-        cloudwatch.put_metric_data(
-            Namespace='CustomApp/Monitoring',
-            MetricData=[
-                {
-                    'MetricName': 'AvailableDatabases',
-                    'Value': available_databases,
-                    'Unit': 'Count',
-                    'Timestamp': datetime.utcnow()
-                }
-            ]
+        logger.error(f"Error in monitoring function: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        }
+""")
         )
-    except Exception as e:
-        print(f"Error monitoring RDS: {str(e)}")
-    
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Monitoring completed successfully')
-    }
-"""
-        
-        # Create Lambda function
-        monitoring_lambda = _lambda.Function(
-            self, "MonitoringFunction",
-            runtime=_lambda.Runtime.PYTHON_3_9,
-            code=_lambda.Code.from_inline(lambda_code),
-            handler="index.handler",
-            timeout=Duration.seconds(60),
-            memory_size=256,
-            environment={
-                "REGION": self.region
-            },
-            role=self.iam_roles['lambda_monitoring'],
-            tracing=_lambda.Tracing.ACTIVE,
-            log_retention=logs.RetentionDays.SEVEN_DAYS
-        )
-        
-        # Create CloudWatch Event to trigger Lambda every 5 minutes
-        from aws_cdk import aws_events as events
-        from aws_cdk import aws_events_targets as events_targets
-        
-        rule = events.Rule(
-            self, "MonitoringSchedule",
+
+        # Create CloudWatch Event Rule to trigger Lambda every 5 minutes
+        monitoring_rule = events.Rule(
+            self,
+            f"MonitoringRule{environment_suffix}",
             schedule=events.Schedule.rate(Duration.minutes(5))
         )
-        rule.add_target(events_targets.LambdaFunction(monitoring_lambda))
-        
-        logger.info("✓ Monitoring Lambda function created with 5-minute schedule")
-        return monitoring_lambda
+        monitoring_rule.add_target(targets.LambdaFunction(monitoring_lambda))
 
-    def _apply_tags(self):
-        """Apply tags to all resources"""
-        logger.info("Applying tags to resources...")
-        
-        Tags.of(self).add("Environment", "Production")
-        Tags.of(self).add("Project", "SecureScalableApp")
-        Tags.of(self).add("ManagedBy", "CDK")
-        Tags.of(self).add("CostCenter", "Engineering")
-        Tags.of(self).add("Compliance", "Required")
-        
-        logger.info("✓ Tags applied to all resources")
-
-    def _create_outputs(self):
-        """Create stack outputs"""
-        logger.info("Creating stack outputs...")
-        
-        CfnOutput(
-            self, "ALBEndpoint",
-            value=f"http://{self.alb.load_balancer_dns_name}",
-            description="Application Load Balancer endpoint"
+        # Create CloudWatch Log Groups
+        app_log_group = logs.LogGroup(
+            self,
+            f"ApplicationLogGroup{environment_suffix}",
+            log_group_name=f"/aws/ec2/tap-application-{environment_suffix}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY
         )
-        
-        CfnOutput(
-            self, "S3BucketName",
-            value=self.s3_bucket.bucket_name,
-            description="S3 bucket name for application storage"
+
+        lambda_log_group = logs.LogGroup(
+            self,
+            f"LambdaLogGroup{environment_suffix}",
+            log_group_name=f"/aws/lambda/{monitoring_lambda.function_name}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY
         )
-        
-        CfnOutput(
-            self, "RDSEndpoint",
-            value=self.rds_instance.db_instance_endpoint_address,
-            description="RDS database endpoint"
+
+        # Create CloudWatch Dashboard
+        dashboard = cloudwatch.Dashboard(
+            self,
+            f"TapDashboard{environment_suffix}",
+            dashboard_name=f"TAP-Infrastructure-{environment_suffix}"
         )
-        
-        CfnOutput(
-            self, "MonitoringLambdaName",
-            value=self.monitoring_lambda.function_name,
-            description="Monitoring Lambda function name"
+
+        # Add widgets to dashboard
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="EC2 CPU Utilization",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="AWS/EC2",
+                        metric_name="CPUUtilization",
+                        statistic="Average"
+                    )
+                ]
+            ),
+            cloudwatch.GraphWidget(
+                title="ALB Request Count",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="AWS/ApplicationELB",
+                        metric_name="RequestCount",
+                        statistic="Sum"
+                    )
+                ]
+            ),
+            cloudwatch.GraphWidget(
+                title="RDS Connections",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="AWS/RDS",
+                        metric_name="DatabaseConnections",
+                        statistic="Average"
+                    )
+                ]
+            )
         )
-        
-        logger.info("✓ Stack outputs created")
 
+        # Add resource tags for all components
+        cdk.Tags.of(self).add("Project", "TAP")
+        cdk.Tags.of(self).add("Environment", environment_suffix)
+        cdk.Tags.of(self).add("ManagedBy", "CDK")
+        cdk.Tags.of(self).add("CostCenter", "Infrastructure")
 
-class StackValidator:
-    """Validates the deployed stack using boto3"""
-    
-    def __init__(self, stack_name: str, region: str):
-        self.stack_name = stack_name
-        self.cf_client = boto3.client('cloudformation', region_name=region)
-        self.ec2_client = boto3.client('ec2', region_name=region)
-        self.s3_client = boto3.client('s3', region_name=region)
-        
-    def validate_stack(self) -> bool:
-        """Validate that the stack was deployed successfully"""
-        logger.info("\n" + "="*50)
-        logger.info("STACK VALIDATION RESULTS")
-        logger.info("="*50)
-        
-        try:
-            # Check CloudFormation stack status
-            response = self.cf_client.describe_stacks(StackName=self.stack_name)
-            stack = response['Stacks'][0]
-            stack_status = stack['StackStatus']
-            
-            logger.info(f"✓ Stack Status: {stack_status}")
-            
-            if stack_status != 'CREATE_COMPLETE':
-                logger.error(f"✗ Stack is not in CREATE_COMPLETE state")
-                return False
-            
-            # Validate outputs
-            outputs = {output['OutputKey']: output['OutputValue'] 
-                      for output in stack.get('Outputs', [])}
-            
-            logger.info("\nStack Outputs:")
-            for key, value in outputs.items():
-                logger.info(f"  • {key}: {value}")
-            
-            # Verify resources
-            resources = self.cf_client.list_stack_resources(
-                StackName=self.stack_name
-            )['StackResourceSummaries']
-            
-            resource_types = {}
-            for resource in resources:
-                resource_type = resource['ResourceType']
-                resource_types[resource_type] = resource_types.get(resource_type, 0) + 1
-            
-            logger.info("\nDeployed Resources:")
-            for resource_type, count in sorted(resource_types.items()):
-                logger.info(f"  • {resource_type}: {count}")
-            
-            # Security validation
-            logger.info("\nSecurity Validation:")
-            
-            # Check VPC flow logs
-            vpcs = [r for r in resources if r['ResourceType'] == 'AWS::EC2::VPC']
-            if vpcs:
-                logger.info("  ✓ VPC with flow logs configured")
-            
-            # Check encryption
-            encrypted_resources = [r for r in resources 
-                                 if 'KMS' in r['ResourceType'] or 
-                                 'Encrypted' in str(r)]
-            if encrypted_resources:
-                logger.info("  ✓ Encryption enabled on resources")
-            
-            # Check IAM roles
-            iam_roles = [r for r in resources if r['ResourceType'] == 'AWS::IAM::Role']
-            logger.info(f"  ✓ {len(iam_roles)} IAM roles created with least privilege")
-            
-            # Performance and scalability validation
-            logger.info("\nScalability Validation:")
-            
-            # Check Auto Scaling
-            asg_resources = [r for r in resources 
-                           if 'AutoScaling' in r['ResourceType']]
-            if asg_resources:
-                logger.info("  ✓ Auto Scaling configured")
-            
-            # Check Multi-AZ RDS
-            rds_resources = [r for r in resources 
-                           if 'RDS' in r['ResourceType']]
-            if rds_resources:
-                logger.info("  ✓ RDS Multi-AZ configured")
-            
-            # Check Load Balancer
-            alb_resources = [r for r in resources 
-                           if 'LoadBalancer' in r['ResourceType']]
-            if alb_resources:
-                logger.info("  ✓ Application Load Balancer configured")
-            
-            logger.info("\n✓ Stack validation completed successfully!")
-            logger.info("="*50)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"✗ Validation failed: {str(e)}")
-            return False
+        # Outputs for integration testing
+        CfnOutput(
+            self,
+            f"VPCId{environment_suffix}",
+            value=vpc.vpc_id,
+            description="VPC ID",
+            export_name=f"TapVPCId{environment_suffix}"
+        )
 
+        CfnOutput(
+            self,
+            f"LoadBalancerDNS{environment_suffix}",
+            value=alb.load_balancer_dns_name,
+            description="Application Load Balancer DNS name",
+            export_name=f"TapALBDNS{environment_suffix}"
+        )
 
-# Main execution
-def main():
-    """Main function to deploy the CDK stack"""
-    
-    # Initialize CDK app
-    app = App()
-    
-    # Get account and region from environment
-    account = os.environ.get('CDK_DEFAULT_ACCOUNT', '123456789012')
-    region = os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')
-    
-    logger.info(f"Deploying to Account: {account}, Region: {region}")
-    
-    # Create the stack
-    stack = SecureScalableStack(
-        app, 
-        "SecureScalableStack",
-        env=Environment(account=account, region=region),
-        description="Secure and scalable AWS infrastructure with CDK"
-    )
-    
-    # Synthesize the app
-    app.synth()
-    
-    logger.info("\nStack synthesized successfully!")
-    logger.info("To deploy, run: cdk deploy")
-    
-    # Note: In a real scenario, you would run validation after deployment
-    # validator = StackValidator("SecureScalableStack", region)
-    # validator.validate_stack()
+        CfnOutput(
+            self,
+            f"DatabaseEndpoint{environment_suffix}",
+            value=database.instance_endpoint.hostname,
+            description="RDS Database endpoint",
+            export_name=f"TapDBEndpoint{environment_suffix}"
+        )
 
+        CfnOutput(
+            self,
+            f"S3BucketName{environment_suffix}",
+            value=s3_bucket.bucket_name,
+            description="S3 Bucket name",
+            export_name=f"TapS3Bucket{environment_suffix}"
+        )
 
-if __name__ == "__main__":
-    main()
+        CfnOutput(
+            self,
+            f"LambdaFunctionName{environment_suffix}",
+            value=monitoring_lambda.function_name,
+            description="Lambda function name",
+            export_name=f"TapLambdaFunction{environment_suffix}"
+        )
+
+        # Store references for potential future use
+        self.vpc = vpc
+        self.alb = alb
+        self.database = database
+        self.s3_bucket = s3_bucket
+        self.monitoring_lambda = monitoring_lambda
+        self.asg = asg
 ```
 
-## Additional Files Required
+## Security Features
 
-### 1. `app.py` (CDK App Entry Point)
-```python
-#!/usr/bin/env python3
-from aws_cdk import App
-from secure_scalable_stack import SecureScalableStack
-import os
+1. **Network Security**: VPC with properly segmented subnets (public, private, isolated)
+2. **Security Groups**: Minimal access rules with specific port restrictions
+3. **IAM Roles**: Least privilege access with specific permissions
+4. **Encryption**: S3 bucket encryption and RDS storage encryption
+5. **Multi-AZ**: RDS deployed across multiple availability zones
 
-app = App()
+## Monitoring and Logging
 
-SecureScalableStack(
-    app, 
-    "SecureScalableStack",
-    env={
-        'account': os.environ.get('CDK_DEFAULT_ACCOUNT'),
-        'region': os.environ.get('CDK_DEFAULT_REGION', 'us-east-1')
-    }
-)
+1. **CloudWatch**: Custom metrics and dashboards
+2. **Lambda Monitoring**: Automated infrastructure monitoring every 5 minutes
+3. **Log Groups**: Centralized logging with retention policies
+4. **Health Checks**: ALB health checks for EC2 instances
 
-app.synth()
-```
+## High Availability
 
-### 2. `requirements.txt`
-```txt
-aws-cdk-lib>=2.100.0
-constructs>=10.0.0
-boto3>=1.26.0
-```
+1. **Auto Scaling**: EC2 instances with auto scaling group (1-3 instances)
+2. **Multi-AZ**: RDS database with multi-AZ deployment
+3. **Load Balancer**: Application Load Balancer distributing traffic
+4. **Multiple AZs**: Infrastructure deployed across 2 availability zones
 
-### 3. `cdk.json`
-```json
-{
-  "app": "python3 app.py",
-  "watch": {
-    "include": [
-      "**"
-    ],
-    "exclude": [
-      "cdk.out"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": true,
-    "@aws-cdk/core:stackRelativeExports": true,
-    "@aws-cdk/aws-lambda:recognizeVersionProps": true,
-    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true
-  }
-}
-```
-
-## Deployment Instructions
-
-1. **Install Dependencies**:
-```bash
-pip install -r requirements.txt
-```
-
-2. **Bootstrap CDK** (first time only):
-```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/REGION
-```
-
-3. **Deploy the Stack**:
-```bash
-cdk deploy --require-approval never
-```
-
-4. **Validate Deployment**:
-```python
-# Run validation script after deployment
-python validate_stack.py
-```
-
-## Security Best Practices Implemented
-
-1. **Encryption Everywhere**:
-   - KMS encryption for EBS volumes, RDS, and S3
-   - SSL/TLS enforcement on S3 bucket
-   - Encrypted EBS volumes for EC2 instances
-
-2. **Network Security**:
-   - Private subnets for compute and database resources
-   - Security groups with minimal exposure
-   - VPC Flow Logs enabled
-   - NAT Gateways for outbound internet access
-
-3. **IAM Least Privilege**:
-   - Specific roles for each service
-   - Minimal permissions granted
-   - No use of `*` in IAM policies where avoidable
-
-4. **Monitoring and Logging**:
-   - CloudWatch Logs for all services
-   - VPC Flow Logs
-   - RDS slow query logs
-   - Lambda function for custom monitoring
-
-5. **High Availability**:
-   - Multi-AZ deployment
-   - Auto Scaling across availability zones
-   - RDS Multi-AZ
-   - Multiple NAT Gateways
-
-6. **Backup and Recovery**:
-   - S3 versioning enabled
-   - RDS automated backups (7 days retention)
-   - Deletion protection on critical resources
-
-This solution provides a production-ready, secure, and scalable AWS infrastructure that follows AWS Well-Architected Framework principles.
+The solution follows AWS best practices for security, scalability, and cost optimization while ensuring all resources can be easily destroyed for testing purposes.
