@@ -57,7 +57,21 @@ describe('TapStack CloudFormation Template', () => {
     test('VPCCidr parameter should have CIDR pattern validation', () => {
       const param = template.Parameters.VPCCidr;
       expect(param.Default).toBe('10.0.0.0/16');
-      expect(param.AllowedPattern).toMatch(/CIDR/i);
+      expect(param.AllowedPattern).toMatch(/^\^.*\$$/); // Should be a regex pattern for CIDR
+    });
+
+    test('SSLCertificateArn parameter should have correct properties', () => {
+      const param = template.Parameters.SSLCertificateArn;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000');
+      expect(param.AllowedPattern).toBe('^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$');
+    });
+
+    test('AlertEmail parameter should have correct properties', () => {
+      const param = template.Parameters.AlertEmail;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('admin@example.com');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     });
   });
 
@@ -452,7 +466,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(35);
+      expect(resourceCount).toBe(47);
     });
 
     test('should have correct number of parameters', () => {

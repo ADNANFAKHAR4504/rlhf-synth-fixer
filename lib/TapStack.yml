@@ -23,6 +23,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Description: "ARN of existing SSL certificate for HTTPS listener"
+    Default: "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
     AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$"
     ConstraintDescription: "Must be a valid ACM certificate ARN"
   InstanceType:
@@ -37,6 +38,7 @@ Parameters:
   AlertEmail:
     Type: String
     Description: "Email address for CloudWatch alerts"
+    Default: "admin@example.com"
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: "Must be a valid email address"
 
