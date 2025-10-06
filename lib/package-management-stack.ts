@@ -32,25 +32,50 @@ export class PackageManagementStack extends Construct {
       },
     });
 
+    // Create upstream repositories first
+    const npmStoreRepo = new CodeartifactRepository(this, 'npm-store-repo', {
+      repository: 'npm-store',
+      domain: this.domain.domain,
+      externalConnections: {
+        externalConnectionName: 'public:npmjs',
+      },
+      tags: {
+        Name: `npm-store-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Purpose: 'NPM Upstream Repository',
+      },
+    });
+
+    const pypiStoreRepo = new CodeartifactRepository(this, 'pypi-store-repo', {
+      repository: 'pypi-store',
+      domain: this.domain.domain,
+      externalConnections: {
+        externalConnectionName: 'public:pypi',
+      },
+      tags: {
+        Name: `pypi-store-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Purpose: 'PyPI Upstream Repository',
+      },
+    });
+
     this.repository = new CodeartifactRepository(this, 'artifact-repository', {
       repository: `cicd-repo-${environmentSuffix}`,
       domain: this.domain.domain,
       upstream: [
         {
-          repositoryName: 'npm-store',
+          repositoryName: npmStoreRepo.repository,
         },
         {
-          repositoryName: 'pypi-store',
+          repositoryName: pypiStoreRepo.repository,
         },
       ],
-      externalConnections: {
-        externalConnectionName: 'public:npmjs',
-      },
       tags: {
         Name: `cicd-repo-${environmentSuffix}`,
         Environment: environmentSuffix,
         Purpose: 'Package Repository',
       },
+      dependsOn: [npmStoreRepo, pypiStoreRepo],
     });
 
     const codeArtifactPolicy = new DataAwsIamPolicyDocument(

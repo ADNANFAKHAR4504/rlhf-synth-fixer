@@ -16,5 +16,9 @@
     "CodeArtifact",
     "CloudWatch",
     "IAM"
+  ],
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
   ]
 }

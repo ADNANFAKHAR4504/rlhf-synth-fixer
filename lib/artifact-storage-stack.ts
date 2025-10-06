@@ -64,6 +64,7 @@ export class ArtifactStorageStack extends Construct {
         {
           id: 'delete-old-versions',
           status: 'Enabled',
+          filter: [{ prefix: '' }],
           noncurrentVersionExpiration: [
             {
               noncurrentDays: 30,
@@ -73,6 +74,7 @@ export class ArtifactStorageStack extends Construct {
         {
           id: 'delete-old-artifacts',
           status: 'Enabled',
+          filter: [{ prefix: '' }],
           expiration: [
             {
               days: 90,
@@ -82,6 +84,7 @@ export class ArtifactStorageStack extends Construct {
         {
           id: 'intelligent-tiering',
           status: 'Enabled',
+          filter: [{ prefix: '' }],
           transition: [
             {
               days: 7,
@@ -106,7 +109,7 @@ export class ArtifactStorageStack extends Construct {
         tiering: [
           {
             accessTier: 'ARCHIVE_ACCESS',
-            days: 60,
+            days: 90,
           },
           {
             accessTier: 'DEEP_ARCHIVE_ACCESS',

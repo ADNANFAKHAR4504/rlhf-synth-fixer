@@ -381,7 +381,7 @@ describe('TapStack Unit Tests', () => {
 
       const lambda = findResource(synthesized.resource.aws_lambda_function, 'cleanup-function');
       expect(lambda).toBeDefined();
-      expect(lambda.runtime).toBe('nodejs18.x');
+      expect(lambda.runtime).toBe('nodejs20.x');
       expect(lambda.handler).toBe('cleanup.handler');
       expect(lambda.timeout).toBe(300);
       expect(lambda.memory_size).toBe(512);
@@ -473,7 +473,7 @@ describe('TapStack Unit Tests', () => {
       expect(tiering.tiering).toBeDefined();
       expect(tiering.tiering.length).toBe(2);
       expect(tiering.tiering[0].access_tier).toBe('ARCHIVE_ACCESS');
-      expect(tiering.tiering[0].days).toBe(60);
+      expect(tiering.tiering[0].days).toBe(90);
       expect(tiering.tiering[1].access_tier).toBe('DEEP_ARCHIVE_ACCESS');
       expect(tiering.tiering[1].days).toBe(180);
     });
@@ -498,13 +498,24 @@ describe('TapStack Unit Tests', () => {
       expect(domain).toBeDefined();
       expect(domain.domain).toContain('artifact-test');
 
+      // Check upstream repositories exist
+      const npmStore = findResource(synthesized.resource.aws_codeartifact_repository, 'npm-store-repo');
+      expect(npmStore).toBeDefined();
+      expect(npmStore.repository).toBe('npm-store');
+      expect(npmStore.external_connections.external_connection_name).toBe('public:npmjs');
+
+      const pypiStore = findResource(synthesized.resource.aws_codeartifact_repository, 'pypi-store-repo');
+      expect(pypiStore).toBeDefined();
+      expect(pypiStore.repository).toBe('pypi-store');
+      expect(pypiStore.external_connections.external_connection_name).toBe('public:pypi');
+
+      // Check main repository references upstreams
       const repository = findResource(synthesized.resource.aws_codeartifact_repository, 'artifact-repository');
       expect(repository).toBeDefined();
       expect(repository.repository).toContain('artifact-test');
       expect(repository.domain).toContain('aws_codeartifact_domain');
       expect(repository.upstream).toBeDefined();
       expect(repository.upstream.length).toBe(2);
-      expect(repository.external_connections.external_connection_name).toBe('public:npmjs');
     });
   });
 

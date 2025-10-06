@@ -104,7 +104,7 @@ export class ArtifactCleanupStack extends Construct {
 
     this.cleanupFunction = new LambdaFunction(this, 'cleanup-function', {
       functionName: `artifact-cleanup-${environmentSuffix}`,
-      runtime: 'nodejs18.x',
+      runtime: 'nodejs20.x',
       handler: 'cleanup.handler',
       role: cleanupLambdaRole.arn,
       filename: lambdaCode.path,
