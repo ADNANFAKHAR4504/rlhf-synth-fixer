@@ -776,16 +776,48 @@ Resources:
           import boto3
           import os
           import logging
+          from datetime import datetime
           
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           
           def lambda_handler(event, context):
               logger.info(f"Received event: {event}")
+              
+              # Create dummy response data
+              response_data = {
+                  'message': 'Hello from TapStack WebApp Lambda!',
+                  'timestamp': datetime.utcnow().isoformat() + 'Z',
+                  'environment': os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),
+                  'region': os.environ.get('AWS_REGION', 'unknown'),
+                  'data': {
+                      'users': [
+                          {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},
+                          {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},
+                          {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'}
+                      ],
+                      'stats': {
+                          'total_users': 3,
+                          'active_sessions': 12,
+                          'last_updated': '2024-01-15T10:30:00Z'
+                      }
+                  },
+                  'config': {
+                      's3_bucket': os.environ.get('S3_BUCKET', 'not-configured'),
+                      'db_secret_configured': bool(os.environ.get('DB_SECRET_ARN')),
+                      'vpc_enabled': True
+                  }
+              }
+              
               return {
                   'statusCode': 200,
-                  'headers': {'Content-Type': 'application/json'},
-                  'body': json.dumps({'message': 'Hello from Lambda!'})
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+                  },
+                  'body': json.dumps(response_data, indent=2)
               }
 
   WebAppLambdaPermission:
@@ -958,7 +990,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
