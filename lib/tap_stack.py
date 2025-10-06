@@ -435,7 +435,7 @@ def lambda_handler(event, context):
         lambda_log_group = logs.LogGroup(
             self,
             f"LambdaLogGroup{environment_suffix}",
-            log_group_name=f"/aws/lambda/{monitoring_lambda.function_name}",
+            log_group_name=f"/aws/lambda/{monitoring_lambda.function_name}-group",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
