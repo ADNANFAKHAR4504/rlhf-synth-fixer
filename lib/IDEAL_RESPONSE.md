@@ -2245,7 +2245,11 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      values = [
+        "arn:aws:s3:::${var.name_prefix}-*/*",
+        "arn:aws:s3:::${var.name_prefix}-app-data-${var.region}/*",
+        "arn:aws:s3:::${var.name_prefix}-alb-logs-${var.region}/*"
+      ]
     }
 
     data_resource {

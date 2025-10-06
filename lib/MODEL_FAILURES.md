@@ -463,7 +463,33 @@ resource "aws_kms_key" "main" {
 }
 ```
 
-### 10. File Structure Issues
+### 10. Invalid CloudTrail Event Selectors
+
+**Model Response Problem:**
+```hcl
+# WRONG - Invalid S3 resource pattern
+data_resource {
+  type   = "AWS::S3::Object"
+  values = ["arn:aws:s3:::*/*"]
+}
+```
+
+**Issue:** CloudTrail doesn't allow overly broad S3 resource patterns like `arn:aws:s3:::*/*`. This causes `InvalidEventSelectorsException` when creating CloudTrail trails.
+
+**Ideal Solution:**
+```hcl
+# CORRECT - Specific S3 resource patterns
+data_resource {
+  type   = "AWS::S3::Object"
+  values = [
+    "arn:aws:s3:::${var.name_prefix}-*/*",
+    "arn:aws:s3:::${var.name_prefix}-app-data-${var.region}/*",
+    "arn:aws:s3:::${var.name_prefix}-alb-logs-${var.region}/*"
+  ]
+}
+```
+
+### 11. File Structure Issues
 
 **Model Response Problem:**
 ```
@@ -492,6 +518,7 @@ The original `MODEL_RESPONSE.md` contained several critical failures that would 
 3. **Security Issues:** Incomplete S3 bucket policies, missing conditions
 4. **Functional Issues:** Missing health checks
 5. **Permission Issues:** Missing CloudTrail KMS permissions
-6. **Structural Issues:** Unnecessary file separation, wrong naming conventions
+6. **CloudTrail Issues:** Invalid event selector patterns
+7. **Structural Issues:** Unnecessary file separation, wrong naming conventions
 
 The `IDEAL_RESPONSE.md` addresses all these issues with working, tested configurations that successfully deploy and pass integration tests.
