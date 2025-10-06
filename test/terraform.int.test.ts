@@ -100,6 +100,10 @@ const rdsEndpointRaw: string = getOutputValue("rds_endpoint");
 const publicSubnetIds: string[] = parseIdList(getOutputValue("public_subnet_ids"));
 const privateSubnetIds: string[] = parseIdList(getOutputValue("private_subnet_ids"));
 
+const namePrefix = typeof appBucketName === "string" && appBucketName.endsWith("secure-app-bucket")
+  ? appBucketName.slice(0, appBucketName.length - "secure-app-bucket".length)
+  : "";
+
 const [rdsEndpointHost, rdsEndpointPort] = typeof rdsEndpointRaw === "string"
   ? rdsEndpointRaw.split(":")
   : [undefined, undefined];
@@ -154,8 +158,11 @@ describe("Terraform infrastructure integration", () => {
     const vpc = vpcResult.Vpcs?.[0];
     expect(vpc).toBeDefined();
     expect(vpc?.VpcId).toBe(vpcId);
+    expect(namePrefix).toBeTruthy();
     const envTag = vpc?.Tags?.find(tag => tag.Key === "Environment");
     expect(envTag?.Value).toBeTruthy();
+    const nameTag = vpc?.Tags?.find(tag => tag.Key === "Name");
+    expect(nameTag?.Value?.startsWith(namePrefix)).toBe(true);
 
     const subnetsResult = await ec2Client.send(
       new DescribeSubnetsCommand({ SubnetIds: [...publicSubnetIds, ...privateSubnetIds] })
@@ -183,6 +190,7 @@ describe("Terraform infrastructure integration", () => {
     );
     const albSg = albSgResult.SecurityGroups?.[0];
     expect(albSg).toBeDefined();
+    expect(albSg?.GroupName?.startsWith(namePrefix)).toBe(true);
     expect(albSg?.IpPermissions?.length).toBe(1);
     const albRule = albSg?.IpPermissions?.[0];
     expect(albRule?.FromPort).toBe(443);
@@ -196,6 +204,7 @@ describe("Terraform infrastructure integration", () => {
     );
     const webSg = webSgResult.SecurityGroups?.[0];
     expect(webSg).toBeDefined();
+    expect(webSg?.GroupName?.startsWith(namePrefix)).toBe(true);
     expect(webSg?.IpPermissions?.length).toBe(2);
 
     const httpsFromAlb = webSg?.IpPermissions?.find(permission =>

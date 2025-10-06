@@ -45,7 +45,8 @@ describe("Terraform stack compliance", () => {
 
   describe("Application S3 bucket", () => {
     it("uses secure naming convention derived from variables", () => {
-      expect(has(/s3_bucket_name\s*=\s*"secure-app-bucket-\${var\.unique_id}"/)).toBe(true);
+      expect(has(/name_prefix\s*=\s*"\${var\.unique_id}-"/)).toBe(true);
+      expect(has(/s3_bucket_name\s*=\s*"\${local\.name_prefix}secure-app-bucket"/)).toBe(true);
     });
 
     it("enforces encryption and blocks public access", () => {
@@ -66,6 +67,7 @@ describe("Terraform stack compliance", () => {
       expect(has(/resource\s+"aws_s3_bucket_policy"\s+"cloudtrail"/)).toBe(true);
       expect(has(/cloudtrail\.amazonaws\.com/)).toBe(true);
       expect(has(/AWSLogs\/\$\{data\.aws_caller_identity\.current\.account_id}\//)).toBe(true);
+      expect(has(/cloudtrail_bucket_name\s*=\s*"\${local\.name_prefix}secure-cloudtrail-logs"/)).toBe(true);
     });
   });
 
