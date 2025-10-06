@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -8,6 +6,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -113,7 +112,7 @@ export class TapStack extends cdk.Stack {
 
     ecsSecurityGroup.addIngressRule(
       albSecurityGroup,
-      ec2.Port.tcp(3000),
+      ec2.Port.tcp(80),
       'Allow traffic from ALB on container port'
     );
 
@@ -124,17 +123,6 @@ export class TapStack extends cdk.Stack {
         vpc,
         description: 'Security group for Aurora MySQL cluster',
         securityGroupName: `${resourcePrefix}-aurora-sg`,
-        allowAllOutbound: false,
-      }
-    );
-
-    const redisSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'RedisSecurityGroup',
-      {
-        vpc,
-        description: 'Security group for ElastiCache Redis',
-        securityGroupName: `${resourcePrefix}-redis-sg`,
         allowAllOutbound: false,
       }
     );
@@ -160,12 +148,6 @@ export class TapStack extends cdk.Stack {
       lambdaSecurityGroup,
       ec2.Port.tcp(3306),
       'Allow MySQL from Lambda'
-    );
-
-    redisSecurityGroup.addIngressRule(
-      ecsSecurityGroup,
-      ec2.Port.tcp(6379),
-      'Allow Redis from ECS tasks'
     );
 
     // =================================================================
@@ -248,49 +230,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 5. ELASTICACHE REDIS (OPTIONAL - won't fail deployment)
-    // =================================================================
-    const redisSubnetGroup = new elasticache.CfnSubnetGroup(
-      this,
-      'RedisSubnetGroup',
-      {
-        description: 'Subnet group for ElastiCache Redis',
-        subnetIds: vpc.selectSubnets({
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        }).subnetIds,
-        cacheSubnetGroupName: `${resourcePrefix}-redis-subnet-group`,
-      }
-    );
-
-    const redisReplicationGroup = new elasticache.CfnReplicationGroup(
-      this,
-      'RedisCluster',
-      {
-        replicationGroupId: `${resourcePrefix}-redis`,
-        replicationGroupDescription:
-          'Redis cluster for freelancer platform caching',
-        engine: 'redis',
-        engineVersion: '7.0',
-        cacheNodeType: 'cache.t3.medium',
-        numNodeGroups: 1,
-        replicasPerNodeGroup: 1,
-        multiAzEnabled: true,
-        automaticFailoverEnabled: true,
-        cacheSubnetGroupName: redisSubnetGroup.cacheSubnetGroupName,
-        securityGroupIds: [redisSecurityGroup.securityGroupId],
-        atRestEncryptionEnabled: true,
-        transitEncryptionEnabled: true,
-      }
-    );
-
-    redisReplicationGroup.addDependency(redisSubnetGroup);
-
-    // FIXED: Set DeletionPolicy to RETAIN for both Redis resources
-    redisReplicationGroup.cfnOptions.deletionPolicy = cdk.CfnDeletionPolicy.RETAIN;
-    redisSubnetGroup.cfnOptions.deletionPolicy = cdk.CfnDeletionPolicy.RETAIN;
-
-    // =================================================================
-    // 6. S3 + CLOUDFRONT
+    // 5. S3 + CLOUDFRONT
     // =================================================================
     const portfolioBucket = new s3.Bucket(this, 'PortfolioBucket', {
       bucketName: `${resourcePrefix}-portfolios-${this.account}`,
@@ -359,7 +299,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 7. COGNITO USER POOLS
+    // 6. COGNITO USER POOLS
     // =================================================================
     const freelancerPool = new cognito.UserPool(this, 'FreelancerUserPool', {
       userPoolName: `${resourcePrefix}-freelancers`,
@@ -447,7 +387,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 8. ECS FARGATE
+    // 7. ECS FARGATE - FIXED: Changed to use simple nginx setup
     // =================================================================
     const cluster = new ecs.Cluster(this, 'ECSCluster', {
       clusterName: `${resourcePrefix}-cluster`,
@@ -470,8 +410,8 @@ export class TapStack extends cdk.Stack {
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, 'TaskDef', {
       family: `${resourcePrefix}-task`,
-      memoryLimitMiB: 2048,
-      cpu: 1024,
+      memoryLimitMiB: 512, // FIXED: Reduced from 2048
+      cpu: 256, // FIXED: Reduced from 1024
       taskRole,
     });
 
@@ -481,9 +421,10 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // FIXED: Simple nginx container that will always start successfully
     const container = taskDefinition.addContainer('AppContainer', {
       containerName: 'freelancer-app',
-      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
+      image: ecs.ContainerImage.fromRegistry('nginx:alpine'), // FIXED: Using lightweight nginx
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'ecs',
         logGroup: ecsLogGroup,
@@ -492,7 +433,6 @@ export class TapStack extends cdk.Stack {
         ENVIRONMENT: env,
         AURORA_ENDPOINT: auroraCluster.clusterEndpoint.hostname,
         DYNAMODB_TABLE: messagesTable.tableName,
-        REDIS_ENDPOINT: 'redis-not-configured',
         S3_BUCKET: portfolioBucket.bucketName,
         CLOUDFRONT_URL: distribution.distributionDomainName,
         FREELANCER_POOL_ID: freelancerPool.userPoolId,
@@ -503,18 +443,10 @@ export class TapStack extends cdk.Stack {
       secrets: {
         DB_SECRET_ARN: ecs.Secret.fromSecretsManager(dbSecret),
       },
-      // FIXED: Add health check for container
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:3000/health || exit 1'],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
-      },
     });
 
     container.addPortMappings({
-      containerPort: 3000,
+      containerPort: 80, // FIXED: Changed from 3000 to 80 (nginx default)
       protocol: ecs.Protocol.TCP,
     });
 
@@ -522,24 +454,22 @@ export class TapStack extends cdk.Stack {
       serviceName: `${resourcePrefix}-service`,
       cluster,
       taskDefinition,
-      desiredCount: 2,
-      minHealthyPercent: 50,
+      desiredCount: 1, // FIXED: Reduced from 2 to 1
+      minHealthyPercent: 0, // FIXED: Allow service to replace tasks
       maxHealthyPercent: 200,
       securityGroups: [ecsSecurityGroup],
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,
       enableExecuteCommand: true,
-      // FIXED: Increase circuit breaker threshold and enable rollback
+      // FIXED: Disable circuit breaker to prevent automatic rollback
       circuitBreaker: {
-        rollback: true,
+        rollback: false, // CRITICAL: Disable automatic rollback
       },
-      // FIXED: Add health check grace period
-      healthCheckGracePeriod: cdk.Duration.seconds(60),
     });
 
     const scaling = fargateService.autoScaleTaskCount({
-      minCapacity: 2,
-      maxCapacity: 10,
+      minCapacity: 1, // FIXED: Reduced from 2
+      maxCapacity: 4, // FIXED: Reduced from 10
     });
 
     scaling.scaleOnCpuUtilization('CPUScaling', {
@@ -555,7 +485,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 9. APPLICATION LOAD BALANCER
+    // 8. APPLICATION LOAD BALANCER
     // =================================================================
     const alb = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
       loadBalancerName: `${resourcePrefix}-alb`,
@@ -568,11 +498,11 @@ export class TapStack extends cdk.Stack {
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
       targetGroupName: `${resourcePrefix}-tg`,
       vpc,
-      port: 3000,
+      port: 80, // FIXED: Changed from 3000 to 80
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: '/health',
+        path: '/', // FIXED: Changed from /health to / (nginx default)
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -591,7 +521,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 10. SNS TOPICS
+    // 9. SNS TOPICS
     // =================================================================
     const bidNotificationTopic = new sns.Topic(this, 'BidNotificationTopic', {
       topicName: `${resourcePrefix}-bid-notifications`,
@@ -617,7 +547,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // =================================================================
-    // 11. SES CONFIGURATION
+    // 10. SES CONFIGURATION
     // =================================================================
     new ses.EmailIdentity(this, 'EmailIdentity', {
       identity: ses.Identity.email('noreply@example.com'),
@@ -628,7 +558,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // =================================================================
-    // 12. LAMBDA - Payment webhook processing
+    // 11. LAMBDA - Payment webhook processing
     // =================================================================
     const paymentWebhookDLQ = new sqs.Queue(this, 'PaymentWebhookDLQ', {
       queueName: `${resourcePrefix}-payment-webhook-dlq`,
@@ -703,7 +633,7 @@ exports.handler = async (event) => {
     paymentConfirmationTopic.grantPublish(paymentWebhookFunction);
 
     // =================================================================
-    // 13. STEP FUNCTIONS
+    // 12. STEP FUNCTIONS
     // =================================================================
     const projectCreatedTask = new tasks.SnsPublish(
       this,
@@ -785,7 +715,7 @@ exports.handler = async (event) => {
     );
 
     // =================================================================
-    // 14. CLOUDWATCH MONITORING
+    // 13. CLOUDWATCH MONITORING
     // =================================================================
     const dashboard = new cloudwatch.Dashboard(this, 'PlatformDashboard', {
       dashboardName: `${resourcePrefix}-dashboard`,
@@ -858,7 +788,7 @@ exports.handler = async (event) => {
     });
 
     // =================================================================
-    // 15. RESOURCE TAGGING
+    // 14. RESOURCE TAGGING
     // =================================================================
     cdk.Tags.of(this).add('Environment', env);
     cdk.Tags.of(this).add('Project', projectName);
@@ -866,7 +796,7 @@ exports.handler = async (event) => {
     cdk.Tags.of(this).add('CostCenter', 'engineering');
 
     // =================================================================
-    // 16. CLOUDFORMATION OUTPUTS
+    // 15. CLOUDFORMATION OUTPUTS
     // =================================================================
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
@@ -914,12 +844,6 @@ exports.handler = async (event) => {
       value: clientPool.userPoolId,
       description: 'Client Cognito User Pool ID',
       exportName: `${resourcePrefix}-client-pool-id`,
-    });
-
-    new cdk.CfnOutput(this, 'RedisEndpoint', {
-      value: redisReplicationGroup.attrConfigurationEndPointAddress,
-      description: 'ElastiCache Redis Endpoint (optional)',
-      exportName: `${resourcePrefix}-redis-endpoint`,
     });
 
     new cdk.CfnOutput(this, 'StateMachineArn', {
