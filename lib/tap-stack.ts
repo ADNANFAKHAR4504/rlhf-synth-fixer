@@ -59,13 +59,6 @@ export class TapStack extends cdk.Stack {
         .slice(0, maxLength);
       return sanitized.length > 0 ? sanitized : 'unknown';
     };
-    const sanitizeStageName = (value: string): string => {
-      if (cdk.Token.isUnresolved(value)) {
-        return 'stage';
-      }
-      return value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
-    };
-
     const appNameParam = new CfnParameter(this, 'AppName', {
       type: 'String',
       default: 'nova',
@@ -348,7 +341,6 @@ export class TapStack extends cdk.Stack {
             HttpMethod.PATCH,
             HttpMethod.DELETE,
             HttpMethod.HEAD,
-            HttpMethod.OPTIONS,
           ],
         },
       });
