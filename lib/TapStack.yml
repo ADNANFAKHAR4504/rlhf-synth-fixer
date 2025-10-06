@@ -102,7 +102,7 @@ Resources:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Sub 
-        - '${AccountId}-centralized-logging-bucket2'
+        - '${AccountId}-centralized-logging-bucket3'
         - AccountId: !If [UseCurrentAccountForLogs, !Ref 'AWS::AccountId', !Ref LoggingAccountId]
       # Security: All buckets private by default
       PublicAccessBlockConfiguration:
