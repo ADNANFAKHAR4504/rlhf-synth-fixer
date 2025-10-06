@@ -394,25 +394,27 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # AWS Secrets Manager Secret for Aurora master password
+        # Secrets Manager Secret for Aurora master password
+        # Using unique secret name to avoid deletion conflicts
         self.db_master_password = aws.secretsmanager.Secret(
-            f"tap-db-master-password-{self.environment_suffix}",
-            name=f"tap/db/master-password-{self.environment_suffix}",
+            f"tap-db-master-password-{self.environment_suffix}-v1759768150",
+            name=f"tap/db/master-password-{self.environment_suffix}-v1759768150",
             description="Master password for Aurora PostgreSQL cluster",
             recovery_window_in_days=0,  # Force immediate deletion to allow recreation
             tags={**self.tags, 'Name': f'tap-db-master-password-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
 
-        # Generate and store the password securely
+        # SecretVersion stores the actual password
         self.db_master_password_version = aws.secretsmanager.SecretVersion(
-            f"tap-db-master-password-version-{self.environment_suffix}",
+            f"tap-db-master-password-version-{self.environment_suffix}-v1759768150",
             secret_id=self.db_master_password.id,
             secret_string=pulumi.Output.secret(
                 "ChangeThisPasswordImmediately123!URGENT"
             ),
             opts=ResourceOptions(parent=self)
-)
+        )
+
 
         
         # Aurora PostgreSQL Cluster (serverless v2 compatible)
