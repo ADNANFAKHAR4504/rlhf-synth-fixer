@@ -402,7 +402,7 @@ resource "aws_iam_policy" "cloudwatch_logs" {
 # Attach CloudWatch Logs policy to EC2 role
 resource "aws_iam_role_policy_attachment" "ec2_cloudwatch" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn = aws_iam_policy.cloudwatch_logs.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
 
 # IAM Instance Profile for EC2
