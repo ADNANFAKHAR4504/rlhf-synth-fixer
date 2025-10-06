@@ -6,6 +6,17 @@
   "po_id": "24730918",
   "team": "synth",
   "startedAt": "2025-10-03T13:27:18+05:30",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Event Processing Architecture",
+    "Asynchronous Message Processing",
+    "Serverless Computing",
+    "Database Management",
+    "Monitoring Setup",
+    "Security Configuration",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
   "training_quality": 8,
   "aws_services": [
     "SQS",
