@@ -111,9 +111,6 @@ export class ArtifactCleanupStack extends Construct {
       sourceCodeHash: lambdaCode.assetHash,
       timeout: 300,
       memorySize: 512,
-      snapStart: {
-        applyOn: 'PublishedVersions',
-      },
       environment: {
         variables: {
           ARTIFACT_BUCKET: artifactBucket.id,

@@ -385,7 +385,6 @@ describe('TapStack Unit Tests', () => {
       expect(lambda.handler).toBe('cleanup.handler');
       expect(lambda.timeout).toBe(300);
       expect(lambda.memory_size).toBe(512);
-      expect(lambda.snap_start.apply_on).toBe('PublishedVersions');
 
       // Check environment variables
       expect(lambda.environment.variables.RETENTION_DAYS).toBe('90');
