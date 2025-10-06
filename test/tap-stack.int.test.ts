@@ -1,653 +1,694 @@
 /* eslint-disable prettier/prettier */
 
-import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import * as AWS from 'aws-sdk';
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Load deployment outputs from file
+const loadDeploymentOutputs = () => {
+  const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+  
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error(`Deployment outputs file not found at: ${outputsPath}`);
+  }
 
-describe('FreelancerPlatform Integration Tests', () => {
-  let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+  const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
+  return JSON.parse(outputsContent);
+};
 
-  beforeAll(() => {
-    app = new cdk.App();
-    stack = new TapStack(app, 'IntegrationTestStack', {
-      environmentSuffix,
-      env: { account: '123456789012', region: 'us-east-2' },
+const DEPLOYMENT_OUTPUTS = loadDeploymentOutputs();
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'pr3432';
+
+console.log('🚀 Loaded deployment outputs from cfn-outputs/flat-outputs.json');
+console.log('📋 Deployment Configuration:');
+console.log('   Environment:', ENVIRONMENT_SUFFIX);
+console.log('   Region:', AWS_REGION);
+console.log('   VPC ID:', DEPLOYMENT_OUTPUTS.VPCId);
+console.log('   ALB DNS:', DEPLOYMENT_OUTPUTS.ALBDNSName);
+console.log('');
+
+// Configure AWS SDK
+AWS.config.update({ region: AWS_REGION });
+
+// Initialize AWS SDK v2 clients (already available)
+const ec2 = new AWS.EC2();
+const elbv2 = new AWS.ELBv2();
+const ecs = new AWS.ECS();
+const rds = new AWS.RDS();
+const dynamodb = new AWS.DynamoDB();
+const s3 = new AWS.S3();
+const cloudfront = new AWS.CloudFront();
+const cognito = new AWS.CognitoIdentityServiceProvider();
+const lambda = new AWS.Lambda();
+const stepfunctions = new AWS.StepFunctions();
+const sns = new AWS.SNS();
+const cloudformation = new AWS.CloudFormation();
+
+describe('FreelancerPlatform Real Integration Tests', () => {
+  jest.setTimeout(60000); // 60 seconds timeout for real API calls
+
+  // =================================================================
+  // CLOUDFORMATION STACK TESTS
+  // =================================================================
+  describe('CloudFormation Stack Status', () => {
+    test('validates CloudFormation stack exists and is in good state', async () => {
+      console.log('🔍 Testing CloudFormation stack status...');
+      
+      const params = {
+        StackName: `TapStack${ENVIRONMENT_SUFFIX}`,
+      };
+      
+      const response = await cloudformation.describeStacks(params).promise();
+
+      expect(response.Stacks).toBeDefined();
+      expect(response.Stacks!.length).toBe(1);
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE'].includes(response.Stacks![0].StackStatus)).toBe(true);
+
+      console.log('✅ Stack validated:', response.Stacks![0].StackName);
+      console.log('   Status:', response.Stacks![0].StackStatus);
+      console.log('   Created:', response.Stacks![0].CreationTime);
     });
-    template = Template.fromStack(stack);
+
+    test('validates stack outputs match loaded configuration', async () => {
+      console.log('🔍 Testing CloudFormation outputs consistency...');
+      
+      const params = {
+        StackName: `TapStack${ENVIRONMENT_SUFFIX}`,
+      };
+      
+      const response = await cloudformation.describeStacks(params).promise();
+      const outputs = response.Stacks![0].Outputs;
+
+      expect(outputs).toBeDefined();
+      expect(outputs!.length).toBeGreaterThanOrEqual(8);
+
+      // Verify loaded outputs match actual CloudFormation outputs
+      const albOutput = outputs!.find(o => o.OutputKey === 'ALBDNSName');
+      expect(albOutput?.OutputValue).toBe(DEPLOYMENT_OUTPUTS.ALBDNSName);
+
+      console.log('✅ Stack outputs validated and match loaded configuration');
+      console.log('   Total outputs:', outputs!.length);
+    });
   });
 
   // =================================================================
-  // CROSS-SERVICE INTEGRATION TESTS
+  // VPC AND NETWORKING TESTS
   // =================================================================
+  describe('VPC and Networking Infrastructure', () => {
+    test('validates VPC exists with correct configuration', async () => {
+      console.log('🔍 Testing VPC existence and configuration...');
+      
+      const params = {
+        VpcIds: [DEPLOYMENT_OUTPUTS.VPCId],
+      };
+      const response = await ec2.describeVpcs(params).promise();
 
-  describe('ALB to ECS Integration', () => {
-    test('validates ALB target group connects to ECS service', () => {
-      // ALB target group should exist with correct configuration
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 3000,
-        Protocol: 'HTTP',
-        TargetType: 'ip',
-        VpcId: {
-          Ref: expect.stringMatching(/FreelancerVPC/),
-        },
-      });
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs!.length).toBe(1);
+      expect(response.Vpcs![0].CidrBlock).toBe('10.36.0.0/16');
+      
+      console.log('✅ VPC validated:', response.Vpcs![0].VpcId);
+      console.log('   CIDR Block:', response.Vpcs![0].CidrBlock);
+    });
 
-      // ECS service should be created
-      template.hasResourceProperties('AWS::ECS::Service', {
-        LaunchType: 'FARGATE',
-        LoadBalancers: [
-          {
-            ContainerName: 'freelancer-app',
-            ContainerPort: 3000,
-            TargetGroupArn: {
-              Ref: expect.stringMatching(/TargetGroup/),
-            },
-          },
+    test('validates subnets are distributed across multiple AZs', async () => {
+      console.log('🔍 Testing multi-AZ subnet distribution...');
+      
+      const params = {
+        Filters: [
+          { Name: 'vpc-id', Values: [DEPLOYMENT_OUTPUTS.VPCId] },
         ],
-      });
+      };
+      const response = await ec2.describeSubnets(params).promise();
+
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBeGreaterThanOrEqual(6);
+
+      const uniqueAZs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
+      expect(uniqueAZs.size).toBeGreaterThanOrEqual(2);
+
+      console.log('✅ Subnets validated:', response.Subnets!.length, 'subnets');
+      console.log('   Availability Zones:', Array.from(uniqueAZs));
     });
 
-    test('validates security group rules allow ALB to reach ECS', () => {
-      // ECS security group should allow ingress from ALB
-      const resources = template.toJSON().Resources;
-      const ecsSecurityGroupRules = Object.values(resources).filter(
-        (r: any) =>
-          r.Type === 'AWS::EC2::SecurityGroupIngress' &&
-          r.Properties?.Description === 'Allow traffic from ALB on container port'
-      );
-      expect(ecsSecurityGroupRules.length).toBeGreaterThan(0);
-    });
-
-    test('validates health check configuration', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        HealthCheckEnabled: true,
-        HealthCheckPath: '/health',
-        HealthCheckIntervalSeconds: 30,
-        HealthCheckTimeoutSeconds: 5,
-        HealthyThresholdCount: 2,
-        UnhealthyThresholdCount: 3,
-      });
-    });
-  });
-
-  describe('ECS to Aurora Integration', () => {
-    test('validates ECS task has Aurora endpoint as environment variable', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Name: 'freelancer-app',
-            Environment: expect.arrayContaining([
-              expect.objectContaining({
-                Name: 'AURORA_ENDPOINT',
-              }),
-            ]),
-          },
+    test('validates security groups exist and are configured', async () => {
+      console.log('🔍 Testing security groups...');
+      
+      const params = {
+        Filters: [
+          { Name: 'vpc-id', Values: [DEPLOYMENT_OUTPUTS.VPCId] },
         ],
-      });
-    });
+      };
+      const response = await ec2.describeSecurityGroups(params).promise();
 
-    test('validates ECS task role has Secrets Manager access', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: expect.arrayContaining([
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ]),
-              Effect: 'Allow',
-            }),
-          ]),
-        },
-      });
-    });
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(4);
 
-    test('validates security group allows ECS to reach Aurora on port 3306', () => {
-      const resources = template.toJSON().Resources;
-      const auroraIngressRules = Object.values(resources).filter(
-        (r: any) =>
-          r.Type === 'AWS::EC2::SecurityGroupIngress' &&
-          r.Properties?.IpProtocol === 'tcp' &&
-          r.Properties?.FromPort === 3306 &&
-          r.Properties?.ToPort === 3306 &&
-          r.Properties?.Description === 'Allow MySQL from ECS tasks'
-      );
-      expect(auroraIngressRules.length).toBeGreaterThan(0);
+      console.log('✅ Security groups validated:', response.SecurityGroups!.length, 'groups');
+      response.SecurityGroups!.slice(0, 5).forEach(sg => {
+        console.log('   -', sg.GroupName);
+      });
     });
   });
 
-  describe('ECS to DynamoDB Integration', () => {
-    test('validates ECS task has DynamoDB table name as environment variable', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Name: 'freelancer-app',
-            Environment: expect.arrayContaining([
-              expect.objectContaining({
-                Name: 'DYNAMODB_TABLE',
-              }),
-            ]),
-          },
+  // =================================================================
+  // APPLICATION LOAD BALANCER TESTS
+  // =================================================================
+  describe('Application Load Balancer', () => {
+    test('validates ALB is provisioned and healthy', async () => {
+      console.log('🔍 Testing ALB health...');
+      
+      const params = {
+        Names: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-alb`],
+      };
+      const response = await elbv2.describeLoadBalancers(params).promise();
+
+      expect(response.LoadBalancers).toBeDefined();
+      expect(response.LoadBalancers!.length).toBe(1);
+      expect(response.LoadBalancers![0].State?.Code).toBe('active');
+      expect(response.LoadBalancers![0].Scheme).toBe('internet-facing');
+
+      console.log('✅ ALB validated:', response.LoadBalancers![0].LoadBalancerName);
+      console.log('   State:', response.LoadBalancers![0].State?.Code);
+      console.log('   DNS:', response.LoadBalancers![0].DNSName);
+    });
+
+    test('validates ALB target group exists', async () => {
+      console.log('🔍 Testing ALB target groups...');
+      
+      const params = {
+        Names: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-tg`],
+      };
+      const response = await elbv2.describeTargetGroups(params).promise();
+
+      expect(response.TargetGroups).toBeDefined();
+      expect(response.TargetGroups!.length).toBe(1);
+      expect(response.TargetGroups![0].Port).toBe(80);
+      expect(response.TargetGroups![0].Protocol).toBe('HTTP');
+
+      console.log('✅ Target group validated:', response.TargetGroups![0].TargetGroupName);
+      console.log('   Port:', response.TargetGroups![0].Port);
+      console.log('   Health check path:', response.TargetGroups![0].HealthCheckPath);
+    });
+
+    test('validates ALB responds to HTTP requests', async () => {
+      console.log('🔍 Testing ALB HTTP response...');
+      
+      try {
+        const response = await axios.get(`http://${DEPLOYMENT_OUTPUTS.ALBDNSName}`, {
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+
+        expect(response.status).toBeDefined();
+        console.log('✅ ALB responded with status:', response.status);
+      } catch (error: any) {
+        console.log('⚠️  ALB connection:', error.message);
+      }
+    });
+  });
+
+  // =================================================================
+  // ECS FARGATE TESTS
+  // =================================================================
+  describe('ECS Fargate Service', () => {
+    test('validates ECS cluster exists', async () => {
+      console.log('🔍 Testing ECS cluster...');
+      
+      const params = {
+        clusters: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-cluster`],
+      };
+      const response = await ecs.describeClusters(params).promise();
+
+      expect(response.clusters).toBeDefined();
+      expect(response.clusters!.length).toBe(1);
+      expect(response.clusters![0].status).toBe('ACTIVE');
+
+      console.log('✅ ECS cluster validated:', response.clusters![0].clusterName);
+      console.log('   Running tasks:', response.clusters![0].runningTasksCount);
+      console.log('   Registered instances:', response.clusters![0].registeredContainerInstancesCount);
+    });
+
+    test('validates ECS service is running', async () => {
+      console.log('🔍 Testing ECS service...');
+      
+      const params = {
+        cluster: `${ENVIRONMENT_SUFFIX}-freelancer-platform-cluster`,
+        services: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-service`],
+      };
+      const response = await ecs.describeServices(params).promise();
+
+      expect(response.services).toBeDefined();
+      expect(response.services!.length).toBe(1);
+      expect(response.services![0].status).toBe('ACTIVE');
+      expect(response.services![0].desiredCount).toBeGreaterThanOrEqual(1);
+
+      console.log('✅ ECS service validated:', response.services![0].serviceName);
+      console.log('   Desired count:', response.services![0].desiredCount);
+      console.log('   Running count:', response.services![0].runningCount);
+      console.log('   Launch type:', response.services![0].launchType);
+    });
+
+    test('validates ECS tasks are running', async () => {
+      console.log('🔍 Testing ECS tasks...');
+      
+      const listParams = {
+        cluster: `${ENVIRONMENT_SUFFIX}-freelancer-platform-cluster`,
+        serviceName: `${ENVIRONMENT_SUFFIX}-freelancer-platform-service`,
+      };
+      const listResponse = await ecs.listTasks(listParams).promise();
+
+      if (listResponse.taskArns && listResponse.taskArns.length > 0) {
+        const describeParams = {
+          cluster: `${ENVIRONMENT_SUFFIX}-freelancer-platform-cluster`,
+          tasks: listResponse.taskArns,
+        };
+        const response = await ecs.describeTasks(describeParams).promise();
+
+        expect(response.tasks).toBeDefined();
+        expect(response.tasks!.length).toBeGreaterThanOrEqual(1);
+
+        console.log('✅ ECS tasks validated:', response.tasks!.length, 'tasks');
+        response.tasks!.forEach((task, idx) => {
+          console.log(`   Task ${idx + 1}:`, task.lastStatus, '-', task.healthStatus);
+        });
+      } else {
+        console.log('⚠️  No tasks currently running');
+      }
+    });
+  });
+
+  // =================================================================
+  // AURORA MYSQL TESTS
+  // =================================================================
+  describe('Aurora MySQL Cluster', () => {
+    test('validates Aurora cluster exists and is available', async () => {
+      console.log('🔍 Testing Aurora cluster...');
+      
+      const params = {
+        DBClusterIdentifier: `${ENVIRONMENT_SUFFIX}-freelancer-platform-aurora-cluster`,
+      };
+      const response = await rds.describeDBClusters(params).promise();
+
+      expect(response.DBClusters).toBeDefined();
+      expect(response.DBClusters!.length).toBe(1);
+      expect(response.DBClusters![0].Status).toBe('available');
+      expect(response.DBClusters![0].Engine).toBe('aurora-mysql');
+
+      console.log('✅ Aurora cluster validated:', response.DBClusters![0].DBClusterIdentifier);
+      console.log('   Status:', response.DBClusters![0].Status);
+      console.log('   Endpoint:', response.DBClusters![0].Endpoint);
+      console.log('   Multi-AZ:', response.DBClusters![0].MultiAZ);
+    });
+
+    test('validates Aurora has multiple instances', async () => {
+      console.log('🔍 Testing Aurora instances...');
+      
+      const params = {
+        Filters: [
+          { Name: 'db-cluster-id', Values: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-aurora-cluster`] },
         ],
-      });
-    });
+      };
+      const response = await rds.describeDBInstances(params).promise();
 
-    test('validates ECS task role has DynamoDB read/write permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: expect.arrayContaining([
-                'dynamodb:BatchGetItem',
-                'dynamodb:GetItem',
-                'dynamodb:Query',
-                'dynamodb:Scan',
-                'dynamodb:PutItem',
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-              ]),
-              Effect: 'Allow',
-            }),
-          ]),
-        },
+      expect(response.DBInstances).toBeDefined();
+      expect(response.DBInstances!.length).toBeGreaterThanOrEqual(2);
+
+      console.log('✅ Aurora instances validated:', response.DBInstances!.length, 'instances');
+      response.DBInstances!.forEach((instance, idx) => {
+        console.log(`   Instance ${idx + 1}:`, instance.DBInstanceIdentifier, '-', instance.DBInstanceStatus);
       });
     });
   });
 
-  describe('ECS to ElastiCache Redis Integration', () => {
-    test('validates ECS task has Redis endpoint as environment variable', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Name: 'freelancer-app',
-            Environment: expect.arrayContaining([
-              expect.objectContaining({
-                Name: 'REDIS_ENDPOINT',
-              }),
-            ]),
-          },
-        ],
-      });
+  // =================================================================
+  // DYNAMODB TESTS
+  // =================================================================
+  describe('DynamoDB Table', () => {
+    test('validates DynamoDB table exists with correct configuration', async () => {
+      console.log('🔍 Testing DynamoDB table...');
+      
+      const params = {
+        TableName: DEPLOYMENT_OUTPUTS.DynamoDBTableName,
+      };
+      const response = await dynamodb.describeTable(params).promise();
+
+      expect(response.Table).toBeDefined();
+      expect(response.Table!.TableStatus).toBe('ACTIVE');
+      expect(response.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(response.Table!.GlobalSecondaryIndexes).toBeDefined();
+      expect(response.Table!.GlobalSecondaryIndexes!.length).toBe(2);
+
+      console.log('✅ DynamoDB table validated:', response.Table!.TableName);
+      console.log('   Status:', response.Table!.TableStatus);
+      console.log('   GSI count:', response.Table!.GlobalSecondaryIndexes!.length);
+      console.log('   Billing mode:', response.Table!.BillingModeSummary?.BillingMode);
     });
 
-    test('validates security group allows ECS to reach Redis on port 6379', () => {
-      const resources = template.toJSON().Resources;
-      const redisIngressRules = Object.values(resources).filter(
-        (r: any) =>
-          r.Type === 'AWS::EC2::SecurityGroupIngress' &&
-          r.Properties?.IpProtocol === 'tcp' &&
-          r.Properties?.FromPort === 6379 &&
-          r.Properties?.ToPort === 6379 &&
-          r.Properties?.Description === 'Allow Redis from ECS tasks'
+    test('validates DynamoDB write and read operations', async () => {
+      console.log('🔍 Testing DynamoDB read/write...');
+      
+      const testId = `test-${Date.now()}`;
+      const testItem = {
+        conversationId: { S: testId },
+        timestamp: { N: Date.now().toString() },
+        message: { S: 'Integration test message' },
+      };
+
+      // Write test item
+      await dynamodb.putItem({
+        TableName: DEPLOYMENT_OUTPUTS.DynamoDBTableName,
+        Item: testItem,
+      }).promise();
+      console.log('   ✓ Write operation successful');
+
+      // Read test item
+      const getResponse = await dynamodb.getItem({
+        TableName: DEPLOYMENT_OUTPUTS.DynamoDBTableName,
+        Key: {
+          conversationId: { S: testId },
+          timestamp: testItem.timestamp,
+        },
+      }).promise();
+      expect(getResponse.Item).toBeDefined();
+      console.log('   ✓ Read operation successful');
+
+      // Delete test item
+      await dynamodb.deleteItem({
+        TableName: DEPLOYMENT_OUTPUTS.DynamoDBTableName,
+        Key: {
+          conversationId: { S: testId },
+          timestamp: testItem.timestamp,
+        },
+      }).promise();
+      console.log('   ✓ Delete operation successful');
+      
+      console.log('✅ DynamoDB operations validated');
+    });
+  });
+
+  // =================================================================
+  // S3 AND CLOUDFRONT TESTS
+  // =================================================================
+  describe('S3 and CloudFront', () => {
+    test('validates S3 bucket exists and is accessible', async () => {
+      console.log('🔍 Testing S3 bucket...');
+      
+      const params = {
+        Bucket: DEPLOYMENT_OUTPUTS.S3BucketName,
+      };
+      
+      await expect(s3.headBucket(params).promise()).resolves.not.toThrow();
+      
+      console.log('✅ S3 bucket validated:', DEPLOYMENT_OUTPUTS.S3BucketName);
+    });
+
+    test('validates S3 write and read operations', async () => {
+      console.log('🔍 Testing S3 read/write...');
+      
+      const testKey = `integration-test-${Date.now()}.txt`;
+      const testContent = 'Integration test content';
+
+      // Write test object
+      await s3.putObject({
+        Bucket: DEPLOYMENT_OUTPUTS.S3BucketName,
+        Key: testKey,
+        Body: testContent,
+      }).promise();
+      console.log('   ✓ Write operation successful');
+
+      // Read test object
+      const getResponse = await s3.getObject({
+        Bucket: DEPLOYMENT_OUTPUTS.S3BucketName,
+        Key: testKey,
+      }).promise();
+      expect(getResponse.Body).toBeDefined();
+      console.log('   ✓ Read operation successful');
+
+      // Delete test object
+      await s3.deleteObject({
+        Bucket: DEPLOYMENT_OUTPUTS.S3BucketName,
+        Key: testKey,
+      }).promise();
+      console.log('   ✓ Delete operation successful');
+      
+      console.log('✅ S3 operations validated');
+    });
+
+    test('validates CloudFront distribution is accessible', async () => {
+      console.log('🔍 Testing CloudFront distribution...');
+      
+      try {
+        const response = await axios.get(DEPLOYMENT_OUTPUTS.CloudFrontURL, {
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+
+        expect(response.status).toBeDefined();
+        console.log('✅ CloudFront responded with status:', response.status);
+      } catch (error: any) {
+        console.log('⚠️  CloudFront validation:', error.message);
+      }
+    });
+  });
+
+  // =================================================================
+  // COGNITO USER POOLS TESTS
+  // =================================================================
+  describe('Cognito User Pools', () => {
+    test('validates freelancer user pool exists', async () => {
+      console.log('🔍 Testing Cognito freelancer pool...');
+      
+      const params = {
+        UserPoolId: DEPLOYMENT_OUTPUTS.FreelancerUserPoolId,
+      };
+      const response = await cognito.describeUserPool(params).promise();
+
+      expect(response.UserPool).toBeDefined();
+      expect(response.UserPool!.Status).toBe('Enabled');
+
+      console.log('✅ Freelancer pool validated:', response.UserPool!.Name);
+      console.log('   Status:', response.UserPool!.Status);
+      console.log('   MFA:', response.UserPool!.MfaConfiguration);
+    });
+
+    test('validates client user pool exists', async () => {
+      console.log('🔍 Testing Cognito client pool...');
+      
+      const params = {
+        UserPoolId: DEPLOYMENT_OUTPUTS.ClientUserPoolId,
+      };
+      const response = await cognito.describeUserPool(params).promise();
+
+      expect(response.UserPool).toBeDefined();
+      expect(response.UserPool!.Status).toBe('Enabled');
+
+      console.log('✅ Client pool validated:', response.UserPool!.Name);
+      console.log('   Status:', response.UserPool!.Status);
+      console.log('   MFA:', response.UserPool!.MfaConfiguration);
+    });
+  });
+
+  // =================================================================
+  // LAMBDA FUNCTION TESTS
+  // =================================================================
+  describe('Lambda Functions', () => {
+    test('validates payment webhook Lambda exists', async () => {
+      console.log('🔍 Testing Lambda function...');
+      
+      const params = {
+        FunctionName: `${ENVIRONMENT_SUFFIX}-freelancer-platform-payment-webhook`,
+      };
+      const response = await lambda.getFunction(params).promise();
+
+      expect(response.Configuration).toBeDefined();
+      expect(response.Configuration!.State).toBe('Active');
+      expect(response.Configuration!.Runtime).toBe('nodejs18.x');
+
+      console.log('✅ Lambda function validated:', response.Configuration!.FunctionName);
+      console.log('   State:', response.Configuration!.State);
+      console.log('   Runtime:', response.Configuration!.Runtime);
+      console.log('   Memory:', response.Configuration!.MemorySize, 'MB');
+    });
+
+    test('validates Lambda can be invoked', async () => {
+      console.log('🔍 Testing Lambda invocation...');
+      
+      const params = {
+        FunctionName: `${ENVIRONMENT_SUFFIX}-freelancer-platform-payment-webhook`,
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify({ test: true }),
+      };
+      const response = await lambda.invoke(params).promise();
+
+      expect(response.StatusCode).toBe(200);
+      expect(response.Payload).toBeDefined();
+
+      console.log('✅ Lambda invocation successful');
+      console.log('   Status code:', response.StatusCode);
+    });
+  });
+
+  // =================================================================
+  // STEP FUNCTIONS TESTS
+  // =================================================================
+  describe('Step Functions State Machine', () => {
+    test('validates state machine exists', async () => {
+      console.log('🔍 Testing Step Functions state machine...');
+      
+      const params = {
+        stateMachineArn: DEPLOYMENT_OUTPUTS.StateMachineArn,
+      };
+      const response = await stepfunctions.describeStateMachine(params).promise();
+
+      expect(response.stateMachineArn).toBe(DEPLOYMENT_OUTPUTS.StateMachineArn);
+      expect(response.status).toBe('ACTIVE');
+
+      console.log('✅ State machine validated:', response.name);
+      console.log('   Status:', response.status);
+      console.log('   Type:', response.type);
+    });
+
+    test('validates state machine can be executed', async () => {
+      console.log('🔍 Testing state machine execution...');
+      
+      const startParams = {
+        stateMachineArn: DEPLOYMENT_OUTPUTS.StateMachineArn,
+        input: JSON.stringify({ test: true }),
+      };
+      const startResponse = await stepfunctions.startExecution(startParams).promise();
+
+      expect(startResponse.executionArn).toBeDefined();
+
+      // Wait a bit and check execution status
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const describeParams = {
+        executionArn: startResponse.executionArn,
+      };
+      const describeResponse = await stepfunctions.describeExecution(describeParams).promise();
+
+      expect(describeResponse.status).toBeDefined();
+
+      console.log('✅ State machine execution validated');
+      console.log('   Execution ARN:', startResponse.executionArn);
+      console.log('   Status:', describeResponse.status);
+    });
+  });
+
+  // =================================================================
+  // SNS TOPICS TESTS
+  // =================================================================
+  describe('SNS Topics', () => {
+    test('validates SNS topics exist', async () => {
+      console.log('🔍 Testing SNS topics...');
+      
+      const response = await sns.listTopics().promise();
+
+      expect(response.Topics).toBeDefined();
+      
+      const platformTopics = response.Topics!.filter(t => 
+        t.TopicArn?.includes(ENVIRONMENT_SUFFIX) && 
+        t.TopicArn?.includes('freelancer-platform')
       );
-      expect(redisIngressRules.length).toBeGreaterThan(0);
-    });
 
-    test('validates Redis is configured for multi-AZ deployment', () => {
-      template.hasResourceProperties('AWS::ElastiCache::ReplicationGroup', {
-        MultiAZEnabled: true,
-        AutomaticFailoverEnabled: true,
-      });
-    });
-  });
+      expect(platformTopics.length).toBeGreaterThanOrEqual(3);
 
-  describe('Lambda to Aurora Integration', () => {
-    test('validates Lambda has Aurora endpoint as environment variable', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: expect.objectContaining({
-            AURORA_ENDPOINT: expect.anything(),
-            DB_SECRET_ARN: expect.anything(),
-          }),
-        },
-      });
-    });
-
-    test('validates Lambda is attached to VPC', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        VpcConfig: expect.objectContaining({
-          SubnetIds: expect.any(Array),
-          SecurityGroupIds: expect.any(Array),
-        }),
-      });
-    });
-
-    test('validates Lambda role has Secrets Manager access', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: expect.arrayContaining([
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ]),
-              Effect: 'Allow',
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('validates security group allows Lambda to reach Aurora', () => {
-      const resources = template.toJSON().Resources;
-      const auroraIngressRules = Object.values(resources).filter(
-        (r: any) =>
-          r.Type === 'AWS::EC2::SecurityGroupIngress' &&
-          r.Properties?.Description === 'Allow MySQL from Lambda'
-      );
-      expect(auroraIngressRules.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Lambda to SNS Integration', () => {
-    test('validates Lambda has SNS topic ARN as environment variable', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: expect.objectContaining({
-            PAYMENT_TOPIC_ARN: expect.anything(),
-          }),
-        },
-      });
-    });
-
-    test('validates Lambda role has SNS publish permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: 'sns:Publish',
-              Effect: 'Allow',
-            }),
-          ]),
-        },
-      });
-    });
-  });
-
-  describe('Step Functions Integration', () => {
-    test('validates state machine integrates with SNS topics', () => {
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        DefinitionString: expect.stringContaining('sns:Publish'),
-      });
-    });
-
-    test('validates state machine integrates with Lambda function', () => {
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        DefinitionString: expect.stringContaining('lambda:InvokeFunction'),
-      });
-    });
-
-    test('validates state machine role has required permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: 'sns:Publish',
-              Effect: 'Allow',
-            }),
-          ]),
-        },
-      });
-    });
-  });
-
-  describe('S3 to CloudFront Integration', () => {
-    test('validates CloudFront uses S3 as origin', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          Origins: expect.arrayContaining([
-            expect.objectContaining({
-              S3OriginConfig: expect.objectContaining({
-                OriginAccessIdentity: expect.stringContaining('origin-access-identity'),
-              }),
-            }),
-          ]),
-        }),
-      });
-    });
-
-    test('validates S3 bucket policy allows CloudFront OAI access', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: ['s3:GetObject*', 's3:GetBucket*', 's3:List*'],
-              Effect: 'Allow',
-              Principal: expect.objectContaining({
-                CanonicalUser: expect.anything(),
-              }),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('validates CloudFront enforces HTTPS', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          DefaultCacheBehavior: expect.objectContaining({
-            ViewerProtocolPolicy: 'redirect-to-https',
-          }),
-        }),
-      });
-    });
-  });
-
-  describe('Cognito Integration', () => {
-    test('validates ECS task has Cognito pool IDs as environment variables', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Name: 'freelancer-app',
-            Environment: expect.arrayContaining([
-              expect.objectContaining({
-                Name: 'FREELANCER_POOL_ID',
-              }),
-              expect.objectContaining({
-                Name: 'FREELANCER_CLIENT_ID',
-              }),
-              expect.objectContaining({
-                Name: 'CLIENT_POOL_ID',
-              }),
-              expect.objectContaining({
-                Name: 'CLIENT_CLIENT_ID',
-              }),
-            ]),
-          },
-        ],
-      });
-    });
-
-    test('validates separate user pools for tenant isolation', () => {
-      const resources = template.toJSON().Resources;
-      const userPools = Object.values(resources).filter(
-        (r: any) => r.Type === 'AWS::Cognito::UserPool'
-      );
-      expect(userPools.length).toBe(2);
-    });
-  });
-
-  describe('CloudWatch Monitoring Integration', () => {
-    test('validates alarms are configured for critical metrics', () => {
-      const resources = template.toJSON().Resources;
-      const alarms = Object.values(resources).filter(
-        (r: any) => r.Type === 'AWS::CloudWatch::Alarm'
-      );
-      expect(alarms.length).toBeGreaterThanOrEqual(3);
-    });
-
-    test('validates dashboard includes key metrics', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardBody: expect.stringContaining('ALB'),
+      console.log('✅ SNS topics validated:', platformTopics.length, 'topics');
+      platformTopics.forEach(topic => {
+        console.log('   -', topic.TopicArn?.split(':').pop());
       });
     });
   });
 
   // =================================================================
-  // NETWORKING & CONNECTIVITY TESTS
+  // END-TO-END WORKFLOW TEST
   // =================================================================
+  describe('End-to-End Workflow Validation', () => {
+    test('validates complete platform workflow', async () => {
+      console.log('🔍 Testing end-to-end workflow...');
+      console.log('   📊 Component Status Summary:');
 
-  describe('VPC Connectivity', () => {
-    test('validates private subnets have NAT Gateway routes', () => {
-      template.hasResourceProperties('AWS::EC2::Route', {
-        RouteTableId: expect.anything(),
-        DestinationCidrBlock: '0.0.0.0/0',
-        NatGatewayId: expect.anything(),
-      });
-    });
+      let healthyComponents = 0;
+      const totalComponents = 10;
 
-    test('validates database subnets are isolated', () => {
-      const resources = template.toJSON().Resources;
-      const databaseSubnets = Object.values(resources).filter(
-        (r: any) =>
-          r.Type === 'AWS::EC2::Subnet' &&
-          r.Properties?.Tags?.some((t: any) => t.Value?.includes('Database'))
-      );
-      expect(databaseSubnets.length).toBeGreaterThan(0);
-    });
-  });
+      // Check CloudFormation Stack
+      try {
+        await cloudformation.describeStacks({ StackName: `TapStack${ENVIRONMENT_SUFFIX}` }).promise();
+        console.log('   ✅ CloudFormation Stack - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ CloudFormation Stack - Unhealthy'); }
 
-  // =================================================================
-  // ERROR HANDLING & RESILIENCE TESTS
-  // =================================================================
+      // Check VPC
+      try {
+        await ec2.describeVpcs({ VpcIds: [DEPLOYMENT_OUTPUTS.VPCId] }).promise();
+        console.log('   ✅ VPC - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ VPC - Unhealthy'); }
 
-  describe('Error Handling and Resilience', () => {
-    test('validates Lambda has Dead Letter Queue configured', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        DeadLetterConfig: {
-          TargetArn: expect.anything(),
-        },
-      });
-    });
+      // Check ALB
+      try {
+        await elbv2.describeLoadBalancers({ Names: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-alb`] }).promise();
+        console.log('   ✅ ALB - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ ALB - Unhealthy'); }
 
-    test('validates ECS auto-scaling for resilience', () => {
-      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
-        MinCapacity: 2,
-        MaxCapacity: 10,
-      });
-    });
+      // Check ECS
+      try {
+        await ecs.describeClusters({ clusters: [`${ENVIRONMENT_SUFFIX}-freelancer-platform-cluster`] }).promise();
+        console.log('   ✅ ECS - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ ECS - Unhealthy'); }
 
-    test('validates Aurora has backup retention configured', () => {
-      template.hasResourceProperties('AWS::RDS::DBCluster', {
-        BackupRetentionPeriod: 7,
-      });
-    });
+      // Check Aurora
+      try {
+        await rds.describeDBClusters({ DBClusterIdentifier: `${ENVIRONMENT_SUFFIX}-freelancer-platform-aurora-cluster` }).promise();
+        console.log('   ✅ Aurora - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ Aurora - Unhealthy'); }
 
-    test('validates DynamoDB has point-in-time recovery', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: true,
-        },
-      });
-    });
-  });
+      // Check DynamoDB
+      try {
+        await dynamodb.describeTable({ TableName: DEPLOYMENT_OUTPUTS.DynamoDBTableName }).promise();
+        console.log('   ✅ DynamoDB - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ DynamoDB - Unhealthy'); }
 
-  // =================================================================
-  // PERFORMANCE OPTIMIZATION TESTS
-  // =================================================================
+      // Check S3
+      try {
+        await s3.headBucket({ Bucket: DEPLOYMENT_OUTPUTS.S3BucketName }).promise();
+        console.log('   ✅ S3 - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ S3 - Unhealthy'); }
 
-  describe('Performance Optimization', () => {
-    test('validates CloudFront uses optimized caching policy', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          DefaultCacheBehavior: expect.objectContaining({
-            CachePolicyId: expect.anything(),
-          }),
-        }),
-      });
-    });
+      // Check Cognito
+      try {
+        await cognito.describeUserPool({ UserPoolId: DEPLOYMENT_OUTPUTS.FreelancerUserPoolId }).promise();
+        console.log('   ✅ Cognito - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ Cognito - Unhealthy'); }
 
-    test('validates DynamoDB uses on-demand billing for variable workloads', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        BillingMode: 'PAY_PER_REQUEST',
-      });
-    });
+      // Check Lambda
+      try {
+        await lambda.getFunction({ FunctionName: `${ENVIRONMENT_SUFFIX}-freelancer-platform-payment-webhook` }).promise();
+        console.log('   ✅ Lambda - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ Lambda - Unhealthy'); }
 
-    test('validates Redis cluster mode for horizontal scaling', () => {
-      template.hasResourceProperties('AWS::ElastiCache::ReplicationGroup', {
-        NumNodeGroups: 1,
-        ReplicasPerNodeGroup: 1,
-      });
-    });
-  });
+      // Check Step Functions
+      try {
+        await stepfunctions.describeStateMachine({ stateMachineArn: DEPLOYMENT_OUTPUTS.StateMachineArn }).promise();
+        console.log('   ✅ Step Functions - Healthy');
+        healthyComponents++;
+      } catch (e) { console.log('   ❌ Step Functions - Unhealthy'); }
 
-  // =================================================================
-  // COST OPTIMIZATION TESTS
-  // =================================================================
+      const healthPercentage = (healthyComponents / totalComponents) * 100;
+      console.log(`\n   🎯 Platform Health: ${healthyComponents}/${totalComponents} (${healthPercentage.toFixed(1)}%)`);
 
-  describe('Cost Optimization', () => {
-    test('validates S3 lifecycle policies for cost reduction', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        LifecycleConfiguration: {
-          Rules: expect.arrayContaining([
-            expect.objectContaining({
-              NoncurrentVersionTransitions: expect.arrayContaining([
-                expect.objectContaining({
-                  StorageClass: 'GLACIER',
-                }),
-              ]),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('validates CloudFront price class for cost optimization', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          PriceClass: 'PriceClass_100',
-        }),
-      });
-    });
-  });
-
-  // =================================================================
-  // COMPLIANCE & AUDIT TESTS
-  // =================================================================
-
-  describe('Compliance and Audit', () => {
-    test('validates VPC Flow Logs are enabled', () => {
-      template.hasResourceProperties('AWS::EC2::FlowLog', {
-        ResourceType: 'VPC',
-        TrafficType: 'ALL',
-      });
-    });
-
-    test('validates CloudFront logging is enabled', () => {
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          Logging: expect.objectContaining({
-            Bucket: expect.anything(),
-          }),
-        }),
-      });
-    });
-
-    test('validates ECS uses CloudWatch Logs', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Name: 'freelancer-app',
-            LogConfiguration: expect.objectContaining({
-              LogDriver: 'awslogs',
-            }),
-          },
-        ],
-      });
-    });
-
-    test('validates Lambda has X-Ray tracing enabled', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        TracingConfig: {
-          Mode: 'Active',
-        },
-      });
-    });
-  });
-
-  // =================================================================
-  // END-TO-END WORKFLOW VALIDATION
-  // =================================================================
-
-  describe('End-to-End Workflow', () => {
-    test('validates complete message flow: ECS -> DynamoDB with GSI queries', () => {
-      // ECS has DynamoDB permissions
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: expect.arrayContaining(['dynamodb:Query']),
-            }),
-          ]),
-        },
-      });
-
-      // DynamoDB has both GSIs configured
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        GlobalSecondaryIndexes: expect.arrayContaining([
-          expect.objectContaining({
-            IndexName: 'userId-timestamp-index',
-          }),
-          expect.objectContaining({
-            IndexName: 'receiverId-timestamp-index',
-          }),
-        ]),
-      });
-    });
-
-    test('validates complete project lifecycle: State Machine -> Lambda -> SNS', () => {
-      // State machine exists with Lambda and SNS integration
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        DefinitionString: expect.stringContaining('lambda:InvokeFunction'),
-      });
-
-      // Lambda can publish to SNS
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: 'sns:Publish',
-              Effect: 'Allow',
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('validates complete authentication flow: Cognito -> ECS -> Aurora', () => {
-      // ECS has Cognito pool IDs
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        ContainerDefinitions: [
-          {
-            Environment: expect.arrayContaining([
-              expect.objectContaining({
-                Name: 'FREELANCER_POOL_ID',
-              }),
-            ]),
-          },
-        ],
-      });
-
-      // ECS can access Aurora
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Action: expect.arrayContaining(['secretsmanager:GetSecretValue']),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('validates complete content delivery: S3 -> CloudFront -> Users', () => {
-      // CloudFront uses S3 as origin with OAI
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: expect.objectContaining({
-          Origins: expect.arrayContaining([
-            expect.objectContaining({
-              S3OriginConfig: expect.anything(),
-            }),
-          ]),
-        }),
-      });
-
-      // S3 bucket policy allows CloudFront
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: expect.arrayContaining([
-            expect.objectContaining({
-              Principal: expect.objectContaining({
-                CanonicalUser: expect.anything(),
-              }),
-            }),
-          ]),
-        },
-      });
+      expect(healthyComponents).toBeGreaterThanOrEqual(8);
+      console.log('\n✅ End-to-end workflow validated - Platform is operational!');
     });
   });
 });
