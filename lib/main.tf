@@ -8,17 +8,6 @@ provider "aws" {
   }
 }
 
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-
-  default_tags {
-    tags = {
-      iac-rlhf-amazon = var.iac_rlhf_tag_value
-    }
-  }
-}
-
 terraform {
   required_providers {
     aws = {
