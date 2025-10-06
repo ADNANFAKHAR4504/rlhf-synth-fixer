@@ -26,7 +26,6 @@ from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import aws_cloudwatch as cloudwatch
-from aws_cdk import aws_cloudwatch_actions as cw_actions
 from constructs import Construct
 
 
@@ -236,7 +235,7 @@ class TapStack(Stack):
             type="String",
             default="10.0.0.0/16",
             description="CIDR block for the main VPC",
-            allowed_pattern=r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$"
+            allowed_pattern="^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$"
         )
         
         # Subnet mask parameters
@@ -298,12 +297,11 @@ class TapStack(Stack):
     def _create_network_infrastructure(self):
         """Create isolated VPC architecture with security zones"""
         
-        # Create main VPC with concrete CIDR (CDK requires concrete values for automatic subnet subdivision)
-        # Note: Parameters are available for other resources but VPC needs concrete CIDR for subnet calculation
+        # Create main VPC with isolated subnets
         self.vpc = ec2.Vpc(
             self, "ZeroTrustVPC",
             max_azs=3,
-            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
+            ip_addresses=ec2.IpAddresses.cidr(self.vpc_cidr.value_as_string),
             enable_dns_hostnames=True,
             enable_dns_support=True,
             nat_gateways=0,  # No NAT by default, will add with strict controls
@@ -312,25 +310,25 @@ class TapStack(Stack):
                 ec2.SubnetConfiguration(
                     name="DMZ",
                     subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24
+                    cidr_mask=self.dmz_subnet_mask.value_as_number
                 ),
                 # Application subnet for workloads
                 ec2.SubnetConfiguration(
                     name="Application",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.app_subnet_mask.value_as_number
                 ),
                 # Data subnet for databases
                 ec2.SubnetConfiguration(
                     name="Data",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.data_subnet_mask.value_as_number
                 ),
                 # Management subnet for administration
                 ec2.SubnetConfiguration(
                     name="Management",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
+                    cidr_mask=self.mgmt_subnet_mask.value_as_number
                 )
             ],
             flow_logs={
@@ -1902,11 +1900,11 @@ def send_response(event, context, status, data, physical_id=None):
         
         # Add alarms to SNS topic for notifications
         ec2_usage_alarm.add_alarm_action(
-            cw_actions.SnsAction(self.alert_topic)
+            cloudwatch.SnsAction(self.alert_topic)
         )
         
         s3_usage_alarm.add_alarm_action(
-            cw_actions.SnsAction(self.alert_topic)
+            cloudwatch.SnsAction(self.alert_topic)
         )
         
         # Output resource limits for reference
