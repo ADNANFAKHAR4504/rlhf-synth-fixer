@@ -50,19 +50,6 @@ class TapStack(cdk.Stack):
     This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
     It determines the environment suffix from the provided properties, 
       CDK context, or defaults to 'dev'.
-    Note:
-      - Do NOT create AWS resources directly in this stack.
-      - Instead, instantiate separate stacks for each resource type within this stack.
-
-    Args:
-      scope (Construct): The parent construct.
-      construct_id (str): The unique identifier for this stack.
-      props (Optional[TapStackProps]): Optional properties for configuring the 
-        stack, including environment suffix.
-      **kwargs: Additional keyword arguments passed to the CDK Stack.
-
-    Attributes:
-      environment_suffix (str): The environment suffix used for resource naming and configuration.
     """
 
     def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
@@ -76,7 +63,6 @@ class TapStack(cdk.Stack):
         # ==================== S3 Bucket for Logs ====================
         log_bucket = s3.Bucket(
             self, "ApplicationLogsBucket",
-            bucket_name=f"user-mgmt-logs-{self.account}-{self.region}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -133,9 +119,69 @@ class TapStack(cdk.Stack):
         # ==================== Lambda Functions ====================
         create_user_lambda = lambda_.Function(
             self, "CreateUserFunction",
-            runtime=lambda_.Runtime.NODEJS_20_X,
-            handler="index.createUser",
-            code=lambda_.Code.from_asset("lambda/create_user"),
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            handler="index.lambda_handler",
+            code=lambda_.Code.from_inline(
+                """
+import json
+import boto3
+import os
+import logging
+from datetime import datetime
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+
+# Get environment variables
+TABLE_NAME = os.environ['TABLE_NAME']
+LOG_BUCKET = os.environ['LOG_BUCKET']
+
+def lambda_handler(event, context):
+    try:
+        logger.info(f"Received event: {json.dumps(event)}")
+        
+        # Parse the request body
+        body = json.loads(event['body'])
+        user_id = body.get('userId', f"user-{int(datetime.now().timestamp())}")
+        created_date = datetime.now().isoformat()
+
+        # Insert the user into DynamoDB
+        table = dynamodb.Table(TABLE_NAME)
+        table.put_item(
+            Item={
+                'userId': user_id,
+                'createdDate': created_date,
+                **body
+            },
+            ConditionExpression='attribute_not_exists(userId)'
+        )
+
+        # Log the operation to S3
+        log_key = f"logs/{user_id}-{int(datetime.now().timestamp())}.json"
+        s3.put_object(
+            Bucket=LOG_BUCKET,
+            Key=log_key,
+            Body=json.dumps({'operation': 'CREATE', 'userId': user_id, 'body': body}),
+            ContentType='application/json'
+        )
+
+        return {
+            'statusCode': 201,
+            'body': json.dumps({'message': 'User created successfully', 'userId': user_id, 'createdDate': created_date})
+        }
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'message': 'Internal server error', 'error': str(e)})
+        }
+                """
+            ),
             timeout=Duration.seconds(30),
             memory_size=512,
             role=lambda_role,
@@ -154,7 +200,6 @@ class TapStack(cdk.Stack):
             description="API for user management operations",
             deploy_options=apigateway.StageOptions(
                 stage_name="prod",
-                logging_level=apigateway.MethodLoggingLevel.INFO,
                 data_trace_enabled=True,
                 metrics_enabled=True,
                 tracing_enabled=True,
@@ -170,28 +215,17 @@ class TapStack(cdk.Stack):
             apigateway.LambdaIntegration(create_user_lambda),
         )
 
-        # ==================== CloudFront Distribution ====================
-        cf_distribution = cloudfront.Distribution(
-            self, "UserManagementDistribution",
-            default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.RestApiOrigin(api),
-                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-            ),
-        )
-
-        # ==================== CloudWatch Alarms ====================
-        cloudwatch.Alarm(
-            self, "CreateUserDurationAlarm",
-            metric=create_user_lambda.metric_duration(statistic="Average"),
-            threshold=25000,
-            evaluation_periods=2,
-            datapoints_to_alarm=2,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        )
-
         # ==================== Outputs ====================
         CfnOutput(self, "ApiUrl", value=api.url, description="API Gateway URL")
-        CfnOutput(self, "CloudFrontUrl", value=f"https://{cf_distribution.domain_name}", description="CloudFront URL")
         CfnOutput(self, "DynamoDBTableName", value=users_table.table_name, description="DynamoDB Table Name")
         CfnOutput(self, "LogBucketName", value=log_bucket.bucket_name, description="S3 Log Bucket Name")
         CfnOutput(self, "DLQUrl", value=dlq.queue_url, description="Dead Letter Queue URL")
+
+        # Additional Outputs
+        CfnOutput(self, "ApiStageName", value="prod", description="API Gateway Stage Name")
+        CfnOutput(self, "LambdaFunctionName", value=create_user_lambda.function_name, description="Lambda Function Name")
+        CfnOutput(self, "LambdaFunctionArn", value=create_user_lambda.function_arn, description="Lambda Function ARN")
+        CfnOutput(self, "CloudWatchLogGroupName", value=create_user_lambda.log_group.log_group_name, description="CloudWatch Log Group Name")
+        CfnOutput(self, "S3BucketArn", value=log_bucket.bucket_arn, description="S3 Bucket ARN")
+        CfnOutput(self, "DynamoDBTableArn", value=users_table.table_arn, description="DynamoDB Table ARN")
+        CfnOutput(self, "DLQArn", value=dlq.queue_arn, description="Dead Letter Queue ARN")
