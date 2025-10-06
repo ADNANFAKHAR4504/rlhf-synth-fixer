@@ -119,7 +119,7 @@ resource "aws_eip" "nat" {
     Name = "${var.project_name}-nat-eip-${count.index + 1}"
   })
 
-   depends_on = [aws_internet_gateway.main]
+   depends_on = [aws_internet_gateway.main, aws_vpc.main]
 }
 
 # NAT Gateways
