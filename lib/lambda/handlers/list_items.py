@@ -6,6 +6,25 @@ from typing import Dict, Any, Optional
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 
+# Import utilities from layer
+try:
+    from utils import DecimalEncoder, format_response
+except ImportError:
+    # Fallback if layer is not available
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, obj):
+            from decimal import Decimal
+            if isinstance(obj, Decimal):
+                return float(obj)
+            return super(DecimalEncoder, self).default(obj)
+    
+    def format_response(status_code, body, headers=None):
+        return {
+            'statusCode': status_code,
+            'headers': headers or {'Content-Type': 'application/json'},
+            'body': json.dumps(body, cls=DecimalEncoder)
+        }
+
 dynamodb = boto3.resource('dynamodb')
 ssm = boto3.client('ssm')
 logger = logging.getLogger()
@@ -76,11 +95,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Listed {result['count']} items")
 
-        return {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps(result)
-        }
+        return format_response(200, result)
 
     except ClientError as e:
         logger.error(f"DynamoDB error: {str(e)}")

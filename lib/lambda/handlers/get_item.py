@@ -6,6 +6,25 @@ from typing import Dict, Any
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr
 
+# Import utilities from layer
+try:
+    from utils import DecimalEncoder, format_response
+except ImportError:
+    # Fallback if layer is not available
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, obj):
+            from decimal import Decimal
+            if isinstance(obj, Decimal):
+                return float(obj)
+            return super(DecimalEncoder, self).default(obj)
+    
+    def format_response(status_code, body, headers=None):
+        return {
+            'statusCode': status_code,
+            'headers': headers or {'Content-Type': 'application/json'},
+            'body': json.dumps(body, cls=DecimalEncoder)
+        }
+
 dynamodb = boto3.resource('dynamodb')
 logger = logging.getLogger()
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
@@ -18,11 +37,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         item_id = path_params.get('item_id')
 
         if not item_id:
-            return {
-                'statusCode': 400,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'Missing item_id parameter'})
-            }
+            return format_response(400, {'error': 'Missing item_id parameter'})
 
         # Get query parameters
         query_params = event.get('queryStringParameters', {}) or {}
@@ -42,11 +57,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
 
             if 'Item' not in response:
-                return {
-                    'statusCode': 404,
-                    'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': 'Item not found'})
-                }
+                return format_response(404, {'error': 'Item not found'})
 
             item = response['Item']
         else:
@@ -57,33 +68,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
 
             if not response.get('Items'):
-                return {
-                    'statusCode': 404,
-                    'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': 'Item not found'})
-                }
+                return format_response(404, {'error': 'Item not found'})
 
             item = response['Items'][0]
 
         logger.info(f"Retrieved item: {item_id}")
 
-        return {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'item': item})
-        }
+        return format_response(200, {'item': item})
 
     except ClientError as e:
         logger.error(f"DynamoDB error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Internal server error'})
-        }
+        return format_response(500, {'error': 'Internal server error'})
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Internal server error'})
-        }
+        return format_response(500, {'error': 'Internal server error'})

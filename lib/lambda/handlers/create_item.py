@@ -7,6 +7,32 @@ from typing import Dict, Any
 import logging
 from botocore.exceptions import ClientError
 
+# Import utilities from layer
+try:
+    from utils import DecimalEncoder, validate_item_data, format_response
+except ImportError:
+    # Fallback if layer is not available
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, obj):
+            from decimal import Decimal
+            if isinstance(obj, Decimal):
+                return float(obj)
+            return super(DecimalEncoder, self).default(obj)
+    
+    def validate_item_data(item_data):
+        required_fields = ['sku', 'name', 'quantity', 'category']
+        for field in required_fields:
+            if field not in item_data:
+                return False, f"Missing required field: {field}"
+        return True, "Valid"
+    
+    def format_response(status_code, body, headers=None):
+        return {
+            'statusCode': status_code,
+            'headers': headers or {'Content-Type': 'application/json'},
+            'body': json.dumps(body, cls=DecimalEncoder)
+        }
+
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
 ssm = boto3.client('ssm')
@@ -19,15 +45,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Parse request body
         body = json.loads(event.get('body', '{}'))
 
-        # Validate required fields
-        required_fields = ['sku', 'name', 'quantity', 'category']
-        for field in required_fields:
-            if field not in body:
-                return {
-                    'statusCode': 400,
-                    'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': f'Missing required field: {field}'})
-                }
+        # Validate request data
+        is_valid, validation_message = validate_item_data(body)
+        if not is_valid:
+            return format_response(400, {'error': validation_message})
 
         # Get table name from environment
         table_name = os.environ['TABLE_NAME']
@@ -62,32 +83,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         logger.info(f"Created item: {item_id}")
 
-        return {
-            'statusCode': 201,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({
-                'message': 'Item created successfully',
-                'item': item
-            })
-        }
+        return format_response(201, {
+            'message': 'Item created successfully',
+            'item': item
+        })
 
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            return {
-                'statusCode': 409,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'Item with this SKU already exists'})
-            }
+            return format_response(409, {'error': 'Item with this SKU already exists'})
         logger.error(f"DynamoDB error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Internal server error'})
-        }
+        return format_response(500, {'error': 'Internal server error'})
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Internal server error'})
-        }
+        return format_response(500, {'error': 'Internal server error'})
