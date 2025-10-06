@@ -1,7 +1,5 @@
 # Infrastructure Code for Project Management Platform
 
-Here is the complete Terraform HCL infrastructure code for the project management platform with enhanced features including AWS Secrets Manager and EventBridge Scheduler:
-
 ```hcl
 # main.tf
 terraform {
