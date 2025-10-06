@@ -30,6 +30,7 @@ import {
   configDeliveryChannel,
   configConfigRule,
   eip,
+  dataAwsCallerIdentity,
 } from '@cdktf/provider-aws';
 
 // Module configuration interfaces
@@ -754,6 +755,13 @@ export class KmsModule extends Construct {
   constructor(scope: Construct, id: string, config: KmsModuleConfig) {
     super(scope, id);
 
+    // Create the data source for current AWS account
+    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current',
+      {}
+    );
+
     // Create KMS key
     this.key = new kmsKey.KmsKey(this, 'kms-key', {
       description: config.description,
@@ -766,16 +774,10 @@ export class KmsModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: '*',
+              AWS: `arn:aws:iam::${currentAccount.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
-            Condition: {
-              StringEquals: {
-                'kms:CallerAccount':
-                  '${data.aws_caller_identity.current.account_id}',
-              },
-            },
           },
           {
             Sid: 'Allow CloudTrail to encrypt logs',
@@ -787,8 +789,7 @@ export class KmsModule extends Construct {
             Resource: '*',
             Condition: {
               StringLike: {
-                'kms:EncryptionContext:aws:cloudtrail:arn':
-                  'arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*',
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:*:${currentAccount.accountId}:trail/*`,
               },
             },
           },
