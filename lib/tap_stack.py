@@ -399,6 +399,7 @@ class TapStack(pulumi.ComponentResource):
             f"tap-db-master-password-{self.environment_suffix}",
             name=f"tap/db/master-password-{self.environment_suffix}",
             description="Master password for Aurora PostgreSQL cluster",
+            recovery_window_in_days=0,  # Force immediate deletion to allow recreation
             tags={**self.tags, 'Name': f'tap-db-master-password-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
@@ -421,7 +422,7 @@ class TapStack(pulumi.ComponentResource):
             engine_version="15.4",
             database_name="tapdb",
             master_username="tapdbadmin",
-            master_password=self.db_master_password.id,  # Retrieved from AWS Secrets Manager
+            master_password=self.db_master_password_version.secret_string,  # Retrieved from AWS Secrets Manager
             db_subnet_group_name=self.aurora_subnet_group.name,
             vpc_security_group_ids=[self.aurora_sg.id],
             db_cluster_parameter_group_name=self.aurora_cluster_param_group.name,
