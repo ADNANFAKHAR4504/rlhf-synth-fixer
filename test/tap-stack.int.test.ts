@@ -38,10 +38,9 @@ describe("TapStack Integration Tests", () => {
   let stackName: string;
 
   beforeAll(() => {
-    // Load deployment outputs
-    const outputFilePath = path.join(__dirname, "..", "deployment-outputs.json");
+    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
     if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`deployment-outputs.json not found at ${outputFilePath}`);
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
     }
     
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
