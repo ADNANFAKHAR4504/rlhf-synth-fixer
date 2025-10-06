@@ -30,9 +30,18 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     }
   });
 
+  // Helper function to skip tests when stack isn't deployed
+  const skipIfStackMissing = (): boolean => {
+    if (!stackExists) {
+      console.warn('⚠️  Skipping test - CloudFormation stack not deployed');
+      return true;
+    }
+    return false;
+  };
+
   describe('Stack Deployment Validation', () => {
     test('should have deployed stack with outputs', () => {
-      if (!stackExists) {
+      if (skipIfStackMissing()) {
         console.log(
           'Stack not deployed yet - run deployment first to enable integration tests'
         );
@@ -44,8 +53,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('should have API endpoint output available', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -58,8 +66,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('DynamoDB Tables Integration', () => {
     test('should have VotesTable deployed', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -68,8 +75,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('should have PollsTable deployed', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -78,8 +84,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('VotesTable should be accessible for write operations', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -91,8 +96,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('PollsTable should support atomic counter updates', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -103,8 +107,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('API Gateway Integration', () => {
     test('API endpoint should be publicly accessible', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -114,8 +117,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('vote endpoint should accept POST requests', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -130,8 +132,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('results endpoint should return vote tallies', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -140,8 +141,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('API should enforce request validation', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -152,8 +152,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('Lambda Function Integration', () => {
     test('VoteProcessorFunction should be deployed and invocable', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -164,8 +163,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda should process votes with idempotency', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -175,8 +173,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda should update Redis cache after vote', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -185,8 +182,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda should write CloudWatch metrics', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -197,8 +193,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('ElastiCache Redis Integration', () => {
     test('Redis cluster should be deployed and accessible from Lambda', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -207,8 +202,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Redis should cache real-time vote counts', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -217,8 +211,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Redis cache should have TTL of 1 hour', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -229,8 +222,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('S3 Results Bucket Integration', () => {
     test('ResultsBucket should be deployed and accessible', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -239,8 +231,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda should be able to write export files to S3', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -249,8 +240,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('S3 bucket should enforce encryption at rest', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -259,8 +249,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('S3 bucket should have lifecycle policy for archival', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -271,8 +260,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('EventBridge Schedule Integration', () => {
     test('scheduled rule should trigger ResultsExporterFunction hourly', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -281,8 +269,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('scheduled exports should create timestamped CSV files in S3', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -293,8 +280,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('CloudWatch Monitoring Integration', () => {
     test('custom metrics should be published to VotingSystem namespace', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -303,8 +289,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('high vote volume alarm should trigger SNS notification', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -313,8 +298,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda error alarm should trigger on function failures', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -325,8 +309,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('End-to-End Voting Workflow', () => {
     test('should successfully process complete voting workflow', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -341,8 +324,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('should handle concurrent vote submissions correctly', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -352,8 +334,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('should prevent duplicate votes with idempotency keys', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -363,8 +344,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('should enforce API throttling limits', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -375,8 +355,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('Security and Access Control', () => {
     test('DynamoDB tables should deny public access', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -385,8 +364,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('S3 bucket should block all public access', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -395,8 +373,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda functions should have least privilege IAM roles', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -405,8 +382,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('ElastiCache should require TLS for connections', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -417,8 +393,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('Performance and Scalability', () => {
     test('should handle 5000 votes per day without errors', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -427,8 +402,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('DynamoDB should scale automatically with on-demand billing', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -437,8 +411,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('API Gateway should handle burst traffic within limits', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -447,8 +420,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Redis cache should provide sub-second latency for reads', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -459,8 +431,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('Data Integrity and Consistency', () => {
     test('atomic counters in DynamoDB should maintain accurate vote counts', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -469,8 +440,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('idempotency table should prevent duplicate vote processing', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -479,8 +449,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('export files should match vote records in DynamoDB', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -491,8 +460,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('QuickSight Analytics Integration', () => {
     test('QuickSight data source should connect to S3 bucket', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -502,8 +470,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('demographic analysis should be available in QuickSight', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -514,8 +481,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
 
   describe('Failure Recovery and Resilience', () => {
     test('ElastiCache should failover automatically in multi-AZ setup', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -524,8 +490,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('DynamoDB should support point-in-time recovery', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 
@@ -534,8 +499,7 @@ describe('Serverless Polling and Voting System - Integration Tests', () => {
     });
 
     test('Lambda should gracefully handle ElastiCache unavailability', () => {
-      if (!stackExists) {
-        console.log('Skipping test - stack not deployed');
+      if (skipIfStackMissing()) {
         return;
       }
 

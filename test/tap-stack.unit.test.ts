@@ -349,9 +349,12 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
     test('should have API Gateway stage with throttling', () => {
       expect(template.Resources.VotingApiStage).toBeDefined();
       const stage = template.Resources.VotingApiStage;
-      expect(stage.Properties.ThrottleSettings).toBeDefined();
-      expect(stage.Properties.ThrottleSettings.RateLimit).toEqual({
+      expect(stage.Properties.MethodSettings).toBeDefined();
+      expect(stage.Properties.MethodSettings[0].ThrottlingRateLimit).toEqual({
         Ref: 'ApiThrottleRateLimit',
+      });
+      expect(stage.Properties.MethodSettings[0].ThrottlingBurstLimit).toEqual({
+        Ref: 'ApiThrottleBurstLimit',
       });
     });
 
@@ -704,7 +707,8 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
 
       // API Gateway throttling configured
       expect(
-        template.Resources.VotingApiStage.Properties.ThrottleSettings
+        template.Resources.VotingApiStage.Properties.MethodSettings[0]
+          .ThrottlingRateLimit
       ).toBeDefined();
 
       // Lambda memory configured for performance

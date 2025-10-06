@@ -748,21 +748,19 @@
                 "DeploymentId": {
                     "Ref": "VotingApiDeployment"
                 },
-                "ThrottleSettings": {
-                    "RateLimit": {
-                        "Ref": "ApiThrottleRateLimit"
-                    },
-                    "BurstLimit": {
-                        "Ref": "ApiThrottleBurstLimit"
-                    }
-                },
                 "MethodSettings": [
                     {
                         "ResourcePath": "/*",
                         "HttpMethod": "*",
                         "LoggingLevel": "INFO",
                         "DataTraceEnabled": true,
-                        "MetricsEnabled": true
+                        "MetricsEnabled": true,
+                        "ThrottlingRateLimit": {
+                            "Ref": "ApiThrottleRateLimit"
+                        },
+                        "ThrottlingBurstLimit": {
+                            "Ref": "ApiThrottleBurstLimit"
+                        }
                     }
                 ]
             }
