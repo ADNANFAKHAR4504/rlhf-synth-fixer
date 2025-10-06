@@ -1,4 +1,3 @@
-# ============================================================================
 # Serverless Recommendation System - Main Infrastructure
 # ============================================================================
 
@@ -94,6 +93,12 @@ variable "retraining_schedule" {
   description = "Schedule expression for model retraining"
   type        = string
   default     = "cron(0 2 * * ? *)"
+}
+
+variable "personalize_campaign_arn" {
+  description = "Amazon Personalize Campaign ARN (set via setup-personalize.sh)"
+  type        = string
+  default     = ""
 }
 
 variable "common_tags" {
@@ -833,8 +838,9 @@ resource "aws_lambda_function" "recommendation_api" {
 
   environment {
     variables = {
-      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.primary_endpoint_address
-      PERSONALIZE_REGION = var.aws_region
+      REDIS_ENDPOINT            = aws_elasticache_replication_group.redis.primary_endpoint_address
+      PERSONALIZE_REGION        = var.aws_region
+      PERSONALIZE_CAMPAIGN_ARN  = var.personalize_campaign_arn
     }
   }
 
@@ -882,17 +888,30 @@ resource "aws_glue_job" "data_preparation" {
 }
 
 # ============================================================================
-# Amazon Personalize (Note: Personalize resources are not fully supported in Terraform)
-# These would need to be created via AWS CLI or Console
+# Amazon Personalize
 # ============================================================================
-
-# Placeholder for Personalize resources
-# Use AWS CLI to create:
-# - Dataset Group
-# - Schema
-# - Dataset
-# - Solution
-# - Campaign
+# Note: Personalize resources are not fully supported in Terraform AWS provider.
+# Run the setup script to create these resources via AWS CLI:
+#
+#   chmod +x lib/scripts/setup-personalize.sh
+#   export AWS_REGION=us-east-1
+#   export PROJECT_NAME=recommendation-system
+#   ./lib/scripts/setup-personalize.sh
+#
+# The script will create:
+# - Dataset Group: recommendation-system-dataset-group
+# - Schema: Interactions schema with USER_ID, ITEM_ID, TIMESTAMP, EVENT_TYPE
+# - Dataset: recommendation-system-interactions
+# - Dataset Import Job: Imports data from S3
+# - Solution: Uses aws-user-personalization recipe
+# - Solution Version: Trains the ML model (takes 1-2 hours)
+# - Campaign: Serves recommendations via API
+#
+# After setup completes, set the campaign ARN as a Terraform variable:
+#   export TF_VAR_personalize_campaign_arn='<campaign-arn-from-script-output>'
+#   terraform apply
+#
+# This will update the Lambda environment variable to use the campaign.
 
 # ============================================================================
 # Step Functions
