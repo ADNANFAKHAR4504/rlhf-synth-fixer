@@ -1093,7 +1093,7 @@ output "vpn_connection_id" {
 
 ## Additional Setup Instructions
 
-### 1. **Lambda Function ZIP File**
+### 1. Lambda Function ZIP File
 You'll need to create a `rds_backup_lambda.zip` file containing the Lambda function code. Create a file named `index.py`:
 
 ```python
@@ -1126,7 +1126,7 @@ Then zip it:
 zip rds_backup_lambda.zip index.py
 ```
 
-### 2. **Initialize and Apply**
+### 2. Initialize and Apply
 
 ```bash
 # Initialize with backend configuration
@@ -1142,20 +1142,20 @@ terraform plan
 terraform apply
 ```
 
-### 3. **Important Security Considerations**
+### 3. Important Security Considerations
 
-1. **RDS Password**: Replace the hardcoded password with AWS Secrets Manager
-2. **Customer Gateway IP**: Update `var.customer_gateway_ip` with your actual on-premises IP
-3. **VPN Routes**: Adjust the on-premises CIDR blocks according to your network
-4. **SSL Certificates**: For production, implement SSL certificates on ALB using AWS Certificate Manager
+1. RDS Password: Replace the hardcoded password with AWS Secrets Manager
+2. Customer Gateway IP: Update `var.customer_gateway_ip` with your actual on-premises IP
+3. VPN Routes: Adjust the on-premises CIDR blocks according to your network
+4. SSL Certificates: For production, implement SSL certificates on ALB using AWS Certificate Manager
 
-### 4. **Cost Optimization Features Implemented**
+### 4. Cost Optimization Features Implemented
 
-- **Auto Scaling**: Automatically adjusts EC2 capacity based on demand
-- **Multi-AZ RDS**: Only for production stability (can be disabled for dev/test)
-- **S3 Lifecycle Policies**: Transitions old data to cheaper storage classes
-- **CloudFront**: Reduces data transfer costs and improves performance
-- **NAT Gateways**: Consider using NAT instances for lower environments
-- **Reserved Capacity**: Consider purchasing Reserved Instances for predictable workloads
+- Auto Scaling: Automatically adjusts EC2 capacity based on demand
+- Multi-AZ RDS: Only for production stability (can be disabled for dev/test)
+- S3 Lifecycle Policies: Transitions old data to cheaper storage classes
+- CloudFront: Reduces data transfer costs and improves performance
+- NAT Gateways: Consider using NAT instances for lower environments
+- Reserved Capacity: Consider purchasing Reserved Instances for predictable workloads
 
 This configuration provides a robust, production-ready AWS infrastructure with all the requested components while following AWS best practices for security, reliability, and cost optimization.

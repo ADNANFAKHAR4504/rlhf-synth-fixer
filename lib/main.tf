@@ -122,31 +122,10 @@ resource "aws_eip" "nat" {
    depends_on = [aws_internet_gateway.main, aws_vpc.main]
 }
 
-# NAT Gateways
-# resource "aws_nat_gateway" "main" {
-#   count         = 2
-#   allocation_id = aws_eip.nat[count.index].id
-#   subnet_id     = aws_subnet.public[count.index].id
-
-#   tags = merge(local.common_tags, {
-#     Name = "${var.project_name}-nat-gateway-${count.index + 1}"
-#   })
-
-#   depends_on = [
-#     aws_internet_gateway.main,
-#     aws_eip.nat
-#   ]
-# }
-
 output "eip_ids" {
   value = aws_eip.nat[*].id
   description = "Elastic IP allocation IDs"
 }
-
-# output "nat_gateway_ids" {
-#   value = aws_nat_gateway.main[*].id
-#   description = "NAT Gateway IDs"
-# }
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
@@ -180,14 +159,6 @@ resource "aws_route_table" "private" {
     Name = "${var.project_name}-private-rt-${count.index + 1}"
   })
 }
-
-# Routes to NAT Gateways
-# resource "aws_route" "private_nat" {
-#   count                  = 2
-#   route_table_id         = aws_route_table.private[count.index].id
-#   destination_cidr_block = "0.0.0.0/0"
-#   nat_gateway_id         = aws_nat_gateway.main[count.index].id
-# }
 
 # Associate Private Subnets with Private Route Tables
 resource "aws_route_table_association" "private" {
@@ -652,6 +623,34 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
+# Generate random password
+resource "random_password" "rds_password" {
+  length  = 16
+  special = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+# Store password in Secrets Manager
+resource "aws_secretsmanager_secret" "rds_password" {
+  description = "RDS Master Password for ${var.project_name}"
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-password"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "rds_password" {
+  secret_id = aws_secretsmanager_secret.rds_password.id
+  secret_string = jsonencode({
+    username = "admin"
+    password = random_password.rds_password.result
+    engine   = "mysql"
+    host     = aws_db_instance.main.endpoint
+    port     = 3306
+    dbname   = "proddb"
+  })
+}
+
 # RDS Instance
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db"
@@ -665,7 +664,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "proddb"
   username = "admin"
-  password = "changeme123!" 
+  password = random_password.rds_password.result 
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -1034,4 +1033,15 @@ output "cloudfront_domain_name" {
 output "rds_endpoint" {
   value     = aws_db_instance.main.endpoint
   sensitive = true
+}
+
+output "rds_secret_arn" {
+  value       = aws_secretsmanager_secret.rds_password.arn
+  description = "The ARN of the secret containing RDS credentials"
+  sensitive   = true
+}
+
+output "rds_secret_name" {
+  value       = aws_secretsmanager_secret.rds_password.name
+  description = "The name of the secret containing RDS credentials"
 }

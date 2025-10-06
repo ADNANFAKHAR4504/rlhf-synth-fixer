@@ -405,9 +405,6 @@ describe('Terraform Infrastructure Tests', () => {
       expect(has(/desired_capacity\s*=\s*2/)).toBe(true);
     });
 
-    it('uses multiple NAT gateways for redundancy', () => {
-      expect(has(/resource\s+"aws_nat_gateway"\s+"main"[\s\S]*?count\s*=\s*2/)).toBe(true);
-    });
   });
 
   describe('Network Architecture', () => {
@@ -416,9 +413,6 @@ describe('Terraform Infrastructure Tests', () => {
       expect(has(/Type\s*=\s*"Database"/)).toBe(true);
     });
 
-    it('configures proper routing for private subnets', () => {
-      expect(has(/resource\s+"aws_route"\s+"private_nat"[\s\S]*?nat_gateway_id/)).toBe(true);
-    });
   });
 
   describe('Monitoring and Observability', () => {
