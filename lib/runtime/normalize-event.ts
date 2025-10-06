@@ -37,8 +37,8 @@ function asString(value: unknown): string | undefined {
 
 function derivePathParameters(
   path: string,
-  existing: Record<string, string> | null | undefined
-): Record<string, string> | null {
+  existing: APIGatewayProxyEvent['pathParameters'] | undefined
+): APIGatewayProxyEvent['pathParameters'] {
   if (existing && Object.keys(existing).length > 0) {
     return existing;
   }
@@ -50,7 +50,10 @@ function derivePathParameters(
       const key = resourceSegment.endsWith('s')
         ? `${resourceSegment.slice(0, -1)}Id`
         : `${resourceSegment}Id`;
-      return { [key]: decodeURIComponent(identifier) };
+      const derived: Record<string, string> = {
+        [key]: decodeURIComponent(identifier),
+      };
+      return derived;
     }
   }
 
@@ -119,7 +122,7 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
       asString(incoming.path) ??
       normalized.path;
 
-    const normalizedEvent = {
+    const normalizedEvent: APIGatewayProxyEvent = {
       ...normalized,
       headers: (incoming.headers ?? {}) as Headers,
       multiValueHeaders: (incoming.multiValueHeaders ??
@@ -139,19 +142,14 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
         normalized.requestContext,
       body: coerceBody(incoming.body),
       isBase64Encoded: Boolean(incoming.isBase64Encoded),
-    } as APIGatewayProxyEvent;
-
-    normalizedEvent.pathParameters = derivePathParameters(
-      normalizedEvent.path,
-      normalizedEvent.pathParameters
-    );
+    };
 
     return normalizedEvent;
   }
 
   const base = createEmptyEvent();
 
-  const fallbackEvent = {
+  const fallbackEvent: APIGatewayProxyEvent = {
     ...base,
     headers: (incoming.headers ?? {}) as Headers,
     multiValueHeaders: (incoming.multiValueHeaders ?? {}) as MultiValueHeaders,
@@ -170,12 +168,7 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
       base.requestContext,
     body: coerceBody(incoming.body),
     isBase64Encoded: Boolean(incoming.isBase64Encoded),
-  } as APIGatewayProxyEvent;
-
-  fallbackEvent.pathParameters = derivePathParameters(
-    fallbackEvent.path,
-    fallbackEvent.pathParameters
-  );
+  };
 
   return fallbackEvent;
 }
