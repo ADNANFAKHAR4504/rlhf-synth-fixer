@@ -1,11 +1,13 @@
-# Route 53 Hosted Zone (assuming it exists)
 terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.primary, aws.secondary, aws.route53]
     }
   }
 }
+
+# Route 53 Hosted Zone (assuming it exists)
 
 data "aws_route53_zone" "main" {
   provider     = aws.route53
