@@ -241,6 +241,16 @@ resource "aws_network_acl" "private" {
     to_port    = 0
   }
 
+  # Allow return traffic from the internet via NAT (ephemeral ports)
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
   egress {
     protocol   = "-1"
     rule_no    = 100
