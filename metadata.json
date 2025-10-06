@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3663",
+  "team": "5",
+  "startedAt": "2025-10-06T17:03:33.575Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "s3, mediaconvert,lambda, eventbridge, dynamodb, sqs, cloudwatch, kms"
+}
