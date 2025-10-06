@@ -112,7 +112,7 @@ def create_lambda_function(
         role=role_arn,
         handler="image_processor.handler",
         code=pulumi.AssetArchive({
-            ".": pulumi.FileArchive("lambda_code")
+            ".": pulumi.FileArchive(os.path.join(os.path.dirname(__file__), "..", "lambda_code"))
         }),
         timeout=60,
         memory_size=1024,
