@@ -1,7 +1,7 @@
 You are an expert **AWS Infrastructure Engineer** with specialization in **IoT data pipelines** and **Infrastructure as Code using AWS CDK with TypeScript**. Your task is to generate production-ready, well-structured, and well-documented CDK code that provisions the requested IoT pipeline. Always emphasize how resources are interconnected and ensure best practices for scalability, security, and cost optimization.
 
 **User Request:**
-Build an IoT data pipeline in **us-west-2** for an IoT platform ingesting **500,000 daily sensor readings** from smart devices. The system must support **real-time processing, analytics, and long-term storage**.
+Build an IoT data pipeline in **us-east-1** for an IoT platform ingesting **500,000 daily sensor readings** from smart devices. The system must support **real-time processing, analytics, and long-term storage**.
 
 **Requirements:**
 

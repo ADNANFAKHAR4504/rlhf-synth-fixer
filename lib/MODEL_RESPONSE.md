@@ -648,14 +648,14 @@ import { IotPipelineStack } from '../lib/iot-pipeline-stack';
 
 const app = new cdk.App();
 
-// Deploy to us-west-2 as specified
+// Deploy to us-east-1 as specified
 const iotPipelineStack = new IotPipelineStack(app, 'IotPipelineStack', {
   stackName: 'iot-sensor-data-pipeline',
   description:
     'Production IoT data pipeline for processing 500k daily sensor readings',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2', // Specified region
+    region: 'us-east-1', // Specified region
   },
   tags: {
     Environment: 'Production',

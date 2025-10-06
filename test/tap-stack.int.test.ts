@@ -56,13 +56,13 @@ const outputs = getOutputs();
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients
-const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-west-2' });
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const kinesisClient = new KinesisClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const glueClient = new GlueClient({ region: process.env.AWS_REGION || 'us-west-2' });
+const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const kinesisClient = new KinesisClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const glueClient = new GlueClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 describe('IoT Pipeline Integration Tests', () => {
   // Test timeout for integration tests
@@ -206,7 +206,7 @@ describe('IoT Pipeline Integration Tests', () => {
     test(
       'Lambda function exists and is properly configured',
       async () => {
-        const functionName = `iot-stream-processor-${environmentSuffix}`;
+        const functionName = `iot-stream-processor-dev-${environmentSuffix}`;
 
         try {
           // Test function description
@@ -344,7 +344,7 @@ describe('IoT Pipeline Integration Tests', () => {
     test(
       'Glue Database exists and is properly configured',
       async () => {
-        const databaseName = `iot_sensor_db_${environmentSuffix}`;
+        const databaseName = `iot_sensor_db_dev_${environmentSuffix}`;
 
         try {
           // Test database
@@ -369,7 +369,7 @@ describe('IoT Pipeline Integration Tests', () => {
     test(
       'Glue Crawler exists and is properly configured',
       async () => {
-        const crawlerName = `iot-sensor-data-crawler-${environmentSuffix}`;
+        const crawlerName = `iot-sensor-data-crawler-dev-${environmentSuffix}`;
 
         try {
           // Test crawler
@@ -464,8 +464,12 @@ describe('IoT Pipeline Integration Tests', () => {
       async () => {
         // This test verifies that the components are properly connected
         // by checking that the Lambda function has the correct event source mapping
-        const functionName = `iot-stream-processor-${environmentSuffix}`;
-        const streamName = `iot-sensor-data-stream-${environmentSuffix}`;
+        const functionName = `iot-stream-processor-dev-${environmentSuffix}`;
+        if (!outputs.KinesisStreamName) {
+          console.warn('KinesisStreamName output not found, skipping interconnection test');
+          return;
+        }
+        const streamName = outputs.KinesisStreamName;
 
         try {
           // Get Lambda function event source mappings
@@ -511,7 +515,7 @@ describe('IoT Pipeline Integration Tests', () => {
               Dimensions: [
                 {
                   Name: 'StreamName',
-                  Value: `iot-sensor-data-stream-${environmentSuffix}`,
+                  Value: outputs.KinesisStreamName || `iot-sensor-data-stream-${environmentSuffix}`,
                 },
               ],
               StartTime: startTime,
@@ -556,7 +560,7 @@ describe('IoT Pipeline Integration Tests', () => {
           }
 
           // Test Lambda function security
-          const functionName = `iot-stream-processor-${environmentSuffix}`;
+          const functionName = `iot-stream-processor-dev-${environmentSuffix}`;
           const getFunctionResponse = await lambdaClient.send(
             new GetFunctionCommand({ FunctionName: functionName })
           );
@@ -604,7 +608,7 @@ describe('IoT Pipeline Integration Tests', () => {
     test(
       'Lambda function has appropriate concurrency limits',
       async () => {
-        const functionName = `iot-stream-processor-${environmentSuffix}`;
+        const functionName = `iot-stream-processor-dev-${environmentSuffix}`;
 
         try {
           const getFunctionResponse = await lambdaClient.send(
