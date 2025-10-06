@@ -29,8 +29,9 @@ describe('TAP Stack Full Live Integration Tests', () => {
     expect(vpcs.Vpcs?.[0].CidrBlock).toBe(outputs.vpc_cidr);
   });
 
-    const igw = await ec2.describeInternetGateways({ InternetGatewayIds: [outputs.internet_gateway_id] }).promise();
-    expect(igw.InternetGateways?.length).toBe(1);
+  it('Internet Gateway exists', async () => {
+  const igw = await ec2.describeInternetGateways({ InternetGatewayIds: [outputs.internet_gateway_id] }).promise();
+  expect(igw.InternetGateways?.length).toBe(1);
   });
 
   it('NAT Gateways exist', async () => {
