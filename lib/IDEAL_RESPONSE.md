@@ -324,7 +324,7 @@ Please find solution files below.
         "FunctionName": {
           "Fn::Sub": "ParkingReservation-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -969,7 +969,7 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 const dynamoClient = new DynamoDBClient({ region });
@@ -1077,7 +1077,7 @@ describe('Parking Management System - Integration Tests', () => {
 
       const result = await lambdaClient.send(getFunctionCommand);
       expect(result.Configuration).toBeDefined();
-      expect(result.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(result.Configuration?.Runtime).toBe('nodejs22.x');
       expect(result.Configuration?.Handler).toBe('index.handler');
     }, 30000);
 
@@ -1512,7 +1512,7 @@ describe('TapStack CloudFormation Template - Parking Management System', () => {
 
     test('Lambda should have correct runtime and handler', () => {
       const lambda = template.Resources.ParkingReservationLambda;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs22.x');
       expect(lambda.Properties.Handler).toBe('index.handler');
     });
 
