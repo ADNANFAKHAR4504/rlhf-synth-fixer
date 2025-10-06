@@ -8,7 +8,6 @@ import {
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
-  GetSecretValueCommand,
 } from '@aws-sdk/client-secrets-manager';
 import {
   SNSClient,
@@ -33,27 +32,14 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'ap-northeast-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-// Extract resource names from outputs
-const extractRepoName = () => {
-  if (outputs.ExportsOutputFnGetAttNodeAppRepoTapStack2710A0E47Arn384A0B0C) {
-    const repoArn = outputs.ExportsOutputFnGetAttNodeAppRepoTapStack2710A0E47Arn384A0B0C;
-    return repoArn.split('/').pop();
-  }
-  return `node-app-${environmentSuffix.toLowerCase()}`;
-};
-
-const extractSecretArn = () => {
-  if (outputs.ExportsOutputRefAppSecretsTapStack27E3B7F6F281CE91A) {
-    return outputs.ExportsOutputRefAppSecretsTapStack27E3B7F6F281CE91A;
-  }
-  return null;
-};
-
-const repositoryName = extractRepoName();
+// Extract resource names from outputs - will fail if missing
+const sourceBucketName = outputs.SourceBucketName;
+const pipelineName = outputs.PipelineArn.split(':').pop();
 const notificationTopicArn = outputs.NotificationTopicArn;
-const secretArn = extractSecretArn();
+const secretArn = outputs.AppSecretsArn;
+const repositoryName = outputs.EcrRepositoryName;
 
 const ecsClient = new ECSClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
@@ -79,17 +65,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('S3 Storage', () => {
     test('should have source bucket with versioning enabled', async () => {
-      const sourceBucket = outputs.SourceBucketName;
-
-      expect(sourceBucket).toBeDefined();
+      expect(sourceBucketName).toBeDefined();
 
       const headCommand = new HeadBucketCommand({
-        Bucket: sourceBucket,
+        Bucket: sourceBucketName,
       });
       await s3Client.send(headCommand);
 
       const versioningCommand = new GetBucketVersioningCommand({
-        Bucket: sourceBucket,
+        Bucket: sourceBucketName,
       });
       const versioningResponse = await s3Client.send(versioningCommand);
 
@@ -99,15 +83,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
     test('should have pipeline artifact bucket created', async () => {
       // Pipeline artifact bucket is created automatically by CodePipeline
       // We verify this by checking that the pipeline itself exists
-      const pipelineArn = outputs.PipelineArn;
-      expect(pipelineArn).toBeDefined();
-      expect(pipelineArn).toContain('codepipeline');
+      expect(pipelineName).toBeDefined();
+      expect(outputs.PipelineArn).toBeDefined();
+      expect(outputs.PipelineArn).toContain('codepipeline');
     }, 30000);
   });
 
   describe('CodePipeline Configuration', () => {
     test('should have CI/CD pipeline with required stages', async () => {
-      const pipelineName = `node-app-pipeline-${environmentSuffix}`;
+      expect(pipelineName).toBeDefined();
 
       const command = new GetPipelineCommand({
         name: pipelineName,
@@ -150,7 +134,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(secretArn).toContain('arn:aws:secretsmanager');
 
       const command = new DescribeSecretCommand({
-        SecretId: secretArn!,
+        SecretId: secretArn,
       });
 
       const response = await secretsClient.send(command);

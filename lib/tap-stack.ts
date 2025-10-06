@@ -46,6 +46,12 @@ class SecurityStack extends cdk.Stack {
         },
       }
     );
+
+    // Output the secrets ARN
+    new cdk.CfnOutput(this, 'AppSecretsArn', {
+      value: this.appSecrets.secretArn,
+      description: 'Secrets Manager ARN for application secrets',
+    });
   }
 }
 
@@ -618,6 +624,16 @@ class PipelineStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'PipelineArn', {
       value: this.pipeline.pipelineArn,
       description: 'Pipeline ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryArn', {
+      value: this.ecrRepository.repositoryArn,
+      description: 'ECR Repository ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EcrRepositoryName', {
+      value: this.ecrRepository.repositoryName,
+      description: 'ECR Repository Name',
     });
   }
 }
