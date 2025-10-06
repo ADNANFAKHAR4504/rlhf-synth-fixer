@@ -1,3 +1,6 @@
+1. Model had failures related to the iam role creations and using same iam role.
+
+2. Model generated response while creating ACM certificate.
 
 ```
 │ Error: creating IAM Role (tap-ec2-role): operation error IAM: CreateRole, https response error StatusCode: 409, RequestID: 8b4da930-4969-4dcb-a7aa-411603421b12, EntityAlreadyExists: Role with name tap-ec2-role already exists.
