@@ -61,7 +61,8 @@ export class ComputeStack extends cdk.Stack {
     );
 
     // Get environment suffix
-    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      this.node.tryGetContext('environmentSuffix') || 'dev';
 
     // Create the ALB
     this.loadBalancer = new elbv2.ApplicationLoadBalancer(

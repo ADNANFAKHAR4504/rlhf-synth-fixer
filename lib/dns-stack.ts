@@ -1,10 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as route53_targets from 'aws-cdk-lib/aws-route53-targets';
 
 interface DnsStackProps extends cdk.StackProps {
   primaryAlb: elbv2.ApplicationLoadBalancer;

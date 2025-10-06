@@ -13,7 +13,9 @@ interface DatabaseStackProps extends cdk.StackProps {
 }
 
 export class DatabaseStack extends cdk.Stack {
-  public readonly dbInstance: rds.DatabaseInstance | rds.DatabaseInstanceReadReplica;
+  public readonly dbInstance:
+    | rds.DatabaseInstance
+    | rds.DatabaseInstanceReadReplica;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
@@ -44,7 +46,8 @@ export class DatabaseStack extends cdk.Stack {
       },
     });
 
-    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      this.node.tryGetContext('environmentSuffix') || 'dev';
 
     if (props.isReplica && props.sourceDatabaseInstance) {
       // Create a read replica in the standby region

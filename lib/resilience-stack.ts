@@ -44,18 +44,23 @@ export class ResilienceStack extends cdk.Stack {
     );
 
     // Create a CloudWatch alarm as a stop condition for FIS experiments
-    const stopConditionAlarm = new cloudwatch.Alarm(this, 'FisStopConditionAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/FIS',
-        metricName: 'ExperimentCount',
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(1),
-      }),
-      threshold: 100,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      alarmDescription: 'Stop condition for FIS experiments',
-    });
+    const stopConditionAlarm = new cloudwatch.Alarm(
+      this,
+      'FisStopConditionAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/FIS',
+          metricName: 'ExperimentCount',
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 100,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        alarmDescription: 'Stop condition for FIS experiments',
+      }
+    );
 
     // Create an experiment template that simulates a failure by stopping primary EC2 instances
     // This will make the ALB unhealthy and trigger Route 53 failover

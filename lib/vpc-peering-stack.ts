@@ -19,10 +19,12 @@ export class VpcPeeringStack extends cdk.Stack {
     const crossRegionRole = new iam.Role(this, 'CrossRegionPeeringRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
       inlinePolicies: {
-        'VpcPeeringPermissions': new iam.PolicyDocument({
+        VpcPeeringPermissions: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               actions: [
@@ -42,67 +44,85 @@ export class VpcPeeringStack extends cdk.Stack {
     });
 
     // Create VPC peering connection using a custom resource
-    const peeringConnection = new cr.AwsCustomResource(this, 'CreateVpcPeering', {
-      onCreate: {
-        service: 'EC2',
-        action: 'createVpcPeeringConnection',
-        parameters: {
-          VpcId: props.primaryVpc.vpcId,
-          PeerVpcId: props.standbyVpc.vpcId,
-          PeerRegion: props.standbyRegion
+    const peeringConnection = new cr.AwsCustomResource(
+      this,
+      'CreateVpcPeering',
+      {
+        onCreate: {
+          service: 'EC2',
+          action: 'createVpcPeeringConnection',
+          parameters: {
+            VpcId: props.primaryVpc.vpcId,
+            PeerVpcId: props.standbyVpc.vpcId,
+            PeerRegion: props.standbyRegion,
+          },
+          region: props.primaryRegion,
+          physicalResourceId: cr.PhysicalResourceId.fromResponse(
+            'VpcPeeringConnection.VpcPeeringConnectionId'
+          ),
         },
-        region: props.primaryRegion,
-        physicalResourceId: cr.PhysicalResourceId.fromResponse('VpcPeeringConnection.VpcPeeringConnectionId')
-      },
-      onDelete: {
-        service: 'EC2',
-        action: 'deleteVpcPeeringConnection',
-        parameters: {
-          VpcPeeringConnectionId: new cr.PhysicalResourceIdReference()
+        onDelete: {
+          service: 'EC2',
+          action: 'deleteVpcPeeringConnection',
+          parameters: {
+            VpcPeeringConnectionId: new cr.PhysicalResourceIdReference(),
+          },
+          region: props.primaryRegion,
         },
-        region: props.primaryRegion
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
-      }),
-      role: crossRegionRole
-    });
+        policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+        }),
+        role: crossRegionRole,
+      }
+    );
 
-    const peeringConnectionId = peeringConnection.getResponseField('VpcPeeringConnection.VpcPeeringConnectionId');
+    const peeringConnectionId = peeringConnection.getResponseField(
+      'VpcPeeringConnection.VpcPeeringConnectionId'
+    );
 
     // Accept the peering connection in the standby region
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const acceptPeering = new cr.AwsCustomResource(this, 'AcceptVpcPeering', {
       onCreate: {
         service: 'EC2',
         action: 'acceptVpcPeeringConnection',
         parameters: {
-          VpcPeeringConnectionId: peeringConnectionId
+          VpcPeeringConnectionId: peeringConnectionId,
         },
         region: props.standbyRegion,
-        physicalResourceId: cr.PhysicalResourceId.of(`${peeringConnectionId}-accepted`)
+        physicalResourceId: cr.PhysicalResourceId.of(
+          `${peeringConnectionId}-accepted`
+        ),
       },
       policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
       }),
-      role: crossRegionRole
+      role: crossRegionRole,
     });
 
     // Wait for the peering connection to be active
-    const describePeering = new cr.AwsCustomResource(this, 'DescribeVpcPeering', {
-      onCreate: {
-        service: 'EC2',
-        action: 'describeVpcPeeringConnections',
-        parameters: {
-          VpcPeeringConnectionIds: [peeringConnectionId]
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const describePeering = new cr.AwsCustomResource(
+      this,
+      'DescribeVpcPeering',
+      {
+        onCreate: {
+          service: 'EC2',
+          action: 'describeVpcPeeringConnections',
+          parameters: {
+            VpcPeeringConnectionIds: [peeringConnectionId],
+          },
+          region: props.primaryRegion,
+          physicalResourceId: cr.PhysicalResourceId.of(
+            `${peeringConnectionId}-describe`
+          ),
         },
-        region: props.primaryRegion,
-        physicalResourceId: cr.PhysicalResourceId.of(`${peeringConnectionId}-describe`)
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
-      }),
-      role: crossRegionRole
-    });
+        policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+        }),
+        role: crossRegionRole,
+      }
+    );
 
     // Add routes between VPCs
     // Primary to standby
@@ -111,7 +131,7 @@ export class VpcPeeringStack extends cdk.Stack {
       new ec2.CfnRoute(this, `PrimaryToStandbyRoute-Public${i}`, {
         routeTableId: routeTable.routeTableId,
         destinationCidrBlock: props.standbyVpc.vpcCidrBlock,
-        vpcPeeringConnectionId: peeringConnectionId
+        vpcPeeringConnectionId: peeringConnectionId,
       });
     });
 
@@ -120,7 +140,7 @@ export class VpcPeeringStack extends cdk.Stack {
       new ec2.CfnRoute(this, `PrimaryToStandbyRoute-Private${i}`, {
         routeTableId: routeTable.routeTableId,
         destinationCidrBlock: props.standbyVpc.vpcCidrBlock,
-        vpcPeeringConnectionId: peeringConnectionId
+        vpcPeeringConnectionId: peeringConnectionId,
       });
     });
 
@@ -134,24 +154,26 @@ export class VpcPeeringStack extends cdk.Stack {
           parameters: {
             RouteTableId: routeTable.routeTableId,
             DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
-            VpcPeeringConnectionId: peeringConnectionId
+            VpcPeeringConnectionId: peeringConnectionId,
           },
           region: props.standbyRegion,
-          physicalResourceId: cr.PhysicalResourceId.of(`standby-public-route-${i}`)
+          physicalResourceId: cr.PhysicalResourceId.of(
+            `standby-public-route-${i}`
+          ),
         },
         onDelete: {
           service: 'EC2',
           action: 'deleteRoute',
           parameters: {
             RouteTableId: routeTable.routeTableId,
-            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
           },
-          region: props.standbyRegion
+          region: props.standbyRegion,
         },
         policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
         }),
-        role: crossRegionRole
+        role: crossRegionRole,
       });
     });
 
@@ -164,24 +186,26 @@ export class VpcPeeringStack extends cdk.Stack {
           parameters: {
             RouteTableId: routeTable.routeTableId,
             DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
-            VpcPeeringConnectionId: peeringConnectionId
+            VpcPeeringConnectionId: peeringConnectionId,
           },
           region: props.standbyRegion,
-          physicalResourceId: cr.PhysicalResourceId.of(`standby-private-route-${i}`)
+          physicalResourceId: cr.PhysicalResourceId.of(
+            `standby-private-route-${i}`
+          ),
         },
         onDelete: {
           service: 'EC2',
           action: 'deleteRoute',
           parameters: {
             RouteTableId: routeTable.routeTableId,
-            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock
+            DestinationCidrBlock: props.primaryVpc.vpcCidrBlock,
           },
-          region: props.standbyRegion
+          region: props.standbyRegion,
         },
         policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+          resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
         }),
-        role: crossRegionRole
+        role: crossRegionRole,
       });
     });
 

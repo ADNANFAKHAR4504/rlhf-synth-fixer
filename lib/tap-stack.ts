@@ -44,7 +44,7 @@ export class TapStack extends cdk.Stack {
     };
 
     // Create VPC stacks
-    const primaryVpcStack = new VpcStack(this, `VpcStack-Primary`, {
+    const primaryVpcStack = new VpcStack(this, 'VpcStack-Primary', {
       env: primaryEnv,
       cidr: '10.0.0.0/16',
       description: 'VPC in primary region (eu-west-2)',
@@ -52,7 +52,7 @@ export class TapStack extends cdk.Stack {
       crossRegionReferences: true,
     });
 
-    const standbyVpcStack = new VpcStack(this, `VpcStack-Standby`, {
+    const standbyVpcStack = new VpcStack(this, 'VpcStack-Standby', {
       env: standbyEnv,
       cidr: '10.1.0.0/16',
       description: 'VPC in standby region (eu-west-3)',
@@ -61,7 +61,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create security stacks with KMS keys and security groups
-    const primarySecurityStack = new SecurityStack(this, `SecurityPrimary`, {
+    const primarySecurityStack = new SecurityStack(this, 'SecurityPrimary', {
       env: primaryEnv,
       vpc: primaryVpcStack.vpc,
       description: 'Security resources in primary region',
@@ -69,7 +69,7 @@ export class TapStack extends cdk.Stack {
       crossRegionReferences: true,
     });
 
-    const standbySecurityStack = new SecurityStack(this, `SecurityStandby`, {
+    const standbySecurityStack = new SecurityStack(this, 'SecurityStandby', {
       env: standbyEnv,
       vpc: standbyVpcStack.vpc,
       description: 'Security resources in standby region',
@@ -78,7 +78,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create VPC peering between regions
-    const peeringStack = new VpcPeeringStack(this, `VpcPeering`, {
+    const peeringStack = new VpcPeeringStack(this, 'VpcPeering', {
       env: primaryEnv,
       primaryVpc: primaryVpcStack.vpc,
       standbyVpc: standbyVpcStack.vpc,
@@ -92,7 +92,7 @@ export class TapStack extends cdk.Stack {
     peeringStack.addDependency(standbyVpcStack);
 
     // Create storage stacks (EFS)
-    const primaryStorageStack = new StorageStack(this, `StoragePrimary`, {
+    const primaryStorageStack = new StorageStack(this, 'StoragePrimary', {
       env: primaryEnv,
       vpc: primaryVpcStack.vpc,
       kmsKey: primarySecurityStack.kmsKey,
@@ -103,7 +103,7 @@ export class TapStack extends cdk.Stack {
     primaryStorageStack.addDependency(primaryVpcStack);
     primaryStorageStack.addDependency(primarySecurityStack);
 
-    const standbyStorageStack = new StorageStack(this, `StorageStandby`, {
+    const standbyStorageStack = new StorageStack(this, 'StorageStandby', {
       env: standbyEnv,
       vpc: standbyVpcStack.vpc,
       kmsKey: standbySecurityStack.kmsKey,
@@ -115,7 +115,7 @@ export class TapStack extends cdk.Stack {
     standbyStorageStack.addDependency(standbySecurityStack);
 
     // Create database stacks
-    const primaryDatabaseStack = new DatabaseStack(this, `DatabasePrimary`, {
+    const primaryDatabaseStack = new DatabaseStack(this, 'DatabasePrimary', {
       env: primaryEnv,
       vpc: primaryVpcStack.vpc,
       kmsKey: primarySecurityStack.kmsKey,
@@ -127,7 +127,7 @@ export class TapStack extends cdk.Stack {
     primaryDatabaseStack.addDependency(primaryVpcStack);
     primaryDatabaseStack.addDependency(primarySecurityStack);
 
-    const standbyDatabaseStack = new DatabaseStack(this, `DatabaseStandby`, {
+    const standbyDatabaseStack = new DatabaseStack(this, 'DatabaseStandby', {
       env: standbyEnv,
       vpc: standbyVpcStack.vpc,
       kmsKey: standbySecurityStack.kmsKey,
@@ -143,7 +143,7 @@ export class TapStack extends cdk.Stack {
     standbyDatabaseStack.addDependency(primaryDatabaseStack);
 
     // Create compute stacks (ALB + ASG)
-    const primaryComputeStack = new ComputeStack(this, `ComputePrimary`, {
+    const primaryComputeStack = new ComputeStack(this, 'ComputePrimary', {
       env: primaryEnv,
       vpc: primaryVpcStack.vpc,
       fileSystem: primaryStorageStack.fileSystem,
@@ -157,7 +157,7 @@ export class TapStack extends cdk.Stack {
     primaryComputeStack.addDependency(primaryStorageStack);
     primaryComputeStack.addDependency(primaryDatabaseStack);
 
-    const standbyComputeStack = new ComputeStack(this, `ComputeStandby`, {
+    const standbyComputeStack = new ComputeStack(this, 'ComputeStandby', {
       env: standbyEnv,
       vpc: standbyVpcStack.vpc,
       fileSystem: standbyStorageStack.fileSystem,
@@ -172,7 +172,7 @@ export class TapStack extends cdk.Stack {
     standbyComputeStack.addDependency(standbyDatabaseStack);
 
     // Create DNS stack with Route 53 failover
-    const dnsStack = new DnsStack(this, `Dns`, {
+    const dnsStack = new DnsStack(this, 'Dns', {
       env: primaryEnv,
       primaryAlb: primaryComputeStack.loadBalancer,
       standbyAlb: standbyComputeStack.loadBalancer,
@@ -185,7 +185,7 @@ export class TapStack extends cdk.Stack {
     dnsStack.addDependency(standbyComputeStack);
 
     // Create resilience stack with FIS experiment and Resilience Hub
-    const resilienceStack = new ResilienceStack(this, `Resilience`, {
+    const resilienceStack = new ResilienceStack(this, 'Resilience', {
       env: primaryEnv,
       primaryVpc: primaryVpcStack.vpc,
       primaryAlb: primaryComputeStack.loadBalancer,

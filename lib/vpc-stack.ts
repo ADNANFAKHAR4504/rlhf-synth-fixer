@@ -38,8 +38,6 @@ export class VpcStack extends cdk.Stack {
     });
 
     // Collect route table IDs for VPC peering
-    const cfnVpc = this.vpc.node.defaultChild as ec2.CfnVPC;
-
     // Store route table IDs for peering setup
     this.vpc.publicSubnets.forEach(subnet => {
       if (subnet.routeTable) {
