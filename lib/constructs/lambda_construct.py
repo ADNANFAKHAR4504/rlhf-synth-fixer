@@ -8,6 +8,21 @@ from aws_cdk import (
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 from constructs import Construct
 import os
+import subprocess
+
+
+def is_docker_available() -> bool:
+    """Check if Docker is available and running"""
+    try:
+        result = subprocess.run(
+            ["docker", "info"], 
+            capture_output=True, 
+            text=True, 
+            timeout=5
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 class LambdaConstruct(Construct):
@@ -23,9 +38,11 @@ class LambdaConstruct(Construct):
 
         self.functions = {}
 
-        # Create shared layer for common dependencies (skip in test mode)
+        # Create shared layer for common dependencies (skip in test mode or if Docker unavailable)
         shared_layer = None
-        if not os.environ.get('CDK_TEST_MODE'):
+        skip_layer = os.environ.get('CDK_TEST_MODE') or not is_docker_available()
+        
+        if not skip_layer:
             shared_layer = PythonLayerVersion(
                 self,
                 "SharedLayer",
@@ -33,6 +50,9 @@ class LambdaConstruct(Construct):
                 compatible_runtimes=[lambda_.Runtime.PYTHON_3_9],
                 description="Shared utilities and dependencies"
             )
+        elif not is_docker_available():
+            print("⚠️  Docker not available - skipping Lambda layer creation")
+            print("   Lambda functions will run without the shared layer")
 
         # Lambda execution role with least privilege
         lambda_role = iam.Role(
