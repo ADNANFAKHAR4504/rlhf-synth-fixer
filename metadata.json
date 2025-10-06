@@ -10,5 +10,5 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "IAM, S3, DynamoDB, Lambda, CloudWatch, SNS"
+  "aws_services": "IAM, S3, DynamoDB, Lambda, CloudWatch, SNS, Kinesis, KinesisFirehose, IoT Core, Glue, CloudWatch Logs"
 }

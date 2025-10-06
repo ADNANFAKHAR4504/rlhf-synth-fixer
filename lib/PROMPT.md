@@ -1,52 +1,58 @@
-You are an expert **AWS Infrastructure Engineer** with specialization in **IoT data pipelines** and **Infrastructure as Code using AWS CDK with TypeScript**. Your task is to generate production-ready, well-structured, and well-documented CDK code that provisions the requested IoT pipeline. Always emphasize how resources are interconnected and ensure best practices for scalability, security, and cost optimization.
+# IoT Data Pipeline Challenge
 
-**User Request:**
-Build an IoT data pipeline in **us-east-1** for an IoT platform ingesting **500,000 daily sensor readings** from smart devices. The system must support **real-time processing, analytics, and long-term storage**.
+Hey there! I need help building an IoT data pipeline that can handle a lot of sensor data. We're talking about 500,000 sensor readings per day from various smart devices, and I want to deploy this in the us-east-1 region.
 
-**Requirements:**
+## What I'm Looking For
 
-- **Device Connectivity:**
-  - AWS IoT Core with **device certificates** for authentication
-  - IoT Device Shadows enabled
+I need a complete IoT pipeline that can:
+- Take in real-time sensor data from devices
+- Process and analyze that data as it comes in
+- Store everything for both immediate use and long-term analysis
+- Keep costs reasonable while handling the scale
 
-- **Routing & Processing:**
-  - IoT Rules → route messages to **Kinesis Data Streams**
-  - Kinesis Data Streams with shard scaling
-  - Lambda (Python 3.11) for stream processing with retry logic + exponential backoff
+## The Technical Stack I Want
 
-- **Storage & Analytics:**
-  - Kinesis Data Firehose → deliver data to **S3** with batching enabled
-  - DynamoDB table for device state with **TTL for auto-expiration**
-  - Timestream for time-series sensor data
-  - Glue Crawler for schema discovery + automated updates
-  - Athena for ad-hoc queries
+**Device Connection:**
+- AWS IoT Core to securely connect all the devices
+- Device certificates for authentication
+- IoT Device Shadows so we can track device state
 
-- **Monitoring & Alerts:**
-  - CloudWatch metrics + alarms
-  - SNS for alert notifications
+**Data Flow:**
+- IoT Rules that automatically route messages to Kinesis Data Streams
+- Kinesis configured to handle the volume with proper sharding
+- Lambda function (Python 3.11) that processes the stream data
+- Need retry logic with exponential backoff for reliability
 
-- **IAM:**
-  - Fine-grained IAM roles for IoT, Lambda, Firehose, Glue, Athena
-  - Policies enforcing least privilege
+**Storage & Analytics:**
+- Kinesis Data Firehose to batch and deliver data to S3
+- DynamoDB table for keeping track of device states (with TTL for cleanup)
+- Timestream for time-series sensor data storage
+- Glue Crawler to automatically discover data schemas
+- Athena for running ad-hoc queries when needed
 
-**Implementation Guidelines:**
+**Monitoring:**
+- CloudWatch for metrics and alarms
+- SNS for sending alerts when things go wrong
 
-1. Use **AWS CDK with TypeScript**; structure into constructs for IoT, ingestion, processing, storage, and monitoring.
-2. Clearly show **how each component is connected** (IoT Core → Kinesis → Lambda → Firehose → S3, etc.).
-3. Configure:
-   - Firehose batching for cost optimization
-   - Kinesis shard scaling
-   - DynamoDB TTL for auto-expiration
-   - Lambda retry with exponential backoff
+**Security:**
+- Proper IAM roles for each service
+- Least privilege access policies
+- Secure device authentication
 
-4. Ensure security with IAM roles and device certificates.
-5. Add inline comments explaining each construct and connection.
-6. Output must include:
-   - **Full CDK stack code** (`tap-stack.ts`)
-   - **Initialisation code** (`bin/main.ts`)
-   - **Architecture explanation** (step-by-step data flow)
+## Implementation Details
 
-**Output Format:**
+Please use AWS CDK with TypeScript. I want to see how everything connects together - from IoT Core through Kinesis to Lambda to Firehose to S3, and how the monitoring fits in.
 
-- Provide the **TypeScript CDK code** inside a fenced code block.
-- Then write a **clear explanation** of the architecture, highlighting resource interconnections.
+Make sure to configure:
+- Firehose batching to keep costs down
+- Kinesis shard scaling for the volume
+- DynamoDB TTL so old data gets cleaned up automatically
+- Lambda retry logic that backs off when there are issues
+
+Include security best practices with IAM roles and device certificates.
+
+## What I Need Back
+
+Give me the complete TypeScript CDK code, and then explain how the architecture works - especially how all the pieces connect together and why you made the design choices you did.
+
+The code should be production-ready with proper error handling, monitoring, and cost optimization built in.
