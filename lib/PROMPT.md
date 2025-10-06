@@ -4,7 +4,6 @@ Infrastructure Requirements:
 
 1. IoT Infrastructure:
    - Configure AWS IoT Core for vehicle telemetry ingestion from 15,000 vehicles
-   - Enable fleet indexing to support connectivity status queries and device metadata retrieval
    - Set up IoT rules for data routing to downstream processing services
    - Configure thing registry for vehicle metadata management
 
@@ -14,10 +13,10 @@ Infrastructure Requirements:
    - Enable enhanced monitoring for stream metrics
 
 3. Time-Series Data Storage:
-   - Deploy Amazon Timestream database and table for vehicle telemetry storage
-   - Configure memory store retention for recent data (24 hours recommended)
-   - Set magnetic store retention for long-term historical data (365 days recommended)
-   - Enable magnetic store writes to handle late-arriving telemetry data
+   - Create DynamoDB table for vehicle telemetry data with on-demand billing
+   - Configure partition key (vehicleId) and sort key (timestamp) for efficient queries
+   - Enable DynamoDB Streams for real-time data processing
+   - Configure Time-To-Live (TTL) for automatic data expiration (30 days recommended)
 
 4. Vehicle Data Storage:
    - Create DynamoDB table for vehicle profiles with on-demand billing
@@ -31,8 +30,8 @@ Infrastructure Requirements:
    - Deploy SageMaker endpoint for real-time inference
 
 6. Anomaly Detection:
-   - Configure Amazon Lookout for Equipment for real-time vehicle anomaly detection
-   - Set up inference scheduler for continuous monitoring
+   - Configure CloudWatch Anomaly Detection for real-time vehicle anomaly detection
+   - Set up anomaly detectors for key vehicle metrics (engine temperature, fuel consumption)
 
 7. Route Optimization:
    - Create Amazon Location Service tracker for vehicle position tracking
@@ -59,9 +58,8 @@ Infrastructure Requirements:
     - Create Athena result bucket for query outputs
 
 11. Business Intelligence:
-    - Configure QuickSight for fleet analytics dashboards
-    - Set up data source connections to Timestream and Athena
-    - Enable SPICE capacity for dashboard performance
+    - Prepare infrastructure for QuickSight integration (Athena workgroup, Glue database)
+    - Note: QuickSight data sources and dashboards should be configured manually due to CloudFormation limitations
 
 12. Workflow Orchestration:
     - Create Step Functions state machine for maintenance scheduling workflows
@@ -91,8 +89,9 @@ Infrastructure Requirements:
     - Configure API Gateway logging to CloudWatch
 
 Security and Best Practices:
+
 - Use IAM roles with least privilege principle for all services
-- Enable encryption at rest where supported (S3, DynamoDB, Timestream)
+- Enable encryption at rest where supported (S3, DynamoDB, Kinesis)
 - Configure VPC endpoints where applicable for private connectivity
 - Apply consistent resource tagging for cost tracking
 - Use CloudFormation parameters for environment-specific values

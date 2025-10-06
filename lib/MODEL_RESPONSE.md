@@ -55,18 +55,6 @@ Let's start with the Parameters section:
     "Description": "Frequency of telemetry data emitted by each vehicle (in seconds)",
     "Default": 60,
     "MinValue": 1
-  },
-  "MemoryStoreRetentionHours": {
-    "Type": "Number",
-    "Description": "Timestream memory store retention period in hours",
-    "Default": 24,
-    "MinValue": 1
-  },
-  "MagneticStoreRetentionDays": {
-    "Type": "Number",
-    "Description": "Timestream magnetic store retention period in days",
-    "Default": 365,
-    "MinValue": 1
   }
 }
 ```
@@ -233,30 +221,42 @@ Next, let's add the Data Ingestion and Streaming resources:
 Now let's add the Time-Series Data Storage resources:
 
 ```json
-"TimestreamDatabase": {
-  "Type": "AWS::Timestream::Database",
+"TelemetryDataTable": {
+  "Type": "AWS::DynamoDB::Table",
   "Properties": {
-    "DatabaseName": {"Fn::Sub": "${EnvironmentName}-vehicle-telemetry"}
-  }
-},
-"TimestreamTable": {
-  "Type": "AWS::Timestream::Table",
-  "Properties": {
-    "DatabaseName": {"Ref": "TimestreamDatabase"},
-    "TableName": "vehicle_telemetry",
-    "RetentionProperties": {
-      "MemoryStoreRetentionPeriodInHours": {"Ref": "MemoryStoreRetentionHours"},
-      "MagneticStoreRetentionPeriodInDays": {"Ref": "MagneticStoreRetentionDays"}
-    },
-    "MagneticStoreWriteProperties": {
-      "EnableMagneticStoreWrites": true,
-      "MagneticStoreRejectedDataLocation": {
-        "S3Configuration": {
-          "BucketName": {"Ref": "RawTelemetryBucket"},
-          "ObjectKeyPrefix": "rejected-timestream-data/"
-        }
+    "TableName": {"Fn::Sub": "${EnvironmentName}-telemetry-data"},
+    "BillingMode": "PAY_PER_REQUEST",
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "vehicleId",
+        "AttributeType": "S"
+      },
+      {
+        "AttributeName": "timestamp",
+        "AttributeType": "N"
       }
-    }
+    ],
+    "KeySchema": [
+      {
+        "AttributeName": "vehicleId",
+        "KeyType": "HASH"
+      },
+      {
+        "AttributeName": "timestamp",
+        "KeyType": "RANGE"
+      }
+    ],
+    "StreamSpecification": {
+      "StreamViewType": "NEW_AND_OLD_IMAGES"
+    },
+    "TimeToLiveSpecification": {
+      "Enabled": true,
+      "AttributeName": "ttl"
+    },
+    "Tags": [
+      {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+      {"Key": "Project", "Value": "Fleet Management"}
+    ]
   }
 }
 ```
@@ -389,7 +389,7 @@ Now, let's add the Machine Learning Infrastructure resources:
     "ManagedPolicyArns": [
       "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess",
       "arn:aws:iam::aws:policy/AmazonS3FullAccess",
-      "arn:aws:iam::aws:policy/AmazonTimestreamReadOnlyAccess"
+      "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"
     ]
   }
 },
@@ -499,73 +499,15 @@ Now, let's add the Machine Learning Infrastructure resources:
 
 Let's add the Anomaly Detection resources:
 
+Note: Using CloudWatch Anomaly Detection instead of Lookout for Equipment due to regional availability in us-east-2.
+
 ```json
-"LookoutForEquipmentRole": {
-  "Type": "AWS::IAM::Role",
+"VehicleTemperatureAnomaly": {
+  "Type": "AWS::CloudWatch::AnomalyDetector",
   "Properties": {
-    "AssumeRolePolicyDocument": {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "lookoutequipment.amazonaws.com"
-          },
-          "Action": "sts:AssumeRole"
-        }
-      ]
-    },
-    "ManagedPolicyArns": [
-      "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-      "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
-    ]
-  }
-},
-"VehicleDataset": {
-  "Type": "AWS::LookoutEquipment::Dataset",
-  "Properties": {
-    "DatasetName": {"Fn::Sub": "${EnvironmentName}-vehicle-telemetry-dataset"},
-    "ServerSideKmsKeyId": {"Fn::ImportValue": "KmsKeyId"},
-    "DatasetSchema": {
-      "InlineDataSchema": "{\"Components\":[{\"ComponentName\":\"Engine\",\"Measurements\":[{\"MeasurementName\":\"Temperature\"},{\"MeasurementName\":\"Pressure\"},{\"MeasurementName\":\"RPM\"}]},{\"ComponentName\":\"Transmission\",\"Measurements\":[{\"MeasurementName\":\"Temperature\"},{\"MeasurementName\":\"GearPosition\"}]},{\"ComponentName\":\"Brakes\",\"Measurements\":[{\"MeasurementName\":\"PadWear\"},{\"MeasurementName\":\"FluidLevel\"}]},{\"ComponentName\":\"Fuel\",\"Measurements\":[{\"MeasurementName\":\"Level\"},{\"MeasurementName\":\"Consumption\"}]},{\"ComponentName\":\"Electrical\",\"Measurements\":[{\"MeasurementName\":\"BatteryVoltage\"},{\"MeasurementName\":\"AlternatorOutput\"}]}]}"
-    },
-    "RoleArn": {"Fn::GetAtt": ["LookoutForEquipmentRole", "Arn"]},
-    "Tags": [
-      {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
-      {"Key": "Project", "Value": "Fleet Management"}
-    ]
-  }
-},
-"VehicleAnomalyDetector": {
-  "Type": "AWS::LookoutEquipment::InferenceScheduler",
-  "DependsOn": ["VehicleDataset"],
-  "Properties": {
-    "InferenceSchedulerName": {"Fn::Sub": "${EnvironmentName}-vehicle-anomaly-detector"},
-    "ModelName": {"Fn::Sub": "${EnvironmentName}-vehicle-anomaly-model"},
-    "DataDelayOffsetInMinutes": 0,
-    "DataInputConfiguration": {
-      "S3InputConfiguration": {
-        "Bucket": {"Ref": "RawTelemetryBucket"},
-        "Prefix": "inference-data/"
-      },
-      "InputTimeZoneOffset": "+00:00",
-      "InferenceInputNameConfiguration": {
-        "TimestampFormat": "yyyy-MM-dd-HH-mm-ss"
-      }
-    },
-    "DataOutputConfiguration": {
-      "S3OutputConfiguration": {
-        "Bucket": {"Ref": "RawTelemetryBucket"},
-        "Prefix": "anomaly-results/"
-      }
-    },
-    "RoleArn": {"Fn::GetAtt": ["LookoutForEquipmentRole", "Arn"]},
-    "ServerSideKmsKeyId": {"Fn::ImportValue": "KmsKeyId"},
-    "DataUploadFrequency": "PT5M",
-    "Tags": [
-      {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
-      {"Key": "Project", "Value": "Fleet Management"}
-    ]
+    "MetricName": "EngineTemperature",
+    "Namespace": "FleetManagement",
+    "Stat": "Average"
   }
 }
 ```
@@ -651,7 +593,6 @@ Let's add the Data Processing resources:
     "ManagedPolicyArns": [
       "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
       "arn:aws:iam::aws:policy/AmazonKinesisReadOnlyAccess",
-      "arn:aws:iam::aws:policy/AmazonTimestreamFullAccess",
       "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
       "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
       "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
@@ -665,15 +606,14 @@ Let's add the Data Processing resources:
     "Handler": "index.handler",
     "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
     "Code": {
-      "ZipFile": "exports.handler = async (event) => {\n  console.log('Processing vehicle telemetry');\n  // Process records from Kinesis and store in Timestream\n  return { statusCode: 200 };\n};"
+      "ZipFile": "exports.handler = async (event) => {\n  console.log('Processing vehicle telemetry');\n  // Process records from Kinesis and store in DynamoDB\n  return { statusCode: 200 };\n};"
     },
     "Runtime": "nodejs16.x",
     "Timeout": 60,
     "MemorySize": 512,
     "Environment": {
       "Variables": {
-        "TIMESTREAM_DATABASE": {"Ref": "TimestreamDatabase"},
-        "TIMESTREAM_TABLE": {"Ref": "TimestreamTable"},
+        "TELEMETRY_TABLE": {"Ref": "TelemetryDataTable"},
         "ENVIRONMENT": {"Ref": "EnvironmentName"}
       }
     },
@@ -792,30 +732,6 @@ Now, let's add the Historical Data and Analytics resources:
       {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
       {"Key": "Project", "Value": "Fleet Management"}
     ]
-  }
-},
-"RawTelemetryBucketPolicy": {
-  "Type": "AWS::S3::BucketPolicy",
-  "Properties": {
-    "Bucket": {"Ref": "RawTelemetryBucket"},
-    "PolicyDocument": {
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Effect": "Allow",
-          "Principal": {
-            "Service": "lookoutequipment.amazonaws.com"
-          },
-          "Action": [
-            "s3:GetObject",
-            "s3:PutObject"
-          ],
-          "Resource": [
-            {"Fn::Sub": "arn:aws:s3:::${RawTelemetryBucket}/*"}
-          ]
-        }
-      ]
-    }
   }
 }
 ```
@@ -947,7 +863,7 @@ Let's add the Business Intelligence resources:
     },
     "ManagedPolicyArns": [
       "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-      "arn:aws:iam::aws:policy/AmazonTimestreamReadOnlyAccess",
+      "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess",
       "arn:aws:iam::aws:policy/service-role/AWSQuicksightAthenaAccess"
     ]
   }
@@ -1225,11 +1141,11 @@ Let's add the Monitoring and Observability resources:
         "\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"",
         {"Ref": "AWS::Region"},
         "\",\"title\":\"Incoming Telemetry Records\",\"period\":60}},",
-        "{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/Timestream\",\"QueryCount\",\"Database\",\"",
-        {"Ref": "TimestreamDatabase"},
+        "{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/DynamoDB\",\"ConsumedWriteCapacityUnits\",\"TableName\",\"",
+        {"Ref": "TelemetryDataTable"},
         "\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"",
         {"Ref": "AWS::Region"},
-        "\",\"title\":\"Timestream Queries\",\"period\":300}},",
+        "\",\"title\":\"DynamoDB Write Activity\",\"period\":300}},",
         "{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"",
         {"Ref": "TelemetryProcessorFunction"},
         "\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"",
@@ -1307,7 +1223,6 @@ Finally, let's add the API Layer resources:
     },
     "ManagedPolicyArns": [
       "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess",
-      "arn:aws:iam::aws:policy/AmazonTimestreamReadOnlyAccess",
       "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
     ]
   }
@@ -1493,11 +1408,11 @@ Let's add the Outputs section:
       "Name": {"Fn::Sub": "${AWS::StackName}-TelemetryStreamName"}
     }
   },
-  "TimestreamDatabaseName": {
-    "Description": "Timestream Database for Vehicle Telemetry",
-    "Value": {"Ref": "TimestreamDatabase"},
+  "TelemetryDataTableName": {
+    "Description": "DynamoDB Table for Vehicle Telemetry Data",
+    "Value": {"Ref": "TelemetryDataTable"},
     "Export": {
-      "Name": {"Fn::Sub": "${AWS::StackName}-TimestreamDatabaseName"}
+      "Name": {"Fn::Sub": "${AWS::StackName}-TelemetryDataTableName"}
     }
   },
   "VehicleProfileTableName": {

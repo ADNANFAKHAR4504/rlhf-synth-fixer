@@ -15,7 +15,8 @@
     "OperationsEmail": {
       "Type": "String",
       "Description": "Email address for operations team to receive alerts",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "Default": "ops-team@example.com"
     },
     "VehicleCount": {
       "Type": "Number",
@@ -27,18 +28,6 @@
       "Type": "Number",
       "Description": "Frequency of telemetry data emitted by each vehicle (in seconds)",
       "Default": 60,
-      "MinValue": 1
-    },
-    "MemoryStoreRetentionHours": {
-      "Type": "Number",
-      "Description": "Timestream memory store retention period in hours",
-      "Default": 24,
-      "MinValue": 1
-    },
-    "MagneticStoreRetentionDays": {
-      "Type": "Number",
-      "Description": "Timestream magnetic store retention period in days",
-      "Default": 365,
       "MinValue": 1
     }
   },
@@ -368,6 +357,68 @@
         ]
       }
     },
+    "SageMakerExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sagemaker.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess",
+          "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+          "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "SageMakerNotebookInstanceV2": {
+      "Type": "AWS::SageMaker::NotebookInstance",
+      "Properties": {
+        "NotebookInstanceName": {
+          "Fn::Sub": "${EnvironmentName}-fleet-maintenance-model-v2-${EnvironmentSuffix}"
+        },
+        "InstanceType": "ml.t3.xlarge",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "SageMakerExecutionRole",
+            "Arn"
+          ]
+        },
+        "VolumeSizeInGB": 50,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -386,7 +437,6 @@
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
           "arn:aws:iam::aws:policy/AmazonKinesisReadOnlyAccess",
-          "arn:aws:iam::aws:policy/AmazonTimestreamFullAccess",
           "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
           "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
           "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
@@ -407,21 +457,19 @@
           ]
         },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ntimestream_client = boto3.client('timestream-write')\n\ndef handler(event, context):\n    database_name = os.environ['TIMESTREAM_DATABASE']\n    table_name = os.environ['TIMESTREAM_TABLE']\n    \n    records = []\n    for record in event['Records']:\n        payload = json.loads(record['kinesis']['data'])\n        \n        timestream_record = {\n            'Time': str(int(datetime.now().timestamp() * 1000)),\n            'TimeUnit': 'MILLISECONDS',\n            'Dimensions': [\n                {'Name': 'vehicleId', 'Value': payload.get('vehicleId', 'unknown')}\n            ],\n            'MeasureName': 'telemetry',\n            'MeasureValueType': 'MULTI',\n            'MeasureValues': [\n                {'Name': 'speed', 'Value': str(payload.get('speed', 0)), 'Type': 'DOUBLE'},\n                {'Name': 'engineTemp', 'Value': str(payload.get('engineTemp', 0)), 'Type': 'DOUBLE'},\n                {'Name': 'fuelLevel', 'Value': str(payload.get('fuelLevel', 0)), 'Type': 'DOUBLE'}\n            ]\n        }\n        records.append(timestream_record)\n    \n    if records:\n        try:\n            timestream_client.write_records(\n                DatabaseName=database_name,\n                TableName=table_name,\n                Records=records\n            )\n        except Exception as e:\n            print(f'Error writing to Timestream: {e}')\n            raise\n    \n    return {'statusCode': 200, 'body': json.dumps('Processed successfully')}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport base64\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    table_name = os.environ['TELEMETRY_TABLE']\n    table = dynamodb.Table(table_name)\n    \n    for record in event['Records']:\n        payload = json.loads(base64.b64decode(record['kinesis']['data']))\n        \n        item = {\n            'vehicleId': payload.get('vehicleId', 'unknown'),\n            'timestamp': int(datetime.now().timestamp()),\n            'speed': payload.get('speed', 0),\n            'engineTemp': payload.get('engineTemp', 0),\n            'fuelLevel': payload.get('fuelLevel', 0),\n            'ttl': int(datetime.now().timestamp()) + (30 * 24 * 60 * 60)\n        }\n        \n        try:\n            table.put_item(Item=item)\n        except Exception as e:\n            print(f'Error writing to DynamoDB: {e}')\n            raise\n    \n    return {'statusCode': 200, 'body': json.dumps('Processed successfully')}\n"
         },
         "Runtime": "python3.11",
         "Timeout": 60,
         "MemorySize": 512,
+        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "ENVIRONMENT": {
               "Ref": "EnvironmentName"
             },
-            "TIMESTREAM_DATABASE": {
-              "Ref": "TimestreamDatabase"
-            },
-            "TIMESTREAM_TABLE": {
-              "Ref": "TimestreamTable"
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
             },
             "VEHICLE_TABLE": {
               "Ref": "VehicleProfileTable"
@@ -464,6 +512,7 @@
         "Runtime": "python3.11",
         "Timeout": 60,
         "MemorySize": 512,
+        "ReservedConcurrentExecutions": 50,
         "Environment": {
           "Variables": {
             "ALERT_TOPIC_ARN": {
@@ -472,11 +521,8 @@
             "ENVIRONMENT": {
               "Ref": "EnvironmentName"
             },
-            "TIMESTREAM_DATABASE": {
-              "Ref": "TimestreamDatabase"
-            },
-            "TIMESTREAM_TABLE": {
-              "Ref": "TimestreamTable"
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
             },
             "VEHICLE_TABLE": {
               "Ref": "VehicleProfileTable"
@@ -519,17 +565,15 @@
         "Runtime": "python3.11",
         "Timeout": 300,
         "MemorySize": 1024,
+        "ReservedConcurrentExecutions": 25,
         "Environment": {
           "Variables": {
             "SAGEMAKER_ENDPOINT": "placeholder-endpoint",
             "ENVIRONMENT": {
               "Ref": "EnvironmentName"
             },
-            "TIMESTREAM_DATABASE": {
-              "Ref": "TimestreamDatabase"
-            },
-            "TIMESTREAM_TABLE": {
-              "Ref": "TimestreamTable"
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
             },
             "VEHICLE_TABLE": {
               "Ref": "VehicleProfileTable"
@@ -1022,9 +1066,51 @@
         },
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess",
-          "arn:aws:iam::aws:policy/AmazonTimestreamReadOnlyAccess",
           "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
         ]
+      }
+    },
+    "ApiGatewayCloudWatchLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "ApiGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "ApiGatewayCloudWatchLogsRole",
+            "Arn"
+          ]
+        }
       }
     },
     "FleetManagementApi": {
@@ -1087,6 +1173,7 @@
         "Runtime": "python3.11",
         "Timeout": 30,
         "MemorySize": 256,
+        "ReservedConcurrentExecutions": 50,
         "Environment": {
           "Variables": {
             "VEHICLE_PROFILE_TABLE": {
@@ -1178,6 +1265,15 @@
         }
       }
     },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/${EnvironmentName}-fleet-management-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
     "ApiDeployment": {
       "Type": "AWS::ApiGateway::Deployment",
       "DependsOn": [
@@ -1188,57 +1284,76 @@
         "RestApiId": {
           "Ref": "FleetManagementApi"
         },
-        "StageName": {
-          "Ref": "EnvironmentName"
+        "Description": {
+          "Fn::Sub": "Deployment for ${EnvironmentName}-${EnvironmentSuffix}"
         }
       }
     },
-    "TimestreamDatabase": {
-      "Type": "AWS::Timestream::Database",
+    "ApiStageV2": {
+      "Type": "AWS::ApiGateway::Stage",
       "Properties": {
-        "DatabaseName": {
-          "Fn::Sub": "${EnvironmentName}-vehicle-telemetry-${EnvironmentSuffix}"
+        "StageName": {
+          "Ref": "EnvironmentName"
         },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentName"
-            }
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayLogGroup",
+              "Arn"
+            ]
           },
+          "Format": "$context.requestId $context.identity.sourceIp $context.routeKey $context.status"
+        },
+        "MethodSettings": [
           {
-            "Key": "Project",
-            "Value": "Fleet Management"
+            "HttpMethod": "*",
+            "ResourcePath": "/*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": true,
+            "MetricsEnabled": true
           }
         ]
       }
     },
-    "TimestreamTable": {
-      "Type": "AWS::Timestream::Table",
+    "TelemetryDataTable": {
+      "Type": "AWS::DynamoDB::Table",
       "Properties": {
-        "DatabaseName": {
-          "Ref": "TimestreamDatabase"
+        "TableName": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-data-${EnvironmentSuffix}"
         },
-        "TableName": "vehicle_telemetry",
-        "RetentionProperties": {
-          "MemoryStoreRetentionPeriodInHours": {
-            "Ref": "MemoryStoreRetentionHours"
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "vehicleId",
+            "AttributeType": "S"
           },
-          "MagneticStoreRetentionPeriodInDays": {
-            "Ref": "MagneticStoreRetentionDays"
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
           }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "vehicleId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
         },
-        "MagneticStoreWriteProperties": {
-          "EnableMagneticStoreWrites": true,
-          "MagneticStoreRejectedDataLocation": {
-            "S3Configuration": {
-              "BucketName": {
-                "Ref": "RawTelemetryBucket"
-              },
-              "ObjectKeyPrefix": "rejected-timestream-data/",
-              "EncryptionOption": "SSE_S3"
-            }
-          }
+        "TimeToLiveSpecification": {
+          "Enabled": true,
+          "AttributeName": "ttl"
         },
         "Tags": [
           {
@@ -1350,25 +1465,14 @@
         }
       }
     },
-    "TimestreamDatabaseName": {
-      "Description": "Timestream Database for Vehicle Telemetry",
+    "TelemetryDataTableName": {
+      "Description": "DynamoDB Table for Vehicle Telemetry Data",
       "Value": {
-        "Ref": "TimestreamDatabase"
+        "Ref": "TelemetryDataTable"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-TimestreamDatabaseName"
-        }
-      }
-    },
-    "TimestreamTableName": {
-      "Description": "Timestream Table for Vehicle Telemetry",
-      "Value": {
-        "Ref": "TimestreamTable"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-TimestreamTableName"
+          "Fn::Sub": "${AWS::StackName}-TelemetryDataTableName"
         }
       }
     }
