@@ -17,5 +17,9 @@
     "IAM",
     "SQS",
     "S3"
+  ],
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
   ]
 }
