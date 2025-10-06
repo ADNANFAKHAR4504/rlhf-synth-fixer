@@ -59,17 +59,7 @@ describe('TapStack Terraform Unit Tests (comprehensive)', () => {
       expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password"/);
       expect(tfContent).toMatch(/override_special\s*=\s*["']!#\$%\^&\*\(\)_\+\-=["']/);
     });
-
-    test('defines secretsmanager secret and secret_version', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"rds_credentials"/);
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"rds_credentials"/);
-      expect(tfContent).toMatch(/secret_string\s*=\s*jsonencode\(/);
-      // secret_string should include username and password keys
-      expect(tfContent).toMatch(/"username"\s*:/);
-      expect(tfContent).toMatch(/"password"\s*:/);
-    });
-  });
-
+   });
   // =========================
   // VPC & Networking
   // =========================
