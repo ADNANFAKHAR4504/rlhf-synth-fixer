@@ -136,11 +136,12 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
+      const distributionDomainName = deployedOutputs.distributionDomainName || deployedOutputs.DistributionDomainName;
       const listCommand = new ListDistributionsCommand({});
       const listResponse = await cloudFrontClient.send(listCommand);
 
       const distribution = listResponse.DistributionList?.Items?.find(
-        dist => dist.DomainName === deployedOutputs.DistributionDomainName
+        dist => dist.DomainName === distributionDomainName
       );
 
       expect(distribution).toBeDefined();
@@ -154,11 +155,12 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
+      const distributionDomainName = deployedOutputs.distributionDomainName || deployedOutputs.DistributionDomainName;
       const listCommand = new ListDistributionsCommand({});
       const listResponse = await cloudFrontClient.send(listCommand);
 
       const distribution = listResponse.DistributionList?.Items?.find(
-        dist => dist.DomainName === deployedOutputs.DistributionDomainName
+        dist => dist.DomainName === distributionDomainName
       );
 
       if (distribution?.Id) {
