@@ -22,11 +22,6 @@
             "Default": 200,
             "Description": "API Gateway throttle burst limit"
         },
-        "DailyVoteTarget": {
-            "Type": "Number",
-            "Default": 5000,
-            "Description": "Expected daily vote volume"
-        },
         "ElastiCacheNodeType": {
             "Type": "String",
             "Default": "cache.t3.micro",
@@ -47,14 +42,6 @@
             "Description": "Email address for CloudWatch alerts",
             "AllowedPattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
             "ConstraintDescription": "Must be a valid email address"
-        }
-    },
-    "Mappings": {
-        "RegionConfig": {
-            "us-east-1": {
-                "QuickSightRegion": "us-east-1",
-                "HasElastiCache": true
-            }
         }
     },
     "Conditions": {

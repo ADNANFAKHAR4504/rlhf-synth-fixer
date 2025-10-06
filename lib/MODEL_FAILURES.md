@@ -170,7 +170,7 @@ test('should have VotesTable deployed', () => {
 
 ---
 
-## Issue #4: CloudFormation Lint Warnings (Non-Critical)
+## Issue #4: CloudFormation Lint Warnings - Unused Parameters/Mappings
 
 ### Warnings Detected
 ```
@@ -178,22 +178,41 @@ W2001 Parameter DailyVoteTarget not used.
 W7001 Mapping 'RegionConfig' is defined but not used
 ```
 
-### Analysis
-These are **non-critical warnings** (W-level, not E-level errors):
+### Root Cause
+The template included a `DailyVoteTarget` parameter and `RegionConfig` mapping that were not referenced anywhere in the template.
 
-1. **DailyVoteTarget Parameter:** Reserved for future use in auto-scaling calculations or CloudWatch alarm thresholds. Keeping it allows future enhancements without breaking changes.
+### Solution Applied
+Removed unused elements to achieve clean lint validation:
 
-2. **RegionConfig Mapping:** Reserved for multi-region QuickSight configuration. Provides flexibility for future regional deployments.
+1. **Removed DailyVoteTarget parameter** (lines 25-29)
+2. **Removed RegionConfig mapping** (lines 52-59)
 
-### Decision
-**No action required.** These parameters are intentionally included for:
-- Future extensibility
-- Documentation of intended features
-- Backward compatibility when features are implemented
+**Before:**
+```json
+"Parameters": {
+    "ApiThrottleBurstLimit": {...},
+    "DailyVoteTarget": {
+        "Type": "Number",
+        "Default": 5000,
+        "Description": "Expected daily vote volume"
+    },
+    "ElastiCacheNodeType": {...}
+}
+```
 
-AWS CloudFormation allows unused parameters and mappings. They do not affect stack deployment or functionality.
+**After:**
+```json
+"Parameters": {
+    "ApiThrottleBurstLimit": {...},
+    "ElastiCacheNodeType": {...}
+}
+```
 
-**Status:** Acceptable warnings - no fix needed
+**Files Modified:**
+- `lib/TapStack.json` (removed 2 unused items)
+- `test/tap-stack.unit.test.ts` (removed DailyVoteTarget test, updated parameter count from 7 to 6)
+
+**Result:** All cfn-lint warnings resolved. Clean lint validation with 0 errors, 0 warnings.
 
 ---
 
@@ -254,9 +273,9 @@ Populated `IDEAL_RESPONSE.md` with the complete CloudFormation template (1,173 l
 |----------------|---------|---------|
 | JSON Syntax | ✅ PASSED | Valid JSON structure |
 | CloudFormation Validate | ✅ PASSED | AWS CLI validation successful |
-| cfn-lint | ✅ PASSED | 0 errors, 2 acceptable warnings |
+| cfn-lint | ✅ PASSED | 0 errors, 0 warnings |
 | Build Process | ✅ PASSED | TypeScript compilation successful |
-| Unit Tests | ✅ PASSED | 81/81 tests passing (100%) |
+| Unit Tests | ✅ PASSED | 80/80 tests passing (100%) |
 | Integration Tests | ✅ CONFIGURED | 46 tests with proper skip logic |
 | Security Review | ✅ PASSED | All best practices implemented |
 
@@ -267,8 +286,10 @@ Populated `IDEAL_RESPONSE.md` with the complete CloudFormation template (1,173 l
    - Moved ThrottleSettings to MethodSettings
 
 2. **test/tap-stack.unit.test.ts**
-   - Updated 2 tests to match corrected structure
-   - All 81 tests now passing
+   - Updated 2 tests to match corrected throttling structure
+   - Removed DailyVoteTarget test
+   - Updated parameter count expectation (7 → 6)
+   - All 80 tests now passing
 
 3. **test/tap-stack.int.test.ts**
    - Added skipIfStackMissing() helper function
@@ -277,16 +298,16 @@ Populated `IDEAL_RESPONSE.md` with the complete CloudFormation template (1,173 l
 
 4. **lib/IDEAL_RESPONSE.md**
    - Populated with complete CloudFormation template
-   - 1,173 lines of JSON code
+   - 1,157 lines of JSON code (updated to match cleaned template)
 
 ### Key Metrics
 
 - **Resources:** 31 AWS resources
-- **Parameters:** 7 configurable parameters
+- **Parameters:** 6 configurable parameters
 - **Outputs:** 6 stack outputs
-- **Unit Tests:** 81 tests (100% passing)
+- **Unit Tests:** 80 tests (100% passing)
 - **Integration Tests:** 46 tests (properly configured)
-- **Lines of Code:** 1,173 (template) + 714 (unit tests) + 511 (integration tests)
+- **Lines of Code:** 1,157 (template) + 710 (unit tests) + 511 (integration tests)
 
 ---
 
@@ -301,9 +322,8 @@ When fixing infrastructure code, corresponding test expectations must be updated
 ### 3. Integration Tests Need Infrastructure Awareness
 Tests should gracefully handle missing infrastructure rather than failing. Helper functions like `skipIfStackMissing()` provide clean, reusable skip logic.
 
-### 4. cfn-lint Warnings vs Errors
-- **Errors (E-level):** Must be fixed before deployment
-- **Warnings (W-level):** Advisory only, acceptable for unused parameters/mappings
+### 4. Clean Lint Validation
+Remove unused parameters and mappings to achieve zero warnings. While W-level warnings don't block deployment, clean validation demonstrates production-ready code quality.
 
 ### 5. Scope Management
 Pre-existing issues outside the task scope (like subcategory-references) should be documented but not fixed as part of the current task.
@@ -314,9 +334,9 @@ Pre-existing issues outside the task scope (like subcategory-references) should 
 
 - [x] JSON syntax valid
 - [x] CloudFormation template validates successfully
-- [x] cfn-lint passes with only acceptable warnings
+- [x] cfn-lint passes with 0 errors, 0 warnings
 - [x] Build process successful
-- [x] All unit tests passing (81/81)
+- [x] All unit tests passing (80/80)
 - [x] Integration tests properly configured with skip logic
 - [x] Security best practices implemented
 - [x] IAM policies follow least privilege

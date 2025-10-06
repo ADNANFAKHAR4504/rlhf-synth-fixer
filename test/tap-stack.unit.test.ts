@@ -50,12 +50,6 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       expect(template.Parameters.ApiThrottleBurstLimit.Type).toBe('Number');
     });
 
-    test('should have DailyVoteTarget parameter', () => {
-      expect(template.Parameters.DailyVoteTarget).toBeDefined();
-      expect(template.Parameters.DailyVoteTarget.Type).toBe('Number');
-      expect(template.Parameters.DailyVoteTarget.Default).toBe(5000);
-    });
-
     test('should have ElastiCache configuration parameter', () => {
       expect(template.Parameters.ElastiCacheNodeType).toBeDefined();
       expect(template.Parameters.ElastiCacheNodeType.Type).toBe('String');
@@ -598,9 +592,9 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       expect(resourceCount).toBe(31);
     });
 
-    test('should have 7 parameters', () => {
+    test('should have 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(6);
     });
 
     test('should have 6 outputs', () => {
