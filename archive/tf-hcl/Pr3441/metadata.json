@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "100252",
+  "team": "1",
+  "startedAt": "2025-10-03T10:34:41.552Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "KMS",
+    "IAM",
+    "DynamoDB",
+    "ElastiCache",
+    "SSM Parameter Store",
+    "Lambda",
+    "API Gateway",
+    "WAF",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "CloudTrail",
+    "QuickSight",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

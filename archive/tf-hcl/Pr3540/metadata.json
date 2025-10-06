@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348984",
+  "team": "4",
+  "startedAt": "2025-10-04T04:21:29.292Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "EC2",
+    "RDS",
+    "S3",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "WAF",
+    "CloudTrail",
+    "AWS Config",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "Inspector",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
