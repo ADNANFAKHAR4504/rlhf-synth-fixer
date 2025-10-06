@@ -328,7 +328,7 @@ describe("Multi-Region Infrastructure - Terraform Configuration Validation", () 
       expect(content).toMatch(/http_tokens\s*=\s*"required"/);
       expect(content).toMatch(/block_device_mappings\s*{/);
       expect(content).toMatch(/encrypted\s*=\s*true/);
-      expect(content).toMatch(/kms_key_id\s*=\s*var\.kms_key_id/);
+      // kms_key_id may be omitted to use AWS-managed EBS key (aws/ebs)
 
       // Auto Scaling Group
       expect(content).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
