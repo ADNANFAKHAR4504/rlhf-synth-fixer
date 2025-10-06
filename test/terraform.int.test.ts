@@ -272,6 +272,7 @@ describe("Terraform infrastructure integration", () => {
       AutoScalingGroupName: asgName,
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
+    console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
     const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
     const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
     const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";

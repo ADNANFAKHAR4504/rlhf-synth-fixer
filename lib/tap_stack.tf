@@ -64,7 +64,7 @@ variable "db_username" {
 
 variable "lambda_name" {
   description = "Name of the Lambda function"
-  default     = "${var.unique_id}-app-processor"
+  default     = "app-processor"
 }
 
 data "aws_caller_identity" "current" {}
@@ -610,7 +610,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 
 
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${var.lambda_name}"
+  name              = "/aws/lambda/${local.name_prefix}${var.lambda_name}"
   retention_in_days = 14
   tags              = local.common_tags
 }
@@ -648,7 +648,7 @@ data "archive_file" "inline_lambda" {
 }
 
 resource "aws_lambda_function" "app" {
-  function_name = var.lambda_name
+  function_name = "${local.name_prefix}${var.lambda_name}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
