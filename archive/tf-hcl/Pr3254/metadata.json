@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-01T21:55:30+05:30",
   "subtask": "Serverless Infrastructure",
-  "subject_labels": ["Application Deployment"],
+  "subject_labels": [
+    "Application Deployment"
+  ],
   "aws_services": [
     "API Gateway HTTP API",
     "Lambda",
@@ -20,5 +22,11 @@
     "AWS X-Ray",
     "AWS WAF"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
