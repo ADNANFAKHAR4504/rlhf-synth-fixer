@@ -1,7 +1,7 @@
 // Configuration - These are coming from cfn-outputs after deployment
 import { CloudFrontClient, GetDistributionCommand, GetDistributionConfigCommand } from '@aws-sdk/client-cloudfront';
 import { CloudWatchClient, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
-import { EventsClient } from '@aws-sdk/client-eventbridge';
+import { EventBridgeClient } from '@aws-sdk/client-eventbridge';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { GetBucketEncryptionCommand, GetBucketVersioningCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
@@ -33,7 +33,7 @@ let kmsClient: KMSClient | null = null;
 let snsClient: SNSClient | null = null;
 let cloudWatchClient: CloudWatchClient | null = null;
 let lambdaClient: LambdaClient | null = null;
-let eventsClient: EventsClient | null = null;
+let eventsClient: EventBridgeClient | null = null;
 
 if (hasAWS) {
   const region = process.env.AWS_REGION || 'us-east-1';
@@ -43,7 +43,7 @@ if (hasAWS) {
   snsClient = new SNSClient({ region });
   cloudWatchClient = new CloudWatchClient({ region });
   lambdaClient = new LambdaClient({ region });
-  eventsClient = new EventsClient({ region });
+  eventsClient = new EventBridgeClient({ region });
 }
 
 describe('eBook Delivery System Integration Tests', () => {
@@ -284,7 +284,7 @@ describe('eBook Delivery System Integration Tests', () => {
         expect(response.DistributionConfig).toBeDefined();
         expect(response.DistributionConfig?.Enabled).toBe(true);
         expect(response.DistributionConfig?.HttpVersion).toBe('http2');
-        expect(response.DistributionConfig?.IPV6Enabled).toBe(true);
+        expect(response.DistributionConfig?.IsIPV6Enabled).toBe(true);
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -542,7 +542,7 @@ describe('eBook Delivery System Integration Tests', () => {
         // Verify that CloudFront distribution has S3 as origin
         const origins = cfResponse.Distribution?.DistributionConfig?.Origins;
         expect(origins).toBeDefined();
-        expect(origins?.length).toBeGreaterThan(0);
+        expect(origins && 'length' in origins ? origins.length : 0).toBeGreaterThan(0);
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -691,7 +691,7 @@ describe('eBook Delivery System Integration Tests', () => {
         const distribution = response.Distribution;
         expect(distribution?.Status).toBe('Deployed');
         expect(distribution?.DistributionConfig?.HttpVersion).toBe('http2');
-        expect(distribution?.DistributionConfig?.IPV6Enabled).toBe(true);
+        expect(distribution?.DistributionConfig?.IsIPV6Enabled).toBe(true);
         expect(distribution?.DistributionConfig?.PriceClass).toBeDefined();
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
