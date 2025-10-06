@@ -1,5 +1,4 @@
 import fs from 'fs';
-import { Lambda } from 'aws-sdk';
 
 const outputs = (() => {
   try {
@@ -11,139 +10,156 @@ const outputs = (() => {
   }
 })();
 
-process.env.AWS_SDK_LOAD_CONFIG = process.env.AWS_SDK_LOAD_CONFIG || '1';
+const userFunctionUrl = outputs.UserFunctionUrl;
+const productFunctionUrl = outputs.ProductFunctionUrl;
+const orderFunctionUrl = outputs.OrderFunctionUrl;
 
-const region = process.env.AWS_REGION || outputs.ApiEndpoint?.split('.')[2] || 'us-west-2';
-const lambda = new Lambda({ region });
+if (!userFunctionUrl || !productFunctionUrl || !orderFunctionUrl) {
+  throw new Error('Function URLs are missing from deployment outputs.');
+}
 
-const inferFunctionName = (tableName: string, purpose: string) =>
-  tableName.replace('-users-', `-${purpose}-`);
-
-const userFunctionName = inferFunctionName(outputs.UserTableName, 'user-service');
-const productFunctionName = inferFunctionName(outputs.ProductTableName, 'product-service');
-const orderFunctionName = inferFunctionName(outputs.OrderTableName, 'order-service');
-
-const invokeLambda = async <T>(functionName: string, payload: Record<string, unknown>) => {
-  const response = await lambda
-    .invoke({
-      FunctionName: functionName,
-      InvocationType: 'RequestResponse',
-      Payload: JSON.stringify(payload),
-    })
-    .promise();
-
-  const raw = response.Payload ? JSON.parse(response.Payload.toString()) : {};
-  const status = raw.statusCode as number;
-  const body = raw.body ? (JSON.parse(raw.body) as T) : undefined;
-  return { status, body };
-};
-
-const buildEvent = (
+const invokeFunctionUrl = async <T>(
+  url: string,
   method: string,
-  path: string,
-  body?: Record<string, unknown>,
-  pathParameters?: Record<string, string>
-) => ({
-  resource: path,
-  path,
-  httpMethod: method,
-  headers: {},
-  multiValueHeaders: {},
-  queryStringParameters: null,
-  multiValueQueryStringParameters: null,
-  pathParameters: pathParameters ?? null,
-  stageVariables: null,
-  requestContext: {},
-  body: body ? JSON.stringify(body) : null,
-  isBase64Encoded: false,
-});
+  body?: Record<string, unknown>
+): Promise<{ status: number; json?: T; headers: Headers }> => {
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (response.status === 204) {
+    return { status: response.status, headers: response.headers };
+  }
+
+  const text = await response.text();
+  const parsed = text.length ? (JSON.parse(text) as T) : undefined;
+  return { status: response.status, json: parsed, headers: response.headers };
+};
 
 const uniqueId = `int-${Date.now().toString(36)}`;
 
 jest.setTimeout(120_000);
 
-describe('Serverless Lambda integration workflow', () => {
+describe('Lambda function URL integration workflow', () => {
   let createdUserId: string | undefined;
   let createdProductId: string | undefined;
   let createdOrderId: string | undefined;
 
   afterAll(async () => {
     if (createdOrderId) {
-      await invokeLambda(
-        orderFunctionName,
-        buildEvent('PATCH', `/orders/${createdOrderId}`, { status: 'CANCELLED' }, { orderId: createdOrderId })
-      );
+      await invokeFunctionUrl(orderFunctionUrl, 'PATCH', {
+        status: 'CANCELLED',
+        path: `/orders/${createdOrderId}`,
+        httpMethod: 'PATCH',
+        pathParameters: { orderId: createdOrderId },
+      });
     }
     if (createdUserId) {
-      await invokeLambda(
-        userFunctionName,
-        buildEvent('DELETE', `/users/${createdUserId}`, undefined, { userId: createdUserId })
-      );
+      await invokeFunctionUrl(userFunctionUrl, 'DELETE', {
+        path: `/users/${createdUserId}`,
+        httpMethod: 'DELETE',
+        pathParameters: { userId: createdUserId },
+      });
     }
     if (createdProductId) {
-      await invokeLambda(
-        productFunctionName,
-        buildEvent('DELETE', `/products/${createdProductId}`, undefined, { productId: createdProductId })
-      );
+      await invokeFunctionUrl(productFunctionUrl, 'DELETE', {
+        path: `/products/${createdProductId}`,
+        httpMethod: 'DELETE',
+        pathParameters: { productId: createdProductId },
+      });
     }
   });
 
   test('supports user, product, and order lifecycle', async () => {
-    const createUser = await invokeLambda<{ userId: string }>(
-      userFunctionName,
-      buildEvent('POST', '/users', {
-        name: `Integration User ${uniqueId}`,
-        email: `${uniqueId}@example.com`,
-      })
+    const createUser = await invokeFunctionUrl<{ userId: string }>(
+      userFunctionUrl,
+      'POST',
+      {
+        path: '/users',
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          name: `Integration User ${uniqueId}`,
+          email: `${uniqueId}@example.com`,
+        }),
+      }
     );
     expect(createUser.status).toBe(201);
-    createdUserId = createUser.body?.userId;
+    createdUserId = createUser.json?.userId;
     expect(createdUserId).toEqual(expect.any(String));
 
-    const getUser = await invokeLambda(
-      userFunctionName,
-      buildEvent('GET', `/users/${createdUserId}`, undefined, { userId: createdUserId! })
+    const getUser = await invokeFunctionUrl(
+      userFunctionUrl,
+      'POST',
+      {
+        path: `/users/${createdUserId}`,
+        httpMethod: 'GET',
+        pathParameters: { userId: createdUserId! },
+      }
     );
     expect(getUser.status).toBe(200);
-    expect(getUser.body).toEqual(expect.objectContaining({ userId: createdUserId }));
+    expect(getUser.json).toEqual(
+      expect.objectContaining({ userId: createdUserId })
+    );
 
-    const createProduct = await invokeLambda<{ productId: string }>(
-      productFunctionName,
-      buildEvent('POST', '/products', {
-        name: `Integration Product ${uniqueId}`,
-        description: 'Integration test asset',
-        price: 19.99,
-        inventory: 10,
-      })
+    const createProduct = await invokeFunctionUrl<{ productId: string }>(
+      productFunctionUrl,
+      'POST',
+      {
+        path: '/products',
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          name: `Integration Product ${uniqueId}`,
+          description: 'Integration test asset',
+          price: 19.99,
+          inventory: 10,
+        }),
+      }
     );
     expect(createProduct.status).toBe(201);
-    createdProductId = createProduct.body?.productId;
+    createdProductId = createProduct.json?.productId;
     expect(createdProductId).toEqual(expect.any(String));
 
-    const getProduct = await invokeLambda(
-      productFunctionName,
-      buildEvent('GET', `/products/${createdProductId}`, undefined, { productId: createdProductId! })
+    const getProduct = await invokeFunctionUrl(
+      productFunctionUrl,
+      'POST',
+      {
+        path: `/products/${createdProductId}`,
+        httpMethod: 'GET',
+        pathParameters: { productId: createdProductId! },
+      }
     );
     expect(getProduct.status).toBe(200);
 
-    const createOrder = await invokeLambda<{ orderId: string }>(
-      orderFunctionName,
-      buildEvent('POST', '/orders', {
-        userId: createdUserId,
-        productId: createdProductId,
-        quantity: 2,
-      })
+    const createOrder = await invokeFunctionUrl<{ orderId: string }>(
+      orderFunctionUrl,
+      'POST',
+      {
+        path: '/orders',
+        httpMethod: 'POST',
+        body: JSON.stringify({
+          userId: createdUserId,
+          productId: createdProductId,
+          quantity: 2,
+        }),
+      }
     );
     expect(createOrder.status).toBe(201);
-    createdOrderId = createOrder.body?.orderId;
+    createdOrderId = createOrder.json?.orderId;
     expect(createdOrderId).toEqual(expect.any(String));
 
-    const getOrder = await invokeLambda(
-      orderFunctionName,
-      buildEvent('GET', `/orders/${createdOrderId}`, undefined, { orderId: createdOrderId! })
+    const getOrder = await invokeFunctionUrl(
+      orderFunctionUrl,
+      'POST',
+      {
+        path: `/orders/${createdOrderId}`,
+        httpMethod: 'GET',
+        pathParameters: { orderId: createdOrderId! },
+      }
     );
     expect(getOrder.status).toBe(200);
-    expect(getOrder.body).toEqual(
+    expect(getOrder.json).toEqual(
       expect.objectContaining({
         orderId: createdOrderId,
         userId: createdUserId,
@@ -151,47 +167,72 @@ describe('Serverless Lambda integration workflow', () => {
       })
     );
 
-    const patchOrder = await invokeLambda(
-      orderFunctionName,
-      buildEvent('PATCH', `/orders/${createdOrderId}`, { status: 'SHIPPED' }, { orderId: createdOrderId! })
+    const patchOrder = await invokeFunctionUrl(
+      orderFunctionUrl,
+      'POST',
+      {
+        path: `/orders/${createdOrderId}`,
+        httpMethod: 'PATCH',
+        pathParameters: { orderId: createdOrderId! },
+        body: JSON.stringify({ status: 'SHIPPED' }),
+      }
     );
     expect(patchOrder.status).toBe(200);
 
-    const verifyOrder = await invokeLambda(
-      orderFunctionName,
-      buildEvent('GET', `/orders/${createdOrderId}`, undefined, { orderId: createdOrderId! })
+    const verifyOrder = await invokeFunctionUrl(
+      orderFunctionUrl,
+      'POST',
+      {
+        path: `/orders/${createdOrderId}`,
+        httpMethod: 'GET',
+        pathParameters: { orderId: createdOrderId! },
+      }
     );
     expect(verifyOrder.status).toBe(200);
-    expect(verifyOrder.body).toEqual(expect.objectContaining({ status: 'SHIPPED' }));
+    expect(verifyOrder.json).toEqual(
+      expect.objectContaining({ status: 'SHIPPED' })
+    );
 
-    const listUsers = await invokeLambda<any[]>(
-      userFunctionName,
-      buildEvent('GET', '/users')
+    const listUsers = await invokeFunctionUrl<any[]>(
+      userFunctionUrl,
+      'POST',
+      {
+        path: '/users',
+        httpMethod: 'GET',
+      }
     );
     expect(listUsers.status).toBe(200);
-    expect(listUsers.body).toEqual(
+    expect(listUsers.json).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ userId: createdUserId }),
       ])
     );
 
-    const listProducts = await invokeLambda<any[]>(
-      productFunctionName,
-      buildEvent('GET', '/products')
+    const listProducts = await invokeFunctionUrl<any[]>(
+      productFunctionUrl,
+      'POST',
+      {
+        path: '/products',
+        httpMethod: 'GET',
+      }
     );
     expect(listProducts.status).toBe(200);
-    expect(listProducts.body).toEqual(
+    expect(listProducts.json).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ productId: createdProductId }),
       ])
     );
 
-    const listOrders = await invokeLambda<any[]>(
-      orderFunctionName,
-      buildEvent('GET', '/orders')
+    const listOrders = await invokeFunctionUrl<any[]>(
+      orderFunctionUrl,
+      'POST',
+      {
+        path: '/orders',
+        httpMethod: 'GET',
+      }
     );
     expect(listOrders.status).toBe(200);
-    expect(listOrders.body).toEqual(
+    expect(listOrders.json).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ orderId: createdOrderId }),
       ])

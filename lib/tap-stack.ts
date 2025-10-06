@@ -16,6 +16,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -335,13 +336,32 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
-    const apiStageName = sanitizeStageName(environmentName);
+    const createFunctionUrl = (fn: NodejsFunction) =>
+      fn.addFunctionUrl({
+        authType: FunctionUrlAuthType.NONE,
+        cors: {
+          allowedOrigins: ['*'],
+          allowedMethods: [
+            HttpMethod.GET,
+            HttpMethod.POST,
+            HttpMethod.PUT,
+            HttpMethod.PATCH,
+            HttpMethod.DELETE,
+            HttpMethod.HEAD,
+            HttpMethod.OPTIONS,
+          ],
+        },
+      });
+
+    const userFunctionUrl = createFunctionUrl(userServiceFunction);
+    const productFunctionUrl = createFunctionUrl(productServiceFunction);
+    const orderFunctionUrl = createFunctionUrl(orderServiceFunction);
 
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
       description: 'Serverless API for the Nova microservices platform.',
       deployOptions: {
-        stageName: apiStageName,
+        stageName: 'stage',
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
@@ -526,6 +546,21 @@ export class TapStack extends cdk.Stack {
     new CfnOutput(this, 'ApiSecretArn', {
       value: apiSecret.secretArn,
       description: 'Secrets Manager ARN for external API credentials.',
+    });
+
+    new CfnOutput(this, 'UserFunctionUrl', {
+      value: userFunctionUrl.url,
+      description: 'HTTPS endpoint for the user service Lambda function.',
+    });
+
+    new CfnOutput(this, 'ProductFunctionUrl', {
+      value: productFunctionUrl.url,
+      description: 'HTTPS endpoint for the product service Lambda function.',
+    });
+
+    new CfnOutput(this, 'OrderFunctionUrl', {
+      value: orderFunctionUrl.url,
+      description: 'HTTPS endpoint for the order service Lambda function.',
     });
   }
 }
