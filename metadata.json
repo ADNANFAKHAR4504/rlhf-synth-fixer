@@ -17,5 +17,9 @@
     "SES",
     "IAM"
   ],
-  "subcategory": "serverless-infrastructure-functions-as-code"
+  "subcategory": "serverless-infrastructure-functions-as-code",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ]
 }
