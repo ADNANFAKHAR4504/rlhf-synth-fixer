@@ -60,9 +60,9 @@ Mappings:
       CIDR: "10.0.11.0/24"
 
 Resources:
-  ########################################
-  # Networking (VPC, Subnets, Routing)
-  ########################################
+  # ---------------------------
+  # Networking
+  # ---------------------------
   VPC:
     Type: "AWS::EC2::VPC"
     Properties:
@@ -242,9 +242,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  ########################################
+  # ---------------------------
   # Security Groups
-  ########################################
+  # ---------------------------
   ALBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -289,9 +289,9 @@ Resources:
       DestinationSecurityGroupId: !Ref EC2SecurityGroup
       Description: "Allow HTTP egress to EC2 instances"
 
-  ########################################
-  # S3 Buckets (all encrypted + logged)
-  ########################################
+  # ---------------------------
+  # S3 (encrypted + server-access-logged)
+  # ---------------------------
   CentralLogsBucket:
     Type: "AWS::S3::Bucket"
     Properties:
@@ -336,7 +336,8 @@ Resources:
             ExpirationInDays: 90
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
-        LogFilePrefix: "cloudtrail-bucket/"
+        LogFilePrefix: "cloudtrail-bucket/" # S3 logging prefix can end with '/'
+
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-cloudtrail-logs"
@@ -383,14 +384,15 @@ Resources:
             ExpirationInDays: 30
       LoggingConfiguration:
         DestinationBucketName: !Ref CentralLogsBucket
-        LogFilePrefix: "access-bucket/"
+        LogFilePrefix: "access-bucket/" # S3 logging prefix can end with '/'
+
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-access-logs"
 
-  ########################################
-  # IAM (minimal, no fixed RoleName)
-  ########################################
+  # ---------------------------
+  # IAM (least-privilege, no fixed names)
+  # ---------------------------
   EC2InstanceRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -459,9 +461,9 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-cloudtrail-role"
 
-  ########################################
-  # Load Balancer + Targeting
-  ########################################
+  # ---------------------------
+  # Load Balancer + Target Group + HTTPS
+  # ---------------------------
   ApplicationLoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -483,7 +485,7 @@ Resources:
         - Key: "access_logs.s3.bucket"
           Value: !Ref AccessLogsBucket
         - Key: "access_logs.s3.prefix"
-          Value: "alb/"
+          Value: "alb" # <-- FIXED: must NOT start/end with '/'
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-alb"
@@ -520,9 +522,9 @@ Resources:
         - Type: "forward"
           TargetGroupArn: !Ref TargetGroup
 
-  ########################################
+  # ---------------------------
   # AWS WAFv2
-  ########################################
+  # ---------------------------
   WAFWebACL:
     Type: "AWS::WAFv2::WebACL"
     Properties:
@@ -577,9 +579,9 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WAFWebACL.Arn
 
-  ########################################
+  # ---------------------------
   # Compute (Launch Template + ASG)
-  ########################################
+  # ---------------------------
   EC2LaunchTemplate:
     Type: "AWS::EC2::LaunchTemplate"
     Properties:
@@ -626,9 +628,9 @@ Resources:
           Value: !Sub "${ProjectName}-${Environment}-asg-ec2"
           PropagateAtLaunch: true
 
-  ########################################
+  # ---------------------------
   # CloudTrail + Monitoring
-  ########################################
+  # ---------------------------
   CloudTrail:
     Type: "AWS::CloudTrail::Trail"
     DependsOn:
@@ -711,12 +713,6 @@ Resources:
       ComparisonOperator: "GreaterThanThreshold"
       TreatMissingData: "notBreaching"
       AlarmActions: [!Ref AlertTopic]
-
-  ########################################
-  # (Intentionally REMOVED) AWS Config Rule
-  # - Config Recorder is not allowed/available
-  # - Creating a rule without a recorder causes rollback
-  ########################################
 
 Outputs:
   VPCId:
