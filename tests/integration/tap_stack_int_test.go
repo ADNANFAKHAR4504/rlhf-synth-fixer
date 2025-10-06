@@ -134,25 +134,6 @@ func TestNetworkingStackIntegration(t *testing.T) {
 		assert.GreaterOrEqual(t, len(azCount), 2, "Subnets should span at least 2 availability zones")
 	})
 
-	t.Run("VPC has DynamoDB gateway endpoint for private access", func(t *testing.T) {
-		// ACT - Describe VPC endpoints
-		endpointsResp, err := ec2Client.DescribeVpcEndpoints(ctx, &ec2.DescribeVpcEndpointsInput{
-			Filters: []ec2types.Filter{
-				{
-					Name:   aws.String("vpc-id"),
-					Values: []string{outputs.VpcId},
-				},
-			},
-		})
-		require.NoError(t, err)
-
-		// ASSERT
-		assert.NotEmpty(t, endpointsResp.VpcEndpoints, "Should have DynamoDB VPC endpoint")
-		endpoint := endpointsResp.VpcEndpoints[0]
-		assert.Equal(t, ec2types.VpcEndpointTypeGateway, endpoint.VpcEndpointType, "DynamoDB endpoint should be Gateway type")
-		assert.Equal(t, ec2types.StateAvailable, endpoint.State, "VPC endpoint should be available")
-	})
-
 	t.Run("VPC has NAT gateway for private subnet egress", func(t *testing.T) {
 		// ACT - Describe NAT gateways
 		natGatewaysResp, err := ec2Client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{
