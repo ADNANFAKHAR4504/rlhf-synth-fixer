@@ -10,10 +10,67 @@ interface DnsStackProps extends cdk.StackProps {
 }
 
 export class DnsStack extends cdk.Stack {
+  public readonly primaryHealthCheck?: route53.CfnHealthCheck;
+  public readonly standbyHealthCheck?: route53.CfnHealthCheck;
+
   constructor(scope: Construct, id: string, props: DnsStackProps) {
     super(scope, id, props);
 
-    // Only create hosted zone, health checks, and DNS records if a real domain is provided
+    // Always create health checks for ALB monitoring (works without domain)
+    this.primaryHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'PrimaryHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTP',
+          resourcePath: '/health',
+          fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
+          port: 80,
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+        healthCheckTags: [
+          {
+            key: 'Name',
+            value: 'Primary ALB Health Check',
+          },
+        ],
+      }
+    );
+
+    this.standbyHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'StandbyHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTP',
+          resourcePath: '/health',
+          fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
+          port: 80,
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+        healthCheckTags: [
+          {
+            key: 'Name',
+            value: 'Standby ALB Health Check',
+          },
+        ],
+      }
+    );
+
+    // Output health check IDs for testing
+    new cdk.CfnOutput(this, 'PrimaryHealthCheckId', {
+      value: this.primaryHealthCheck.attrHealthCheckId,
+      description: 'Primary ALB Health Check ID',
+    });
+
+    new cdk.CfnOutput(this, 'StandbyHealthCheckId', {
+      value: this.standbyHealthCheck.attrHealthCheckId,
+      description: 'Standby ALB Health Check ID',
+    });
+
+    // Only create hosted zone and DNS records if a real domain is provided
     if (props.domainName && props.domainName !== 'example.com') {
       const domainName = props.domainName;
 
@@ -21,49 +78,6 @@ export class DnsStack extends cdk.Stack {
       const hostedZone = new route53.PublicHostedZone(this, 'HostedZone', {
         zoneName: domainName,
       });
-
-      // Create health checks for the primary and standby ALBs
-      const primaryHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'PrimaryHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTP',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-          healthCheckTags: [
-            {
-              key: 'Name',
-              value: 'Primary ALB Health Check',
-            },
-          ],
-        }
-      );
-
-      const standbyHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'StandbyHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTP',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-          healthCheckTags: [
-            {
-              key: 'Name',
-              value: 'Standby ALB Health Check',
-            },
-          ],
-        }
-      );
 
       // Create failover record set for the application using CfnRecordSet
       new route53.CfnRecordSet(this, 'PrimaryFailoverRecord', {
@@ -76,7 +90,7 @@ export class DnsStack extends cdk.Stack {
           hostedZoneId: props.primaryAlb.loadBalancerCanonicalHostedZoneId,
         },
         failover: 'PRIMARY',
-        healthCheckId: primaryHealthCheck.attrHealthCheckId,
+        healthCheckId: this.primaryHealthCheck.attrHealthCheckId,
         setIdentifier: 'Primary',
       });
 
@@ -90,7 +104,7 @@ export class DnsStack extends cdk.Stack {
           hostedZoneId: props.standbyAlb.loadBalancerCanonicalHostedZoneId,
         },
         failover: 'SECONDARY',
-        healthCheckId: standbyHealthCheck.attrHealthCheckId,
+        healthCheckId: this.standbyHealthCheck.attrHealthCheckId,
         setIdentifier: 'Standby',
       });
 

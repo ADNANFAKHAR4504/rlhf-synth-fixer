@@ -1,12 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as efs from 'aws-cdk-lib/aws-efs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Construct } from 'constructs';
 
 interface ComputeStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -117,12 +117,63 @@ export class ComputeStack extends cdk.Stack {
     // Create a user data script to mount EFS and configure the application
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
+      'set -e',
+      'exec > >(tee /var/log/user-data.log) 2>&1',
+      'echo "Starting user data script at $(date)"',
+      '',
+      '# Update system and install packages',
       'yum update -y',
-      'yum install -y amazon-efs-utils',
+      'yum install -y amazon-efs-utils httpd postgresql15',
+      '',
+      '# Mount EFS',
       'mkdir -p /mnt/efs',
-      `mount -t efs ${props.fileSystem.fileSystemId}:/ /mnt/efs`,
-      'echo "Setting up application..."'
-      // Add application setup commands here
+      `mount -t efs ${props.fileSystem.fileSystemId}:/ /mnt/efs || echo "EFS mount failed"`,
+      'echo "EFS mounted successfully"',
+      '',
+      '# Create index page',
+      'cat > /var/www/html/index.html << "INDEXEOF"',
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head><title>Multi-Region Web App</title></head>',
+      '<body>',
+      `<h1>Hello from ${this.region}</h1>`,
+      '<p>This is a multi-region resilient application</p>',
+      `<p>Region: ${this.region}</p>`,
+      '<p>EFS Mounted: /mnt/efs</p>',
+      '<p>Timestamp: ' + new Date().toISOString() + '</p>',
+      '</body>',
+      '</html>',
+      'INDEXEOF',
+      '',
+      '# Create health check endpoint',
+      'cat > /var/www/html/health << "HEALTHEOF"',
+      '{"status":"healthy","region":"' +
+        this.region +
+        '","timestamp":"' +
+        new Date().toISOString() +
+        '"}',
+      'HEALTHEOF',
+      '',
+      '# Set proper permissions',
+      'chmod 644 /var/www/html/index.html',
+      'chmod 644 /var/www/html/health',
+      'chown apache:apache /var/www/html/index.html',
+      'chown apache:apache /var/www/html/health',
+      '',
+      '# Start and enable Apache',
+      'systemctl start httpd',
+      'systemctl enable httpd',
+      'systemctl status httpd',
+      '',
+      '# Verify httpd is running',
+      'sleep 5',
+      'curl -f http://localhost/health || echo "Health check failed"',
+      '',
+      '# Write test data to EFS',
+      'echo "Test data from ' + this.region + '" > /mnt/efs/test.txt',
+      'date >> /mnt/efs/test.txt',
+      '',
+      'echo "User data script completed successfully at $(date)"'
     );
 
     // Create the Auto Scaling group

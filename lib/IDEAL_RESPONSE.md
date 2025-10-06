@@ -726,12 +726,63 @@ export class ComputeStack extends cdk.Stack {
     // Create a user data script to mount EFS and configure the application
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
+      'set -e',
+      'exec > >(tee /var/log/user-data.log) 2>&1',
+      'echo "Starting user data script at $(date)"',
+      '',
+      '# Update system and install packages',
       'yum update -y',
-      'yum install -y amazon-efs-utils',
+      'yum install -y amazon-efs-utils httpd postgresql15',
+      '',
+      '# Mount EFS',
       'mkdir -p /mnt/efs',
-      `mount -t efs ${props.fileSystem.fileSystemId}:/ /mnt/efs`,
-      'echo "Setting up application..."'
-      // Add application setup commands here
+      `mount -t efs ${props.fileSystem.fileSystemId}:/ /mnt/efs || echo "EFS mount failed"`,
+      'echo "EFS mounted successfully"',
+      '',
+      '# Create index page',
+      'cat > /var/www/html/index.html << "INDEXEOF"',
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head><title>Multi-Region Web App</title></head>',
+      '<body>',
+      `<h1>Hello from ${this.region}</h1>`,
+      '<p>This is a multi-region resilient application</p>',
+      `<p>Region: ${this.region}</p>`,
+      '<p>EFS Mounted: /mnt/efs</p>',
+      '<p>Timestamp: ' + new Date().toISOString() + '</p>',
+      '</body>',
+      '</html>',
+      'INDEXEOF',
+      '',
+      '# Create health check endpoint',
+      'cat > /var/www/html/health << "HEALTHEOF"',
+      '{"status":"healthy","region":"' +
+        this.region +
+        '","timestamp":"' +
+        new Date().toISOString() +
+        '"}',
+      'HEALTHEOF',
+      '',
+      '# Set proper permissions',
+      'chmod 644 /var/www/html/index.html',
+      'chmod 644 /var/www/html/health',
+      'chown apache:apache /var/www/html/index.html',
+      'chown apache:apache /var/www/html/health',
+      '',
+      '# Start and enable Apache',
+      'systemctl start httpd',
+      'systemctl enable httpd',
+      'systemctl status httpd',
+      '',
+      '# Verify httpd is running',
+      'sleep 5',
+      'curl -f http://localhost/health || echo "Health check failed"',
+      '',
+      '# Write test data to EFS',
+      'echo "Test data from ' + this.region + '" > /mnt/efs/test.txt',
+      'date >> /mnt/efs/test.txt',
+      '',
+      'echo "User data script completed successfully at $(date)"'
     );
 
     // Create the Auto Scaling group
@@ -818,10 +869,7 @@ export class ComputeStack extends cdk.Stack {
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as route53_targets from 'aws-cdk-lib/aws-route53-targets';
 
 interface DnsStackProps extends cdk.StackProps {
   primaryAlb: elbv2.ApplicationLoadBalancer;
@@ -830,10 +878,67 @@ interface DnsStackProps extends cdk.StackProps {
 }
 
 export class DnsStack extends cdk.Stack {
+  public readonly primaryHealthCheck?: route53.CfnHealthCheck;
+  public readonly standbyHealthCheck?: route53.CfnHealthCheck;
+
   constructor(scope: Construct, id: string, props: DnsStackProps) {
     super(scope, id, props);
 
-    // Only create hosted zone, health checks, and DNS records if a real domain is provided
+    // Always create health checks for ALB monitoring (works without domain)
+    this.primaryHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'PrimaryHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTP',
+          resourcePath: '/health',
+          fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
+          port: 80,
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+        healthCheckTags: [
+          {
+            key: 'Name',
+            value: 'Primary ALB Health Check',
+          },
+        ],
+      }
+    );
+
+    this.standbyHealthCheck = new route53.CfnHealthCheck(
+      this,
+      'StandbyHealthCheck',
+      {
+        healthCheckConfig: {
+          type: 'HTTP',
+          resourcePath: '/health',
+          fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
+          port: 80,
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+        healthCheckTags: [
+          {
+            key: 'Name',
+            value: 'Standby ALB Health Check',
+          },
+        ],
+      }
+    );
+
+    // Output health check IDs for testing
+    new cdk.CfnOutput(this, 'PrimaryHealthCheckId', {
+      value: this.primaryHealthCheck.attrHealthCheckId,
+      description: 'Primary ALB Health Check ID',
+    });
+
+    new cdk.CfnOutput(this, 'StandbyHealthCheckId', {
+      value: this.standbyHealthCheck.attrHealthCheckId,
+      description: 'Standby ALB Health Check ID',
+    });
+
+    // Only create hosted zone and DNS records if a real domain is provided
     if (props.domainName && props.domainName !== 'example.com') {
       const domainName = props.domainName;
 
@@ -841,49 +946,6 @@ export class DnsStack extends cdk.Stack {
       const hostedZone = new route53.PublicHostedZone(this, 'HostedZone', {
         zoneName: domainName,
       });
-
-      // Create health checks for the primary and standby ALBs
-      const primaryHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'PrimaryHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTP',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: props.primaryAlb.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-          healthCheckTags: [
-            {
-              key: 'Name',
-              value: 'Primary ALB Health Check',
-            },
-          ],
-        }
-      );
-
-      const standbyHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'StandbyHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTP',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: props.standbyAlb.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-          healthCheckTags: [
-            {
-              key: 'Name',
-              value: 'Standby ALB Health Check',
-            },
-          ],
-        }
-      );
 
       // Create failover record set for the application using CfnRecordSet
       new route53.CfnRecordSet(this, 'PrimaryFailoverRecord', {
@@ -896,7 +958,7 @@ export class DnsStack extends cdk.Stack {
           hostedZoneId: props.primaryAlb.loadBalancerCanonicalHostedZoneId,
         },
         failover: 'PRIMARY',
-        healthCheckId: primaryHealthCheck.attrHealthCheckId,
+        healthCheckId: this.primaryHealthCheck.attrHealthCheckId,
         setIdentifier: 'Primary',
       });
 
@@ -910,7 +972,7 @@ export class DnsStack extends cdk.Stack {
           hostedZoneId: props.standbyAlb.loadBalancerCanonicalHostedZoneId,
         },
         failover: 'SECONDARY',
-        healthCheckId: standbyHealthCheck.attrHealthCheckId,
+        healthCheckId: this.standbyHealthCheck.attrHealthCheckId,
         setIdentifier: 'Standby',
       });
 
