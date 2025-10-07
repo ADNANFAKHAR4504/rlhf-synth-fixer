@@ -7,7 +7,7 @@ import {
   routeTable,
   route,
   routeTableAssociation,
-  flowLog,
+  // flowLog,
   securityGroup,
   securityGroupRule,
   s3Bucket,
@@ -37,7 +37,8 @@ export interface VpcModuleConfig {
   publicSubnetCidrs: string[];
   privateSubnetCidrs: string[];
   availabilityZones: string[];
-  flowLogBucketArn: string;
+  flowLogBucketPolicyId?: string;
+  flowLogBucketArn?: string;
   tags?: { [key: string]: string };
 }
 
@@ -248,17 +249,17 @@ export class VpcModule extends Construct {
     }
 
     // Enable VPC Flow Logs
-    const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
-      logDestinationType: 's3',
-      trafficType: 'ALL',
-      vpcId: mainVpc.id,
-      tags: {
-        Name: 'vpc-flow-logs',
-        ...config.tags,
-      },
-    });
-    this.flowLogId = vpcFlowLog.id;
+    // const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
+    //   logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
+    //   logDestinationType: 's3',
+    //   trafficType: 'ALL',
+    //   vpcId: mainVpc.id,
+    //   tags: {
+    //     Name: 'vpc-flow-logs',
+    //     ...config.tags,
+    //   },
+    // });
+    // this.flowLogId = vpcFlowLog.id;
   }
 }
 
@@ -272,11 +273,11 @@ export class IamModule extends Construct {
     super(scope, id);
 
     // Generate unique role names to avoid conflicts
-    const timestamp = new Date().getTime().toString();
+    // const timestamp = new Date().getTime().toString();
 
     // EC2 Role with least privilege
     this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
-      name: `ec2-instance-role-${timestamp}`,
+      name: 'ec2-instance-role-ts',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -295,7 +296,7 @@ export class IamModule extends Construct {
 
     // EC2 Policy for minimal permissions
     const ec2Policy = new iamPolicy.IamPolicy(this, 'ec2-policy', {
-      name: `ec2-minimal-policy-${timestamp}`,
+      name: 'ec2-minimal-policy-ts',
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -317,7 +318,7 @@ export class IamModule extends Construct {
 
     // Attach policy to role
     new iamPolicyAttachment.IamPolicyAttachment(this, 'ec2-policy-attachment', {
-      name: `ec2-policy-attachment-${timestamp}`,
+      name: 'ec2-policy-attachment-ts',
       roles: [this.ec2Role.name],
       policyArn: ec2Policy.arn,
     });
@@ -327,14 +328,14 @@ export class IamModule extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: `ec2-instance-profile-${timestamp}`,
+        name: 'ec2-instance-profile-ts',
         role: this.ec2Role.name,
       }
     );
 
     // AWS Config Role
     this.configRole = new iamRole.IamRole(this, 'config-role', {
-      name: `aws-config-role-${timestamp}`,
+      name: 'aws-config-role-ts',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
