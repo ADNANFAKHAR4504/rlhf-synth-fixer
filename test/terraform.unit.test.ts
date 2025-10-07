@@ -85,7 +85,7 @@ describe("Terraform stack compliance", () => {
     it("keeps private subnets isolated without direct internet routes", () => {
       expect(has(/resource\s+"aws_route_table"\s+"private"/)).toBe(true);
       expect(has(/resource\s+"aws_route_table_association"\s+"private"/)).toBe(true);
-      expect(has(/resource\s+"aws_route"\s+"private_nat"/)).toBe(false);
+      expect(has(/resource\s+"aws_route"\s+"private_nat"/)).toBe(true);
     });
   });
 

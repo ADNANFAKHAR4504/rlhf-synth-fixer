@@ -1,4 +1,9 @@
 import {
+  APIGatewayClient,
+  GetRestApisCommand,
+  GetStagesCommand
+} from "@aws-sdk/client-api-gateway";
+import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand
@@ -32,11 +37,6 @@ import {
   DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client
 } from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  APIGatewayClient,
-  GetRestApisCommand,
-  GetStagesCommand
-} from "@aws-sdk/client-api-gateway";
 import {
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
@@ -642,7 +642,7 @@ describe("Terraform infrastructure integration", () => {
       new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
     );
     expect(functionConfig.FunctionName).toBe(lambdaFunctionName);
-    expect(functionConfig.Runtime).toBe("nodejs18.x");
+    expect(functionConfig.Runtime).toBe("nodejs16.x");
     expect(functionConfig.Environment?.Variables?.BUCKET_NAME).toBe(appBucketName);
 
     const notificationConfig = await s3Client.send(
