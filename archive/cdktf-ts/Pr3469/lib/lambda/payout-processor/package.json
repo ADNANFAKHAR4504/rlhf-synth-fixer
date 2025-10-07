@@ -1,0 +1,12 @@
+{
+  "name": "payout-processor",
+  "version": "1.0.0",
+  "description": "Lambda function for processing monthly payouts",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0"
+  }
+}
