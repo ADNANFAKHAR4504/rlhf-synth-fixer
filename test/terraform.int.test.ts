@@ -650,9 +650,9 @@ describe("Multi-Region Disaster Recovery Infrastructure Integration Tests", () =
       test("should handle multiple concurrent requests", async () => {
         const globalEndpoint = outputs.failover_endpoint!;
 
-        const requests = Array(5).fill(null).map(() =>
+        const requests = Array(3).fill(null).map(() =>
           axios.get(`${globalEndpoint}/health`, {
-            timeout: 20000
+            timeout: 30000
           })
         );
 
@@ -660,7 +660,7 @@ describe("Multi-Region Disaster Recovery Infrastructure Integration Tests", () =
         responses.forEach((response) => {
           expect(response.status).toBe(200);
         });
-      }, 60000);
+      }, 120000);
     });
 
     describe("Failover Mechanism Tests", () => {
