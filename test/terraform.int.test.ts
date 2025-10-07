@@ -273,19 +273,19 @@ describe("Terraform infrastructure integration", () => {
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
     console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
-    const scaleUpPolicy = scalingPolicies.find(policy => { console.log(policy, policy.PolicyName, policy.PolicyName === 'iac-350039-prod-scale-up'); return policy.PolicyName === 'iac-350039-prod-scale-up' });
-    const scaleDownPolicy = scalingPolicies.find(policy => { console.log(policy, policy.PolicyName, policy.PolicyName === 'iac-350039-prod-scale-down'); return policy.PolicyName === 'iac-350039-prod-scale-down' });
+    const scaleUpPolicy = scalingPolicies.find(policy => { return policy.PolicyName === 'iac-350039-prod-scale-up' });
+    const scaleDownPolicy = scalingPolicies.find(policy => { return policy.PolicyName === 'iac-350039-prod-scale-down' });
     const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
     const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
     expect(scaleUpPolicyArn).not.toBe("");
     expect(scaleDownPolicyArn).not.toBe("");
 
     const alarmsResult = await cloudwatchClient.send(new DescribeAlarmsCommand({
-      AlarmNames: ["high-cpu-utilization", "low-cpu-utilization"]
+      AlarmNames: ["iac-350039-prod-high-cpu-utilization", "iac-350039-prod-low-cpu-utilization"]
     }));
     const alarms = alarmsResult.MetricAlarms ?? [];
-    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === "high-cpu-utilization");
-    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === "low-cpu-utilization");
+    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === "iac-350039-prod-high-cpu-utilization");
+    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === "iac-350039-prod-low-cpu-utilization");
     expect(highCpuAlarm).toBeDefined();
     expect(lowCpuAlarm).toBeDefined();
 
@@ -405,7 +405,7 @@ describe("Terraform infrastructure integration", () => {
       new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
     );
     expect(functionConfig.FunctionName).toBe(lambdaFunctionName);
-    expect(functionConfig.Runtime).toBe("nodejs18.x");
+    expect(functionConfig.Runtime).toBe("nodejs16.x");
     expect(functionConfig.Environment?.Variables?.BUCKET_NAME).toBe(appBucketName);
 
     const notificationConfig = await s3Client.send(
@@ -470,8 +470,8 @@ describe("Terraform infrastructure integration", () => {
           });
           const hasMatch = events.some(event => {
             const message = event.message ?? "";
-            console.log("Inspecting log message", message);
-            return message.includes(`s3://execution`) &&
+            console.log("Inspecting log message", message, { objectKey, expectedCount, expectedSum, expectedAvg });
+            return message.includes(`s3://${objectKey}`) &&
               message.includes(`count=${expectedCount}`) &&
               message.includes(`sum=${expectedSum}`) &&
               message.includes(`avg=${expectedAvg}`);

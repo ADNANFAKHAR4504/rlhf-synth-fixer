@@ -667,7 +667,7 @@ data "archive_file" "inline_lambda" {
             const sum = numbers.reduce((total, value) => total + value, 0);
             const avg = count ? sum / count : 0;
 
-            console.log(`Processed s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
+            console.log(`Processed s3://$${key} count=$${count} sum=$${sum} avg=$${avg}`);
             results.push({ bucket, key, count, sum, avg });
           } catch (error) {
             console.log(`Error processing s3://error`, error?.message ?? String(error));

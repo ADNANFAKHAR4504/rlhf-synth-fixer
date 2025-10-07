@@ -697,7 +697,7 @@ data "archive_file" "inline_lambda" {
             const sum = numbers.reduce((total, value) => total + value, 0);
             const avg = count ? sum / count : 0;
 
-            console.log(`Processed s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
+            console.log(`Processed s3://$${key} count=$${count} sum=$${sum} avg=$${avg}`);
             results.push({ bucket, key, count, sum, avg });
           } catch (error) {
             console.log(`Error processing s3://error`, error?.message ?? String(error));
@@ -715,7 +715,7 @@ resource "aws_lambda_function" "app" {
   function_name = "${local.name_prefix}${var.lambda_name}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
-  runtime       = "nodejs18.x"
+  runtime       = "nodejs16.x"
   filename         = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
   depends_on     = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
