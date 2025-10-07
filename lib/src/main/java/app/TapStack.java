@@ -33,7 +33,6 @@ import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.s3.StorageClass;
 import software.amazon.awscdk.services.s3.Transition;
-import software.amazon.awscdk.services.applicationinsights.CfnApplication;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
 import software.amazon.awscdk.services.wafv2.CfnWebACLAssociation;
 import software.amazon.awscdk.services.wafv2.CfnWebACLAssociationProps;
@@ -202,17 +201,17 @@ public class TapStack extends software.amazon.awscdk.Stack {
     private void setupApiGateway() {
         api = RestApi.Builder.create(this, "URLShortenerAPI")
                 .deployOptions(StageOptions.builder()
-                        .stageName(environmentSuffix)
-                        .tracingEnabled(true)
+                    .stageName(environmentSuffix)
+                    .tracingEnabled(true)
                         .dataTraceEnabled(true)
                         .loggingLevel(MethodLoggingLevel.INFO)
-                        .metricsEnabled(true)
+                    .metricsEnabled(true)
                         .build())
                 .defaultCorsPreflightOptions(CorsOptions.builder()
                         .allowOrigins(Arrays.asList("*"))
                         .allowMethods(Arrays.asList("GET", "POST", "PUT", "DELETE",
                             "OPTIONS"))
-                        .build())
+                    .build())
                 .build();
 
         LambdaIntegration shortenerIntegration =
@@ -240,24 +239,24 @@ public class TapStack extends software.amazon.awscdk.Stack {
                         .metricName("URLShortenerWAF")
                         .build())
                 .rules(Arrays.asList(
-                    CfnWebACL.RuleProperty.builder()
-                        .name("RateLimitRule")
-                        .priority(1)
+                        CfnWebACL.RuleProperty.builder()
+                                .name("RateLimitRule")
+                                .priority(1)
                         .action(CfnWebACL.RuleActionProperty.builder()
                                 .block(CfnWebACL.BlockActionProperty.builder().build())
                                 .build())
-                        .statement(CfnWebACL.StatementProperty.builder()
+                                .statement(CfnWebACL.StatementProperty.builder()
                                 .rateBasedStatement(
                                     CfnWebACL.RateBasedStatementProperty.builder()
                                         .limit(2000)
-                                        .aggregateKeyType("IP")
+                                                .aggregateKeyType("IP")
+                                                .build())
                                         .build())
-                                .build())
-                        .visibilityConfig(CfnWebACL.VisibilityConfigProperty.builder()
-                                .sampledRequestsEnabled(true)
-                                .cloudWatchMetricsEnabled(true)
-                                .metricName("RateLimitRule")
-                                .build())
+                                .visibilityConfig(CfnWebACL.VisibilityConfigProperty.builder()
+                                        .sampledRequestsEnabled(true)
+                                        .cloudWatchMetricsEnabled(true)
+                                        .metricName("RateLimitRule")
+                                        .build())
                         .build()
                 ))
                 .build();
@@ -270,11 +269,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
     }
 
     private void setupMonitoring() {
-        CfnApplication.Builder.create(this, "AppInsights")
-                .resourceGroupName("URLShortenerResourceGroup")
-                .autoConfigurationEnabled(true)
-                .build();
-
+        // CloudWatch alarms for Lambda function monitoring
         new Alarm(this, "HighErrorRateAlarm", AlarmProps.builder()
                 .metric(urlShortenerFunction.metricErrors())
                 .threshold(10)
