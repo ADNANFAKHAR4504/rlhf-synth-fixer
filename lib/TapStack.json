@@ -27,7 +27,6 @@
   "Resources": {
     "UploadBucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": "S3InvokePermission",
       "Properties": {
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -55,58 +54,6 @@
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
-        },
-        "NotificationConfiguration": {
-          "LambdaConfigurations": [
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": ["ImageProcessorFunction", "Arn"]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".jpg"
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": ["ImageProcessorFunction", "Arn"]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".jpeg"
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "Event": "s3:ObjectCreated:*",
-              "Function": {
-                "Fn::GetAtt": ["ImageProcessorFunction", "Arn"]
-              },
-              "Filter": {
-                "S3Key": {
-                  "Rules": [
-                    {
-                      "Name": "suffix",
-                      "Value": ".png"
-                    }
-                  ]
-                }
-              }
-            }
-          ]
         },
         "Tags": [
           {
@@ -239,7 +186,7 @@
                     "s3:GetObjectVersion"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-*/*"
+                    "Fn::Sub": "${UploadBucket.Arn}/*"
                   }
                 },
                 {
@@ -249,7 +196,7 @@
                     "s3:PutObjectAcl"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-*/*"
+                    "Fn::Sub": "${ProcessedBucket.Arn}/*"
                   }
                 }
               ]
@@ -387,8 +334,141 @@
           "Ref": "AWS::AccountId"
         },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-uploadbucket-*"
+          "Fn::GetAtt": ["UploadBucket", "Arn"]
         }
+      }
+    },
+    "UploadBucketNotification": {
+      "Type": "Custom::S3BucketNotification",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "S3NotificationFunction",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "UploadBucket"
+        },
+        "LambdaConfigurations": [
+          {
+            "Event": "s3:ObjectCreated:*",
+            "Filter": {
+              "S3Key": {
+                "Rules": [
+                  {
+                    "Name": "suffix",
+                    "Value": ".jpg"
+                  }
+                ]
+              }
+            },
+            "Function": {
+              "Fn::GetAtt": [
+                "ImageProcessorFunction",
+                "Arn"
+              ]
+            }
+          },
+          {
+            "Event": "s3:ObjectCreated:*",
+            "Filter": {
+              "S3Key": {
+                "Rules": [
+                  {
+                    "Name": "suffix",
+                    "Value": ".jpeg"
+                  }
+                ]
+              }
+            },
+            "Function": {
+              "Fn::GetAtt": [
+                "ImageProcessorFunction",
+                "Arn"
+              ]
+            }
+          },
+          {
+            "Event": "s3:ObjectCreated:*",
+            "Filter": {
+              "S3Key": {
+                "Rules": [
+                  {
+                    "Name": "suffix",
+                    "Value": ".png"
+                  }
+                ]
+              }
+            },
+            "Function": {
+              "Fn::GetAtt": [
+                "ImageProcessorFunction",
+                "Arn"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "S3NotificationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "S3NotificationConfig-${AWS::StackName}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "S3NotificationRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport cfnresponse\nimport traceback\n\ndef lambda_handler(event, context):\n    try:\n        s3 = boto3.client('s3')\n        \n        if event['RequestType'] == 'Delete':\n            # Remove notification configuration\n            bucket_name = event['ResourceProperties']['BucketName']\n            s3.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={}\n            )\n        else:\n            # Set notification configuration\n            bucket_name = event['ResourceProperties']['BucketName']\n            lambda_configs = event['ResourceProperties']['LambdaConfigurations']\n            \n            # Transform the configuration to match boto3 API format\n            transformed_configs = []\n            for config in lambda_configs:\n                transformed_config = {\n                    'LambdaFunctionArn': config['Function'],\n                    'Events': [config['Event']]\n                }\n                if 'Filter' in config:\n                    # Transform Filter structure from CFN to boto3 format\n                    # CFN: {\"S3Key\": {\"Rules\": [{\"Name\": \"suffix\", \"Value\": \".jpg\"}]}}\n                    # Boto3: {\"Key\": {\"FilterRules\": [{\"Name\": \"suffix\", \"Value\": \".jpg\"}]}}\n                    cfn_filter = config['Filter']\n                    boto3_filter = {}\n                    if 'S3Key' in cfn_filter:\n                        boto3_filter['Key'] = {\n                            'FilterRules': cfn_filter['S3Key']['Rules']\n                        }\n                    transformed_config['Filter'] = boto3_filter\n                transformed_configs.append(transformed_config)\n            \n            s3.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={\n                    'LambdaFunctionConfigurations': transformed_configs\n                }\n            )\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        print(traceback.format_exc())\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+        }
+      }
+    },
+    "S3NotificationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3NotificationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutBucketNotification",
+                    "s3:GetBucketNotification"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["UploadBucket", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     "ProcessingAlarmTopic": {

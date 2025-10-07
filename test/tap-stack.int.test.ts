@@ -101,11 +101,12 @@ describe('Image Processing Pipeline Integration Tests', () => {
 
   describe('Event Configuration', () => {
     test('S3 bucket should have Lambda event notifications configured', () => {
-      // Check that the bucket has NotificationConfiguration property
-      const bucket = template.Resources.UploadBucket;
-      expect(bucket.Properties.NotificationConfiguration).toBeDefined();
+      // Check that the Custom Resource for bucket notifications exists
+      const notificationResource = template.Resources.UploadBucketNotification;
+      expect(notificationResource).toBeDefined();
+      expect(notificationResource.Type).toBe('Custom::S3BucketNotification');
       
-      const lambdaConfigs = bucket.Properties.NotificationConfiguration.LambdaConfigurations;
+      const lambdaConfigs = notificationResource.Properties.LambdaConfigurations;
       expect(lambdaConfigs).toBeDefined();
       expect(lambdaConfigs.length).toBeGreaterThanOrEqual(3);
     });
