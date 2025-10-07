@@ -138,6 +138,217 @@
                 ]
             }
         },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-1"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "NatGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-eip"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "DynamoDBVpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "S3VpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VotingVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
         "SecurityGroupLambda": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -467,6 +678,24 @@
                 ]
             }
         },
+        "LambdaDeadLetterQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-dlq"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": "alias/aws/sqs",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -483,7 +712,8 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
                 ],
                 "Policies": [
                     {
@@ -589,6 +819,26 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "SQSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LambdaDeadLetterQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
                     }
                 ]
             }
@@ -609,6 +859,17 @@
                 },
                 "Timeout": 30,
                 "MemorySize": 512,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "LambdaDeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
                 "Environment": {
                     "Variables": {
                         "VOTES_TABLE": {
@@ -681,6 +942,17 @@
                 },
                 "Timeout": 300,
                 "MemorySize": 1024,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "LambdaDeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
                 "Environment": {
                     "Variables": {
                         "VOTES_TABLE": {
@@ -764,7 +1036,78 @@
                         "DataTraceEnabled": true,
                         "MetricsEnabled": true
                     }
+                ],
+                "TracingEnabled": true
+            }
+        },
+        "ApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "DependsOn": [
+                "VotingApiDeployment",
+                "VotingApiStage"
+            ],
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api-key"
+                },
+                "Description": "API Key for Voting System",
+                "Enabled": true,
+                "StageKeys": [
+                    {
+                        "RestApiId": {
+                            "Ref": "VotingApi"
+                        },
+                        "StageName": {
+                            "Ref": "Environment"
+                        }
+                    }
                 ]
+            }
+        },
+        "UsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "DependsOn": "VotingApiStage",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "${AWS::StackName}-usage-plan"
+                },
+                "Description": "Usage plan for Voting System API",
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "VotingApi"
+                        },
+                        "Stage": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ],
+                "Throttle": {
+                    "RateLimit": {
+                        "Ref": "ApiThrottleRateLimit"
+                    },
+                    "BurstLimit": {
+                        "Ref": "ApiThrottleBurstLimit"
+                    }
+                },
+                "Quota": {
+                    "Limit": {
+                        "Ref": "DailyVoteTarget"
+                    },
+                    "Period": "DAY"
+                }
+            }
+        },
+        "UsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "ApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "UsagePlan"
+                }
             }
         },
         "VoteResource": {

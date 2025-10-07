@@ -590,9 +590,9 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       });
     });
 
-    test('should have 31 resources total', () => {
+    test('should have 49 resources total', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(31);
+      expect(resourceCount).toBe(49);
     });
 
     test('should have 7 parameters', () => {
@@ -711,6 +711,152 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       expect(
         template.Resources.VoteProcessorFunction.Properties.MemorySize
       ).toBeGreaterThanOrEqual(512);
+    });
+  });
+
+  describe('Enhanced Network Architecture', () => {
+    test('should have public subnet for NAT Gateway', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(
+        true
+      );
+    });
+
+    test('should have Internet Gateway for public access', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
+      expect(template.Resources.AttachGateway).toBeDefined();
+    });
+
+    test('should have NAT Gateway for private subnet internet access', () => {
+      expect(template.Resources.NatGateway).toBeDefined();
+      expect(template.Resources.NatGateway.Type).toBe('AWS::EC2::NatGateway');
+      expect(template.Resources.NatGatewayEIP).toBeDefined();
+      expect(template.Resources.NatGatewayEIP.Type).toBe('AWS::EC2::EIP');
+    });
+
+    test('should have route tables for public and private subnets', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PrivateRouteTable).toBeDefined();
+      expect(template.Resources.PublicRoute).toBeDefined();
+      expect(template.Resources.PrivateRoute).toBeDefined();
+    });
+
+    test('should have VPC endpoints for DynamoDB and S3', () => {
+      expect(template.Resources.DynamoDBVpcEndpoint).toBeDefined();
+      expect(template.Resources.S3VpcEndpoint).toBeDefined();
+      expect(template.Resources.DynamoDBVpcEndpoint.Type).toBe(
+        'AWS::EC2::VPCEndpoint'
+      );
+      expect(template.Resources.S3VpcEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+    });
+
+    test('VPC endpoints should be Gateway type', () => {
+      expect(
+        template.Resources.DynamoDBVpcEndpoint.Properties.VpcEndpointType
+      ).toBe('Gateway');
+      expect(template.Resources.S3VpcEndpoint.Properties.VpcEndpointType).toBe(
+        'Gateway'
+      );
+    });
+  });
+
+  describe('Observability and Reliability', () => {
+    test('should have Dead Letter Queue for Lambda failures', () => {
+      expect(template.Resources.LambdaDeadLetterQueue).toBeDefined();
+      expect(template.Resources.LambdaDeadLetterQueue.Type).toBe('AWS::SQS::Queue');
+      expect(
+        template.Resources.LambdaDeadLetterQueue.Properties.MessageRetentionPeriod
+      ).toBe(1209600);
+    });
+
+    test('DLQ should have encryption enabled', () => {
+      expect(
+        template.Resources.LambdaDeadLetterQueue.Properties.KmsMasterKeyId
+      ).toBe('alias/aws/sqs');
+    });
+
+    test('Lambda functions should have DLQ configured', () => {
+      expect(
+        template.Resources.VoteProcessorFunction.Properties.DeadLetterConfig
+      ).toBeDefined();
+      expect(
+        template.Resources.ResultsExporterFunction.Properties.DeadLetterConfig
+      ).toBeDefined();
+    });
+
+    test('Lambda functions should have X-Ray tracing enabled', () => {
+      expect(
+        template.Resources.VoteProcessorFunction.Properties.TracingConfig.Mode
+      ).toBe('Active');
+      expect(
+        template.Resources.ResultsExporterFunction.Properties.TracingConfig.Mode
+      ).toBe('Active');
+    });
+
+    test('API Gateway stage should have X-Ray tracing enabled', () => {
+      expect(template.Resources.VotingApiStage.Properties.TracingEnabled).toBe(
+        true
+      );
+    });
+
+    test('Lambda execution role should have X-Ray write permissions', () => {
+      const xrayPolicy = template.Resources.LambdaExecutionRole.Properties
+        .ManagedPolicyArns;
+      expect(xrayPolicy).toContain(
+        'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+      );
+    });
+  });
+
+  describe('API Gateway Advanced Features', () => {
+    test('should have API Key for access control', () => {
+      expect(template.Resources.ApiKey).toBeDefined();
+      expect(template.Resources.ApiKey.Type).toBe('AWS::ApiGateway::ApiKey');
+      expect(template.Resources.ApiKey.Properties.Enabled).toBe(true);
+    });
+
+    test('should have Usage Plan for rate limiting', () => {
+      expect(template.Resources.UsagePlan).toBeDefined();
+      expect(template.Resources.UsagePlan.Type).toBe('AWS::ApiGateway::UsagePlan');
+      expect(template.Resources.UsagePlan.Properties.Throttle).toBeDefined();
+      expect(template.Resources.UsagePlan.Properties.Quota).toBeDefined();
+    });
+
+    test('Usage Plan should have daily quota based on DailyVoteTarget', () => {
+      const quota = template.Resources.UsagePlan.Properties.Quota;
+      expect(quota.Period).toBe('DAY');
+      expect(quota.Limit).toEqual({ Ref: 'DailyVoteTarget' });
+    });
+
+    test('should link API Key to Usage Plan', () => {
+      expect(template.Resources.UsagePlanKey).toBeDefined();
+      expect(template.Resources.UsagePlanKey.Type).toBe(
+        'AWS::ApiGateway::UsagePlanKey'
+      );
+      expect(template.Resources.UsagePlanKey.Properties.KeyType).toBe('API_KEY');
+    });
+  });
+
+  describe('IAM Least Privilege Enhancements', () => {
+    test('Lambda execution role should have SQS send permissions for DLQ', () => {
+      const policies = template.Resources.LambdaExecutionRole.Properties.Policies;
+      const sqsPolicy = policies.find((p: any) => p.PolicyName === 'SQSAccess');
+      expect(sqsPolicy).toBeDefined();
+      expect(sqsPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'sqs:SendMessage'
+      );
+    });
+
+    test('SQS policy should be scoped to specific DLQ ARN', () => {
+      const policies = template.Resources.LambdaExecutionRole.Properties.Policies;
+      const sqsPolicy = policies.find((p: any) => p.PolicyName === 'SQSAccess');
+      expect(sqsPolicy.PolicyDocument.Statement[0].Resource).toEqual({
+        'Fn::GetAtt': ['LambdaDeadLetterQueue', 'Arn']
+      });
     });
   });
 });
