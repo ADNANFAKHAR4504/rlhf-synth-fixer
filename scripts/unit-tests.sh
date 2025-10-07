@@ -107,7 +107,7 @@ elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running unit tests..."
   npm run test:unit-js
 
-elif [ "$LANGUAGE" = "py" ]; then
+elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
   pipenv run test-py-unit
 

@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "74150629",
+  "team": "synth",
+  "startedAt": "2025-10-01T15:27:12+00:00",
+  "training_quality": 8,
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon RDS",
+    "AWS KMS",
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "AWS Secrets Manager",
+    "Amazon SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

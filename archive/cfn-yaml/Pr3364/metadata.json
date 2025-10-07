@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "41364950",
+  "team": "3",
+  "startedAt": "2025-10-02T13:58:57.796Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFormation",
+    "Lambda",
+    "VPC",
+    "KMS",
+    "IAM",
+    "Glue",
+    "Kinesis Data Firehose",
+    "SNS"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}
