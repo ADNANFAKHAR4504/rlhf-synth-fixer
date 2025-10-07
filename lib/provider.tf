@@ -18,8 +18,10 @@ terraform {
     }
   }
 
-  # Local backend for testing
-  backend "local" {}
+  # S3 backend for state management
+  backend "s3" {
+    # Backend configuration will be provided via init command
+  }
 }
 
 # Primary AWS provider for general resources
