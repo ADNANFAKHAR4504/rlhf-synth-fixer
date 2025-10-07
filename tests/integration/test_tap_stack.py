@@ -38,6 +38,52 @@ def get_cfn_outputs(stack_name):
     outputs = {o["OutputKey"]: o["OutputValue"] for o in stacks[0].get("Outputs", [])}
     return outputs
 
+def _extract_first_json_object(text: str) -> Optional[dict]:
+    """Extract and parse the first top-level JSON object from a string."""
+    text = text.strip()
+    if not text:
+        return None
+    # Fast path
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    depth = 0
+    in_string = False
+    escape = False
+    start_index = None
+    for idx, ch in enumerate(text):
+        if start_index is None:
+            if ch == '{':
+                start_index = idx
+                depth = 1
+                continue
+            else:
+                continue
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == '\\':
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0 and start_index is not None:
+                    candidate = text[start_index:idx+1]
+                    try:
+                        return json.loads(candidate)
+                    except Exception:
+                        return None
+    return None
+
+
 def invoke_lambda(function_name, payload):
     """Invoke Lambda function and return response."""
     payload_json = json.dumps(payload)
@@ -52,19 +98,18 @@ def invoke_lambda(function_name, payload):
             f"aws lambda invoke "
             f"--function-name {function_name} "
             f"--payload fileb://{payload_file} "
+            f"--no-cli-pager "
             f"--cli-binary-format raw-in-base64-out "
             f"--region {REGION} "
             f"/dev/stdout"
         )
         
-        # Parse the response (AWS CLI returns response in specific format)
-        # The actual response body is in the stdout
-        try:
-            response = json.loads(result)
-            return response
-        except json.JSONDecodeError:
-            # If parsing fails, return raw output
-            return {"rawOutput": result}
+        # Parse the response: stdout may contain the function JSON followed by CLI metadata JSON.
+        parsed = _extract_first_json_object(result)
+        if parsed is not None:
+            return parsed
+        # If parsing fails, return raw output
+        return {"rawOutput": result}
     finally:
         # Cleanup temporary file
         if os.path.exists(payload_file):
@@ -222,17 +267,18 @@ class TestTapStackDeployment:
         env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
         function_name = f"tasks-crud-{env_suffix}"
         
-        # First create a task
-        task_id = f"task-{generate_random_suffix()}"
+        # First create a project and then a task
+        project_id = self._create_test_project(env_suffix)
         create_event = {
             "httpMethod": "POST",
             "path": "/tasks",
             "pathParameters": None,
             "queryStringParameters": None,
             "body": json.dumps({
-                "taskId": task_id,
+                "projectId": project_id,
                 "title": "Test Get Task",
-                "status": "pending"
+                "description": "Created for get test",
+                "status": "TODO"
             }),
             "requestContext": {
                 "authorizer": {
@@ -246,7 +292,7 @@ class TestTapStackDeployment:
         
         create_response = invoke_lambda(function_name, create_event)
         create_body = json.loads(create_response.get("body", "{}"))
-        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Now get the task
         get_event = {
@@ -284,17 +330,18 @@ class TestTapStackDeployment:
         env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
         function_name = f"tasks-crud-{env_suffix}"
         
-        # First create a task
-        task_id = f"task-{generate_random_suffix()}"
+        # First create a project and then a task
+        project_id = self._create_test_project(env_suffix)
         create_event = {
             "httpMethod": "POST",
             "path": "/tasks",
             "pathParameters": None,
             "queryStringParameters": None,
             "body": json.dumps({
-                "taskId": task_id,
+                "projectId": project_id,
                 "title": "Task Before Update",
-                "status": "pending"
+                "description": "Created for update test",
+                "status": "TODO"
             }),
             "requestContext": {
                 "authorizer": {
@@ -308,7 +355,7 @@ class TestTapStackDeployment:
         
         create_response = invoke_lambda(function_name, create_event)
         create_body = json.loads(create_response.get("body", "{}"))
-        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Wait a bit to ensure task is created
         time.sleep(1)
@@ -323,7 +370,7 @@ class TestTapStackDeployment:
             "queryStringParameters": None,
             "body": json.dumps({
                 "title": "Task After Update",
-                "status": "in_progress"
+                "status": "IN_PROGRESS"
             }),
             "requestContext": {
                 "authorizer": {
@@ -351,17 +398,18 @@ class TestTapStackDeployment:
         env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
         function_name = f"tasks-crud-{env_suffix}"
         
-        # First create a task
-        task_id = f"task-{generate_random_suffix()}"
+        # First create a project and then a task
+        project_id = self._create_test_project(env_suffix)
         create_event = {
             "httpMethod": "POST",
             "path": "/tasks",
             "pathParameters": None,
             "queryStringParameters": None,
             "body": json.dumps({
-                "taskId": task_id,
+                "projectId": project_id,
                 "title": "Task To Delete",
-                "status": "pending"
+                "description": "Created for delete test",
+                "status": "TODO"
             }),
             "requestContext": {
                 "authorizer": {
@@ -375,7 +423,7 @@ class TestTapStackDeployment:
         
         create_response = invoke_lambda(function_name, create_event)
         create_body = json.loads(create_response.get("body", "{}"))
-        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Wait a bit to ensure task is created
         time.sleep(1)
