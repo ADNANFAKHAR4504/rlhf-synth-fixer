@@ -1,7 +1,5 @@
-import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { NestedStack, NestedStackProps } from 'aws-cdk-lib';
-import { Construct, IConstruct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -9,12 +7,19 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import { Construct, IConstruct } from 'constructs';
+import * as path from 'path';
 
 export interface IaCNovaStackProps extends NestedStackProps {
   /**
    * Default value used for the EnvironmentId parameter when not provided explicitly.
    */
   readonly initialEnvironmentId?: string;
+
+  /**
+   * Default value used for the StringSuffix parameter when not provided explicitly.
+   */
+  readonly initialStringSuffix?: string;
 }
 
 /**
@@ -35,6 +40,8 @@ export class IaCNovaStack extends NestedStack {
     super(scope, id, props);
 
     const environmentIdDefault = props?.initialEnvironmentId ?? 'development';
+    const defaultStringSuffix = props?.initialStringSuffix ?? 'stack';
+    const defaultVpcCidr = '10.0.0.0/16';
 
     const environmentIdParam = new cdk.CfnParameter(this, 'EnvironmentId', {
       type: 'String',
@@ -47,45 +54,50 @@ export class IaCNovaStack extends NestedStack {
       type: 'String',
       description:
         'Unique suffix appended to resource names to prevent collisions.',
+      default: defaultStringSuffix,
     });
 
     const vpcCidrParam = new cdk.CfnParameter(this, 'VpcCidr', {
       type: 'String',
       description: 'CIDR block for the workload VPC.',
-      default: '10.0.0.0/16',
+      default: defaultVpcCidr,
     });
 
+    const defaultMaxAzs = 2;
     const maxAzsParam = new cdk.CfnParameter(this, 'MaxAzs', {
       type: 'Number',
       description: 'Number of availability zones to span.',
-      default: 2,
+      default: defaultMaxAzs,
       minValue: 2,
       maxValue: 3,
     });
 
+    const defaultNatGatewayCount = 1;
     const natGatewayCountParam = new cdk.CfnParameter(this, 'NatGatewayCount', {
       type: 'Number',
       description: 'Number of NAT gateways to provision for the VPC.',
-      default: 1,
+      default: defaultNatGatewayCount,
       minValue: 1,
       maxValue: 2,
     });
 
+    const defaultLambdaMemory = 512;
     const lambdaMemoryParam = new cdk.CfnParameter(this, 'LambdaMemorySize', {
       type: 'Number',
       description: 'Memory size for the Lambda function (MB).',
-      default: 512,
+      default: defaultLambdaMemory,
       minValue: 128,
       maxValue: 10240,
     });
 
+    const defaultLambdaTimeout = 60;
     const lambdaTimeoutParam = new cdk.CfnParameter(
       this,
       'LambdaTimeoutSeconds',
       {
         type: 'Number',
         description: 'Timeout for the Lambda function in seconds.',
-        default: 60,
+        default: defaultLambdaTimeout,
         minValue: 10,
         maxValue: 900,
       }
@@ -148,8 +160,27 @@ export class IaCNovaStack extends NestedStack {
       }
     );
 
-    this.environmentIdToken = environmentIdParam.valueAsString;
-    this.stringSuffixToken = stringSuffixParam.valueAsString;
+    let environmentIdValue = environmentIdParam.valueAsString;
+    if (cdk.Token.isUnresolved(environmentIdValue)) {
+      environmentIdValue =
+        (this.node.tryGetContext('environmentId') as string | undefined) ??
+        process.env.ENVIRONMENT_ID ??
+        environmentIdDefault;
+    }
+
+    let stringSuffixValue = stringSuffixParam.valueAsString;
+    if (cdk.Token.isUnresolved(stringSuffixValue)) {
+      stringSuffixValue =
+        (this.node.tryGetContext('stringSuffix') as string | undefined) ??
+        process.env.STRING_SUFFIX ??
+        defaultStringSuffix;
+    }
+
+    this.environmentIdToken = environmentIdValue;
+    this.stringSuffixToken = stringSuffixValue;
+
+    // vpcCidrValue is resolved later using context/env/default to guarantee a concrete CIDR at synth time.
+    // See the concrete resolution before creating the VPC further down in this constructor.
 
     const formatResourceName = (purpose: string, lowercase = false): string =>
       this.formatResourceName(purpose, lowercase);
@@ -169,11 +200,52 @@ export class IaCNovaStack extends NestedStack {
     const lambdaRuntime = this.resolveRuntime(lambdaRuntimeValue);
     const lambdaCodePath = this.resolveLambdaCodePath();
 
+    const maxAzsValue = this.resolveNumberParameter(maxAzsParam, {
+      contextKey: 'maxAzs',
+      envKey: 'MAX_AZS',
+      defaultValue: defaultMaxAzs,
+    });
+
+    const natGatewayCountValue = this.resolveNumberParameter(
+      natGatewayCountParam,
+      {
+        contextKey: 'natGatewayCount',
+        envKey: 'NAT_GATEWAY_COUNT',
+        defaultValue: defaultNatGatewayCount,
+      }
+    );
+
+    const lambdaMemoryValue = this.resolveNumberParameter(lambdaMemoryParam, {
+      contextKey: 'lambdaMemorySize',
+      envKey: 'LAMBDA_MEMORY_SIZE',
+      defaultValue: defaultLambdaMemory,
+    });
+
+    const lambdaTimeoutValue = this.resolveNumberParameter(lambdaTimeoutParam, {
+      contextKey: 'lambdaTimeoutSeconds',
+      envKey: 'LAMBDA_TIMEOUT_SECONDS',
+      defaultValue: defaultLambdaTimeout,
+    });
+
+    // The VPC construct must receive a concrete CIDR at synth time so CDK can subdivide it.
+    // Do not pass a CloudFormation parameter token into ec2.IpAddresses.cidr.
+    // Prefer context / environment variable / default for the CIDR used to create the VPC.
+    const vpcCidrValue: string =
+      (this.node.tryGetContext('vpcCidr') as string | undefined) ??
+      process.env.VPC_CIDR ??
+      defaultVpcCidr;
+
+    if (!vpcCidrValue) {
+      throw new Error(
+        'VPC CIDR must be provided via cdk context key "vpcCidr", environment variable VPC_CIDR, or a default in the stack.'
+      );
+    }
+
     this.vpc = new ec2.Vpc(this, 'NotificationVpc', {
-      cidr: vpcCidrParam.valueAsString,
-      maxAzs: maxAzsParam.valueAsNumber,
+      ipAddresses: ec2.IpAddresses.cidr(vpcCidrValue),
+      maxAzs: maxAzsValue,
       natGatewayProvider: ec2.NatProvider.gateway(),
-      natGateways: natGatewayCountParam.valueAsNumber,
+      natGateways: natGatewayCountValue,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -332,8 +404,8 @@ export class IaCNovaStack extends NestedStack {
         runtime: lambdaRuntime,
         code: lambda.Code.fromAsset(path.resolve(lambdaCodePath)),
         handler: this.selectLambdaHandler(lambdaRuntime),
-        memorySize: lambdaMemoryParam.valueAsNumber,
-        timeout: cdk.Duration.seconds(lambdaTimeoutParam.valueAsNumber),
+        memorySize: lambdaMemoryValue,
+        timeout: cdk.Duration.seconds(lambdaTimeoutValue),
         role: lambdaRole,
         functionName: formatResourceName('email-processor'),
         description:
@@ -482,6 +554,63 @@ export class IaCNovaStack extends NestedStack {
       default:
         throw new Error(`Unsupported Lambda runtime: ${value}`);
     }
+  }
+
+  private resolveStringParameter(
+    parameter: cdk.CfnParameter,
+    options: { contextKey: string; envKey: string; defaultValue: string }
+  ): string {
+    const paramValue = parameter.valueAsString;
+    if (!cdk.Token.isUnresolved(paramValue)) {
+      return paramValue;
+    }
+
+    const contextValue = this.node.tryGetContext(options.contextKey) as
+      | string
+      | undefined;
+    const envValue = process.env[options.envKey];
+    const candidate = contextValue ?? envValue ?? options.defaultValue;
+
+    if (!candidate) {
+      throw new Error(
+        `Unable to resolve string parameter for ${parameter.logicalId}. Provide a value via context key "${options.contextKey}", environment variable "${options.envKey}", or adjust the default.`
+      );
+    }
+
+    return candidate;
+  }
+
+  private resolveNumberParameter(
+    parameter: cdk.CfnParameter,
+    options: { contextKey: string; envKey: string; defaultValue: number }
+  ): number {
+    const paramValue = parameter.valueAsNumber as unknown as number;
+    if (!cdk.Token.isUnresolved(paramValue)) {
+      return paramValue;
+    }
+
+    const contextValue = this.node.tryGetContext(options.contextKey) as
+      | string
+      | number
+      | undefined;
+    const envValue = process.env[options.envKey];
+
+    const candidate =
+      typeof contextValue === 'number'
+        ? contextValue
+        : contextValue !== undefined
+          ? Number(contextValue)
+          : envValue !== undefined
+            ? Number(envValue)
+            : options.defaultValue;
+
+    if (!Number.isFinite(candidate)) {
+      throw new Error(
+        `Unable to resolve numeric parameter for ${parameter.logicalId}. Provide a valid number via context key "${options.contextKey}", environment variable "${options.envKey}", or adjust the default.`
+      );
+    }
+
+    return candidate;
   }
 
   private resolveLambdaCodePath(): string {

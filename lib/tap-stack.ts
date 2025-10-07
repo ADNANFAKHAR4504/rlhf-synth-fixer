@@ -17,6 +17,11 @@ interface TapStackProps extends cdk.StackProps {
    * Human-readable description for the IaC stack.
    */
   stackDescription?: string;
+
+  /**
+   * Explicit string suffix to pass into the nested infrastructure stack.
+   */
+  stringSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -46,9 +51,16 @@ export class TapStack extends cdk.Stack {
       contextDescription ??
       'Email notification infrastructure (IAC-349955) synthesized by TapStack.';
 
+    const resolvedStringSuffix =
+      props?.stringSuffix ??
+      (this.node.tryGetContext('stringSuffix') as string | undefined) ??
+      process.env.STRING_SUFFIX ??
+      environmentSuffix;
+
     this.emailInfrastructure = new IaCNovaStack(this, stackId, {
       description: stackDescription,
       initialEnvironmentId: environmentSuffix,
+      initialStringSuffix: resolvedStringSuffix,
     });
   }
 }

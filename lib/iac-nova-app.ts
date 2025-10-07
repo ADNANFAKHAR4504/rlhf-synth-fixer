@@ -21,6 +21,9 @@ new TapStack(app, tapStackId, {
   stackDescription:
     process.env.CDK_STACK_DESCRIPTION ??
     'Email notification infrastructure synthesized via TapStack.',
+  stringSuffix:
+    process.env.STRING_SUFFIX ??
+    (app.node.tryGetContext('stringSuffix') as string | undefined),
   environmentSuffix:
     process.env.ENVIRONMENT_SUFFIX ??
     (app.node.tryGetContext('environmentSuffix') as string | undefined),
