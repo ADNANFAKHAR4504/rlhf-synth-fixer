@@ -250,29 +250,44 @@ def handler(event, context):
 
         # Outputs
         CfnOutput(
-            self, "DeliveryEventsTopicArn",
-            description="ARN of the SNS topic for delivery events",
+            self, "EventTopicArn",
+            description="SNS topic ARN for delivery events",
             value=delivery_events_topic.topic_arn
         )
         CfnOutput(
-            self, "EventsQueueUrl",
-            description="URL of the SQS queue for processing events",
+            self, "ProcessingQueueUrl",
+            description="SQS queue URL (main queue)",
             value=events_queue.queue_url
         )
         CfnOutput(
-            self, "DeadLetterQueueUrl",
-            description="URL of the DLQ for failed events",
+            self, "ProcessingQueueArn",
+            description="SQS queue ARN (main)",
+            value=events_queue.queue_arn
+        )
+        CfnOutput(
+            self, "DlqQueueUrl",
+            description="DLQ SQS queue URL",
             value=dead_letter_queue.queue_url
         )
         CfnOutput(
-            self, "ProcessedEventsTableName",
-            description="Name of the DynamoDB table for processed events",
+            self, "HandlerLambdaName",
+            description="Lambda function name that processes messages",
+            value=event_processor_function.function_name
+        )
+        CfnOutput(
+            self, "DeliveryTableName",
+            description="DynamoDB table name for processed logs",
             value=events_table.table_name
         )
         CfnOutput(
-            self, "EventProcessorFunctionName",
-            description="Name of the Lambda function processing events",
-            value=event_processor_function.function_name
+            self, "Region",
+            description="AWS region where stack is deployed",
+            value=self.region
+        )
+        CfnOutput(
+            self, "MonitoringAlarmName",
+            description="CloudWatch alarm name(s) for queue depth or errors (optional)",
+            value=f"{dlq_messages_alarm.alarm_name},{lambda_errors_alarm.alarm_name},{queue_delay_alarm.alarm_name}"
         )
 
 
