@@ -1,11 +1,10 @@
-# import os
-# import sys
 import unittest
 
 import aws_cdk as cdk
-# import pytest
-# from aws_cdk.assertions import Match, Template
-from aws_cdk.assertions import Template
+from aws_cdk.assertions import Match, Template
+
+from pathlib import Path
+import sys
 from pytest import mark
 
 from lib.tap_stack import TapStack, TapStackProps
@@ -19,35 +18,68 @@ class TestTapStack(unittest.TestCase):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
+  @mark.it("creates the high availability nested stack with default tags")
+  def test_creates_nested_stack_with_default_tags(self):
+    stack = TapStack(self.app, "TapStackUnderTest")
     template = Template.from_stack(stack)
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
-    })
+    resources = template.find_resources("AWS::CloudFormation::Stack")
+    self.assertEqual(len(resources), 1)
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
+    nested = next(iter(resources.values()))
+    tags = {tag["Key"]: tag["Value"] for tag in nested["Properties"]["Tags"]}
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
-    })
+    self.assertEqual(tags.get("Environment"), "dev")
+    self.assertEqual(tags.get("Project"), "TapProject")
+    self.assertEqual(tags.get("Owner"), "TapTeam")
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
+  @mark.it("applies custom props to nested stack tags")
+  def test_nested_stack_uses_custom_props(self):
+    props = TapStackProps(
+        environment_suffix="qa",
+        environment="staging",
+        project_name="MyApp",
+        owner="TeamX"
     )
+
+    stack = TapStack(self.app, "TapStackCustomProps", props=props)
+    template = Template.from_stack(stack)
+
+    resources = template.find_resources("AWS::CloudFormation::Stack")
+    self.assertEqual(len(resources), 1)
+
+    nested = next(iter(resources.values()))
+    tags = {tag["Key"]: tag["Value"] for tag in nested["Properties"]["Tags"]}
+
+    self.assertEqual(tags.get("Environment"), "staging")
+    self.assertEqual(tags.get("Project"), "MyApp")
+    self.assertEqual(tags.get("Owner"), "TeamX")
+
+  @mark.it("provisions key resources inside the high availability stack")
+  def test_high_availability_nested_stack_resources(self):
+    stack = TapStack(self.app, "TapStackResources")
+    nested_stack = stack.high_availability_web_app
+    template = Template.from_stack(nested_stack)
+
+    template.resource_count_is("AWS::EC2::VPC", 1)
+    template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
+    template.resource_count_is("AWS::RDS::DBInstance", 1)
+    template.resource_count_is("AWS::Lambda::Function", 1)
+
+    template.has_resource_properties("AWS::RDS::DBInstance", {
+        "Engine": "postgres",
+        "EngineVersion": "16.9"
+    })
+
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Environment": {
+            "Variables": Match.object_like({
+                "DB_INSTANCE_ID": Match.any_value(),
+                "ENVIRONMENT": "dev",
+                "OWNER": "TapTeam"
+            })
+        }
+    })
+
+    outputs = template.to_json().get("Outputs", {})
+    self.assertIn("ALBDNSName", outputs)
