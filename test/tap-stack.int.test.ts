@@ -328,8 +328,8 @@ describe('Travel Platform API - Comprehensive Cross-Service Integration Tests', 
       const results = await Promise.all(rapidRequests);
 
       // Count successful vs throttled requests
-      const successful = results.filter(r => !r.error).length;
-      const throttled = results.filter(r => r.error && r.status === 429).length;
+      const successful = results.filter(r => !('error' in r)).length;
+      const throttled = results.filter(r => 'error' in r && r.error && r.status === 429).length;
 
       console.log(`📊 Throttling test results: ${successful} successful, ${throttled} throttled`);
 
