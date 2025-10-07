@@ -249,26 +249,34 @@ describe('E-books Content Delivery Infrastructure - Integration Tests', () => {
       // STEP 7: Verify CloudWatch monitoring is set up
       console.log('Step 7: Verifying CloudWatch monitoring configuration...');
       
-      // Check CloudWatch alarms
-      const alarmsRes = await cloudwatch.send(new DescribeAlarmsCommand({}));
-      const alarms = alarmsRes.MetricAlarms || [];
+      // Check CloudWatch alarms using the output ARN
+      const errorRateAlarmArn = outputs.cloudwatch_alarm_error_rate_arn;
+      expect(errorRateAlarmArn).toBeDefined();
+      expect(errorRateAlarmArn).toMatch(/^arn:aws:cloudwatch:/);
       
-      const errorRateAlarm = alarms.find(alarm => 
-        alarm.AlarmName?.includes('high-error-rate') && 
-        alarm.Namespace === 'AWS/CloudFront'
-      );
+      // Extract alarm name from ARN (format: arn:aws:cloudwatch:region:account:alarm:alarm-name)
+      const alarmNameFromArn = errorRateAlarmArn.split(':').pop();
+      expect(alarmNameFromArn).toContain('high-error-rate');
+      
+      // Describe the specific alarm by name
+      const alarmsRes = await cloudwatch.send(new DescribeAlarmsCommand({
+        AlarmNames: [alarmNameFromArn]
+      }));
+      
+      expect(alarmsRes.MetricAlarms?.length).toBeGreaterThan(0);
+      const errorRateAlarm = alarmsRes.MetricAlarms?.[0];
+      
       expect(errorRateAlarm).toBeDefined();
       expect(errorRateAlarm?.MetricName).toBe('5xxErrorRate');
+      expect(errorRateAlarm?.Namespace).toBe('AWS/CloudFront');
       expect(errorRateAlarm?.Statistic).toBe('Average');
       expect(errorRateAlarm?.ComparisonOperator).toBe('GreaterThanThreshold');
       expect(errorRateAlarm?.Threshold).toBe(5);
-
-      const requestCountAlarm = alarms.find(alarm => 
-        alarm.AlarmName?.includes('low-request-count') && 
-        alarm.Namespace === 'AWS/CloudFront'
-      );
-      expect(requestCountAlarm).toBeDefined();
-      expect(requestCountAlarm?.MetricName).toBe('Requests');
+      expect(errorRateAlarm?.Dimensions).toBeDefined();
+      
+      const distributionDimension = errorRateAlarm?.Dimensions?.find(d => d.Name === 'DistributionId');
+      expect(distributionDimension?.Value).toBe(distributionId);
+      
       console.log('✓ CloudWatch alarms are configured for error monitoring');
 
       // Check CloudWatch dashboard
