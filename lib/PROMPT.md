@@ -2,7 +2,7 @@
 
 Your mission is to act as an **expert AWS Solutions Architect** and generate a TypeScript-based CloudFormation Infrastructure as Code (IaC) solution for a secure, cost-effective, and scalable serverless environment.
 
-## Instructions
+## Instructions 
 
 ### 1. Analyze the Requirements
 Thoroughly review and understand all the provided requirements, constraints, and naming standards. **Do not alter, omit, or change any provided data.**
