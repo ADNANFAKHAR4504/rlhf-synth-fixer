@@ -2,8 +2,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  PutCommand,
-  ScanCommand,
+  QueryCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyResult, Context } from 'aws-lambda';
@@ -78,9 +78,15 @@ export const handler = async (
         }
 
         const list = await dynamoDocumentClient.send(
-          new ScanCommand({
+          new QueryCommand({
             TableName: orderTableName,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'ORDER',
+            },
             Limit: 50,
+            ScanIndexForward: false,
           })
         );
 
@@ -150,35 +156,54 @@ export const handler = async (
           ),
           status: 'CREATED',
           createdAt: new Date().toISOString(),
+          entityType: 'ORDER',
           audit: {
             traceId: context.awsRequestId,
           },
         };
 
-        await dynamoDocumentClient.send(
-          new PutCommand({
-            TableName: orderTableName,
-            Item: orderRecord,
-            ConditionExpression: 'attribute_not_exists(orderId)',
-          })
-        );
-
-        await dynamoDocumentClient.send(
-          new UpdateCommand({
-            TableName: productTableName,
-            Key: { productId: payload.productId },
-            ConditionExpression: 'inventory >= :requested',
-            UpdateExpression:
-              'SET inventory = inventory - :requested, #updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-              ':requested': payload.quantity,
-              ':updatedAt': new Date().toISOString(),
-            },
-            ExpressionAttributeNames: {
-              '#updatedAt': 'updatedAt',
-            },
-          })
-        );
+        try {
+          await dynamoDocumentClient.send(
+            new TransactWriteCommand({
+              TransactItems: [
+                {
+                  Put: {
+                    TableName: orderTableName,
+                    Item: orderRecord,
+                    ConditionExpression: 'attribute_not_exists(orderId)',
+                  },
+                },
+                {
+                  Update: {
+                    TableName: productTableName,
+                    Key: { productId: payload.productId },
+                    ConditionExpression: 'inventory >= :requested',
+                    UpdateExpression:
+                      'SET inventory = inventory - :requested, #updatedAt = :updatedAt',
+                    ExpressionAttributeValues: {
+                      ':requested': payload.quantity,
+                      ':updatedAt': new Date().toISOString(),
+                    },
+                    ExpressionAttributeNames: {
+                      '#updatedAt': 'updatedAt',
+                    },
+                  },
+                },
+              ],
+            })
+          );
+        } catch (error) {
+          if (
+            (error as { name?: string }).name === 'TransactionCanceledException'
+          ) {
+            console.warn(
+              'Order creation transaction canceled due to inventory constraint.',
+              { error }
+            );
+            return respond(409, { message: 'Insufficient product inventory.' });
+          }
+          throw error;
+        }
 
         await snsClient.send(
           new PublishCommand({

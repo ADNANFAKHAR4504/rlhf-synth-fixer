@@ -4,7 +4,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
-  ScanCommand,
+  QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyResult, Context } from 'aws-lambda';
@@ -109,9 +109,15 @@ export const handler = async (
         }
 
         const list = await dynamoDocumentClient.send(
-          new ScanCommand({
+          new QueryCommand({
             TableName: tableName,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'USER',
+            },
             Limit: 50,
+            ScanIndexForward: false,
           })
         );
 
@@ -135,6 +141,7 @@ export const handler = async (
         const userItem = {
           userId: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
           createdAt: new Date().toISOString(),
+          entityType: 'USER',
           name: payload.name,
           email: payload.email.toLowerCase(),
           audit: {

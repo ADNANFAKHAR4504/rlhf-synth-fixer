@@ -1,12 +1,12 @@
 ## Solution Overview
-- Constructs a reusable `TapStack` that parameterises app, environment, and uniqueness suffixes while enforcing AWS tag and stage-name constraints through sanitisation utilities.
-- Centralises security primitives with a customer-managed KMS key, CloudWatch LogGroup encryption, and SNS notifications for operational events.
-- Provisions fully managed data stores (three DynamoDB tables), a KMS-encrypted static asset bucket, and Secrets Manager credentials, all tagged with the mandated `iac-rlhf-amazon` key.
-- Deploys three Node.js 18 Lambda services (users, products, orders) via `NodejsFunction`, each granted least-privilege IAM roles, X-Ray tracing, structured logging, and CloudWatch alarms capped at 1,000 invocations per hour.
-- Publishes a RESTful API Gateway front door that wires CRUD resources to the Lambda functions, includes CORS, stage logging, access logs, and exposes key deployment outputs for downstream automation.
-- Runtime handlers implement business workflows end-to-end: user onboarding with secret-powered notifications, product catalog management with validation, and order orchestration that reserves inventory, emits high-severity events, and supports status transitions.
-- Introduces a shared `normalizeEvent` helper so Lambda handlers seamlessly accept API Gateway v1, HTTP API v2, and Function URL payloads without touching the business logic.
-- Derives a collision-resistant environment suffix from context, CI metadata, or the stack name so each deployment synthesizes unique DynamoDB table and S3 bucket names.
+- Constructs a reusable `TapStack` stack that parameterises application name, environment, and uniqueness suffix while enforcing tagging and sanitised resource names.
+- Centralises security primitives with a customer-managed KMS key, encrypted CloudWatch logs, restricted CORS, IAM-authenticated Lambda Function URLs, and an SNS topic for operational alerts.
+- Provisions DynamoDB tables (with GSIs for efficient listing), a KMS-encrypted static asset bucket, and Secrets Manager credentials, all tagged with the mandated `iac-rlhf-amazon` key.
+- Deploys three Node.js 18 Lambda services (users, products, orders) with least-privilege IAM roles, X-Ray tracing, structured logging, reserved concurrency, and comprehensive CloudWatch alarms.
+- Publishes a REST API Gateway front door secured with IAM authorisation, per-resource integrations, access logging, and latency/error monitoring.
+- Runtime handlers implement complete business workflows: user onboarding with secret-backed notifications, product catalog CRUD with validation, and order orchestration with transactional inventory reservation.
+- Includes a shared `normalizeEvent` helper so Lambda handlers can process API Gateway and Function URL payloads uniformly.
+- Exposes deployment outputs (function URLs, API endpoint, table names, etc.) for downstream automation.
 
 ---
 
@@ -29,6 +29,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -60,6 +61,9 @@ export class TapStack extends cdk.Stack {
       'nine',
     ];
     const sanitizeTagValue = (value: string, maxLength = 256): string => {
+      if (cdk.Token.isUnresolved(value)) {
+        return value;
+      }
       const digitExpanded = value.replace(
         /[0-9]/g,
         digit => digitWords[Number(digit)]
@@ -76,8 +80,6 @@ export class TapStack extends cdk.Stack {
         .replace(/-{2,}/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 32) || 'dev';
-    const sanitizeStageName = (value: string): string =>
-      value.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 128) || 'stage';
 
     const suffixSourceCandidates: (string | undefined)[] = [
       props?.environmentSuffix,
@@ -113,9 +115,39 @@ export class TapStack extends cdk.Stack {
         'Unique, lowercase suffix appended to resource names to guarantee uniqueness across accounts.',
     });
 
+    const allowedCorsOriginsParam = new CfnParameter(
+      this,
+      'AllowedCorsOrigins',
+      {
+        type: 'String',
+        default: 'https://localhost:3000',
+        description:
+          'Comma-separated list of HTTPS origins permitted to access public endpoints.',
+      }
+    );
+
+    const billingAlarmThresholdParam = new CfnParameter(
+      this,
+      'MonthlyBillingThreshold',
+      {
+        type: 'Number',
+        default: 500,
+        minValue: 1,
+        description:
+          'USD amount that will trigger a billing alarm for the account.',
+      }
+    );
+
     const appName = appNameParam.valueAsString.toLowerCase();
     const environmentName = environmentParam.valueAsString.toLowerCase();
     const stringSuffix = sanitizeSuffix(suffixParam.valueAsString);
+    const allowedOrigins = allowedCorsOriginsParam.valueAsString
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(origin => origin.length > 0);
+    const resolvedAllowedOrigins =
+      allowedOrigins.length > 0 ? allowedOrigins : ['https://localhost'];
+    const billingThreshold = billingAlarmThresholdParam.valueAsNumber;
 
     const resourceName = (purpose: string): string =>
       `${appName}-${purpose}-${environmentName}-${stringSuffix}`.replace(
@@ -129,7 +161,7 @@ export class TapStack extends cdk.Stack {
     const encryptionKey = new kms.Key(this, 'DataProtectionKey', {
       alias: `alias/${resourceName('kms')}`,
       enableKeyRotation: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
       description:
         'KMS key securing secrets, logs, and data for the Nova serverless platform.',
     });
@@ -160,6 +192,7 @@ export class TapStack extends cdk.Stack {
       topicName: resourceName('notifications'),
       masterKey: encryptionKey,
       displayName: 'Serverless platform notifications',
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const apiSecret = new secretsmanager.Secret(this, 'ApiCredentialSecret', {
@@ -171,6 +204,7 @@ export class TapStack extends cdk.Stack {
         passwordLength: 32,
         excludePunctuation: true,
       },
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const staticAssetBucket = new s3.Bucket(this, 'StaticAssetBucket', {
@@ -180,7 +214,8 @@ export class TapStack extends cdk.Stack {
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     const userTable = new dynamodb.Table(this, 'UsersTable', {
@@ -190,7 +225,16 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    userTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     const productTable = new dynamodb.Table(this, 'ProductsTable', {
@@ -200,7 +244,16 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    productTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     const orderTable = new dynamodb.Table(this, 'OrdersTable', {
@@ -210,7 +263,16 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    orderTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
@@ -299,6 +361,7 @@ export class TapStack extends cdk.Stack {
         },
         logRetention: logs.RetentionDays.ONE_WEEK,
         tracing: lambda.Tracing.ACTIVE,
+        reservedConcurrentExecutions: 50,
       });
     };
 
@@ -359,13 +422,54 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
-    const apiStageName = sanitizeStageName(environmentName);
+    const userFunctionUrl = userServiceFunction.addFunctionUrl({
+      authType: FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowedOrigins: resolvedAllowedOrigins,
+        allowedMethods: [
+          HttpMethod.GET,
+          HttpMethod.POST,
+          HttpMethod.PUT,
+          HttpMethod.PATCH,
+          HttpMethod.DELETE,
+          HttpMethod.HEAD,
+        ],
+      },
+    });
+    const productFunctionUrl = productServiceFunction.addFunctionUrl({
+      authType: FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowedOrigins: resolvedAllowedOrigins,
+        allowedMethods: [
+          HttpMethod.GET,
+          HttpMethod.POST,
+          HttpMethod.PUT,
+          HttpMethod.PATCH,
+          HttpMethod.DELETE,
+          HttpMethod.HEAD,
+        ],
+      },
+    });
+    const orderFunctionUrl = orderServiceFunction.addFunctionUrl({
+      authType: FunctionUrlAuthType.AWS_IAM,
+      cors: {
+        allowedOrigins: resolvedAllowedOrigins,
+        allowedMethods: [
+          HttpMethod.GET,
+          HttpMethod.POST,
+          HttpMethod.PUT,
+          HttpMethod.PATCH,
+          HttpMethod.DELETE,
+          HttpMethod.HEAD,
+        ],
+      },
+    });
 
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
       description: 'Serverless API for the Nova microservices platform.',
       deployOptions: {
-        stageName: apiStageName,
+        stageName: environmentName,
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
@@ -385,8 +489,12 @@ export class TapStack extends cdk.Stack {
         }),
       },
       defaultCorsPreflightOptions: {
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+        allowOrigins: resolvedAllowedOrigins,
+        allowHeaders: ['Authorization', 'Content-Type'],
+      },
+      defaultMethodOptions: {
+        authorizationType: apigateway.AuthorizationType.IAM,
       },
     });
 
@@ -396,27 +504,36 @@ export class TapStack extends cdk.Stack {
       pathParamName: string
     ): void => {
       const baseResource = api.root.addResource(basePath);
+      const methodOptions: apigateway.MethodOptions = {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.IAM,
+      };
       baseResource.addMethod(
         'GET',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       baseResource.addMethod(
         'POST',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
 
       const entityResource = baseResource.addResource(`{${pathParamName}}`);
       entityResource.addMethod(
         'GET',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       entityResource.addMethod(
         'PUT',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
       entityResource.addMethod(
         'DELETE',
-        new apigateway.LambdaIntegration(serviceLambda)
+        new apigateway.LambdaIntegration(serviceLambda),
+        methodOptions
       );
     };
 
@@ -426,21 +543,37 @@ export class TapStack extends cdk.Stack {
     const ordersResource = api.root.addResource('orders');
     ordersResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.IAM,
+      }
     );
     ordersResource.addMethod(
       'POST',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.IAM,
+      }
     );
 
     const orderEntity = ordersResource.addResource('{orderId}');
     orderEntity.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.IAM,
+      }
     );
     orderEntity.addMethod(
       'PATCH',
-      new apigateway.LambdaIntegration(orderServiceFunction)
+      new apigateway.LambdaIntegration(orderServiceFunction),
+      {
+        apiKeyRequired: false,
+        authorizationType: apigateway.AuthorizationType.IAM,
+      }
     );
 
     const connectApiGateway = (fn: NodejsFunction): void => {
@@ -454,43 +587,229 @@ export class TapStack extends cdk.Stack {
     connectApiGateway(productServiceFunction);
     connectApiGateway(orderServiceFunction);
 
-    const createInvocationAlarm = (
-      id: string,
-      fn: NodejsFunction,
-      purpose: string
-    ): void => {
+    const lambdaMetrics: Array<{
+      id: string;
+      purpose: string;
+      metricFactory: (fn: NodejsFunction) => cloudwatch.IMetric;
+      props?: Partial<cloudwatch.AlarmProps>;
+      fn: NodejsFunction;
+    }> = [
+      {
+        id: 'UserServiceErrorAlarm',
+        purpose: 'user-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the user service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'ProductServiceErrorAlarm',
+        purpose: 'product-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the product service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'OrderServiceErrorAlarm',
+        purpose: 'order-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the order service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'UserServiceThrottleAlarm',
+        purpose: 'user-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the user service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'UserServiceInvocationAlarm',
+        purpose: 'user-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when user service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+      {
+        id: 'ProductServiceThrottleAlarm',
+        purpose: 'product-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the product service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'ProductServiceInvocationAlarm',
+        purpose: 'product-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when product service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+      {
+        id: 'OrderServiceThrottleAlarm',
+        purpose: 'order-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the order service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'OrderServiceInvocationAlarm',
+        purpose: 'order-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when order service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+    ];
+
+    lambdaMetrics.forEach(({ id, purpose, metricFactory, props, fn }) => {
       const alarm = new cloudwatch.Alarm(this, id, {
         alarmName: resourceName(purpose),
-        metric: fn.metricInvocations({
-          period: Duration.hours(1),
-          statistic: 'Sum',
-        }),
-        threshold: 1000,
-        evaluationPeriods: 1,
+        metric: metricFactory(fn),
+        threshold: props?.threshold ?? 1,
+        evaluationPeriods: props?.evaluationPeriods ?? 1,
+        datapointsToAlarm: props?.datapointsToAlarm,
         comparisonOperator:
-          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+          props?.comparisonOperator ??
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription:
-          'Notifies when invocation volume exceeds hourly baseline.',
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          props?.alarmDescription ??
+          `Alerts on metric ${purpose} for Lambda function.`,
+        treatMissingData:
+          props?.treatMissingData ?? cloudwatch.TreatMissingData.BREACHING,
       });
       alarm.addAlarmAction(new SnsAction(notificationTopic));
-    };
+    });
 
-    createInvocationAlarm(
-      'UserServiceInvocationAlarm',
-      userServiceFunction,
-      'user-invocations-alarm'
+    const apiServerErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'ApiGatewayServerErrorAlarm',
+      {
+        alarmName: resourceName('api-5xx-alarm'),
+        metric: api.deploymentStage.metricServerError({
+          period: Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription:
+          'Alerts when API Gateway returns 5XX responses within a 5-minute window.',
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      }
     );
-    createInvocationAlarm(
-      'ProductServiceInvocationAlarm',
-      productServiceFunction,
-      'product-invocations-alarm'
-    );
-    createInvocationAlarm(
-      'OrderServiceInvocationAlarm',
-      orderServiceFunction,
-      'order-invocations-alarm'
-    );
+    apiServerErrorAlarm.addAlarmAction(new SnsAction(notificationTopic));
+
+    const apiLatencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
+      alarmName: resourceName('api-latency-alarm'),
+      metric: api.deploymentStage.metricLatency({
+        period: Duration.minutes(5),
+        statistic: 'Average',
+      }),
+      threshold: 2000,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription:
+        'Alerts when API Gateway latency exceeds 2 seconds on average over 5 minutes.',
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+    apiLatencyAlarm.addAlarmAction(new SnsAction(notificationTopic));
+
+    const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
+      alarmName: resourceName('billing-alarm'),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Billing',
+        metricName: 'EstimatedCharges',
+        statistic: 'Maximum',
+        period: Duration.hours(6),
+        region: 'us-east-1',
+        dimensionsMap: {
+          Currency: 'USD',
+        },
+      }),
+      threshold: billingThreshold,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
 
     new CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
@@ -526,934 +845,21 @@ export class TapStack extends cdk.Stack {
       value: apiSecret.secretArn,
       description: 'Secrets Manager ARN for external API credentials.',
     });
-  }
-}
-```
 
-```typescript
-// lib/runtime/user-service.ts
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DeleteCommand,
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  ScanCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
-
-const dynamoDocumentClient = DynamoDBDocumentClient.from(
-  new DynamoDBClient({}),
-  {
-    marshallOptions: {
-      removeUndefinedValues: true,
-    },
-  }
-);
-const snsClient = new SNSClient({});
-const secretsClient = new SecretsManagerClient({});
-
-let cachedSecret: string | undefined;
-
-const respond = (
-  statusCode: number,
-  payload: unknown
-): APIGatewayProxyResult => ({
-  statusCode,
-  headers: {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Credentials': 'true',
-  },
-  body: JSON.stringify(payload),
-});
-
-async function resolveApiKey(secretArn: string): Promise<string> {
-  if (cachedSecret) {
-    return cachedSecret;
-  }
-
-  const secret = await secretsClient.send(
-    new GetSecretValueCommand({
-      SecretId: secretArn,
-    })
-  );
-
-  if (!secret.SecretString) {
-    throw new Error(
-      'Secret payload is empty. Ensure the secret contains an apiKey attribute.'
-    );
-  }
-
-  const parsedSecret = JSON.parse(secret.SecretString) as { apiKey?: string };
-  if (!parsedSecret.apiKey) {
-    throw new Error('apiKey field missing from secret payload.');
-  }
-
-  cachedSecret = parsedSecret.apiKey;
-  return cachedSecret;
-}
-
-export const handler = async (
-  event: APIGatewayProxyEvent,
-  context: Context
-): Promise<APIGatewayProxyResult> => {
-  const tableName = process.env.USER_TABLE_NAME;
-  const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
-  const apiSecretArn = process.env.API_SECRET_ARN;
-
-  if (!tableName || !notificationTopicArn || !apiSecretArn) {
-    console.error('Missing required environment configuration.', {
-      tableName,
-      notificationTopicArn,
-      apiSecretArn,
+    new CfnOutput(this, 'UserFunctionUrl', {
+      value: userFunctionUrl.url,
+      description: 'HTTPS endpoint for the user service Lambda function.',
     });
-    return respond(500, { message: 'Service misconfiguration detected.' });
-  }
 
-  try {
-    const method = event.httpMethod?.toUpperCase();
-    const userId = event.pathParameters?.userId;
-
-    switch (method) {
-      case 'GET': {
-        if (userId) {
-          const result = await dynamoDocumentClient.send(
-            new GetCommand({
-              TableName: tableName,
-              Key: { userId },
-            })
-          );
-
-          if (!result.Item) {
-            return respond(404, { message: 'User not found.' });
-          }
-
-          return respond(200, result.Item);
-        }
-
-        const list = await dynamoDocumentClient.send(
-          new ScanCommand({
-            TableName: tableName,
-            Limit: 50,
-          })
-        );
-
-        return respond(200, list.Items ?? []);
-      }
-      case 'POST': {
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-
-        const payload = JSON.parse(event.body) as {
-          name?: string;
-          email?: string;
-        };
-        if (!payload.name || !payload.email) {
-          return respond(422, {
-            message: 'Both name and email fields are required.',
-          });
-        }
-
-        const userItem = {
-          userId: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: new Date().toISOString(),
-          name: payload.name,
-          email: payload.email.toLowerCase(),
-          audit: {
-            traceId: context.awsRequestId,
-          },
-        };
-
-        await dynamoDocumentClient.send(
-          new PutCommand({
-            TableName: tableName,
-            Item: userItem,
-            ConditionExpression: 'attribute_not_exists(userId)',
-          })
-        );
-
-        const apiKey = await resolveApiKey(apiSecretArn);
-        await snsClient.send(
-          new PublishCommand({
-            TopicArn: notificationTopicArn,
-            Subject: 'user.created',
-            Message: JSON.stringify({
-              userId: userItem.userId,
-              email: userItem.email,
-            }),
-            MessageAttributes: {
-              purpose: { DataType: 'String', StringValue: 'lifecycle-event' },
-              apiKey: {
-                DataType: 'String',
-                StringValue: apiKey.substring(0, 4).padEnd(8, '*'),
-              },
-            },
-          })
-        );
-
-        return respond(201, { userId: userItem.userId });
-      }
-      case 'PUT': {
-        if (!userId) {
-          return respond(400, {
-            message: 'userId path parameter is required.',
-          });
-        }
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-
-        const payload = JSON.parse(event.body) as {
-          name?: string;
-          email?: string;
-        };
-        if (!payload.name && !payload.email) {
-          return respond(422, {
-            message: 'Provide at least one attribute to update.',
-          });
-        }
-
-        const updateExpressions: string[] = [];
-        const expressionAttributeNames: Record<string, string> = {};
-        const expressionAttributeValues: Record<string, unknown> = {};
-
-        if (payload.name) {
-          updateExpressions.push('#name = :name');
-          expressionAttributeNames['#name'] = 'name';
-          expressionAttributeValues[':name'] = payload.name;
-        }
-        if (payload.email) {
-          updateExpressions.push('#email = :email');
-          expressionAttributeNames['#email'] = 'email';
-          expressionAttributeValues[':email'] = payload.email.toLowerCase();
-        }
-
-        updateExpressions.push('#updatedAt = :updatedAt');
-        expressionAttributeNames['#updatedAt'] = 'updatedAt';
-        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
-
-        await dynamoDocumentClient.send(
-          new UpdateCommand({
-            TableName: tableName,
-            Key: { userId },
-            UpdateExpression: `SET ${updateExpressions.join(', ')}`,
-            ExpressionAttributeNames: expressionAttributeNames,
-            ExpressionAttributeValues: expressionAttributeValues,
-            ConditionExpression: 'attribute_exists(userId)',
-            ReturnValues: 'ALL_NEW',
-          })
-        );
-
-        return respond(200, { message: 'User updated successfully.' });
-      }
-      case 'DELETE': {
-        if (!userId) {
-          return respond(400, {
-            message: 'userId path parameter is required.',
-          });
-        }
-
-        await dynamoDocumentClient.send(
-          new DeleteCommand({
-            TableName: tableName,
-            Key: { userId },
-            ConditionExpression: 'attribute_exists(userId)',
-          })
-        );
-
-        return {
-          statusCode: 204,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Credentials': 'true',
-          },
-          body: '',
-        };
-      }
-      default:
-        return respond(405, { message: `Unsupported method: ${method}` });
-    }
-  } catch (error) {
-    console.error('Unhandled error in user service.', { error });
-    return respond(500, { message: 'Internal server error.' });
-  }
-};
-```
-
-```typescript
-// lib/runtime/product-service.ts
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DeleteCommand,
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  ScanCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-
-const dynamoDocumentClient = DynamoDBDocumentClient.from(
-  new DynamoDBClient({}),
-  {
-    marshallOptions: {
-      removeUndefinedValues: true,
-    },
-  }
-);
-const snsClient = new SNSClient({});
-
-const respond = (
-  statusCode: number,
-  payload: unknown
-): APIGatewayProxyResult => ({
-  statusCode,
-  headers: {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-  },
-  body: JSON.stringify(payload),
-});
-
-export const handler = async (
-  event: APIGatewayProxyEvent,
-  context: Context
-): Promise<APIGatewayProxyResult> => {
-  const tableName = process.env.PRODUCT_TABLE_NAME;
-  const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
-
-  if (!tableName || !notificationTopicArn) {
-    console.error(
-      'Missing required environment variables for product service.',
-      {
-        tableName,
-        notificationTopicArn,
-      }
-    );
-    return respond(500, { message: 'Service misconfiguration detected.' });
-  }
-
-  try {
-    const method = event.httpMethod?.toUpperCase();
-    const productId = event.pathParameters?.productId;
-
-    switch (method) {
-      case 'GET': {
-        if (productId) {
-          const result = await dynamoDocumentClient.send(
-            new GetCommand({
-              TableName: tableName,
-              Key: { productId },
-            })
-          );
-          if (!result.Item) {
-            return respond(404, { message: 'Product not found.' });
-          }
-          return respond(200, result.Item);
-        }
-
-        const list = await dynamoDocumentClient.send(
-          new ScanCommand({
-            TableName: tableName,
-            Limit: 50,
-            ProjectionExpression:
-              'productId, name, price, inventory, updatedAt',
-          })
-        );
-
-        return respond(200, list.Items ?? []);
-      }
-      case 'POST': {
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-
-        const payload = JSON.parse(event.body) as {
-          name?: string;
-          description?: string;
-          price?: number;
-          inventory?: number;
-        };
-
-        if (
-          !payload.name ||
-          payload.price === undefined ||
-          payload.inventory === undefined
-        ) {
-          return respond(422, {
-            message: 'name, price, and inventory are required.',
-          });
-        }
-        if (payload.price < 0 || payload.inventory < 0) {
-          return respond(422, {
-            message: 'price and inventory must be positive values.',
-          });
-        }
-
-        const productItem = {
-          productId: `product-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          name: payload.name,
-          description: payload.description ?? '',
-          price: Number(payload.price.toFixed(2)),
-          inventory: Math.floor(payload.inventory),
-        };
-
-        await dynamoDocumentClient.send(
-          new PutCommand({
-            TableName: tableName,
-            Item: productItem,
-            ConditionExpression: 'attribute_not_exists(productId)',
-          })
-        );
-
-        await snsClient.send(
-          new PublishCommand({
-            TopicArn: notificationTopicArn,
-            Subject: 'product.created',
-            Message: JSON.stringify({
-              productId: productItem.productId,
-              price: productItem.price,
-            }),
-            MessageAttributes: {
-              severity: { DataType: 'String', StringValue: 'info' },
-              correlationId: {
-                DataType: 'String',
-                StringValue: context.awsRequestId,
-              },
-            },
-          })
-        );
-
-        return respond(201, { productId: productItem.productId });
-      }
-      case 'PUT': {
-        if (!productId) {
-          return respond(400, {
-            message: 'productId path parameter is required.',
-          });
-        }
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-
-        const payload = JSON.parse(event.body) as {
-          name?: string;
-          description?: string;
-          price?: number;
-          inventory?: number;
-        };
-
-        if (
-          payload.price !== undefined &&
-          (Number.isNaN(payload.price) || payload.price < 0)
-        ) {
-          return respond(422, { message: 'price must be a positive number.' });
-        }
-        if (
-          payload.inventory !== undefined &&
-          (Number.isNaN(payload.inventory) || payload.inventory < 0)
-        ) {
-          return respond(422, {
-            message: 'inventory must be a positive integer.',
-          });
-        }
-
-        const expressionAttributeNames: Record<string, string> = {
-          '#updatedAt': 'updatedAt',
-        };
-        const expressionAttributeValues: Record<string, unknown> = {
-          ':updatedAt': new Date().toISOString(),
-        };
-        const expressionSegments: string[] = [];
-
-        if (payload.name) {
-          expressionAttributeNames['#name'] = 'name';
-          expressionAttributeValues[':name'] = payload.name;
-          expressionSegments.push('#name = :name');
-        }
-        if (payload.description !== undefined) {
-          expressionAttributeNames['#description'] = 'description';
-          expressionAttributeValues[':description'] = payload.description;
-          expressionSegments.push('#description = :description');
-        }
-        if (payload.price !== undefined) {
-          expressionAttributeNames['#price'] = 'price';
-          expressionAttributeValues[':price'] = Number(
-            payload.price.toFixed(2)
-          );
-          expressionSegments.push('#price = :price');
-        }
-        if (payload.inventory !== undefined) {
-          expressionAttributeNames['#inventory'] = 'inventory';
-          expressionAttributeValues[':inventory'] = Math.floor(
-            payload.inventory
-          );
-          expressionSegments.push('#inventory = :inventory');
-        }
-
-        if (!expressionSegments.length) {
-          return respond(422, { message: 'No updates supplied.' });
-        }
-
-        expressionSegments.push('#updatedAt = :updatedAt');
-
-        await dynamoDocumentClient.send(
-          new UpdateCommand({
-            TableName: tableName,
-            Key: { productId },
-            UpdateExpression: `SET ${expressionSegments.join(', ')}`,
-            ConditionExpression: 'attribute_exists(productId)',
-            ExpressionAttributeNames: expressionAttributeNames,
-            ExpressionAttributeValues: expressionAttributeValues,
-          })
-        );
-
-        return respond(200, { message: 'Product updated successfully.' });
-      }
-      case 'DELETE': {
-        if (!productId) {
-          return respond(400, {
-            message: 'productId path parameter is required.',
-          });
-        }
-
-        await dynamoDocumentClient.send(
-          new DeleteCommand({
-            TableName: tableName,
-            Key: { productId },
-            ConditionExpression: 'attribute_exists(productId)',
-          })
-        );
-
-        return {
-          statusCode: 204,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-          },
-          body: '',
-        };
-      }
-      default:
-        return respond(405, { message: `Unsupported method: ${method}` });
-    }
-  } catch (error) {
-    console.error('Unhandled error in product service.', { error });
-    return respond(500, { message: 'Internal server error.' });
-  }
-};
-```
-
-```typescript
-// lib/runtime/order-service.ts
-import {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  ScanCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-
-const dynamoDocumentClient = DynamoDBDocumentClient.from(
-  new DynamoDBClient({}),
-  {
-    marshallOptions: {
-      removeUndefinedValues: true,
-    },
-  }
-);
-const snsClient = new SNSClient({});
-
-const respond = (
-  statusCode: number,
-  payload: unknown
-): APIGatewayProxyResult => ({
-  statusCode,
-  headers: {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-  },
-  body: JSON.stringify(payload),
-});
-
-export const handler = async (
-  event: APIGatewayProxyEvent,
-  context: Context
-): Promise<APIGatewayProxyResult> => {
-  const orderTableName = process.env.ORDER_TABLE_NAME;
-  const productTableName = process.env.PRODUCT_TABLE_NAME;
-  const userTableName = process.env.USER_TABLE_NAME;
-  const topicArn = process.env.NOTIFICATION_TOPIC_ARN;
-
-  if (!orderTableName || !productTableName || !userTableName || !topicArn) {
-    console.error(
-      'Missing required environment configuration for order service.',
-      {
-        orderTableName,
-        productTableName,
-        userTableName,
-        topicArn,
-      }
-    );
-    return respond(500, { message: 'Service misconfiguration detected.' });
-  }
-
-  try {
-    const method = event.httpMethod?.toUpperCase();
-    const orderId = event.pathParameters?.orderId;
-
-    switch (method) {
-      case 'GET': {
-        if (orderId) {
-          const order = await dynamoDocumentClient.send(
-            new GetCommand({
-              TableName: orderTableName,
-              Key: { orderId },
-            })
-          );
-
-          if (!order.Item) {
-            return respond(404, { message: 'Order not found.' });
-          }
-
-          return respond(200, order.Item);
-        }
-
-        const list = await dynamoDocumentClient.send(
-          new ScanCommand({
-            TableName: orderTableName,
-            Limit: 50,
-          })
-        );
-
-        return respond(200, list.Items ?? []);
-      }
-      case 'POST': {
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-        const payload = JSON.parse(event.body) as {
-          userId?: string;
-          productId?: string;
-          quantity?: number;
-        };
-
-        if (!payload.userId || !payload.productId || !payload.quantity) {
-          return respond(422, {
-            message: 'userId, productId, and quantity are required.',
-          });
-        }
-        if (payload.quantity <= 0) {
-          return respond(422, {
-            message: 'quantity must be greater than zero.',
-          });
-        }
-
-        const [user, product] = await Promise.all([
-          dynamoDocumentClient.send(
-            new GetCommand({
-              TableName: userTableName,
-              Key: { userId: payload.userId },
-            })
-          ),
-          dynamoDocumentClient.send(
-            new GetCommand({
-              TableName: productTableName,
-              Key: { productId: payload.productId },
-            })
-          ),
-        ]);
-
-        if (!user.Item) {
-          return respond(404, { message: `User ${payload.userId} not found.` });
-        }
-        if (!product.Item) {
-          return respond(404, {
-            message: `Product ${payload.productId} not found.`,
-          });
-        }
-
-        const availableInventory = product.Item.inventory as number | undefined;
-        if (
-          availableInventory === undefined ||
-          availableInventory < payload.quantity
-        ) {
-          return respond(409, { message: 'Insufficient product inventory.' });
-        }
-
-        const orderRecord = {
-          orderId: `order-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-          productId: payload.productId,
-          userId: payload.userId,
-          quantity: payload.quantity,
-          unitPrice: product.Item.price,
-          totalPrice: Number(
-            (product.Item.price * payload.quantity).toFixed(2)
-          ),
-          status: 'CREATED',
-          createdAt: new Date().toISOString(),
-          audit: {
-            traceId: context.awsRequestId,
-          },
-        };
-
-        await dynamoDocumentClient.send(
-          new PutCommand({
-            TableName: orderTableName,
-            Item: orderRecord,
-            ConditionExpression: 'attribute_not_exists(orderId)',
-          })
-        );
-
-        await dynamoDocumentClient.send(
-          new UpdateCommand({
-            TableName: productTableName,
-            Key: { productId: payload.productId },
-            ConditionExpression: 'inventory >= :requested',
-            UpdateExpression:
-              'SET inventory = inventory - :requested, #updatedAt = :updatedAt',
-            ExpressionAttributeValues: {
-              ':requested': payload.quantity,
-              ':updatedAt': new Date().toISOString(),
-            },
-            ExpressionAttributeNames: {
-              '#updatedAt': 'updatedAt',
-            },
-          })
-        );
-
-        await snsClient.send(
-          new PublishCommand({
-            TopicArn: topicArn,
-            Subject: 'order.created',
-            Message: JSON.stringify({
-              orderId: orderRecord.orderId,
-              userId: orderRecord.userId,
-              totalPrice: orderRecord.totalPrice,
-            }),
-            MessageAttributes: {
-              eventType: { DataType: 'String', StringValue: 'order' },
-              severity: { DataType: 'String', StringValue: 'high' },
-            },
-          })
-        );
-
-        return respond(201, { orderId: orderRecord.orderId });
-      }
-      case 'PATCH': {
-        if (!orderId) {
-          return respond(400, {
-            message: 'orderId path parameter is required.',
-          });
-        }
-        if (!event.body) {
-          return respond(400, { message: 'Missing request body.' });
-        }
-
-        const payload = JSON.parse(event.body) as {
-          status?: 'SHIPPED' | 'CANCELLED';
-        };
-        if (!payload.status) {
-          return respond(422, { message: 'status field is required.' });
-        }
-
-        await dynamoDocumentClient.send(
-          new UpdateCommand({
-            TableName: orderTableName,
-            Key: { orderId },
-            UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
-            ConditionExpression: 'attribute_exists(orderId)',
-            ExpressionAttributeNames: {
-              '#status': 'status',
-              '#updatedAt': 'updatedAt',
-            },
-            ExpressionAttributeValues: {
-              ':status': payload.status,
-              ':updatedAt': new Date().toISOString(),
-            },
-          })
-        );
-
-        return respond(200, { message: 'Order status updated.' });
-      }
-      default:
-        return respond(405, { message: `Unsupported method: ${method}` });
-    }
-  } catch (error) {
-    console.error('Unhandled error in order service.', { error });
-    return respond(500, { message: 'Internal server error.' });
-  }
-};
-```
-
-```typescript
-// lib/runtime/normalize-event.ts
-import { APIGatewayProxyEvent } from 'aws-lambda';
-
-type Headers = Record<string, string>;
-
-type MultiValueHeaders = Record<string, string[]>;
-
-type FunctionUrlRequestContext = {
-  http?: {
-    method?: string;
-    path?: string;
-  };
-};
-
-type NormalizableEvent = {
-  httpMethod?: unknown;
-  headers?: Headers;
-  multiValueHeaders?: MultiValueHeaders;
-  body?: unknown;
-  isBase64Encoded?: boolean;
-  path?: unknown;
-  rawPath?: unknown;
-  pathParameters?: Record<string, string> | null;
-  queryStringParameters?: Record<string, string> | null;
-  multiValueQueryStringParameters?: Record<string, string[]> | null;
-  stageVariables?: Record<string, string> | null;
-  resource?: unknown;
-  requestContext?: FunctionUrlRequestContext;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function createEmptyEvent(method: string = 'GET'): APIGatewayProxyEvent {
-  return {
-    resource: '',
-    path: '/',
-    httpMethod: method,
-    headers: {},
-    multiValueHeaders: {},
-    queryStringParameters: null,
-    multiValueQueryStringParameters: null,
-    pathParameters: null,
-    stageVariables: null,
-    requestContext: {} as APIGatewayProxyEvent['requestContext'],
-    body: null,
-    isBase64Encoded: false,
-  };
-}
-
-function coerceBody(body: unknown): string | null {
-  if (typeof body === 'string') {
-    return body;
-  }
-  if (body === undefined || body === null) {
-    return null;
-  }
-  try {
-    return JSON.stringify(body);
-  } catch {
-    return String(body);
+    new CfnOutput(this, 'ProductFunctionUrl', {
+      value: productFunctionUrl.url,
+      description: 'HTTPS endpoint for the product service Lambda function.',
+    });
+
+    new CfnOutput(this, 'OrderFunctionUrl', {
+      value: orderFunctionUrl.url,
+      description: 'HTTPS endpoint for the order service Lambda function.',
+    });
   }
 }
-
-export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
-  if (!isRecord(event)) {
-    return createEmptyEvent();
-  }
-
-  const incoming = event as NormalizableEvent;
-
-  if (typeof incoming.httpMethod === 'string') {
-    return incoming as unknown as APIGatewayProxyEvent;
-  }
-
-  if (typeof incoming.body === 'string') {
-    try {
-      const parsed = JSON.parse(incoming.body);
-      if (isRecord(parsed) && typeof parsed.httpMethod === 'string') {
-        return parsed as unknown as APIGatewayProxyEvent;
-      }
-    } catch {
-      // ignore malformed JSON bodies
-    }
-  }
-
-  const method = asString(incoming.requestContext?.http?.method);
-  if (method) {
-    const normalized = createEmptyEvent(method.toUpperCase());
-    const resolvedPath =
-      asString(incoming.rawPath) ??
-      asString(incoming.requestContext?.http?.path) ??
-      asString(incoming.path) ??
-      normalized.path;
-
-    return {
-      ...normalized,
-      headers: (incoming.headers ?? {}) as Headers,
-      multiValueHeaders: (incoming.multiValueHeaders ??
-        {}) as MultiValueHeaders,
-      path: resolvedPath,
-      resource: asString(incoming.resource) ?? normalized.resource,
-      pathParameters: incoming.pathParameters ?? null,
-      queryStringParameters: incoming.queryStringParameters ?? null,
-      multiValueQueryStringParameters:
-        incoming.multiValueQueryStringParameters ?? null,
-      stageVariables: incoming.stageVariables ?? null,
-      requestContext:
-        (incoming.requestContext as unknown as APIGatewayProxyEvent['requestContext']) ||
-        normalized.requestContext,
-      body: coerceBody(incoming.body),
-      isBase64Encoded: Boolean(incoming.isBase64Encoded),
-    };
-  }
-
-  const base = createEmptyEvent();
-
-  return {
-    ...base,
-    headers: (incoming.headers ?? {}) as Headers,
-    multiValueHeaders: (incoming.multiValueHeaders ?? {}) as MultiValueHeaders,
-    path: asString(incoming.path) ?? base.path,
-    resource: asString(incoming.resource) ?? base.resource,
-    pathParameters: incoming.pathParameters ?? null,
-    queryStringParameters: incoming.queryStringParameters ?? null,
-    multiValueQueryStringParameters:
-      incoming.multiValueQueryStringParameters ?? null,
-    stageVariables: incoming.stageVariables ?? null,
-    requestContext:
-      (incoming.requestContext as unknown as APIGatewayProxyEvent['requestContext']) ||
-      base.requestContext,
-    body: coerceBody(incoming.body),
-    isBase64Encoded: Boolean(incoming.isBase64Encoded),
-  };
-}
-
 ```

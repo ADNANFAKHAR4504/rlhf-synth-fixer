@@ -15,8 +15,8 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -101,9 +101,39 @@ export class TapStack extends cdk.Stack {
         'Unique, lowercase suffix appended to resource names to guarantee uniqueness across accounts.',
     });
 
+    const allowedCorsOriginsParam = new CfnParameter(
+      this,
+      'AllowedCorsOrigins',
+      {
+        type: 'String',
+        default: 'https://localhost:3000',
+        description:
+          'Comma-separated list of HTTPS origins permitted to access public endpoints.',
+      }
+    );
+
+    const billingAlarmThresholdParam = new CfnParameter(
+      this,
+      'MonthlyBillingThreshold',
+      {
+        type: 'Number',
+        default: 500,
+        minValue: 1,
+        description:
+          'USD amount that will trigger a billing alarm for the account.',
+      }
+    );
+
     const appName = appNameParam.valueAsString.toLowerCase();
     const environmentName = environmentParam.valueAsString.toLowerCase();
     const stringSuffix = sanitizeSuffix(suffixParam.valueAsString);
+    const allowedOrigins = allowedCorsOriginsParam.valueAsString
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(origin => origin.length > 0);
+    const resolvedAllowedOrigins =
+      allowedOrigins.length > 0 ? allowedOrigins : ['https://localhost'];
+    const billingThreshold = billingAlarmThresholdParam.valueAsNumber;
 
     const resourceName = (purpose: string): string =>
       `${appName}-${purpose}-${environmentName}-${stringSuffix}`.replace(
@@ -117,7 +147,7 @@ export class TapStack extends cdk.Stack {
     const encryptionKey = new kms.Key(this, 'DataProtectionKey', {
       alias: `alias/${resourceName('kms')}`,
       enableKeyRotation: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
       description:
         'KMS key securing secrets, logs, and data for the Nova serverless platform.',
     });
@@ -149,6 +179,7 @@ export class TapStack extends cdk.Stack {
       masterKey: encryptionKey,
       displayName: 'Serverless platform notifications',
     });
+    notificationTopic.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
     const apiSecret = new secretsmanager.Secret(this, 'ApiCredentialSecret', {
       secretName: resourceName('api-credentials'),
@@ -159,6 +190,7 @@ export class TapStack extends cdk.Stack {
         passwordLength: 32,
         excludePunctuation: true,
       },
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const staticAssetBucket = new s3.Bucket(this, 'StaticAssetBucket', {
@@ -181,6 +213,15 @@ export class TapStack extends cdk.Stack {
       pointInTimeRecovery: true,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+    userTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
 
     const productTable = new dynamodb.Table(this, 'ProductsTable', {
       tableName: resourceName('products'),
@@ -191,6 +232,15 @@ export class TapStack extends cdk.Stack {
       pointInTimeRecovery: true,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+    productTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
 
     const orderTable = new dynamodb.Table(this, 'OrdersTable', {
       tableName: resourceName('orders'),
@@ -200,6 +250,15 @@ export class TapStack extends cdk.Stack {
       encryptionKey,
       pointInTimeRecovery: true,
       removalPolicy: RemovalPolicy.DESTROY,
+    });
+    orderTable.addGlobalSecondaryIndex({
+      indexName: 'byEntityType',
+      partitionKey: {
+        name: 'entityType',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
@@ -288,6 +347,7 @@ export class TapStack extends cdk.Stack {
         },
         logRetention: logs.RetentionDays.ONE_WEEK,
         tracing: lambda.Tracing.ACTIVE,
+        reservedConcurrentExecutions: 50,
       });
     };
 
@@ -350,9 +410,9 @@ export class TapStack extends cdk.Stack {
 
     const createFunctionUrl = (fn: NodejsFunction) =>
       fn.addFunctionUrl({
-        authType: FunctionUrlAuthType.NONE,
+        authType: FunctionUrlAuthType.AWS_IAM,
         cors: {
-          allowedOrigins: ['*'],
+          allowedOrigins: resolvedAllowedOrigins,
           allowedMethods: [
             HttpMethod.GET,
             HttpMethod.POST,
@@ -372,7 +432,7 @@ export class TapStack extends cdk.Stack {
       restApiName: resourceName('api'),
       description: 'Serverless API for the Nova microservices platform.',
       deployOptions: {
-        stageName: 'stage',
+        stageName: environmentName,
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
@@ -392,8 +452,20 @@ export class TapStack extends cdk.Stack {
         }),
       },
       defaultCorsPreflightOptions: {
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: [
+          'GET',
+          'POST',
+          'PUT',
+          'PATCH',
+          'DELETE',
+          'OPTIONS',
+          'HEAD',
+        ],
+        allowOrigins: resolvedAllowedOrigins,
+        allowHeaders: ['Authorization', 'Content-Type'],
+      },
+      defaultMethodOptions: {
+        authorizationType: apigateway.AuthorizationType.IAM,
       },
     });
 
@@ -405,7 +477,7 @@ export class TapStack extends cdk.Stack {
       const baseResource = api.root.addResource(basePath);
       const methodOptions: apigateway.MethodOptions = {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.IAM,
       };
       baseResource.addMethod(
         'GET',
@@ -445,7 +517,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(orderServiceFunction),
       {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.IAM,
       }
     );
     ordersResource.addMethod(
@@ -453,7 +525,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(orderServiceFunction),
       {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.IAM,
       }
     );
 
@@ -463,7 +535,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(orderServiceFunction),
       {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.IAM,
       }
     );
     orderEntity.addMethod(
@@ -471,7 +543,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(orderServiceFunction),
       {
         apiKeyRequired: false,
-        authorizationType: apigateway.AuthorizationType.NONE,
+        authorizationType: apigateway.AuthorizationType.IAM,
       }
     );
 
@@ -486,43 +558,229 @@ export class TapStack extends cdk.Stack {
     connectApiGateway(productServiceFunction);
     connectApiGateway(orderServiceFunction);
 
-    const createInvocationAlarm = (
-      id: string,
-      fn: NodejsFunction,
-      purpose: string
-    ): void => {
+    const lambdaMetrics: Array<{
+      id: string;
+      purpose: string;
+      metricFactory: (fn: NodejsFunction) => cloudwatch.IMetric;
+      props?: Partial<cloudwatch.AlarmProps>;
+      fn: NodejsFunction;
+    }> = [
+      {
+        id: 'UserServiceErrorAlarm',
+        purpose: 'user-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the user service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'ProductServiceErrorAlarm',
+        purpose: 'product-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the product service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'OrderServiceErrorAlarm',
+        purpose: 'order-errors-alarm',
+        metricFactory: fn =>
+          fn.metricErrors({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the order service logs any Lambda errors within one minute.',
+        },
+      },
+      {
+        id: 'UserServiceThrottleAlarm',
+        purpose: 'user-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the user service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'UserServiceInvocationAlarm',
+        purpose: 'user-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: userServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when user service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+      {
+        id: 'ProductServiceThrottleAlarm',
+        purpose: 'product-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the product service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'ProductServiceInvocationAlarm',
+        purpose: 'product-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: productServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when product service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+      {
+        id: 'OrderServiceThrottleAlarm',
+        purpose: 'order-throttle-alarm',
+        metricFactory: fn =>
+          fn.metricThrottles({
+            period: Duration.minutes(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1,
+          alarmDescription:
+            'Alerts when the order service experiences throttled Lambda invocations.',
+        },
+      },
+      {
+        id: 'OrderServiceInvocationAlarm',
+        purpose: 'order-invocations-alarm',
+        metricFactory: fn =>
+          fn.metricInvocations({
+            period: Duration.hours(1),
+            statistic: 'Sum',
+          }),
+        fn: orderServiceFunction,
+        props: {
+          threshold: 1000,
+          alarmDescription:
+            'Notifies when order service invocation volume exceeds hourly baseline.',
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      },
+    ];
+
+    lambdaMetrics.forEach(({ id, purpose, metricFactory, props, fn }) => {
       const alarm = new cloudwatch.Alarm(this, id, {
         alarmName: resourceName(purpose),
-        metric: fn.metricInvocations({
-          period: Duration.hours(1),
-          statistic: 'Sum',
-        }),
-        threshold: 1000,
-        evaluationPeriods: 1,
+        metric: metricFactory(fn),
+        threshold: props?.threshold ?? 1,
+        evaluationPeriods: props?.evaluationPeriods ?? 1,
+        datapointsToAlarm: props?.datapointsToAlarm,
         comparisonOperator:
-          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+          props?.comparisonOperator ??
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         alarmDescription:
-          'Notifies when invocation volume exceeds hourly baseline.',
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          props?.alarmDescription ??
+          `Alerts on metric ${purpose} for Lambda function.`,
+        treatMissingData:
+          props?.treatMissingData ?? cloudwatch.TreatMissingData.BREACHING,
       });
       alarm.addAlarmAction(new SnsAction(notificationTopic));
-    };
+    });
 
-    createInvocationAlarm(
-      'UserServiceInvocationAlarm',
-      userServiceFunction,
-      'user-invocations-alarm'
+    const apiServerErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'ApiGatewayServerErrorAlarm',
+      {
+        alarmName: resourceName('api-5xx-alarm'),
+        metric: api.deploymentStage.metricServerError({
+          period: Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription:
+          'Alerts when API Gateway returns 5XX responses within a 5-minute window.',
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      }
     );
-    createInvocationAlarm(
-      'ProductServiceInvocationAlarm',
-      productServiceFunction,
-      'product-invocations-alarm'
-    );
-    createInvocationAlarm(
-      'OrderServiceInvocationAlarm',
-      orderServiceFunction,
-      'order-invocations-alarm'
-    );
+    apiServerErrorAlarm.addAlarmAction(new SnsAction(notificationTopic));
+
+    const apiLatencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
+      alarmName: resourceName('api-latency-alarm'),
+      metric: api.deploymentStage.metricLatency({
+        period: Duration.minutes(5),
+        statistic: 'Average',
+      }),
+      threshold: 2000,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription:
+        'Alerts when API Gateway latency exceeds 2 seconds on average over 5 minutes.',
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+    apiLatencyAlarm.addAlarmAction(new SnsAction(notificationTopic));
+
+    const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
+      alarmName: resourceName('billing-alarm'),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/Billing',
+        metricName: 'EstimatedCharges',
+        statistic: 'Maximum',
+        period: Duration.hours(6),
+        region: 'us-east-1',
+        dimensionsMap: {
+          Currency: 'USD',
+        },
+      }),
+      threshold: billingThreshold,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
 
     new CfnOutput(this, 'ApiEndpoint', {
       value: api.url,

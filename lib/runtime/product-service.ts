@@ -4,7 +4,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
-  ScanCommand,
+  QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyResult, Context } from 'aws-lambda';
@@ -73,14 +73,20 @@ export const handler = async (
         }
 
         const list = await dynamoDocumentClient.send(
-          new ScanCommand({
+          new QueryCommand({
             TableName: tableName,
-            Limit: 50,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'PRODUCT',
+            },
             ProjectionExpression:
               'productId, #name, price, inventory, updatedAt',
             ExpressionAttributeNames: {
               '#name': 'name',
             },
+            Limit: 50,
+            ScanIndexForward: false,
           })
         );
 
@@ -117,6 +123,7 @@ export const handler = async (
           productId: `product-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          entityType: 'PRODUCT',
           name: payload.name,
           description: payload.description ?? '',
           price: Number(payload.price.toFixed(2)),
