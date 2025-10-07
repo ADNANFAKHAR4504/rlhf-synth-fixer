@@ -6,19 +6,33 @@
             "ParameterGroups": [
                 {
                     "Label": {
-                        "default": "Environment Configuration"
+                        "default": "Project Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix",
-                        "CacheNodeType",
+                        "ProjectName",
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "API Configuration"
+                    },
+                    "Parameters": [
                         "ApiThrottlingRate",
-                        "ApiThrottlingBurst"
+                        "ApiThrottlingBurst",
+                        "CacheNodeType"
                     ]
                 }
             ]
         }
     },
     "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "TravelPlatform",
+            "Description": "Name of the project for resource tagging",
+            "AllowedPattern": "^[a-zA-Z0-9-]+$"
+        },
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "dev",
@@ -115,7 +129,25 @@
                 },
                 "SSESpecification": {
                     "SSEEnabled": true
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "CacheSubnetGroup": {
@@ -270,6 +302,7 @@
                 "FunctionName": {
                     "Fn::Sub": "TravelSearchApi${EnvironmentSuffix}"
                 },
+                "Description": "Lambda function for processing travel search requests with caching, performance monitoring, and real-time event publishing for external integrations",
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
                 "Code": {
@@ -310,7 +343,25 @@
                         "LambdaExecutionRole",
                         "Arn"
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "TravelApi": {
@@ -383,10 +434,54 @@
             "Properties": {
                 "RestApiId": {
                     "Ref": "TravelApi"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TravelApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
                 },
                 "StageName": {
                     "Ref": "EnvironmentSuffix"
-                }
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "ThrottlingRateLimit": {
+                            "Ref": "ApiThrottlingRate"
+                        },
+                        "ThrottlingBurstLimit": {
+                            "Ref": "ApiThrottlingBurst"
+                        },
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": false,
+                        "MetricsEnabled": true
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "EventBus": {
@@ -394,7 +489,25 @@
             "Properties": {
                 "Name": {
                     "Fn::Sub": "TravelEvents${EnvironmentSuffix}"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "IntegrationRule": {
@@ -437,7 +550,25 @@
                 },
                 "VisibilityTimeout": 300,
                 "MessageRetentionPeriod": 1209600,
-                "ReceiveMessageWaitTimeSeconds": 20
+                "ReceiveMessageWaitTimeSeconds": 20,
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "IntegrationQueuePolicy": {
