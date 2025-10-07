@@ -55,9 +55,9 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
                     with open('cfn-outputs/flat-outputs.json', 'r') as f:
                         cls.outputs = json.load(f)
                     cls.output_method = "CI/CD flat-outputs.json"
-                    print("✅ Successfully loaded outputs from cfn-outputs/flat-outputs.json")
+                    print("Successfully loaded outputs from cfn-outputs/flat-outputs.json")
                 else:
-                    print("❌ cfn-outputs/flat-outputs.json not found")
+                    print("cfn-outputs/flat-outputs.json not found")
                     # Final fallback: Use environment suffix to construct resource names
                     environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
                     cls.outputs = {
@@ -70,9 +70,9 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
                         'kms_key_id': 'c4e7c35b-daf5-43ee-957f-afe8c3079ed4'
                     }
                     cls.output_method = "Environment variables fallback"
-                    print(f"✅ Using environment variables fallback (suffix: {environment_suffix})")
+                    print(f"Using environment variables fallback (suffix: {environment_suffix})")
             except (FileNotFoundError, json.JSONDecodeError) as e:
-                print(f"❌ CI/CD output file failed: {e}")
+                print(f"CI/CD output file failed: {e}")
                 # Final fallback: Use environment suffix to construct resource names
                 environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
                 cls.outputs = {
@@ -85,10 +85,10 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
                     'kms_key_id': 'c4e7c35b-daf5-43ee-957f-afe8c3079ed4'
                 }
                 cls.output_method = "Environment variables fallback"
-                print(f"✅ Using environment variables fallback (suffix: {environment_suffix})")
+                print(f"Using environment variables fallback (suffix: {environment_suffix})")
         
-        print(f"📊 Output method selected: {cls.output_method}")
-        print(f"📋 Number of outputs loaded: {len(cls.outputs)}")
+        print(f"Output method selected: {cls.output_method}")
+        print(f"Number of outputs loaded: {len(cls.outputs)}")
 
         if not cls.outputs:
             raise unittest.SkipTest("No outputs found. Stack may not be deployed.")
@@ -136,9 +136,9 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
     
     def test_output_method_used_for_debugging(self):
         """Test to show which output method was used - for debugging purposes."""
-        print(f"\n🔍 DEBUG: Output method used: {self.output_method}")
-        print(f"📊 Number of outputs loaded: {len(self.outputs)}")
-        print(f"🌍 Environment suffix: {self.environment_suffix}")
+        print(f"\nDEBUG: Output method used: {self.output_method}")
+        print(f"Number of outputs loaded: {len(self.outputs)}")
+        print(f"Environment suffix: {self.environment_suffix}")
         
         # This test always passes - it's just for debugging
         self.assertTrue(True, "Output method debugging test")
