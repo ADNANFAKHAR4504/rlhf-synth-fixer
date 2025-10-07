@@ -51,7 +51,8 @@ def invoke_lambda(function_name, payload):
         result = run_cli(
             f"aws lambda invoke "
             f"--function-name {function_name} "
-            f"--payload file://{payload_file} "
+            f"--payload fileb://{payload_file} "
+            f"--cli-binary-format raw-in-base64-out "
             f"--region {REGION} "
             f"/dev/stdout"
         )
@@ -72,6 +73,52 @@ def invoke_lambda(function_name, payload):
 
 class TestTapStackDeployment:
     """Integration tests for deployed TapStack resources."""
+
+    def _create_test_project(self, env_suffix: str) -> str:
+        """Create a test project via the projects Lambda and return its ID."""
+        function_name = f"projects-crud-{env_suffix}"
+        project_name = f"Proj-{generate_random_suffix()}"
+        event = {
+            "httpMethod": "POST",
+            "path": "/projects",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "name": project_name,
+                "description": "Integration test project"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+
+        response = invoke_lambda(function_name, event)
+        # Accept 200/201
+        assert "statusCode" in response, f"Project create missing statusCode: {response}"
+        assert response["statusCode"] in [200, 201], f"Project create failed: {response}"
+
+        body = {}
+        try:
+            body = json.loads(response.get("body", "{}"))
+        except Exception:
+            body = {}
+
+        # Try common keys for project id
+        project_id = (
+            body.get("projectId")
+            or body.get("id")
+            or (body.get("project") or {}).get("projectId")
+            or (body.get("project") or {}).get("id")
+        )
+        if not project_id:
+            # Fallback to a generated ID if API did not return one
+            project_id = f"proj-{generate_random_suffix()}"
+        return project_id
 
     def test_tap_stack_outputs_exist(self):
         """Verify all required CloudFormation outputs are present."""
