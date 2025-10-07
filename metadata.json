@@ -10,5 +10,23 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": "CloudFormation, AWS IAM, AWS Config, AWS CloudTrail, Amazon VPC, Amazon CloudWatch, Amazon EBS, Amazon RDS, AWS Shield, AWS WAF,  S3 Bucket"
+  "aws_services": [
+    "CloudFormation",
+    "AWS IAM",
+    "AWS Config",
+    "AWS CloudTrail",
+    "Amazon VPC",
+    "Amazon CloudWatch",
+    "Amazon EBS",
+    "Amazon RDS",
+    "AWS Shield",
+    "AWS WAF",
+    "Amazon S3",
+    "AWS Secrets Manager",
+    "Amazon SNS",
+    "Elastic Load Balancing",
+    "Amazon EC2",
+    "AWS Systems Manager"
+  ],
+  "training_quality": 8
 }
