@@ -345,7 +345,7 @@ describe('Payment Workflow System Integration Tests', () => {
         const command = new DescribeKeyCommand({ KeyId: kmsKeyId });
         const response = await kmsClient.send(command);
 
-        expect(response.KeyMetadata?.Description).toContain('eBook encryption');
+        expect(response.KeyMetadata?.Description).toContain('payment encryption');
         expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
         expect(response.KeyMetadata?.KeySpec).toBe('SYMMETRIC_DEFAULT');
       } catch (error: any) {
@@ -382,7 +382,7 @@ describe('Payment Workflow System Integration Tests', () => {
         const response = await snsClient.send(command);
 
         expect(response.Attributes).toBeDefined();
-        expect(response.Attributes?.TopicName).toContain(`eBook-Alerts-${environment}`);
+        expect(response.Attributes?.TopicName).toContain(`payment-workflow-alerts-${environment}`);
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
@@ -396,7 +396,7 @@ describe('Payment Workflow System Integration Tests', () => {
     });
 
     test('should successfully access CloudWatch dashboard', async () => {
-      const dashboardName = `eBook-Delivery-${environment}`;
+      const dashboardName = `payment-workflow-dashboard-${environment}`;
       const dashboardURL = outputs.DashboardURL;
 
       if (!dashboardURL) {
@@ -416,7 +416,7 @@ describe('Payment Workflow System Integration Tests', () => {
         const response = await cloudWatchClient.send(command);
 
         expect(response.DashboardBody).toBeDefined();
-        expect(response.DashboardBody).toContain('CloudFront');
+        expect(response.DashboardBody).toContain('payment');
       } catch (error: any) {
         // Handle AWS credential issues gracefully in CI/CD
         if (error.Code === 'InvalidClientTokenId' || error.Code === 'CredentialsError' || error.Code === 'AccessDenied') {
