@@ -179,6 +179,7 @@ resource "aws_flow_log" "main" {
   })
 }
 
+
 resource "aws_cloudwatch_log_group" "flow_log" {
   name              = "/aws/vpc/flowlogs/${var.project_name}"
   retention_in_days = 7
