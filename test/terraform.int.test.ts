@@ -8,7 +8,7 @@ import mysql from 'mysql2/promise';
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
 
-AWS.config.update({ region: 'us-west-2' }); // Adjust or get dynamically if required
+AWS.config.update({ region: 'us-west-2' });
 
 const ec2 = new AWS.EC2();
 const rds = new AWS.RDS();
@@ -34,13 +34,16 @@ describe('TAP Stack Live Integration Tests', () => {
   });
 
   it('Public and Private subnets exist with expected CIDRs', async () => {
-    const publicSubnets = await ec2.describeSubnets({ SubnetIds: JSON.parse(outputs.public_subnet_ids) }).promise();
+    const publicSubnetIds: string[] = JSON.parse(outputs.public_subnet_ids);
+    const privateSubnetIds: string[] = JSON.parse(outputs.private_subnet_ids);
+
+    const publicSubnets = await ec2.describeSubnets({ SubnetIds: publicSubnetIds }).promise();
     publicSubnets.Subnets?.forEach(s => {
       expect(JSON.parse(outputs.public_subnet_cidrs)).toContain(s.CidrBlock);
       expect(s.VpcId).toBe(outputs.vpc_id);
     });
 
-    const privateSubnets = await ec2.describeSubnets({ SubnetIds: JSON.parse(outputs.private_subnet_ids) }).promise();
+    const privateSubnets = await ec2.describeSubnets({ SubnetIds: privateSubnetIds }).promise();
     privateSubnets.Subnets?.forEach(s => {
       expect(JSON.parse(outputs.private_subnet_cidrs)).toContain(s.CidrBlock);
       expect(s.VpcId).toBe(outputs.vpc_id);
@@ -48,42 +51,47 @@ describe('TAP Stack Live Integration Tests', () => {
   });
 
   it('NAT Gateways exist with allocated Elastic IPs', async () => {
-    const natGateways = await ec2.describeNatGateways({ NatGatewayIds: JSON.parse(outputs.nat_gateway_ids) }).promise();
-    expect(natGateways.NatGateways?.length).toBe(JSON.parse(outputs.nat_gateway_ids).length);
+    const natGatewayIds: string[] = JSON.parse(outputs.nat_gateway_ids);
+    const publicIps: string[] = JSON.parse(outputs.nat_gateway_public_ips);
+
+    const natGateways = await ec2.describeNatGateways({ NatGatewayIds: natGatewayIds }).promise();
+    expect(natGateways.NatGateways?.length).toBe(natGatewayIds.length);
 
     const natPublicIps = natGateways.NatGateways?.map(n => n.NatGatewayAddresses?.[0].PublicIp);
-    const expectedIps = JSON.parse(outputs.nat_gateway_public_ips);
-    expectedIps.forEach(ip => expect(natPublicIps).toContain(ip));
+    publicIps.forEach((ip: string) => expect(natPublicIps).toContain(ip));
   });
 
-  it('ALB Security Group allows HTTP(80) and HTTPS(443)', async () => {
+  it('ALB Security Group allows HTTP and HTTPS', async () => {
     const sg = await ec2.describeSecurityGroups({ GroupIds: [outputs.alb_security_group_id] }).promise();
     const ports = sg.SecurityGroups?.[0].IpPermissions?.map(p => p.FromPort);
     expect(ports).toEqual(expect.arrayContaining([80, 443]));
   });
 
-  it('EC2 Security Group allows SSH(22) and HTTP(80) from correct sources', async () => {
+  it('EC2 Security Group allows SSH and HTTP from correct sources', async () => {
     const sg = await ec2.describeSecurityGroups({ GroupIds: [outputs.ec2_security_group_id] }).promise();
     const permissions = sg.SecurityGroups?.[0].IpPermissions || [];
 
     const ssh = permissions.find(p => p.FromPort === 22);
     expect(ssh).toBeDefined();
-    expect(ssh.IpRanges?.some(r => r.CidrIp === '10.0.0.0/16')).toBe(true);
+    expect(ssh?.IpRanges?.some(r => r.CidrIp === '10.0.0.0/16')).toBe(true);
 
     const http = permissions.find(p => p.FromPort === 80);
     expect(http).toBeDefined();
-    expect(http.UserIdGroupPairs?.some(sg => sg.GroupId === outputs.alb_security_group_id)).toBe(true);
+    expect(http?.UserIdGroupPairs?.some(sg => sg.GroupId === outputs.alb_security_group_id)).toBe(true);
   });
 
   it('RDS instance is available and properties match outputs', async () => {
     const instances = await rds.describeDBInstances({ DBInstanceIdentifier: outputs.rds_identifier }).promise();
     const instance = instances.DBInstances?.[0];
     expect(instance).toBeDefined();
-    expect(instance.DBInstanceStatus).toBe('available');
-    expect(instance.Endpoint?.Address).toBe(outputs.rds_address);
-    expect(instance.Endpoint?.Port?.toString()).toBe(outputs.rds_port);
-    expect(instance.DBName).toBe(outputs.rds_database_name);
-    expect(instance.MultiAZ).toBe(true);
+
+    if (instance) {
+      expect(instance.DBInstanceStatus).toBe('available');
+      expect(instance.Endpoint?.Address).toBe(outputs.rds_address);
+      expect(instance.Endpoint?.Port?.toString()).toBe(outputs.rds_port);
+      expect(instance.DBName).toBe(outputs.rds_database_name);
+      expect(instance.MultiAZ).toBe(true);
+    }
   });
 
   it('Able to connect to RDS with credentials from Secrets Manager', async () => {
