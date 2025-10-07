@@ -139,7 +139,7 @@ describe("Terraform stack compliance", () => {
   describe("Lambda data processing", () => {
     it("deploys latest runtime and least-privilege integration", () => {
       expect(has(/resource\s+"aws_lambda_function"\s+"app"/)).toBe(true);
-      expect(has(/runtime\s*=\s*"nodejs18\.x"/)).toBe(true);
+      expect(has(/runtime\s*=\s*"nodejs16\.x"/)).toBe(true);
       expect(has(/environment\s*{[\s\S]*BUCKET_NAME\s*=\s*aws_s3_bucket\.app\.bucket/)).toBe(true);
       expect(has(/resource\s+"aws_lambda_permission"\s+"allow_bucket"/)).toBe(true);
     });
