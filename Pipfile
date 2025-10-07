@@ -6,17 +6,13 @@ name = "pypi"
 [packages]
 aws-cdk-lib = "2.214.0"
 constructs = "10.4.2"
-aws-cdk-aws-lambda-python-alpha = "*"
-
 cdktf = "0.21.0"
 cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
+pulumi = "==3.192.0"
+pulumi-aws = "7.6.0"
 pytest-cov = "*"
 cfn-lint = "*"
-pulumi = "*"
-pulumi-aws = "*"
-boto3 = "*"
-cfn-flip = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -29,7 +25,8 @@ requests = "*"
 pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
-black = "*"
+Pillow = "*"
+
 
 [requires]
 python_version = "3.12.11"

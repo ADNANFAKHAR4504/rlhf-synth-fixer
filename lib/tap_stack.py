@@ -72,7 +72,12 @@ class TapStack(pulumi.ComponentResource):
         # Register outputs
         self.register_outputs({
             "upload_bucket": self.image_optimization.upload_bucket.id,
+            "webp_bucket": self.image_optimization.webp_bucket.id,
+            "jpeg_bucket": self.image_optimization.jpeg_bucket.id,
+            "png_bucket": self.image_optimization.png_bucket.id,
             "cloudfront_distribution": self.image_optimization.distribution.domain_name,
+            "cloudfront_distribution_id": self.image_optimization.distribution.id,
             "dynamodb_table": self.image_optimization.metadata_table.name,
             "lambda_function": self.image_optimization.processor_function.name,
+            "lambda_function_arn": self.image_optimization.processor_function.arn,
         })

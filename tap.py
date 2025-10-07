@@ -35,3 +35,14 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export outputs from the stack
+pulumi.export("upload_bucket", stack.image_optimization.upload_bucket.id)
+pulumi.export("webp_bucket", stack.image_optimization.webp_bucket.id)
+pulumi.export("jpeg_bucket", stack.image_optimization.jpeg_bucket.id)
+pulumi.export("png_bucket", stack.image_optimization.png_bucket.id)
+pulumi.export("cloudfront_distribution", stack.image_optimization.distribution.domain_name)
+pulumi.export("cloudfront_distribution_id", stack.image_optimization.distribution.id)
+pulumi.export("dynamodb_table", stack.image_optimization.metadata_table.name)
+pulumi.export("lambda_function", stack.image_optimization.processor_function.name)
+pulumi.export("lambda_function_arn", stack.image_optimization.processor_function.arn)
