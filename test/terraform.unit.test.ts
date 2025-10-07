@@ -59,7 +59,7 @@ describe("Terraform Security Monitoring Infrastructure", () => {
       const { content } = parseHCLFile("provider.tf");
       expect(content).toMatch(/provider\s+"aws"/);
       expect(content).toMatch(/required_version\s*=\s*">=\s*1\.4\.0"/);
-      expect(content).toMatch(/backend\s+"local"/);
+      expect(content).toMatch(/backend\s+"s3"/);
     });
 
     test("provider.tf includes required provider sources", () => {
@@ -170,14 +170,14 @@ describe("Terraform Security Monitoring Infrastructure", () => {
   });
 
   describe("GuardDuty Configuration", () => {
-    test("guardduty.tf includes existing detector check", () => {
+    test("guardduty.tf creates detector resource", () => {
       const { content } = parseHCLFile("guardduty.tf");
-      expect(content).toMatch(/data\s+"aws_guardduty_detector"\s+"existing"/);
+      expect(content).toMatch(/resource\s+"aws_guardduty_detector"\s+"main"/);
     });
 
-    test("guardduty.tf conditionally creates detector", () => {
+    test("guardduty.tf enables detector", () => {
       const { content } = parseHCLFile("guardduty.tf");
-      expect(content).toMatch(/count\s*=/);
+      expect(content).toMatch(/enable\s*=\s*true/);
     });
 
     test("guardduty.tf sets finding publishing frequency", () => {
