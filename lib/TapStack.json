@@ -156,8 +156,8 @@
     },
     "RdsEngineVersion": {
       "Type": "String",
-      "Default": "15.0",
-      "Description": "PostgreSQL engine version (generic)"
+      "Default": "15.10",
+      "Description": "PostgreSQL engine version (use plain x.y, e.g., 15.10)"
     },
     "RdsInstanceClass": {
       "Type": "String",
