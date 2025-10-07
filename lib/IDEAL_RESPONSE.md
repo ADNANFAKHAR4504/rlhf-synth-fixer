@@ -2,10 +2,11 @@
 
 This document contains the ideal implementation for the email notification system described in PROMPT.md, with all TypeScript code properly formatted in code blocks.
 
+
 ## iac-nova-app.ts
 
 ```typescript
-#!/usr/bin/env node
+#!/usr/bin/env node 
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tap-stack';
