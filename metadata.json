@@ -6,16 +6,9 @@
   "po_id": "56382107",
   "team": "synth",
   "startedAt": "2025-10-02T03:26:33+05:30",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Database Infrastructure Provisioning",
-    "Security Configuration",
-    "Network Infrastructure Design",
-    "Encryption and Key Management",
-    "Monitoring Setup",
-    "Backup and Recovery",
-    "IaC Optimization",
-    "Access Control"
+    "Cloud Environment Setup"
   ],
   "training_quality": 8,
   "aws_services": [
