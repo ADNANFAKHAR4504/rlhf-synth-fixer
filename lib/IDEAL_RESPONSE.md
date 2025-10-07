@@ -146,6 +146,8 @@ export class TapStack extends cdk.Stack {
     const resolvedAllowedOrigins =
       allowedOrigins.length > 0 ? allowedOrigins : ['https://localhost'];
     const billingThreshold = billingAlarmThresholdParam.valueAsNumber;
+    const sanitizedStageName =
+      environmentName.replace(/[^A-Za-z0-9_]/g, '_') || 'stage';
 
     const resourceName = (purpose: string): string =>
       `${appName}-${purpose}-${environmentName}-${stringSuffix}`.replace(
@@ -440,7 +442,7 @@ export class TapStack extends cdk.Stack {
       restApiName: resourceName('api'),
       description: 'Serverless API for the Nova microservices platform.',
       deployOptions: {
-        stageName: environmentName,
+        stageName: sanitizedStageName,
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
