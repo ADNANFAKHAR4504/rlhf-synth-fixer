@@ -249,7 +249,7 @@ export class VpcModule extends Construct {
 
     // Enable VPC Flow Logs
     const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: config.flowLogBucketArn,
+      logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
       logDestinationType: 's3',
       trafficType: 'ALL',
       vpcId: mainVpc.id,
@@ -357,22 +357,32 @@ export class IamModule extends Construct {
 }
 
 // S3 Module
+// S3 Module - Updated with VPC Flow Logs permissions
 export class S3Module extends Construct {
   public readonly mainBucket: s3Bucket.S3Bucket;
   public readonly logBucket: s3Bucket.S3Bucket;
+  public readonly mainBucketArn: string;
+  public readonly logBucketArn: string;
 
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
 
+    // Get current account information
+    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current',
+      {}
+    );
+
     // Create log bucket first
     this.logBucket = new s3Bucket.S3Bucket(this, 'log-bucket', {
       bucket: config.logBucketName,
-      // Removed ACL setting to prevent conflict with ownership controls
       tags: {
         Name: config.logBucketName,
         ...config.tags,
       },
     });
+    this.logBucketArn = this.logBucket.arn;
 
     // Set ownership controls for the log bucket
     new s3BucketOwnershipControls.S3BucketOwnershipControls(
@@ -416,6 +426,80 @@ export class S3Module extends Construct {
       }
     );
 
+    // Add bucket policy for VPC Flow Logs and CloudTrail
+    new s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
+      bucket: this.logBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-acl': 'bucket-owner-full-control',
+                'aws:SourceAccount': currentAccount.accountId,
+              },
+            },
+          },
+          {
+            Sid: 'AWSLogDeliveryAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+            Condition: {
+              StringEquals: {
+                'aws:SourceAccount': currentAccount.accountId,
+              },
+            },
+          },
+          {
+            Sid: 'CloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+          },
+          {
+            Sid: 'CloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Sid: 'DenyNonSSLRequests',
+            Effect: 'Deny',
+            Principal: '*',
+            Action: 's3:*',
+            Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
+            Condition: {
+              Bool: {
+                'aws:SecureTransport': 'false',
+              },
+            },
+          },
+        ],
+      }),
+    });
+
     // Create main bucket
     this.mainBucket = new s3Bucket.S3Bucket(this, 'main-bucket', {
       bucket: config.bucketName,
@@ -424,6 +508,7 @@ export class S3Module extends Construct {
         ...config.tags,
       },
     });
+    this.mainBucketArn = this.mainBucket.arn;
 
     // Set ownership controls for the main bucket
     new s3BucketOwnershipControls.S3BucketOwnershipControls(

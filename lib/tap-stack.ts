@@ -184,6 +184,55 @@ export class TapStack extends TerraformStack {
       value: rdsKms.key.arn,
       description: 'The ARN of the RDS KMS key',
     });
+
+    // Additional VPC outputs
+    new TerraformOutput(this, 'nat_gateway_ids', {
+      value: vpc.natGatewayIds,
+      description: 'The IDs of the NAT gateways',
+    });
+
+    new TerraformOutput(this, 'internet_gateway_id', {
+      value: vpc.internetGatewayId,
+      description: 'The ID of the Internet Gateway',
+    });
+
+    new TerraformOutput(this, 'vpc_flow_log_id', {
+      value: vpc.flowLogId,
+      description: 'The ID of the VPC Flow Log',
+    });
+
+    // IAM outputs
+    new TerraformOutput(this, 'ec2_role_arn', {
+      value: iam.ec2Role.arn,
+      description: 'The ARN of the EC2 IAM role',
+    });
+
+    new TerraformOutput(this, 'ec2_instance_profile_arn', {
+      value: iam.ec2InstanceProfile.arn,
+      description: 'The ARN of the EC2 instance profile',
+    });
+
+    new TerraformOutput(this, 'config_role_arn', {
+      value: iam.configRole.arn,
+      description: 'The ARN of the Config IAM role',
+    });
+
+    // RDS outputs
+    new TerraformOutput(this, 'rds_security_group_id', {
+      value: rds.dbInstance.vpcSecurityGroupIds,
+      description: 'The security groups associated with the RDS instance',
+    });
+
+    new TerraformOutput(this, 'rds_subnet_group_name', {
+      value: rds.dbInstance.dbSubnetGroupName,
+      description: 'The DB subnet group name used by the RDS instance',
+    });
+
+    // Security information
+    new TerraformOutput(this, 'vpc_cidr_block', {
+      value: vpc.vpcId,
+      description: 'The CIDR block of the VPC',
+    });
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
