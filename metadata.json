@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10000099",
+  "team": "1",
+  "startedAt": "2025-10-07T07:43:38.383Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": "\"S3 Bucket, CloudFormation, VPC, Application Load Balancer, ECS Fargate, Aurora PostgreSQL, DynamoDB, Amazon Connect, Lex, Kendra, Lambda, Comprehend, Step Functions, SES, SNS, Pinpoint, ElastiCache Redis, CloudWatch, CloudWatch LogGroup, EventBridge, API Gateway, IAM, KMS, Secrets Manager\""
+}
