@@ -181,4 +181,4 @@ def record_email_delivery(table, order_id, message_id, email, order_data, ses_me
         logger.warning(f"Duplicate email delivery record for order {order_id}, message {message_id}")
     except Exception as e:
         logger.error(f"Failed to record email delivery for order {order_id}: {str(e)}")
-        raise
+        raise 
