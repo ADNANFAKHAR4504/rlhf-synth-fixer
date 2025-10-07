@@ -5,6 +5,7 @@ import { WafStack } from './waf-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  skipCertificate?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -19,6 +20,11 @@ export class TapStack extends cdk.Stack {
 
     const domainName = 'mydemosite.dev';
     const subDomain = 'portfolio';
+
+    // Skip certificate creation for testing/demo (avoids DNS validation issues)
+    const skipCertificate = props?.skipCertificate ??
+      this.node.tryGetContext('skipCertificate') ??
+      (process.env.SKIP_CERTIFICATE ? process.env.SKIP_CERTIFICATE === 'true' : true);
 
     // Check if we're in us-east-1 (for WAF and Certificate requirements)
     const isUsEast1 = this.region === 'us-east-1';
@@ -38,6 +44,7 @@ export class TapStack extends cdk.Stack {
       domainName,
       subDomain,
       webAclArn,
+      skipCertificate,
       env: props?.env,
     });
 

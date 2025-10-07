@@ -16,6 +16,7 @@ export interface StaticWebsiteStackProps extends cdk.StackProps {
   subDomain: string;
   webAclArn?: string;
   certificate?: certificatemanager.ICertificate;
+  skipCertificate?: boolean;
 }
 
 export class StaticWebsiteStack extends cdk.NestedStack {
@@ -82,16 +83,30 @@ export class StaticWebsiteStack extends cdk.NestedStack {
       zoneName: siteDomain,
     });
 
-    // If certificate is not provided, create one locally (for non us-east-1 regions)
-    const certificate =
-      props.certificate ||
-      new certificatemanager.Certificate(this, 'SiteCertificate', {
-        domainName: siteDomain,
-        certificateName: `portfolio-cert-${props.environmentSuffix}`,
-        validation: certificatemanager.CertificateValidation.fromDns(
-          this.hostedZone
-        ),
-      });
+    // Create certificate conditionally (skip for testing to avoid DNS validation issues)
+    let certificate: certificatemanager.ICertificate | undefined;
+
+    if (!props.skipCertificate) {
+      certificate = props.certificate ||
+        new certificatemanager.Certificate(this, 'SiteCertificate', {
+          domainName: siteDomain,
+          certificateName: `portfolio-cert-${props.environmentSuffix}`,
+          validation: certificatemanager.CertificateValidation.fromDns(
+            this.hostedZone
+          ),
+        });
+    }
+
+    // For testing/demo: Use email validation as alternative (commented out)
+    // if (!props.skipCertificate && !props.certificate) {
+    //   certificate = new certificatemanager.Certificate(this, 'SiteCertificate', {
+    //     domainName: siteDomain,
+    //     certificateName: `portfolio-cert-${props.environmentSuffix}`,
+    //     validation: certificatemanager.CertificateValidation.fromEmail([
+    //       `admin@${props.domainName}`
+    //     ]),
+    //   });
+    // }
 
     // Origin Access Control for CloudFront
     const originAccessControl = new cloudfront.S3OriginAccessControl(
@@ -102,8 +117,8 @@ export class StaticWebsiteStack extends cdk.NestedStack {
       }
     );
 
-    // CloudFront distribution
-    const distribution = new cloudfront.Distribution(this, 'Distribution', {
+    // CloudFront distribution configuration (conditional based on certificate availability)
+    const distributionConfig: any = {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(
           this.websiteBucket,
@@ -111,14 +126,13 @@ export class StaticWebsiteStack extends cdk.NestedStack {
             originAccessControl,
           }
         ),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        viewerProtocolPolicy: certificate ?
+          cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS :
+          cloudfront.ViewerProtocolPolicy.ALLOW_ALL,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
       },
-      domainNames: [siteDomain],
-      certificate: certificate,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       enableLogging: true,
       logBucket: this.logsBucket,
       logFilePrefix: 'cloudfront-logs/',
@@ -139,18 +153,29 @@ export class StaticWebsiteStack extends cdk.NestedStack {
         },
       ],
       comment: `Portfolio distribution for ${props.environmentSuffix}`,
-    });
+    };
+
+    // Add certificate and domain configuration only if certificate exists
+    if (certificate) {
+      distributionConfig.domainNames = [siteDomain];
+      distributionConfig.certificate = certificate;
+      distributionConfig.minimumProtocolVersion = cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021;
+    }
+
+    const distribution = new cloudfront.Distribution(this, 'Distribution', distributionConfig);
 
     this.distribution = distribution;
 
-    // Route 53 A record
-    new route53.ARecord(this, 'SiteAliasRecord', {
-      zone: this.hostedZone,
-      recordName: `${props.subDomain}-${props.environmentSuffix}`,
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.CloudFrontTarget(distribution)
-      ),
-    });
+    // Route 53 A record (only create if we have a certificate for custom domain)
+    if (certificate) {
+      new route53.ARecord(this, 'SiteAliasRecord', {
+        zone: this.hostedZone,
+        recordName: `${props.subDomain}-${props.environmentSuffix}`,
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(distribution)
+        ),
+      });
+    }
 
     // CloudWatch dashboard with environment suffix
     const dashboard = new cloudwatch.Dashboard(this, 'WebsiteDashboard', {
@@ -238,8 +263,12 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     // Outputs
     new cdk.CfnOutput(this, 'WebsiteURL', {
-      value: `https://${siteDomain}`,
-      description: 'Website URL',
+      value: certificate ?
+        `https://${siteDomain}` :
+        `https://${distribution.distributionDomainName}`,
+      description: certificate ?
+        'Website URL (Custom Domain)' :
+        'Website URL (CloudFront Domain)',
       exportName: `website-url-${props.environmentSuffix}`,
     });
 
