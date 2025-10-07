@@ -84,9 +84,6 @@
     "ConflictDetectorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "ConflictDetectorRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -173,9 +170,6 @@
     "ReminderSenderRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "ReminderSenderRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -259,9 +253,6 @@
     "APIGatewayCloudWatchLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "APIGatewayCloudWatchLogsRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
