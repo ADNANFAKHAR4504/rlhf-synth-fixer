@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "10000040",
+  "team": "1",
+  "startedAt": "2025-10-07T08:00:23.631Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": "DynamoDB, DynamoDB Streams, DynamoDB Global Secondary Index, DynamoDB Local Secondary Index, Application Auto Scaling, KMS, IAM"
+}
