@@ -24,3 +24,12 @@ TapStackpr3701  ╷
                 │ 
                 ╵
 TapStackpr3701  ╷
+
+                │ Error: creating RDS DB Instance (tap-pr3701-db): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 42b2b20e-dc55-4ec6-89cb-b242bd3aec49, api error InvalidParameterCombination: Performance Insights not supported for this configuration.
+                │ 
+                │   with aws_db_instance.database_rds-instance_A4A033CE (database/rds-instance),
+                │   on cdk.tf.json line 156, in resource.aws_db_instance.database_rds-instance_A4A033CE (database/rds-instance):
+                │  156:       }
+                │ 
+                ╵
+TapStackpr3701  ╷

@@ -387,8 +387,8 @@ export class RdsModule extends Construct {
 
       // Monitoring
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
-      performanceInsightsEnabled: true,
-      performanceInsightsRetentionPeriod: 7,
+      performanceInsightsEnabled: false,
+      // performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
       monitoringRoleArn: monitoringRole.arn,
 
