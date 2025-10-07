@@ -212,6 +212,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
   // =========================
   // OUTPUTS
   // =========================
+  
   describe('Outputs', () => {
     const expectedOutputs = [
       'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
