@@ -95,7 +95,6 @@ class TapStack(cdk.Stack):
         storage_bucket = s3.Bucket(
             self,
             "PrivateStorageBucket",
-            bucket_name=f"serverless-storage-{self.account}-{self.region}-{environment}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=s3_kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -120,7 +119,6 @@ class TapStack(cdk.Stack):
         transient_table = dynamodb.Table(
             self,
             "TransientDataTable",
-            table_name=f"serverless-transient-{environment}",
             partition_key=dynamodb.Attribute(
                 name="pk",
                 type=dynamodb.AttributeType.STRING
