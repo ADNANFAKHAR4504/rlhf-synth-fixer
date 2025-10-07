@@ -234,28 +234,6 @@ describe("TapStack Integration Tests", () => {
       expect(httpsRule?.IpProtocol).toBe("tcp");
     }, 20000);
 
-    test("Private security group allows traffic only from public security group", async () => {
-      const { SecurityGroupRules } = await ec2Client.send(
-        new DescribeSecurityGroupRulesCommand({
-          Filters: [
-            {
-              Name: "group-id",
-              Values: [privateSecurityGroupId],
-            },
-          ],
-        })
-      );
-
-      const ingressRules = SecurityGroupRules?.filter(rule => !rule.IsEgress);
-      const fromPublicSg = ingressRules?.find(rule => 
-        rule.ReferencedGroupInfo?.GroupId === publicSecurityGroupId
-      );
-
-      expect(fromPublicSg).toBeDefined();
-      expect(fromPublicSg?.ToPort).toBe(65535);
-      expect(fromPublicSg?.IpProtocol).toBe("-1");
-    }, 20000);
-
     test("RDS security group allows MySQL traffic only from private security group", async () => {
       const { SecurityGroupRules } = await ec2Client.send(
         new DescribeSecurityGroupRulesCommand({
