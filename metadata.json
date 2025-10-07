@@ -9,7 +9,7 @@
   "training_quality": 8.5,
   "subtask": "Cloud Environment Setup",
   "subject_labels": [
-    "Application Deployment"
+    "Provisioning of Infrastructure Environments"
   ],
   "aws_services": [
     "Amazon VPC",
