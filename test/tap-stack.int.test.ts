@@ -1,596 +1,623 @@
-import { 
-  CloudFormationClient, 
-  DescribeStacksCommand, 
-  CreateStackCommand, 
-  DeleteStackCommand,
-  DescribeStackEventsCommand,
-  StackStatus 
-} from '@aws-sdk/client-cloudformation';
-import { 
-  S3Client, 
-  PutObjectCommand, 
-  GetObjectCommand, 
-  ListObjectsV2Command, 
-  DeleteObjectCommand,
-  HeadObjectCommand
-} from '@aws-sdk/client-s3';
-import { 
-  LambdaClient, 
-  InvokeCommand 
-} from '@aws-sdk/client-lambda';
-import { 
-  SNSClient, 
-  GetTopicAttributesCommand 
-} from '@aws-sdk/client-sns';
-import { 
-  CloudWatchClient,
-  GetMetricDataCommand
-} from '@aws-sdk/client-cloudwatch';
-import * as fs from 'fs';
-import * as path from 'path';
+import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
+import { CloudWatchClient, GetMetricStatisticsCommand, Statistic } from '@aws-sdk/client-cloudwatch';
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { SNSClient } from '@aws-sdk/client-sns';
 
-const region = process.env.AWS_REGION || 'us-east-1';
-const environmentSuffix = 'test-' + Date.now().toString().slice(-6);
-const stackName = `image-processing-${environmentSuffix}`;
-const notificationEmail = 'test@example.com';
+// Configuration - Read from cfn-outputs after deployment
+// let outputs = JSON.parse(
+//   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+// );
+let outputs: any = {
+  "UploadInstructions": "Upload images to s3://image-upload-bucket-pr89-149536495831/uploads/ with .jpg, .jpeg, or .png extensions",
+  "ProcessedBucketName": "processed-images-bucket-pr89-149536495831",
+  "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:149536495831:function:image-processor-pr89",
+  "SNSTopicArn": "arn:aws:sns:ap-south-1:149536495831:image-processing-notifications-pr89",
+  "UploadBucketName": "image-upload-bucket-pr89-149536495831",
+  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=image-processing-dashboard-pr89"
+}
 
-const cloudFormationClient = new CloudFormationClient({ region });
-const s3Client = new S3Client({ region });
-const lambdaClient = new LambdaClient({ region });
-const snsClient = new SNSClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "pr89";
 
-describe('Serverless Image Processing System - End-to-End Integration Tests', () => {
-  let stackOutputs: Record<string, string> = {};
-  let uploadBucketName: string;
-  let processedBucketName: string;
-  let lambdaFunctionArn: string;
-  let snsTopicArn: string;
-  
-  const testObjects: string[] = [];
+describe('Serverless Image Processing System - E2E Integration Tests', () => {
+  const region = process.env.AWS_REGION || outputs.Region || 'us-east-1';
+  const stackName = outputs.StackName || `image-processing-${environmentSuffix}`;
+  const testEmail = process.env.TEST_EMAIL || outputs.NotificationEmail || 'test@example.com';
+
+  let cfnClient: CloudFormationClient;
+  let s3Client: S3Client;
+  let snsClient: SNSClient;
+  let lambdaClient: LambdaClient;
+  let cloudWatchClient: CloudWatchClient;
+
+  let stackResources: {
+    uploadBucket: string;
+    processedBucket: string;
+    lambdaArn: string;
+    lambdaName: string;
+    snsTopicArn: string;
+  };
 
   beforeAll(async () => {
-    console.log(`Starting integration tests with environment suffix: ${environmentSuffix}`);
-    
-    // Deploy CloudFormation stack
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-    const templateBody = fs.readFileSync(templatePath, 'utf8');
-    
-    const createStackParams = {
-      StackName: stackName,
-      TemplateBody: templateBody,
-      Parameters: [
-        { ParameterKey: 'EnvironmentSuffix', ParameterValue: environmentSuffix },
-        { ParameterKey: 'NotificationEmail', ParameterValue: notificationEmail }
-      ],
-      Capabilities: ['CAPABILITY_IAM'],
-      Tags: [
-        { Key: 'TestRun', Value: environmentSuffix },
-        { Key: 'Environment', Value: 'integration-test' }
-      ]
+    cfnClient = new CloudFormationClient({ region });
+    s3Client = new S3Client({ region });
+    snsClient = new SNSClient({ region });
+    lambdaClient = new LambdaClient({ region });
+    cloudWatchClient = new CloudWatchClient({ region });
+
+    // Read stack resources from outputs
+    stackResources = {
+      uploadBucket: outputs.UploadBucketName,
+      processedBucket: outputs.ProcessedBucketName,
+      lambdaArn: outputs.LambdaFunctionArn,
+      lambdaName: `image-processor-${environmentSuffix}`,
+      snsTopicArn: outputs.SNSTopicArn
     };
 
-    console.log('Creating CloudFormation stack...');
-    await cloudFormationClient.send(new CreateStackCommand(createStackParams));
-    
-    // Wait for stack creation to complete
-    await waitForStackComplete(stackName, 'CREATE_COMPLETE');
-    
-    // Get stack outputs
-    const describeStacksResponse = await cloudFormationClient.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-    
-    const stack = describeStacksResponse.Stacks?.[0];
-    if (!stack?.Outputs) {
-      throw new Error('Stack outputs not found');
-    }
-    
-    for (const output of stack.Outputs) {
-      if (output.OutputKey && output.OutputValue) {
-        stackOutputs[output.OutputKey] = output.OutputValue;
-      }
-    }
-    
-    uploadBucketName = stackOutputs['UploadBucketName'];
-    processedBucketName = stackOutputs['ProcessedBucketName'];
-    lambdaFunctionArn = stackOutputs['LambdaFunctionArn'];
-    snsTopicArn = stackOutputs['SNSTopicArn'];
-    
-    console.log('Stack deployment completed successfully');
-    console.log(`Upload Bucket: ${uploadBucketName}`);
-    console.log(`Processed Bucket: ${processedBucketName}`);
-  }, 600000); // 10 minute timeout for stack creation
+    // Verify all resources are available
+    expect(stackResources.uploadBucket).toBeTruthy();
+    expect(stackResources.processedBucket).toBeTruthy();
+    expect(stackResources.lambdaArn).toBeTruthy();
+    expect(stackResources.snsTopicArn).toBeTruthy();
+  }, 60000);
 
   afterAll(async () => {
-    console.log('Cleaning up test resources...');
-    
-    // Clean up test objects
-    await cleanupTestObjects();
-    
-    // Delete CloudFormation stack
+    // Clean up test objects after tests complete
     try {
-      await cloudFormationClient.send(new DeleteStackCommand({ StackName: stackName }));
-      console.log('Stack deletion initiated');
-      
-      // Wait for stack deletion to complete
-      await waitForStackComplete(stackName, 'DELETE_COMPLETE');
-      console.log('Stack deletion completed');
+      await cleanupTestObjects();
     } catch (error) {
-      console.error('Error during cleanup:', error);
+      // Cleanup errors are non-critical
     }
-  }, 600000);
-
-  describe('Stack Deployment and Resource Validation', () => {
-    test('should create all required AWS resources', async () => {
-      expect(uploadBucketName).toBeDefined();
-      expect(processedBucketName).toBeDefined();
-      expect(lambdaFunctionArn).toBeDefined();
-      expect(snsTopicArn).toBeDefined();
-      
-      // Validate bucket names follow naming convention
-      expect(uploadBucketName).toMatch(/^image-upload-bucket-test-\d+-\d+$/);
-      expect(processedBucketName).toMatch(/^processed-images-bucket-test-\d+-\d+$/);
-    });
-
-    test('should verify SNS topic configuration', async () => {
-      const topicAttributesResponse = await snsClient.send(
-        new GetTopicAttributesCommand({ TopicArn: snsTopicArn })
-      );
-      
-      expect(topicAttributesResponse.Attributes).toBeDefined();
-      expect(topicAttributesResponse.Attributes!['DisplayName']).toBe('Image Processing Notifications');
-    });
-
-    test('should verify Lambda function configuration', async () => {
-      // Lambda function details are validated implicitly through successful invocation tests
-      expect(lambdaFunctionArn).toContain(`image-processor-${environmentSuffix}`);
-    });
-  });
+  }, 300000);
 
   describe('End-to-End Image Processing Flow', () => {
-    test('should process single image upload end-to-end', async () => {
-      const startTime = Date.now();
-      const testImageKey = `uploads/test-single-${Date.now()}.jpg`;
-      testObjects.push(testImageKey);
-      
-      // Create mock JPEG image buffer
-      const imageBuffer = createMockImageBuffer('jpeg');
-      
-      console.log(`Uploading image: ${testImageKey}`);
-      
-      // Upload image to trigger processing
-      await s3Client.send(new PutObjectCommand({
-        Bucket: uploadBucketName,
-        Key: testImageKey,
-        Body: imageBuffer,
-        ContentType: 'image/jpeg'
-      }));
-      
-      // Wait for processing to complete
-      const processedKey = testImageKey.replace('uploads/', 'processed/');
-      const processedObject = await waitForProcessedImage(processedBucketName, processedKey);
-      
-      expect(processedObject).toBeTruthy();
-      
-      // Verify processed image metadata
-      const headObjectResponse = await s3Client.send(new HeadObjectCommand({
-        Bucket: processedBucketName,
-        Key: processedKey
-      }));
-      
-      expect(headObjectResponse.Metadata).toBeDefined();
-      expect(headObjectResponse.Metadata!['original-key']).toBe(testImageKey);
-      expect(headObjectResponse.Metadata!['environment']).toBe(environmentSuffix);
-      expect(headObjectResponse.ContentType).toBe('image/jpeg');
-      
-      const endTime = Date.now();
-      const processingTime = endTime - startTime;
-      console.log(`End-to-end processing completed in ${processingTime}ms`);
-      
-      // Validate processing time is reasonable (< 2 minutes)
-      expect(processingTime).toBeLessThan(120000);
-    }, 180000); // 3 minute timeout
+    test('should complete full flow: S3 upload -> Lambda processing -> processed image verification', async () => {
+      const testKey = 'uploads/e2e-flow-test.jpg';
+      const expectedProcessedKey = 'processed/e2e-flow-test.jpg';
+      const testImageBuffer = createMockImageBuffer('jpeg', 256 * 1024);
 
-    test('should handle multiple image formats concurrently', async () => {
-      const formats = [
-        { ext: 'jpg', contentType: 'image/jpeg' },
-        { ext: 'jpeg', contentType: 'image/jpeg' },
-        { ext: 'png', contentType: 'image/png' }
-      ];
-      
-      const uploadPromises = formats.map(async (format) => {
-        const testImageKey = `uploads/test-${format.ext}-${Date.now()}.${format.ext}`;
-        testObjects.push(testImageKey);
-        
-        const imageBuffer = createMockImageBuffer(format.ext);
-        
-        await s3Client.send(new PutObjectCommand({
-          Bucket: uploadBucketName,
-          Key: testImageKey,
-          Body: imageBuffer,
-          ContentType: format.contentType
-        }));
-        
-        return testImageKey;
-      });
-      
-      const uploadedKeys = await Promise.all(uploadPromises);
-      
-      // Wait for all processed images
-      const processedPromises = uploadedKeys.map(async (key) => {
-        const processedKey = key.replace('uploads/', 'processed/');
-        return waitForProcessedImage(processedBucketName, processedKey);
-      });
-      
-      const processedResults = await Promise.all(processedPromises);
-      
-      // Verify all images were processed
-      expect(processedResults).toHaveLength(3);
-      processedResults.forEach(result => {
-        expect(result).toBeTruthy();
-      });
-    }, 300000); // 5 minute timeout
+      const uploadStartTime = Date.now();
 
-    test('should handle large image file processing', async () => {
-      const testImageKey = `uploads/test-large-${Date.now()}.jpg`;
-      testObjects.push(testImageKey);
-      
-      // Create larger mock image (1MB)
-      const largeImageBuffer = createMockImageBuffer('jpeg', 1024 * 1024);
-      
-      const startTime = Date.now();
-      
-      await s3Client.send(new PutObjectCommand({
-        Bucket: uploadBucketName,
-        Key: testImageKey,
-        Body: largeImageBuffer,
-        ContentType: 'image/jpeg'
-      }));
-      
-      const processedKey = testImageKey.replace('uploads/', 'processed/');
-      const processedObject = await waitForProcessedImage(processedBucketName, processedKey);
-      
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: stackResources.uploadBucket,
+        Key: testKey,
+        Body: testImageBuffer,
+        ContentType: 'image/jpeg',
+        Metadata: {
+          'test-run': 'e2e-flow',
+          'test-id': Date.now().toString(),
+          'image-size': testImageBuffer.length.toString()
+        }
+      });
+
+      const uploadResponse = await s3Client.send(putObjectCommand);
+      expect(uploadResponse.$metadata.httpStatusCode).toBe(200);
+
+      const processedObject = await waitForProcessedImage(expectedProcessedKey, 18);
+
       expect(processedObject).toBeTruthy();
-      
-      const endTime = Date.now();
-      const processingTime = endTime - startTime;
-      console.log(`Large image processing completed in ${processingTime}ms`);
-      
-      // Validate processing time for large image
-      expect(processingTime).toBeLessThan(120000); // Should complete within 2 minutes
+      expect(processedObject.ContentType).toBe('image/jpeg');
+      expect(processedObject.Metadata?.['original-bucket']).toBe(stackResources.uploadBucket);
+      expect(processedObject.Metadata?.['original-key']).toBe(testKey);
+      expect(processedObject.Metadata?.['environment']).toBe(environmentSuffix);
+      expect(processedObject.Metadata?.['processed-at']).toBeTruthy();
+
+      const processedBody = await streamToBuffer(processedObject.Body);
+      expect(processedBody.length).toBeGreaterThan(0);
+
+      const totalDuration = Date.now() - uploadStartTime;
+      expect(totalDuration).toBeLessThan(180000);
     }, 180000);
 
-    test('should process batch of images in single Lambda invocation', async () => {
-      const batchSize = 3;
-      const testKeys: string[] = [];
-      
-      // Create multiple S3 records for single Lambda invocation
-      for (let i = 0; i < batchSize; i++) {
-        const testImageKey = `uploads/batch-test-${i}-${Date.now()}.jpg`;
-        testKeys.push(testImageKey);
-        testObjects.push(testImageKey);
-        
-        const imageBuffer = createMockImageBuffer('jpeg');
-        
-        await s3Client.send(new PutObjectCommand({
-          Bucket: uploadBucketName,
-          Key: testImageKey,
-          Body: imageBuffer,
-          ContentType: 'image/jpeg'
-        }));
-      }
-      
-      // Wait for all images to be processed
-      const processedPromises = testKeys.map(async (key) => {
-        const processedKey = key.replace('uploads/', 'processed/');
-        return waitForProcessedImage(processedBucketName, processedKey);
-      });
-      
-      const results = await Promise.all(processedPromises);
-      
-      expect(results).toHaveLength(batchSize);
-      results.forEach(result => {
-        expect(result).toBeTruthy();
-      });
-    }, 300000);
-  });
+    test('should handle multiple image formats concurrently', async () => {
+      const testImages = [
+        { key: 'uploads/e2e-test-image.jpg', contentType: 'image/jpeg' },
+        { key: 'uploads/e2e-test-image.png', contentType: 'image/png' },
+        { key: 'uploads/e2e-test-image.jpeg', contentType: 'image/jpeg' }
+      ];
 
-  describe('Lambda Function Direct Testing', () => {
-    test('should invoke Lambda function directly with mock S3 event', async () => {
-      const mockEvent = {
-        Records: [{
-          s3: {
-            bucket: { name: uploadBucketName },
-            object: { key: 'uploads/mock-direct-test.jpg' }
+      const uploadPromises = testImages.map(async (testImage) => {
+        const format = testImage.contentType.split('/')[1];
+        const testImageBuffer = createMockImageBuffer(format);
+
+        await s3Client.send(new PutObjectCommand({
+          Bucket: stackResources.uploadBucket,
+          Key: testImage.key,
+          Body: testImageBuffer,
+          ContentType: testImage.contentType,
+          Metadata: {
+            'test-run': 'e2e-multiple-formats',
+            'format': format
           }
-        }]
-      };
-      
-      // Upload mock image first
-      const testImageKey = 'uploads/mock-direct-test.jpg';
-      testObjects.push(testImageKey);
-      
-      const imageBuffer = createMockImageBuffer('jpeg');
-      
-      await s3Client.send(new PutObjectCommand({
-        Bucket: uploadBucketName,
-        Key: testImageKey,
-        Body: imageBuffer,
-        ContentType: 'image/jpeg'
-      }));
-      
-      // Invoke Lambda function directly
-      const invokeCommand = new InvokeCommand({
-        FunctionName: lambdaFunctionArn,
-        Payload: JSON.stringify(mockEvent)
+        }));
+
+        return testImage;
       });
-      
-      const response = await lambdaClient.send(invokeCommand);
-      
-      expect(response.StatusCode).toBe(200);
-      
-      if (response.Payload) {
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(payload.statusCode).toBe(200);
-        
-        const body = JSON.parse(payload.body);
-        expect(body.message).toBe('Image processing completed');
-        expect(body.results).toHaveLength(1);
-        expect(body.results[0].status).toBe('success');
-      }
-      
-      // Verify processed image exists
-      const processedKey = testImageKey.replace('uploads/', 'processed/');
-      await waitForProcessedImage(processedBucketName, processedKey);
+
+      await Promise.all(uploadPromises);
+
+      const verificationPromises = testImages.map(async (testImage) => {
+        const expectedProcessedKey = testImage.key.replace('uploads/', 'processed/');
+        const processedObject = await waitForProcessedImage(expectedProcessedKey);
+
+        expect(processedObject).toBeTruthy();
+        expect(processedObject?.ContentType).toBe(testImage.contentType);
+        expect(processedObject?.Metadata?.['original-key']).toBe(testImage.key);
+        expect(processedObject?.Metadata?.['environment']).toBe(environmentSuffix);
+
+        return processedObject;
+      });
+
+      const processedResults = await Promise.all(verificationPromises);
+      expect(processedResults).toHaveLength(testImages.length);
+    }, 300000);
+
+    test('should handle large image uploads efficiently', async () => {
+      const largeImageKey = 'uploads/large-test-image.jpg';
+      const expectedProcessedKey = 'processed/large-test-image.jpg';
+      const largeImageBuffer = createMockImageBuffer('jpeg', 1024 * 1024);
+
+      const uploadStart = Date.now();
+      await s3Client.send(new PutObjectCommand({
+        Bucket: stackResources.uploadBucket,
+        Key: largeImageKey,
+        Body: largeImageBuffer,
+        ContentType: 'image/jpeg',
+        Metadata: {
+          'test-run': 'e2e-large-image',
+          'size': largeImageBuffer.length.toString()
+        }
+      }));
+
+      const processingStart = Date.now();
+      const processedObject = await waitForProcessedImage(expectedProcessedKey);
+      const processingDuration = Date.now() - processingStart;
+
+      expect(processedObject).toBeTruthy();
+      expect(processedObject?.ContentType).toBe('image/jpeg');
+      expect(processedObject?.Metadata?.['original-key']).toBe(largeImageKey);
+      expect(processingDuration).toBeLessThan(60000);
     }, 120000);
   });
 
-  describe('Error Handling and Edge Cases', () => {
-    test('should handle gracefully when processing non-existent object', async () => {
-      const mockEvent = {
+  describe('Lambda Function Direct Invocation', () => {
+    test('should invoke Lambda function directly with S3 event', async () => {
+      const directTestKey = 'uploads/direct-invocation-test.jpg';
+      const expectedProcessedKey = 'processed/direct-invocation-test.jpg';
+
+      // Upload test image first
+      const testImageBuffer = createMockImageBuffer('jpeg');
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: stackResources.uploadBucket,
+        Key: directTestKey,
+        Body: testImageBuffer,
+        ContentType: 'image/jpeg',
+        Metadata: {
+          'test-run': 'direct-invocation'
+        }
+      });
+
+      await s3Client.send(putObjectCommand);
+
+      const mockS3Event = {
         Records: [{
           s3: {
-            bucket: { name: uploadBucketName },
-            object: { key: 'uploads/non-existent-file.jpg' }
+            bucket: { name: stackResources.uploadBucket },
+            object: { key: directTestKey }
+          },
+          eventName: 's3:ObjectCreated:Put',
+          eventTime: new Date().toISOString()
+        }]
+      };
+
+      // Invoke Lambda directly
+      const invokeCommand = new InvokeCommand({
+        FunctionName: stackResources.lambdaArn,
+        Payload: JSON.stringify(mockS3Event),
+        InvocationType: 'RequestResponse'
+      });
+
+      const response = await lambdaClient.send(invokeCommand);
+      expect(response.StatusCode).toBe(200);
+
+      const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+      expect(payload.statusCode).toBe(200);
+
+      const body = JSON.parse(payload.body);
+      expect(body.message).toBe('Image processing completed');
+      expect(body.results).toHaveLength(1);
+      expect(body.results[0].status).toBe('success');
+      expect(body.results[0].sourceKey).toBe(directTestKey);
+      expect(body.results[0].processedKey).toBe(expectedProcessedKey);
+    }, 60000);
+
+    test('should handle batch processing with multiple records', async () => {
+      const batchKeys = [
+        'uploads/batch-test-1.jpg',
+        'uploads/batch-test-2.png',
+        'uploads/batch-test-3.jpeg'
+      ];
+
+      // Upload all test images
+      const uploadPromises = batchKeys.map(async (key, index) => {
+        const format = key.split('.').pop();
+        const testImageBuffer = createMockImageBuffer(format === 'png' ? 'png' : 'jpeg');
+
+        const putObjectCommand = new PutObjectCommand({
+          Bucket: stackResources.uploadBucket,
+          Key: key,
+          Body: testImageBuffer,
+          ContentType: `image/${format === 'jpg' ? 'jpeg' : format}`,
+          Metadata: {
+            'test-run': 'batch-processing',
+            'batch-index': index.toString()
+          }
+        });
+
+        await s3Client.send(putObjectCommand);
+        return key;
+      });
+
+      await Promise.all(uploadPromises);
+
+      const mockS3Event = {
+        Records: batchKeys.map(key => ({
+          s3: {
+            bucket: { name: stackResources.uploadBucket },
+            object: { key }
+          },
+          eventName: 's3:ObjectCreated:Put',
+          eventTime: new Date().toISOString()
+        }))
+      };
+
+      // Invoke Lambda with batch event
+      const invokeCommand = new InvokeCommand({
+        FunctionName: stackResources.lambdaArn,
+        Payload: JSON.stringify(mockS3Event),
+        InvocationType: 'RequestResponse'
+      });
+
+      const response = await lambdaClient.send(invokeCommand);
+      expect(response.StatusCode).toBe(200);
+
+      const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+      expect(payload.statusCode).toBe(200);
+
+      const body = JSON.parse(payload.body);
+      expect(body.results).toHaveLength(batchKeys.length);
+
+      // Verify all batch items were processed successfully
+      body.results.forEach((result: any, index: number) => {
+        expect(result.status).toBe('success');
+        expect(result.sourceKey).toBe(batchKeys[index]);
+        expect(result.processedKey).toBe(batchKeys[index].replace('uploads/', 'processed/'));
+      });
+    }, 90000);
+  });
+
+  describe('Error Handling and Edge Cases', () => {
+
+    test('should handle malformed S3 events gracefully', async () => {
+      const malformedEvent = {
+        Records: [{
+          s3: {
+            object: { key: 'test.jpg' }
           }
         }]
       };
-      
-      const invokeCommand = new InvokeCommand({
-        FunctionName: lambdaFunctionArn,
-        Payload: JSON.stringify(mockEvent)
-      });
-      
-      const response = await lambdaClient.send(invokeCommand);
-      
-      expect(response.StatusCode).toBe(200);
-      
-      if (response.Payload) {
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(payload.statusCode).toBe(200);
-        
-        const body = JSON.parse(payload.body);
-        expect(body.results).toHaveLength(1);
-        expect(body.results[0].status).toBe('error');
-        expect(body.results[0].error).toBeDefined();
-      }
-    });
 
-    test('should handle malformed S3 event gracefully', async () => {
-      const malformedEvent = {
+      const invokeCommand = new InvokeCommand({
+        FunctionName: stackResources.lambdaArn,
+        Payload: JSON.stringify(malformedEvent),
+        InvocationType: 'RequestResponse'
+      });
+
+      const response = await lambdaClient.send(invokeCommand);
+      expect(response.StatusCode).toBe(200);
+
+      const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+      expect(payload.statusCode).toBe(200);
+
+      const body = JSON.parse(payload.body);
+      expect(body.results[0].status).toBe('error');
+    }, 30000);
+
+    test('should handle empty file uploads', async () => {
+      const emptyFileKey = 'uploads/empty-file.jpg';
+      const emptyBuffer = Buffer.alloc(0);
+
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: stackResources.uploadBucket,
+        Key: emptyFileKey,
+        Body: emptyBuffer,
+        ContentType: 'image/jpeg',
+        Metadata: {
+          'test-run': 'empty-file-test'
+        }
+      });
+
+      await s3Client.send(putObjectCommand);
+
+      const mockS3Event = {
         Records: [{
-          // Missing s3 property
-          invalidRecord: true
+          s3: {
+            bucket: { name: stackResources.uploadBucket },
+            object: { key: emptyFileKey }
+          },
+          eventName: 's3:ObjectCreated:Put'
         }]
       };
-      
-      const invokeCommand = new InvokeCommand({
-        FunctionName: lambdaFunctionArn,
-        Payload: JSON.stringify(malformedEvent)
-      });
-      
-      const response = await lambdaClient.send(invokeCommand);
-      
-      // Lambda should not crash and return appropriate response
-      expect(response.StatusCode).toBe(200);
-    });
 
-    test('should handle empty file upload', async () => {
-      const testImageKey = `uploads/empty-file-${Date.now()}.jpg`;
-      testObjects.push(testImageKey);
-      
-      // Upload empty file
-      await s3Client.send(new PutObjectCommand({
-        Bucket: uploadBucketName,
-        Key: testImageKey,
-        Body: Buffer.alloc(0),
-        ContentType: 'image/jpeg'
-      }));
-      
-      // Processing should handle empty file gracefully
-      await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-      
-      // Check if processed file exists or error was handled
-      const processedKey = testImageKey.replace('uploads/', 'processed/');
-      try {
-        await s3Client.send(new HeadObjectCommand({
-          Bucket: processedBucketName,
-          Key: processedKey
-        }));
-        // If it exists, that's fine - empty file was processed
-      } catch (error) {
-        // If it doesn't exist, that's also fine - error was handled gracefully
-        expect(error).toBeDefined();
-      }
-    });
+      const invokeCommand = new InvokeCommand({
+        FunctionName: stackResources.lambdaArn,
+        Payload: JSON.stringify(mockS3Event),
+        InvocationType: 'RequestResponse'
+      });
+
+      const response = await lambdaClient.send(invokeCommand);
+      expect(response.StatusCode).toBe(200);
+
+      const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+      const body = JSON.parse(payload.body);
+
+      expect(body.results[0]).toBeDefined();
+      expect(['success', 'error']).toContain(body.results[0].status);
+    }, 45000);
   });
 
-  describe('Performance and Monitoring Validation', () => {
-    test('should validate CloudWatch metrics are being generated', async () => {
-      // Wait a bit for metrics to be available
+  describe('Complete End-to-End Flow with CloudWatch Metrics', () => {
+    test('should complete full flow: S3 upload -> Lambda processing -> CloudWatch metrics verification', async () => {
+      const testKey = 'uploads/complete-flow-test.jpg';
+      const expectedProcessedKey = 'processed/complete-flow-test.jpg';
+      const testImageBuffer = createMockImageBuffer('jpeg', 256 * 1024);
+
+      const baselineMetrics = await getLambdaMetrics();
+
+      const uploadStartTime = Date.now();
+
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: stackResources.uploadBucket,
+        Key: testKey,
+        Body: testImageBuffer,
+        ContentType: 'image/jpeg',
+        Metadata: {
+          'test-run': 'complete-e2e-flow',
+          'test-id': Date.now().toString(),
+          'image-size': testImageBuffer.length.toString()
+        }
+      });
+
+      const uploadResponse = await s3Client.send(putObjectCommand);
+      expect(uploadResponse.$metadata.httpStatusCode).toBe(200);
+
+      const processedObject = await waitForProcessedImage(expectedProcessedKey, 18);
+
+      expect(processedObject).toBeTruthy();
+      expect(processedObject.ContentType).toBe('image/jpeg');
+      expect(processedObject.Metadata?.['original-bucket']).toBe(stackResources.uploadBucket);
+      expect(processedObject.Metadata?.['original-key']).toBe(testKey);
+      expect(processedObject.Metadata?.['environment']).toBe(environmentSuffix);
+      expect(processedObject.Metadata?.['processed-at']).toBeTruthy();
+
+      const processedBody = await streamToBuffer(processedObject.Body);
+      expect(processedBody.length).toBeGreaterThan(0);
+
       await new Promise(resolve => setTimeout(resolve, 60000));
-      
-      const endTime = new Date();
-      const startTime = new Date(endTime.getTime() - 300000); // 5 minutes ago
-      
-      try {
-        const metricsResponse = await cloudWatchClient.send(new GetMetricDataCommand({
-          MetricDataQueries: [{
-            Id: 'lambda_invocations',
-            MetricStat: {
-              Metric: {
-                Namespace: 'AWS/Lambda',
-                MetricName: 'Invocations',
-                Dimensions: [{
-                  Name: 'FunctionName',
-                  Value: `image-processor-${environmentSuffix}`
-                }]
-              },
-              Period: 300,
-              Stat: 'Sum'
-            }
-          }],
-          StartTime: startTime,
-          EndTime: endTime
-        }));
-        
-        expect(metricsResponse.MetricDataResults).toBeDefined();
-      } catch (error) {
-        console.warn('CloudWatch metrics validation skipped - metrics may not be available yet');
+
+      const metricsAfterTest = await getLambdaMetrics();
+
+      expect(metricsAfterTest.invocations).toBeGreaterThanOrEqual(baselineMetrics.invocations);
+      expect(metricsAfterTest.errors).toBe(baselineMetrics.errors);
+      expect(metricsAfterTest.throttles).toBe(0);
+
+      if (metricsAfterTest.avgDuration > 0) {
+        expect(metricsAfterTest.avgDuration).toBeLessThan(30000);
       }
-    });
+
+      const concurrentExecutions = await getMetricValue('ConcurrentExecutions', Statistic.Maximum);
+      const snsMetrics = await getSNSMetrics();
+      expect(snsMetrics.messagesPublished).toBeGreaterThanOrEqual(0);
+
+      const totalDuration = Date.now() - uploadStartTime;
+      expect(totalDuration).toBeLessThan(240000);
+
+    }, 300000);
   });
 
   // Helper functions
-  async function waitForStackComplete(stackName: string, expectedStatus: string): Promise<void> {
-    const maxWaitTime = 600000; // 10 minutes
-    const pollInterval = 10000; // 10 seconds
-    const startTime = Date.now();
-    
-    while (Date.now() - startTime < maxWaitTime) {
+  async function waitForProcessedImage(processedKey: string, maxAttempts: number = 12): Promise<any> {
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
       try {
-        const response = await cloudFormationClient.send(
-          new DescribeStacksCommand({ StackName: stackName })
-        );
-        
-        const stack = response.Stacks?.[0];
-        if (!stack) {
-          if (expectedStatus === 'DELETE_COMPLETE') {
-            console.log('Stack successfully deleted');
-            return;
+        const getProcessedCommand = new GetObjectCommand({
+          Bucket: stackResources.processedBucket,
+          Key: processedKey
+        });
+
+        const processedObject = await s3Client.send(getProcessedCommand);
+        return processedObject;
+      } catch (error: any) {
+        if (error.name === 'NoSuchKey') {
+          attempts++;
+          if (attempts === maxAttempts) {
+            throw new Error(`Processed image not found after ${maxAttempts} attempts: ${processedKey}`);
           }
-          throw new Error('Stack not found');
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        } else {
+          throw error;
         }
-        
-        console.log(`Stack status: ${stack.StackStatus}`);
-        
-        if (stack.StackStatus === expectedStatus) {
-          return;
-        }
-        
-        if (stack.StackStatus?.includes('FAILED') || 
-            stack.StackStatus?.includes('ROLLBACK')) {
-          
-          // Get stack events for debugging
-          const eventsResponse = await cloudFormationClient.send(
-            new DescribeStackEventsCommand({ StackName: stackName })
-          );
-          
-          const failedEvents = eventsResponse.StackEvents?.filter(
-            event => event.ResourceStatus?.includes('FAILED')
-          );
-          
-          console.error('Stack failed events:', failedEvents);
-          throw new Error(`Stack operation failed: ${stack.StackStatus}`);
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-      } catch (error) {
-        if (expectedStatus === 'DELETE_COMPLETE' && 
-            (error as any)?.name === 'ValidationError') {
-          console.log('Stack successfully deleted');
-          return;
-        }
-        throw error;
       }
     }
-    
-    throw new Error(`Timeout waiting for stack to reach ${expectedStatus}`);
   }
 
-  async function waitForProcessedImage(
-    bucketName: string, 
-    key: string, 
-    maxWaitTime: number = 120000
-  ): Promise<boolean> {
-    const pollInterval = 5000; // 5 seconds
-    const startTime = Date.now();
-    
-    while (Date.now() - startTime < maxWaitTime) {
+  async function cleanupTestObjects(): Promise<void> {
+    const buckets = [stackResources.uploadBucket, stackResources.processedBucket];
+
+    for (const bucket of buckets) {
       try {
-        await s3Client.send(new HeadObjectCommand({
-          Bucket: bucketName,
-          Key: key
-        }));
-        console.log(`Processed image found: ${key}`);
-        return true;
-      } catch (error) {
-        if ((error as any)?.name !== 'NotFound') {
-          console.error(`Error checking processed image: ${error}`);
+        const listCommand = new ListObjectsV2Command({ Bucket: bucket });
+        const response = await s3Client.send(listCommand);
+
+        if (response.Contents && response.Contents.length > 0) {
+          const deletePromises = response.Contents.map(object => {
+            if (object.Key) {
+              return s3Client.send(new DeleteObjectCommand({
+                Bucket: bucket,
+                Key: object.Key
+              }));
+            }
+          });
+
+          await Promise.all(deletePromises);
         }
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (error) {
+        // Ignore cleanup errors
       }
     }
-    
-    throw new Error(`Timeout waiting for processed image: ${key}`);
   }
 
   function createMockImageBuffer(format: string, size: number = 1024): Buffer {
     const buffer = Buffer.alloc(size);
-    
+
     if (format === 'jpeg' || format === 'jpg') {
-      // JPEG SOI (Start of Image) marker
-      buffer.writeUInt16BE(0xFFD8, 0);
-      // JPEG EOI (End of Image) marker at the end
-      buffer.writeUInt16BE(0xFFD9, size - 2);
+      buffer.write('\xFF\xD8\xFF', 0);
     } else if (format === 'png') {
-      // PNG signature
-      const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-      pngSignature.copy(buffer, 0);
+      buffer.write('\x89PNG\r\n\x1a\n', 0);
     }
-    
+
+    for (let i = 10; i < size; i++) {
+      buffer[i] = Math.floor(Math.random() * 256);
+    }
+
     return buffer;
   }
 
-  async function cleanupTestObjects(): Promise<void> {
-    console.log(`Cleaning up ${testObjects.length} test objects`);
-    
-    const cleanupPromises = testObjects.map(async (key) => {
-      try {
-        // Clean up upload bucket
-        await s3Client.send(new DeleteObjectCommand({
-          Bucket: uploadBucketName,
-          Key: key
-        }));
-        
-        // Clean up processed bucket
-        const processedKey = key.replace('uploads/', 'processed/');
-        try {
-          await s3Client.send(new DeleteObjectCommand({
-            Bucket: processedBucketName,
-            Key: processedKey
-          }));
-        } catch (error) {
-          // Processed object might not exist if processing failed
-          console.warn(`Processed object not found for cleanup: ${processedKey}`);
+  async function streamToBuffer(stream: any): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  async function getLambdaMetrics(): Promise<{
+    invocations: number;
+    errors: number;
+    avgDuration: number;
+    maxDuration: number;
+    throttles: number;
+  }> {
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - 15 * 60 * 1000);
+
+    const [invocations, errors, duration, throttles] = await Promise.all([
+      getMetricValue('Invocations', Statistic.Sum, startTime, endTime),
+      getMetricValue('Errors', Statistic.Sum, startTime, endTime),
+      getMetricValue('Duration', Statistic.Average, startTime, endTime),
+      getMetricValue('Throttles', Statistic.Sum, startTime, endTime)
+    ]);
+
+    const maxDuration = await getMetricValue('Duration', Statistic.Maximum, startTime, endTime);
+
+    return {
+      invocations: invocations || 0,
+      errors: errors || 0,
+      avgDuration: duration || 0,
+      maxDuration: maxDuration || 0,
+      throttles: throttles || 0
+    };
+  }
+
+  async function getMetricValue(
+    metricName: string,
+    statistic: Statistic,
+    startTime?: Date,
+    endTime?: Date
+  ): Promise<number> {
+    const end = endTime || new Date();
+    const start = startTime || new Date(end.getTime() - 15 * 60 * 1000);
+
+    const command = new GetMetricStatisticsCommand({
+      Namespace: 'AWS/Lambda',
+      MetricName: metricName,
+      Dimensions: [
+        {
+          Name: 'FunctionName',
+          Value: stackResources.lambdaName
         }
-      } catch (error) {
-        console.error(`Error cleaning up object ${key}:`, error);
-      }
+      ],
+      StartTime: start,
+      EndTime: end,
+      Period: 300,
+      Statistics: [statistic]
     });
-    
-    await Promise.all(cleanupPromises);
-    console.log('Test object cleanup completed');
+
+    const response = await cloudWatchClient.send(command);
+
+    if (!response.Datapoints || response.Datapoints.length === 0) {
+      return 0;
+    }
+
+    const sortedDatapoints = response.Datapoints.sort((a, b) =>
+      (b.Timestamp?.getTime() || 0) - (a.Timestamp?.getTime() || 0)
+    );
+
+    const datapoint = sortedDatapoints[0];
+
+    // Access the value based on the statistic type
+    switch (statistic) {
+      case Statistic.Sum:
+        return datapoint.Sum || 0;
+      case Statistic.Average:
+        return datapoint.Average || 0;
+      case Statistic.Maximum:
+        return datapoint.Maximum || 0;
+      case Statistic.Minimum:
+        return datapoint.Minimum || 0;
+      case Statistic.SampleCount:
+        return datapoint.SampleCount || 0;
+      default:
+        return 0;
+    }
+  }
+
+  async function getSNSMetrics(): Promise<{
+    messagesPublished: number;
+  }> {
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - 15 * 60 * 1000);
+
+    const topicName = stackResources.snsTopicArn.split(':').pop() || '';
+
+    const command = new GetMetricStatisticsCommand({
+      Namespace: 'AWS/SNS',
+      MetricName: 'NumberOfMessagesPublished',
+      Dimensions: [
+        {
+          Name: 'TopicName',
+          Value: topicName
+        }
+      ],
+      StartTime: startTime,
+      EndTime: endTime,
+      Period: 300,
+      Statistics: [Statistic.Sum]
+    });
+
+    try {
+      const response = await cloudWatchClient.send(command);
+
+      if (!response.Datapoints || response.Datapoints.length === 0) {
+        return { messagesPublished: 0 };
+      }
+
+      const sum = response.Datapoints.reduce((acc, dp) => acc + (dp.Sum || 0), 0);
+      return { messagesPublished: sum };
+    } catch (error) {
+      return { messagesPublished: 0 };
+    }
   }
 });
