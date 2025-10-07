@@ -19,7 +19,7 @@ const deriveEnvironmentSuffix = (): string => {
     process.env.ENVIRONMENT_SUFFIX ||
     'dev';
 
-  const uniquenessHint =
+  let uniquenessHint =
     process.env.DEPLOY_UNIQUE_ID ||
     process.env.GITHUB_RUN_ATTEMPT ||
     process.env.GITHUB_RUN_NUMBER ||
@@ -34,9 +34,13 @@ const deriveEnvironmentSuffix = (): string => {
     process.env.TRAVIS_BUILD_NUMBER ||
     undefined;
 
-  const rawSuffix = uniquenessHint
-    ? `${baseContext}-${uniquenessHint}`
-    : baseContext;
+  if (!uniquenessHint) {
+    const timestamp = Date.now().toString(36).slice(-8);
+    const entropy = Math.random().toString(36).slice(2, 6);
+    uniquenessHint = `${timestamp}${entropy}`;
+  }
+
+  const rawSuffix = `${baseContext}-${uniquenessHint}`;
 
   return sanitizeSuffix(rawSuffix);
 };
