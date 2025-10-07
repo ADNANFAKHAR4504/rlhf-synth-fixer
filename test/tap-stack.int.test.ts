@@ -1,35 +1,35 @@
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand
-} from '@aws-sdk/client-s3';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand
-} from '@aws-sdk/client-kms';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
-  IAMClient,
-  GetRoleCommand
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient
 } from '@aws-sdk/client-iam';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+  ListAliasesCommand
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Load deployment outputs
 const outputs = JSON.parse(
@@ -56,12 +56,13 @@ describe('E-Learning RDS MySQL Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.7.0.0/16');
       expect(vpc.State).toBe('available');
-      // DNS attributes might not be returned in the response, but they're set in the template
-      if (vpc.EnableDnsHostnames !== undefined) {
-        expect(vpc.EnableDnsHostnames).toBe(true);
+      // DNS attributes might not be returned in the response shape; access via any to avoid SDK typing mismatch
+      const vpcAny = vpc as any;
+      if (vpcAny?.EnableDnsHostnames !== undefined) {
+        expect(vpcAny.EnableDnsHostnames).toBe(true);
       }
-      if (vpc.EnableDnsSupport !== undefined) {
-        expect(vpc.EnableDnsSupport).toBe(true);
+      if (vpcAny?.EnableDnsSupport !== undefined) {
+        expect(vpcAny.EnableDnsSupport).toBe(true);
       }
     });
 
