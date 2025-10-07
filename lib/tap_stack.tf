@@ -132,6 +132,20 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_eip" "nat" {
+  vpc = true
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}nat-eip" })
+}
+
+resource "aws_nat_gateway" "this" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}nat-gateway" })
+
+  depends_on = [aws_internet_gateway.igw]
+}
+
 resource "aws_subnet" "private" {
   count                   = length(var.private_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
@@ -144,6 +158,12 @@ resource "aws_subnet" "private" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   tags   = merge(local.common_tags, { Name = "${local.name_prefix}private-route-table" })
+}
+
+resource "aws_route" "private_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this.id
 }
 
 resource "aws_route_table_association" "private" {
@@ -622,8 +642,8 @@ data "archive_file" "inline_lambda" {
   source {
     content  = <<-JS
       // index.js
-      // Simple processor: accepts an array of numbers and returns { sum, avg, count }
-      const AWS = require('aws-sdk');
+      // Processes CSV-style numeric payloads from S3 object creation events.
+      const AWS = require("aws-sdk");
       const s3 = new AWS.S3();
 
       const parseNumbers = text =>
@@ -667,10 +687,10 @@ data "archive_file" "inline_lambda" {
             const sum = numbers.reduce((total, value) => total + value, 0);
             const avg = count ? sum / count : 0;
 
-            console.log(`Processed s3://$${key} count=$${count} sum=$${sum} avg=$${avg}`);
+            console.log(`Processed s3://$${bucket}/$${key} count=$${count} sum=$${sum} avg=$${avg}`);
             results.push({ bucket, key, count, sum, avg });
           } catch (error) {
-            console.log(`Error processing s3://error`, error?.message ?? String(error));
+            console.log(`Error processing s3://$${bucket}/$${key}`, error?.message ?? String(error));
           }
         }
 
@@ -682,13 +702,13 @@ data "archive_file" "inline_lambda" {
 }
 
 resource "aws_lambda_function" "app" {
-  function_name = "${local.name_prefix}${var.lambda_name}"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs16.x"
-  filename         = data.archive_file.inline_lambda.output_path
+  function_name   = "${local.name_prefix}${var.lambda_name}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "nodejs18.x"
+  filename        = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
-  depends_on     = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
+  depends_on      = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
 
   environment {
     variables = {
@@ -790,6 +810,22 @@ resource "aws_api_gateway_deployment" "app" {
   rest_api_id = aws_api_gateway_rest_api.app.id
 
   lifecycle { create_before_destroy = true }
+}
+
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id   = aws_api_gateway_rest_api.app.id
+  deployment_id = aws_api_gateway_deployment.app.id
+  stage_name    = "prod"
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_permission" "allow_apigw" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.app.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "arn:aws:execute-api:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.app.id}/*/*/${aws_api_gateway_resource.app.path_part}"
 }
 
 # =============================================================================

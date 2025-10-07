@@ -17,6 +17,10 @@ import {
   GetLogEventsCommand
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
@@ -28,6 +32,17 @@ import {
   DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client
 } from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  APIGatewayClient,
+  GetRestApisCommand,
+  GetStagesCommand
+} from "@aws-sdk/client-api-gateway";
+import {
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
+  ListAliasesCommand
+} from "@aws-sdk/client-kms";
 import {
   GetFunctionConfigurationCommand,
   LambdaClient
@@ -120,6 +135,8 @@ let s3Client: S3Client;
 let cloudtrailClient: CloudTrailClient;
 let rdsClient: RDSClient;
 let lambdaClient: LambdaClient;
+let kmsClient: KMSClient;
+let apiGatewayClient: APIGatewayClient;
 
 beforeAll(async () => {
   stsClient = new STSClient({ region });
@@ -132,6 +149,8 @@ beforeAll(async () => {
   cloudtrailClient = new CloudTrailClient({ region });
   rdsClient = new RDSClient({ region });
   lambdaClient = new LambdaClient({ region });
+  kmsClient = new KMSClient({ region });
+  apiGatewayClient = new APIGatewayClient({ region });
 
   const identity = await stsClient.send(new GetCallerIdentityCommand({}));
   console.log(`Running integration tests in account ${identity.Account}, region ${region}`);
@@ -148,7 +167,9 @@ afterAll(async () => {
     s3Client.destroy?.(),
     cloudtrailClient.destroy?.(),
     rdsClient.destroy?.(),
-    lambdaClient.destroy?.()
+    lambdaClient.destroy?.(),
+    kmsClient.destroy?.(),
+    apiGatewayClient.destroy?.()
   ]);
 });
 
@@ -182,6 +203,52 @@ describe("Terraform infrastructure integration", () => {
       expect(subnet.MapPublicIpOnLaunch).toBe(false);
       expect(subnet.VpcId).toBe(vpcId);
     });
+  });
+
+  test("Internet gateway and route tables provide expected routing", async () => {
+    const igwResult = await ec2Client.send(new DescribeInternetGatewaysCommand({}));
+    const internetGateways = (igwResult.InternetGateways ?? []).filter(gw =>
+      (gw.Attachments ?? []).some(attachment => attachment.VpcId === vpcId)
+    );
+    expect(internetGateways.length).toBeGreaterThan(0);
+    const igwId = internetGateways[0].InternetGatewayId ?? "";
+    expect(igwId).not.toBe("");
+
+    const routeTablesResult = await ec2Client.send(new DescribeRouteTablesCommand({}));
+    const routeTables = (routeTablesResult.RouteTables ?? []).filter(table => table.VpcId === vpcId);
+    expect(routeTables.length).toBeGreaterThan(0);
+
+    const findRouteTableForSubnet = (subnetId: string) =>
+      routeTables.find(table => (table.Associations ?? []).some(assoc => assoc.SubnetId === subnetId));
+
+    publicSubnetIds.forEach(subnetId => {
+      const routeTable = findRouteTableForSubnet(subnetId);
+      expect(routeTable).toBeDefined();
+      const hasIgwRoute = routeTable?.Routes?.some(route =>
+        route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId === igwId
+      );
+      expect(hasIgwRoute).toBe(true);
+    });
+
+    privateSubnetIds.forEach(subnetId => {
+      const routeTable = findRouteTableForSubnet(subnetId);
+      expect(routeTable).toBeDefined();
+      const hasNatRoute = routeTable?.Routes?.some(route =>
+        route.DestinationCidrBlock === "0.0.0.0/0" && Boolean(route.NatGatewayId)
+      );
+      expect(hasNatRoute).toBe(true);
+    });
+  });
+
+  test("NAT gateway is provisioned in a public subnet", async () => {
+    const natResult = await ec2Client.send(new DescribeNatGatewaysCommand({}));
+    const natGateways = (natResult.NatGateways ?? []).filter(gateway => gateway.VpcId === vpcId);
+    expect(natGateways.length).toBeGreaterThan(0);
+    const availableNat = natGateways.find(gateway => gateway.State === "available");
+    expect(availableNat).toBeDefined();
+    const natSubnetId = availableNat?.SubnetId;
+    expect(natSubnetId).toBeDefined();
+    expect(publicSubnetIds).toContain(natSubnetId);
   });
 
   test("Security groups restrict ingress to HTTPS and SSH", async () => {
@@ -234,6 +301,70 @@ describe("Terraform infrastructure integration", () => {
     expect(dbIngressFromWeb).toBeDefined();
   });
 
+  test("Auto Scaling EC2 instances run as t3.micro in private subnets", async () => {
+    const asgResult = await asgClient.send(
+      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
+    );
+    const asg = asgResult.AutoScalingGroups?.[0];
+    expect(asg).toBeDefined();
+
+    const instanceIds = (asg?.Instances ?? [])
+      .map(instance => instance.InstanceId)
+      .filter((id): id is string => Boolean(id));
+    expect(instanceIds.length).toBeGreaterThan(0);
+
+    const instancesResult = await ec2Client.send(
+      new DescribeInstancesCommand({ InstanceIds: instanceIds })
+    );
+    const reservations = instancesResult.Reservations ?? [];
+    const instances = reservations.flatMap(reservation => reservation.Instances ?? []);
+    expect(instances.length).toBe(instanceIds.length);
+
+    instances.forEach(instance => {
+      expect(instance.InstanceType).toBe("t3.micro");
+      expect(instance.SubnetId).toBeDefined();
+      expect(privateSubnetIds).toContain(instance.SubnetId ?? "");
+      expect(instance.PublicIpAddress).toBeUndefined();
+    });
+  });
+
+  test("EC2 instances can reach RDS over the database port", async () => {
+    const securityGroupResult = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webSecurityGroupId, dbSecurityGroupId] })
+    );
+    const securityGroups = securityGroupResult.SecurityGroups ?? [];
+    const webSecurityGroup = securityGroups.find(group => group.GroupId === webSecurityGroupId);
+    const dbSecurityGroup = securityGroups.find(group => group.GroupId === dbSecurityGroupId);
+
+    expect(webSecurityGroup).toBeDefined();
+    expect(dbSecurityGroup).toBeDefined();
+
+    const dbIngressRules = dbSecurityGroup?.IpPermissions ?? [];
+    const allowsWebGroup = dbIngressRules.some(rule => {
+      if (rule.FromPort !== 5432 || rule.ToPort !== 5432 || rule.IpProtocol !== "tcp") {
+        return false;
+      }
+      const allowedGroups = rule.UserIdGroupPairs ?? [];
+      return allowedGroups.some(pair => pair.GroupId === webSecurityGroupId);
+    });
+    expect(allowsWebGroup).toBe(true);
+
+    const webEgressRules = webSecurityGroup?.IpPermissionsEgress ?? [];
+    const webAllowsOutboundPostgres = webEgressRules.some(rule => {
+      if (rule.IpProtocol !== "-1" && rule.IpProtocol !== "tcp") {
+        return false;
+      }
+      const fromPort = rule.FromPort ?? 0;
+      const toPort = rule.ToPort ?? 0;
+      const allowsAllPorts = rule.IpProtocol === "-1";
+      const allowsPostgresPort = allowsAllPorts || (fromPort <= 5432 && toPort >= 5432);
+      const targetGroups = rule.UserIdGroupPairs ?? [];
+      const targetsDbGroup = targetGroups.some(pair => pair.GroupId === dbSecurityGroupId);
+      return targetsDbGroup && allowsPostgresPort;
+    });
+    expect(webAllowsOutboundPostgres).toBe(true);
+  });
+
   test("Load balancer, target group, and autoscaling group are wired together", async () => {
     const loadBalancers = await elbClient.send(new DescribeLoadBalancersCommand({}));
     const loadBalancer = loadBalancers.LoadBalancers?.find(lb => lb.DNSName === albDnsName);
@@ -273,19 +404,19 @@ describe("Terraform infrastructure integration", () => {
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
     console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
-    const scaleUpPolicy = scalingPolicies.find(policy => { return policy.PolicyName === 'iac-350039-prod-scale-up' });
-    const scaleDownPolicy = scalingPolicies.find(policy => { return policy.PolicyName === 'iac-350039-prod-scale-down' });
+    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
+    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
     const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
     const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
     expect(scaleUpPolicyArn).not.toBe("");
     expect(scaleDownPolicyArn).not.toBe("");
 
     const alarmsResult = await cloudwatchClient.send(new DescribeAlarmsCommand({
-      AlarmNames: ["iac-350039-prod-high-cpu-utilization", "iac-350039-prod-low-cpu-utilization"]
+      AlarmNames: [`${namePrefix}high-cpu-utilization`, `${namePrefix}low-cpu-utilization`]
     }));
     const alarms = alarmsResult.MetricAlarms ?? [];
-    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === "iac-350039-prod-high-cpu-utilization");
-    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === "iac-350039-prod-low-cpu-utilization");
+    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}high-cpu-utilization`);
+    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}low-cpu-utilization`);
     expect(highCpuAlarm).toBeDefined();
     expect(lowCpuAlarm).toBeDefined();
 
@@ -400,12 +531,69 @@ describe("Terraform infrastructure integration", () => {
     });
   });
 
+  test("RDS KMS key exists with rotation enabled", async () => {
+    const kmsAliasName = `alias/${namePrefix}rds-encryption-key`;
+
+    const keyResult = await kmsClient.send(new DescribeKeyCommand({ KeyId: kmsAliasName }));
+    const keyMetadata = keyResult.KeyMetadata;
+    expect(keyMetadata).toBeDefined();
+    expect(keyMetadata?.KeyState).toBe("Enabled");
+    expect(keyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
+    expect(keyMetadata?.Description).toBe("KMS key for RDS encryption");
+
+    const rotationStatus = await kmsClient.send(new GetKeyRotationStatusCommand({ KeyId: kmsAliasName }));
+    expect(rotationStatus.KeyRotationEnabled).toBe(true);
+
+    if (keyMetadata?.KeyId) {
+      const aliasesResult = await kmsClient.send(new ListAliasesCommand({ KeyId: keyMetadata.KeyId }));
+      const hasAlias = (aliasesResult.Aliases ?? []).some(alias => alias.AliasName === kmsAliasName);
+      expect(hasAlias).toBe(true);
+    } else {
+      throw new Error("KMS key metadata did not include KeyId");
+    }
+
+    const dbResult = await rdsClient.send(
+      new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier })
+    );
+    const dbInstance = dbResult.DBInstances?.[0];
+    expect(dbInstance).toBeDefined();
+    expect(dbInstance?.KmsKeyId).toBe(keyMetadata?.Arn);
+    expect(dbInstance?.StorageEncrypted).toBe(true);
+  });
+
+  test("API Gateway endpoint responds successfully", async () => {
+    const apis = await apiGatewayClient.send(new GetRestApisCommand({ limit: 500 }));
+    const restApis = apis.items ?? [];
+    const restApi = restApis.find(api => {
+      const apiName = api.name ?? "";
+      return apiName === `${namePrefix}app-api` || apiName.endsWith("app-api");
+    });
+    expect(restApi).toBeDefined();
+
+    const restApiId = restApi?.id ?? "";
+    expect(restApiId).not.toBe("");
+
+    const stagesResult = await apiGatewayClient.send(new GetStagesCommand({ restApiId }));
+    const stages = stagesResult.item ?? [];
+    expect(stages.length).toBeGreaterThan(0);
+
+    const stage = stages.find(item => item.stageName === "prod") ?? stages[0];
+    const stageName = stage.stageName ?? "";
+    expect(stageName).not.toBe("");
+
+    const url = `https://${restApiId}.execute-api.${region}.amazonaws.com/${stageName}/resource`;
+    const fetchFn = (globalThis as any).fetch as (input: string, init?: any) => Promise<any>;
+    expect(fetchFn).toBeDefined();
+    const response = await fetchFn(url);
+    expect(response.status).toBe(200);
+  });
+
   test("Lambda function is configured and subscribed to S3 events", async () => {
     const functionConfig = await lambdaClient.send(
       new GetFunctionConfigurationCommand({ FunctionName: lambdaFunctionName })
     );
     expect(functionConfig.FunctionName).toBe(lambdaFunctionName);
-    expect(functionConfig.Runtime).toBe("nodejs16.x");
+    expect(functionConfig.Runtime).toBe("nodejs18.x");
     expect(functionConfig.Environment?.Variables?.BUCKET_NAME).toBe(appBucketName);
 
     const notificationConfig = await s3Client.send(
@@ -464,14 +652,9 @@ describe("Terraform infrastructure integration", () => {
           );
 
           const events = eventsResult.events ?? [];
-          console.log("Retrieved log events", {
-            logStreamName,
-            eventCount: events.length
-          });
           const hasMatch = events.some(event => {
             const message = event.message ?? "";
-            console.log("Inspecting log message", message, { objectKey, expectedCount, expectedSum, expectedAvg });
-            return message.includes(`s3://${objectKey}`) &&
+            return message.includes(`s3://${appBucketName}/${objectKey}`) &&
               message.includes(`count=${expectedCount}`) &&
               message.includes(`sum=${expectedSum}`) &&
               message.includes(`avg=${expectedAvg}`);
