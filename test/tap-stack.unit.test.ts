@@ -26,7 +26,6 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have all required sections', () => {
       expect(template.Parameters).toBeDefined();
-      expect(template.Mappings).toBeDefined();
       expect(template.Conditions).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
@@ -91,24 +90,6 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Mappings', () => {
-    test('should have RegionMap mapping', () => {
-      expect(template.Mappings).toBeDefined();
-      expect(template.Mappings.RegionMap).toBeDefined();
-
-      // Test a few regions
-      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
-      expect(template.Mappings.RegionMap['eu-west-1']).toBeDefined();
-
-      // Test CIDR structure
-      const usEast1 = template.Mappings.RegionMap['us-east-1'];
-      expect(usEast1.PublicSubnet1CIDR).toBeDefined();
-      expect(usEast1.PublicSubnet2CIDR).toBeDefined();
-      expect(usEast1.PrivateSubnet1CIDR).toBeDefined();
-      expect(usEast1.PrivateSubnet2CIDR).toBeDefined();
-    });
-  });
 
   describe('Resources', () => {
     // VPC Resources

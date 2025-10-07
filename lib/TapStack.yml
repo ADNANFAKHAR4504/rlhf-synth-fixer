@@ -59,48 +59,6 @@ Parameters:
     AllowedPattern: '[0-9]{5}'
     ConstraintDescription: Must be exactly 5 digits
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      PublicSubnet1CIDR: 10.0.1.0/24
-      PublicSubnet2CIDR: 10.0.2.0/24
-      PrivateSubnet1CIDR: 10.0.3.0/24
-      PrivateSubnet2CIDR: 10.0.4.0/24
-    us-east-2:
-      PublicSubnet1CIDR: 10.1.1.0/24
-      PublicSubnet2CIDR: 10.1.2.0/24
-      PrivateSubnet1CIDR: 10.1.3.0/24
-      PrivateSubnet2CIDR: 10.1.4.0/24
-    us-west-1:
-      PublicSubnet1CIDR: 10.2.1.0/24
-      PublicSubnet2CIDR: 10.2.2.0/24
-      PrivateSubnet1CIDR: 10.2.3.0/24
-      PrivateSubnet2CIDR: 10.2.4.0/24
-    us-west-2:
-      PublicSubnet1CIDR: 10.3.1.0/24
-      PublicSubnet2CIDR: 10.3.2.0/24
-      PrivateSubnet1CIDR: 10.3.3.0/24
-      PrivateSubnet2CIDR: 10.3.4.0/24
-    eu-west-1:
-      PublicSubnet1CIDR: 10.4.1.0/24
-      PublicSubnet2CIDR: 10.4.2.0/24
-      PrivateSubnet1CIDR: 10.4.3.0/24
-      PrivateSubnet2CIDR: 10.4.4.0/24
-    eu-central-1:
-      PublicSubnet1CIDR: 10.5.1.0/24
-      PublicSubnet2CIDR: 10.5.2.0/24
-      PrivateSubnet1CIDR: 10.5.3.0/24
-      PrivateSubnet2CIDR: 10.5.4.0/24
-    ap-northeast-1:
-      PublicSubnet1CIDR: 10.6.1.0/24
-      PublicSubnet2CIDR: 10.6.2.0/24
-      PrivateSubnet1CIDR: 10.6.3.0/24
-      PrivateSubnet2CIDR: 10.6.4.0/24
-    ap-southeast-1:
-      PublicSubnet1CIDR: 10.7.1.0/24
-      PublicSubnet2CIDR: 10.7.2.0/24
-      PrivateSubnet1CIDR: 10.7.3.0/24
-      PrivateSubnet2CIDR: 10.7.4.0/24
 
 Conditions:
   # Condition to check if cross-region replication buckets are provided
@@ -243,7 +201,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', PublicSubnet1CIDR]
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -254,7 +212,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', PublicSubnet2CIDR]
+      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -266,7 +224,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', PrivateSubnet1CIDR]
+      CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -277,7 +235,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !FindInMap [RegionMap, !Ref 'AWS::Region', PrivateSubnet2CIDR]
+      CidrBlock: 10.0.4.0/24
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
