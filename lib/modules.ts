@@ -249,7 +249,7 @@ export class VpcModule extends Construct {
 
     // Enable VPC Flow Logs
     const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: `${config.flowLogBucketArn}/AWSLogs/${process.env.CURRENT_ACCOUNT_ID}/vpcflowlogs`,
+      logDestination: config.flowLogBucketArn,
       logDestinationType: 's3',
       trafficType: 'ALL',
       vpcId: mainVpc.id,
