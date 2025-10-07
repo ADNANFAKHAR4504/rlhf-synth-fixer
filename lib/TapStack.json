@@ -42,7 +42,7 @@
           "PasswordLength": 20,
           "ExcludePunctuation": false,
           "RequireEachIncludedType": true,
-          "ExcludeCharacters": "/@\""
+          "ExcludeCharacters": "/@\" "
         },
         "Tags": [
           {
