@@ -29,7 +29,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
 
         String environmentSuffix = props != null ? props.getEnvironmentSuffix() : "dev";
 
-        Map<String, String> tags = new HashMap<>();
+        java.util.Map<String, String> tags = new HashMap<>();
         tags.put("Environment", environmentSuffix);
         tags.put("Application", "URLShortener");
 
