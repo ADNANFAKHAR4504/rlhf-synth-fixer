@@ -16,6 +16,7 @@ A publisher needs to deliver **~3,000 daily e-books** to readers across the glob
 
 ---
 
+
 ## Functional Requirements
 
 1. Store e-book files (PDF, ePub, MOBI) securely in an S3 bucket with server-side encryption (KMS).
