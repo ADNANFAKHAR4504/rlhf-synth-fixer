@@ -38,9 +38,6 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
 
-# ═══════════════════════════════════════════════════════════════
-# EXPORT STACK OUTPUTS FOR INTEGRATION TESTS
-# ═══════════════════════════════════════════════════════════════
 
 # Export VPC and Networking outputs
 export('vpc_id', stack.vpc.id)

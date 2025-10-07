@@ -76,9 +76,6 @@ class TapStack(pulumi.ComponentResource):
         self.region = args.region
         self.tags = {**args.tags, 'Environment': self.environment_suffix}
         
-        # ═══════════════════════════════════════════════════════════════
-        # NETWORK LAYER - VPC, Subnets, Gateways, Route Tables
-        # ═══════════════════════════════════════════════════════════════
         
         # VPC with DNS support enabled
         self.vpc = aws.ec2.Vpc(
@@ -241,9 +238,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
-        # SECURITY GROUPS - Least Privilege Access Control
-        # ═══════════════════════════════════════════════════════════════
         
         # ALB Security Group - Allow HTTP/HTTPS from internet
         self.alb_sg = aws.ec2.SecurityGroup(
@@ -1303,9 +1297,6 @@ def handler(event, context):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
-        # REGISTER OUTPUTS
-        # ═══════════════════════════════════════════════════════════════
         
         self.register_outputs({
             'vpc_id': self.vpc.id,
