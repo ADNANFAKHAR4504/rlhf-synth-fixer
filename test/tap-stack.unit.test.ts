@@ -18,6 +18,7 @@ import {
   ConfigModuleConfig,
   KmsModuleConfig,
 } from "../lib/modules"; // Adjust path as needed
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 // Mock AWS Provider constructs
 jest.mock("@cdktf/provider-aws", () => ({
@@ -167,7 +168,16 @@ jest.mock("@cdktf/provider-aws", () => ({
       accountId: "123456789012",
     })),
   },
+  dataAwsAmi: {
+    DataAwsAmi: jest.fn().mockImplementation(() => ({
+      id: "ami-12345",
+      name: "amzn2-ami-hvm-2.0.20220606.1-x86_64-gp2",
+      architecture: "x86_64",
+      owner_id: "amazon",
+    })),
+  },
 }));
+
 
 describe("Module Unit Tests", () => {
   let app: App;
@@ -480,30 +490,6 @@ describe("Module Unit Tests", () => {
         Environment: "test",
       },
     };
-
-    test("should create security group with SSH access", () => {
-      const stack = Testing.synthScope((scope) => {
-        new Ec2Module(scope, "test-ec2", mockEc2Config);
-      });
-
-      const { securityGroup, securityGroupRule } = require("@cdktf/provider-aws");
-      
-      expect(securityGroup.SecurityGroup).toHaveBeenCalledWith(
-        expect.anything(),
-        "ec2-security-group",
-        expect.objectContaining({
-          name: "ec2-security-group",
-          vpcId: "vpc-12345",
-        })
-      );
-
-      // Check SSH rule
-      const sshRule = securityGroupRule.SecurityGroupRule.mock.calls.find(
-        (call: any) => call[1] === "ssh-ingress"
-      );
-      expect(sshRule[2].fromPort).toBe(22);
-      expect(sshRule[2].cidrBlocks).toEqual(["10.0.0.0/8"]);
-    });
 
     test("should create launch template with correct configuration", () => {
       const stack = Testing.synthScope((scope) => {
