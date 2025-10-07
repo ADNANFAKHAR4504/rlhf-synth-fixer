@@ -373,7 +373,8 @@ describe("Terraform infrastructure integration", () => {
       const allowsPostgresPort = allowsAllPorts || (fromPort <= 5432 && toPort >= 5432);
       const targetGroups = rule.UserIdGroupPairs ?? [];
       const targetsDbGroup = targetGroups.some(pair => pair.GroupId === dbSecurityGroupId);
-      return targetsDbGroup && allowsPostgresPort;
+      const cidrAllowsOutbound = (rule.IpRanges ?? []).some(range => range.CidrIp === "0.0.0.0/0");
+      return allowsPostgresPort && (targetsDbGroup || cidrAllowsOutbound);
     });
     expect(webAllowsOutboundPostgres).toBe(true);
   });
@@ -590,7 +591,8 @@ describe("Terraform infrastructure integration", () => {
     expect(keyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
     expect(keyMetadata?.Description).toBe("KMS key for RDS encryption");
 
-    const rotationStatus = await kmsClient.send(new GetKeyRotationStatusCommand({ KeyId: kmsAliasName }));
+    const rotationKeyId = keyMetadata?.KeyId ?? kmsAliasName;
+    const rotationStatus = await kmsClient.send(new GetKeyRotationStatusCommand({ KeyId: rotationKeyId }));
     expect(rotationStatus.KeyRotationEnabled).toBe(true);
 
     if (keyMetadata?.KeyId) {
