@@ -504,31 +504,6 @@ describe("TapStack Unit Tests", () => {
     });
   });
 
-  describe("AWS Region Override", () => {
-    test("should use AWS_REGION_OVERRIDE when set", () => {
-      const app = new App();
-      
-      // Mock AWS_REGION_OVERRIDE by modifying the module
-      const originalModule = require("../lib/tap-stack");
-      jest.resetModules();
-      
-      // Re-import with modified AWS_REGION_OVERRIDE
-      jest.doMock("../lib/tap-stack", () => {
-        const code = originalModule.toString();
-        return {
-          ...originalModule,
-          TapStack: class extends originalModule.TapStack {
-            constructor(scope: any, id: string, props?: any) {
-              // Override AWS_REGION_OVERRIDE
-              const AWS_REGION_OVERRIDE = 'eu-west-2';
-              super(scope, id, props);
-            }
-          }
-        };
-      });
-    });
-  });
-
   describe("Common Tags Structure", () => {
     test("should use correct common tags structure", () => {
       const app = new App();
