@@ -359,10 +359,10 @@
                   {
                     "Name": "suffix",
                     "Value": ".jpg"
-          }
-        ]
-      }
-    },
+                  }
+                ]
+              }
+            },
             "Function": {
               "Fn::GetAtt": [
                 "ImageProcessorFunction",
@@ -393,8 +393,8 @@
             "Event": "s3:ObjectCreated:*",
             "Filter": {
               "S3Key": {
-        "Rules": [
-          {
+                "Rules": [
+                  {
                     "Name": "suffix",
                     "Value": ".png"
                   }
