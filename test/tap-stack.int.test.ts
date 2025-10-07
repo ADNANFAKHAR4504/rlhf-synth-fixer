@@ -1279,6 +1279,7 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
           Bucket: appDataBucket,
           Key: testFileName,
           Body: testContent,
+          ServerSideEncryption: 'aws:kms',
         })
       );
 
