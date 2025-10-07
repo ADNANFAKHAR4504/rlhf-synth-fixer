@@ -10,5 +10,5 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3, Lambda, KMS, SNS"
+  "aws_services": "DynamoDB, S3, Lambda, KMS, IAM, API Gateway, Step Functions, SNS, EventBridge, CloudWatch, Athena, Glue, Textract, Comprehend, Translate"
 }

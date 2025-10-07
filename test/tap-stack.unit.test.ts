@@ -208,14 +208,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DocumentAnalysisFunction.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('Lambda functions should use Node.js 20.x runtime', () => {
+    test('Lambda functions should use Node.js 22.x runtime', () => {
       const functions = [
         template.Resources.DocumentGenerationFunction,
         template.Resources.DocumentAnalysisFunction,
       ];
 
       functions.forEach(fn => {
-        expect(fn.Properties.Runtime).toBe('nodejs20.x');
+        expect(fn.Properties.Runtime).toBe('nodejs22.x');
       });
     });
 

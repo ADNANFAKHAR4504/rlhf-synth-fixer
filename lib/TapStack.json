@@ -59,7 +59,13 @@
           }
         ],
         "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false
+        "DeletionProtectionEnabled": false,
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
       }
     },
     "DocumentMetadataTable": {
@@ -130,6 +136,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -202,6 +212,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -259,6 +273,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -316,6 +334,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -371,6 +393,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -497,6 +523,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -507,7 +537,7 @@
         "FunctionName": {
           "Fn::Sub": "DocumentGeneration-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -545,6 +575,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       },
@@ -558,7 +592,7 @@
         "FunctionName": {
           "Fn::Sub": "DocumentAnalysis-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -590,6 +624,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       },
@@ -615,6 +653,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -819,6 +861,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -844,6 +890,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -864,6 +914,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -884,6 +938,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -981,7 +1039,13 @@
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/document-automation-${EnvironmentSuffix}"
         },
-        "RetentionInDays": 30
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
       }
     },
     "DocumentProcessingAlarm": {
@@ -1041,6 +1105,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -1084,6 +1152,10 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
