@@ -1307,7 +1307,7 @@
               "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:username}}"
             },
             {
-              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}::SecretString:username}}"
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}:SecretString:username}}"
             }
           ]
         },
@@ -1318,7 +1318,7 @@
               "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:password}}"
             },
             {
-              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}::SecretString:password}}"
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsGeneratedSecret}:SecretString:password}}"
             }
           ]
         },
@@ -1365,6 +1365,20 @@
             "Key": "Environment",
             "Value": {
               "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "RdsSecretId",
+            "Value": {
+              "Fn::If": [
+                "UseProvidedRdsSecret",
+                {
+                  "Ref": "RdsSecretArn"
+                },
+                {
+                  "Ref": "RdsGeneratedSecret"
+                }
+              ]
             }
           }
         ]
