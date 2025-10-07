@@ -143,6 +143,7 @@ resource "aws_db_instance" "replica" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   storage_encrypted          = true
+  kms_key_id                 = aws_kms_key.rds.arn
   publicly_accessible        = false
   auto_minor_version_upgrade = false
 
