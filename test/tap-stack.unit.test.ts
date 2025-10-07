@@ -612,8 +612,17 @@ describe('DnsStack', () => {
       template.resourceCountIs('AWS::Route53::HostedZone', 0);
     });
 
-    test('does not create health checks', () => {
-      template.resourceCountIs('AWS::Route53::HealthCheck', 0);
+    test('creates health checks even without custom domain', () => {
+      // Health checks are always created for ALB monitoring
+      template.resourceCountIs('AWS::Route53::HealthCheck', 2);
+
+      // Verify health check IDs are exported
+      template.hasOutput('PrimaryHealthCheckId', {
+        Description: 'Primary ALB Health Check ID'
+      });
+      template.hasOutput('StandbyHealthCheckId', {
+        Description: 'Standby ALB Health Check ID'
+      });
     });
 
     test('does not create failover records', () => {
