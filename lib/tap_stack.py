@@ -486,7 +486,7 @@ class TapStack(cdk.Stack):
         self.high_availability_web_app = HighAvailabilityWebAppStack(
             self,
             f"HighAvailabilityWebApp{environment_suffix.capitalize()}",
-            environment_name=self.environment_name+"-"+self.environment_suffix.capitalize(),
+            environment_name=self.environment_name+"-"+self.environment_suffix,
             project_name=self.project_name,
             owner=self.owner_name)
 
