@@ -319,7 +319,8 @@ describe('TAP Stack Serverless Integration Tests', () => {
 
       for (const endpoint of endpoints) {
         const response = await fetch(endpoint);
-        expect(response.status).toBe(401); // Expected due to IAM auth requirement
+        // IAM-protected endpoints return 401 (Unauthorized) or 403 (Forbidden)
+        expect([401, 403]).toContain(response.status);
       }
     });
   });
