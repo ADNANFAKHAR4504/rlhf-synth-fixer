@@ -177,12 +177,13 @@ describe('TapStack Integration Tests', () => {
       expect(response.LifecyclePolicies).toBeDefined();
       expect(response.LifecyclePolicies).toHaveLength(2);
 
-      const iaPolicy = response.LifecyclePolicies!.find(p =>
-        p.TransitionToIA === 'AFTER_30_DAYS'
+      const iaPolicy = response.LifecyclePolicies!.find(
+        (p: { TransitionToIA?: string }) =>
+          p.TransitionToIA === 'AFTER_30_DAYS'
       );
       expect(iaPolicy).toBeDefined();
 
-      const primaryPolicy = response.LifecyclePolicies!.find(p =>
+      const primaryPolicy = response.LifecyclePolicies!.find((p: { TransitionToPrimaryStorageClass?: string }) =>
         p.TransitionToPrimaryStorageClass === 'AFTER_1_ACCESS'
       );
       expect(primaryPolicy).toBeDefined();
@@ -197,12 +198,14 @@ describe('TapStack Integration Tests', () => {
       const mountTargets = response.MountTargets!;
 
       // Check all mount targets are available
-      mountTargets.forEach(mt => {
+      mountTargets.forEach((mt: { LifeCycleState?: string }) => {
         expect(mt.LifeCycleState).toBe('available');
       });
 
       // Check mount targets are in different AZs
-      const azs = new Set(mountTargets.map(mt => mt.AvailabilityZoneId));
+      const azs = new Set(
+        mountTargets.map((mt: { AvailabilityZoneId?: string }) => mt.AvailabilityZoneId)
+      );
       expect(azs.size).toBe(2);
     });
 
@@ -412,7 +415,7 @@ describe('TapStack Integration Tests', () => {
         FileSystemId: outputs.EFSFileSystemId
       });
 
-      const efsSubnets = efsResponse.MountTargets!.map(mt => mt.SubnetId);
+      const efsSubnets = efsResponse.MountTargets!.map((mt: { SubnetId?: string }) => mt.SubnetId);
 
       // Lambda subnets should match EFS mount target subnets
       expect(lambdaSubnets!.sort()).toEqual(efsSubnets.sort());
