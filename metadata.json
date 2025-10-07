@@ -1,6 +1,6 @@
 {
-  "platform": "cfn",
-  "language": "yaml",
+  "platform": "pulumi",
+  "language": "ts",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "54729183",
@@ -8,20 +8,18 @@
   "startedAt": "2025-10-03T06:35:46+00:00",
   "subtask": "Web Application Deployment",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Application Deployment"
   ],
   "training_quality": 8.5,
   "aws_services": [
-    "EC2",
-    "VPC",
-    "Auto Scaling",
-    "Elastic Load Balancing",
-    "RDS Aurora",
-    "ElastiCache",
     "S3",
-    "IAM",
+    "CloudFront",
+    "Lambda@Edge",
+    "Route 53",
+    "MediaConvert",
+    "DynamoDB",
     "CloudWatch",
-    "Systems Manager",
-    "CloudFormation"
+    "EventBridge Scheduler",
+    "IAM"
   ]
 }
