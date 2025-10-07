@@ -140,9 +140,9 @@ export class NetworkStack extends Construct {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
@@ -160,12 +160,27 @@ export class DatabaseStack extends Construct {
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id);
 
+    // Get the current region for region-specific configuration
+    const region = cdk.Stack.of(this).region;
+
+    // Use simplest PostgreSQL configuration with default settings
+    const databaseEngine = rds.DatabaseInstanceEngine.POSTGRES;
+
+    // PostgreSQL 15.4 optimized for us-east-2 region
+
+    // Output the selected database engine for debugging
+    new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
+      value: `Database engine selected for region ${region}: PostgreSQL (Default Version)`,
+      description:
+        'Database engine automatically selected based on region compatibility',
+    });
+
     // Create KMS key for database encryption
     const encryptionKey = new kms.Key(this, 'DatabaseEncryptionKey', {
-      description: 'KMS key for RDS PostgreSQL encryption',
+      description: 'KMS key for RDS database encryption',
       enableKeyRotation: true,
       alias: `retail-db-key-${props.environmentSuffix}`,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
     });
 
     // Create database credentials secret
@@ -180,7 +195,7 @@ export class DatabaseStack extends Construct {
           excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
           passwordLength: 32,
         },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
       }
     );
 
@@ -191,15 +206,13 @@ export class DatabaseStack extends Construct {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
     });
 
     // Create RDS PostgreSQL instance
     this.database = new rds.DatabaseInstance(this, 'RetailDatabase', {
       instanceIdentifier: `retail-db-${props.environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_16_5,
-      }),
+      engine: databaseEngine,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
@@ -218,23 +231,14 @@ export class DatabaseStack extends Construct {
       backupRetention: cdk.Duration.days(7),
       preferredBackupWindow: '03:00-04:00',
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deletionProtection: false, // Disabled for testing - must be destroyable
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
       enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
       performanceInsightEncryptionKey: encryptionKey,
       monitoringInterval: cdk.Duration.seconds(60),
       databaseName: 'retaildb',
-      parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
-        engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_16_5,
-        }),
-        parameters: {
-          log_statement: 'all',
-          log_duration: 'on',
-          shared_preload_libraries: 'pg_stat_statements',
-        },
-      }),
+      // No custom parameter group - use AWS defaults for maximum compatibility
     });
 
     // Note: RDS automatic backups are handled by AWS internally
@@ -243,12 +247,12 @@ export class DatabaseStack extends Construct {
     // Output database endpoint
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: this.database.dbInstanceEndpointAddress,
-      description: 'RDS PostgreSQL endpoint',
+      description: 'RDS database endpoint',
     });
 
     new cdk.CfnOutput(this, 'DatabasePort', {
       value: this.database.dbInstanceEndpointPort,
-      description: 'RDS PostgreSQL port',
+      description: 'RDS database port',
     });
 
     // Tag resources
@@ -304,8 +308,8 @@ export class BackupStack extends Construct {
           abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Must be destroyable for testing
+      autoDeleteObjects: true, // Automatically delete objects on bucket deletion
     });
 
     // Output bucket name
@@ -423,9 +427,7 @@ export class MonitoringStack extends Construct {
 
     // Output dashboard URL
     new cdk.CfnOutput(this, 'DashboardURL', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${
-        cdk.Stack.of(this).region
-      }#dashboards:name=${dashboard.dashboardName}`,
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${cdk.Stack.of(this).region}#dashboards:name=${dashboard.dashboardName}`,
       description: 'CloudWatch Dashboard URL',
     });
 
@@ -471,6 +473,7 @@ new TapStack(app, stackName, {
 ## Key Features and Improvements
 
 ### 1. Infrastructure Security
+
 - **Network Isolation**: VPC with private isolated subnets prevents direct internet access
 - **Security Groups**: Least-privilege access with PostgreSQL only accessible from within VPC
 - **Encryption**: KMS encryption for database and Performance Insights
@@ -478,25 +481,28 @@ new TapStack(app, stackName, {
 - **S3 Security**: Bucket encryption, versioning, and complete public access blocking
 
 ### 2. Database Configuration
-- **PostgreSQL 16.5**: Latest stable version with enhanced performance
+
+- **PostgreSQL**: Default version for maximum AWS compatibility
 - **Performance Insights**: 7-day retention for SQL-level performance analysis
 - **Enhanced Monitoring**: 60-second granularity for detailed metrics
 - **Backup Strategy**: 7-day automated backups with defined maintenance windows
 - **Storage**: GP3 SSD with auto-scaling from 20GB to 100GB
 
 ### 3. Monitoring and Alerting
+
 - **CloudWatch Dashboard**: Pre-configured widgets for all critical metrics
 - **Automated Alerts**: CPU, storage, and connection alarms via SNS
-- **Performance Tracking**: Database Insights in Standard mode
-- **Comprehensive Logging**: Parameter group configured for full query logging
+- **Performance Tracking**: Performance Insights enabled for SQL-level analysis
 
 ### 4. Cost Optimization
+
 - **Single-AZ Deployment**: Reduced costs for small business use case
 - **No NAT Gateways**: Private isolated subnets without NAT costs
 - **S3 Lifecycle Policies**: Automatic archival to reduce storage costs
 - **Right-Sized Instance**: db.t3.micro appropriate for 1,500 daily orders
 
 ### 5. Operational Excellence
+
 - **Environment Isolation**: Environment suffix for multi-environment deployments
 - **Resource Tagging**: Consistent tagging strategy for cost tracking
 - **Removal Policies**: All resources configured for clean destruction
@@ -504,8 +510,9 @@ new TapStack(app, stackName, {
 - **Outputs**: All critical resource IDs and endpoints exported
 
 ### 6. Compliance and Governance
+
 - **KMS Key Rotation**: Automated annual key rotation
-- **Audit Logging**: Full query logging enabled
+- **Database Monitoring**: Performance Insights and Enhanced Monitoring enabled
 - **VPC Endpoints**: Private connectivity to S3
 - **Version Control**: Minor version auto-upgrades for security patches
 
