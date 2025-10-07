@@ -42,11 +42,8 @@ describe('E-Learning RDS MySQL CloudFormation Template', () => {
       expect(template.Parameters.DBMasterUsername.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('should have DBMasterPassword parameter', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe('8');
+    test('should not expose password as template parameter', () => {
+      expect(template.Parameters.DBMasterPassword).toBeUndefined();
     });
   });
 
@@ -403,7 +400,7 @@ describe('E-Learning RDS MySQL CloudFormation Template', () => {
       const expectedResources = [
         'VPC', 'PrivateSubnet1', 'PrivateSubnet2', 'DBSubnetGroup',
         'DatabaseSecurityGroup', 'KMSKey', 'KMSKeyAlias', 'S3BackupBucket',
-        'EnhancedMonitoringRole', 'MySQLDatabase', 'DBHighCPUAlarm', 'DBLowStorageAlarm'
+        'EnhancedMonitoringRole', 'DBMasterPasswordSecret', 'MySQLDatabase', 'DBHighCPUAlarm', 'DBLowStorageAlarm'
       ];
 
       expect(Object.keys(template.Resources).length).toBe(expectedResources.length);
@@ -413,7 +410,7 @@ describe('E-Learning RDS MySQL CloudFormation Template', () => {
     });
 
     test('should have correct parameter count', () => {
-      expect(Object.keys(template.Parameters).length).toBe(3);
+      expect(Object.keys(template.Parameters).length).toBe(2);
     });
 
     test('should have correct output count', () => {
