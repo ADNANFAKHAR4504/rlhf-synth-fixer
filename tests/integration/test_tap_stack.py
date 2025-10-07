@@ -302,8 +302,8 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
     def test_kms_key_exists_and_accessible(self):
         """Test that KMS key exists and is accessible."""
         try:
-            # Check for KMS alias (with environment suffix)
-            alias_name = f"alias/img-proc-kms-alias-{self.environment_suffix}"
+            # Check for KMS alias (without environment suffix as per deployment)
+            alias_name = "alias/img-proc-kms-alias"
             try:
                 response = self.kms_client.describe_key(KeyId=alias_name)
                 key_metadata = response['KeyMetadata']
