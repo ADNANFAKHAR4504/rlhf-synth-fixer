@@ -2,8 +2,6 @@ package app;
 
 import software.amazon.awscdk.*;
 import software.amazon.awscdk.services.apigateway.*;
-import software.amazon.awscdk.services.cloudfront.*;
-import software.amazon.awscdk.services.cloudfront.origins.*;
 import software.amazon.awscdk.services.cloudwatch.*;
 import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.iam.*;
@@ -130,35 +128,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
         urlTable.grantReadWriteData(cleanupFunction);
         expirationTopic.grantPublish(cleanupFunction);
         analyticsBucket.grantWrite(cleanupFunction);
-
-        // Lambda@Edge for click tracking
-        Role edgeRole = Role.Builder.create(this, "EdgeRole")
-                .roleName("url-shortener-edge-role-" + environmentSuffix)
-                .assumedBy(new CompositePrincipal(
-                        new ServicePrincipal("lambda.amazonaws.com"),
-                        new ServicePrincipal("edgelambda.amazonaws.com")
-                    ))
-                .managedPolicies(Arrays.asList(
-                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
-                ))
-                .build();
-
-        analyticsBucket.grantWrite(edgeRole);
-
-        software.amazon.awscdk.services.lambda.Function edgeFunction = software.amazon.awscdk.services.lambda.Function.Builder.create(this, "EdgeFunction")
-                .functionName("url-shortener-edge-" + environmentSuffix)
-                .runtime(Runtime.NODEJS_20_X)
-                .code(Code.fromAsset("lib/edge-handler"))
-                .handler("index.handler")
-                .role(edgeRole)
-                .memorySize(128)
-                .timeout(Duration.seconds(5))
-                .build();
-
-        EdgeLambda edgeLambda = EdgeLambda.builder()
-                .functionVersion(edgeFunction.getCurrentVersion())
-                .eventType(LambdaEdgeEventType.VIEWER_REQUEST)
-                .build();
 
         // Step Functions state machine for cleanup workflow
         LambdaInvoke cleanupTask = LambdaInvoke.Builder.create(this, "CleanupTask")
@@ -308,31 +277,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
                 .webAclArn(webAcl.getAttrArn())
                 .build();
 
-        // CloudFront distribution
-        software.amazon.awscdk.services.cloudfront.Distribution distribution = software.amazon.awscdk.services.cloudfront.Distribution.Builder.create(this, "URLShortenerDistribution")
-                .comment("URL Shortener CloudFront Distribution " + environmentSuffix)
-                .defaultBehavior(BehaviorOptions.builder()
-                    .origin(new HttpOrigin(api.getUrl().replace("https://", "").replace("/", "")))
-                    .allowedMethods(AllowedMethods.ALLOW_ALL)
-                    .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
-                    .cachePolicy(CachePolicy.Builder.create(this, "URLShortenerCachePolicy")
-                        .cachePolicyName("url-shortener-cache-policy-" + environmentSuffix)
-                        .defaultTtl(Duration.hours(1))
-                        .maxTtl(Duration.hours(24))
-                        .minTtl(Duration.seconds(0))
-                        .build())
-                    .edgeLambdas(Arrays.asList(edgeLambda))
-                    .build())
-                .errorResponses(Arrays.asList(
-                    ErrorResponse.builder()
-                        .httpStatus(404)
-                        .responseHttpStatus(404)
-                        .responsePagePath("/404.html")
-                        .ttl(Duration.minutes(5))
-                        .build()
-                ))
-                .build();
-
         // CloudWatch Dashboard
         Dashboard dashboard = Dashboard.Builder.create(this, "URLShortenerDashboard")
                 .dashboardName("url-shortener-" + environmentSuffix)
@@ -376,19 +320,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
                                 .statistic("Sum")
                                 .build()
                         ))
-                        .build(),
-                    GraphWidget.Builder.create()
-                        .title("CloudFront Cache Hit Rate")
-                        .left(Arrays.asList(
-                            Metric.Builder.create()
-                                .namespace("AWS/CloudFront")
-                                .metricName("CacheHitRate")
-                                .dimensionsMap(java.util.Map.of(
-                                    "DistributionId", distribution.getDistributionId()
-                                ))
-                                .statistic("Average")
-                                .build()
-                        ))
                         .build()
                 )))
                 .build();
@@ -413,11 +344,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
         new CfnOutput(this, "APIEndpoint", CfnOutputProps.builder()
                 .value(api.getUrl())
                 .description("API Gateway endpoint URL")
-                .build());
-
-        new CfnOutput(this, "CloudFrontURL", CfnOutputProps.builder()
-                .value("https://" + distribution.getDistributionDomainName())
-                .description("CloudFront distribution URL")
                 .build());
     }
 
