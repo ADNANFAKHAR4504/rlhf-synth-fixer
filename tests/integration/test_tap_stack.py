@@ -402,11 +402,11 @@ class TestDynamoDBIntegration:
             
             # Check key schema
             key_schema = {item['AttributeName']: item['KeyType'] for item in table['KeySchema']}
-            assert 'id' in key_schema, "DynamoDB table should have 'id' as key"
+            assert 'image_id' in key_schema, "DynamoDB table should have 'image_id' as key"
             
             # Check if table has the expected attributes
             attribute_definitions = {attr['AttributeName']: attr['AttributeType'] for attr in table['AttributeDefinitions']}
-            assert 'id' in attribute_definitions, "DynamoDB table should define 'id' attribute"
+            assert 'image_id' in attribute_definitions, "DynamoDB table should define 'image_id' attribute"
             
             print(f"DynamoDB table {table_name} is properly configured")
             print(f"Status: {table['TableStatus']}, Item count: {table['ItemCount']}")
