@@ -357,7 +357,6 @@ export class IamModule extends Construct {
 }
 
 // S3 Module
-// S3 Module - Updated with VPC Flow Logs permissions
 export class S3Module extends Construct {
   public readonly mainBucket: s3Bucket.S3Bucket;
   public readonly logBucket: s3Bucket.S3Bucket;
@@ -367,6 +366,13 @@ export class S3Module extends Construct {
 
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
+
+    // Get current account info
+    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current-account',
+      {}
+    );
 
     // Create log bucket first
     this.logBucket = new s3Bucket.S3Bucket(this, 'log-bucket', {
@@ -420,76 +426,108 @@ export class S3Module extends Construct {
       }
     );
 
-    // Add bucket policy for VPC Flow Logs and CloudTrail
-    new s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
-      bucket: this.logBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          // VPC Flow Logs permissions
-          {
-            Sid: 'AWSLogDeliveryAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
+    // Add bucket policy for VPC Flow Logs and CloudTrail with more permissive flow logs access
+    this.logBucketPolicy = new s3BucketPolicy.S3BucketPolicy(
+      this,
+      'log-bucket-policy',
+      {
+        bucket: this.logBucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            // VPC Flow Logs permissions - More permissive as requested
+            {
+              Sid: 'AWSLogDeliveryAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: ['s3:GetBucketAcl', 's3:ListBucket'],
+              Resource: this.logBucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: this.logBucket.arn,
-          },
-          {
-            Sid: 'AWSLogDeliveryWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
+            {
+              Sid: 'AWSLogDeliveryWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.logBucket.arn}/*`,
+              // Removed the condition for more permissive access
             },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/AWSLogs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+            // Alternative: VPC Flow Logs using vpc-flow-logs service principal
+            {
+              Sid: 'VPCFlowLogsAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'vpc-flow-logs.amazonaws.com',
+              },
+              Action: ['s3:GetBucketAcl', 's3:ListBucket'],
+              Resource: this.logBucket.arn,
+            },
+            {
+              Sid: 'VPCFlowLogsWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'vpc-flow-logs.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.logBucket.arn}/*`,
+            },
+            // CloudTrail permissions
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.logBucket.arn,
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.logBucket.arn}/cloudtrail/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
               },
             },
-          },
-          // CloudTrail permissions - keep these with unique Sids
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: this.logBucket.arn,
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/cloudtrail/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+            // Global access as requested (NOT RECOMMENDED for production)
+            {
+              Sid: 'GlobalFlowLogsAccess',
+              Effect: 'Allow',
+              Principal: '*',
+              Action: ['s3:GetObject', 's3:ListBucket'],
+              Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
+              Condition: {
+                StringLike: {
+                  'aws:SourceArn': `arn:aws:ec2:*:${currentAccount.accountId}:vpc-flow-log/*`,
+                },
               },
             },
-          },
-          // Security best practice - deny non-SSL requests
-          {
-            Sid: 'DenyNonSSLRequests',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
-            Condition: {
-              Bool: {
-                'aws:SecureTransport': 'false',
+            // Security best practice - deny non-SSL requests
+            {
+              Sid: 'DenyNonSSLRequests',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
               },
             },
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+      }
+    );
 
     // Create main bucket
     this.mainBucket = new s3Bucket.S3Bucket(this, 'main-bucket', {
