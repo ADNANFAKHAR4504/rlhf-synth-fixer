@@ -187,3 +187,726 @@ Key metrics to track post-deployment:
 - **Multi-region**: Critical services span all regions
 
 This implementation provides enterprise-grade security monitoring with proper isolation, scalability, and maintainability suitable for production environments handling thousands of daily security events.
+
+
+## Terraform Code for Security Monitoring Platform
+
+```hcl
+resource "aws_cloudtrail" "main" {
+  name                          = "security-monitoring-trail-${local.environment_suffix}"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
+  enable_log_file_validation    = true
+
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch.arn
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+  }
+
+  kms_key_id = aws_kms_key.security_key.arn
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-monitoring-trail-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_cloudwatch_log_group" "security_events" {
+  name              = "/aws/security/events-${local.environment_suffix}"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.security_key.arn
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-events-log-group-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_cloudwatch_log_group" "cloudtrail" {
+  name              = "/aws/cloudtrail/security-${local.environment_suffix}"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.security_key.arn
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "cloudtrail-log-group-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_cloudwatch_log_stream" "guardduty" {
+  name           = "guardduty-findings"
+  log_group_name = aws_cloudwatch_log_group.security_events.name
+}
+
+resource "aws_cloudwatch_log_stream" "security_hub" {
+  name           = "security-hub-findings"
+  log_group_name = aws_cloudwatch_log_group.security_events.name
+}
+
+resource "aws_cloudwatch_log_stream" "custom_rules" {
+  name           = "custom-rules-processor"
+  log_group_name = aws_cloudwatch_log_group.security_events.name
+}
+
+resource "aws_cloudwatch_event_rule" "guardduty_findings" {
+  name        = "guardduty-high-severity-findings-${local.environment_suffix}"
+  description = "Capture high severity GuardDuty findings"
+
+  event_pattern = jsonencode({
+    source      = ["aws.guardduty"]
+    detail-type = ["GuardDuty Finding"]
+    detail = {
+      severity = [
+        { numeric = [">=", 7] }
+      ]
+    }
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "guardduty-findings-rule-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_cloudwatch_event_target" "guardduty_sns" {
+  rule      = aws_cloudwatch_event_rule.guardduty_findings.name
+  target_id = "SendToSNS"
+  arn       = aws_sns_topic.security_alerts.arn
+
+  input_transformer {
+    input_paths = {
+      severity    = "$.detail.severity"
+      type        = "$.detail.type"
+      region      = "$.region"
+      accountId   = "$.account"
+      time        = "$.time"
+      description = "$.detail.description"
+    }
+
+    input_template = jsonencode({
+      severity    = "<severity>"
+      type        = "<type>"
+      region      = "<region>"
+      accountId   = "<accountId>"
+      time        = "<time>"
+      description = "<description>"
+    })
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "security_hub_findings" {
+  name        = "security-hub-critical-findings-${local.environment_suffix}"
+  description = "Capture critical Security Hub findings"
+
+  event_pattern = jsonencode({
+    source      = ["aws.securityhub"]
+    detail-type = ["Security Hub Findings - Imported"]
+    detail = {
+      findings = {
+        Severity = {
+          Label = ["CRITICAL", "HIGH"]
+        }
+      }
+    }
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-hub-findings-rule-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_cloudwatch_event_target" "security_hub_sns" {
+  rule      = aws_cloudwatch_event_rule.security_hub_findings.name
+  target_id = "SendToSNS"
+  arn       = aws_sns_topic.security_alerts.arn
+}
+
+resource "aws_cloudwatch_event_target" "security_hub_lambda" {
+  rule      = aws_cloudwatch_event_rule.security_hub_findings.name
+  target_id = "ProcessWithLambda"
+  arn       = aws_lambda_function.custom_rules_processor.arn
+}
+
+resource "aws_cloudwatch_event_rule" "cloudtrail_api_events" {
+  name        = "cloudtrail-sensitive-api-calls-${local.environment_suffix}"
+  description = "Monitor sensitive API calls"
+
+  event_pattern = jsonencode({
+    source      = ["aws.cloudtrail"]
+    detail-type = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventName = [
+        "DeleteBucket",
+        "DeleteTrail",
+        "StopLogging",
+        "UpdateTrail",
+        "PutBucketPolicy",
+        "DeleteBucketPolicy",
+        "CreateAccessKey",
+        "DeleteAccessKey"
+      ]
+    }
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "cloudtrail-api-events-rule"
+    }
+  )
+}
+
+resource "aws_cloudwatch_event_target" "cloudtrail_sns" {
+  rule      = aws_cloudwatch_event_rule.cloudtrail_api_events.name
+  target_id = "SendToSNS"
+  arn       = aws_sns_topic.security_alerts.arn
+}
+
+# Try to get existing detector
+data "aws_guardduty_detector" "existing" {
+  count = 1
+}
+
+# Create detector only if it doesn't exist
+resource "aws_guardduty_detector" "main" {
+  count  = length(data.aws_guardduty_detector.existing) == 0 ? 1 : 0
+  enable = true
+
+  datasources {
+    s3_logs {
+      enable = true
+    }
+    kubernetes {
+      audit_logs {
+        enable = true
+      }
+    }
+    malware_protection {
+      scan_ec2_instance_with_findings {
+        ebs_volumes {
+          enable = true
+        }
+      }
+    }
+  }
+
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-monitoring-detector-${local.environment_suffix}"
+    }
+  )
+}
+
+# Local value to reference the detector
+locals {
+  guardduty_detector_id = length(data.aws_guardduty_detector.existing) > 0 ? data.aws_guardduty_detector.existing[0].id : aws_guardduty_detector.main[0].id
+}
+
+# Note: Multi-region GuardDuty would require separate provider blocks for each region
+# For this deployment, GuardDuty is enabled in the primary region
+
+# Security Team Role
+resource "aws_iam_role" "security_team" {
+  name = "SecurityTeamRole-${local.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-team-role-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_iam_role_policy" "security_team_policy" {
+  name = "SecurityTeamPolicy"
+  role = aws_iam_role.security_team.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "securityhub:Get*",
+          "securityhub:List*",
+          "securityhub:Describe*",
+          "guardduty:Get*",
+          "guardduty:List*",
+          "cloudtrail:Get*",
+          "cloudtrail:Describe*",
+          "cloudtrail:LookupEvents",
+          "logs:Get*",
+          "logs:Describe*",
+          "logs:FilterLogEvents",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "sns:Get*",
+          "sns:List*",
+          "events:List*",
+          "events:Describe*",
+          "lambda:Get*",
+          "lambda:List*",
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Lambda Execution Role
+resource "aws_iam_role" "lambda_execution" {
+  name = "CustomRulesLambdaExecutionRole-${local.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "lambda-execution-role-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_custom_policy" {
+  name = "CustomRulesProcessorPolicy"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.security_alerts.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.security_key.arn
+      }
+    ]
+  })
+}
+
+# CloudTrail CloudWatch Role
+resource "aws_iam_role" "cloudtrail_cloudwatch" {
+  name = "CloudTrailCloudWatchRole-${local.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "cloudtrail-cloudwatch-role"
+    }
+  )
+}
+
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
+  name = "CloudTrailCloudWatchPolicy"
+  role = aws_iam_role.cloudtrail_cloudwatch.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${aws_cloudwatch_log_group.cloudtrail.name}:*"
+      }
+    ]
+  })
+}
+
+resource "aws_kms_key" "security_key" {
+  description             = "KMS key for security monitoring platform"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      },
+      {
+        Sid    = "Allow CloudTrail"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+          }
+        }
+      },
+      {
+        Sid    = "Allow CloudTrail to decrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "kms:Decrypt"
+        Resource = "*"
+        Condition = {
+          "Null" = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "false"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-monitoring-kms-key-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_kms_alias" "security_key_alias" {
+  name          = "alias/security-monitoring-${local.environment_suffix}"
+  target_key_id = aws_kms_key.security_key.key_id
+}
+
+resource "aws_lambda_function" "custom_rules_processor" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "security-custom-rules-processor-${local.environment_suffix}"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 60
+  memory_size      = 256
+
+  environment {
+    variables = {
+      LOG_GROUP = aws_cloudwatch_log_group.security_events.name
+      SNS_TOPIC = aws_sns_topic.security_alerts.arn
+    }
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "custom-rules-processor-${local.environment_suffix}"
+    }
+  )
+}
+
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  output_path = "/tmp/lambda_function.zip"
+
+  source {
+    content  = file("${path.module}/lambda_function.py")
+    filename = "index.py"
+  }
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.custom_rules_processor.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.security_hub_findings.arn
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket        = "${var.cloudtrail_bucket_prefix}-${local.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "CloudTrail Logs Bucket-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+    # MFA delete disabled for destroyability
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.security_key.arn
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    id     = "transition-to-glacier"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = var.glacier_transition_days
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 2555 # 7 years
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  statement {
+    sid    = "AWSCloudTrailAclCheck"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:GetBucketAcl"]
+    resources = [aws_s3_bucket.cloudtrail_logs.arn]
+  }
+
+  statement {
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.cloudtrail_logs.arn}/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+  }
+
+  statement {
+    sid    = "SecurityTeamAccess"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_role.security_team.arn]
+    }
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+    resources = [
+      aws_s3_bucket.cloudtrail_logs.arn,
+      "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+    ]
+  }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
+}
+
+resource "aws_securityhub_account" "main" {}
+
+resource "aws_securityhub_standards_subscription" "foundational" {
+  depends_on    = [aws_securityhub_account.main]
+  standards_arn = "arn:aws:securityhub:${var.aws_region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+}
+
+resource "aws_securityhub_finding_aggregator" "main" {
+  linking_mode = "ALL_REGIONS"
+
+  depends_on = [aws_securityhub_account.main]
+}
+
+resource "aws_securityhub_product_subscription" "guardduty" {
+  depends_on  = [aws_securityhub_account.main]
+  product_arn = "arn:aws:securityhub:${var.aws_region}::product/aws/guardduty"
+}
+
+resource "aws_sns_topic" "security_alerts" {
+  name              = "security-monitoring-alerts-${local.environment_suffix}"
+  kms_master_key_id = aws_kms_key.security_key.id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "security-alerts-topic-${local.environment_suffix}"
+    }
+  )
+}
+
+resource "aws_sns_topic_subscription" "security_email" {
+  topic_arn = aws_sns_topic.security_alerts.arn
+  protocol  = "email"
+  endpoint  = var.security_email
+
+  filter_policy = jsonencode({
+    severity = ["HIGH", "CRITICAL"]
+  })
+}
+
+resource "aws_sns_topic_policy" "security_alerts" {
+  arn = aws_sns_topic.security_alerts.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "security-alerts-policy"
+    Statement = [
+      {
+        Sid    = "AllowEventBridgePublish"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.security_alerts.arn
+      }
+    ]
+  })
+}
+
+```
