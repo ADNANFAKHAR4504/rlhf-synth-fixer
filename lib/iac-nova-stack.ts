@@ -217,7 +217,7 @@ export class IaCNovaStack extends NestedStack {
     const lambdaRuntimeValue =
       process.env.LAMBDA_RUNTIME ??
       (this.node.tryGetContext('lambdaRuntime') as string | undefined) ??
-      'NODEJS_18_X';
+      'NODEJS_20_X';
     const lambdaRuntime = this.resolveRuntime(lambdaRuntimeValue);
     const lambdaCodePath = this.resolveLambdaCodePath();
 
@@ -330,10 +330,25 @@ export class IaCNovaStack extends NestedStack {
       ec2.Port.tcp(80),
       'HTTP access'
     );
+
+    // SSH access - restrict to VPC CIDR for better security
+    const sshCidr = process.env.SSH_CIDR || this.resolveStringParameter(
+      new cdk.CfnParameter(this, 'SshCidr', {
+        type: 'String',
+        description: 'CIDR block for SSH access',
+        default: '10.0.0.0/16'
+      }),
+      {
+        contextKey: 'sshCidr',
+        envKey: 'SSH_CIDR',
+        defaultValue: '10.0.0.0/16'
+      }
+    );
+
     this.sharedSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4(sshCidr),
       ec2.Port.tcp(22),
-      'SSH access'
+      'SSH access - restricted to VPC'
     );
     applyCommonTags(this.sharedSecurityGroup, formatResourceName('sg'));
 
@@ -413,14 +428,14 @@ export class IaCNovaStack extends NestedStack {
     const rdsCredentialsSecret =
       rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
         ? secretsmanager.Secret.fromSecretCompleteArn(
-            this,
-            'ImportedRdsCredentialsSecret',
-            rdsCredentialsSecretArn
-          )
+          this,
+          'ImportedRdsCredentialsSecret',
+          rdsCredentialsSecretArn
+        )
         : this.createManagedDatabaseSecret(
-            formatResourceName('db-credentials', true),
-            dbMasterUsername
-          );
+          formatResourceName('db-credentials', true),
+          dbMasterUsername
+        );
     if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
       applyCommonTags(
         rdsCredentialsSecret,
@@ -601,12 +616,20 @@ export class IaCNovaStack extends NestedStack {
       case 'NODEJS18.X':
       case 'NODEJS18X':
         return lambda.Runtime.NODEJS_18_X;
+      case 'NODEJS_20_X':
+      case 'NODEJS20.X':
+      case 'NODEJS20X':
+        return lambda.Runtime.NODEJS_20_X;
       case 'PYTHON_3_11':
       case 'PYTHON3.11':
       case 'PYTHON3_11':
         return lambda.Runtime.PYTHON_3_11;
+      case 'PYTHON_3_12':
+      case 'PYTHON3.12':
+      case 'PYTHON3_12':
+        return lambda.Runtime.PYTHON_3_12;
       default:
-        throw new Error(`Unsupported Lambda runtime: ${value}`);
+        throw new Error(`Unsupported Lambda runtime: ${value}. Supported: NODEJS_18_X, NODEJS_20_X, PYTHON_3_11, PYTHON_3_12`);
     }
   }
 
@@ -709,7 +732,7 @@ export class IaCNovaStack extends NestedStack {
   }
 
   private selectLambdaHandler(runtime: lambda.Runtime): string {
-    if (runtime === lambda.Runtime.PYTHON_3_11) {
+    if (runtime === lambda.Runtime.PYTHON_3_11 || runtime === lambda.Runtime.PYTHON_3_12) {
       return 'app.handler';
     }
 

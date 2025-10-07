@@ -168,7 +168,7 @@ describe('TapStack Infrastructure Validation', () => {
         expect.objectContaining({ Name: 'Prefix', Value: 'email-events/' })
       ])
     );
-  }, 60000);
+  }, 30000);
 
   test('Lambda function has correct environment and VPC configuration', () => {
     if (!ensureReady() || !outputs) return;
@@ -266,9 +266,9 @@ describe('TapStack End-to-End Workflow', () => {
     expect(headResult.ContentLength).toBeGreaterThan(0);
 
     // Wait for Lambda execution (S3 event should trigger it)
-    const executionDetected = await waitForLambdaExecution(outputs.LambdaFunctionName, 45000);
+    const executionDetected = await waitForLambdaExecution(outputs.LambdaFunctionName, 30000);
     expect(executionDetected).toBe(true);
-  }, 60000);
+  }, 45000);
 
   test('Lambda function can access RDS database through VPC connectivity', async () => {
     if (!ensureReady() || !outputs) return;
@@ -311,7 +311,7 @@ describe('TapStack End-to-End Workflow', () => {
       // Log group might not exist, which is fine for this test
       console.warn('Could not check logs, log group may not exist yet');
     }
-  }, 45000);
+  }, 30000);
 
   test('S3 to Lambda to RDS pipeline processes email events correctly', async () => {
     if (!ensureReady() || !outputs) return;
@@ -342,7 +342,7 @@ describe('TapStack End-to-End Workflow', () => {
     testObjectKeys.push(objectKey);
 
     // Allow time for complete processing chain
-    await waitForLambdaExecution(outputs.LambdaFunctionName, 45000);
+    await waitForLambdaExecution(outputs.LambdaFunctionName, 30000);
 
     // Verify the object still exists (Lambda should read, not delete)
     const objectExists = await s3.headObject({
@@ -354,5 +354,5 @@ describe('TapStack End-to-End Workflow', () => {
     // Additional verification: Check that Lambda had sufficient permissions and resources
     expect(lambdaConfig?.MemorySize).toBeGreaterThanOrEqual(512);
     expect(lambdaConfig?.Timeout).toBeGreaterThanOrEqual(60);
-  }, 60000);
+  }, 45000);
 });

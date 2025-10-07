@@ -1,3 +1,5 @@
+# Model Response - Email Notification Infrastructure
+
 ### Reasoning Trace
 ---
 
@@ -1208,7 +1210,7 @@ This CDK implementation creates a secure, multi-tier architecture with:
    ```
 
 5. Deploy the stack:
-   ```
+   ```bash
    cdk deploy
    ```
 
