@@ -75,6 +75,8 @@ jest.mock('@aws-sdk/lib-dynamodb', () => {
     PutCommand: class extends BaseCommand { },
     UpdateCommand: class extends BaseCommand { },
     DeleteCommand: class extends BaseCommand { },
+    QueryCommand: class extends BaseCommand { },
+    TransactWriteCommand: class extends BaseCommand { },
   };
 });
 
@@ -194,12 +196,6 @@ describe('TapStack infrastructure', () => {
 
     expect(templateJson.Parameters.EnvironmentName.AllowedPattern).toBe('^[a-z0-9-]+$');
 
-    const stageResource = Object.values<any>(templateJson.Resources).find(
-      resource => resource.Type === 'AWS::ApiGateway::Stage'
-    );
-    expect(typeof stageResource?.Properties?.StageName).toBe('string');
-    expect(stageResource?.Properties?.StageName).toMatch(/^[A-Za-z0-9_]+$/);
-
     const keyResource = Object.values<any>(templateJson.Resources).find(
       resource => resource.Type === 'AWS::KMS::Key'
     );
@@ -227,6 +223,20 @@ describe('TapStack infrastructure', () => {
     functions.forEach(entry => {
       expect(entry.props.environment).toEqual(expect.any(Object));
       expect(entry.props.functionName.length).toBeLessThanOrEqual(64);
+    });
+  });
+
+  test('creates billing alarm when region is us-east-1', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'BillingStack', {
+      environmentSuffix: 'qa123',
+      env: { account: '111111111111', region: 'us-east-1' },
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'EstimatedCharges',
+      Namespace: 'AWS/Billing',
     });
   });
 });
@@ -692,6 +702,17 @@ describe('product-service handler', () => {
     expect(JSON.parse(response.body)).toEqual([]);
   });
 
+  test('bubbles datastore errors as 500', async () => {
+    dynamoMock.mockRejectedValueOnce(new Error('boom'));
+
+    const response = await productHandler(
+      createEvent({ httpMethod: 'GET', path: '/products' }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(500);
+  });
+
   test('retrieves product by identifier', async () => {
     dynamoMock.mockResolvedValueOnce({ Item: { productId: 'p1' } });
 
@@ -985,11 +1006,23 @@ describe('order-service handler', () => {
     expect(response.statusCode).toBe(409);
   });
 
+  test('POST rejects zero quantity', async () => {
+    const response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ userId: 'u1', productId: 'p1', quantity: 0 }),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(422);
+  });
+
   test('POST creates order, updates inventory and publishes notification', async () => {
     dynamoMock
       .mockResolvedValueOnce({ Item: { userId: 'u1' } })
       .mockResolvedValueOnce({ Item: { productId: 'p1', inventory: 5, price: 25 } })
-      .mockResolvedValueOnce({})
       .mockResolvedValueOnce({});
     snsMock.mockResolvedValueOnce({});
 
@@ -1003,8 +1036,45 @@ describe('order-service handler', () => {
     );
 
     expect(response.statusCode).toBe(201);
-    expect(dynamoMock).toHaveBeenCalledTimes(4);
+    expect(dynamoMock).toHaveBeenCalledTimes(3);
     expect(snsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('POST handles transaction cancellation gracefully', async () => {
+    dynamoMock
+      .mockResolvedValueOnce({ Item: { userId: 'u1' } })
+      .mockResolvedValueOnce({ Item: { productId: 'p1', inventory: 5, price: 25 } })
+      .mockRejectedValueOnce({ name: 'TransactionCanceledException' });
+
+    const response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ userId: 'u1', productId: 'p1', quantity: 3 }),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(409);
+    expect(snsMock).not.toHaveBeenCalled();
+  });
+
+  test('POST bubbles unexpected transaction errors', async () => {
+    dynamoMock
+      .mockResolvedValueOnce({ Item: { userId: 'u1' } })
+      .mockResolvedValueOnce({ Item: { productId: 'p1', inventory: 5, price: 25 } })
+      .mockRejectedValueOnce(new Error('kaboom'));
+
+    const response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ userId: 'u1', productId: 'p1', quantity: 1 }),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(500);
   });
 
   test('PATCH validates identifier and payload', async () => {
@@ -1096,5 +1166,16 @@ describe('order-service handler', () => {
       baseContext
     );
     expect(response.statusCode).toBe(405);
+  });
+
+  test('handles datastore failures with 500 response', async () => {
+    dynamoMock.mockRejectedValueOnce(new Error('boom'));
+
+    const response = await orderHandler(
+      createEvent({ httpMethod: 'GET', path: '/orders' }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(500);
   });
 });

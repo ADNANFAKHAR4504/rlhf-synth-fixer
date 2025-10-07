@@ -21,6 +21,7 @@ import {
   RemovalPolicy,
   StackProps,
   Tags,
+  Token,
 } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -61,9 +62,6 @@ export class TapStack extends cdk.Stack {
       'nine',
     ];
     const sanitizeTagValue = (value: string, maxLength = 256): string => {
-      if (cdk.Token.isUnresolved(value)) {
-        return value;
-      }
       const digitExpanded = value.replace(
         /[0-9]/g,
         digit => digitWords[Number(digit)]
@@ -192,8 +190,8 @@ export class TapStack extends cdk.Stack {
       topicName: resourceName('notifications'),
       masterKey: encryptionKey,
       displayName: 'Serverless platform notifications',
-      removalPolicy: RemovalPolicy.DESTROY,
     });
+    notificationTopic.applyRemovalPolicy(RemovalPolicy.DESTROY);
 
     const apiSecret = new secretsmanager.Secret(this, 'ApiCredentialSecret', {
       secretName: resourceName('api-credentials'),
@@ -422,48 +420,25 @@ export class TapStack extends cdk.Stack {
     userTable.grantReadData(orderServiceFunction);
     notificationTopic.grantPublish(orderServiceFunction);
 
-    const userFunctionUrl = userServiceFunction.addFunctionUrl({
-      authType: FunctionUrlAuthType.AWS_IAM,
-      cors: {
-        allowedOrigins: resolvedAllowedOrigins,
-        allowedMethods: [
-          HttpMethod.GET,
-          HttpMethod.POST,
-          HttpMethod.PUT,
-          HttpMethod.PATCH,
-          HttpMethod.DELETE,
-          HttpMethod.HEAD,
-        ],
-      },
-    });
-    const productFunctionUrl = productServiceFunction.addFunctionUrl({
-      authType: FunctionUrlAuthType.AWS_IAM,
-      cors: {
-        allowedOrigins: resolvedAllowedOrigins,
-        allowedMethods: [
-          HttpMethod.GET,
-          HttpMethod.POST,
-          HttpMethod.PUT,
-          HttpMethod.PATCH,
-          HttpMethod.DELETE,
-          HttpMethod.HEAD,
-        ],
-      },
-    });
-    const orderFunctionUrl = orderServiceFunction.addFunctionUrl({
-      authType: FunctionUrlAuthType.AWS_IAM,
-      cors: {
-        allowedOrigins: resolvedAllowedOrigins,
-        allowedMethods: [
-          HttpMethod.GET,
-          HttpMethod.POST,
-          HttpMethod.PUT,
-          HttpMethod.PATCH,
-          HttpMethod.DELETE,
-          HttpMethod.HEAD,
-        ],
-      },
-    });
+    const createFunctionUrl = (fn: NodejsFunction) =>
+      fn.addFunctionUrl({
+        authType: FunctionUrlAuthType.AWS_IAM,
+        cors: {
+          allowedOrigins: resolvedAllowedOrigins,
+          allowedMethods: [
+            HttpMethod.GET,
+            HttpMethod.POST,
+            HttpMethod.PUT,
+            HttpMethod.PATCH,
+            HttpMethod.DELETE,
+            HttpMethod.HEAD,
+          ],
+        },
+      });
+
+    const userFunctionUrl = createFunctionUrl(userServiceFunction);
+    const productFunctionUrl = createFunctionUrl(productServiceFunction);
+    const orderFunctionUrl = createFunctionUrl(orderServiceFunction);
 
     const api = new apigateway.RestApi(this, 'NovaRestApi', {
       restApiName: resourceName('api'),
@@ -489,7 +464,15 @@ export class TapStack extends cdk.Stack {
         }),
       },
       defaultCorsPreflightOptions: {
-        allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+        allowMethods: [
+          'GET',
+          'POST',
+          'PUT',
+          'PATCH',
+          'DELETE',
+          'OPTIONS',
+          'HEAD',
+        ],
         allowOrigins: resolvedAllowedOrigins,
         allowHeaders: ['Authorization', 'Content-Type'],
       },
@@ -789,27 +772,37 @@ export class TapStack extends cdk.Stack {
     });
     apiLatencyAlarm.addAlarmAction(new SnsAction(notificationTopic));
 
-    const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
-      alarmName: resourceName('billing-alarm'),
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Billing',
-        metricName: 'EstimatedCharges',
-        statistic: 'Maximum',
-        period: Duration.hours(6),
-        region: 'us-east-1',
-        dimensionsMap: {
-          Currency: 'USD',
-        },
-      }),
-      threshold: billingThreshold,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
+    const stackRegion = cdk.Stack.of(this).region;
+    const canCreateBillingAlarm =
+      Token.isUnresolved(stackRegion) || stackRegion === 'us-east-1';
+
+    if (canCreateBillingAlarm) {
+      const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
+        alarmName: resourceName('billing-alarm'),
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Billing',
+          metricName: 'EstimatedCharges',
+          statistic: 'Maximum',
+          period: Duration.hours(6),
+          region: 'us-east-1',
+          dimensionsMap: {
+            Currency: 'USD',
+          },
+        }),
+        threshold: billingThreshold,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
+    } else {
+      cdk.Annotations.of(this).addWarning(
+        'Billing alarm is only created in the us-east-1 region; skipping for this deployment.'
+      );
+    }
 
     new CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
@@ -862,4 +855,5 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+
 ```

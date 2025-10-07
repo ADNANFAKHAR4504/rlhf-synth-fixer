@@ -7,6 +7,7 @@ import {
   RemovalPolicy,
   StackProps,
   Tags,
+  Token,
 } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -47,9 +48,6 @@ export class TapStack extends cdk.Stack {
       'nine',
     ];
     const sanitizeTagValue = (value: string, maxLength = 256): string => {
-      if (cdk.Token.isUnresolved(value)) {
-        return value;
-      }
       const digitExpanded = value.replace(
         /[0-9]/g,
         digit => digitWords[Number(digit)]
@@ -760,27 +758,37 @@ export class TapStack extends cdk.Stack {
     });
     apiLatencyAlarm.addAlarmAction(new SnsAction(notificationTopic));
 
-    const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
-      alarmName: resourceName('billing-alarm'),
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Billing',
-        metricName: 'EstimatedCharges',
-        statistic: 'Maximum',
-        period: Duration.hours(6),
-        region: 'us-east-1',
-        dimensionsMap: {
-          Currency: 'USD',
-        },
-      }),
-      threshold: billingThreshold,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator:
-        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
+    const stackRegion = cdk.Stack.of(this).region;
+    const canCreateBillingAlarm =
+      Token.isUnresolved(stackRegion) || stackRegion === 'us-east-1';
+
+    if (canCreateBillingAlarm) {
+      const billingAlarm = new cloudwatch.Alarm(this, 'MonthlyBillingAlarm', {
+        alarmName: resourceName('billing-alarm'),
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Billing',
+          metricName: 'EstimatedCharges',
+          statistic: 'Maximum',
+          period: Duration.hours(6),
+          region: 'us-east-1',
+          dimensionsMap: {
+            Currency: 'USD',
+          },
+        }),
+        threshold: billingThreshold,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription: `Triggers when estimated monthly charges exceed $${billingThreshold}.`,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      billingAlarm.addAlarmAction(new SnsAction(notificationTopic));
+    } else {
+      cdk.Annotations.of(this).addWarning(
+        'Billing alarm is only created in the us-east-1 region; skipping for this deployment.'
+      );
+    }
 
     new CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
