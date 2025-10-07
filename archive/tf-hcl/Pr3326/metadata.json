@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350090",
+  "team": "1",
+  "startedAt": "2025-10-02T05:32:09.090Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing (ALB)",
+    "CloudFront",
+    "S3",
+    "MediaConvert",
+    "Lambda@Edge",
+    "Route 53",
+    "WAF",
+    "Shield Standard",
+    "CloudWatch",
+    "Systems Manager (SSM)"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

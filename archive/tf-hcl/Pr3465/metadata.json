@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349085",
+  "team": "4",
+  "startedAt": "2025-10-03T10:45:45.260Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "CloudWatch",
+    "S3",
+    "IAM"
+  ],
+  "testDependencies": [
+    "@aws-sdk/client-ec2@^3.883.0",
+    "@aws-sdk/client-rds@^3.883.0",
+    "@aws-sdk/client-elastic-load-balancing-v2@^3.873.0",
+    "@aws-sdk/client-cloudwatch@^3.883.0",
+    "@aws-sdk/client-s3@^3.884.0",
+    "jest@^29.7.0",
+    "typescript@^5.9.2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
