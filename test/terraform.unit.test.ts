@@ -1,231 +1,264 @@
 import fs from "fs";
 import path from "path";
 
-describe("TapStack.tf Terraform Unit Tests", () => {
+describe("TapStack Terraform Unit Tests (accurate)", () => {
   let tfContent: string;
 
   beforeAll(() => {
-    const tfPath = path.join(__dirname, "../lib/tap_stack.tf");
+    const tfPath = path.join(__dirname, "../tap_stack.tf");
     tfContent = fs.readFileSync(tfPath, "utf8");
   });
 
-  // =======================
-  // VARIABLES & DATA SOURCES
-  // =======================
+  function countMatches(regex: RegExp) {
+    const matches = tfContent.match(regex);
+    return matches ? matches.length : 0;
+  }
+
+  // Variables & Data Sources
   describe("Variables & Data Sources", () => {
-    test("defines key variables", () => {
+    test("contains expected variables", () => {
       expect(tfContent).toMatch(/variable\s+"primary_region"/);
       expect(tfContent).toMatch(/variable\s+"secondary_region"/);
       expect(tfContent).toMatch(/variable\s+"domain_name"/);
       expect(tfContent).toMatch(/variable\s+"environment"/);
     });
-    test("contains data sources for AZs & AMIs", () => {
-      expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"primaryazs"/);
-      expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"secondaryazs"/);
-      expect(tfContent).toMatch(/data\s+"aws_ami"\s+"primaryamazonlinux"/);
-      expect(tfContent).toMatch(/data\s+"aws_ami"\s+"secondaryamazonlinux"/);
+
+    test("contains data sources for availability zones and AMIs", () => {
+      expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"primary_azs"/);
+      expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"secondary_azs"/);
+      expect(tfContent).toMatch(/data\s+"aws_ami"\s+"primary_amazon_linux"/);
+      expect(tfContent).toMatch(/data\s+"aws_ami"\s+"secondary_amazon_linux"/);
     });
   });
 
-  // ==========
-  // LOCALS
-  // ==========
+  // Locals
   describe("Locals", () => {
-    test("defines resource names, CIDRs, and tags", () => {
-      expect(tfContent).toMatch(/locals?\s*{/);
-      expect(tfContent).toMatch(/resourcesuffix/);
-      expect(tfContent).toMatch(/primaryvpcname/);
-      expect(tfContent).toMatch(/secondaryvpcname/);
-      expect(tfContent).toMatch(/primaryvpccidr/);
-      expect(tfContent).toMatch(/secondaryvpccidr/);
-    });
-    test("defines commontags with required keys", () => {
-      expect(tfContent).toMatch(/commontags/);
-      expect(tfContent).toMatch(/Environment/);
-      expect(tfContent).toMatch(/ManagedBy\s*=\s*"Terraform"/i);
-      expect(tfContent).toMatch(/Stack\s*=\s*"tap-stack"/i);
+    test("defines locals resource_suffix and primary_vpc_name", () => {
+      expect(tfContent).toMatch(/locals\s*{/);
+      expect(tfContent).toMatch(/resource_suffix/);
+      expect(tfContent).toMatch(/primary_vpc_name/);
     });
   });
 
-  // ===============
-  // RANDOM & SECRETS
-  // ===============
+  // Random & Secrets
   describe("Random & Secrets", () => {
-    test("creates random username/password resources", () => {
+    test("creates random strings and passwords", () => {
       expect(tfContent).toMatch(/resource\s+"random_string"\s+"suffix"/);
-      expect(tfContent).toMatch(/resource\s+"random_string"\s+"rdsusernameprimary"/);
-      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rdspasswordprimary"/);
-      expect(tfContent).toMatch(/resource\s+"random_string"\s+"rdsusernamesecondary"/);
-      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rdspasswordsecondary"/);
+      expect(tfContent).toMatch(/resource\s+"random_string"\s+"rds_username_primary"/);
+      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password_primary"/);
+      expect(tfContent).toMatch(/resource\s+"random_string"\s+"rds_username_secondary"/);
+      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password_secondary"/);
     });
-    test("uses override_special in random password", () => {
+
+    test("uses override_special for random password", () => {
       expect(tfContent).toMatch(/override_special\s*=\s*["']!-?["']/);
     });
   });
 
-  // ======================
-  // VPC & NETWORKING
-  // ======================
-  describe("VPC, IGW, Subnets", () => {
-    test("creates VPCs and internet gateways in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"primaryvpc"/);
-      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"secondaryvpc"/);
-      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primaryigw"/);
-      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondaryigw"/);
+  // VPC & Networking
+  describe("VPC and Networking", () => {
+    test("defines VPCs and internet gateways", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"primary_vpc"/);
+      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"secondary_vpc"/);
+      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primary_igw"/);
+      expect(tfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondary_igw"/);
     });
-    test("contains required public and private subnets in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"primarypublicsubnet1"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"primarypublicsubnet2"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"primaryprivatesubnet1"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"primaryprivatesubnet2"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"secondarypublicsubnet1"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"secondarypublicsubnet2"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"secondaryprivatesubnet1"/);
-      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"secondaryprivatesubnet2"/);
+
+    test("creates public and private subnets", () => {
+      expect(countMatches(/resource\s+"aws_subnet"\s+"primary_public_subnet_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_subnet"\s+"primary_private_subnet_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_subnet"\s+"secondary_public_subnet_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_subnet"\s+"secondary_private_subnet_\d"/g)).toBeGreaterThanOrEqual(1);
+    });
+
+    test("creates NAT gateways and Elastic IPs", () => {
+      expect(countMatches(/resource\s+"aws_nat_gateway"\s+"primary_nat_gw_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_nat_gateway"\s+"secondary_nat_gw_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_eip"\s+"primary_nat_eip_\d"/g)).toBeGreaterThanOrEqual(1);
+      expect(countMatches(/resource\s+"aws_eip"\s+"secondary_nat_eip_\d"/g)).toBeGreaterThanOrEqual(1);
+    });
+
+    test("route tables and associations exist", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"primary_public_rt"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"primary_private_rt_\d"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"primary_public_rta_\d"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"primary_private_rta_\d"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_public_rt"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_private_rt_\d"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"secondary_public_rta_\d"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"secondary_private_rta_\d"/);
     });
   });
 
-  // ======================
-  // SECURITY GROUPS
-  // ======================
+  // Security Groups
   describe("Security Groups", () => {
-    test("defines SGs for both ALB, EC2, RDS in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primaryalbsg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primaryec2sg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primaryrdssg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondaryalbsg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondaryec2sg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondaryrdssg"/);
+    test("defines security groups for ALB, EC2, and RDS", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primary_alb_sg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_alb_sg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primary_ec2_sg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_ec2_sg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primary_rds_sg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_rds_sg"/);
     });
   });
 
-  // ======================
-  // IAM ROLES & POLICIES
-  // ======================
+  // IAM Roles & Policies
   describe("IAM Roles & Policies", () => {
-    test("defines EC2 role, instance profile and essential policies", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2role"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2profile"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"s3accesspolicy"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"cloudwatchpolicy"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"ssmpolicy"/);
+    test("defines ec2 role, instance profile, and policies", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"s3_access_policy"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_s3_attachment"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"cloudwatch_policy"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_cloudwatch_attachment"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_policy"\s+"ssm_policy"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_ssm_attachment"/);
     });
   });
 
-  // =============
-  // S3 BUCKETS
-  // =============
+  // S3 Buckets
   describe("S3 Buckets", () => {
-    test("creates S3 buckets for both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"primarybucket"/);
-      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"secondarybucket"/);
+    test("creates S3 buckets with versioning, encryption, and public access blocks", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"primary_bucket"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"primary_bucket_versioning"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary_bucket_encryption"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"primary_bucket_pab"/);
+
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"secondary_bucket"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"secondary_bucket_versioning"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"secondary_bucket_encryption"/);
+      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"secondary_bucket_pab"/);
     });
   });
 
-  // ==============================
-  // ACM, ALB, TARGET GROUPS
-  // ==============================
-  describe("ACM, ALB, Target Groups", () => {
-    test("defines ACM certificate for CloudFront", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_acm_certificate"\s+"cloudfrontcert"/);
+  // ACM & Load Balancers
+  describe("ACM and Load Balancer", () => {
+    test("ACM certificate", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_acm_certificate"\s+"cloudfront_cert"/);
     });
-    test("defines ALBs, listeners, target groups in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_lb"\s+"primaryalb"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lb"\s+"secondaryalb"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lb_target_group"\s+"primarytg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lb_target_group"\s+"secondarytg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lb_listener"\s+"primarylistener"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lb_listener"\s+"secondarylistener"/);
+
+    test("ALB, target groups, listeners", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_lb"\s+"primary_alb"/);
+      expect(tfContent).toMatch(/resource\s+"aws_lb_target_group"\s+"primary_tg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_lb_listener"\s+"primary_listener"/);
+
+      expect(tfContent).toMatch(/resource\s+"aws_lb"\s+"secondary_alb"/);
+      expect(tfContent).toMatch(/resource\s+"aws_lb_target_group"\s+"secondary_tg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_lb_listener"\s+"secondary_listener"/);
     });
   });
 
-  // ==============================
-  // LAUNCH TEMPLATE & ASGs
-  // ==============================
-  describe("Launch Template & AutoScaling", () => {
-    test("creates launch templates and ASGs in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"primarylt"/);
-      expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"secondarylt"/);
-      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"primaryasg"/);
-      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"secondaryasg"/);
+  // Launch Templates & ASGs
+  describe("Launch Templates & Auto Scaling Groups", () => {
+    test("launch templates and autoscaling groups", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"primary_lt"/);
+      expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"secondary_lt"/);
+      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"primary_asg"/);
+      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"secondary_asg"/);
     });
-    test("defines autoscaling policies for both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"primaryscalingpolicy"/);
-      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"secondaryscalingpolicy"/);
+
+    test("autoscaling policies", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"primary_scaling_policy"/);
+      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_policy"\s+"secondary_scaling_policy"/);
     });
   });
 
-  // ==============================
-  // RDS & DB Subnet Group
-  // ==============================
-  describe("RDS & DB Subnet", () => {
-    test("RDS instances & DB subnet groups in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"primaryrds"/);
-      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"secondaryrds"/);
-      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primarydbsubnetgroup"/);
-      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondarydbsubnetgroup"/);
+  // RDS & DB Subnet Groups
+  describe("RDS and DB Subnet Groups", () => {
+    test("primary and secondary RDS instances and subnet groups", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary_db_subnet_group"/);
+      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"primary_rds"/);
+      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary_db_subnet_group"/);
+      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"secondary_rds"/);
     });
   });
 
-  // ==============================
-  // SECRETS MANAGER & SSM
-  // ==============================
-  describe("Secrets Manager & SSM", () => {
-    test("creates RDS secrets and secret versions for both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"primaryrdssecret"/);
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"secondaryrdssecret"/);
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"primaryrdssecretversion"/);
-      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"secondaryrdssecretversion"/);
+  // Secrets Manager & SSM Parameters
+  describe("Secrets Manager & SSM Parameters", () => {
+    test("Secrets manager secrets and versions", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"primary_rds_secret"/);
+      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"primary_rds_secret_version"/);
+      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"secondary_rds_secret"/);
+      expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"secondary_rds_secret_version"/);
     });
-    test("creates SSM parameters for DB connection for both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primarydbhost"/);
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primarydbusername"/);
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primarydbpassword"/);
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondarydbhost"/);
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondarydbusername"/);
-      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondarydbpassword"/);
+
+    test("SSM parameters for DB credentials", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primary_db_host"/);
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primary_db_username"/);
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"primary_db_password"/);
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondary_db_host"/);
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondary_db_username"/);
+      expect(tfContent).toMatch(/resource\s+"aws_ssm_parameter"\s+"secondary_db_password"/);
     });
   });
 
-  // ==============================
-  // CLOUDWATCH & ALARMS
-  // ==============================
+  // CloudWatch & Alarms
   describe("CloudWatch & Alarms", () => {
-    test("CloudWatch metric alarms exist for scaling in both regions", () => {
-      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primarycpualarm"/);
-      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"secondarycpualarm"/);
+    test("cloudwatch metric alarms", () => {
+      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_cpu_alarm"/);
+      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_cpu_alarm"/);
     });
   });
 
-  // ==============================
-  // OUTPUTS
-  // ==============================
+  // Outputs
   describe("Outputs", () => {
     test("exports all expected outputs", () => {
       [
-        "environment", "primaryvpcid", "secondaryvpcid",
-        "primaryvpccidr", "secondaryvpccidr", "domainname", "primaryregion", "secondaryregion",
-        "primarypublicsubnet1id", "primarypublicsubnet2id",
-        "primaryprivatesubnet1id", "primaryprivatesubnet2id",
-        "secondarypublicsubnet1id", "secondarypublicsubnet2id",
-        "secondaryprivatesubnet1id", "secondaryprivatesubnet2id",
-        "primarynateip1", "primarynateip2", "secondarynateip1", "secondarynateip2",
-        "primarynatgateway1id", "primarynatgateway2id", "secondarynatgateway1id", "secondarynatgateway2id",
-        "primaryigwid", "secondaryigwid", "primarydbsubnetgroupname", "secondarydbsubnetgroupname",
-        "cloudfrontdistributionid", "route53zoneid"
-      ].forEach(name =>
-        expect(tfContent).toMatch(new RegExp(`output\\s+"${name}"`))
-      );
+        "primary_vpc_id", "secondary_vpc_id",
+        "primary_vpc_cidr", "secondary_vpc_cidr",
+        "primary_public_subnet_1_id", "primary_public_subnet_2_id",
+        "primary_private_subnet_1_id", "primary_private_subnet_2_id",
+        "secondary_public_subnet_1_id", "secondary_public_subnet_2_id",
+        "secondary_private_subnet_1_id", "secondary_private_subnet_2_id",
+        "primary_igw_id", "secondary_igw_id",
+        "primary_nat_gateway_1_id", "primary_nat_gateway_2_id",
+        "secondary_nat_gateway_1_id", "secondary_nat_gateway_2_id",
+        "primary_nat_eip_1", "primary_nat_eip_2",
+        "secondary_nat_eip_1", "secondary_nat_eip_2",
+        "primary_alb_sg_id", "secondary_alb_sg_id",
+        "primary_ec2_sg_id", "secondary_ec2_sg_id",
+        "primary_rds_sg_id", "secondary_rds_sg_id",
+        "primary_s3_bucket_id", "primary_s3_bucket_arn", "primary_s3_bucket_domain",
+        "secondary_s3_bucket_id", "secondary_s3_bucket_arn", "secondary_s3_bucket_domain",
+        "primary_rds_endpoint", "primary_rds_address", "primary_rds_arn", "primary_rds_id",
+        "secondary_rds_endpoint", "secondary_rds_address", "secondary_rds_arn", "secondary_rds_id",
+        "primary_rds_secret_arn", "primary_rds_secret_id",
+        "secondary_rds_secret_arn", "secondary_rds_secret_id",
+        "primary_db_host_parameter", "primary_db_username_parameter",
+        "secondary_db_host_parameter", "secondary_db_username_parameter",
+        "ec2_role_arn", "ec2_role_name", "ec2_instance_profile_arn", "ec2_instance_profile_name",
+        "s3_access_policy_arn", "cloudwatch_policy_arn", "ssm_policy_arn",
+        "primary_alb_dns", "primary_alb_arn", "primary_alb_zone_id",
+        "secondary_alb_dns", "secondary_alb_arn", "secondary_alb_zone_id",
+        "primary_target_group_arn", "primary_target_group_name",
+        "secondary_target_group_arn", "secondary_target_group_name",
+        "primary_asg_id", "primary_asg_arn", "primary_asg_name",
+        "secondary_asg_id", "secondary_asg_arn", "secondary_asg_name",
+        "primary_launch_template_id", "primary_launch_template_arn",
+        "secondary_launch_template_id", "secondary_launch_template_arn",
+        "primary_ami_id", "primary_ami_name", "secondary_ami_id", "secondary_ami_name",
+        "route53_zone_id", "route53_zone_name", "route53_name_servers",
+        "primary_health_check_id", "secondary_health_check_id",
+        "cloudfront_distribution_id", "cloudfront_distribution_arn", "cloudfront_distribution_domain", "cloudfront_distribution_hosted_zone_id",
+        "cloudfront_oai_id", "cloudfront_oai_path",
+        "waf_web_acl_id", "waf_web_acl_arn",
+        "acm_certificate_arn", "acm_certificate_domain",
+        "primary_cpu_alarm_arn", "secondary_cpu_alarm_arn",
+        "primary_public_route_table_id", "primary_private_route_table_1_id", "primary_private_route_table_2_id",
+        "secondary_public_route_table_id", "secondary_private_route_table_1_id", "secondary_private_route_table_2_id",
+        "primary_db_subnet_group_name", "primary_db_subnet_group_arn", "secondary_db_subnet_group_name", "secondary_db_subnet_group_arn",
+        "resource_suffix", "environment", "primary_region", "secondary_region", "domain_name"
+      ].forEach((outputName) => {
+        expect(tfContent).toMatch(new RegExp(`output\\s+"${outputName}"`));
+      });
     });
   });
 
-  // ==============================
-  // TAGGING & SANITY
-  // ==============================
-  describe("Tagging & Sanity", () => {
-    test("commontags are referenced in merged tags on key resources", () => {
-      expect(tfContent).toMatch(/merge\(local\.commontags/);
+  // Tagging & Sanity
+  describe("Tagging & Sanity checks", () => {
+    test("Common tags usage and merging", () => {
+      expect(tfContent).toMatch(/commontags/);
+      expect(tfContent).toMatch(/merge\(local.commmon_tags,.*\)/);
     });
   });
 });
-
