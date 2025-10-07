@@ -91,13 +91,6 @@ export class IaCNovaStack extends NestedStack {
       }
     );
 
-    const lambdaRuntimeParam = new cdk.CfnParameter(this, 'LambdaRuntime', {
-      type: 'String',
-      description: 'Runtime for the Lambda function.',
-      allowedValues: ['NODEJS_18_X', 'PYTHON_3_11'],
-      default: 'NODEJS_18_X',
-    });
-
     const rdsInstanceTypeParam = new cdk.CfnParameter(this, 'RdsInstanceType', {
       type: 'String',
       description: 'Instance type for the RDS MySQL instance, e.g., t3.medium.',
@@ -169,7 +162,11 @@ export class IaCNovaStack extends NestedStack {
       cdk.Tags.of(resource).add('iac-rlhf-amazon', 'true');
     };
 
-    const lambdaRuntime = this.resolveRuntime(lambdaRuntimeParam.valueAsString);
+    const lambdaRuntimeValue =
+      process.env.LAMBDA_RUNTIME ??
+      (this.node.tryGetContext('lambdaRuntime') as string | undefined) ??
+      'NODEJS_18_X';
+    const lambdaRuntime = this.resolveRuntime(lambdaRuntimeValue);
     const lambdaCodePath = this.resolveLambdaCodePath();
 
     this.vpc = new ec2.Vpc(this, 'NotificationVpc', {
@@ -472,10 +469,15 @@ export class IaCNovaStack extends NestedStack {
   }
 
   private resolveRuntime(value: string): lambda.Runtime {
-    switch (value) {
+    const normalized = value.trim().toUpperCase();
+    switch (normalized) {
       case 'NODEJS_18_X':
+      case 'NODEJS18.X':
+      case 'NODEJS18X':
         return lambda.Runtime.NODEJS_18_X;
       case 'PYTHON_3_11':
+      case 'PYTHON3.11':
+      case 'PYTHON3_11':
         return lambda.Runtime.PYTHON_3_11;
       default:
         throw new Error(`Unsupported Lambda runtime: ${value}`);
@@ -486,12 +488,7 @@ export class IaCNovaStack extends NestedStack {
     const fromEnv = process.env.LAMBDA_CODE_PATH;
     const fromContext = this.node.tryGetContext('lambdaCodePath');
 
-    const selected = fromEnv ?? fromContext;
-    if (!selected) {
-      throw new Error(
-        'Set the LAMBDA_CODE_PATH environment variable or provide the "lambdaCodePath" context value before synthesizing the stack.'
-      );
-    }
+    const selected = fromEnv ?? fromContext ?? 'lambda';
 
     return selected.startsWith('.') ? path.resolve(selected) : selected;
   }
