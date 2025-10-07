@@ -6,12 +6,9 @@
   "po_id": "43287915",
   "team": "synth",
   "startedAt": "2025-10-03T19:17:35+05:30",
-  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Expense Tracking Application",
-    "OCR Processing",
-    "Document Analysis",
-    "Step Functions Workflow"
+    "Serverless Infrastructure"
   ],
   "training_quality": 7.5,
   "aws_services": [
