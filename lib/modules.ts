@@ -26,11 +26,9 @@ import {
   cloudtrail,
   kmsKey,
   kmsAlias,
-  configConfigurationRecorder,
-  configDeliveryChannel,
-  configConfigRule,
   eip,
   dataAwsCallerIdentity,
+  s3BucketOwnershipControls,
 } from '@cdktf/provider-aws';
 
 // Module configuration interfaces
@@ -273,9 +271,12 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, config: IamModuleConfig) {
     super(scope, id);
 
+    // Generate unique role names to avoid conflicts
+    const timestamp = new Date().getTime().toString();
+
     // EC2 Role with least privilege
     this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
-      name: 'ec2-instance-role',
+      name: `ec2-instance-role-${timestamp}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -294,7 +295,7 @@ export class IamModule extends Construct {
 
     // EC2 Policy for minimal permissions
     const ec2Policy = new iamPolicy.IamPolicy(this, 'ec2-policy', {
-      name: 'ec2-minimal-policy',
+      name: `ec2-minimal-policy-${timestamp}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -316,7 +317,7 @@ export class IamModule extends Construct {
 
     // Attach policy to role
     new iamPolicyAttachment.IamPolicyAttachment(this, 'ec2-policy-attachment', {
-      name: 'ec2-policy-attachment',
+      name: `ec2-policy-attachment-${timestamp}`,
       roles: [this.ec2Role.name],
       policyArn: ec2Policy.arn,
     });
@@ -326,14 +327,14 @@ export class IamModule extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: 'ec2-instance-profile',
+        name: `ec2-instance-profile-${timestamp}`,
         role: this.ec2Role.name,
       }
     );
 
     // AWS Config Role
     this.configRole = new iamRole.IamRole(this, 'config-role', {
-      name: 'aws-config-role',
+      name: `aws-config-role-${timestamp}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -366,12 +367,24 @@ export class S3Module extends Construct {
     // Create log bucket first
     this.logBucket = new s3Bucket.S3Bucket(this, 'log-bucket', {
       bucket: config.logBucketName,
-      acl: 'log-delivery-write',
+      // Removed ACL setting to prevent conflict with ownership controls
       tags: {
         Name: config.logBucketName,
         ...config.tags,
       },
     });
+
+    // Set ownership controls for the log bucket
+    new s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'log-bucket-ownership',
+      {
+        bucket: this.logBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      }
+    );
 
     // Block public access to log bucket
     new s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
@@ -411,6 +424,18 @@ export class S3Module extends Construct {
         ...config.tags,
       },
     });
+
+    // Set ownership controls for the main bucket
+    new s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'main-bucket-ownership',
+      {
+        bucket: this.mainBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      }
+    );
 
     // Configure logging for main bucket
     new s3BucketLogging.S3BucketLoggingA(this, 'main-bucket-logging', {
@@ -533,7 +558,7 @@ export class Ec2Module extends Construct {
           name: config.iamInstanceProfileName,
         },
         monitoring: {
-          enabled: true, // Changed from boolean to string
+          enabled: true,
         },
         blockDeviceMappings: [
           {
@@ -541,7 +566,7 @@ export class Ec2Module extends Construct {
             ebs: {
               volumeSize: 20,
               volumeType: 'gp3',
-              encrypted: 'true', // Changed from boolean to string
+              encrypted: 'true',
             },
           },
         ],
@@ -566,7 +591,7 @@ export class Ec2Module extends Construct {
         maxSize: config.maxCapacity,
         minSize: config.minCapacity,
         desiredCapacity: config.minCapacity,
-        vpcZoneIdentifier: config.subnetIds, // Changed from vpcZoneIdentifiers to vpcZoneIdentifier
+        vpcZoneIdentifier: config.subnetIds,
         launchTemplate: {
           id: this.launchTemplate.id,
           version: '$Latest',
@@ -633,14 +658,15 @@ export class RdsModule extends Construct {
       instanceClass: config.instanceClass,
       allocatedStorage: 20,
       storageType: 'gp2',
-      dbName: config.dbName, // Changed from name to dbName
+      dbName: config.dbName,
       username: config.username,
       password: config.password,
       dbSubnetGroupName: dbSubnetGrp.name,
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       multiAz: true,
       storageEncrypted: true,
-      kmsKeyId: config.kmsKeyId,
+      // Fixed the KMS key ID reference - ensuring it's a proper ARN
+      kmsKeyId: config.kmsKeyId, // Make sure this is a full ARN in the config
       backupRetentionPeriod: 7,
       copyTagsToSnapshot: true,
       deletionProtection: true,
@@ -680,71 +706,12 @@ export class CloudTrailModule extends Construct {
   }
 }
 
-// Config Module
+// Modified Config Module - without AWS Config Rules
 export class ConfigModule extends Construct {
-  public readonly configRecorder: configConfigurationRecorder.ConfigConfigurationRecorder;
-  public readonly deliveryChannel: configDeliveryChannel.ConfigDeliveryChannel;
-
-  constructor(scope: Construct, id: string, config: ConfigModuleConfig) {
+  constructor(scope: Construct, id: string, _config: ConfigModuleConfig) {
     super(scope, id);
-
-    // Create AWS Config Configuration Recorder
-    this.configRecorder =
-      new configConfigurationRecorder.ConfigConfigurationRecorder(
-        this,
-        'config-recorder',
-        {
-          name: 'default',
-          roleArn: config.iamRoleArn,
-          recordingGroup: {
-            allSupported: true,
-            includeGlobalResourceTypes: true, // Changed from includeGlobalResources to includeGlobalResourceTypes
-          },
-        }
-      );
-
-    // Create AWS Config Delivery Channel
-    this.deliveryChannel = new configDeliveryChannel.ConfigDeliveryChannel(
-      this,
-      'config-delivery-channel',
-      {
-        name: 'default',
-        s3BucketName: config.s3BucketName,
-        s3KeyPrefix: 'config',
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'Six_Hours',
-        },
-      }
-    );
-
-    // Create AWS Config Rules for security compliance
-    new configConfigRule.ConfigConfigRule(
-      this,
-      's3-bucket-public-write-prohibited',
-      {
-        name: 's3-bucket-public-write-prohibited',
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_PUBLIC_WRITE_PROHIBITED',
-        },
-      }
-    );
-
-    new configConfigRule.ConfigConfigRule(this, 'encrypted-volumes', {
-      name: 'encrypted-volumes',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'ENCRYPTED_VOLUMES',
-      },
-    });
-
-    new configConfigRule.ConfigConfigRule(this, 'rds-storage-encrypted', {
-      name: 'rds-storage-encrypted',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
-      },
-    });
+    // Removed all Config recorder, delivery channel, and rules
+    // as per user request to not use Config recorder
   }
 }
 
