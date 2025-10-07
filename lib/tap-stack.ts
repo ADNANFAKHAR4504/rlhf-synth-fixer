@@ -82,11 +82,7 @@ export class TapStack extends TerraformStack {
     };
 
     // Create Network Module (VPC, Subnets, NAT Gateway, Route Tables)
-    const networkModule = new NetworkModule(
-      this,
-      'network',
-      networkConfig
-    );
+    const networkModule = new NetworkModule(this, 'network', networkConfig);
 
     // Security Group Module Configuration
     const securityGroupConfig: SecurityGroupModuleConfig = {
@@ -175,6 +171,5 @@ export class TapStack extends TerraformStack {
       value: current.accountId,
       description: 'Current AWS Account ID',
     });
-
   }
 }

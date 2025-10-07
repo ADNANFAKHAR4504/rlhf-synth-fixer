@@ -20,6 +20,7 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 
 // IAM
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
 // Data Sources
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
@@ -135,14 +136,10 @@ export class NetworkModule extends Construct {
 
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(
-        this,
-        `public-rt-association-${index + 1}`,
-        {
-          subnetId: subnet.id,
-          routeTableId: this.publicRouteTable.id,
-        }
-      );
+      new RouteTableAssociation(this, `public-rt-association-${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: this.publicRouteTable.id,
+      });
     });
 
     // Create private route table
@@ -163,14 +160,10 @@ export class NetworkModule extends Construct {
 
     // Associate private subnets with private route table
     this.privateSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(
-        this,
-        `private-rt-association-${index + 1}`,
-        {
-          subnetId: subnet.id,
-          routeTableId: this.privateRouteTable.id,
-        }
-      );
+      new RouteTableAssociation(this, `private-rt-association-${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: this.privateRouteTable.id,
+      });
     });
   }
 }
@@ -337,7 +330,32 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Create RDS Instance with AWS-managed credentials
+    // Create RDS Monitoring Role
+    const monitoringRole = new IamRole(this, 'rds-monitoring-role', {
+      name: `${config.projectName}-${config.environment}-rds-monitoring`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'monitoring.rds.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: config.tags,
+    });
+
+    // Attach AmazonRDS Enhanced Monitoring Policy
+    new IamRolePolicyAttachment(this, 'rds-monitoring-policy-attachment', {
+      role: monitoringRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+    });
+
+    // Create RDS Instance using AWS-managed credentials
     this.dbInstance = new DbInstance(this, 'rds-instance', {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: 'mysql',
@@ -345,60 +363,46 @@ export class RdsModule extends Construct {
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
       storageEncrypted: true,
-      iops: 3000,
-      
+
       // Database configuration
-      dbName: `${config.projectName}${config.environment}db`.replace(/[^a-zA-Z0-9]/g, ''),
+      dbName: `${config.projectName}${config.environment}db`.replace(
+        /[^a-zA-Z0-9]/g,
+        ''
+      ),
       username: 'admin',
-      manageMasterUserPassword: true, // Use AWS-managed credentials
-      
-      // Multi-AZ for high availability
+      manageMasterUserPassword: true, // AWS-managed password
+
+      // High availability
       multiAz: true,
-      
-      // Network configuration
+
+      // Networking
       dbSubnetGroupName: this.dbSubnetGroup.name,
       vpcSecurityGroupIds: [config.securityGroupId],
       publiclyAccessible: false,
-      
-      // Backup configuration
+
+      // Backup & maintenance
       backupRetentionPeriod: config.backupRetentionDays,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      
-      // Performance and monitoring
+
+      // Monitoring
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
-      monitoringRoleArn: new IamRole(this, 'rds-monitoring-role', {
-        name: `${config.projectName}-${config.environment}-rds-monitoring`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
-        managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'],
-        tags: config.tags,
-      }).arn,
-      
+      monitoringRoleArn: monitoringRole.arn,
+
       // Protection settings
       deletionProtection: config.deletionProtection,
       skipFinalSnapshot: !config.deletionProtection,
-      finalSnapshotIdentifier: config.deletionProtection 
+      finalSnapshotIdentifier: config.deletionProtection
         ? `${config.projectName}-${config.environment}-final-snapshot-${Date.now()}`
         : undefined,
-      
-      // Auto minor version upgrade for security patches
+
+      // Security patches
       autoMinorVersionUpgrade: true,
       applyImmediately: false,
-      
+
       tags: {
         ...config.tags,
         Name: `${config.projectName}-${config.environment}-db`,
@@ -427,7 +431,7 @@ export class OutputsModule extends Construct {
     super(scope, id);
 
     new DataAwsCallerIdentity(this, 'current');
-    
+
     // Define outputs as properties that can be accessed
     Object.entries({
       vpcId: config.vpcId,
