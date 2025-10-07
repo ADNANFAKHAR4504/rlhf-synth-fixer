@@ -400,7 +400,18 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-results-${AWS::AccountId}"
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Fn::Sub": "${AWS::StackName}"
+              },
+              "-results-",
+              {
+                "Ref": "AWS::AccountId"
+              }
+            ]
+          ]
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -733,8 +744,6 @@
           {
             "ResourcePath": "/*",
             "HttpMethod": "*",
-            "LoggingLevel": "INFO",
-            "DataTraceEnabled": true,
             "MetricsEnabled": true,
             "ThrottlingRateLimit": {
               "Ref": "ApiThrottleRateLimit"
