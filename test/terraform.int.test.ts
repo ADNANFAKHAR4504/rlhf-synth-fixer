@@ -273,8 +273,8 @@ describe("Terraform infrastructure integration", () => {
     }));
     const scalingPolicies = policiesResult.ScalingPolicies ?? [];
     console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
-    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
-    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
+    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName === "iac-350039-prod-scale-up");
+    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName === "iac-350039-prod-scale-down");
     const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
     const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
     expect(scaleUpPolicyArn).not.toBe("");

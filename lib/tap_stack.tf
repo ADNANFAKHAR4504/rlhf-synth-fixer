@@ -623,25 +623,56 @@ data "archive_file" "inline_lambda" {
     content  = <<-JS
       // index.js
       // Simple processor: accepts an array of numbers and returns { sum, avg, count }
-      exports.handler = async (event) => {
-        let payload;
-        try {
-          payload = (typeof event?.body === "string") ? JSON.parse(event.body) : event;
-        } catch (e) {
-          console.log("Error parsing JSON", e);
-          return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
-        }
-        const items = Array.isArray(payload?.data) ? payload.data : [];
-        if (!Array.isArray(items) || items.some(n => typeof n !== "number")) {
-        console.log("Invalid data format", items, payload, payload.data);
-          return { statusCode: 400, body: JSON.stringify({ error: "data must be an array of numbers" }) };
-        }
-        const count = items.length;
-        const sum   = items.reduce((a, b) => a + b, 0);
-        const avg   = count ? sum / count : 0;
-        console.log(`s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
-        return { statusCode: 200, body: JSON.stringify({ count, sum, avg }) };
-      };
+      const parseNumbers = text =>
+  text
+    .split(/[ \t\r\n,]+/)
+    .map(value => value.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter(Number.isFinite);
+
+exports.handler = async event => {
+  console.log("Received event", JSON.stringify(event));
+  const records = Array.isArray(event?.Records) ? event.Records : [];
+  if (!records.length) {
+    console.log("No S3 records found in event");
+    return { statusCode: 200, body: JSON.stringify({ recordsProcessed: 0 }) };
+  }
+
+  const results = [];
+
+  for (const record of records) {
+    const bucket = record?.s3?.bucket?.name;
+    const rawKey = record?.s3?.object?.key;
+    if (!bucket || !rawKey) {
+      console.log("Skipping record missing bucket or key", JSON.stringify(record));
+      continue;
+    }
+
+    const key = decodeURIComponent(rawKey.replace(/\+/g, " "));
+    try {
+      const object = await s3.getObject({ Bucket: bucket, Key: key }).promise();
+      const body = object.Body ? object.Body.toString("utf-8") : "";
+      const numbers = parseNumbers(body);
+
+      if (!numbers.length) {
+        console.log(`No numeric data found for s3://$${bucket}/$${key}`);
+        continue;
+      }
+
+      const count = numbers.length;
+      const sum = numbers.reduce((total, value) => total + value, 0);
+      const avg = count ? sum / count : 0;
+
+      console.log(`Processed s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
+      results.push({ bucket, key, count, sum, avg });
+    } catch (error) {
+      console.log(`Error processing s3://error`, error?.message ?? String(error));
+    }
+  }
+
+  return { statusCode: 200, body: JSON.stringify({ processed: results.length, results }) };
+};
     JS
     filename = "index.js"
   }
