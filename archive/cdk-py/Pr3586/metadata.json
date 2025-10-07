@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349099",
+  "team": "6",
+  "startedAt": "2025-10-06T07:35:05.199Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "EC2, RDS, Load Balancer, S3, Lambda, IAM",
+  "training_quality": "high",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
+}
