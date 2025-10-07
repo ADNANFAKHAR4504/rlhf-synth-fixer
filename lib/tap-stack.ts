@@ -92,7 +92,7 @@ export class TapStack extends TerraformStack {
       vpcCidrBlock: '10.0.0.0/16',
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
       privateSubnetCidrs: ['10.0.3.0/24', '10.0.4.0/24'],
-      availabilityZones: ['eu-north-1a', 'eu-north-1b'],
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
       flowLogBucketArn: s3.logBucket.arn,
       tags,
     });

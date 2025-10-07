@@ -30,6 +30,7 @@ import {
   eip,
   dataAwsCallerIdentity,
   s3BucketOwnershipControls,
+  dataAwsAmi,
 } from '@cdktf/provider-aws';
 
 // Module configuration interfaces
@@ -249,6 +250,11 @@ export class VpcModule extends Construct {
       }
     }
 
+    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current-account',
+      {}
+    );
     // First, add IAM role for Flow Logs
     const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
       name: 'vpc-flow-log-role',
@@ -279,7 +285,10 @@ export class VpcModule extends Construct {
                   'logs:DescribeLogGroups',
                   'logs:DescribeLogStreams',
                 ],
-                Resource: '*',
+                Resource: [
+                  `arn:aws:logs:*:${currentAccount.accountId}:log-group:/aws/vpc/flowlogs:*`,
+                  `arn:aws:logs:*:${currentAccount.accountId}:log-group:/aws/vpc/flowlogs`,
+                ],
               },
             ],
           }),
@@ -658,13 +667,29 @@ export class Ec2Module extends Construct {
       securityGroupId: ec2SecurityGroup.id,
     });
 
+    // After (dynamic lookup)
+    const ami = new dataAwsAmi.DataAwsAmi(this, 'amazon-linux-2', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+        },
+        {
+          name: 'virtualization-type',
+          values: ['hvm'],
+        },
+      ],
+    });
+
     // Create launch template
     this.launchTemplate = new launchTemplate.LaunchTemplate(
       this,
       'ec2-launch-template',
       {
         name: 'ec2-launch-template',
-        imageId: 'ami-0989fb15ce71ba39e', // Amazon Linux 2 AMI in eu-north-1
+        imageId: ami.id,
         instanceType: config.instanceType,
         keyName: config.keyName,
         vpcSecurityGroupIds: [ec2SecurityGroup.id, ...config.securityGroupIds],
