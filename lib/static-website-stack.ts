@@ -127,9 +127,7 @@ export class StaticWebsiteStack extends cdk.NestedStack {
             originAccessControl,
           }
         ),
-        viewerProtocolPolicy: certificate
-          ? cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
-          : cloudfront.ViewerProtocolPolicy.ALLOW_ALL,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
@@ -172,16 +170,14 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     this.distribution = distribution;
 
-    // Route 53 A record (only create if we have a certificate for custom domain)
-    if (certificate) {
-      new route53.ARecord(this, 'SiteAliasRecord', {
-        zone: this.hostedZone,
-        recordName: `${props.subDomain}-${props.environmentSuffix}`,
-        target: route53.RecordTarget.fromAlias(
-          new route53Targets.CloudFrontTarget(distribution)
-        ),
-      });
-    }
+    // Route 53 A record - create regardless of certificate (points to CloudFront)
+    new route53.ARecord(this, 'SiteAliasRecord', {
+      zone: this.hostedZone,
+      recordName: `${props.subDomain}-${props.environmentSuffix}`,
+      target: route53.RecordTarget.fromAlias(
+        new route53Targets.CloudFrontTarget(distribution)
+      ),
+    });
 
     // CloudWatch dashboard with environment suffix
     const dashboard = new cloudwatch.Dashboard(this, 'WebsiteDashboard', {
