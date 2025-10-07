@@ -61,26 +61,14 @@ echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"
 
 # Check if CloudFormation template exists
 # Use LocalStack-compatible template if available, otherwise use main template
-TEMPLATE_FILE=null;
-
-# Check if CloudFormation template exists
 if [ -f "TapStack.yml" ]; then
-    echo -e "${GREEN}❌ CloudFormation yml template found: TapStack.yml${NC}"
     TEMPLATE_FILE="TapStack.yml"
-elif [ -f "TapStack.json" ]; then
-    echo -e "${GREEN}✅ CloudFormation json template found: TapStack.json${NC}"
-    TEMPLATE_FILE="TapStack.json"
 else
-    echo -e "${RED}❌ No CloudFormation template found (TapStack.yml or TapStack.json)${NC}"
-    exit 1    
+    echo -e "${RED}❌ CloudFormation template not found${NC}"
+    exit 1
 fi
 
-
-
 echo -e "${GREEN}✅ CloudFormation template found: $TEMPLATE_FILE${NC}"
-
-awslocal s3 mb s3://local-bucket
-awslocal s3 cp "$TEMPLATE_FILE" "s3://local-bucket/" # --template-body file://$TEMPLATE_FILE has limitation of 50 KB.
 
 # Set stack name and parameters
 STACK_NAME="tap-stack-localstack"
@@ -124,7 +112,7 @@ echo -e "${YELLOW}📦 Creating new stack...${NC}"
 
 awslocal cloudformation create-stack \
     --stack-name $STACK_NAME \
-    --template-url "https://local-bucket.s3.amazonaws.com/$TEMPLATE_FILE" \
+    --template-body file://$TEMPLATE_FILE \
     --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
     --capabilities CAPABILITY_IAM
 
