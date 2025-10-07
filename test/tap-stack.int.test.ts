@@ -66,6 +66,7 @@ const region = process.env.AWS_REGION || 'us-east-1';
 // Check if we have AWS credentials and outputs
 const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const hasOutputs = Object.keys(outputs).length > 0;
+const awsRegion = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS SDK clients only when needed
 let dynamoClient: DynamoDBClient | undefined;
@@ -81,16 +82,16 @@ let cloudWatchClient: CloudWatchClient | undefined;
 
 const initializeClients = () => {
   if (!dynamoClient) {
-    dynamoClient = new DynamoDBClient({ region });
-    ec2Client = new EC2Client({ region });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region });
-    asgClient = new AutoScalingClient({ region });
-    rdsClient = new RDSClient({ region });
-    lambdaClient = new LambdaClient({ region });
-    logsClient = new CloudWatchLogsClient({ region });
-    eventBridgeClient = new EventBridgeClient({ region });
-    acmClient = new ACMClient({ region });
-    cloudWatchClient = new CloudWatchClient({ region });
+    dynamoClient = new DynamoDBClient({ region: awsRegion });
+    ec2Client = new EC2Client({ region: awsRegion });
+    elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
+    asgClient = new AutoScalingClient({ region: awsRegion });
+    rdsClient = new RDSClient({ region: awsRegion });
+    lambdaClient = new LambdaClient({ region: awsRegion });
+    logsClient = new CloudWatchLogsClient({ region: awsRegion });
+    eventBridgeClient = new EventBridgeClient({ region: awsRegion });
+    acmClient = new ACMClient({ region: awsRegion });
+    cloudWatchClient = new CloudWatchClient({ region: awsRegion });
   }
 };
 
@@ -559,7 +560,7 @@ describe('TapStack Integration Tests', () => {
       expect(dbEndpoint).toBeDefined();
 
       // Clean up
-      await dynamoClient.send(
+      await dynamoClient!.send(
         new DeleteItemCommand({
           TableName: outputs.TurnAroundPromptTableName,
           Key: { id: { S: testId } },
