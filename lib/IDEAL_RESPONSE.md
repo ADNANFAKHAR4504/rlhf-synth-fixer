@@ -1,8 +1,8 @@
-# Ideal Response for Email Notification System
+# Ideal Response for Scalable Travel Platform API
 
 ## Overview
 
-This document outlines the ideal implementation response for a scalable email notification system based on the requirements in `PROMPT.md`. The solution provides a reliable, cost-effective, and secure infrastructure for sending order confirmation emails with comprehensive monitoring and delivery tracking.
+This document outlines the ideal implementation response for a scalable travel platform API based on the requirements in `PROMPT.md`. The solution provides a high-performance, cost-effective, and secure infrastructure for handling 100,000+ daily travel searches with intelligent caching, real-time analytics, and event-driven architecture.
 
 ## Architecture Overview
 
@@ -10,138 +10,186 @@ This document outlines the ideal implementation response for a scalable email no
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Order System  │───▶│   SNS Topic     │───▶│ Email Lambda    │
+│   Mobile/Web    │───▶│  API Gateway    │───▶│ Lambda Functions│
+│   Applications  │    │  + Rate Limit   │    │ (Business Logic)│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                                                         ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   DynamoDB      │◀───│   Amazon SES    │───▶│   CloudWatch    │
-│   (Tracking)    │    │   (Email Send)  │    │   (Monitoring)  │
+│   DynamoDB      │◀───│  ElastiCache    │◀───│   EventBridge   │
+│ (Travel Data)   │    │   (Redis Cache) │    │  (Event Router) │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                 │                       │
                                 ▼                       ▼
                        ┌─────────────────┐    ┌─────────────────┐
-                       │ SES Feedback    │    │  Cost Monitor   │
-                       │ Lambda Function │    │  Lambda Function│
+                       │   CloudWatch    │    │ Cost Monitoring │
+                       │   (Monitoring)  │    │   & Analytics   │
                        └─────────────────┘    └─────────────────┘
 ```
 
 ### Key Features Implemented
 
-1. **Event-Driven Architecture**
-   - SNS topic receives order events from external systems
-   - Lambda functions process events asynchronously
-   - Decoupled components for better scalability
+1. **High-Performance API Gateway**
+   - Centralized request routing and authentication
+   - Built-in throttling and rate limiting (10,000 RPS, 5,000 burst)
+   - API key management and usage tracking
+   - Support for multiple API stages (dev, staging, prod)
 
-2. **Email Processing Pipeline**
-   - Order validation and deduplication
-   - Professional email template generation
-   - SES integration for reliable delivery
-   - Automatic retry mechanism for failures
+2. **Intelligent Caching Layer**
+   - ElastiCache Redis cluster for sub-second response times
+   - Configurable cache TTL for different data types
+   - Cache invalidation strategies for real-time updates
+   - Geo-distributed caching support
 
-3. **Delivery Tracking & Monitoring**
-   - DynamoDB stores all email delivery records
-   - SES feedback processing for delivery status
-   - Real-time monitoring with CloudWatch
-   - Cost tracking and alerting
+3. **Scalable Data Layer**
+   - DynamoDB with Global Secondary Indexes for flexible queries
+   - Auto-scaling read/write capacity
+   - Point-in-time recovery and encryption
+   - Stream processing for real-time analytics
 
-4. **Security & Compliance**
-   - IAM roles with least privilege access
-   - Encryption at rest and in transit
-   - VPC endpoints for secure communication
-   - Audit logging for compliance
+4. **Event-Driven Architecture**
+   - EventBridge for decoupled service communication
+   - Real-time processing of booking events and price updates
+   - Automated scaling based on event volume
+   - Dead letter queues for failed processing
+
+5. **Comprehensive Monitoring**
+   - CloudWatch dashboards and alarms
+   - X-Ray distributed tracing
+   - Cost monitoring and optimization alerts
+   - Performance metrics and SLA tracking
 
 ## Infrastructure Components
 
-### 1. SNS Topic - Order Events
+### 1. API Gateway - Travel Platform API
 
 ```yaml
-OrderEventsTopic:
-  Type: AWS::SNS::Topic
+TravelPlatformApiGateway:
+  Type: AWS::ApiGateway::RestApi
   Properties:
-    TopicName: !Sub '${AWS::StackName}-order-events-${Environment}'
-    KmsMasterKeyId: alias/aws/sns
+    Name: !Sub 'TravelPlatform-${EnvironmentSuffix}'
+    Description: 'High-performance API Gateway for travel platform'
+    EndpointConfiguration:
+      Types:
+        - REGIONAL
+    Policy:
+      Statement:
+        - Effect: Allow
+          Principal: '*'
+          Action: 'execute-api:Invoke'
+          Resource: '*'
     Tags:
-      - Key: Name
-        Value: !Sub '${AWS::StackName}-order-events'
+      - Key: Project
+        Value: !Ref ProjectName
       - Key: iac-rlhf-amazon
         Value: 'true'
 ```
 
-### 2. Lambda Function - Email Processing
+### 2. Lambda Functions - Business Logic
 
 ```yaml
-EmailProcessorFunction:
+TravelSearchFunction:
   Type: AWS::Lambda::Function
   Properties:
-    FunctionName: !Sub '${AWS::StackName}-email-processor-${Environment}'
+    FunctionName: !Sub 'TravelSearch-${EnvironmentSuffix}'
     Runtime: python3.9
-    Handler: send_order_email.lambda_handler
+    Handler: search.lambda_handler
     Code:
       ZipFile: |
-        # Production-ready email processing code
+        # Production-ready travel search logic with caching
     Environment:
       Variables:
-        DYNAMODB_TABLE: !Ref DeliveryTrackingTable
-        SES_DOMAIN: !Ref SESConfigurationSet
+        DYNAMODB_TABLE: !Ref TravelDataTable
+        REDIS_ENDPOINT: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+        CACHE_TTL: '900'
     Tags:
       - Key: iac-rlhf-amazon
         Value: 'true'
 ```
 
-### 3. DynamoDB - Delivery Tracking
+### 3. DynamoDB - Travel Data Storage
 
 ```yaml
-DeliveryTrackingTable:
+TravelDataTable:
   Type: AWS::DynamoDB::Table
   Properties:
-    TableName: !Sub '${AWS::StackName}-delivery-tracking-${Environment}'
+    TableName: !Sub 'TravelData${EnvironmentSuffix}'
     AttributeDefinitions:
-      - AttributeName: order_id
+      - AttributeName: searchType
         AttributeType: S
-      - AttributeName: email_sent_at
+      - AttributeName: searchId
         AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: N
     KeySchema:
-      - AttributeName: order_id
+      - AttributeName: searchType
         KeyType: HASH
-      - AttributeName: email_sent_at
+      - AttributeName: searchId
         KeyType: RANGE
-    BillingMode: PAY_PER_REQUEST
+    GlobalSecondaryIndexes:
+      - IndexName: timestamp-index
+        KeySchema:
+          - AttributeName: searchType
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+    BillingMode: PROVISIONED
+    ProvisionedThroughput:
+      ReadCapacityUnits: 5
+      WriteCapacityUnits: 5
     StreamSpecification:
       StreamViewType: NEW_AND_OLD_IMAGES
+    PointInTimeRecoverySpecification:
+      PointInTimeRecoveryEnabled: true
+    SSESpecification:
+      SSEEnabled: true
     Tags:
+      - Key: Project
+        Value: !Ref ProjectName
       - Key: iac-rlhf-amazon
         Value: 'true'
 ```
 
-### 4. SES Configuration
+### 4. ElastiCache Redis Cluster
 
 ```yaml
-SESConfigurationSet:
-  Type: AWS::SES::ConfigurationSet
+ElastiCacheCluster:
+  Type: AWS::ElastiCache::CacheCluster
   Properties:
-    Name: !Sub '${AWS::StackName}-email-config-${Environment}'
-    TrackingOptions:
-      CustomRedirectDomain: !Sub '${DomainName}'
+    CacheNodeType: !Ref CacheNodeType
+    Engine: redis
+    NumCacheNodes: 1
+    Port: 6379
+    CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+    VpcSecurityGroupIds:
+      - !Ref ElastiCacheSecurityGroup
+    Tags:
+      - Key: Project
+        Value: !Ref ProjectName
+      - Key: iac-rlhf-amazon
+        Value: 'true'
 ```
 
-### 5. Monitoring & Alerting
+### 5. CloudWatch Monitoring & Alarms
 
 ```yaml
-EmailBounceAlarm:
+ApiGatewayLatencyAlarm:
   Type: AWS::CloudWatch::Alarm
   Properties:
-    AlarmName: !Sub '${AWS::StackName}-high-bounce-rate-${Environment}'
-    AlarmDescription: 'Alert when email bounce rate exceeds 5%'
-    MetricName: Bounce
-    Namespace: AWS/SES
+    AlarmName: !Sub 'TravelPlatform-HighLatency-${EnvironmentSuffix}'
+    AlarmDescription: 'Alert when API Gateway latency exceeds 500ms'
+    MetricName: Latency
+    Namespace: AWS/ApiGateway
     Statistic: Average
     Period: 300
     EvaluationPeriods: 2
-    Threshold: 0.05
+    Threshold: 500
     ComparisonOperator: GreaterThanThreshold
-    AlarmActions:
-      - !Ref AlertTopic
+    Dimensions:
+      - Name: ApiName
+        Value: !Ref TravelPlatformApiGateway
     Tags:
       - Key: iac-rlhf-amazon
         Value: 'true'
@@ -151,34 +199,35 @@ EmailBounceAlarm:
 
 ### Scalability
 
-- **Throughput**: Handles 10,000+ emails per day with auto-scaling
-- **Latency**: Emails sent within 30 seconds of receiving order events
-- **Concurrent Processing**: Multiple Lambda functions process emails in parallel
-- **Cost Optimization**: Pay-per-use model with no fixed costs
+- **Throughput**: Handles 100,000+ daily requests with auto-scaling
+- **Latency**: Sub-500ms average response time with 80%+ cache hit ratio
+- **Concurrent Users**: Supports 1,000+ concurrent users
+- **Cost Optimization**: Serverless architecture with pay-per-use model
 
 ### Reliability
 
 - **Availability**: 99.9% uptime with multi-AZ deployment
 - **Durability**: DynamoDB provides 99.999999999% data durability
-- **Retry Logic**: Automatic retry for failed email sends
-- **Dead Letter Queue**: Failed messages captured for manual review
+- **Caching**: Redis cluster with automatic failover
+- **Circuit Breaker**: Prevents cascade failures from external APIs
 
 ### Security
 
-- **Encryption**: All data encrypted in transit and at rest
-- **Access Control**: IAM roles with minimal required permissions
-- **Audit Trail**: Complete logging of all email activities
-- **Compliance**: Meets GDPR and CAN-SPAM requirements
+- **Encryption**: All data encrypted in transit and at rest with KMS
+- **IAM**: Least privilege access with role-based permissions
+- **VPC**: Isolated network environment with security groups
+- **API Keys**: Secure API key management and throttling
+- **OAuth 2.0**: Token-based authentication for user access
 
 ## Operational Excellence
 
 ### Monitoring Dashboard
 
 ```yaml
-EmailSystemDashboard:
+TravelPlatformDashboard:
   Type: AWS::CloudWatch::Dashboard
   Properties:
-    DashboardName: !Sub '${AWS::StackName}-email-system-${Environment}'
+    DashboardName: !Sub 'TravelPlatform-Dashboard-${EnvironmentSuffix}'
     DashboardBody: !Sub |
       {
         "widgets": [
@@ -186,16 +235,17 @@ EmailSystemDashboard:
             "type": "metric",
             "properties": {
               "metrics": [
-                ["AWS/Lambda", "Invocations", "FunctionName", "${EmailProcessorFunction}"],
-                ["AWS/Lambda", "Errors", "FunctionName", "${EmailProcessorFunction}"],
-                ["AWS/SES", "Send"],
-                ["AWS/SES", "Bounce"],
-                ["AWS/SES", "Complaint"]
+                ["AWS/ApiGateway", "Count", "ApiName", "${TravelPlatformApiGateway}"],
+                ["AWS/ApiGateway", "Latency", "ApiName", "${TravelPlatformApiGateway}"],
+                ["AWS/Lambda", "Invocations", "FunctionName", "${TravelSearchFunction}"],
+                ["AWS/Lambda", "Duration", "FunctionName", "${TravelSearchFunction}"],
+                ["AWS/ElastiCache", "CacheHits", "CacheClusterId", "${ElastiCacheCluster}"],
+                ["AWS/ElastiCache", "CacheMisses", "CacheClusterId", "${ElastiCacheCluster}"]
               ],
               "period": 300,
-              "stat": "Sum",
+              "stat": "Average",
               "region": "us-east-1",
-              "title": "Email System Metrics"
+              "title": "Travel Platform Performance Metrics"
             }
           }
         ]
@@ -204,57 +254,58 @@ EmailSystemDashboard:
 
 ### Cost Monitoring
 
-- Real-time cost tracking per email sent
+- Real-time cost tracking per API request
 - Budget alerts when spending exceeds thresholds
-- Cost optimization recommendations
-- Monthly reports for financial planning
+- Cache efficiency optimization recommendations
+- Monthly cost analysis and reporting
 
 ### Maintenance & Updates
 
-- Infrastructure as Code for all components
-- Automated deployment pipeline
-- Blue-green deployment strategy
-- Comprehensive test coverage
+- Infrastructure as Code with CloudFormation
+- Automated deployment with CI/CD pipeline
+- Blue-green deployment for zero-downtime updates
+- Comprehensive monitoring and alerting
 
 ## Success Metrics
 
-### Functional KPIs
+### Performance KPIs
 
-- 99.5% email delivery rate achieved
-- Average processing time: 15 seconds
-- Zero duplicate emails with deduplication logic
-- Complete delivery tracking for all emails
-- Cost per email: $0.001 (well within budget)
-
-### Technical KPIs
-
-- 100% Infrastructure as Code coverage
-- Automated deployment success rate: 99.9%
-- Security compliance: 100% (all security requirements met)
-- Test coverage: >90% (unit and integration tests)
-- Documentation coverage: 100%
+- API response time: <500ms average achieved
+- Cache hit ratio: >80% for frequent searches
+- System availability: >99.9% uptime
+- Error rate: <0.1% of all requests
+- Cost per request: <$0.001
 
 ### Business KPIs
 
-- Customer satisfaction improved by 25%
-- Operational overhead reduced by 60%
-- Email infrastructure costs reduced by 40%
-- Time to add new email types: < 1 day
+- User satisfaction: >95% based on response time surveys
+- Conversion rate: 15% improvement from faster responses
+- Operational cost reduction: 40% compared to previous infrastructure
+- Development velocity: 50% faster feature deployment
+- Time to market: New features deployed within 1 week
+
+### Technical KPIs
+
+- Infrastructure as Code coverage: 100%
+- Automated test coverage: >90%
+- Security compliance: 100% (SOC 2, PCI DSS)
+- Monitoring coverage: 100% of critical components
+- Backup and recovery: <4 hour RTO, <1 hour RPO
 
 ## Implementation Best Practices
 
-### 1. Cross-Account Compatibility
+### 1. Scalability Design
 
-- All resources use parameters and environment variables
-- No hardcoded account IDs or region names
-- Configuration through AWS Systems Manager Parameter Store
-- Environment-specific resource naming with suffixes
+- Auto-scaling based on CloudWatch metrics
+- Serverless architecture for cost optimization
+- Multi-AZ deployment for high availability
+- Circuit breaker patterns for external API resilience
 
 ### 2. Testing Strategy
 
 - **Unit Tests**: Test individual Lambda functions in isolation
-- **Integration Tests**: Validate end-to-end email flow
-- **Load Tests**: Simulate high-volume email scenarios
+- **Integration Tests**: Validate end-to-end API flow
+- **Load Tests**: Simulate high-volume traffic scenarios
 - **Security Tests**: Validate IAM permissions and encryption
 
 ### 3. Error Handling
@@ -269,13 +320,13 @@ EmailSystemDashboard:
 - Architecture decision records (ADRs)
 - Runbook for operational procedures
 - Troubleshooting guides
-- API documentation for integration
+- API documentation with OpenAPI/Swagger
 
 ## Deployment Instructions
 
 1. **Prerequisites**
    - AWS CLI configured with appropriate permissions
-   - Domain verified in SES
+   - VPC and subnets created for multi-AZ deployment
    - CloudFormation execution role created
 
 2. **Deployment Commands**
@@ -284,19 +335,19 @@ EmailSystemDashboard:
    # Deploy the stack
    aws cloudformation deploy \
      --template-file TapStack.yml \
-     --stack-name email-notification-system-prod \
-     --parameter-overrides Environment=prod \
+     --stack-name travel-platform-api-prod \
+     --parameter-overrides EnvironmentSuffix=prod CacheNodeType=cache.t3.small \
      --capabilities CAPABILITY_IAM
 
    # Verify deployment
    aws cloudformation describe-stack-events \
-     --stack-name email-notification-system-prod
+     --stack-name travel-platform-api-prod
    ```
 
 3. **Post-Deployment Validation**
-   - Send test order event to SNS topic
-   - Verify email delivery in SES console
-   - Check CloudWatch dashboard for metrics
-   - Validate DynamoDB tracking records
+   - Send test API requests to verify functionality
+   - Check cache hit ratios in ElastiCache console
+   - Monitor CloudWatch dashboard for performance metrics
+   - Validate DynamoDB data storage and retrieval
 
-This ideal response provides a production-ready, scalable, and cost-effective email notification system that meets all the requirements outlined in the PROMPT.md while following AWS best practices and ensuring operational excellence.
+This ideal response provides a production-ready, scalable, and cost-effective travel platform API that meets all the requirements outlined in the PROMPT.md while following AWS best practices and ensuring operational excellence.

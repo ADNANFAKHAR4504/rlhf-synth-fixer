@@ -1,173 +1,189 @@
-# Email Notification System - Infrastructure Requirements
+# Scalable Travel Platform API - Infrastructure Requirements
 
 ## Business Context
 
-Our e-commerce platform needs a reliable email notification system to send order confirmations to customers. Currently, we're manually sending emails or using a basic email service that doesn't provide delivery tracking or cost visibility. We need a scalable, cost-effective solution that integrates with our existing order processing workflow.
+Our travel platform processes over **100,000 daily user searches** for flights, hotels, and destinations across global markets. The current infrastructure struggles with peak load handling, lacks effective caching mechanisms, and doesn't provide the real-time analytics needed for business optimization. We need a scalable, cost-effective solution that can handle fluctuating demand while maintaining consistent sub-second response times.
 
 ## What We Need
 
 ### Core Functionality
 
-- **Send order confirmation emails** to customers when they complete a purchase
-- **Track email delivery status** (sent, delivered, bounced, complained) for each message
-- **Prevent duplicate emails** if the same order is processed multiple times
-- **Handle high volume** - we expect around 2,000 emails per day with occasional spikes
-- **Cost monitoring** to understand and control our email infrastructure costs
+- **High-Performance API Gateway** to handle 100,000+ daily requests with sub-second response times
+- **Intelligent Caching Layer** using Redis/ElastiCache to reduce external API calls by 80%
+- **Real-Time Analytics** for monitoring user behavior, search patterns, and system performance
+- **Event-Driven Architecture** for processing booking confirmations, price updates, and inventory changes
+- **Auto-Scaling Infrastructure** that adapts to traffic patterns without manual intervention
+- **Cost Monitoring & Optimization** to maintain predictable operational expenses
 
 ### Integration Requirements
 
-- **Connect to our order system** - we need to receive order events containing customer details and order information
-- **Use our verified domain** for sending emails (e.g., orders@ourcompany.com)
-- **Store delivery records** for customer service and compliance purposes
-- **Provide visibility** into system health and performance
+- **External Travel APIs** integration for flight, hotel, and destination data
+- **Payment Processing** for secure booking transactions
+- **User Authentication & Authorization** with OAuth 2.0 and JWT tokens
+- **Email Notifications** for booking confirmations and updates
+- **Third-Party Analytics** integration for business intelligence
+- **Mobile App Support** with optimized API responses
 
 ## Technical Requirements
 
-### Email Processing
+### API Performance
 
-1. **Receive order events** containing:
-   - Order ID
-   - Customer email address
-   - Customer name
-   - Order items and total
-   - Order timestamp
+1. **Request Handling**:
+   - Process 100,000+ requests per day
+   - Maintain <500ms average response time
+   - Support concurrent users up to 1,000
+   - Handle traffic spikes of 10x normal load
 
-2. **Send professional emails** with:
-   - Company branding
-   - Order details
-   - Tracking information
-   - Professional formatting
+2. **Caching Strategy**:
+   - Cache frequent search results for 5-15 minutes
+   - Implement cache invalidation for real-time updates
+   - Reduce external API calls by 80%
+   - Support geo-distributed caching
 
-3. **Track delivery status** for each email:
-   - When email was sent
-   - When it was delivered (or bounced)
-   - Any delivery issues or complaints
+3. **API Security**:
+   - OAuth 2.0 authentication
+   - API key management and throttling
+   - Rate limiting per user/API key
+   - DDoS protection and WAF integration
 
 ### System Architecture
 
-- **Message Queue**: Handle incoming order events reliably
-- **Email Service**: Send emails using AWS SES
-- **Database**: Store delivery records and status updates
-- **Monitoring**: Track system health and costs
-- **Security**: Ensure only authorized systems can send emails
+- **API Gateway**: Centralized routing, authentication, and rate limiting
+- **Lambda Functions**: Serverless compute for business logic
+- **ElastiCache**: Redis-based caching layer for performance optimization
+- **DynamoDB**: NoSQL database for user data and booking records
+- **EventBridge**: Event-driven integration between services
+- **CloudWatch**: Comprehensive monitoring and alerting
+- **S3**: Static content and backup storage
 
 ### Performance & Reliability
 
-- **Handle 2,000+ emails per day** with room for growth
-- **Process emails within 30 seconds** of receiving order events
-- **99.9% uptime** for email processing
-- **Automatic retry** for failed email sends
-- **No duplicate emails** for the same order
+- **Availability**: 99.9% uptime with multi-AZ deployment
+- **Scalability**: Auto-scaling based on CloudWatch metrics
+- **Disaster Recovery**: Cross-region backup and failover capabilities
+- **Load Balancing**: Distribute traffic across multiple instances
+- **Circuit Breaker**: Prevent cascade failures from external dependencies
 
 ### Cost Management
 
-- **Pay only for what we use** - no fixed monthly costs for unused capacity
-- **Monitor costs** and get alerts if spending exceeds budget
-- **Optimize for transactional emails** (not marketing blasts)
-- **Track cost per email** for budgeting
+- **Serverless Architecture**: Pay only for actual usage
+- **Reserved Capacity**: Cost optimization for predictable workloads
+- **Automated Scaling**: Prevent over-provisioning of resources
+- **Cost Monitoring**: Real-time alerts and budget controls
+- **Resource Optimization**: Regular analysis and rightsizing
 
-### Security & Compliance
+## Security & Compliance
 
-- **Secure email sending** - only our verified domains can send emails
-- **Encrypt customer data** at rest and in transit
-- **Audit trail** of all email activities
-- **Comply with email regulations** (CAN-SPAM, GDPR)
+### Data Protection
 
-## Operational Requirements
+- **Encryption**: All data encrypted in transit and at rest
+- **PCI Compliance**: Secure payment processing standards
+- **GDPR Compliance**: User data privacy and right to deletion
+- **Access Controls**: Role-based access with least privilege
+- **Audit Logging**: Comprehensive activity tracking
 
-### Monitoring & Alerts
+### Network Security
 
-- **Real-time dashboard** showing email volume, success rates, and costs
-- **Alerts** when bounce rates are too high (>5%)
-- **Alerts** when email sending fails
-- **Cost alerts** when spending exceeds budget
-- **System health monitoring** for all components
-
-### Maintenance & Support
-
-- **Easy deployment** using Infrastructure as Code
-- **Environment separation** (dev, staging, production)
-- **Backup and recovery** procedures
-- **Documentation** for troubleshooting and maintenance
-
-### Scalability
-
-- **Auto-scaling** to handle traffic spikes
-- **No manual intervention** required for normal operations
-- **Easy to add new email types** (shipping notifications, etc.)
-- **Support for multiple environments** and regions
+- **VPC**: Isolated network environment
+- **Security Groups**: Granular network access controls
+- **WAF**: Web application firewall for common threats
+- **DDoS Protection**: AWS Shield integration
+- **Certificate Management**: SSL/TLS certificate automation
 
 ## Success Criteria
 
-### Functional Success
+### Performance KPIs
 
-- ✅ All order confirmations are sent within 30 seconds
-- ✅ 99%+ email delivery rate
-- ✅ Zero duplicate emails for the same order
-- ✅ Complete delivery tracking for all emails
-- ✅ Cost visibility and control
+- API response time: <500ms average, <1s 99th percentile
+- Cache hit ratio: >80% for frequent searches
+- System availability: >99.9% uptime
+- Error rate: <0.1% of all requests
+- Cost per request: <$0.001
 
-### Technical Success
+### Business KPIs
 
-- ✅ System deploys successfully via CloudFormation
-- ✅ All components integrate properly
-- ✅ Monitoring and alerting work correctly
-- ✅ Security requirements are met
-- ✅ Performance targets are achieved
+- User satisfaction: >95% based on response time surveys
+- Conversion rate: 15% improvement from faster response times
+- Operational cost reduction: 40% compared to current infrastructure
+- Development velocity: 50% faster feature deployment
+- Time to market: New features deployed within 1 week
 
-### Business Success
+### Technical KPIs
 
-- ✅ Improved customer experience with reliable email delivery
-- ✅ Reduced operational overhead for email management
-- ✅ Clear cost visibility and control
-- ✅ Foundation for additional email types (shipping, returns, etc.)
+- Infrastructure as Code coverage: 100%
+- Automated test coverage: >90%
+- Security compliance: 100% (SOC 2, PCI DSS)
+- Monitoring coverage: 100% of critical components
+- Backup and recovery: <4 hour RTO, <1 hour RPO
 
-## Implementation Approach
+## Implementation Phases
 
-### Phase 1: Core Email System
+### Phase 1: Core Infrastructure (Weeks 1-2)
 
-- Set up SNS topic for order events
-- Create Lambda function to process orders and send emails
-- Configure SES for email delivery
-- Set up DynamoDB for delivery tracking
-- Implement basic monitoring
+- Set up VPC, subnets, and security groups
+- Deploy API Gateway with basic routing
+- Implement Lambda functions for core business logic
+- Configure DynamoDB for data storage
+- Basic monitoring and logging setup
 
-### Phase 2: Advanced Features
+### Phase 2: Caching & Performance (Weeks 3-4)
 
-- Add SES feedback processing for delivery status
-- Implement cost monitoring and alerting
-- Create operational dashboards
-- Add comprehensive logging and debugging
+- Deploy ElastiCache Redis cluster
+- Implement caching strategies in Lambda functions
+- Add CloudFront CDN for static content
+- Performance testing and optimization
+- Advanced monitoring dashboards
 
-### Phase 3: Optimization
+### Phase 3: Event-Driven Integration (Weeks 5-6)
 
-- Performance tuning and optimization
-- Advanced monitoring and alerting
-- Cost optimization
+- Configure EventBridge for event processing
+- Implement real-time price update handlers
+- Add booking confirmation workflows
+- Email notification system integration
+- End-to-end testing and validation
+
+### Phase 4: Advanced Features (Weeks 7-8)
+
+- Cost monitoring and optimization
+- Advanced security features (WAF, Shield)
+- Multi-region deployment setup
+- Load testing and capacity planning
 - Documentation and training
 
 ## Technical Constraints
 
-- **AWS Services Only**: Must use AWS services for consistency with existing infrastructure
-- **CloudFormation**: All infrastructure must be defined as code
-- **Python/Node.js**: Lambda functions should use Python or Node.js for consistency
-- **US East Region**: Deploy in us-east-1 for cost optimization
-- **Existing Domain**: Must work with our already-verified SES domain
-
-## Questions for Implementation
-
-1. **SES Configuration**: Is our domain already verified in SES? What's our current sending limit?
-2. **Order System Integration**: How does our order system currently work? Can it publish to SNS or do we need an API?
-3. **Email Templates**: Do we have existing email templates or should we create new ones?
-4. **Monitoring Tools**: What monitoring tools are we already using? Should we integrate with existing dashboards?
-5. **Compliance Requirements**: Are there specific compliance requirements for email storage or processing?
+- **AWS Services Only**: Maintain consistency with existing cloud strategy
+- **Serverless First**: Prefer managed services and serverless options
+- **Multi-AZ Deployment**: High availability across availability zones
+- **Cost Optimization**: Target 40% cost reduction from current state
+- **Compliance**: Must meet PCI DSS and GDPR requirements
+- **Required Tags**: All resources must include 'iac-rlhf-amazon' tag
 
 ## Expected Deliverables
 
-1. **CloudFormation Template**: Complete infrastructure definition
-2. **Lambda Functions**: Email processing and feedback handling code
-3. **Documentation**: Setup, deployment, and operational guides
-4. **Monitoring Setup**: Dashboards, alarms, and logging configuration
-5. **Testing Scripts**: Tools to test the system end-to-end
+2. **Lambda Functions**: Production-ready code with real-world use cases
+3. **API Documentation**: OpenAPI/Swagger specifications
+4. **Monitoring Setup**: CloudWatch dashboards, alarms, and log groups
+5. **Security Configuration**: IAM roles, security groups, and encryption
+6. **Testing Framework**: Unit, integration, and load testing scripts
+7. **Deployment Pipeline**: CI/CD automation with multiple environments
+8. **Operational Runbooks**: Troubleshooting and maintenance procedures
 
-This system will provide a solid foundation for our email notifications while being cost-effective, reliable, and easy to maintain.
+This scalable travel platform API will provide the foundation for handling high-volume traffic while maintaining excellent performance, security, and cost-effectiveness across all business operations.
+
+> - **EventBridge** for external API integration events.
+> - **CloudWatch** for monitoring, metrics, and alarms.
+> - **X-Ray** for distributed tracing.
+> - **IAM roles and policies** for secure resource access.
+>
+> Ensure:
+>
+> - Proper environment variables for cache connection strings and table names.
+> - Logging and metrics are enabled for all resources.
+> - Template follows least-privilege and cost-effective design principles.
+>
+> Output should include:
+>
+> 1. CloudFormation YAML template.
+> 2. Lambda handler code example (Python or Node.js).
+> 3. Example architecture diagram description in text form.

@@ -10,5 +10,15 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "apiGateway,Lambda,Redis,DynamoDB,EventBridge,Cloudwatch, X-ray,IAM"
+  "training_quality": 8.5,
+  "aws_services": [
+    "apiGateway",
+    "Lambda",
+    "Redis",
+    "DynamoDB",
+    "EventBridge",
+    "Cloudwatch",
+    "X-ray",
+    "IAM"
+  ]
 }
