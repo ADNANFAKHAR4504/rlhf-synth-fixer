@@ -66,36 +66,19 @@ const region = process.env.AWS_REGION || 'us-east-1';
 // Check if we have AWS credentials and outputs
 const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const hasOutputs = Object.keys(outputs).length > 0;
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
-
-// Initialize AWS SDK clients only when needed
-let dynamoClient: DynamoDBClient | undefined;
-let ec2Client: EC2Client | undefined;
-let elbv2Client: ElasticLoadBalancingV2Client | undefined;
-let asgClient: AutoScalingClient | undefined;
-let rdsClient: RDSClient | undefined;
-let lambdaClient: LambdaClient | undefined;
-let logsClient: CloudWatchLogsClient | undefined;
-let eventBridgeClient: EventBridgeClient | undefined;
-let acmClient: ACMClient | undefined;
-let cloudWatchClient: CloudWatchClient | undefined;
-
-const initializeClients = () => {
-  if (!dynamoClient) {
-    dynamoClient = new DynamoDBClient({ region: awsRegion });
-    ec2Client = new EC2Client({ region: awsRegion });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
-    asgClient = new AutoScalingClient({ region: awsRegion });
-    rdsClient = new RDSClient({ region: awsRegion });
-    lambdaClient = new LambdaClient({ region: awsRegion });
-    logsClient = new CloudWatchLogsClient({ region: awsRegion });
-    eventBridgeClient = new EventBridgeClient({ region: awsRegion });
-    acmClient = new ACMClient({ region: awsRegion });
-    cloudWatchClient = new CloudWatchClient({ region: awsRegion });
-  }
-};
 
 describe('TapStack Integration Tests', () => {
+  // Initialize AWS clients
+  const dynamoClient = new DynamoDBClient({ region });
+  const ec2Client = new EC2Client({ region });
+  const elbv2Client = new ElasticLoadBalancingV2Client({ region });
+  const asgClient = new AutoScalingClient({ region });
+  const rdsClient = new RDSClient({ region });
+  const lambdaClient = new LambdaClient({ region });
+  const logsClient = new CloudWatchLogsClient({ region });
+  const eventBridgeClient = new EventBridgeClient({ region });
+  const acmClient = new ACMClient({ region });
+  const cloudWatchClient = new CloudWatchClient({ region });
   // Skip all integration tests if we don't have AWS credentials or outputs
   const skipIntegrationTests = !hasAwsCredentials || !hasOutputs;
 
@@ -105,18 +88,8 @@ describe('TapStack Integration Tests', () => {
       console.log('Skipping test: AWS credentials or outputs not available');
       return true;
     }
-    if (!dynamoClient || !ec2Client || !elbv2Client || !asgClient || !rdsClient ||
-      !lambdaClient || !logsClient || !eventBridgeClient || !acmClient || !cloudWatchClient) {
-      console.log('Skipping test: AWS clients not initialized');
-      return true;
-    }
     return false;
   };
-
-  // Initialize clients before running tests
-  beforeAll(() => {
-    initializeClients();
-  });
 
   describe('DynamoDB Table', () => {
     test('TurnAroundPromptTable should exist and be accessible', async () => {
@@ -560,7 +533,7 @@ describe('TapStack Integration Tests', () => {
       expect(dbEndpoint).toBeDefined();
 
       // Clean up
-      await dynamoClient!.send(
+      await dynamoClient.send(
         new DeleteItemCommand({
           TableName: outputs.TurnAroundPromptTableName,
           Key: { id: { S: testId } },
