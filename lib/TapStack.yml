@@ -373,7 +373,7 @@ Resources:
             Action: "s3:PutObject"
             Resource: !Sub "${AccessLogsBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*"
 
-  # --- IAM (least privilege) ---
+  # --- IAM (least privilege for EC2; BROAD for CloudTrail logs delivery) ---
   EC2InstanceRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -416,7 +416,7 @@ Resources:
       LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}-${Environment}"
       RetentionInDays: 90
 
-  # ✅ FIXED: CloudTrail delivery role now has required logs permissions
+  # >>> BROADENED CloudTrail delivery role
   CloudTrailRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -427,23 +427,28 @@ Resources:
             Principal: { Service: "cloudtrail.amazonaws.com" }
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "CloudTrailToCloudWatchLogs"
+        - PolicyName: "CloudTrailToCloudWatchLogs-Broad"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # CloudTrail needs these on * (no resource-level restriction)
+              # Broad allow for creation/describe + put to any log group/stream (in-account)
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
+                  - logs:PutRetentionPolicy
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: "*"
-              # Stream-level permissions for the specified log group
+              # Also include explicit resources for your log group with suffix wildcards (covers future streams)
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
+                Resource:
+                  - !Sub "${CloudTrailLogGroup.Arn}:*"
+                  - !Sub "${CloudTrailLogGroup.Arn}:log-stream:*"
       Tags:
         [
           {
@@ -466,7 +471,7 @@ Resources:
         - { Key: "deletion_protection.enabled", Value: "false" }
         - { Key: "access_logs.s3.enabled", Value: "true" }
         - { Key: "access_logs.s3.bucket", Value: !Ref AccessLogsBucket }
-        - { Key: "access_logs.s3.prefix", Value: "alb" } # no leading/trailing '/'
+        - { Key: "access_logs.s3.prefix", Value: "alb" }
       Tags: [{ Key: Name, Value: !Sub "${ProjectName}-${Environment}-alb" }]
 
   TargetGroup:
@@ -594,10 +599,9 @@ Resources:
   # --- CloudTrail + Monitoring ---
   CloudTrail:
     Type: "AWS::CloudTrail::Trail"
+    # Only bucket policy must be ready
     DependsOn:
       - CloudTrailLogsBucketPolicy
-      - CloudTrailRole # ensure role ready
-      - CloudTrailLogGroup # ensure log group ready
     Properties:
       TrailName: !Sub "${ProjectName}-${Environment}-trail"
       S3BucketName: !Ref CloudTrailLogsBucket
