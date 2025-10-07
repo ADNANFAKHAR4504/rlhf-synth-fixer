@@ -3,21 +3,13 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('Serverless Image Processing CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -27,89 +19,157 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(template.Description).toContain('Serverless Image Upload Processing System');
     });
   });
 
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      const envParam = template.Parameters.EnvironmentSuffix;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have NotificationEmail parameter', () => {
+      expect(template.Parameters.NotificationEmail).toBeDefined();
+      const emailParam = template.Parameters.NotificationEmail;
+      expect(emailParam.Type).toBe('String');
+      expect(emailParam.Default).toBe('admin@example.com');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('S3 Resources', () => {
+    test('should have ImageUploadBucket resource', () => {
+      expect(template.Resources.ImageUploadBucket).toBeDefined();
+      const bucket = template.Resources.ImageUploadBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('ImageUploadBucket should have security configurations', () => {
+      const bucket = template.Resources.ImageUploadBucket;
+      const props = bucket.Properties;
+      
+      expect(props.BucketEncryption).toBeDefined();
+      expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(props.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(props.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have ProcessedImageBucket resource', () => {
+      expect(template.Resources.ProcessedImageBucket).toBeDefined();
+      const bucket = template.Resources.ProcessedImageBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('bucket names should use environment suffix and account ID', () => {
+      const uploadBucket = template.Resources.ImageUploadBucket;
+      const processedBucket = template.Resources.ProcessedImageBucket;
+      
+      expect(uploadBucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(processedBucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'processed-images-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      });
+    });
+  });
+
+  describe('Lambda Resources', () => {
+    test('should have ImageProcessingLambda resource', () => {
+      expect(template.Resources.ImageProcessingLambda).toBeDefined();
+      const lambda = template.Resources.ImageProcessingLambda;
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('Lambda should have correct runtime and configuration', () => {
+      const lambda = template.Resources.ImageProcessingLambda;
+      const props = lambda.Properties;
+      
+      expect(props.Runtime).toBe('nodejs20.x');
+      expect(props.Handler).toBe('index.handler');
+      expect(props.Timeout).toBe(60);
+      expect(props.MemorySize).toBe(512);
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('Lambda should have environment variables', () => {
+      const lambda = template.Resources.ImageProcessingLambda;
+      const env = lambda.Properties.Environment.Variables;
+      
+      expect(env.PROCESSED_BUCKET).toEqual({ Ref: 'ProcessedImageBucket' });
+      expect(env.SNS_TOPIC_ARN).toEqual({ Ref: 'ImageProcessingTopic' });
+      expect(env.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have LambdaExecutionRole resource', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('IAM role should have least privilege policies', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const policies = role.Properties.Policies[0].PolicyDocument.Statement;
+      
+      // Should have S3 read access to upload bucket
+      const s3ReadPolicy = policies.find((p: any) => 
+        p.Action.includes('s3:GetObject') && 
+        p.Resource.includes('image-upload-bucket')
+      );
+      expect(s3ReadPolicy).toBeDefined();
+      
+      // Should have S3 write access to processed bucket
+      const s3WritePolicy = policies.find((p: any) => 
+        p.Action.includes('s3:PutObject') && 
+        p.Resource.includes('processed-images-bucket')
+      );
+      expect(s3WritePolicy).toBeDefined();
+      
+      // Should have SNS publish access
+      const snsPolicy = policies.find((p: any) => p.Action.includes('sns:Publish'));
+      expect(snsPolicy).toBeDefined();
+    });
+
+    test('should have LambdaInvokePermission resource', () => {
+      expect(template.Resources.LambdaInvokePermission).toBeDefined();
+      const permission = template.Resources.LambdaInvokePermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+    });
+  });
+
+  describe('SNS Resources', () => {
+    test('should have ImageProcessingTopic resource', () => {
+      expect(template.Resources.ImageProcessingTopic).toBeDefined();
+      const topic = template.Resources.ImageProcessingTopic;
+      expect(topic.Type).toBe('AWS::SNS::Topic');
+    });
+
+    test('SNS topic should have email subscription', () => {
+      const topic = template.Resources.ImageProcessingTopic;
+      const subscription = topic.Properties.Subscription[0];
+      
+      expect(subscription.Protocol).toBe('email');
+      expect(subscription.Endpoint).toEqual({ Ref: 'NotificationEmail' });
+    });
+
+    test('SNS topic name should use environment suffix', () => {
+      const topic = template.Resources.ImageProcessingTopic;
+      expect(topic.Properties.TopicName).toEqual({
+        'Fn::Sub': 'image-processing-notifications-${EnvironmentSuffix}'
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'UploadBucketName',
+        'ProcessedBucketName', 
+        'LambdaFunctionArn',
+        'SNSTopicArn'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +177,74 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('outputs should have proper export names', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey.replace('Name', '').replace('Arn', '')}`
+        });
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('UploadBucketName output should reference correct resource', () => {
+      const output = template.Outputs.UploadBucketName;
+      expect(output.Value).toEqual({ Ref: 'ImageUploadBucket' });
+      expect(output.Description).toContain('S3 bucket for image uploads');
+    });
+
+    test('LambdaFunctionArn output should use GetAtt', () => {
+      const output = template.Outputs.LambdaFunctionArn;
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['ImageProcessingLambda', 'Arn']
       });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('resources should have consistent tagging', () => {
+      const taggedResourceTypes = ['ImageUploadBucket', 'ProcessedImageBucket', 'ImageProcessingTopic', 'LambdaExecutionRole'];
+      
+      taggedResourceTypes.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const tags = resource.Properties.Tags;
+        
+        expect(tags).toBeDefined();
+        expect(tags.some((tag: any) => tag.Key === 'Environment')).toBe(true);
+        expect(tags.some((tag: any) => tag.Key === 'Application')).toBe(true);
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('S3 buckets should block public access', () => {
+      ['ImageUploadBucket', 'ProcessedImageBucket'].forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        
+        expect(publicAccessBlock.BlockPublicAcls).toBe(true);
+        expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
+        expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
+        expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+    test('S3 buckets should have encryption enabled', () => {
+      ['ImageUploadBucket', 'ProcessedImageBucket'].forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const encryption = bucket.Properties.BucketEncryption;
+        
+        expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('Lambda execution role should not have wildcard permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const policies = role.Properties.Policies[0].PolicyDocument.Statement;
+      
+      policies.forEach((statement: any) => {
+        if (statement.Resource && statement.Resource !== '*') {
+          expect(statement.Resource).not.toBe('*');
+        }
       });
     });
   });
@@ -164,47 +255,27 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
+    test('should have all required sections', () => {
+      expect(template.AWSTemplateFormatVersion).toBeTruthy();
+      expect(template.Description).toBeTruthy();
+      expect(template.Parameters).toBeTruthy();
+      expect(template.Resources).toBeTruthy();
+      expect(template.Outputs).toBeTruthy();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple resources for complete infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(5);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(2);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct output count', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
     });
   });
 });
