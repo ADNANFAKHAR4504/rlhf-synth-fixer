@@ -1425,20 +1425,6 @@
         "IsLogging": true,
         "IsMultiRegionTrail": true,
         "EnableLogFileValidation": true,
-        "EventSelectors": [
-          {
-            "ReadWriteType": "All",
-            "IncludeManagementEvents": true,
-            "DataResources": [
-              {
-                "Type": "AWS::S3::Object",
-                "Values": [
-                  "arn:aws:s3:::*/*"
-                ]
-              }
-            ]
-          }
-        ],
         "KMSKeyId": {
           "Fn::If": [
             "CreateKmsKey",
@@ -1450,6 +1436,8 @@
             }
           ]
         }
+        /* Note: No EventSelectors with wildcard S3 DataResources. If you want S3 data events,
+           list specific bucket ARNs here or switch to an org-level trail with advanced selectors. */
       }
     },
     "OpsSnsTopic": {
