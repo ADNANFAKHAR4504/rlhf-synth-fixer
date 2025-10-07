@@ -7,7 +7,7 @@ import {
   routeTable,
   route,
   routeTableAssociation,
-  // flowLog,
+  flowLog,
   securityGroup,
   securityGroupRule,
   s3Bucket,
@@ -249,17 +249,17 @@ export class VpcModule extends Construct {
     }
 
     // Enable VPC Flow Logs
-    // const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-    //   logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
-    //   logDestinationType: 's3',
-    //   trafficType: 'ALL',
-    //   vpcId: mainVpc.id,
-    //   tags: {
-    //     Name: 'vpc-flow-logs',
-    //     ...config.tags,
-    //   },
-    // });
-    // this.flowLogId = vpcFlowLog.id;
+    const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
+      logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
+      logDestinationType: 's3',
+      trafficType: 'ALL',
+      vpcId: mainVpc.id,
+      tags: {
+        Name: 'vpc-flow-logs',
+        ...config.tags,
+      },
+    });
+    this.flowLogId = vpcFlowLog.id;
   }
 }
 
