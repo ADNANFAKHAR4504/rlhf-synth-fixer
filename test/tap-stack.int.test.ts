@@ -280,7 +280,7 @@ describe('News Aggregator Stack Integration Tests', () => {
 
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration?.State).toBe('Active');
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
       expect(response.Configuration?.Timeout).toBe(300);
       expect(response.Configuration?.MemorySize).toBe(1024);
     });

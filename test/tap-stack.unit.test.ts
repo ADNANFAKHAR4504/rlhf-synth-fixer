@@ -311,7 +311,7 @@ describe('TapStack CloudFormation Template - News Aggregator', () => {
 
     test('ContentAggregatorFunction should have correct runtime', () => {
       const func = template.Resources.ContentAggregatorFunction;
-      expect(func.Properties.Runtime).toBe('nodejs18.x');
+      expect(func.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('ContentAggregatorFunction should have correct timeout and memory', () => {

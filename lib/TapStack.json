@@ -455,7 +455,7 @@
         "FunctionName": {
           "Fn::Sub": "ContentAggregator${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -501,7 +501,7 @@
         "FunctionName": {
           "Fn::Sub": "UserPreferencesHandler${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -544,7 +544,7 @@
         "FunctionName": {
           "Fn::Sub": "PersonalizedFeedHandler${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
