@@ -26,14 +26,6 @@ export {};
           "Parameters": [
             "EnvironmentSuffix"
           ]
-        },
-        {
-          "Label": {
-            "default": "Email Configuration"
-          },
-          "Parameters": [
-            "SenderEmailAddress"
-          ]
         }
       ]
     }
@@ -420,9 +412,6 @@ export {};
     "DocumentGenerationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "DocumentGenerationRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -789,9 +778,6 @@ export {};
     "ApprovalStateMachineRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "ApprovalStateMachineRole-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
