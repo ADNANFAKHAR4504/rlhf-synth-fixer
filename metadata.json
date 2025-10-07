@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350010",
+  "team": "2",
+  "startedAt": "2025-10-07T18:28:52.498Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": "CloudFormation, KMS, S3 Bucket, SNS, IAM, ElasticBeanstalk, CodeBuild, CodePipeline, CloudWatchEvents"
+}
