@@ -168,7 +168,8 @@
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "yaml-cfn": "^0.3.2"
   },
   "dependencies": {
     "@aws-cdk/aws-pipes-alpha": "^2.204.0-alpha.0",

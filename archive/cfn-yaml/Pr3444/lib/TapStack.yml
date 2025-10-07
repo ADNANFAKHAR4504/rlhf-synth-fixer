@@ -1,0 +1,307 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Static Website Infrastructure with S3, CloudFront, Route53, CloudWatch, WAF, and Lambda@Edge'
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for the website (e.g., example.com)
+    Default: example.com
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: Environment suffix for resource naming
+  WebACLArn:
+    Type: String
+    Description: ARN of the WAF WebACL from us-east-1 stack
+    Default: ''
+  SecurityHeadersFunctionArn:
+    Type: String
+    Description: ARN of Lambda@Edge Security Headers function from us-east-1 stack
+    Default: ''
+  CustomHeadersFunctionArn:
+    Type: String
+    Description: ARN of Lambda@Edge Custom Headers function from us-east-1 stack
+    Default: ''
+
+Conditions:
+  HasWebACL: !Not [!Equals [!Ref WebACLArn, '']]
+  HasLambdaFunctions: !And
+    - !Not [!Equals [!Ref SecurityHeadersFunctionArn, '']]
+    - !Not [!Equals [!Ref CustomHeadersFunctionArn, '']]
+
+Resources:
+  # S3 Bucket for Website Content
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${DomainName}-website-${EnvironmentSuffix}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      MetricsConfigurations:
+        - Id: EntireBucket
+          Prefix: ''
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # S3 Bucket for CloudFront Logs
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${DomainName}-logs-${EnvironmentSuffix}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 30
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: true
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${LogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !GetAtt LogsBucket.Arn
+
+  # Origin Access Identity for CloudFront
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${DomainName}'
+
+  # Bucket Policy for Website Bucket
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontOAIRead
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebsiteBucket.Arn}/*'
+
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+      DistributionConfig:
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${OriginAccessIdentity}'
+        Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+          LambdaFunctionAssociations: !If
+            - HasLambdaFunctions
+            - - EventType: viewer-request
+                LambdaFunctionARN: !Ref SecurityHeadersFunctionArn
+              - EventType: origin-response
+                LambdaFunctionARN: !Ref CustomHeadersFunctionArn
+            - !Ref AWS::NoValue
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1.2_2021
+        Logging:
+          Bucket: !GetAtt LogsBucket.DomainName
+          Prefix: cloudfront-logs/
+          IncludeCookies: false
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /error.html
+        Comment: !Sub 'CloudFront distribution for ${DomainName}'
+        WebACLId: !If [HasWebACL, !Ref WebACLArn, !Ref AWS::NoValue]
+
+  # Note: Route53 and custom domain configuration removed due to ACM certificate region requirements
+  # CloudFront requires certificates in us-east-1, but we're deploying to us-west-2
+
+  # CloudWatch Dashboard
+  CloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'website-metrics-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/CloudFront", "CacheHitRate"],
+                  [".", "BytesDownloaded"],
+                  [".", "BytesUploaded"],
+                  [".", "Requests"]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "CloudFront Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/S3", "NumberOfObjects", "BucketName", "${WebsiteBucket}", "StorageType", "AllStorageTypes"],
+                  [".", "BucketSizeBytes", "BucketName", "${WebsiteBucket}", "StorageType", "StandardStorage"]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "S3 Storage Metrics",
+                "period": 86400
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/S3", "AllRequests", "BucketName", "${WebsiteBucket}", "FilterId", "EntireBucket"],
+                  [".", "GetRequests", "BucketName", "${WebsiteBucket}", "FilterId", "EntireBucket"],
+                  [".", "4xxErrors", "BucketName", "${WebsiteBucket}", "FilterId", "EntireBucket"],
+                  [".", "5xxErrors", "BucketName", "${WebsiteBucket}", "FilterId", "EntireBucket"]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "S3 Request Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/WAFV2", "BlockedRequests", "WebACL", "${DomainName}-waf-${EnvironmentSuffix}", "Region", "GLOBAL", "Rule", "RateLimitRule"],
+                  [".", "AllowedRequests", ".", ".", ".", ".", ".", "."],
+                  [".", "CountedRequests", ".", ".", ".", ".", ".", "."]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "us-east-1",
+                "title": "WAF Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  WebsiteBucketName:
+    Description: Name of the S3 bucket hosting the website
+    Value: !Ref WebsiteBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteBucket'
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-DistributionId'
+
+  CloudFrontDomainName:
+    Description: CloudFront Distribution Domain Name
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-DistributionDomain'
+
+  WebsiteURL:
+    Description: Website URL (via CloudFront)
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteURL'
+
+  LogsBucketName:
+    Description: Name of the S3 bucket for logs
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsBucket'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=website-metrics-${EnvironmentSuffix}'
+
+  WebACLArn:
+    Description: AWS WAF WebACL ARN
+    Value: !If [HasWebACL, !Ref WebACLArn, 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACLArn'
+
+  SecurityHeadersFunctionArn:
+    Description: Lambda@Edge Security Headers Function ARN
+    Value: !If [HasLambdaFunctions, !Ref SecurityHeadersFunctionArn, 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityHeadersFunction'
+
+  CustomHeadersFunctionArn:
+    Description: Lambda@Edge Custom Headers Function ARN
+    Value: !If [HasLambdaFunctions, !Ref CustomHeadersFunctionArn, 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-CustomHeadersFunction'
