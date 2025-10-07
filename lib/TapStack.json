@@ -265,6 +265,18 @@
         ""
       ]
     },
+    "UseExistingDataBucket": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "S3DataBucketName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
     "EmailSubscriptionEnabled": {
       "Fn::Not": [
         {
@@ -1401,8 +1413,9 @@
         ]
       }
     },
-    "CloudTrail": {
+    "CloudTrailNewBucket": {
       "Type": "AWS::CloudTrail::Trail",
+      "Condition": "CreateDataBucket",
       "DependsOn": [
         "DataBucketPolicy"
       ],
@@ -1411,15 +1424,7 @@
           "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
         },
         "S3BucketName": {
-          "Fn::If": [
-            "CreateDataBucket",
-            {
-              "Ref": "DataBucket"
-            },
-            {
-              "Ref": "S3DataBucketName"
-            }
-          ]
+          "Ref": "DataBucket"
         },
         "IncludeGlobalServiceEvents": true,
         "IsLogging": true,
@@ -1436,8 +1441,33 @@
             }
           ]
         }
-        /* Note: No EventSelectors with wildcard S3 DataResources. If you want S3 data events,
-           list specific bucket ARNs here or switch to an org-level trail with advanced selectors. */
+      }
+    },
+    "CloudTrailExistingBucket": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Condition": "UseExistingDataBucket",
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "S3DataBucketName"
+        },
+        "IncludeGlobalServiceEvents": true,
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {
+          "Fn::If": [
+            "CreateKmsKey",
+            {
+              "Ref": "KmsKey"
+            },
+            {
+              "Ref": "KmsKeyArn"
+            }
+          ]
+        }
       }
     },
     "OpsSnsTopic": {
