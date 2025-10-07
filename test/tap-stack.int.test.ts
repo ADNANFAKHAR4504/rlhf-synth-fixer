@@ -17,8 +17,8 @@ try {
   console.warn('Could not load cfn-outputs/flat-outputs.json:', error);
 }
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environment = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get environment suffix from environment variable (set by CI/CD pipeline) or CloudFormation outputs
+const environment = process.env.ENVIRONMENT_SUFFIX || outputs.Environment || 'dev';
 
 // Check if we're in CI/CD environment
 const isCI = process.env.CI === '1' || process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
