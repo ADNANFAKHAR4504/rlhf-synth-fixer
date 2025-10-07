@@ -103,17 +103,17 @@ exports.handler = async (event) => {
     const tableName = process.env.DYNAMODB_TABLE;
     const snsTopicArn = process.env.SNS_TOPIC_ARN;
     const ttlDays = parseInt(process.env.TTL_DAYS || '90');
-    
+
     const records = event.Records || [];
     const processedRecords = [];
-    
+
     for (const record of records) {
         try {
             // Decode Kinesis data
             const payload = JSON.parse(
                 Buffer.from(record.kinesis.data, 'base64').toString('utf-8')
             );
-            
+
             // Add metadata
             const item = {
                 ...payload,
@@ -122,13 +122,13 @@ exports.handler = async (event) => {
                 expires_at: Math.floor(Date.now() / 1000) + (ttlDays * 24 * 60 * 60),
                 processed_at: new Date().toISOString()
             };
-            
+
             // Store in DynamoDB
             await dynamodb.put({
                 TableName: tableName,
                 Item: item
             }).promise();
-            
+
             // Check for anomalies
             if (payload.temperature > 40 || payload.humidity > 95) {
                 await sns.publish({
@@ -144,14 +144,14 @@ exports.handler = async (event) => {
                     })
                 }).promise();
             }
-            
+
             processedRecords.push(item);
         } catch (error) {
             console.error('Error processing record:', error);
             throw error;
         }
     }
-    
+
     return {
         statusCode: 200,
         batchItemFailures: [],
@@ -177,13 +177,13 @@ cloudwatch = boto3.client('cloudwatch')
 def handler(event, context):
     table_name = os.environ['DYNAMODB_TABLE']
     sns_topic_arn = os.environ['SNS_TOPIC_ARN']
-    
+
     table = dynamodb.Table(table_name)
-    
+
     # Calculate time range for analysis (last 5 minutes)
     end_time = datetime.now()
     start_time = end_time - timedelta(minutes=5)
-    
+
     # Query recent sensor data
     try:
         # Scan for recent data (in production, use GSI for better performance)
@@ -192,9 +192,9 @@ def handler(event, context):
             ExpressionAttributeNames={'#ts': 'timestamp'},
             ExpressionAttributeValues={':start_time': int(start_time.timestamp() * 1000)}
         )
-        
+
         items = response.get('Items', [])
-        
+
         # Analyze data for anomalies
         anomalies = []
         metrics = {
@@ -202,7 +202,7 @@ def handler(event, context):
             'humidity': [],
             'soil_moisture': []
         }
-        
+
         for item in items:
             # Collect metrics
             if 'temperature' in item:
@@ -211,7 +211,7 @@ def handler(event, context):
                 metrics['humidity'].append(float(item['humidity']))
             if 'soil_moisture' in item:
                 metrics['soil_moisture'].append(float(item['soil_moisture']))
-            
+
             # Check for anomalies
             if 'temperature' in item and (float(item['temperature']) > 45 or float(item['temperature']) < -10):
                 anomalies.append({
@@ -220,7 +220,7 @@ def handler(event, context):
                     'value': float(item['temperature']),
                     'timestamp': item['timestamp']
                 })
-            
+
             if 'humidity' in item and float(item['humidity']) > 98:
                 anomalies.append({
                     'device_id': item['device_id'],
@@ -228,7 +228,7 @@ def handler(event, context):
                     'value': float(item['humidity']),
                     'timestamp': item['timestamp']
                 })
-        
+
         # Send CloudWatch metrics
         if metrics['temperature']:
             cloudwatch.put_metric_data(
@@ -241,7 +241,7 @@ def handler(event, context):
                     }
                 ]
             )
-        
+
         # Send alerts for anomalies
         if anomalies:
             message = {
@@ -252,13 +252,13 @@ def handler(event, context):
                 },
                 'anomalies': anomalies[:10]  # Limit to first 10
             }
-            
+
             sns.publish(
                 TopicArn=sns_topic_arn,
                 Subject='IoT Anomaly Detection Alert',
                 Message=json.dumps(message, default=str)
             )
-        
+
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -266,7 +266,7 @@ def handler(event, context):
                 'anomalies_found': len(anomalies)
             })
         }
-        
+
     except Exception as e:
         print(f"Error in anomaly detection: {str(e)}")
         raise e
@@ -294,7 +294,7 @@ resource "aws_kms_key" "iot_key" {
   description             = "KMS key for IoT data encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -364,7 +364,7 @@ resource "aws_kms_key" "iot_key" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -376,7 +376,7 @@ resource "aws_kms_alias" "iot_key_alias" {
 # IAM Roles and Policies
 resource "aws_iam_role" "iot_role" {
   name = "${var.project_name}-iot-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -389,14 +389,14 @@ resource "aws_iam_role" "iot_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "iot_policy" {
   name        = "${var.project_name}-iot-policy"
   description = "Policy for IoT services"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -437,7 +437,7 @@ resource "aws_iam_role_policy_attachment" "iot_policy_attachment" {
 
 resource "aws_iam_role" "lambda_role" {
   name = "${var.project_name}-lambda-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -450,14 +450,14 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "lambda_policy" {
   name        = "${var.project_name}-lambda-policy"
   description = "Policy for Lambda functions"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -533,7 +533,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 # IoT Core Setup
 resource "aws_iot_thing_type" "sensor_type" {
   name = "${var.project_name}-sensor-type"
-  
+
   properties {
     description = "Agriculture IoT sensor"
   }
@@ -541,7 +541,7 @@ resource "aws_iot_thing_type" "sensor_type" {
 
 resource "aws_iot_policy" "sensor_policy" {
   name = "${var.project_name}-sensor-policy"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -575,20 +575,20 @@ resource "aws_iot_topic_rule" "sensor_data_rule" {
   enabled     = true
   sql         = "SELECT * FROM 'sensors/data'"
   sql_version = "2016-03-23"
-  
+
   kinesis {
     role_arn      = aws_iam_role.iot_role.arn
     stream_name   = aws_kinesis_stream.iot_stream.name
     partition_key = "$${topic()}"
   }
-  
+
   error_action {
     cloudwatch_logs {
       role_arn       = aws_iam_role.iot_role.arn
       log_group_name = aws_cloudwatch_log_group.iot_errors.name
     }
   }
-  
+
   tags = local.common_tags
 }
 
@@ -597,7 +597,7 @@ resource "aws_cloudwatch_log_group" "iot_errors" {
   name              = "/aws/iot/${var.project_name}/errors"
   retention_in_days = var.retention_days
   kms_key_id        = aws_kms_key.iot_key.arn
-  
+
   tags = local.common_tags
 }
 
@@ -606,14 +606,14 @@ resource "aws_kinesis_stream" "iot_stream" {
   name             = "${var.project_name}-data-stream"
   shard_count      = var.kinesis_shard_count
   retention_period = 24  # Hours
-  
+
   encryption_type = "KMS"
   kms_key_id      = aws_kms_key.iot_key.arn
-  
+
   stream_mode_details {
     stream_mode = "PROVISIONED"
   }
-  
+
   tags = local.common_tags
 }
 
@@ -622,7 +622,7 @@ resource "aws_cloudwatch_log_group" "kinesis_logs" {
   name              = "/aws/kinesis/${aws_kinesis_stream.iot_stream.name}"
   retention_in_days = var.retention_days
   kms_key_id        = aws_kms_key.iot_key.arn
-  
+
   tags = local.common_tags
 }
 
@@ -634,27 +634,27 @@ resource "aws_dynamodb_table" "iot_data" {
   write_capacity = var.dynamodb_write_capacity
   hash_key       = "device_id"
   range_key      = "timestamp"
-  
+
   attribute {
     name = "device_id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"
   }
-  
+
   attribute {
     name = "sensor_type"
     type = "S"
   }
-  
+
   attribute {
     name = "location_id"
     type = "S"
   }
-  
+
   global_secondary_index {
     name            = "SensorTypeIndex"
     hash_key        = "sensor_type"
@@ -663,7 +663,7 @@ resource "aws_dynamodb_table" "iot_data" {
     read_capacity   = 50
     projection_type = "ALL"
   }
-  
+
   global_secondary_index {
     name            = "LocationIndex"
     hash_key        = "location_id"
@@ -672,21 +672,21 @@ resource "aws_dynamodb_table" "iot_data" {
     read_capacity   = 50
     projection_type = "ALL"
   }
-  
+
   ttl {
     attribute_name = "expires_at"
     enabled        = true
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.iot_key.arn
   }
-  
+
   tags = local.common_tags
 }
 
@@ -701,7 +701,7 @@ resource "aws_lambda_function" "data_processor" {
   memory_size      = 512
   filename         = data.archive_file.data_processor_zip.output_path
   source_code_hash = data.archive_file.data_processor_zip.output_base64sha256
-  
+
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.iot_data.name
@@ -709,7 +709,7 @@ resource "aws_lambda_function" "data_processor" {
       TTL_DAYS       = var.sensor_data_ttl_days
     }
   }
-  
+
   tags = local.common_tags
 }
 
@@ -730,7 +730,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/${aws_lambda_function.data_processor.function_name}"
   retention_in_days = var.retention_days
   kms_key_id        = aws_kms_key.iot_key.arn
-  
+
   tags = local.common_tags
 }
 
@@ -745,14 +745,14 @@ resource "aws_lambda_function" "anomaly_detector" {
   memory_size      = 1024
   filename         = data.archive_file.anomaly_detector_zip.output_path
   source_code_hash = data.archive_file.anomaly_detector_zip.output_base64sha256
-  
+
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.iot_data.name
       SNS_TOPIC_ARN  = aws_sns_topic.iot_alerts.arn
     }
   }
-  
+
   tags = local.common_tags
 }
 
@@ -761,7 +761,7 @@ resource "aws_cloudwatch_log_group" "anomaly_detector_logs" {
   name              = "/aws/lambda/${aws_lambda_function.anomaly_detector.function_name}"
   retention_in_days = var.retention_days
   kms_key_id        = aws_kms_key.iot_key.arn
-  
+
   tags = local.common_tags
 }
 
@@ -770,7 +770,7 @@ resource "aws_cloudwatch_event_rule" "anomaly_detection_schedule" {
   name                = "${var.project_name}-anomaly-detection-schedule"
   description         = "Triggers anomaly detection every 5 minutes"
   schedule_expression = "rate(5 minutes)"
-  
+
   tags = local.common_tags
 }
 
@@ -792,7 +792,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 resource "aws_sns_topic" "iot_alerts" {
   name              = "${var.project_name}-alerts"
   kms_master_key_id = aws_kms_key.iot_key.id
-  
+
   tags = local.common_tags
 }
 
@@ -815,11 +815,11 @@ resource "aws_cloudwatch_metric_alarm" "kinesis_throttled_records" {
   alarm_description   = "This alarm monitors Kinesis throttled records"
   alarm_actions       = [aws_sns_topic.iot_alerts.arn]
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     StreamName = aws_kinesis_stream.iot_stream.name
   }
-  
+
   tags = local.common_tags
 }
 
@@ -835,11 +835,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_description   = "This alarm monitors Lambda function errors"
   alarm_actions       = [aws_sns_topic.iot_alerts.arn]
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     FunctionName = aws_lambda_function.data_processor.function_name
   }
-  
+
   tags = local.common_tags
 }
 
@@ -855,17 +855,17 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttled_requests" {
   alarm_description   = "This alarm monitors DynamoDB throttled requests"
   alarm_actions       = [aws_sns_topic.iot_alerts.arn]
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     TableName = aws_dynamodb_table.iot_data.name
   }
-  
+
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_dashboard" "iot_dashboard" {
   dashboard_name = "${var.project_name}-monitoring-dashboard"
-  
+
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -950,7 +950,7 @@ resource "aws_cloudwatch_dashboard" "iot_dashboard" {
 # IAM Role for QuickSight to access DynamoDB
 resource "aws_iam_role" "quicksight_service_role" {
   name = "${var.project_name}-quicksight-service-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -963,14 +963,14 @@ resource "aws_iam_role" "quicksight_service_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "quicksight_dynamodb_access" {
   name        = "${var.project_name}-quicksight-dynamodb-access"
   description = "Policy for QuickSight to access DynamoDB IoT data"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
