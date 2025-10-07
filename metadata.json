@@ -10,5 +10,18 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "IoT Core",
+    "Kinesis Data Streams",
+    "Lambda",
+    "DynamoDB",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "QuickSight",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10
 }

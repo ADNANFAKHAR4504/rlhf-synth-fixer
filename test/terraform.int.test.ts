@@ -105,7 +105,7 @@ describe('IoT Monitoring System Integration Tests', () => {
         const roleArns = outputs.iam_role_arns.value;
         expect(roleArns.iot_role).toMatch(/^arn:aws:iam::\d+:role\/agri-iot-monitor-iot-role$/);
         expect(roleArns.lambda_role).toMatch(/^arn:aws:iam::\d+:role\/agri-iot-monitor-lambda-role$/);
-        expect(roleArns.quicksight_role).toMatch(/^arn:aws:iam::\d+:role\/agri-iot-monitor-quicksight-role$/);
+        expect(roleArns.quicksight_role).toMatch(/^arn:aws:iam::\d+:role\/agri-iot-monitor-quicksight-service-role$/);
       });
 
       test('IAM roles follow naming conventions', () => {
@@ -513,7 +513,7 @@ function createMockIoTOutputs(): TerraformOutputs {
       value: {
         iot_role: "arn:aws:iam::123456789012:role/agri-iot-monitor-iot-role",
         lambda_role: "arn:aws:iam::123456789012:role/agri-iot-monitor-lambda-role",
-        quicksight_role: "arn:aws:iam::123456789012:role/agri-iot-monitor-quicksight-role"
+        quicksight_role: "arn:aws:iam::123456789012:role/agri-iot-monitor-quicksight-service-role"
       }
     },
     kms_key_arn: {
