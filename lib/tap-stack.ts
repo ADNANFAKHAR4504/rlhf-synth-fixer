@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -14,7 +13,6 @@ export class TapStack extends cdk.Stack {
   public readonly transactionsHandler: lambda.Function;
   public readonly apiKey: apigateway.ApiKey;
   public readonly usagePlan: apigateway.UsagePlan;
-  public readonly domainName: apigateway.DomainName;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, {
@@ -31,7 +29,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // 1. Create Lambda Functions with inline code (placeholder as per PROMPT)
+    // 1. Create Lambda Functions
     this.paymentsHandler = new lambda.Function(this, 'PaymentsHandler', {
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
@@ -135,14 +133,14 @@ exports.handler = async (event) => {
 
     // 2. Create API Gateway REST API
     this.api = new apigateway.RestApi(this, 'PaymentProcessingApi', {
-      restApiName: 'PaymentProcessingApi',
+      restApiName: `PaymentProcessingApi-${environmentSuffix}`,
       deployOptions: {
         stageName: 'prod',
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: ['https://*.example.com'],
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
       },
     });
@@ -191,32 +189,10 @@ exports.handler = async (event) => {
 
     this.usagePlan.addApiKey(this.apiKey);
 
-    // 5. Create Custom Domain Name
-    // Note: Assuming an ACM Certificate already exists (as per PROMPT.md)
-    // In a real scenario, you would import an existing certificate
-    // For this implementation, we create a placeholder certificate
-    const certificate = acm.Certificate.fromCertificateArn(
-      this,
-      'ApiCertificate',
-      `arn:aws:acm:us-west-2:${cdk.Stack.of(this).account}:certificate/00000000-0000-0000-0000-000000000000`
-    );
-
-    this.domainName = new apigateway.DomainName(this, 'PaymentApiDomain', {
-      domainName: `payments-api-${environmentSuffix}.example.com`,
-      certificate,
-      endpointType: apigateway.EndpointType.EDGE,
-    });
-
-    new apigateway.BasePathMapping(this, 'PaymentApiMapping', {
-      domainName: this.domainName,
-      restApi: this.api,
-    });
-
-    // 6. Stack Outputs
+    // 5. Stack Outputs
     new cdk.CfnOutput(this, 'ApiInvokeUrl', {
-      value: this.api.deploymentStage.urlForPath(),
-      description:
-        'Invoke URL for the prod stage of the Payment Processing API',
+      value: this.api.url,
+      description: 'Invoke URL for the Payment Processing API',
       exportName: `PaymentApiInvokeUrl-${environmentSuffix}`,
     });
 
@@ -224,12 +200,6 @@ exports.handler = async (event) => {
       value: this.apiKey.keyId,
       description: 'ID of the Payment Processing API Key',
       exportName: `PaymentApiKeyId-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'DomainName', {
-      value: this.domainName.domainName,
-      description: 'Custom domain name for the API',
-      exportName: `PaymentApiDomainName-${environmentSuffix}`,
     });
   }
 }

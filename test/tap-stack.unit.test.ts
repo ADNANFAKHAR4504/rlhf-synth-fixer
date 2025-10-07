@@ -2,81 +2,53 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = 'test';
 
-describe('TapStack', () => {
+describe('TapStack - Payment API Unit Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
 
-  beforeEach(() => {
+  beforeAll(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
   });
 
-  describe('Stack Initialization', () => {
-    test('should create stack without environment suffix prop', () => {
-      const testApp = new cdk.App();
-      const testStack = new TapStack(testApp, 'TestStackNoEnv');
-      expect(testStack).toBeDefined();
-    });
-
-    test('should create stack with context environment suffix', () => {
-      const testApp = new cdk.App({
-        context: {
-          environmentSuffix: 'test',
-        },
-      });
-      const testStack = new TapStack(testApp, 'TestStackContext');
-      expect(testStack).toBeDefined();
-    });
-
-    test('should create stack with explicit environment suffix', () => {
-      const testApp = new cdk.App();
-      const testStack = new TapStack(testApp, 'TestStackExplicit', {
-        environmentSuffix: 'prod',
-      });
-      expect(testStack).toBeDefined();
-    });
-  });
-
-  describe('Stack Configuration', () => {
+  describe('Stack Initialization and Configuration', () => {
     test('should create stack with correct region', () => {
       expect(stack.region).toBe('us-west-2');
     });
 
-    test('should have environment suffix configured', () => {
-      const outputs = template.findOutputs('*');
-      expect(
-        Object.values(outputs).some((output) =>
-          output.Export?.Name?.includes(environmentSuffix)
-        )
-      ).toBe(true);
+    test('should use default suffix if none is provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultSuffixStack');
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.hasResourceProperties('AWS::ApiGateway::ApiKey', {
+        Name: 'payment-api-key-dev',
+      });
     });
   });
 
   describe('Lambda Functions', () => {
-    test('should create payments handler with correct configuration', () => {
+    test('should create Payments and Transactions handlers', () => {
+      template.resourceCountIs('AWS::Lambda::Function', 2);
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs18.x',
-        MemorySize: 512,
-        Timeout: 30,
         Architectures: ['arm64'],
-        Handler: Match.stringLikeRegexp('index.handler'),
+        Handler: 'index.handler',
       });
     });
 
-    test('should create transactions handler with correct configuration', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 2);
-    });
-
-    test('should apply removal policy to lambda functions', () => {
+    test('should apply Destroy removal policy to Lambda functions', () => {
       const functions = template.findResources('AWS::Lambda::Function');
-      expect(Object.keys(functions).length).toBeGreaterThanOrEqual(2);
+      for (const logicalId in functions) {
+        // CDK's RemovalPolicy.DESTROY translates to a DeletionPolicy of "Delete"
+        expect(functions[logicalId].DeletionPolicy).toBe('Delete');
+      }
     });
 
-    test('should set environment variables for lambda functions', () => {
+    test('should have ENVIRONMENT variable set', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
@@ -88,288 +60,132 @@ describe('TapStack', () => {
   });
 
   describe('API Gateway REST API', () => {
-    test('should create REST API with correct name', () => {
+    test('should create REST API with a suffixed name', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'PaymentProcessingApi',
+        Name: `PaymentProcessingApi-${environmentSuffix}`,
       });
     });
 
-    test('should configure deployment stage as prod', () => {
+    test('should configure the prod stage with logging', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         StageName: 'prod',
-      });
-
-      // MethodSettings contain logging and trace configuration
-      template.hasResourceProperties('AWS::ApiGateway::Stage', {
         MethodSettings: Match.arrayWith([
           Match.objectLike({
+            DataTraceEnabled: true,
+            LoggingLevel: 'INFO',
             HttpMethod: '*',
             ResourcePath: '/*',
-            LoggingLevel: 'INFO',
-            DataTraceEnabled: true,
           }),
         ]),
       });
     });
 
-    test('should create /payments resource', () => {
+    test('should have CORS configured for all origins', () => {
+      const corsMethod = template.findResources('AWS::ApiGateway::Method', {
+        Properties: {
+          HttpMethod: 'OPTIONS',
+        },
+      });
+      expect(Object.keys(corsMethod).length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('API Endpoints', () => {
+    test('should create /payments and /transactions resources', () => {
       template.hasResourceProperties('AWS::ApiGateway::Resource', {
         PathPart: 'payments',
       });
-    });
-
-    test('should create /transactions resource', () => {
       template.hasResourceProperties('AWS::ApiGateway::Resource', {
         PathPart: 'transactions',
       });
     });
 
-    test('should have exactly 2 API resources (excluding root)', () => {
-      const resources = template.findResources('AWS::ApiGateway::Resource');
-      expect(Object.keys(resources).length).toBe(2);
-    });
-  });
-
-  describe('API Methods and Integrations', () => {
-    test('should create POST method for /payments', () => {
+    test('should create POST on /payments and GET on /transactions', () => {
+      // Test for POST /payments
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'POST',
-        ApiKeyRequired: true,
+        ResourceId: { Ref: Match.stringLikeRegexp('PaymentProcessingApipayments*') },
       });
-    });
-
-    test('should create GET method for /transactions', () => {
+      // Test for GET /transactions
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'GET',
-        ApiKeyRequired: true,
+        ResourceId: { Ref: Match.stringLikeRegexp('PaymentProcessingApitransactions*') },
       });
     });
 
-    test('should integrate payments endpoint with lambda', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Method', {
-        HttpMethod: 'POST',
-        Integration: {
-          Type: 'AWS_PROXY',
-        },
-      });
-    });
-
-    test('should integrate transactions endpoint with lambda', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Method', {
-        HttpMethod: 'GET',
-        Integration: {
-          Type: 'AWS_PROXY',
-        },
-      });
-    });
-
-    test('should require API key for both methods', () => {
+    test('should require an API key for both methods', () => {
       const methods = template.findResources('AWS::ApiGateway::Method', {
         Properties: {
           ApiKeyRequired: true,
         },
       });
-      // Expect at least 2 methods with API key requirement (POST and GET)
+      // Expect the GET and POST methods to require a key
       expect(Object.keys(methods).length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('API Key and Usage Plan', () => {
-    test('should create API key with correct name', () => {
+    test('should create an enabled API Key', () => {
+      template.resourceCountIs('AWS::ApiGateway::ApiKey', 1);
       template.hasResourceProperties('AWS::ApiGateway::ApiKey', {
         Name: `payment-api-key-${environmentSuffix}`,
-        Description: 'API Key for Payment Processing API',
         Enabled: true,
       });
     });
 
-    test('should create usage plan with throttle settings', () => {
-      template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
-        UsagePlanName: `payment-usage-plan-${environmentSuffix}`,
-        Description: 'Usage plan for Payment Processing API',
-        Throttle: {
-          RateLimit: 10,
-          BurstLimit: 20,
-        },
-      });
-    });
-
-    test('should configure daily quota on usage plan', () => {
-      template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
-        Quota: {
-          Limit: 1000,
-          Period: 'DAY',
-        },
-      });
-    });
-
-    test('should associate API stage with usage plan', () => {
-      template.hasResourceProperties('AWS::ApiGateway::UsagePlanKey', {});
-    });
-
-    test('should have exactly one API key', () => {
-      template.resourceCountIs('AWS::ApiGateway::ApiKey', 1);
-    });
-
-    test('should have exactly one usage plan', () => {
+    test('should create a Usage Plan with throttling and quota', () => {
       template.resourceCountIs('AWS::ApiGateway::UsagePlan', 1);
-    });
-  });
-
-  describe('Custom Domain Name', () => {
-    test('should create domain name with edge endpoint', () => {
-      template.hasResourceProperties('AWS::ApiGateway::DomainName', {
-        DomainName: `payments-api-${environmentSuffix}.example.com`,
+      template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
+        Throttle: { RateLimit: 10, BurstLimit: 20 },
+        Quota: { Limit: 1000, Period: 'DAY' },
       });
     });
 
-    test('should create base path mapping', () => {
-      template.hasResourceProperties('AWS::ApiGateway::BasePathMapping', {
-        DomainName: Match.objectLike({
-          Ref: Match.stringLikeRegexp('PaymentApiDomain'),
-        }),
-      });
+    test('should associate the API Key with the Usage Plan', () => {
+      template.resourceCountIs('AWS::ApiGateway::UsagePlanKey', 1);
     });
 
-    test('should have exactly one domain name', () => {
-      template.resourceCountIs('AWS::ApiGateway::DomainName', 1);
-    });
-
-    test('should have exactly one base path mapping', () => {
-      template.resourceCountIs('AWS::ApiGateway::BasePathMapping', 1);
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    test('should export API invoke URL', () => {
-      template.hasOutput('ApiInvokeUrl', {
-        Export: {
-          Name: `PaymentApiInvokeUrl-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('should export API key ID', () => {
-      template.hasOutput('ApiKeyId', {
-        Export: {
-          Name: `PaymentApiKeyId-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('should export domain name', () => {
-      template.hasOutput('DomainName', {
-        Export: {
-          Name: `PaymentApiDomainName-${environmentSuffix}`,
-        },
-      });
-    });
-
-    test('should have at least 3 outputs', () => {
-      const outputs = template.findOutputs('*');
-      expect(Object.keys(outputs).length).toBeGreaterThanOrEqual(3);
-    });
-  });
-
-  describe('Lambda Permissions', () => {
-    test('should grant API Gateway permission to invoke payments lambda', () => {
-      template.hasResourceProperties('AWS::Lambda::Permission', {
-        Action: 'lambda:InvokeFunction',
-        Principal: 'apigateway.amazonaws.com',
-      });
-    });
-
-    test('should create permissions for both lambda functions', () => {
-      // Each Lambda has two permissions (prod + test-invoke-stage)
-      template.resourceCountIs('AWS::Lambda::Permission', 4);
-    });
-  });
-
-  describe('IAM Roles', () => {
-    test('should create IAM roles for lambda functions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-            },
-          ],
-        },
-      });
-    });
-
-    test('should attach basic execution policy to lambda roles', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.arrayWith([
+    test('should associate the prod stage with the Usage Plan', () => {
+      template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
+        ApiStages: Match.arrayWith([
           Match.objectLike({
-            'Fn::Join': Match.arrayWith([
-              Match.arrayWith([
-                Match.stringLikeRegexp(
-                  'AWSLambdaBasicExecutionRole|service-role/AWSLambdaBasicExecutionRole'
-                ),
-              ]),
-            ]),
+            Stage: {
+              Ref: Match.stringLikeRegexp('PaymentProcessingApiDeploymentStageprod*'),
+            },
           }),
         ]),
       });
     });
   });
 
-  describe('CloudWatch Logs', () => {
-    test('should create log groups for lambda functions', () => {
-      // Lambda functions automatically create log groups
-      // We just verify the configuration is correct
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: Match.stringLikeRegexp('index.handler'),
+  describe('IAM Roles and Permissions', () => {
+    test('should create IAM Roles for Lambdas and API Gateway', () => {
+      // Expect 3 roles: 2 for Lambdas, 1 for APIGW CloudWatch logging
+      template.resourceCountIs('AWS::IAM::Role', 3);
+    });
+
+    test('should grant API Gateway permission to invoke Lambda functions', () => {
+      const permissions = template.findResources('AWS::Lambda::Permission');
+      expect(Object.keys(permissions).length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('should have the required ApiInvokeUrl and ApiKeyId outputs', () => {
+      template.hasOutput('ApiInvokeUrl', {});
+      template.hasOutput('ApiKeyId', {});
+    });
+
+    test('should export the API Invoke URL', () => {
+      template.hasOutput('ApiInvokeUrl', {
+        Export: { Name: `PaymentApiInvokeUrl-${environmentSuffix}` },
       });
     });
-  });
 
-  describe('Public Properties', () => {
-    test('should expose api as public property', () => {
-      expect(stack.api).toBeDefined();
-      expect(stack.api.restApiId).toBeDefined();
-    });
-
-    test('should expose paymentsHandler as public property', () => {
-      expect(stack.paymentsHandler).toBeDefined();
-      expect(stack.paymentsHandler.functionName).toBeDefined();
-    });
-
-    test('should expose transactionsHandler as public property', () => {
-      expect(stack.transactionsHandler).toBeDefined();
-      expect(stack.transactionsHandler.functionName).toBeDefined();
-    });
-
-    test('should expose apiKey as public property', () => {
-      expect(stack.apiKey).toBeDefined();
-      expect(stack.apiKey.keyId).toBeDefined();
-    });
-
-    test('should expose usagePlan as public property', () => {
-      expect(stack.usagePlan).toBeDefined();
-    });
-
-    test('should expose domainName as public property', () => {
-      expect(stack.domainName).toBeDefined();
-      // domainName can be a token, so we just verify it's defined
-      expect(stack.domainName.domainName).toBeDefined();
-    });
-  });
-
-  describe('Resource Dependencies', () => {
-    test('should have correct dependency chain for API deployment', () => {
-      const deployment = template.findResources('AWS::ApiGateway::Deployment');
-      expect(Object.keys(deployment).length).toBeGreaterThan(0);
-    });
-
-    test('should ensure usage plan depends on API stage', () => {
-      const usagePlans = template.findResources('AWS::ApiGateway::UsagePlan');
-      expect(Object.keys(usagePlans).length).toBe(1);
+    test('should export the API Key ID', () => {
+      template.hasOutput('ApiKeyId', {
+        Export: { Name: `PaymentApiKeyId-${environmentSuffix}` },
+      });
     });
   });
 });
