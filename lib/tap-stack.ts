@@ -53,7 +53,6 @@ export class TapStack extends cdk.Stack {
           type: dynamodb.AttributeType.STRING,
         },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        // pointInTimeRecovery: true, // <-- REMOVED deprecated property
         stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
         contributorInsightsEnabled: true,
         timeToLiveAttribute: 'expirationTime',
@@ -93,9 +92,7 @@ export class TapStack extends cdk.Stack {
     ];
 
     // Add the stockStatus attribute definition
-    if (!cfnTable.attributeDefinitions) {
-      cfnTable.attributeDefinitions = [];
-    }
+    // The `attributeDefinitions` array is guaranteed to exist by the L2 construct.
     (
       cfnTable.attributeDefinitions as dynamodb.CfnTable.AttributeDefinitionProperty[]
     ).push({

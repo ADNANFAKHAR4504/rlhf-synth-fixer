@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -49,29 +48,6 @@ describe('TapStack - DynamoDB Inventory Management System', () => {
       template = Template.fromStack(stack);
       template.resourceCountIs('AWS::DynamoDB::Table', 1);
     });
-
-    test('should initialize correctly when attributeDefinitions are missing at construction time', () => {
-      // Mock the dynamodb.Table so it starts without attributeDefinitions
-      const app = new cdk.App();
-      const stack = new TapStack(app, 'NoAttributeDefStack', {
-        environmentSuffix: 'test',
-      });
-
-      const cfnTable = stack.productInventoryTable.node
-        .defaultChild as dynamodb.CfnTable;
-
-      // Manually remove attributeDefinitions to simulate missing case
-      delete cfnTable.attributeDefinitions;
-
-      // Re-run the logic that conditionally initializes attributeDefinitions
-      if (!cfnTable.attributeDefinitions) {
-        cfnTable.attributeDefinitions = [];
-      }
-
-      expect(Array.isArray(cfnTable.attributeDefinitions)).toBe(true);
-      expect(cfnTable.attributeDefinitions.length).toBeGreaterThanOrEqual(0);
-    });
-
   });
 
   //
@@ -204,9 +180,9 @@ describe('TapStack - DynamoDB Inventory Management System', () => {
     });
 
     //
-    // Attribute Definitions + Branch Coverage
+    // Attribute Definitions
     //
-    describe('9. Attribute Definitions Completeness', () => {
+    describe('7. Attribute Definitions Completeness', () => {
       test('should have all required attribute definitions', () => {
         const resources = template.findResources('AWS::DynamoDB::Table');
         const table = Object.values(resources)[0] as any;
@@ -216,30 +192,6 @@ describe('TapStack - DynamoDB Inventory Management System', () => {
         expect(attributes).toEqual(
           expect.arrayContaining(['productId', 'warehouseId', 'stockStatus', 'lastUpdated'])
         );
-      });
-
-      // ✅ Branch Coverage Test
-      test('should initialize correctly when attributeDefinitions are missing at construction time', () => {
-        const app = new cdk.App();
-
-        // Temporarily patch renderTableProps to simulate missing definitions
-        const originalRenderTableProps = (dynamodb.Table as any).prototype.renderTableProps;
-
-        (dynamodb.Table as any).prototype.renderTableProps = function (props: any) {
-          delete props.attributeDefinitions;
-          return originalRenderTableProps.call(this, props);
-        };
-
-        const stack = new TapStack(app, 'BranchCoverageStack', {
-          environmentSuffix: 'test',
-        });
-        const template = Template.fromStack(stack);
-
-        // Validate table still creates successfully
-        template.resourceCountIs('AWS::DynamoDB::Table', 1);
-
-        // Restore the original method
-        (dynamodb.Table as any).prototype.renderTableProps = originalRenderTableProps;
       });
     });
   });
