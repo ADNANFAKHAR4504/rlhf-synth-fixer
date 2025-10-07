@@ -192,7 +192,6 @@ export class TapStack extends cdk.Stack {
     });
 
     const staticAssetBucket = new s3.Bucket(this, 'StaticAssetBucket', {
-      bucketName: resourceName('assets'),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey,
       enforceSSL: true,
@@ -203,7 +202,6 @@ export class TapStack extends cdk.Stack {
     });
 
     const userTable = new dynamodb.Table(this, 'UsersTable', {
-      tableName: resourceName('users'),
       partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
@@ -222,7 +220,6 @@ export class TapStack extends cdk.Stack {
     });
 
     const productTable = new dynamodb.Table(this, 'ProductsTable', {
-      tableName: resourceName('products'),
       partitionKey: { name: 'productId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
@@ -241,7 +238,6 @@ export class TapStack extends cdk.Stack {
     });
 
     const orderTable = new dynamodb.Table(this, 'OrdersTable', {
-      tableName: resourceName('orders'),
       partitionKey: { name: 'orderId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
