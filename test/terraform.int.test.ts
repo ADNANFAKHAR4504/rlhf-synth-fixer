@@ -205,50 +205,63 @@ describe("Terraform infrastructure integration", () => {
     });
   });
 
-  test("Internet gateway and route tables provide expected routing", async () => {
-    const igwResult = await ec2Client.send(new DescribeInternetGatewaysCommand({}));
-    const internetGateways = (igwResult.InternetGateways ?? []).filter(gw =>
-      (gw.Attachments ?? []).some(attachment => attachment.VpcId === vpcId)
-    );
-    expect(internetGateways.length).toBeGreaterThan(0);
-    const igwId = internetGateways[0].InternetGatewayId ?? "";
-    expect(igwId).not.toBe("");
+  describe("Network routing", () => {
+    let igwId = "";
+    let routeTables: any[] = [];
+    let natGateway: any;
 
-    const routeTablesResult = await ec2Client.send(new DescribeRouteTablesCommand({}));
-    const routeTables = (routeTablesResult.RouteTables ?? []).filter(table => table.VpcId === vpcId);
-    expect(routeTables.length).toBeGreaterThan(0);
-
-    const findRouteTableForSubnet = (subnetId: string) =>
-      routeTables.find(table => (table.Associations ?? []).some(assoc => assoc.SubnetId === subnetId));
-
-    publicSubnetIds.forEach(subnetId => {
-      const routeTable = findRouteTableForSubnet(subnetId);
-      expect(routeTable).toBeDefined();
-      const hasIgwRoute = routeTable?.Routes?.some(route =>
-        route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId === igwId
+    beforeAll(async () => {
+      const igwResult = await ec2Client.send(new DescribeInternetGatewaysCommand({}));
+      const internetGateways = (igwResult.InternetGateways ?? []).filter(gw =>
+        (gw.Attachments ?? []).some(attachment => attachment.VpcId === vpcId)
       );
-      expect(hasIgwRoute).toBe(true);
+      igwId = internetGateways[0]?.InternetGatewayId ?? "";
+
+      const routeTablesResult = await ec2Client.send(new DescribeRouteTablesCommand({}));
+      routeTables = (routeTablesResult.RouteTables ?? []).filter(table => table.VpcId === vpcId);
+
+      const natResult = await ec2Client.send(new DescribeNatGatewaysCommand({}));
+      const natGateways = (natResult.NatGateways ?? []).filter(gateway => gateway.VpcId === vpcId);
+      natGateway = natGateways.find(gateway => gateway.State === "available") ?? natGateways[0];
     });
 
-    privateSubnetIds.forEach(subnetId => {
-      const routeTable = findRouteTableForSubnet(subnetId);
-      expect(routeTable).toBeDefined();
-      const hasNatRoute = routeTable?.Routes?.some(route =>
-        route.DestinationCidrBlock === "0.0.0.0/0" && Boolean(route.NatGatewayId)
-      );
-      expect(hasNatRoute).toBe(true);
-    });
-  });
+    const findRouteTableForSubnet = (subnetId: string, tables: any[]) =>
+      tables.find(table => (table.Associations ?? []).some((assoc: any) => assoc.SubnetId === subnetId));
 
-  test("NAT gateway is provisioned in a public subnet", async () => {
-    const natResult = await ec2Client.send(new DescribeNatGatewaysCommand({}));
-    const natGateways = (natResult.NatGateways ?? []).filter(gateway => gateway.VpcId === vpcId);
-    expect(natGateways.length).toBeGreaterThan(0);
-    const availableNat = natGateways.find(gateway => gateway.State === "available");
-    expect(availableNat).toBeDefined();
-    const natSubnetId = availableNat?.SubnetId;
-    expect(natSubnetId).toBeDefined();
-    expect(publicSubnetIds).toContain(natSubnetId);
+    test("Internet gateway is attached to the VPC", () => {
+      expect(igwId).not.toBe("");
+    });
+
+    test("Public subnets route through the internet gateway", () => {
+      expect(routeTables.length).toBeGreaterThan(0);
+      publicSubnetIds.forEach(subnetId => {
+        const routeTable = findRouteTableForSubnet(subnetId, routeTables);
+        expect(routeTable).toBeDefined();
+        const hasIgwRoute = routeTable?.Routes?.some((route: any) =>
+          route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId === igwId
+        );
+        expect(hasIgwRoute).toBe(true);
+      });
+    });
+
+    test("Private subnets route through the NAT gateway", () => {
+      expect(natGateway).toBeDefined();
+      privateSubnetIds.forEach(subnetId => {
+        const routeTable = findRouteTableForSubnet(subnetId, routeTables);
+        expect(routeTable).toBeDefined();
+        const hasNatRoute = routeTable?.Routes?.some((route: any) =>
+          route.DestinationCidrBlock === "0.0.0.0/0" && route.NatGatewayId === natGateway?.NatGatewayId
+        );
+        expect(hasNatRoute).toBe(true);
+      });
+    });
+
+    test("NAT gateway resides in a public subnet", () => {
+      expect(natGateway).toBeDefined();
+      const natSubnetId = natGateway?.SubnetId;
+      expect(natSubnetId).toBeDefined();
+      expect(publicSubnetIds).toContain(natSubnetId);
+    });
   });
 
   test("Security groups restrict ingress to HTTPS and SSH", async () => {
@@ -398,103 +411,139 @@ describe("Terraform infrastructure integration", () => {
     });
   });
 
-  test("CloudWatch alarms trigger scaling policies on CPU thresholds", async () => {
-    const policiesResult = await asgClient.send(new DescribePoliciesCommand({
-      AutoScalingGroupName: asgName,
-    }));
-    const scalingPolicies = policiesResult.ScalingPolicies ?? [];
-    console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
-    const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
-    const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
-    const scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
-    const scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
-    expect(scaleUpPolicyArn).not.toBe("");
-    expect(scaleDownPolicyArn).not.toBe("");
+  describe("CloudWatch CPU-based scaling", () => {
+    let scaleUpPolicyArn = "";
+    let scaleDownPolicyArn = "";
+    let highCpuAlarm: any;
+    let lowCpuAlarm: any;
 
-    const alarmsResult = await cloudwatchClient.send(new DescribeAlarmsCommand({
-      AlarmNames: [`${namePrefix}high-cpu-utilization`, `${namePrefix}low-cpu-utilization`]
-    }));
-    const alarms = alarmsResult.MetricAlarms ?? [];
-    const highCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}high-cpu-utilization`);
-    const lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}low-cpu-utilization`);
-    expect(highCpuAlarm).toBeDefined();
-    expect(lowCpuAlarm).toBeDefined();
+    beforeAll(async () => {
+      const policiesResult = await asgClient.send(new DescribePoliciesCommand({
+        AutoScalingGroupName: asgName
+      }));
+      const scalingPolicies = policiesResult.ScalingPolicies ?? [];
+      console.log("Retrieved scaling policies", { count: scalingPolicies.length, scalingPolicies });
+      const scaleUpPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-up"));
+      const scaleDownPolicy = scalingPolicies.find(policy => policy.PolicyName?.endsWith("scale-down"));
+      scaleUpPolicyArn = scaleUpPolicy?.PolicyARN ?? "";
+      scaleDownPolicyArn = scaleDownPolicy?.PolicyARN ?? "";
 
-    expect(highCpuAlarm?.Namespace).toBe("AWS/EC2");
-    expect(lowCpuAlarm?.Namespace).toBe("AWS/EC2");
-    expect(highCpuAlarm?.MetricName).toBe("CPUUtilization");
-    expect(lowCpuAlarm?.MetricName).toBe("CPUUtilization");
-    expect(highCpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
-    expect(lowCpuAlarm?.ComparisonOperator).toBe("LessThanThreshold");
-    expect(highCpuAlarm?.Threshold).toBe(80);
-    expect(lowCpuAlarm?.Threshold).toBe(20);
-    expect(highCpuAlarm?.EvaluationPeriods).toBe(2);
-    expect(lowCpuAlarm?.EvaluationPeriods).toBe(2);
-    expect(highCpuAlarm?.Period).toBe(120);
-    expect(lowCpuAlarm?.Period).toBe(120);
-    expect(highCpuAlarm?.Statistic).toBe("Average");
-    expect(lowCpuAlarm?.Statistic).toBe("Average");
+      const alarmsResult = await cloudwatchClient.send(new DescribeAlarmsCommand({
+        AlarmNames: [`${namePrefix}high-cpu-utilization`, `${namePrefix}low-cpu-utilization`]
+      }));
+      const alarms = alarmsResult.MetricAlarms ?? [];
+      highCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}high-cpu-utilization`);
+      lowCpuAlarm = alarms.find(alarm => alarm.AlarmName === `${namePrefix}low-cpu-utilization`);
+    });
 
-    const highAlarmActions = highCpuAlarm?.AlarmActions ?? [];
-    const lowAlarmActions = lowCpuAlarm?.AlarmActions ?? [];
-    expect(highAlarmActions).toContain(scaleUpPolicyArn);
-    expect(lowAlarmActions).toContain(scaleDownPolicyArn);
+    test("Scaling policies exist for CPU thresholds", () => {
+      expect(scaleUpPolicyArn).not.toBe("");
+      expect(scaleDownPolicyArn).not.toBe("");
+    });
 
-    const highAsgDimension = highCpuAlarm?.Dimensions?.find(dim => dim.Name === "AutoScalingGroupName")?.Value;
-    const lowAsgDimension = lowCpuAlarm?.Dimensions?.find(dim => dim.Name === "AutoScalingGroupName")?.Value;
-    expect(highAsgDimension).toBe(asgName);
-    expect(lowAsgDimension).toBe(asgName);
+    test("CPU alarms are configured to trigger scaling policies", () => {
+      expect(highCpuAlarm).toBeDefined();
+      expect(lowCpuAlarm).toBeDefined();
 
-    expect(highCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
-    expect(lowCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
+      expect(highCpuAlarm?.Namespace).toBe("AWS/EC2");
+      expect(lowCpuAlarm?.Namespace).toBe("AWS/EC2");
+      expect(highCpuAlarm?.MetricName).toBe("CPUUtilization");
+      expect(lowCpuAlarm?.MetricName).toBe("CPUUtilization");
+      expect(highCpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
+      expect(lowCpuAlarm?.ComparisonOperator).toBe("LessThanThreshold");
+      expect(highCpuAlarm?.Threshold).toBe(80);
+      expect(lowCpuAlarm?.Threshold).toBe(20);
+      expect(highCpuAlarm?.EvaluationPeriods).toBe(2);
+      expect(lowCpuAlarm?.EvaluationPeriods).toBe(2);
+      expect(highCpuAlarm?.Period).toBe(120);
+      expect(lowCpuAlarm?.Period).toBe(120);
+      expect(highCpuAlarm?.Statistic).toBe("Average");
+      expect(lowCpuAlarm?.Statistic).toBe("Average");
+
+      const highAlarmActions = highCpuAlarm?.AlarmActions ?? [];
+      const lowAlarmActions = lowCpuAlarm?.AlarmActions ?? [];
+      expect(highAlarmActions).toContain(scaleUpPolicyArn);
+      expect(lowAlarmActions).toContain(scaleDownPolicyArn);
+
+      const highAsgDimension = highCpuAlarm?.Dimensions?.find((dim: any) => dim.Name === "AutoScalingGroupName")?.Value;
+      const lowAsgDimension = lowCpuAlarm?.Dimensions?.find((dim: any) => dim.Name === "AutoScalingGroupName")?.Value;
+      expect(highAsgDimension).toBe(asgName);
+      expect(lowAsgDimension).toBe(asgName);
+
+      expect(highCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
+      expect(lowCpuAlarm?.AlarmDescription).toBe("This metric monitors ec2 cpu utilization");
+    });
   });
 
-  test("S3 buckets enforce encryption and public access blocks", async () => {
-    const appEncryption = await s3Client.send(
-      new GetBucketEncryptionCommand({ Bucket: appBucketName })
-    );
-    const appRules = appEncryption.ServerSideEncryptionConfiguration?.Rules ?? [];
-    expect(appRules.length).toBeGreaterThan(0);
-    const appSseAlgorithm = appRules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
-    expect(appSseAlgorithm).toBe("AES256");
+  describe("S3 buckets", () => {
+    let appEncryptionRules: any[] = [];
+    let appPublicAccessBlock: any;
+    let trailEncryptionRules: any[] = [];
+    let trailPublicAccessBlock: any;
+    let trailPolicyStatements: any[] = [];
 
-    const appPublicAccess = await s3Client.send(
-      new GetPublicAccessBlockCommand({ Bucket: appBucketName })
-    );
-    const appBlock = appPublicAccess.PublicAccessBlockConfiguration;
-    expect(appBlock?.BlockPublicAcls).toBe(true);
-    expect(appBlock?.BlockPublicPolicy).toBe(true);
-    expect(appBlock?.RestrictPublicBuckets).toBe(true);
-    expect(appBlock?.IgnorePublicAcls).toBe(true);
+    beforeAll(async () => {
+      const appEncryption = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: appBucketName })
+      );
+      appEncryptionRules = appEncryption.ServerSideEncryptionConfiguration?.Rules ?? [];
 
-    const cloudtrailEncryption = await s3Client.send(
-      new GetBucketEncryptionCommand({ Bucket: cloudtrailBucketName })
-    );
-    const trailRules = cloudtrailEncryption.ServerSideEncryptionConfiguration?.Rules ?? [];
-    expect(trailRules.length).toBeGreaterThan(0);
-    const trailSseAlgorithm = trailRules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
-    expect(trailSseAlgorithm).toBe("AES256");
+      const appPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: appBucketName })
+      );
+      appPublicAccessBlock = appPublicAccess.PublicAccessBlockConfiguration;
 
-    const cloudtrailPublicAccess = await s3Client.send(
-      new GetPublicAccessBlockCommand({ Bucket: cloudtrailBucketName })
-    );
-    const trailBlock = cloudtrailPublicAccess.PublicAccessBlockConfiguration;
-    expect(trailBlock?.BlockPublicAcls).toBe(true);
-    expect(trailBlock?.BlockPublicPolicy).toBe(true);
-    expect(trailBlock?.RestrictPublicBuckets).toBe(true);
-    expect(trailBlock?.IgnorePublicAcls).toBe(true);
+      const cloudtrailEncryption = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: cloudtrailBucketName })
+      );
+      trailEncryptionRules = cloudtrailEncryption.ServerSideEncryptionConfiguration?.Rules ?? [];
 
-    const bucketPolicy = await s3Client.send(
-      new GetBucketPolicyCommand({ Bucket: cloudtrailBucketName })
-    );
-    const policyDocument = JSON.parse(bucketPolicy.Policy ?? "{}");
-    const statements = policyDocument.Statement ?? [];
-    const allowsCloudTrail = statements.some((statement: any) => {
-      const principal = statement.Principal ?? {};
-      const service = principal?.Service ?? principal?.AWS;
-      return typeof service === "string" && service.includes("cloudtrail.amazonaws.com");
+      const cloudtrailPublicAccess = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: cloudtrailBucketName })
+      );
+      trailPublicAccessBlock = cloudtrailPublicAccess.PublicAccessBlockConfiguration;
+
+      const bucketPolicy = await s3Client.send(
+        new GetBucketPolicyCommand({ Bucket: cloudtrailBucketName })
+      );
+      const policyDocument = JSON.parse(bucketPolicy.Policy ?? "{}");
+      trailPolicyStatements = policyDocument.Statement ?? [];
     });
-    expect(allowsCloudTrail).toBe(true);
+
+    test("Application bucket enforces AES256 encryption", () => {
+      expect(appEncryptionRules.length).toBeGreaterThan(0);
+      const algorithm = appEncryptionRules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      expect(algorithm).toBe("AES256");
+    });
+
+    test("Application bucket blocks all public access", () => {
+      expect(appPublicAccessBlock?.BlockPublicAcls).toBe(true);
+      expect(appPublicAccessBlock?.BlockPublicPolicy).toBe(true);
+      expect(appPublicAccessBlock?.RestrictPublicBuckets).toBe(true);
+      expect(appPublicAccessBlock?.IgnorePublicAcls).toBe(true);
+    });
+
+    test("CloudTrail bucket enforces AES256 encryption", () => {
+      expect(trailEncryptionRules.length).toBeGreaterThan(0);
+      const algorithm = trailEncryptionRules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      expect(algorithm).toBe("AES256");
+    });
+
+    test("CloudTrail bucket blocks all public access", () => {
+      expect(trailPublicAccessBlock?.BlockPublicAcls).toBe(true);
+      expect(trailPublicAccessBlock?.BlockPublicPolicy).toBe(true);
+      expect(trailPublicAccessBlock?.RestrictPublicBuckets).toBe(true);
+      expect(trailPublicAccessBlock?.IgnorePublicAcls).toBe(true);
+    });
+
+    test("CloudTrail bucket policy allows CloudTrail service", () => {
+      const allowsCloudTrail = trailPolicyStatements.some((statement: any) => {
+        const principal = statement.Principal ?? {};
+        const service = principal?.Service ?? principal?.AWS;
+        return typeof service === "string" && service.includes("cloudtrail.amazonaws.com");
+      });
+      expect(allowsCloudTrail).toBe(true);
+    });
   });
 
   test("CloudTrail trail delivers to secure bucket", async () => {
