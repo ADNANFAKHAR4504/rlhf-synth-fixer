@@ -561,7 +561,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "retailinventory-${EnvironmentSuffix}-backups-${AWS::AccountId}"
+          "Fn::Sub": "retailinventory2-${EnvironmentSuffix}-backups-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
