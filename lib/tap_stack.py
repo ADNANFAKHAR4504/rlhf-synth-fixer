@@ -286,7 +286,8 @@ class TapStack(pulumi.ComponentResource):
                         "Effect": "Allow",
                         "Action": [
                             "ses:SendEmail",
-                            "ses:SendRawEmail"
+                            "ses:SendRawEmail",
+                            "sqs:SendMessage"
                         ],
                         "Resource": "*"
                     },
