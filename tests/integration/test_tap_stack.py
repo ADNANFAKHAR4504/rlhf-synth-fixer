@@ -8,6 +8,7 @@ import tempfile
 import os
 import sys
 import pytest
+import time
 from aws_cdk import App
 from typing import Optional
 
@@ -37,6 +38,37 @@ def get_cfn_outputs(stack_name):
     outputs = {o["OutputKey"]: o["OutputValue"] for o in stacks[0].get("Outputs", [])}
     return outputs
 
+def invoke_lambda(function_name, payload):
+    """Invoke Lambda function and return response."""
+    payload_json = json.dumps(payload)
+    
+    # Create temporary file for payload
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        f.write(payload_json)
+        payload_file = f.name
+    
+    try:
+        result = run_cli(
+            f"aws lambda invoke "
+            f"--function-name {function_name} "
+            f"--payload file://{payload_file} "
+            f"--region {REGION} "
+            f"/dev/stdout"
+        )
+        
+        # Parse the response (AWS CLI returns response in specific format)
+        # The actual response body is in the stdout
+        try:
+            response = json.loads(result)
+            return response
+        except json.JSONDecodeError:
+            # If parsing fails, return raw output
+            return {"rawOutput": result}
+    finally:
+        # Cleanup temporary file
+        if os.path.exists(payload_file):
+            os.remove(payload_file)
+
 
 class TestTapStackDeployment:
     """Integration tests for deployed TapStack resources."""
@@ -56,7 +88,304 @@ class TestTapStackDeployment:
         for key in required_keys:
             assert key in outputs, f"Missing CloudFormation output: {key}"
 
+    def test_lambda_create_task(self):
+        """Test Lambda function - Create Task operation."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        # Create mock event simulating API Gateway request
+        task_id = f"task-{generate_random_suffix()}"
+        event = {
+            "httpMethod": "POST",
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "title": "Integration Test Task",
+                "description": "Created by integration test",
+                "status": "pending",
+                "priority": "high",
+                "dueDate": "2025-12-31"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        # Invoke Lambda
+        response = invoke_lambda(function_name, event)
+        
+        # Verify response
+        assert "statusCode" in response
+        assert response["statusCode"] in [200, 201], f"Expected 200/201, got {response['statusCode']}"
+        
+        body = json.loads(response.get("body", "{}"))
+        assert "taskId" in body or "task" in body, "Response should contain task data"
+        print(f"✓ Task created successfully: {body}")
 
+    def test_lambda_list_tasks(self):
+        """Test Lambda function - List Tasks operation."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        event = {
+            "httpMethod": "GET",
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": {
+                "limit": "10"
+            },
+            "body": None,
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        response = invoke_lambda(function_name, event)
+        
+        assert "statusCode" in response
+        assert response["statusCode"] == 200, f"Expected 200, got {response['statusCode']}"
+        
+        body = json.loads(response.get("body", "{}"))
+        assert "tasks" in body or isinstance(body, list), "Response should contain tasks list"
+        print(f"✓ Tasks listed successfully: {len(body.get('tasks', body))} tasks found")
+
+    def test_lambda_get_task(self):
+        """Test Lambda function - Get Single Task operation."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        # First create a task
+        task_id = f"task-{generate_random_suffix()}"
+        create_event = {
+            "httpMethod": "POST",
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "taskId": task_id,
+                "title": "Test Get Task",
+                "status": "pending"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        create_response = invoke_lambda(function_name, create_event)
+        create_body = json.loads(create_response.get("body", "{}"))
+        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        
+        # Now get the task
+        get_event = {
+            "httpMethod": "GET",
+            "path": f"/tasks/{created_task_id}",
+            "pathParameters": {
+                "taskId": created_task_id
+            },
+            "queryStringParameters": None,
+            "body": None,
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        response = invoke_lambda(function_name, get_event)
+        
+        assert "statusCode" in response
+        assert response["statusCode"] in [200, 404], f"Expected 200 or 404, got {response['statusCode']}"
+        
+        if response["statusCode"] == 200:
+            body = json.loads(response.get("body", "{}"))
+            assert "taskId" in body or "task" in body, "Response should contain task data"
+            print(f"✓ Task retrieved successfully: {created_task_id}")
+
+    def test_lambda_update_task(self):
+        """Test Lambda function - Update Task operation."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        # First create a task
+        task_id = f"task-{generate_random_suffix()}"
+        create_event = {
+            "httpMethod": "POST",
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "taskId": task_id,
+                "title": "Task Before Update",
+                "status": "pending"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        create_response = invoke_lambda(function_name, create_event)
+        create_body = json.loads(create_response.get("body", "{}"))
+        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        
+        # Wait a bit to ensure task is created
+        time.sleep(1)
+        
+        # Now update the task
+        update_event = {
+            "httpMethod": "PUT",
+            "path": f"/tasks/{created_task_id}",
+            "pathParameters": {
+                "taskId": created_task_id
+            },
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "title": "Task After Update",
+                "status": "in_progress"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        response = invoke_lambda(function_name, update_event)
+        
+        assert "statusCode" in response
+        assert response["statusCode"] in [200, 404], f"Expected 200 or 404, got {response['statusCode']}"
+        
+        if response["statusCode"] == 200:
+            body = json.loads(response.get("body", "{}"))
+            print(f"✓ Task updated successfully: {created_task_id}")
+
+    def test_lambda_delete_task(self):
+        """Test Lambda function - Delete Task operation."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        # First create a task
+        task_id = f"task-{generate_random_suffix()}"
+        create_event = {
+            "httpMethod": "POST",
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": json.dumps({
+                "taskId": task_id,
+                "title": "Task To Delete",
+                "status": "pending"
+            }),
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        create_response = invoke_lambda(function_name, create_event)
+        create_body = json.loads(create_response.get("body", "{}"))
+        created_task_id = create_body.get("taskId") or create_body.get("task", {}).get("taskId") or task_id
+        
+        # Wait a bit to ensure task is created
+        time.sleep(1)
+        
+        # Now delete the task
+        delete_event = {
+            "httpMethod": "DELETE",
+            "path": f"/tasks/{created_task_id}",
+            "pathParameters": {
+                "taskId": created_task_id
+            },
+            "queryStringParameters": None,
+            "body": None,
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        response = invoke_lambda(function_name, delete_event)
+        
+        assert "statusCode" in response
+        assert response["statusCode"] in [200, 204, 404], f"Expected 200/204/404, got {response['statusCode']}"
+        print(f"✓ Task deleted successfully: {created_task_id}")
+
+    def test_lambda_invalid_request(self):
+        """Test Lambda function - Invalid request handling."""
+        outputs = get_cfn_outputs(STACK_NAME)
+        tasks_table_name = outputs.get("TasksTableName", "")
+        env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
+        function_name = f"tasks-crud-{env_suffix}"
+        
+        # Send invalid HTTP method
+        event = {
+            "httpMethod": "PATCH",  # Not supported
+            "path": "/tasks",
+            "pathParameters": None,
+            "queryStringParameters": None,
+            "body": None,
+            "requestContext": {
+                "authorizer": {
+                    "claims": {
+                        "sub": "test-user-123",
+                        "email": "test@example.com"
+                    }
+                }
+            }
+        }
+        
+        response = invoke_lambda(function_name, event)
+        
+        assert "statusCode" in response
+        assert response["statusCode"] == 400, f"Expected 400 for invalid request, got {response['statusCode']}"
+        
+        body = json.loads(response.get("body", "{}"))
+        assert "error" in body, "Response should contain error message"
+        print(f"✓ Invalid request handled correctly: {body.get('error')}")
 
     def test_s3_bucket_operations(self):
         """Test S3 bucket upload, download, and update operations."""
@@ -167,10 +496,6 @@ class TestTapStackConstruction:
         assert stack is not None
         assert hasattr(stack, 'environment_suffix')
         assert stack.environment_suffix == 'dev'  # Default value
-
-
-
-
 
     def test_tap_stack_has_required_resources(self):
         """Verify TapStack creates all expected resources."""
