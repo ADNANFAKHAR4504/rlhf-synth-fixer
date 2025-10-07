@@ -122,6 +122,7 @@ Resources:
   # S3 Bucket with versioning and encryption
   S3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}'
       VersioningConfiguration:
@@ -625,6 +626,7 @@ Resources:
 
   DbInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-db'
       DBName: !Ref DBName
@@ -650,6 +652,7 @@ Resources:
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       DeletionProtection: false
+      DeleteAutomatedBackups: true
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-instance'
@@ -669,6 +672,7 @@ Resources:
 
   SecretRotationSchedule:
     Type: AWS::SecretsManager::RotationSchedule
+    DependsOn: SecretRotationLambdaPermission
     Properties:
       SecretId: !Ref DbSecret
       RotationLambdaARN: !GetAtt SecretRotationLambda.Arn
@@ -704,6 +708,14 @@ Resources:
                   'statusCode': 200,
                   'body': 'Secret rotation processed'
               }
+
+  SecretRotationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SecretRotationLambda
+      Action: lambda:InvokeFunction
+      Principal: secretsmanager.amazonaws.com
+      SourceArn: !Ref DbSecret
 
   SecretRotationLambdaRole:
     Type: AWS::IAM::Role
@@ -880,8 +892,6 @@ Resources:
         - ResourcePath: /*
           HttpMethod: '*'
           MetricsEnabled: true
-          LoggingLevel: INFO
-          DataTraceEnabled: true
 
 
 
@@ -895,7 +905,7 @@ Resources:
       EnableLogFileValidation: true
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       Tags:
         - Key: Name
@@ -903,6 +913,7 @@ Resources:
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-cloudtrail-logs-${RandomSuffix}'
       VersioningConfiguration:
@@ -980,108 +991,116 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${EnvironmentSuffix}-webapp-lambda'
       RetentionInDays: 90
 
-  # AWS Config
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Condition: ShouldCreateConfig
-    DependsOn: ConfigDeliveryChannel
-    Properties:
-      Name: !Sub '${EnvironmentSuffix}-config-recorder'
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-      RoleARN: !GetAtt ConfigRecorderRole.Arn
+  # AWS Config - COMMENTED OUT FOR NOW
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   Condition: ShouldCreateConfig
+  #   DependsOn: 
+  #     - ConfigRecorderRole
+  #     - ConfigDeliveryChannel
+  #   Properties:
+  #     Name: !Sub '${EnvironmentSuffix}-config-recorder'
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
+  #     RoleARN: !GetAtt ConfigRecorderRole.Arn
 
-  ConfigRecorderRole:
-    Type: AWS::IAM::Role
-    Condition: ShouldCreateConfig
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+  # ConfigRecorderRole:
+  #   Type: AWS::IAM::Role
+  #   Condition: ShouldCreateConfig
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: config.amazonaws.com
+  #           Action: 'sts:AssumeRole'
+  #     ManagedPolicyArns:
+  #       - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
 
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Condition: ShouldCreateConfig
-    Properties:
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Six_Hours
-      S3BucketName: !Ref ConfigS3Bucket
-      S3KeyPrefix: config
+  # ConfigDeliveryChannel:
+  #   Type: AWS::Config::DeliveryChannel
+  #   Condition: ShouldCreateConfig
+  #   DependsOn: 
+  #     - ConfigS3Bucket
+  #     - ConfigS3BucketPolicy
+  #   Properties:
+  #     ConfigSnapshotDeliveryProperties:
+  #       DeliveryFrequency: Six_Hours
+  #     S3BucketName: !Ref ConfigS3Bucket
+  #     S3KeyPrefix: config
       
-  ConfigS3Bucket:
-    Type: AWS::S3::Bucket
-    Condition: ShouldCreateConfig
-    Properties:
-      BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}'
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+  # ConfigS3Bucket:
+  #   Type: AWS::S3::Bucket
+  #   Condition: ShouldCreateConfig
+  #   DeletionPolicy: Delete
+  #   Properties:
+  #     BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}'
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
 
-  ConfigS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: ShouldCreateConfig
-    Properties:
-      Bucket: !Ref ConfigS3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 's3:GetBucketAcl'
-            Resource: !GetAtt ConfigS3Bucket.Arn
-          - Sid: AWSConfigBucketExistenceCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 's3:ListBucket'
-            Resource: !GetAtt ConfigS3Bucket.Arn
-          - Sid: AWSConfigBucketDelivery
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${ConfigS3Bucket.Arn}/config/AWSLogs/${AWS::AccountId}/Config/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+  # ConfigS3BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Condition: ShouldCreateConfig
+  #   DependsOn: ConfigS3Bucket
+  #   Properties:
+  #     Bucket: !Ref ConfigS3Bucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AWSConfigBucketPermissionsCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: config.amazonaws.com
+  #           Action: 's3:GetBucketAcl'
+  #           Resource: !GetAtt ConfigS3Bucket.Arn
+  #         - Sid: AWSConfigBucketExistenceCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: config.amazonaws.com
+  #           Action: 's3:ListBucket'
+  #           Resource: !GetAtt ConfigS3Bucket.Arn
+  #         - Sid: AWSConfigBucketDelivery
+  #           Effect: Allow
+  #           Principal:
+  #             Service: config.amazonaws.com
+  #           Action: 's3:PutObject'
+  #           Resource: !Sub '${ConfigS3Bucket.Arn}/config/AWSLogs/${AWS::AccountId}/Config/*'
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': 'bucket-owner-full-control'
 
-  # AWS Config Rule for tagging compliance
-  RequiredTagsConfigRule:
-    Type: AWS::Config::ConfigRule
-    Condition: ShouldCreateConfig
-    Properties:
-      ConfigRuleName: !Sub '${EnvironmentSuffix}-required-tags'
-      Description: Checks if resources have the required tags
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::EC2::Instance
-          - AWS::S3::Bucket
-          - AWS::RDS::DBInstance
-          - AWS::AutoScaling::AutoScalingGroup
-      Source:
-        Owner: AWS
-        SourceIdentifier: REQUIRED_TAGS
-      InputParameters:
-        tag1Key: Environment
-        tag2Key: Name
-        tag3Key: Owner
+  # AWS Config Rule for tagging compliance - COMMENTED OUT
+  # RequiredTagsConfigRule:
+  #   Type: AWS::Config::ConfigRule
+  #   Condition: ShouldCreateConfig
+  #   DependsOn: ConfigRecorder
+  #   Properties:
+  #     ConfigRuleName: !Sub '${EnvironmentSuffix}-required-tags'
+  #     Description: Checks if resources have the required tags
+  #     Scope:
+  #       ComplianceResourceTypes:
+  #         - AWS::EC2::Instance
+  #         - AWS::S3::Bucket
+  #         - AWS::RDS::DBInstance
+  #         - AWS::AutoScaling::AutoScalingGroup
+  #     Source:
+  #       Owner: AWS
+  #       SourceIdentifier: REQUIRED_TAGS
+  #     InputParameters:
+  #       tag1Key: Environment
+  #       tag2Key: Name
+  #       tag3Key: Owner
 
   # AWS WAF
   WebACL:
@@ -1278,9 +1297,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WebACLArn'
 
-  ConfigRuleName:
-    Condition: ShouldCreateConfig
-    Description: Name of the AWS Config rule for required tags
-    Value: !Ref RequiredTagsConfigRule
-    Export:
-      Name: !Sub '${AWS::StackName}-ConfigRuleName'
+  # ConfigRuleName:
+  #   Condition: ShouldCreateConfig
+  #   Description: Name of the AWS Config rule for required tags
+  #   Value: !Ref RequiredTagsConfigRule
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-ConfigRuleName'
