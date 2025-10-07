@@ -57,7 +57,8 @@ public class TapStack extends software.amazon.awscdk.Stack {
                         ))
                         .build()
                 ))
-                .removalPolicy(RemovalPolicy.RETAIN)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .autoDeleteObjects(true)
                 .build();
 
         // DynamoDB table for URL storage
@@ -148,6 +149,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
                             software.amazon.awscdk.services.logs.LogGroupProps.builder()
                                 .logGroupName("/aws/vendedlogs/states/url-shortener-cleanup-" + environmentSuffix)
                                 .retention(RetentionDays.ONE_WEEK)
+                                .removalPolicy(RemovalPolicy.DESTROY)
                                 .build()))
                         .level(LogLevel.ALL)
                         .build())
