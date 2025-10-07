@@ -11,5 +11,5 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "aws_services": "\"S3 Bucket, CloudFormation, VPC, Application Load Balancer, ECS Fargate, Aurora PostgreSQL, DynamoDB, Amazon Connect, Lex, Kendra, Lambda, Comprehend, Step Functions, SES, SNS, Pinpoint, ElastiCache Redis, CloudWatch, CloudWatch LogGroup, EventBridge, API Gateway, IAM, KMS, Secrets Manager\""
+  "aws_services": "S3, Random"
 }
