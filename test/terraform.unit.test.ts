@@ -5,7 +5,7 @@ describe("TapStack Multi-Region Terraform Unit Tests (detailed)", () => {
   let tfContent: string;
 
   beforeAll(() => {
-    const tfPath = path.join(__dirname, "../lib/tapstack.tf");
+    const tfPath = path.join(__dirname, "../lib/tap_stack.tf");
     tfContent = fs.readFileSync(tfPath, "utf8");
   });
 
