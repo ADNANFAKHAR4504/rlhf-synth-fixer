@@ -1,4 +1,3 @@
-#tap_stack.py
 ```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
