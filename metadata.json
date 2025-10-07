@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348991",
+  "team": "4",
+  "startedAt": "2025-10-07T03:40:33.683Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "VPC, Subnet, NAT, EC2, CDN, S3, RDS, Parameter Store, Route53"
+}
