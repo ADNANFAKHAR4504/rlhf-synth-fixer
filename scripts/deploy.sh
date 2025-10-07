@@ -86,12 +86,10 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  echo "🚀 Starting CloudFormation YAML deployment..."
   npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  echo "🚀 Starting CloudFormation JSON deployment..."
   npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
