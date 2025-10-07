@@ -6,12 +6,9 @@
   "po_id": "53098726",
   "team": "synth",
   "startedAt": "2025-10-03T22:16:29+05:30",
-  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Image Processing Service",
-    "Content Delivery Network",
-    "Event-Driven Architecture",
-    "Multi-Format Optimization"
+    "Serverless Infrastructure"
   ],
   "training_quality": 1,
   "aws_services": [
