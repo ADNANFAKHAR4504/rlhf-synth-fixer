@@ -1,12 +1,18 @@
-# Production-Ready Serverless Logistics Tracking API Infrastructure
+# Serverless Logistics Tracking API Infrastructure - Production Deployment
 
-## Complete Pulumi Python Implementation
+Here's the complete working Pulumi Python infrastructure code that was successfully deployed to AWS:
 
-### Main Stack Implementation (lib/tap_stack.py)
+## Main Stack Implementation (lib/tap_stack.py)
 
 ```python
 """
-tap_stack.py - Production-ready Pulumi infrastructure for serverless logistics tracking API
+tap_stack.py
+
+This module defines the TapStack class, the main Pulumi ComponentResource for
+the TAP (Test Automation Platform) project.
+
+It orchestrates the instantiation of other resource-specific components
+and manages environment-specific configurations.
 """
 
 from typing import Optional
@@ -17,18 +23,33 @@ from pulumi_aws import (
     s3, dynamodb, lambda_, apigateway, iam, ssm,
     cloudwatch, sqs, config
 )
-from pulumi_aws import cloudwatch as cw_logs  # Fixed import
 
 class TapStackArgs:
-    """Input arguments for TapStack"""
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for identifying the
+            deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+    """
+
     def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags or {}
 
-class TapStack(pulumi.ComponentResource):
-    """Main Pulumi component for logistics tracking infrastructure"""
 
-    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+class TapStack(pulumi.ComponentResource):
+    """
+    Represents the main Pulumi component resource for the TAP project.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        args: TapStackArgs,
+        opts: Optional[ResourceOptions] = None
+    ):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
         self.environment_suffix = args.environment_suffix
@@ -39,29 +60,38 @@ class TapStack(pulumi.ComponentResource):
             'ManagedBy': 'Pulumi'
         }
 
-        # Configuration
+        # Get current AWS region and account ID
         aws_region = config.region or 'us-west-2'
-        aws_account_id = '342597974367'  # Fixed: hardcoded account ID
+        aws_account_id = '342597974367'  # Hardcoded for this deployment
 
-        # DLQ for Lambda
+        # Create DLQ for Lambda
         dlq = sqs.Queue(
             f"tracking-lambda-dlq-{self.environment_suffix}",
-            message_retention_seconds=1209600,
+            message_retention_seconds=1209600,  # 14 days
             visibility_timeout_seconds=300,
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
 
-        # DynamoDB Table with on-demand billing
+        # Create DynamoDB table with on-demand billing
         tracking_table = dynamodb.Table(
             f"tracking-data-{self.environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="tracking_id",
             range_key="timestamp",
             attributes=[
-                {"name": "tracking_id", "type": "S"},
-                {"name": "timestamp", "type": "N"},
-                {"name": "status", "type": "S"}
+                {
+                    "name": "tracking_id",
+                    "type": "S"
+                },
+                {
+                    "name": "timestamp",
+                    "type": "N"
+                },
+                {
+                    "name": "status",
+                    "type": "S"
+                }
             ],
             global_secondary_indexes=[{
                 "name": "StatusIndex",
@@ -76,7 +106,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # SSM Parameters
+        # Create SSM Parameters
         api_config_param = ssm.Parameter(
             f"api-config-{self.environment_suffix}",
             name=f"/logistics/api/{self.environment_suffix}/config",
@@ -90,8 +120,30 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # CloudWatch Log Group - Fixed import usage
-        lambda_log_group = cw_logs.LogGroup(
+        db_endpoint_param = ssm.Parameter(
+            f"db-endpoint-{self.environment_suffix}",
+            name=f"/logistics/db/{self.environment_suffix}/endpoint",
+            type="SecureString",
+            value=tracking_table.name,
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        feature_flags_param = ssm.Parameter(
+            f"feature-flags-{self.environment_suffix}",
+            name=f"/logistics/features/{self.environment_suffix}/flags",
+            type="String",
+            value=json.dumps({
+                "enhanced_tracking": True,
+                "batch_processing": False,
+                "real_time_notifications": True
+            }),
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create CloudWatch Log Group for Lambda
+        lambda_log_group = cloudwatch.LogGroup(
             f"tracking-lambda-logs-{self.environment_suffix}",
             name=f"/aws/lambda/tracking-processor-{self.environment_suffix}",
             retention_in_days=7,
@@ -99,14 +151,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Lambda IAM Role
+        # Create IAM role for Lambda
         lambda_role = iam.Role(
             f"tracking-lambda-role-{self.environment_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
                     "Action": "sts:AssumeRole",
-                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
                     "Effect": "Allow"
                 }]
             }),
@@ -114,7 +168,77 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Lambda Function with fixed environment variables
+        # Attach policies to Lambda role
+        lambda_policy = iam.RolePolicy(
+            f"tracking-lambda-policy-{self.environment_suffix}",
+            role=lambda_role.id,
+            policy=pulumi.Output.all(
+                tracking_table.arn,
+                dlq.arn,
+                api_config_param.name,
+                db_endpoint_param.name,
+                feature_flags_param.name
+            ).apply(lambda args: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:PutItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:Query",
+                            "dynamodb:Scan",
+                            "dynamodb:BatchWriteItem",
+                            "dynamodb:BatchGetItem"
+                        ],
+                        "Resource": [
+                            args[0],
+                            f"{args[0]}/index/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": f"arn:aws:logs:{aws_region}:*:*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ssm:GetParameter",
+                            "ssm:GetParameters",
+                            "ssm:GetParametersByPath"
+                        ],
+                        "Resource": [
+                            f"arn:aws:ssm:{aws_region}:*:parameter/logistics/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage",
+                            "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": args[1]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "xray:PutTraceSegments",
+                            "xray:PutTelemetryRecords"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lambda function
         tracking_lambda = lambda_.Function(
             f"tracking-processor-{self.environment_suffix}",
             runtime="python3.9",
@@ -126,7 +250,7 @@ class TapStack(pulumi.ComponentResource):
                 "variables": {
                     "TABLE_NAME": tracking_table.name,
                     "ENVIRONMENT": self.environment_suffix,
-                    "REGION": aws_region,  # Fixed: not AWS_REGION
+                    "REGION": aws_region,  # Changed from AWS_REGION (reserved)
                     "POWERTOOLS_SERVICE_NAME": "tracking-api",
                     "POWERTOOLS_METRICS_NAMESPACE": "LogisticsTracking",
                     "LOG_LEVEL": "INFO",
@@ -135,44 +259,186 @@ class TapStack(pulumi.ComponentResource):
                     "FEATURE_FLAGS_PARAM": feature_flags_param.name
                 }
             },
-            dead_letter_config={"target_arn": dlq.arn},
-            tracing_config={"mode": "Active"},
-            code=pulumi.AssetArchive({".": pulumi.FileArchive("./lib/lambda")}),
+            dead_letter_config={
+                "target_arn": dlq.arn
+            },
+            tracing_config={
+                "mode": "Active"
+            },
+            code=pulumi.AssetArchive({
+                ".": pulumi.FileArchive("./lib/lambda")
+            }),
             tags=self.tags,
             opts=ResourceOptions(parent=self, depends_on=[lambda_policy])
         )
 
-        # API Gateway - Fixed parameter names
+        # API Gateway REST API
         rest_api = apigateway.RestApi(
             f"tracking-api-{self.environment_suffix}",
             name=f"tracking-api-{self.environment_suffix}",
             description="Logistics Tracking API",
-            endpoint_configuration={"types": "REGIONAL"},
+            endpoint_configuration={
+                "types": "REGIONAL"
+            },
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
 
-        # Request validator - Fixed: rest_api instead of rest_api_id
+        # Request validator
         request_validator = apigateway.RequestValidator(
             f"tracking-validator-{self.environment_suffix}",
-            rest_api=rest_api.id,  # Fixed parameter name
+            rest_api=rest_api.id,
             name="tracking-validator",
             validate_request_body=True,
             validate_request_parameters=True,
             opts=ResourceOptions(parent=self)
         )
 
-        # Integration Response with proper dependencies
+        # Request model
+        tracking_model = apigateway.Model(
+            f"tracking-model-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            content_type="application/json",
+            name="TrackingModel",
+            schema=json.dumps({
+                "$schema": "http://json-schema.org/draft-04/schema#",
+                "title": "Tracking Update",
+                "type": "object",
+                "required": ["tracking_id", "status", "location"],
+                "properties": {
+                    "tracking_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_transit", "delivered", "failed"]
+                    },
+                    "location": {
+                        "type": "object",
+                        "required": ["lat", "lng"],
+                        "properties": {
+                            "lat": {"type": "number"},
+                            "lng": {"type": "number"}
+                        }
+                    },
+                    "metadata": {
+                        "type": "object"
+                    }
+                }
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # /track resource
+        track_resource = apigateway.Resource(
+            f"track-resource-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            parent_id=rest_api.root_resource_id,
+            path_part="track",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # /status resource
+        status_resource = apigateway.Resource(
+            f"status-resource-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            parent_id=rest_api.root_resource_id,
+            path_part="status",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lambda integration
+        lambda_integration = apigateway.Integration(
+            f"lambda-integration-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=track_resource.id,
+            http_method="POST",
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=tracking_lambda.invoke_arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # POST /track method
+        track_post_method = apigateway.Method(
+            f"track-post-method-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=track_resource.id,
+            http_method="POST",
+            authorization="AWS_IAM",
+            request_validator_id=request_validator.id,
+            request_models={
+                "application/json": tracking_model.name
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # GET /status method
+        status_get_method = apigateway.Method(
+            f"status-get-method-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=status_resource.id,
+            http_method="GET",
+            authorization="AWS_IAM",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lambda integration for status
+        status_integration = apigateway.Integration(
+            f"status-integration-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=status_resource.id,
+            http_method="GET",
+            integration_http_method="POST",
+            type="AWS_PROXY",
+            uri=tracking_lambda.invoke_arn,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Method responses
+        track_method_response = apigateway.MethodResponse(
+            f"track-method-response-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=track_resource.id,
+            http_method=track_post_method.http_method,
+            status_code="200",
+            response_models={
+                "application/json": "Empty"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        status_method_response = apigateway.MethodResponse(
+            f"status-method-response-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=status_resource.id,
+            http_method=status_get_method.http_method,
+            status_code="200",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Integration responses (depends on integrations being created first)
         track_integration_response = apigateway.IntegrationResponse(
             f"track-integration-response-{self.environment_suffix}",
             rest_api=rest_api.id,
             resource_id=track_resource.id,
             http_method=track_post_method.http_method,
             status_code=track_method_response.status_code,
-            opts=ResourceOptions(parent=self, depends_on=[lambda_integration])  # Fixed dependency
+            opts=ResourceOptions(parent=self, depends_on=[lambda_integration])
         )
 
-        # Lambda Permission with fixed ARN
+        status_integration_response = apigateway.IntegrationResponse(
+            f"status-integration-response-{self.environment_suffix}",
+            rest_api=rest_api.id,
+            resource_id=status_resource.id,
+            http_method=status_get_method.http_method,
+            status_code=status_method_response.status_code,
+            opts=ResourceOptions(parent=self, depends_on=[status_integration])
+        )
+
+        # Lambda permission for API Gateway
         lambda_permission = lambda_.Permission(
             f"api-lambda-permission-{self.environment_suffix}",
             statement_id="AllowAPIGatewayInvoke",
@@ -181,25 +447,32 @@ class TapStack(pulumi.ComponentResource):
             principal="apigateway.amazonaws.com",
             source_arn=pulumi.Output.concat(
                 "arn:aws:execute-api:",
-                aws_region, ":",
-                aws_account_id, ":",  # Fixed: actual account ID
-                rest_api.id, "/*/*"
+                aws_region,
+                ":",
+                aws_account_id,
+                ":",
+                rest_api.id,
+                "/*/*"
             ),
             opts=ResourceOptions(parent=self)
         )
 
-        # Deployment without stage_name
+        # Deploy API
         api_deployment = apigateway.Deployment(
             f"api-deployment-{self.environment_suffix}",
             rest_api=rest_api.id,
             opts=ResourceOptions(
                 parent=self,
-                depends_on=[lambda_integration, status_integration,
-                           track_method_response, status_method_response]
+                depends_on=[
+                    lambda_integration,
+                    status_integration,
+                    track_method_response,
+                    status_method_response
+                ]
             )
         )
 
-        # Separate Stage resource - Fixed
+        # Create API stage
         api_stage = apigateway.Stage(
             f"api-stage-{self.environment_suffix}",
             deployment=api_deployment.id,
@@ -230,6 +503,118 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        api_5xx_alarm = cloudwatch.MetricAlarm(
+            f"api-5xx-alarm-{self.environment_suffix}",
+            name=f"tracking-api-5xx-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="5XXError",
+            namespace="AWS/ApiGateway",
+            period=60,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="Alert when API has 5XX errors",
+            dimensions={
+                "ApiName": rest_api.name,
+                "Stage": self.environment_suffix
+            },
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        api_latency_alarm = cloudwatch.MetricAlarm(
+            f"api-latency-alarm-{self.environment_suffix}",
+            name=f"tracking-api-latency-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Latency",
+            namespace="AWS/ApiGateway",
+            period=300,
+            statistic="Average",
+            threshold=1000,
+            alarm_description="Alert when API latency is high",
+            dimensions={
+                "ApiName": rest_api.name,
+                "Stage": self.environment_suffix
+            },
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lambda throttle alarm
+        lambda_throttle_alarm = cloudwatch.MetricAlarm(
+            f"lambda-throttle-alarm-{self.environment_suffix}",
+            name=f"tracking-lambda-throttle-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="Throttles",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=10,
+            alarm_description="Alert when Lambda is throttled",
+            dimensions={
+                "FunctionName": tracking_lambda.name
+            },
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # CloudWatch Dashboard
+        dashboard = cloudwatch.Dashboard(
+            f"tracking-dashboard-{self.environment_suffix}",
+            dashboard_name=f"logistics-tracking-{self.environment_suffix}",
+            dashboard_body=json.dumps({
+                "widgets": [
+                    {
+                        "type": "metric",
+                        "properties": {
+                            "metrics": [
+                                ["AWS/ApiGateway", "Count", {"stat": "Sum", "label": "Total Requests"}],
+                                [".", "4XXError", {"stat": "Sum", "label": "4XX Errors"}],
+                                [".", "5XXError", {"stat": "Sum", "label": "5XX Errors"}]
+                            ],
+                            "period": 300,
+                            "stat": "Sum",
+                            "region": aws_region,
+                            "title": "API Gateway Metrics"
+                        }
+                    },
+                    {
+                        "type": "metric",
+                        "properties": {
+                            "metrics": [
+                                ["AWS/Lambda", "Invocations", {"stat": "Sum"}],
+                                [".", "Errors", {"stat": "Sum"}],
+                                [".", "Duration", {"stat": "Average"}],
+                                [".", "Throttles", {"stat": "Sum"}]
+                            ],
+                            "period": 300,
+                            "stat": "Average",
+                            "region": aws_region,
+                            "title": "Lambda Function Metrics"
+                        }
+                    },
+                    {
+                        "type": "metric",
+                        "properties": {
+                            "metrics": [
+                                ["AWS/DynamoDB", "UserErrors", {"stat": "Sum"}],
+                                [".", "SystemErrors", {"stat": "Sum"}],
+                                [".", "ConsumedReadCapacityUnits", {"stat": "Sum"}],
+                                [".", "ConsumedWriteCapacityUnits", {"stat": "Sum"}]
+                            ],
+                            "period": 300,
+                            "stat": "Sum",
+                            "region": aws_region,
+                            "title": "DynamoDB Metrics"
+                        }
+                    }
+                ]
+            }),
+            opts=ResourceOptions(parent=self)
+        )
+
         # Register outputs
         self.register_outputs({
             "api_endpoint": pulumi.Output.concat(
@@ -241,47 +626,14 @@ class TapStack(pulumi.ComponentResource):
             "dlq_url": dlq.url,
             "dashboard_url": pulumi.Output.concat(
                 "https://console.aws.amazon.com/cloudwatch/home?region=",
-                aws_region, "#dashboards:name=", dashboard.dashboard_name
+                aws_region,
+                "#dashboards:name=",
+                dashboard.dashboard_name
             )
         })
 ```
 
-### Entry Point (tap.py)
-
-```python
-#!/usr/bin/env python3
-"""Pulumi application entry point"""
-
-import os
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # Fixed module path
-
-import pulumi
-from pulumi import Config, ResourceOptions
-from lib.tap_stack import TapStack, TapStackArgs
-
-config = Config()
-
-# Fixed: Check environment variable first
-environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', config.get('env') or 'dev')
-STACK_NAME = f"TapStack{environment_suffix}"
-
-repository_name = os.getenv('REPOSITORY', 'unknown')
-commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
-
-default_tags = {
-    'Environment': environment_suffix,
-    'Repository': repository_name,
-    'Author': commit_author,
-}
-
-stack = TapStack(
-    name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
-)
-```
-
-### Lambda Handler (lib/lambda/handler.py)
+## Lambda Function Handler (lib/lambda/handler.py)
 
 ```python
 import json
@@ -291,45 +643,135 @@ import boto3
 from typing import Dict, Any
 from aws_lambda_powertools import Logger, Tracer, Metrics
 from aws_lambda_powertools.metrics import MetricUnit
+from aws_lambda_powertools.logging import correlation_paths
+from aws_lambda_powertools.utilities.typing import LambdaContext
 
+# Initialize AWS Lambda Powertools
 logger = Logger()
 tracer = Tracer()
 metrics = Metrics()
 
+# Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')
 ssm = boto3.client('ssm')
 
+# Environment variables
 TABLE_NAME = os.environ['TABLE_NAME']
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
-# Note: Using REGION instead of AWS_REGION (reserved)
+CONFIG_PARAM = os.environ.get('CONFIG_PARAM')
+DB_PARAM = os.environ.get('DB_PARAM')
+FEATURE_FLAGS_PARAM = os.environ.get('FEATURE_FLAGS_PARAM')
 
+# Cache for SSM parameters
+_parameter_cache = {}
+_cache_expiry = {}
+CACHE_TTL = 300  # 5 minutes
+
+def get_parameter(name: str, decrypt: bool = True) -> str:
+    """Get parameter from SSM with caching."""
+    current_time = time.time()
+
+    if name in _parameter_cache and current_time < _cache_expiry.get(name, 0):
+        return _parameter_cache[name]
+
+    try:
+        response = ssm.get_parameter(Name=name, WithDecryption=decrypt)
+        value = response['Parameter']['Value']
+        _parameter_cache[name] = value
+        _cache_expiry[name] = current_time + CACHE_TTL
+        return value
+    except Exception as e:
+        logger.error(f"Failed to get parameter {name}: {str(e)}")
+        raise
+
+@tracer.capture_method
 def validate_tracking_data(data: Dict[str, Any]) -> bool:
-    """Validate tracking update data"""
-    required = ['tracking_id', 'status', 'location']
+    """Validate tracking data structure."""
+    required_fields = ['tracking_id', 'status', 'location']
+
+    for field in required_fields:
+        if field not in data:
+            logger.warning(f"Missing required field: {field}")
+            return False
+
+    if 'lat' not in data['location'] or 'lng' not in data['location']:
+        logger.warning("Location missing lat or lng")
+        return False
+
     valid_statuses = ['pending', 'in_transit', 'delivered', 'failed']
-
-    if not all(key in data for key in required):
-        return False
-
     if data['status'] not in valid_statuses:
-        return False
-
-    location = data.get('location', {})
-    if 'lat' not in location or 'lng' not in location:
+        logger.warning(f"Invalid status: {data['status']}")
         return False
 
     return True
 
-@logger.inject_lambda_context
+@tracer.capture_method
+def store_tracking_update(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Store tracking update in DynamoDB."""
+    table = dynamodb.Table(TABLE_NAME)
+    timestamp = int(time.time() * 1000)
+
+    item = {
+        'tracking_id': data['tracking_id'],
+        'timestamp': timestamp,
+        'status': data['status'],
+        'location': data['location'],
+        'environment': ENVIRONMENT,
+        'created_at': time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())
+    }
+
+    if 'metadata' in data:
+        item['metadata'] = data['metadata']
+
+    try:
+        table.put_item(Item=item)
+        metrics.add_metric(name="TrackingUpdateStored", unit=MetricUnit.Count, value=1)
+        return item
+    except Exception as e:
+        logger.error(f"Failed to store tracking update: {str(e)}")
+        metrics.add_metric(name="TrackingUpdateFailed", unit=MetricUnit.Count, value=1)
+        raise
+
+@tracer.capture_method
+def get_tracking_status(tracking_id: str) -> list:
+    """Get tracking status from DynamoDB."""
+    table = dynamodb.Table(TABLE_NAME)
+
+    try:
+        response = table.query(
+            KeyConditionExpression='tracking_id = :tid',
+            ExpressionAttributeValues={
+                ':tid': tracking_id
+            },
+            ScanIndexForward=False,
+            Limit=10
+        )
+
+        metrics.add_metric(name="StatusQuerySuccess", unit=MetricUnit.Count, value=1)
+        return response.get('Items', [])
+    except Exception as e:
+        logger.error(f"Failed to get tracking status: {str(e)}")
+        metrics.add_metric(name="StatusQueryFailed", unit=MetricUnit.Count, value=1)
+        raise
+
+@logger.inject_lambda_context(correlation_id_path=correlation_paths.API_GATEWAY_REST)
 @tracer.capture_lambda_handler
 @metrics.log_metrics
-def main(event, context):
-    """Main Lambda handler"""
+def main(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
+    """Main Lambda handler."""
+
+    logger.info(f"Processing request: {json.dumps(event)}")
+
     try:
+        # Load feature flags
+        feature_flags = json.loads(get_parameter(FEATURE_FLAGS_PARAM, decrypt=False))
+        logger.info(f"Feature flags: {feature_flags}")
+
         http_method = event.get('httpMethod', '')
         path = event.get('path', '')
 
         if http_method == 'POST' and path == '/track':
+            # Handle tracking update
             body = json.loads(event.get('body', '{}'))
 
             if not validate_tracking_data(body):
@@ -339,20 +781,20 @@ def main(event, context):
                     'headers': {'Content-Type': 'application/json'}
                 }
 
-            # Store tracking update
-            table = dynamodb.Table(TABLE_NAME)
             result = store_tracking_update(body)
 
             return {
                 'statusCode': 200,
                 'body': json.dumps({
                     'message': 'Tracking update stored successfully',
-                    'tracking_id': result['tracking_id']
+                    'tracking_id': result['tracking_id'],
+                    'timestamp': result['timestamp']
                 }),
                 'headers': {'Content-Type': 'application/json'}
             }
 
         if http_method == 'GET' and path == '/status':
+            # Handle status query
             tracking_id = event.get('queryStringParameters', {}).get('tracking_id')
 
             if not tracking_id:
@@ -368,11 +810,13 @@ def main(event, context):
                 'statusCode': 200,
                 'body': json.dumps({
                     'tracking_id': tracking_id,
-                    'updates': items
+                    'updates': items,
+                    'count': len(items)
                 }),
                 'headers': {'Content-Type': 'application/json'}
             }
 
+        # No matching route found
         return {
             'statusCode': 404,
             'body': json.dumps({'error': 'Not found'}),
@@ -390,17 +834,78 @@ def main(event, context):
         }
 ```
 
-## Key Improvements
+## Application Entry Point (tap.py)
 
-1. **Fixed Import Issues**: Corrected CloudWatch logs import
-2. **Fixed API Gateway Configuration**: Used correct parameter names
-3. **Fixed Lambda Environment Variables**: Avoided reserved AWS variables
-4. **Fixed Lambda Permission ARN**: Used actual account ID
-5. **Added Proper Dependencies**: Ensured resources are created in correct order
-6. **Created Separate API Stage**: Properly separated deployment and stage
-7. **Enhanced Error Handling**: Added comprehensive error handling
-8. **Added Monitoring**: CloudWatch alarms and dashboard
-9. **Security Best Practices**: Least privilege IAM policies
-10. **Configuration Management**: SSM Parameter Store for sensitive data
+```python
+#!/usr/bin/env python3
+"""
+Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
 
-This infrastructure is now production-ready and successfully deployed to AWS.
+This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+configuration based on the deployment environment. It handles environment-specific settings,
+tagging, and deployment configuration for AWS resources.
+
+The stack created by this module uses environment suffixes to distinguish between
+different deployment environments (development, staging, production, etc.).
+"""
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import pulumi
+from pulumi import Config, ResourceOptions
+from lib.tap_stack import TapStack, TapStackArgs
+
+# Initialize Pulumi configuration
+config = Config()
+
+# Get environment suffix from config or environment variable
+import os
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', config.get('env') or 'dev')
+STACK_NAME = f"TapStack{environment_suffix}"
+
+repository_name = os.getenv('REPOSITORY', 'unknown')
+commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
+
+# Create a resource options object with default tags
+default_tags = {
+    'Environment': environment_suffix,
+    'Repository': repository_name,
+    'Author': commit_author,
+}
+
+stack = TapStack(
+    name="pulumi-infra",
+    args=TapStackArgs(environment_suffix=environment_suffix),
+)
+```
+
+## Lambda Dependencies (lib/lambda/requirements.txt)
+
+```txt
+aws-lambda-powertools==2.31.0
+boto3==1.34.11
+```
+
+## Key Infrastructure Features
+
+### Successfully Deployed Resources:
+1. **DynamoDB Table** - On-demand billing with global secondary index
+2. **Lambda Function** - Python 3.9 with proper IAM permissions and environment variables
+3. **API Gateway** - REST API with proper validation and stage deployment
+4. **CloudWatch** - Monitoring dashboard and alarms for operational visibility
+5. **SSM Parameters** - Secure configuration management
+6. **SQS Queue** - Dead letter queue for failed Lambda executions
+7. **IAM Roles and Policies** - Least privilege security model
+
+### Monitoring and Observability:
+- CloudWatch dashboard with API Gateway, Lambda, and DynamoDB metrics
+- Metric alarms for 4XX/5XX errors, latency, and Lambda throttling
+- AWS X-Ray tracing enabled
+- Structured logging with AWS Lambda Powertools
+
+### Security Features:
+- AWS IAM authentication for API endpoints
+- Encrypted SSM parameters for sensitive configuration
+- Lambda dead letter queue for error handling
+- Proper IAM role separation and least privilege access
