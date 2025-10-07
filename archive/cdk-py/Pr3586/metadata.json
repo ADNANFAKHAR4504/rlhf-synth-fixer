@@ -10,5 +10,12 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "EC2, RDS, Load Balancer, S3, Lambda, IAM"
+  "aws_services": "EC2, RDS, Load Balancer, S3, Lambda, IAM",
+  "training_quality": "high",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
 }
