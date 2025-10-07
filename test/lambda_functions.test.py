@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../lib'))
 
 # Mock AWS environment variables
 os.environ['TABLE_NAME'] = 'test-table'
-os.environ['REMINDER_FUNCTION_ARN'] = 'arn:aws:lambda:us-west-1:123456789:function:test'
-os.environ['TOPIC_ARN'] = 'arn:aws:sns:us-west-1:123456789:test-topic'
+os.environ['REMINDER_FUNCTION_ARN'] = 'arn:aws:lambda:us-east-1:123456789:function:test'
+os.environ['TOPIC_ARN'] = 'arn:aws:sns:us-east-1:123456789:test-topic'
 
 class TestConflictDetector(unittest.TestCase):
     def setUp(self):

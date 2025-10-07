@@ -903,7 +903,7 @@ def cleanup_rule(appointment_id, reminder_type):
 ```bash
 # Set environment variables
 export ENVIRONMENT_SUFFIX=prod
-export AWS_REGION=us-west-1
+export AWS_REGION=us-east-1
 
 # Deploy CloudFormation stack
 aws cloudformation create-stack \

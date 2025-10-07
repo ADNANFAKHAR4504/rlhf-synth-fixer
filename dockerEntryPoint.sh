@@ -187,7 +187,7 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         ["iac-rlhf-cfn-states-eu-west-3-$CURRENT_ACCOUNT_ID"]="eu-west-3"
         ["iac-rlhf-cfn-states-us-east-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
         ["iac-rlhf-cfn-states-us-east-2-$CURRENT_ACCOUNT_ID"]="us-east-2"
-        ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-west-1"
+        ["iac-rlhf-cfn-states-us-east-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
         ["iac-rlhf-cfn-states-us-west-2-$CURRENT_ACCOUNT_ID"]="us-west-2"
         ["iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
         ["iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"]="us-east-1"

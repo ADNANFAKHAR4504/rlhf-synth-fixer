@@ -4,7 +4,7 @@ Create CloudFormation infrastructure code in JSON format for an appointment sche
 
 ## Requirements
 
-Build an appointment scheduling system that handles 3,500 daily calendar appointments with conflict detection and reminder notifications. The system should be deployed in us-west-1 region.
+Build an appointment scheduling system that handles 3,500 daily calendar appointments with conflict detection and reminder notifications. The system should be deployed in us-east-1 region.
 
 ## Architecture Components
 
