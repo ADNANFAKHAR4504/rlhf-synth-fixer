@@ -21,6 +21,15 @@ Parameters:
     Type: CommaDelimitedList
     Default: ""
   
+  # Config parameters
+  CreateConfigResources:
+    Description: Whether to create AWS Config resources (set to false if Config is already set up in this region)
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+  
   # RDS parameters
   DBInstanceClass:
     Description: RDS instance class
@@ -105,6 +114,9 @@ Mappings:
 Conditions:
   # Condition to check if cross-region replication buckets are provided
   HasReplicationBuckets: !Not [!Equals [!Join ['', !Ref CrossRegionReplicationBuckets], '']]
+  
+  # Condition to check if Config resources should be created
+  ShouldCreateConfig: !Equals [!Ref CreateConfigResources, "true"]
 
 Resources:
   # S3 Bucket with versioning and encryption
@@ -971,6 +983,7 @@ Resources:
   # AWS Config
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateConfig
     DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub '${EnvironmentSuffix}-config-recorder'
@@ -981,6 +994,7 @@ Resources:
 
   ConfigRecorderRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateConfig
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -994,6 +1008,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateConfig
     Properties:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: Six_Hours
@@ -1002,6 +1017,7 @@ Resources:
       
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateConfig
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}'
       VersioningConfiguration:
@@ -1018,6 +1034,7 @@ Resources:
 
   ConfigS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateConfig
     Properties:
       Bucket: !Ref ConfigS3Bucket
       PolicyDocument:
@@ -1048,6 +1065,7 @@ Resources:
   # AWS Config Rule for tagging compliance
   RequiredTagsConfigRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateConfig
     Properties:
       ConfigRuleName: !Sub '${EnvironmentSuffix}-required-tags'
       Description: Checks if resources have the required tags
@@ -1261,6 +1279,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-WebACLArn'
 
   ConfigRuleName:
+    Condition: ShouldCreateConfig
     Description: Name of the AWS Config rule for required tags
     Value: !Ref RequiredTagsConfigRule
     Export:
