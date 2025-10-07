@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "349402",
+  "team": "1",
+  "startedAt": "2025-09-24T00:46:26.170Z",
+  "task_sub_category": "IaC-Serverless-Architecture",
+  "use_case_category": "Serverless Infrastructure (Functions as Code)",
+  "aws_services": [
+    "lambda",
+    "s3",
+    "ec2",
+    "rds",
+    "vpc",
+    "kms",
+    "iam",
+    "cloudtrail",
+    "guardduty",
+    "wafv2",
+    "apigateway",
+    "cloudfront",
+    "config",
+    "cloudwatch",
+    "logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}
