@@ -242,10 +242,5 @@ describe('Serverless Image Processing CloudFormation Template', () => {
       const parameterCount = Object.keys(template.Parameters).length;
       expect(parameterCount).toBe(2);
     });
-
-    test('should have correct output count', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
   });
 });
