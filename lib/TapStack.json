@@ -1,0 +1,1881 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Hotel Booking Platform Infrastructure - Handles 4,800 daily reservations",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming",
+            "MinLength": 1,
+            "MaxLength": 20,
+            "AllowedPattern": "[a-zA-Z0-9-]*",
+            "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Default": "admin",
+            "Description": "Database master username",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.170.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-VPC"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-IGW"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PublicSubnet-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PublicSubnet-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.10.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PrivateSubnet-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.11.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PrivateSubnet-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.20.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-DBSubnet-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.170.21.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-DBSubnet-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "NATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-NAT-EIP-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "NATGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-NAT-EIP-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-NAT-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "NATGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-NAT-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PublicRouteTable"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PrivateRouteTable-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-PrivateRouteTable-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway2"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                }
+            }
+        },
+        "DBRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-DBRouteTable"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DBSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "DBRouteTable"
+                }
+            }
+        },
+        "DBSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "DBSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "DBRouteTable"
+                }
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "VPCFlowLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/bookingplatform-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-VPCFlowLog"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-ALB-SG"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application instances",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-App-SG"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Aurora database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-DB-SG"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "CacheSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for ElastiCache Redis",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-Cache-SG"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "BookingConfirmationsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "booking-confirmations-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${BookingConfirmationsBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "BookingConfirmationsBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchMetrics",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "cloudwatch:ListMetrics"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "WAFLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "aws-waf-logs-bookingplatform-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "WAFWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "BookingPlatform-WAF-${EnvironmentSuffix}"
+                },
+                "Scope": "REGIONAL",
+                "Description": "WAF WebACL for Hotel Booking Platform ALB",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "BookingPlatformWAF-${EnvironmentSuffix}"
+                    }
+                },
+                "Rules": [
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 1,
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 2000,
+                                "AggregateKeyType": "IP",
+                                "EvaluationWindowSec": 300
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRule"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 2,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                        "Priority": 3,
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                            }
+                        },
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "KnownBadInputsMetric"
+                        }
+                    },
+                    {
+                        "Name": "GeoBlockingRule",
+                        "Priority": 4,
+                        "Statement": {
+                            "GeoMatchStatement": {
+                                "CountryCodes": [
+                                    "CN",
+                                    "RU",
+                                    "KP"
+                                ]
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "GeoBlockingMetric"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "WAFLogConfig": {
+            "Type": "AWS::WAFv2::LoggingConfiguration",
+            "Properties": {
+                "ResourceArn": {
+                    "Fn::GetAtt": [
+                        "WAFWebACL",
+                        "Arn"
+                    ]
+                },
+                "LogDestinationConfigs": [
+                    {
+                        "Fn::GetAtt": [
+                            "WAFLogGroup",
+                            "Arn"
+                        ]
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "BP-ALB-${EnvironmentSuffix}"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "WAFAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Properties": {
+                "ResourceArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "WAFWebACL",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "BP-TG-${EnvironmentSuffix}"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "HealthCheckEnabled": true,
+                "HealthCheckPath": "/health",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": 200
+                },
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "stickiness.enabled",
+                        "Value": true
+                    },
+                    {
+                        "Key": "stickiness.type",
+                        "Value": "lb_cookie"
+                    },
+                    {
+                        "Key": "stickiness.lb_cookie.duration_seconds",
+                        "Value": 86400
+                    },
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": 30
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "EC2LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "BookingPlatform-LaunchTemplate-${EnvironmentSuffix}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": "t3.medium",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Install SSM Agent (usually pre-installed on Amazon Linux 2)\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n\n# Simple web server for health checks\ncat > /var/www/html/health <<EOF\nOK\nEOF\n\n# Start a simple HTTP server for health checks\ncd /var/www/html\npython -m SimpleHTTPServer 80 &\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"metrics\": {\n    \"namespace\": \"BookingPlatform\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\n            \"name\": \"cpu_usage_idle\",\n            \"rename\": \"CPU_IDLE\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\n            \"name\": \"mem_used_percent\",\n            \"rename\": \"MEM_USED\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\\n  -s\n"
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": "BookingPlatform-Instance"
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": "Production"
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": "BookingPlatform"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "BookingPlatform-ASG-${EnvironmentSuffix}"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "EC2LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 8,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-ASG-Instance",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "CPUTargetTrackingScalingPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "TargetTrackingConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue": 60
+                }
+            }
+        },
+        "DBMasterPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "BookingPlatform-DB-Password-${EnvironmentSuffix}"
+                },
+                "Description": "Master password for Aurora MySQL cluster",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": " \"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "BookingPlatform-DB-Password-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+                "SubnetIds": [
+                    {
+                        "Ref": "DBSubnet1"
+                    },
+                    {
+                        "Ref": "DBSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-DBSubnetGroup"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "DBClusterParameterGroup": {
+            "Type": "AWS::RDS::DBClusterParameterGroup",
+            "Properties": {
+                "Description": "Aurora MySQL Cluster Parameter Group",
+                "Family": "aurora-mysql8.0",
+                "Parameters": {
+                    "character_set_server": "utf8mb4",
+                    "collation_server": "utf8mb4_unicode_ci"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "AuroraDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "bookingplatform-aurora-cluster-${EnvironmentSuffix}"
+                },
+                "Engine": "aurora-mysql",
+                "EngineMode": "provisioned",
+                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
+                },
+                "DatabaseName": "bookingdb",
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "DBSecurityGroup"
+                    }
+                ],
+                "DBClusterParameterGroupName": {
+                    "Ref": "DBClusterParameterGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "StorageEncrypted": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-Aurora-Cluster"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "AuroraDBInstance1": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "bookingplatform-aurora-instance-1-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": "db.t3.medium",
+                "Engine": "aurora-mysql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-Aurora-Instance-1"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "AuroraDBInstance2": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "bookingplatform-aurora-instance-2-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": "db.t3.medium",
+                "Engine": "aurora-mysql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-Aurora-Instance-2"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "CacheSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "CacheSubnetGroupName": {
+                    "Fn::Sub": "bookingplatform-cache-subnet-group-${EnvironmentSuffix}"
+                },
+                "Description": "Subnet group for ElastiCache Redis",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "CacheParameterGroup": {
+            "Type": "AWS::ElastiCache::ParameterGroup",
+            "Properties": {
+                "CacheParameterGroupFamily": "redis7",
+                "Description": "Redis parameter group with TTL support",
+                "Properties": {
+                    "timeout": 300,
+                    "maxmemory-policy": "allkeys-lru"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "RedisCache": {
+            "Type": "AWS::ElastiCache::CacheCluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "bookingplatform-redis-${EnvironmentSuffix}"
+                },
+                "Engine": "redis",
+                "CacheNodeType": "cache.t3.micro",
+                "NumCacheNodes": 1,
+                "CacheSubnetGroupName": {
+                    "Ref": "CacheSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "CacheSecurityGroup"
+                    }
+                ],
+                "CacheParameterGroupName": {
+                    "Ref": "CacheParameterGroup"
+                },
+                "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "BookingPlatform-Redis"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "BackupKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for AWS Backup encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow AWS Backup to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "BackupKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/bookingplatform-backup-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "BackupKMSKey"
+                }
+            }
+        },
+        "BackupVault": {
+            "Type": "AWS::Backup::BackupVault",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": "BookingPlatform-Vault-${EnvironmentSuffix}"
+                },
+                "EncryptionKeyArn": {
+                    "Fn::GetAtt": [
+                        "BackupKMSKey",
+                        "Arn"
+                    ]
+                },
+                "BackupVaultTags": {
+                    "Environment": "Production",
+                    "Project": "BookingPlatform"
+                }
+            }
+        },
+        "BackupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "BookingPlatform"
+                    }
+                ]
+            }
+        },
+        "BackupPlan": {
+            "Type": "AWS::Backup::BackupPlan",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": "BookingPlatform-BackupPlan-${EnvironmentSuffix}"
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackupRule",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 2 * * ? *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 97,
+                                "MoveToColdStorageAfterDays": 7
+                            },
+                            "RecoveryPointTags": {
+                                "Environment": "Production",
+                                "Project": "BookingPlatform"
+                            },
+                            "CopyActions": [
+                                {
+                                    "DestinationBackupVaultArn": {
+                                        "Fn::Sub": "arn:aws:backup:us-west-2:${AWS::AccountId}:backup-vault:Default"
+                                    },
+                                    "Lifecycle": {
+                                        "DeleteAfterDays": 97,
+                                        "MoveToColdStorageAfterDays": 7
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "BackupPlanTags": {
+                    "Environment": "Production",
+                    "Project": "BookingPlatform"
+                }
+            }
+        },
+        "BackupSelection": {
+            "Type": "AWS::Backup::BackupSelection",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": {
+                        "Fn::Sub": "BookingPlatform-Selection-${EnvironmentSuffix}"
+                    },
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}"
+                        }
+                    ],
+                    "ListOfTags": [
+                        {
+                            "ConditionType": "STRINGEQUALS",
+                            "ConditionKey": "Project",
+                            "ConditionValue": "BookingPlatform"
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudWatchDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "BookingPlatform-Dashboard-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApplicationELB\", \"TargetResponseTime\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Application Response Times\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApplicationELB\", \"RequestCount\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Request Count\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/EC2\", \"CPUUtilization\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"EC2 CPU Utilization\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0,\n            \"max\": 100\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/RDS\", \"DatabaseConnections\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Database Connections\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ElastiCache\", \"CPUUtilization\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Redis Cache CPU\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket for booking confirmations",
+            "Value": {
+                "Ref": "BookingConfirmationsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "Aurora cluster endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+                }
+            }
+        },
+        "RedisEndpoint": {
+            "Description": "Redis cache endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RedisCache",
+                    "RedisEndpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Redis-Endpoint"
+                }
+            }
+        },
+        "WAFWebACLId": {
+            "Description": "WAF Web ACL ID",
+            "Value": {
+                "Ref": "WAFWebACL"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WAF-WebACL-ID"
+                }
+            }
+        },
+        "WAFWebACLArn": {
+            "Description": "WAF Web ACL ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WAFWebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WAF-WebACL-ARN"
+                }
+            }
+        },
+        "BackupVaultArn": {
+            "Description": "AWS Backup Vault ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BackupVault",
+                    "BackupVaultArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupVault-ARN"
+                }
+            }
+        },
+        "BackupPlanId": {
+            "Description": "AWS Backup Plan ID",
+            "Value": {
+                "Ref": "BackupPlan"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BackupPlan-ID"
+                }
+            }
+        }
+    }
+}
