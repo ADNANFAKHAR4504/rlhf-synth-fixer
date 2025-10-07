@@ -72,7 +72,7 @@ export interface RdsModuleConfig {
   securityGroupIds: string[];
   instanceClass: string;
   engine: string;
-  engineVersion: string;
+  engineVersion?: string;
   dbName: string;
   username: string;
   password: string;

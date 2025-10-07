@@ -123,18 +123,17 @@ export class TapStack extends TerraformStack {
       securityGroupIds: [],
       instanceClass: 'db.t3.small',
       engine: 'mysql',
-      engineVersion: '8.0',
       dbName: 'productiondb',
-      username: 'admin',
-      password: 'StrongPasswordToBeReplaced', // Should be replaced with a secret
-      kmsKeyId: rdsKms.key.id,
+      username: process.env.RDS_USERNAME || 'admin',
+      password: process.env.RDS_PASSWORD || 'ChangeMe123!', // Use a secure password in production
+      kmsKeyId: rdsKms.key.arn,
       tags,
     });
 
     // Enable CloudTrail for logging
     new CloudTrailModule(this, 'cloudtrail', {
       s3BucketName: s3.logBucket.bucket,
-      kmsKeyId: mainKms.key.id,
+      kmsKeyId: mainKms.key.arn,
       tags,
     });
 
