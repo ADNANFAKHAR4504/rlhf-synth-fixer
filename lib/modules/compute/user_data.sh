@@ -3,6 +3,9 @@
 # Create a simple web server without requiring package installation
 # This ensures the instance can pass health checks even if packages fail to install
 
+# Create directory structure (in case httpd is not installed)
+mkdir -p /var/www/html
+
 # Create a simple index.html that doesn't require PHP or database
 cat > /var/www/html/index.html << 'EOF'
 <!DOCTYPE html>
@@ -94,6 +97,12 @@ PHPEOF
 # Set basic permissions
 chmod -R 755 /var/www/html
 
+# Start a simple Python HTTP server to serve the files
+# This runs immediately without needing to install packages
+cd /var/www/html
+nohup python -m SimpleHTTPServer 80 > /var/log/simple-http-server.log 2>&1 &
+
 # Log completion
 echo "User data script completed at $(date)" >> /var/log/user-data.log
 echo "Basic web server is ready for health checks" >> /var/log/user-data.log
+echo "Python SimpleHTTPServer started on port 80" >> /var/log/user-data.log
