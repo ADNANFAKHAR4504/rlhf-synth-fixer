@@ -180,7 +180,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
 
         // Check logging configuration
         expect(distribution.Distribution?.DistributionConfig.Logging?.Enabled).toBe(true);
-        expect(distribution.Distribution?.DistributionConfig.Logging?.Bucket).toMatch(/s3\.amazonaws\.com$/);
+        expect(distribution.Distribution?.DistributionConfig.Logging?.Bucket).toMatch(/s3(\.[a-z0-9-]+)?\.amazonaws\.com$/);
         expect(distribution.Distribution?.DistributionConfig.Logging?.Prefix).toBe('cloudfront-logs/');
 
         // Check TLS version (only when custom certificate is used)
