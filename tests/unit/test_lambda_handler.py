@@ -14,7 +14,7 @@ from datetime import datetime
 import io
 
 # Add lib directory to path
-sys.path.insert(0, '/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-53098726/lib')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 # Set environment variables before importing handler
 os.environ['WEBP_BUCKET'] = 'test-webp-bucket'

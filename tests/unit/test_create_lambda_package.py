@@ -12,7 +12,7 @@ import zipfile
 import shutil
 
 # Add lib directory to path
-sys.path.insert(0, '/Users/mayanksethi/Projects/turing/iac-test-automations/worktrees/IAC-synth-53098726/lib')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 from create_lambda_package import create_lambda_package
 
