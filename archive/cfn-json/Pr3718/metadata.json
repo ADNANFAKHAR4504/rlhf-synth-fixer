@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "12475061",
+  "team": "3",
+  "startedAt": "2025-10-07T08:47:54.602Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "DynamoDB, S3, Lambda, KMS, IAM, API Gateway, Step Functions, SNS, EventBridge, CloudWatch, Athena, Glue, Textract, Comprehend, Translate",
+  "training_quality": "medium",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

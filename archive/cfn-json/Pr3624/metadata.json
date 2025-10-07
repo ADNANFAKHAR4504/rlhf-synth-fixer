@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348964",
+  "team": "2",
+  "startedAt": "2025-10-06T09:48:17.637Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "IoT Core",
+    "IoT Policy",
+    "IoT TopicRule",
+    "Kinesis Data Streams",
+    "DynamoDB",
+    "SageMaker",
+    "Lambda",
+    "Location Service",
+    "S3",
+    "Glue",
+    "Athena",
+    "Step Functions",
+    "EventBridge",
+    "SNS",
+    "SES",
+    "CloudWatch",
+    "API Gateway"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
