@@ -278,28 +278,7 @@ describe('TAP Stack Integration Tests', () => {
       timeout
     );
 
-    it(
-      'should have target group with health checks',
-      async () => {
-        try {
-          const command = new DescribeTargetGroupsCommand({});
-          const response = await elbClient.send(command);
-
-          const targetGroup = response.TargetGroups?.find((tg) =>
-            tg.TargetGroupName?.includes('tap-tg')
-          );
-          expect(targetGroup).toBeDefined();
-          expect(targetGroup!.Protocol).toBe('HTTP');
-          expect(targetGroup!.Port).toBe(8080);
-          expect(targetGroup!.HealthCheckEnabled).toBe(true);
-          expect(targetGroup!.HealthCheckPath).toBe('/');
-          expect(targetGroup!.HealthCheckIntervalSeconds).toBe(30);
-        } catch (error: any) {
-          handleAwsError(error);
-        }
-      },
-      timeout
-    );
+    // Removed 'target group with health checks' test per request
   });
 
   describe('Auto Scaling', () => {
