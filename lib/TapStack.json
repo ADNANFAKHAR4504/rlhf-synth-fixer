@@ -474,9 +474,6 @@
     },
     "BookingMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
-      "DependsOn": [
-        "ConflictDetectorLogGroup"
-      ],
       "Properties": {
         "FilterName": "BookingMetrics",
         "FilterPattern": "[time, request_id, event_type = BOOKING_SUCCESS || event_type = BOOKING_CONFLICT || event_type = BOOKING_ERROR, ...]",
