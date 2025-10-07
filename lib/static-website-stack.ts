@@ -87,7 +87,8 @@ export class StaticWebsiteStack extends cdk.NestedStack {
     let certificate: certificatemanager.ICertificate | undefined;
 
     if (!props.skipCertificate) {
-      certificate = props.certificate ||
+      certificate =
+        props.certificate ||
         new certificatemanager.Certificate(this, 'SiteCertificate', {
           domainName: siteDomain,
           certificateName: `portfolio-cert-${props.environmentSuffix}`,
@@ -126,9 +127,9 @@ export class StaticWebsiteStack extends cdk.NestedStack {
             originAccessControl,
           }
         ),
-        viewerProtocolPolicy: certificate ?
-          cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS :
-          cloudfront.ViewerProtocolPolicy.ALLOW_ALL,
+        viewerProtocolPolicy: certificate
+          ? cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
+          : cloudfront.ViewerProtocolPolicy.ALLOW_ALL,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         compress: true,
@@ -159,10 +160,15 @@ export class StaticWebsiteStack extends cdk.NestedStack {
     if (certificate) {
       distributionConfig.domainNames = [siteDomain];
       distributionConfig.certificate = certificate;
-      distributionConfig.minimumProtocolVersion = cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021;
+      distributionConfig.minimumProtocolVersion =
+        cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021;
     }
 
-    const distribution = new cloudfront.Distribution(this, 'Distribution', distributionConfig);
+    const distribution = new cloudfront.Distribution(
+      this,
+      'Distribution',
+      distributionConfig
+    );
 
     this.distribution = distribution;
 
@@ -263,12 +269,12 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 
     // Outputs
     new cdk.CfnOutput(this, 'WebsiteURL', {
-      value: certificate ?
-        `https://${siteDomain}` :
-        `https://${distribution.distributionDomainName}`,
-      description: certificate ?
-        'Website URL (Custom Domain)' :
-        'Website URL (CloudFront Domain)',
+      value: certificate
+        ? `https://${siteDomain}`
+        : `https://${distribution.distributionDomainName}`,
+      description: certificate
+        ? 'Website URL (Custom Domain)'
+        : 'Website URL (CloudFront Domain)',
       exportName: `website-url-${props.environmentSuffix}`,
     });
 

@@ -22,9 +22,12 @@ export class TapStack extends cdk.Stack {
     const subDomain = 'portfolio';
 
     // Skip certificate creation for testing/demo (avoids DNS validation issues)
-    const skipCertificate = props?.skipCertificate ??
+    const skipCertificate =
+      props?.skipCertificate ??
       this.node.tryGetContext('skipCertificate') ??
-      (process.env.SKIP_CERTIFICATE ? process.env.SKIP_CERTIFICATE === 'true' : true);
+      (process.env.SKIP_CERTIFICATE
+        ? process.env.SKIP_CERTIFICATE === 'true'
+        : true);
 
     // Check if we're in us-east-1 (for WAF and Certificate requirements)
     const isUsEast1 = this.region === 'us-east-1';
