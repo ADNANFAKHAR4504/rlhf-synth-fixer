@@ -239,6 +239,31 @@ describe('TapStack infrastructure', () => {
       Namespace: 'AWS/Billing',
     });
   });
+
+  test('handles edge case sanitization properly', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'EdgeCaseStack', {
+      environmentSuffix: '123!@#$%^&*()_+-={}[]|\\:";\'<>?,./',
+      env: { account: '111111111111', region: 'us-west-2' },
+    });
+
+    // Verify stack creation doesn't fail with complex suffix
+    expect(stack).toBeDefined();
+
+    // Test with empty environmentSuffix
+    const stack2 = new TapStack(app, 'EmptyStack', {
+      environmentSuffix: '',
+      env: { account: '111111111111', region: 'us-west-2' },
+    });
+    expect(stack2).toBeDefined();
+
+    // Test with only special characters that should result in 'dev'
+    const stack3 = new TapStack(app, 'SpecialStack', {
+      environmentSuffix: '!@#$%^&*()',
+      env: { account: '111111111111', region: 'us-west-2' },
+    });
+    expect(stack3).toBeDefined();
+  });
 });
 
 describe('normalizeEvent helper', () => {
@@ -389,6 +414,103 @@ describe('normalizeEvent helper', () => {
     });
 
     expect(normalized.pathParameters).toEqual({ teamId: 'alpha' });
+  });
+
+  it('handles events with no requestContext method but other fields', () => {
+    const normalized = normalizeEvent({
+      headers: { 'content-type': 'application/json' },
+      path: '/custom',
+      resource: '/custom',
+      body: { test: 'data' },
+      isBase64Encoded: true,
+    });
+
+    expect(normalized.httpMethod).toBe('GET');
+    expect(normalized.path).toBe('/custom');
+    expect(normalized.resource).toBe('/custom');
+    expect(normalized.body).toBe('{"test":"data"}');
+    expect(normalized.isBase64Encoded).toBe(true);
+  });
+
+  it('handles events with requestContext but no method', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: {} },
+      path: '/test',
+      headers: { host: 'example.com' },
+    });
+
+    expect(normalized.httpMethod).toBe('GET');
+    expect(normalized.path).toBe('/test');
+    expect(normalized.headers).toEqual({ host: 'example.com' });
+  });
+
+  it('handles function URL events with missing rawPath', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'get', path: '/orders/123' } },
+      pathParameters: { orderId: '123' },
+    });
+
+    expect(normalized.httpMethod).toBe('GET');
+    expect(normalized.path).toBe('/orders/123');
+    expect(normalized.pathParameters).toEqual({ orderId: '123' });
+  });
+
+  it('uses fallback path resolution order', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'post' } },
+      rawPath: '/raw-path',
+      path: '/backup-path',
+    });
+
+    expect(normalized.httpMethod).toBe('POST');
+    expect(normalized.path).toBe('/raw-path');
+  });
+
+  it('handles null/undefined values in coerceBody', () => {
+    let normalized = normalizeEvent({
+      requestContext: { http: { method: 'post', path: '/test' } },
+      body: null,
+    });
+    expect(normalized.body).toBeNull();
+
+    normalized = normalizeEvent({
+      requestContext: { http: { method: 'post', path: '/test' } },
+      body: undefined,
+    });
+    expect(normalized.body).toBeNull();
+  });
+
+  it('handles events with no requestContext http property', () => {
+    const normalized = normalizeEvent({
+      requestContext: {},
+      headers: { 'x-custom': 'header' },
+      path: '/fallback-test',
+      resource: '/fallback-test',
+      queryStringParameters: { param: 'value' },
+      multiValueQueryStringParameters: { multiParam: ['value1', 'value2'] },
+      stageVariables: { stage: 'test' },
+      body: { data: 'test' },
+      isBase64Encoded: false,
+    });
+
+    expect(normalized.httpMethod).toBe('GET');
+    expect(normalized.path).toBe('/fallback-test');
+    expect(normalized.resource).toBe('/fallback-test');
+    expect(normalized.headers).toEqual({ 'x-custom': 'header' });
+    expect(normalized.queryStringParameters).toEqual({ param: 'value' });
+    expect(normalized.multiValueQueryStringParameters).toEqual({ multiParam: ['value1', 'value2'] });
+    expect(normalized.stageVariables).toEqual({ stage: 'test' });
+    expect(normalized.body).toBe('{"data":"test"}');
+    expect(normalized.isBase64Encoded).toBe(false);
+  });
+
+  it('handles empty path segments that cannot be decoded', () => {
+    const normalized = normalizeEvent({
+      requestContext: { http: { method: 'get', path: '/items/' } },
+      rawPath: '/items/',
+    });
+
+    expect(normalized.pathParameters).toBeNull();
   });
 });
 
@@ -602,6 +724,65 @@ describe('user-service handler', () => {
         ':email': 'ada@example.com',
       }),
     });
+  });
+
+  test('PUT updates only name when email is not provided', async () => {
+    dynamoMock.mockResolvedValueOnce({});
+
+    const response = await userHandler(
+      createEvent({
+        httpMethod: 'PUT',
+        path: '/users/user-1',
+        pathParameters: { userId: 'user-1' },
+        body: JSON.stringify({ name: 'New Name' }),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const updateCall = dynamoMock.mock.calls.at(-1);
+    expectCommandCall(updateCall, {
+      ExpressionAttributeValues: expect.objectContaining({
+        ':name': 'New Name',
+      }),
+    });
+  });
+
+  test('PUT updates only email when name is not provided', async () => {
+    dynamoMock.mockResolvedValueOnce({});
+
+    const response = await userHandler(
+      createEvent({
+        httpMethod: 'PUT',
+        path: '/users/user-1',
+        pathParameters: { userId: 'user-1' },
+        body: JSON.stringify({ email: 'new@example.com' }),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(200);
+    const updateCall = dynamoMock.mock.calls.at(-1);
+    expectCommandCall(updateCall, {
+      ExpressionAttributeValues: expect.objectContaining({
+        ':email': 'new@example.com',
+      }),
+    });
+  });
+
+  test('PUT returns 422 when neither name nor email is provided', async () => {
+    const response = await userHandler(
+      createEvent({
+        httpMethod: 'PUT',
+        path: '/users/user-1',
+        pathParameters: { userId: 'user-1' },
+        body: JSON.stringify({}),
+      }),
+      baseContext
+    );
+
+    expect(response.statusCode).toBe(422);
+    expect(JSON.parse(response.body).message).toBe('Provide at least one attribute to update.');
   });
 
   test('DELETE enforces identifier existence', async () => {
@@ -955,6 +1136,36 @@ describe('order-service handler', () => {
       baseContext
     );
     expect(response.statusCode).toBe(422);
+
+    response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ userId: 'u1', productId: 'p1' }),
+      }),
+      baseContext
+    );
+    expect(response.statusCode).toBe(422);
+
+    response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ productId: 'p1', quantity: 1 }),
+      }),
+      baseContext
+    );
+    expect(response.statusCode).toBe(422);
+
+    response = await orderHandler(
+      createEvent({
+        httpMethod: 'POST',
+        path: '/orders',
+        body: JSON.stringify({ userId: 'u1', productId: 'p1', quantity: undefined }),
+      }),
+      baseContext
+    );
+    expect(response.statusCode).toBe(422);
   });
 
   test('POST aborts when user does not exist', async () => {
@@ -1080,6 +1291,16 @@ describe('order-service handler', () => {
   test('PATCH validates identifier and payload', async () => {
     let response = await orderHandler(
       createEvent({ httpMethod: 'PATCH', path: '/orders' }),
+      baseContext
+    );
+    expect(response.statusCode).toBe(400);
+
+    response = await orderHandler(
+      createEvent({
+        httpMethod: 'PATCH',
+        path: '/orders/order-1',
+        pathParameters: { orderId: 'order-1' },
+      }),
       baseContext
     );
     expect(response.statusCode).toBe(400);
