@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-describe("TapStack Terraform Unit Tests (accurate)", () => {
+describe("TapStack Terraform Unit Tests (accurate and fixed)", () => {
   let tfContent: string;
 
   beforeAll(() => {
@@ -14,7 +14,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     return matches ? matches.length : 0;
   }
 
-  // Variables & Data Sources
+  // Variables & Data Sources Tests
   describe("Variables & Data Sources", () => {
     test("contains expected variables", () => {
       expect(tfContent).toMatch(/variable\s+"primary_region"/);
@@ -31,7 +31,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Locals
+  // Locals Tests
   describe("Locals", () => {
     test("defines locals resource_suffix and primary_vpc_name", () => {
       expect(tfContent).toMatch(/locals\s*{/);
@@ -40,7 +40,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Random & Secrets
+  // Random & Secrets Tests
   describe("Random & Secrets", () => {
     test("creates random strings and passwords", () => {
       expect(tfContent).toMatch(/resource\s+"random_string"\s+"suffix"/);
@@ -55,7 +55,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // VPC & Networking
+  // VPC & Networking Tests
   describe("VPC and Networking", () => {
     test("defines VPCs and internet gateways", () => {
       expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"primary_vpc"/);
@@ -90,7 +90,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Security Groups
+  // Security Groups Tests
   describe("Security Groups", () => {
     test("defines security groups for ALB, EC2, and RDS", () => {
       expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"primary_alb_sg"/);
@@ -102,7 +102,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // IAM Roles & Policies
+  // IAM Roles & Policies Tests
   describe("IAM Roles & Policies", () => {
     test("defines ec2 role, instance profile, and policies", () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
@@ -116,7 +116,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // S3 Buckets
+  // S3 Bucket Tests
   describe("S3 Buckets", () => {
     test("creates S3 buckets with versioning, encryption, and public access blocks", () => {
       expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"primary_bucket"/);
@@ -131,7 +131,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // ACM & Load Balancers
+  // ACM & Load Balancer Tests
   describe("ACM and Load Balancer", () => {
     test("ACM certificate", () => {
       expect(tfContent).toMatch(/resource\s+"aws_acm_certificate"\s+"cloudfront_cert"/);
@@ -148,7 +148,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Launch Templates & ASGs
+  // Launch Templates & Auto Scaling Group Tests
   describe("Launch Templates & Auto Scaling Groups", () => {
     test("launch templates and autoscaling groups", () => {
       expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"primary_lt"/);
@@ -163,7 +163,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // RDS & DB Subnet Groups
+  // RDS and DB Subnet Groups Tests
   describe("RDS and DB Subnet Groups", () => {
     test("primary and secondary RDS instances and subnet groups", () => {
       expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary_db_subnet_group"/);
@@ -173,7 +173,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Secrets Manager & SSM Parameters
+  // Secrets Manager and SSM Parameters Tests
   describe("Secrets Manager & SSM Parameters", () => {
     test("Secrets manager secrets and versions", () => {
       expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"primary_rds_secret"/);
@@ -192,7 +192,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // CloudWatch & Alarms
+  // CloudWatch and Alarms Tests
   describe("CloudWatch & Alarms", () => {
     test("cloudwatch metric alarms", () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_cpu_alarm"/);
@@ -200,7 +200,7 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Outputs
+  // Outputs Tests
   describe("Outputs", () => {
     test("exports all expected outputs", () => {
       [
@@ -254,11 +254,11 @@ describe("TapStack Terraform Unit Tests (accurate)", () => {
     });
   });
 
-  // Tagging & Sanity
+  // Tagging & Sanity Checks
   describe("Tagging & Sanity checks", () => {
     test("Common tags usage and merging", () => {
       expect(tfContent).toMatch(/commontags/);
-      expect(tfContent).toMatch(/merge\(local.commmon_tags,.*\)/);
+      expect(tfContent).toMatch(/merge\(local.commontags,.*\)/);
     });
   });
 });
