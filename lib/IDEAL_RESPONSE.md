@@ -25,6 +25,12 @@ Metadata:
           - PrivateSubnetCidr1
           - PrivateSubnetCidr2
       - Label:
+          default: "Database Configuration"
+        Parameters:
+          - DBName
+          - DBUser
+          - DBInstanceClass
+      - Label:
           default: "SSL Certificate Configuration"
         Parameters:
           - DomainName
@@ -146,15 +152,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
 
-  DBPassword:
-    Type: String
-    Default: "TapAppDB2024!"
-    Description: Database master password
-    MinLength: 8
-    MaxLength: 128
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]*$'
-    ConstraintDescription: "Password must be 8-128 characters and contain only printable ASCII characters"
-    NoEcho: true
 
   MinSize:
     Type: Number
@@ -915,6 +912,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub "${AppName}-db"
       DBName: !Ref DBName
@@ -925,7 +923,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUser
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}"
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -1406,6 +1404,9 @@ Outputs:
 - Restricted SSH access (configurable CIDR)
 - Database in private subnets
 - Encrypted storage
+- **Dynamic references for secrets** (AWS Secrets Manager integration)
+- **UpdateReplacePolicy for data protection** (RDS snapshots on replacement)
+- No plain text passwords in CloudFormation parameters
 
 #### **High Availability**
 - Multi-AZ deployment
@@ -1418,6 +1419,28 @@ Outputs:
 - AWS CLI configured with appropriate permissions
 - CloudFormation stack creation permissions
 - IAM role creation permissions
+- AWS Secrets Manager access (for database password)
+
+### **Security Setup (Required for Database)**
+Before deploying, create the database password secret in AWS Secrets Manager:
+
+```bash
+# Create the secret for database password
+aws secretsmanager create-secret \
+  --name "TapApp-dev-db-password" \
+  --description "Database password for TapApp" \
+  --secret-string '{"password":"YourSecurePassword123!"}' \
+  --region us-east-1
+
+# For production, use a more secure password
+aws secretsmanager create-secret \
+  --name "TapApp-prod-db-password" \
+  --description "Database password for TapApp Production" \
+  --secret-string '{"password":"YourVerySecureProductionPassword456!"}' \
+  --region us-east-1
+```
+
+**Note**: Replace `YourSecurePassword123!` with a strong password that meets your security requirements.
 
 ### **Deployment Scenarios**
 
@@ -1530,6 +1553,8 @@ aws cloudformation describe-stacks \
 2. **Database Connection**: Check security group rules and subnet configuration
 3. **Auto Scaling**: Verify CloudWatch alarms and target group health
 4. **Lambda Monitoring**: Check VPC configuration and IAM permissions
+5. **Database Password**: Ensure AWS Secrets Manager secret exists with correct name format
+6. **Secrets Manager Access**: Verify CloudFormation execution role has `secretsmanager:GetSecretValue` permission
 
 #### **Useful Commands**
 ```bash
@@ -1541,11 +1566,17 @@ aws cloudformation describe-stack-events --stack-name tap-stack-http
 
 # Get all outputs
 aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0].Outputs'
+
+# Check if secrets manager secret exists
+aws secretsmanager describe-secret --secret-id "TapApp-dev-db-password"
+
+# Test secret retrieval (for troubleshooting)
+aws secretsmanager get-secret-value --secret-id "TapApp-dev-db-password" --query 'SecretString' --output text
 ```
 
 ## **Template Statistics**
 
-- **Parameters**: 20 (with sensible defaults)
+- **Parameters**: 19 (with sensible defaults, DBPassword removed for security)
 - **Resources**: 35+ AWS resources
 - **Outputs**: 17 (conditional exports)
 - **Regions**: 8 supported regions
@@ -1553,6 +1584,26 @@ aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0
 - **IAM Roles**: 2 with least privilege policies
 - **Monitoring**: Comprehensive CloudWatch dashboard
 - **Scaling**: Auto Scaling with multiple policies
+- **Security**: Dynamic references for secrets, UpdateReplacePolicy for data protection
+
+## **CloudFormation Best Practices Compliance**
+
+This template follows AWS CloudFormation best practices and addresses common warnings:
+
+### **W3011 - UpdateReplacePolicy and DeletionPolicy**
+- **Issue**: Both policies needed for resource protection
+- **Solution**: Added `UpdateReplacePolicy: Snapshot` to RDS database
+- **Benefit**: Ensures data snapshots are created during both deletion and replacement operations
+
+### **W1011 - Dynamic References for Secrets**
+- **Issue**: Plain text parameters for sensitive data
+- **Solution**: Replaced `DBPassword` parameter with AWS Secrets Manager dynamic reference
+- **Benefit**: Enhanced security with encrypted secret storage and automatic rotation support
+
+### **Template Validation**
+- All CloudFormation warnings resolved
+- Follows AWS Well-Architected Framework principles
+- Compliant with security and operational excellence pillars
 
 ## **Production Readiness**
 
@@ -1564,3 +1615,4 @@ This template is production-ready with:
 - Self-contained infrastructure
 - Multi-environment support
 - Cost optimization features
+- **CloudFormation best practices compliance**

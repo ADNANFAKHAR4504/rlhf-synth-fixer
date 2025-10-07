@@ -28,7 +28,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(3);
+      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(4);
     });
 
     test('should have mappings for region support', () => {
@@ -64,7 +64,6 @@ describe('TapStack CloudFormation Template', () => {
       'DBInstanceClass',
       'DBName',
       'DBUser',
-      'DBPassword',
       'MinSize',
       'MaxSize',
       'DesiredCapacity',
@@ -110,13 +109,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Description).toBe('Whether to create a new ACM certificate (requires DomainName to be set)');
     });
 
-    test('DBPassword parameter should have security properties', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(128);
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?/~`]*$');
+    test('RDS database should use dynamic reference for password', () => {
+      const rdsDatabase = template.Resources.RDSDatabase;
+      expect(rdsDatabase.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}'
+      });
     });
 
     test('scaling parameters should have correct constraints', () => {
@@ -567,7 +564,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have reasonable number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(20);
+      expect(parameterCount).toBe(19);
     });
 
     test('should have reasonable number of outputs', () => {

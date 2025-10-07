@@ -27,6 +27,16 @@
         },
         {
           "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DBName",
+            "DBUser",
+            "DBInstanceClass"
+          ]
+        },
+        {
+          "Label": {
             "default": "SSL Certificate Configuration"
           },
           "Parameters": [
@@ -156,16 +166,6 @@
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DBPassword": {
-      "Type": "String",
-      "Default": "TapAppDB2024!",
-      "Description": "Database master password",
-      "MinLength": 8,
-      "MaxLength": 128,
-      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?/~`]*$",
-      "ConstraintDescription": "Password must be 8-128 characters and contain only printable ASCII characters",
-      "NoEcho": true
     },
     "MinSize": {
       "Type": "Number",
@@ -1522,6 +1522,7 @@
     "RDSDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "${AppName}-db"
@@ -1541,7 +1542,7 @@
           "Ref": "DBUser"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}"
         },
         "VPCSecurityGroups": [
           {

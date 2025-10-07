@@ -68,16 +68,16 @@ const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRE
 const hasOutputs = Object.keys(outputs).length > 0;
 
 // Initialize AWS SDK clients only when needed
-let dynamoClient: DynamoDBClient;
-let ec2Client: EC2Client;
-let elbv2Client: ElasticLoadBalancingV2Client;
-let asgClient: AutoScalingClient;
-let rdsClient: RDSClient;
-let lambdaClient: LambdaClient;
-let logsClient: CloudWatchLogsClient;
-let eventBridgeClient: EventBridgeClient;
-let acmClient: ACMClient;
-let cloudWatchClient: CloudWatchClient;
+let dynamoClient: DynamoDBClient | undefined;
+let ec2Client: EC2Client | undefined;
+let elbv2Client: ElasticLoadBalancingV2Client | undefined;
+let asgClient: AutoScalingClient | undefined;
+let rdsClient: RDSClient | undefined;
+let lambdaClient: LambdaClient | undefined;
+let logsClient: CloudWatchLogsClient | undefined;
+let eventBridgeClient: EventBridgeClient | undefined;
+let acmClient: ACMClient | undefined;
+let cloudWatchClient: CloudWatchClient | undefined;
 
 const initializeClients = () => {
   if (!dynamoClient) {
@@ -102,6 +102,11 @@ describe('TapStack Integration Tests', () => {
   const skipIfNoAws = () => {
     if (skipIntegrationTests) {
       console.log('Skipping test: AWS credentials or outputs not available');
+      return true;
+    }
+    if (!dynamoClient || !ec2Client || !elbv2Client || !asgClient || !rdsClient ||
+      !lambdaClient || !logsClient || !eventBridgeClient || !acmClient || !cloudWatchClient) {
+      console.log('Skipping test: AWS clients not initialized');
       return true;
     }
     return false;
