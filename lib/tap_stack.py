@@ -139,12 +139,12 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Enable server-side encryption for S3 bucket
-        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"loyalty-campaign-assets-encryption-{self.environment_suffix}",
             bucket=self.campaign_assets_bucket.id,
             rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     ),
                     bucket_key_enabled=True
@@ -154,10 +154,10 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Enable versioning for S3 bucket
-        self.bucket_versioning = aws.s3.BucketVersioningV2(
+        self.bucket_versioning = aws.s3.BucketVersioning(
             f"loyalty-campaign-assets-versioning-{self.environment_suffix}",
             bucket=self.campaign_assets_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=ResourceOptions(parent=self.campaign_assets_bucket)
@@ -710,7 +710,7 @@ def handler(event, context):
                 "https://",
                 self.api.id,
                 ".execute-api.",
-                aws.get_region().name,
+                aws.get_region().region,
                 ".amazonaws.com/",
                 self.environment_suffix
             ),
@@ -909,10 +909,10 @@ def handler(event, context):
                         "type": "metric",
                         "properties": {
                             "metrics": [
-                                ["AWS/ApiGateway", "Count", {"stat": "Sum", "label": "API Requests"}],
-                                [".", "5XXError", {"stat": "Sum", "label": "5XX Errors"}],
-                                [".", "4XXError", {"stat": "Sum", "label": "4XX Errors"}],
-                                [".", "Latency", {"stat": "Average", "label": "Latency"}]
+                                ["AWS/ApiGateway", "Count"],
+                                [".", "5XXError"],
+                                [".", "4XXError"],
+                                [".", "Latency"]
                             ],
                             "view": "timeSeries",
                             "stacked": False,
@@ -930,10 +930,10 @@ def handler(event, context):
                         "type": "metric",
                         "properties": {
                             "metrics": [
-                                ["AWS/Lambda", "Invocations", {"stat": "Sum", "dimensions": {"FunctionName": args[1]}}],
-                                [".", "Errors", {"stat": "Sum", "dimensions": {"FunctionName": args[1]}}],
-                                [".", "Duration", {"stat": "Average", "dimensions": {"FunctionName": args[1]}}],
-                                [".", "Throttles", {"stat": "Sum", "dimensions": {"FunctionName": args[1]}}]
+                                ["AWS/Lambda", "Invocations", "FunctionName", args[1]],
+                                [".", "Errors", "FunctionName", args[1]],
+                                [".", "Duration", "FunctionName", args[1]],
+                                [".", "Throttles", "FunctionName", args[1]]
                             ],
                             "view": "timeSeries",
                             "stacked": False,
@@ -946,9 +946,9 @@ def handler(event, context):
                         "type": "metric",
                         "properties": {
                             "metrics": [
-                                ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum", "dimensions": {"TableName": args[4]}}],
-                                [".", "ConsumedWriteCapacityUnits", {"stat": "Sum", "dimensions": {"TableName": args[4]}}],
-                                [".", "UserErrors", {"stat": "Sum", "dimensions": {"TableName": args[4]}}]
+                                ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", args[4]],
+                                [".", "ConsumedWriteCapacityUnits", "TableName", args[4]],
+                                [".", "UserErrors", "TableName", args[4]]
                             ],
                             "view": "timeSeries",
                             "stacked": False,
@@ -961,8 +961,8 @@ def handler(event, context):
                         "type": "metric",
                         "properties": {
                             "metrics": [
-                                ["AWS/Lambda", "Invocations", {"stat": "Sum", "dimensions": {"FunctionName": args[2]}, "label": "Lookup Invocations"}],
-                                ["...", {"dimensions": {"FunctionName": args[3]}, "label": "Campaign Invocations"}]
+                                ["AWS/Lambda", "Invocations", "FunctionName", args[2]],
+                                [".", "Invocations", "FunctionName", args[3]]
                             ],
                             "view": "timeSeries",
                             "stacked": False,
@@ -986,7 +986,7 @@ def handler(event, context):
                 "https://",
                 self.api.id,
                 ".execute-api.",
-                aws.get_region().name,
+                aws.get_region().region,
                 ".amazonaws.com/",
                 self.environment_suffix
             ),
