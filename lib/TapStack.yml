@@ -24,9 +24,14 @@ Parameters:
     Default: 'ecommerce-config-bucket'
 
   DomainName:
-    Description: Base domain name for the application (e.g., our-ecomm-store.com)
+    Description: Base domain name for the application
     Type: String
-    Default: 'example.com'
+    Default: 'our-ecomm-store.com'
+
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID (automatically fetched from SSM)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Mappings:
   EnvironmentSecrets:
@@ -39,6 +44,9 @@ Mappings:
     prod:
       DatabaseSecretPath: /ecommerce/prod/DatabaseCredentials
       PaymentProcessorKeyPath: /ecommerce/prod/PaymentProcessorKey
+
+Conditions:
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
 
 Resources:
   # Database Secret
@@ -108,10 +116,9 @@ Resources:
                           'PrivateSubnet1CIDR': '10.0.3.0/24',
                           'PrivateSubnet2CIDR': '10.0.4.0/24',
                           'EC2InstanceType': 't3.micro',
-                          'EC2AMI': 'ami-0c55b159cbfafe1f0',
                           'EC2VolumeSize': '20',
                           'DBEngine': 'mysql',
-                          'DBEngineVersion': '8.0.35',
+                          'DBEngineVersion': '8.0',
                           'DBInstanceClass': 'db.t3.micro',
                           'DBAllocatedStorage': '20',
                           'DBStorageType': 'gp2',
@@ -391,6 +398,56 @@ Resources:
             Action:
               - kms:*
             Resource: '*'
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: Allow CloudTrail to describe key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow S3 to use the key for CloudTrail
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 's3.${AWS::Region}.amazonaws.com'
+          - Sid: Allow service-linked role use of the customer managed key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - kms:CreateGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
 
   EncryptionKeyAlias:
     Type: AWS::KMS::Alias
@@ -460,10 +517,20 @@ Resources:
                 Resource:
                   - !Sub
                     - 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretPath}*'
-                    - SecretPath: !FindInMap [EnvironmentSecrets, !Ref Environment, DatabaseSecretPath]
+                    - SecretPath:
+                        !FindInMap [
+                          EnvironmentSecrets,
+                          !Ref Environment,
+                          DatabaseSecretPath,
+                        ]
                   - !Sub
                     - 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretPath}*'
-                    - SecretPath: !FindInMap [EnvironmentSecrets, !Ref Environment, PaymentProcessorKeyPath]
+                    - SecretPath:
+                        !FindInMap [
+                          EnvironmentSecrets,
+                          !Ref Environment,
+                          PaymentProcessorKeyPath,
+                        ]
 
   WebServerProfile:
     Type: AWS::IAM::InstanceProfile
@@ -477,7 +544,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${Environment}-ecommerce-launch-template-${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: !GetAtt ConfigFetcher.EC2AMI
+        ImageId: !Ref LatestAmiId
         InstanceType: !GetAtt ConfigFetcher.EC2InstanceType
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
@@ -579,9 +646,10 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-ecommerce-tg-${EnvironmentSuffix}'
 
-  # Route53 Hosted Zone
+  # Route53 Hosted Zone (only created if DomainName is provided)
   HostedZone:
     Type: AWS::Route53::HostedZone
+    Condition: HasDomainName
     Properties:
       Name: !Ref DomainName
       HostedZoneConfig:
@@ -592,9 +660,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # DNS Record
+  # DNS Record (only created if DomainName is provided)
   DNSRecord:
     Type: AWS::Route53::RecordSet
+    Condition: HasDomainName
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Sub 'api-${Environment}.${DomainName}.'
@@ -752,3 +821,222 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # Networking Outputs
+  VPCCidr:
+    Description: VPC CIDR block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidr'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  NatGateway1Id:
+    Description: NAT Gateway 1 ID
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway1'
+
+  NatGateway2Id:
+    Description: NAT Gateway 2 ID
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGateway'
+
+  # Security Group Outputs
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBSecurityGroup'
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerSecurityGroup'
+
+  DBSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecurityGroup'
+
+  # Compute Outputs
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref WebServerAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ASGName'
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${AWS::StackName}-LaunchTemplate'
+
+  # Load Balancer Outputs
+  ApplicationLoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBArn'
+
+  ALBTargetGroupArn:
+    Description: ARN of the ALB Target Group
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetGroupArn'
+
+  ALBListenerArn:
+    Description: ARN of the ALB Listener
+    Value: !Ref ALBListener
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBListener'
+
+  # Database Outputs
+  DatabaseInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref Database
+    Export:
+      Name: !Sub '${AWS::StackName}-DBInstanceId'
+
+  DatabasePort:
+    Description: RDS Database Port
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPort'
+
+  DatabaseName:
+    Description: Database Name
+    Value: !GetAtt ConfigFetcher.DBName
+    Export:
+      Name: !Sub '${AWS::StackName}-DBName'
+
+  DatabaseSecretArn:
+    Description: ARN of the database credentials secret
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecretArn'
+
+  # DNS Outputs
+  HostedZoneId:
+    Description: Route53 Hosted Zone ID
+    Value: !If [HasDomainName, !Ref HostedZone, 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
+
+  DNSRecordName:
+    Description: DNS Record Name
+    Value: !If [HasDomainName, !Sub 'api-${Environment}.${DomainName}', 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSRecord'
+
+  # Security & Monitoring Outputs
+  EncryptionKeyId:
+    Description: KMS Key ID
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  EncryptionKeyAlias:
+    Description: KMS Key Alias
+    Value: !Sub 'alias/ecommerce-${Environment}-${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  CloudTrailName:
+    Description: CloudTrail Trail Name
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailName'
+
+  CloudTrailBucketName:
+    Description: S3 Bucket for CloudTrail logs
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  AlertTopicName:
+    Description: SNS Topic Name for alerts
+    Value: !GetAtt AlertTopic.TopicName
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopicName'
+
+  CPUAlarmName:
+    Description: CloudWatch CPU Alarm Name
+    Value: !Ref CPUAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-CPUAlarmName'
+
+  # IAM Outputs
+  WebServerRoleArn:
+    Description: Web Server IAM Role ARN
+    Value: !GetAtt WebServerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerRoleArn'
+
+  WebServerInstanceProfileArn:
+    Description: Web Server Instance Profile ARN
+    Value: !GetAtt WebServerProfile.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceProfileArn'
+
+  # Configuration Outputs
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+
+  ConfigBucketName:
+    Description: S3 bucket for configuration files
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucket'
+
+  DomainName:
+    Description: Base domain name
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainName'
+
+  Region:
+    Description: AWS Region
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  AccountId:
+    Description: AWS Account ID
+    Value: !Ref AWS::AccountId
+    Export:
+      Name: !Sub '${AWS::StackName}-AccountId'
