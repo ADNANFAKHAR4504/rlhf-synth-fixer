@@ -77,7 +77,10 @@ export const handler = async (
             TableName: tableName,
             Limit: 50,
             ProjectionExpression:
-              'productId, name, price, inventory, updatedAt',
+              'productId, #name, price, inventory, updatedAt',
+            ExpressionAttributeNames: {
+              '#name': 'name',
+            },
           })
         );
 
