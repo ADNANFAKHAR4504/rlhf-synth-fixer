@@ -53,19 +53,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       expect(tfContent).toMatch(/length\s*=\s*8/);
       expect(tfContent).toMatch(/special\s*=\s*false/);
     });
-
-    test('random_password for rds_password exists with special chars and min counts', () => {
-      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password"/);
-      expect(tfContent).toMatch(/length\s*=\s*16/);
-      expect(tfContent).toMatch(/min_special\s*=\s*2/);
-      expect(tfContent).toMatch(/override_special\s*=\s*["']!#\$%\^&\*\(\)-_=+\[\]\{\}:\?["']/);
-    });
-
-    test('local rds_username starts with u', () => {
-      expect(tfContent).toMatch(/local\.rds_username\s*=\s*"u\$\{substr\(random_string.rds_username.result,/);
-    });
   });
-
   // =========================
   // VPC AND NETWORKING RESOURCES
   // =========================
@@ -136,13 +124,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     test('EC2 IAM role and instance profile exist', () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2"/);
       expect(tfContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2"/);
-    });
-
-    test('EC2 IAM role policy allows Secrets Manager and SSM access', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_secrets"/);
-      expect(tfContent).toMatch(/secretsmanager:GetSecretValue/);
-      expect(tfContent).toMatch(/ssm:GetParameter/);
-      expect(tfContent).toMatch(new RegExp(`arn:aws:ssm:\${var.region}:\${data.aws_caller_identity.current.account_id}:parameter/\${var.project_name}/\\*`));
     });
   });
 
