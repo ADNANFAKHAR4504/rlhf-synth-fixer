@@ -1,11 +1,18 @@
 {
-  "platform": "terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "24816359",
   "team": "synth",
   "startedAt": "2025-10-03T20:59:06+05:30",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Security Configuration",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
   "training_quality": 8.5,
   "aws_services": [
     "API Gateway",
