@@ -1,41 +1,29 @@
-1. RDS Password Management
+# MODEL FAILURES
 
-Model Response: Hardcoded the RDS password in Terraform configuration (password = "ChangeMePlease123!"), creating a serious security risk.
-Actual Implementation: Uses AWS Secrets Manager or SSM Parameter Store to securely store and inject database credentials dynamically, avoiding hardcoding sensitive information.
+### 1. Networking - Missing NAT Gateway and Private Routes
+** Model Response: ** 
+The code defines Elastic IPs (aws_eip.nat) but never creates the actual NAT Gateway resource (aws_nat_gateway). Furthermore, it attempts to use a private route table (aws_route_table.private) that is never defined.
 
-2. Lambda Deployment Automation
+** Ideal Response Implements **
+Creates two aws_nat_gateway resources, each using one of the allocated EIPs and placed in a separate public subnet.
 
-Model Response: Requires manual creation of rds_backup_lambda.zip file and upload for Lambda deployment.
-Actual Implementation: Automates Lambda packaging and deployment using Terraform assets or local-exec scripts:
-Packages source code from a defined folder into a ZIP dynamically
-Computes source_code_hash for version tracking
-Ensures Terraform redeploys Lambda only on code changes
+### 2. Security - Hardcoded Database Password
+** Model Response: **
+The code hardcodes the RDS master password (password = "ChangeMePlease123!") directly in the configuration.
 
-3. Monolithic Terraform Configuration
+Ideal Response Implements:
+Utilizes AWS Secrets Manager (aws_secretsmanager_secret) to store the sensitive password securely.
 
-Model Response: All resources are defined in a single main.tf file, making the codebase hard to maintain and scale.
-Actual Implementation: Modularizes Terraform code:
-Separates networking, compute, database, and storage into reusable modules
-Uses tap-stack.ts for orchestration and modules.ts for resource definitions in CDKTF
-Improves maintainability, readability, and reusability
+### 3. Maintainability - Inline Security Group Rules
+** Model Response: **
+Security rules (ingress/egress) are defined using inline blocks within the aws_security_group resource.
 
-4. CloudFront Security and SSL
+Ideal Response Implements:
+Defines all Security Group rules using dedicated aws_security_group_rule resources.
 
-Model Response: Uses CloudFront default certificate instead of a proper ACM SSL certificate for HTTPS.
-Actual Implementation: Implements ACM-managed SSL certificates for CloudFront distributions:
-Provides secure HTTPS endpoints for production
-Enables strict transport security and encryption best practices
+### 4. Application Logic - Non-Functional CloudWatch Agent
+** Model Response: **
+The EC2 Launch Template's user_data installs the CloudWatch agent RPM but does not provide a configuration file (amazon-cloudwatch-agent.json).
 
-5. Customer Gateway and VPN Automation
-
-Model Response: Uses a placeholder IP for the customer gateway (203.0.113.100) and lacks automation for multi-region deployments.
-Actual Implementation: Dynamically injects customer gateway IPs from environment variables or Terraform input variables and supports multi-region VPC connectivity:
-Properly configures VPN connections and routing
-Ensures on-premises integration without manual intervention
-
-6. Single Environment Configuration
-
-Model Response: Configuration is hardcoded for production, with no support for dev/test environments.
-Actual Implementation: Adds environment-aware variables and conditional resource creation:
-Allows dev, test, and prod deployments with appropriate sizing, and cost optimizations
-Ensures consistent behavior across multiple environments while controlling costs
+Ideal Response Implements:
+The user_data script would include the steps to fetch and place a pre-defined JSON configuration file (stored, perhaps, in S3 or as a local file) and then start the agent using this configuration.

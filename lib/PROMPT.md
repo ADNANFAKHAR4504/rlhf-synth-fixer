@@ -1,8 +1,8 @@
 Generate Terraform code in HCL that provisions a production-ready AWS environment with the following requirements. The solution must be split into only two files:
 
-provider.tf → contains the AWS provider configuration and remote backend (if required).
+The provider.tf file defines the AWS provider configuration and includes the setup for a remote backend if needed. 
 
-main.tf → contains all AWS resources.
+The main.tf file contains the definitions of all AWS resources used in the infrastructure.
 
 Requirements:
 Networking
