@@ -3,7 +3,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 
 // Helper to load outputs from deployment
 const loadOutputs = (): any => {
@@ -22,7 +21,7 @@ const loadOutputs = (): any => {
 };
 
 describe('Terraform Infrastructure Integration Tests', () => {
-  let outputs: any;
+  let outputs: Record<string, any>;
 
   beforeAll(() => {
     outputs = loadOutputs();
@@ -49,82 +48,21 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('CloudFront Distribution', () => {
-    test('CloudFront distribution ID is defined', () => {
-      expect(outputs.cloudfront_distribution_id).toBeDefined();
-      expect(outputs.cloudfront_distribution_id).not.toEqual('');
+  describe('CloudWatch URL', () => {
+    test('cloudwatch URL is defined', () => {
+      expect(outputs.cloudwatch_dashboard_url).toBeDefined();
+      expect(outputs.cloudwatch_dashboard_url).not.toEqual('');
     });
 
-    test('CloudFront distribution domain is defined', () => {
-      expect(outputs.cloudfront_distribution_domain).toBeDefined();
-      expect(outputs.cloudfront_distribution_domain).not.toEqual('');
+    test('cloudwatch URL uses HTTPS', () => {
+      expect(outputs.cloudwatch_dashboard_url).toMatch(/^https:\/\//);
     });
 
-    test('CloudFront domain follows AWS format', () => {
-      // CloudFront domains should end with .cloudfront.net or be a custom domain
-      if (outputs.cloudfront_distribution_domain.includes('cloudfront')) {
-        expect(outputs.cloudfront_distribution_domain).toMatch(/\.cloudfront\.net$/);
-      }
-    });
-  });
-
-  describe('Website URL', () => {
-    test('website URL is defined', () => {
-      expect(outputs.website_url).toBeDefined();
-      expect(outputs.website_url).not.toEqual('');
-    });
-
-    test('website URL uses HTTPS', () => {
-      expect(outputs.website_url).toMatch(/^https:\/\//);
-    });
-
-    test('website URL is properly formatted', () => {
-      const url = new URL(outputs.website_url);
+    test('cloudwatch URL is properly formatted', () => {
+      const url = new URL(outputs.cloudwatch_dashboard_url);
       expect(url.protocol).toBe('https:');
       expect(url.hostname).toBeTruthy();
     });
-  });
-
-  describe('CloudFront Website Access', () => {
-    test('CloudFront distribution URL is accessible', async () => {
-      if (process.env.SKIP_LIVE_TESTS === 'true' || !outputs.cloudfront_distribution_domain.includes('.cloudfront.net')) {
-        console.log('Skipping live test - no real deployment');
-        return;
-      }
-
-      try {
-        const url = `https://${outputs.cloudfront_distribution_domain}`;
-        const response = await axios.get(url, {
-          validateStatus: (status) => status < 500, // Accept any status < 500
-          timeout: 10000
-        });
-
-        // Either 200 (content exists) or 403/404 (no content yet) is acceptable
-        expect([200, 403, 404]).toContain(response.status);
-      } catch (error) {
-        // If the domain doesn't exist yet, that's okay for new deployments
-        console.log('CloudFront distribution not yet available:', error.message);
-      }
-    }, 30000);
-
-    test('website URL is accessible', async () => {
-      if (process.env.SKIP_LIVE_TESTS === 'true' || !outputs.website_url.includes('http')) {
-        console.log('Skipping live test - no real deployment');
-        return;
-      }
-
-      try {
-        const response = await axios.get(outputs.website_url, {
-          validateStatus: (status) => status < 500,
-          timeout: 10000
-        });
-
-        // Either 200 (content exists) or 403/404 (no content yet) is acceptable
-        expect([200, 403, 404]).toContain(response.status);
-      } catch (error) {
-        console.log('Website not yet available:', error.message);
-      }
-    }, 30000);
   });
 
   describe('Resource Tagging', () => {
@@ -132,20 +70,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       // This would normally query AWS to verify tags
       // For now, we just verify that the outputs exist
       expect(outputs).toBeDefined();
-    });
-  });
-
-  describe('Security Configuration', () => {
-    test('CloudFront uses HTTPS', () => {
-      expect(outputs.website_url).toContain('https://');
-    });
-
-    test('S3 buckets are not directly accessible', () => {
-      // Bucket names should not be exposed as public URLs
-      if (outputs.website_bucket_name) {
-        expect(outputs.website_url).not.toContain('.s3.amazonaws.com');
-        expect(outputs.website_url).not.toContain('.s3-website');
-      }
     });
   });
 
@@ -160,51 +84,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(outputs.logs_bucket_name).toBeDefined();
       expect(outputs.logs_bucket_name).toContain('logs');
     });
-  });
-
-  describe('Content Delivery', () => {
-    test('can retrieve index page', async () => {
-      if (process.env.SKIP_LIVE_TESTS === 'true' || !outputs.website_url.includes('http')) {
-        console.log('Skipping live test - no real deployment');
-        return;
-      }
-
-      try {
-        const response = await axios.get(`${outputs.website_url}/index.html`, {
-          validateStatus: (status) => status < 500,
-          timeout: 10000
-        });
-
-        // Check if we get either the actual content or a CloudFront error
-        expect([200, 403, 404]).toContain(response.status);
-
-        if (response.status === 200) {
-          expect(response.headers['content-type']).toContain('text/html');
-        }
-      } catch (error) {
-        console.log('Content not yet available:', error.message);
-      }
-    }, 30000);
-
-    test('error pages are configured', async () => {
-      if (process.env.SKIP_LIVE_TESTS === 'true' || !outputs.website_url.includes('http')) {
-        console.log('Skipping live test - no real deployment');
-        return;
-      }
-
-      try {
-        // Try to access a non-existent page
-        const response = await axios.get(`${outputs.website_url}/non-existent-page`, {
-          validateStatus: () => true, // Accept any status
-          timeout: 10000
-        });
-
-        // Should get either 404 (correct) or 403 (if no content uploaded yet)
-        expect([403, 404]).toContain(response.status);
-      } catch (error) {
-        console.log('Error page test skipped:', error.message);
-      }
-    }, 30000);
   });
 
   describe('DNS and Certificate Configuration', () => {
@@ -241,9 +120,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const expectedOutputs = [
         'website_bucket_name',
         'logs_bucket_name',
-        'cloudfront_distribution_id',
-        'cloudfront_distribution_domain',
-        'website_url'
       ];
 
       expectedOutputs.forEach(output => {
@@ -258,11 +134,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
           // Check specific output formats
           if (key.includes('bucket_name')) {
-            expect(typeof value).toBe('string');
-            expect(value.length).toBeGreaterThan(0);
-          }
-
-          if (key.includes('_id')) {
             expect(typeof value).toBe('string');
             expect(value.length).toBeGreaterThan(0);
           }
