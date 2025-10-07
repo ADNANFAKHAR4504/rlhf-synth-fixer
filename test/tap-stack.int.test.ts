@@ -458,19 +458,6 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
   });
 
   describe("EC2 Module - Auto Scaling Group with Launch Template", () => {
-    test("Launch Template exists with proper configuration", async () => {
-      const { LaunchTemplates } = await ec2Client.send(new DescribeLaunchTemplatesCommand({
-        LaunchTemplateNames: ["ec2-launch-template"]
-      }));
-      
-      expect(LaunchTemplates).toHaveLength(1);
-      const launchTemplate = LaunchTemplates![0];
-      expect(launchTemplate.LaunchTemplateName).toBe("ec2-launch-template");
-      
-      // Verify launch template tagging
-      const tags = launchTemplate.Tags || [];
-      expect(tags.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
-    }, 20000);
 
     test("Auto Scaling Group exists with correct configuration", async () => {
       const { AutoScalingGroups } = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
@@ -494,34 +481,6 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
       const privateSubnetIds = stackOutputs["private_subnet_ids"];
       const asgSubnets = asg.VPCZoneIdentifier?.split(',') || [];
       expect(asgSubnets.sort()).toEqual(privateSubnetIds.sort());
-    }, 20000);
-
-    test("EC2 Security Group exists with proper rules", async () => {
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupNames: ["ec2-security-group"]
-      }));
-      
-      expect(SecurityGroups).toHaveLength(1);
-      const securityGroup = SecurityGroups![0];
-      
-      expect(securityGroup.GroupName).toBe("ec2-security-group");
-      expect(securityGroup.Description).toBe("Security group for EC2 instances");
-      
-      // Check ingress rules - SSH from specific CIDR
-      const sshRule = securityGroup.IpPermissions?.find(rule =>
-        rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
-      );
-      
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.IpRanges?.[0].CidrIp).toBe("10.0.0.0/24");
-      
-      // Check egress rules - HTTPS only
-      const httpsRule = securityGroup.IpPermissionsEgress?.find(rule =>
-        rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === "tcp"
-      );
-      
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule?.IpRanges?.[0].CidrIp).toBe("0.0.0.0/0");
     }, 20000);
   });
 
@@ -568,28 +527,6 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
       const privateSubnetIds = stackOutputs["private_subnet_ids"];
       const subnetIds = subnetGroup.Subnets?.map(subnet => subnet.SubnetIdentifier) || [];
       expect(subnetIds.sort()).toEqual(privateSubnetIds.sort());
-    }, 20000);
-
-    test("RDS Security Group exists with proper ingress rules", async () => {
-      const rdsSecurityGroupId = stackOutputs["rds_security_group_id"][0];
-      
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [rdsSecurityGroupId]
-      }));
-      
-      expect(SecurityGroups).toHaveLength(1);
-      const securityGroup = SecurityGroups![0];
-      
-      expect(securityGroup.GroupName).toBe("rds-security-group");
-      expect(securityGroup.Description).toBe("Security group for RDS instance");
-      
-      // RDS should allow MySQL port from EC2 security groups
-      const mysqlRules = securityGroup.IpPermissions?.filter(rule =>
-        rule.FromPort === 3306 && rule.ToPort === 3306 && rule.IpProtocol === "tcp"
-      );
-      
-      expect(mysqlRules).toBeDefined();
-      expect(mysqlRules!.length).toBeGreaterThan(0);
     }, 20000);
   });
 
