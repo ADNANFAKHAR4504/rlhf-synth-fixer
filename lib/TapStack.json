@@ -1120,9 +1120,6 @@
     "DynamoDbReadOnlyPolicy": {
       "Type": "AWS::IAM::ManagedPolicy",
       "Properties": {
-        "ManagedPolicyName": {
-          "Fn::Sub": "${ProjectPrefix}-dynamodb-readonly-${Environment}-${EnvironmentSuffix}"
-        },
         "Description": "Read-only access to TurnAroundPrompt DynamoDB table",
         "PolicyDocument": {
           "Version": "2012-10-17",
@@ -1151,9 +1148,6 @@
     "AppInstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectPrefix}-app-role-${Environment}-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -1312,9 +1306,6 @@
     "AppInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${ProjectPrefix}-app-profile-${Environment}-${EnvironmentSuffix}"
-        },
         "Roles": [
           {
             "Ref": "AppInstanceRole"
@@ -1325,9 +1316,6 @@
     "BastionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-role-${Environment}-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -1388,9 +1376,6 @@
     "BastionInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-profile-${Environment}-${EnvironmentSuffix}"
-        },
         "Roles": [
           {
             "Ref": "BastionRole"
