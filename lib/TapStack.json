@@ -62,6 +62,12 @@
         "DeletionProtectionEnabled": false,
         "Tags": [
           {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
             "Key": "iac-rlhf-amazon",
             "Value": "true"
           }

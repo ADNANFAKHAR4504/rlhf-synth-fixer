@@ -74,7 +74,19 @@ export {};
           }
         ],
         "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false
+        "DeletionProtectionEnabled": false,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
       }
     },
     "DocumentMetadataTable": {
@@ -145,6 +157,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -217,6 +233,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -274,6 +294,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -331,6 +355,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -386,6 +414,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -512,6 +544,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -522,7 +558,7 @@ export {};
         "FunctionName": {
           "Fn::Sub": "DocumentGeneration-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -560,6 +596,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       },
@@ -573,7 +613,7 @@ export {};
         "FunctionName": {
           "Fn::Sub": "DocumentAnalysis-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -605,6 +645,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       },
@@ -630,6 +674,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -834,6 +882,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -859,6 +911,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -879,6 +935,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -899,6 +959,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -996,7 +1060,13 @@ export {};
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/document-automation-${EnvironmentSuffix}"
         },
-        "RetentionInDays": 30
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
       }
     },
     "DocumentProcessingAlarm": {
@@ -1056,6 +1126,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -1099,6 +1173,10 @@ export {};
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
           }
         ]
       }
@@ -1341,7 +1419,6 @@ export {};
     }
   }
 }
-
 ```
 
 ## ./lib/tap-stack.d.ts
@@ -1586,7 +1663,7 @@ describe('Document Automation System Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.Runtime).toBe('nodejs20.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
       expect(response.Configuration?.State).toBe('Active');
     });
 
@@ -1599,7 +1676,7 @@ describe('Document Automation System Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.Runtime).toBe('nodejs20.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
       expect(response.Configuration?.State).toBe('Active');
     });
 
@@ -2067,14 +2144,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DocumentAnalysisFunction.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('Lambda functions should use Node.js 20.x runtime', () => {
+    test('Lambda functions should use Node.js 22.x runtime', () => {
       const functions = [
         template.Resources.DocumentGenerationFunction,
         template.Resources.DocumentAnalysisFunction,
       ];
 
       functions.forEach(fn => {
-        expect(fn.Properties.Runtime).toBe('nodejs20.x');
+        expect(fn.Properties.Runtime).toBe('nodejs22.x');
       });
     });
 
