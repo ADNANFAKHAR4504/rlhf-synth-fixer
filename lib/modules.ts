@@ -23,6 +23,7 @@ import {
   autoscalingGroup,
   dbInstance,
   dbSubnetGroup,
+  cloudwatchLogGroup,
   cloudtrail,
   kmsKey,
   kmsAlias,
@@ -248,10 +249,61 @@ export class VpcModule extends Construct {
       }
     }
 
-    // Enable VPC Flow Logs
+    // First, add IAM role for Flow Logs 
+    const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
+      name: 'vpc-flow-log-role',
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Effect: 'Allow',
+          },
+        ],
+      }),
+      inlinePolicy: [
+        {
+          name: 'flow-log-cloudwatch-policy',
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: '*',
+              },
+            ],
+          }),
+        },
+      ],
+      tags: config.tags,
+    });
+
+    // Create CloudWatch Log Group
+    const logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'flow-log-group',
+      {
+        name: '/aws/vpc/flowlogs',
+        retentionInDays: 7, // Adjust as needed
+        tags: config.tags,
+      }
+    );
+
+    // Then replace the flowLog creation with:
     const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: config.flowLogBucketArn,
-      logDestinationType: 's3',
+      iamRoleArn: flowLogRole.arn,
+      logDestination: logGroup.arn,
+      logDestinationType: 'cloud-watch-logs',
       trafficType: 'ALL',
       vpcId: mainVpc.id,
       tags: {
