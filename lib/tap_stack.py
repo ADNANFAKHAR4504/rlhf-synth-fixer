@@ -1,4 +1,4 @@
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Environment
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_cloudwatch_actions as cloudwatch_actions
 from aws_cdk import aws_dynamodb as dynamodb
@@ -9,6 +9,8 @@ from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as sns_subs
 from aws_cdk import aws_sqs as sqs
 from constructs import Construct
+from dataclasses import dataclass
+from typing import Optional
 
 
 class LogisticsEventProcessingStack(Stack):
@@ -22,14 +24,6 @@ class LogisticsEventProcessingStack(Stack):
             topic_name="logistics-delivery-events"
         )
 
-        # Create SQS Queue for processing events
-        events_queue = sqs.Queue(
-            self, "DeliveryEventsQueue",
-            queue_name="logistics-delivery-events-queue",
-            visibility_timeout=Duration.seconds(300),  # 5 minutes
-            retention_period=Duration.days(7)  # Keep messages for 7 days
-        )
-
         # Create Dead Letter Queue for failed message processing
         dead_letter_queue = sqs.Queue(
             self, "DeliveryEventsDLQ",
@@ -37,10 +31,16 @@ class LogisticsEventProcessingStack(Stack):
             retention_period=Duration.days(14)  # Keep failed messages longer for analysis
         )
 
-        # Configure main queue to use DLQ after 3 failed attempts
-        events_queue.add_dead_letter_queue(
-            max_receive_count=3,
-            queue=dead_letter_queue
+        # Create SQS Queue for processing events with DLQ configuration
+        events_queue = sqs.Queue(
+            self, "DeliveryEventsQueue",
+            queue_name="logistics-delivery-events-queue",
+            visibility_timeout=Duration.seconds(300),  # 5 minutes
+            retention_period=Duration.days(7),  # Keep messages for 7 days
+            dead_letter_queue=sqs.DeadLetterQueue(
+                max_receive_count=3,
+                queue=dead_letter_queue
+            )
         )
 
         # Subscribe the SQS queue to the SNS topic
@@ -61,11 +61,9 @@ class LogisticsEventProcessingStack(Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.RETAIN  # Important data, don't delete by default
+            removal_policy=RemovalPolicy.RETAIN,  # Important data, don't delete by default
+            time_to_live_attribute="ttl"  # Time-to-live for event records (90 days)
         )
-
-        # Time-to-live for event records (90 days)
-        events_table.add_time_to_live_attribute("ttl")
 
         # Define Lambda code inline
         lambda_code = """
@@ -276,3 +274,27 @@ def handler(event, context):
             description="Name of the Lambda function processing events",
             value=event_processor_function.function_name
         )
+
+
+@dataclass
+class TapStackProps:
+    """Properties for TapStack configuration."""
+    environment_suffix: str
+    env: Optional[Environment] = None
+
+
+class TapStack(LogisticsEventProcessingStack):
+    """
+    TapStack extends LogisticsEventProcessingStack to provide the required interface
+    for the TAP (Test Automation Platform) infrastructure.
+    """
+    
+    def __init__(self, scope: Construct, construct_id: str, props: TapStackProps, **kwargs) -> None:
+        # Pass the env from props if provided
+        if props.env:
+            kwargs['env'] = props.env
+        
+        super().__init__(scope, construct_id, **kwargs)
+        
+        # Store the environment suffix for potential future use
+        self.environment_suffix = props.environment_suffix
