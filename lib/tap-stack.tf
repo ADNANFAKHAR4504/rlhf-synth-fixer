@@ -168,7 +168,6 @@ resource "aws_s3_bucket_acl" "logs_bucket_acl" {
 # CLOUDFRONT DISTRIBUTION
 # ===========================
 
-# CloudFront Origin Access Identity
 resource "aws_cloudfront_origin_access_identity" "oai" {
   comment = "OAI for ${local.name_prefix} e-books distribution"
 }
