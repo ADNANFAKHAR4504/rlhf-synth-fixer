@@ -122,7 +122,7 @@ describe('TapStack Security CloudFormation Template', () => {
       expect(bucket.Properties.BucketEncryption).toBeDefined();
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
       const rules = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration;
-      expect(rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(rules[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
 
     test('S3 bucket should block all public access', () => {
