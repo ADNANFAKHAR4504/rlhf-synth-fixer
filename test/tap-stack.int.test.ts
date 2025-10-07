@@ -175,7 +175,7 @@ describe('Static Website Infrastructure Integration Tests', () => {
 
         const error404 = errorResponses?.Items?.find(e => e.ErrorCode === 404);
         expect(error404).toBeDefined();
-        expect(error404?.ResponseCode).toBe(404);
+        expect(error404?.ResponseCode).toBe("404");
         expect(error404?.ResponsePagePath).toBe('/error.html');
 
         // Check logging configuration
