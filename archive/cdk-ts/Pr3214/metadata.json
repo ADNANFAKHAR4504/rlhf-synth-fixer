@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "90417528",
+  "team": "synth",
+  "startedAt": "2025-10-01T12:41:56+00:00",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "IaC Optimization",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Resource Scaling",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "Application Insights",
+    "Systems Manager",
+    "EC2 Instance Connect"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
