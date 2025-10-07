@@ -41,7 +41,8 @@
         "GenerateSecretString": {
           "PasswordLength": 20,
           "ExcludePunctuation": false,
-          "RequireEachIncludedType": true
+          "RequireEachIncludedType": true,
+          "ExcludeCharacters": "/@\""
         },
         "Tags": [
           {
