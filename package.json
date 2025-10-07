@@ -99,7 +99,6 @@
     "@aws-sdk/client-ecr": "^3.873.0",
     "@aws-sdk/client-ecs": "^3.856.0",
     "@aws-sdk/client-elastic-beanstalk": "^3.848.0",
-    "@aws-sdk/client-elastic-load-balancing-v2": "^3.896.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-eventbridge": "^3.901.0",
     "@aws-sdk/client-guardduty": "^3.902.0",
