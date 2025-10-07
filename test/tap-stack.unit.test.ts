@@ -114,7 +114,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(lambda.Handler).toBe('index.lambda_handler');
       expect(lambda.Timeout).toBe(30);
       expect(lambda.MemorySize).toBe(512);
-      expect(lambda.ReservedConcurrentExecutions).toBe(100);
+      // ReservedConcurrentExecutions removed to avoid account limits
     });
 
     test('Lambda should have dead letter config', () => {

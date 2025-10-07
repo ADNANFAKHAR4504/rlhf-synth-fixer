@@ -321,7 +321,6 @@
         },
         "Timeout": 30,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
