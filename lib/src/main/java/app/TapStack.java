@@ -24,10 +24,20 @@ import java.util.*;
 
 public class TapStack extends software.amazon.awscdk.Stack {
 
+    private final String environmentSuffix;
+
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
-        String environmentSuffix = props != null ? props.getEnvironmentSuffix() : "dev";
+        // Get environment suffix from props, context, or default to 'dev'
+        String suffix = props != null ? props.getEnvironmentSuffix() : null;
+        if (suffix == null) {
+            suffix = (String) this.getNode().tryGetContext("environmentSuffix");
+        }
+        if (suffix == null) {
+            suffix = "dev";
+        }
+        this.environmentSuffix = suffix;
 
         java.util.Map<String, String> tags = new HashMap<>();
         tags.put("Environment", environmentSuffix);
@@ -143,9 +153,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
                 .role(edgeRole)
                 .memorySize(128)
                 .timeout(Duration.seconds(5))
-                .environment(java.util.Map.of(
-                    "ANALYTICS_BUCKET", analyticsBucket.getBucketName()
-                ))
                 .build();
 
         EdgeLambda edgeLambda = EdgeLambda.builder()
@@ -412,5 +419,14 @@ public class TapStack extends software.amazon.awscdk.Stack {
                 .value("https://" + distribution.getDistributionDomainName())
                 .description("CloudFront distribution URL")
                 .build());
+    }
+
+    /**
+     * Get the environment suffix for this stack.
+     *
+     * @return the environment suffix (e.g., "dev", "staging", "prod")
+     */
+    public String getEnvironmentSuffix() {
+        return this.environmentSuffix;
     }
 }

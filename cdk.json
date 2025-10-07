@@ -1,5 +1,5 @@
 {
-  "app": "./gradlew run -q",
+  "app": "lib/cdk-app.sh",
   "watch": {
     "include": [
       "**"

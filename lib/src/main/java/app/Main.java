@@ -2,11 +2,7 @@ package app;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.constructs.Construct;
-
-import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
@@ -14,13 +10,13 @@ import java.util.Optional;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -36,21 +32,21 @@ class TapStackProps {
     }
 
     public static class Builder {
-        private String environmentSuffix;
-        private StackProps stackProps;
+        private String envSuffix;
+        private StackProps props;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String suffix) {
+            this.envSuffix = suffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps properties) {
+            this.props = properties;
             return this;
         }
 
         public TapStackProps build() {
-            return new TapStackProps(environmentSuffix, stackProps);
+            return new TapStackProps(envSuffix, props);
         }
     }
 }
