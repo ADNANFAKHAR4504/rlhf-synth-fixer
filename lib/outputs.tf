@@ -22,7 +22,7 @@ output "secondary_db_endpoint" {
 
 output "failover_endpoint" {
   description = "Main application endpoint with Global Accelerator failover"
-  value       = length(module.failover_mechanism) > 0 ? "https://${module.failover_mechanism[0].global_accelerator_dns_name}" : null
+  value       = length(module.failover_mechanism) > 0 ? "http://${module.failover_mechanism[0].global_accelerator_dns_name}" : null
 }
 
 output "global_accelerator_ips" {
@@ -33,8 +33,8 @@ output "global_accelerator_ips" {
 output "health_check_urls" {
   description = "Health check URLs"
   value = {
-    primary   = "https://${module.primary_compute.alb_dns}/health"
-    secondary = "https://${module.secondary_compute.alb_dns}/health"
+    primary   = "http://${module.primary_compute.alb_dns}/health"
+    secondary = "http://${module.secondary_compute.alb_dns}/health"
   }
 }
 

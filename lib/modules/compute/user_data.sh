@@ -97,10 +97,34 @@ PHPEOF
 # Set basic permissions
 chmod -R 755 /var/www/html
 
-# Start a simple Python HTTP server to serve the files
-# This runs immediately without needing to install packages
+# Start a simple HTTP server to serve the files
+# User data runs as root, so we can bind to port 80
+# Try Python 3 first, fall back to Python 2
 cd /var/www/html
-nohup python -m SimpleHTTPServer 80 > /var/log/simple-http-server.log 2>&1 &
+
+if command -v python3 > /dev/null 2>&1; then
+    # Python 3's http.server
+    nohup python3 -m http.server 80 > /var/log/simple-http-server.log 2>&1 &
+    echo "Started Python 3 HTTP server on port 80" >> /var/log/user-data.log
+elif command -v python2 > /dev/null 2>&1; then
+    # Python 2's SimpleHTTPServer
+    nohup python2 -m SimpleHTTPServer 80 > /var/log/simple-http-server.log 2>&1 &
+    echo "Started Python 2 HTTP server on port 80" >> /var/log/user-data.log
+else
+    # Fallback to python (whatever version is default)
+    nohup python -m SimpleHTTPServer 80 > /var/log/simple-http-server.log 2>&1 &
+    echo "Started Python HTTP server on port 80" >> /var/log/user-data.log
+fi
+
+# Wait a moment for the server to start
+sleep 2
+
+# Test if the server is running
+if curl -s http://localhost/health > /dev/null 2>&1; then
+    echo "HTTP server is responding correctly" >> /var/log/user-data.log
+else
+    echo "WARNING: HTTP server may not be responding" >> /var/log/user-data.log
+fi
 
 # Log completion
 echo "User data script completed at $(date)" >> /var/log/user-data.log
