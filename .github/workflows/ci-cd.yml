@@ -266,7 +266,6 @@ jobs:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
           CURRENT_ACCOUNT_ID: ${{ env.CURRENT_ACCOUNT_ID }}
-          CFN_S3_BUCKET: iac-rlhf-cfn-states-${{ env.CURRENT_ACCOUNT_ID }}-${{ env.AWS_REGION }}
 
       # Note: Deployment outputs are now collected by the deploy.sh script
 
