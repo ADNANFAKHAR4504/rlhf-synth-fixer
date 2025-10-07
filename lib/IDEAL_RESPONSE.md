@@ -8,7 +8,7 @@ This CloudFormation template creates a secure, production-ready RDS PostgreSQL d
 
 ### 1. Network Infrastructure
 - **VPC**: Custom VPC with CIDR 10.60.0.0/16 enabling DNS hostnames and support
-- **Private Subnets**: Two private subnets (10.60.10.0/24 and 10.60.20.0/24) across different availability zones (us-east-1a and us-east-1b)
+- **Private Subnets**: Two private subnets (10.60.10.0/24 and 10.60.20.0/24) across different availability zones (us-west-2a and us-west-2b)
 - **VPC Endpoint**: Gateway endpoint for S3 to keep backup traffic within AWS network
 - **Route Tables**: Dedicated route tables for private subnets with S3 endpoint routing
 

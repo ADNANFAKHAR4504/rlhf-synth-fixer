@@ -69,9 +69,9 @@ describe('TapStack CloudFormation Template - RDS PostgreSQL Infrastructure', () 
     test('should have RegionConfig mapping', () => {
       expect(template.Mappings).toBeDefined();
       expect(template.Mappings.RegionConfig).toBeDefined();
-      expect(template.Mappings.RegionConfig['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionConfig['us-east-1'].AZ1).toBe('us-east-1a');
-      expect(template.Mappings.RegionConfig['us-east-1'].AZ2).toBe('us-east-1b');
+      expect(template.Mappings.RegionConfig['us-west-2']).toBeDefined();
+      expect(template.Mappings.RegionConfig['us-west-2'].AZ1).toBe('us-west-2a');
+      expect(template.Mappings.RegionConfig['us-west-2'].AZ2).toBe('us-west-2b');
     });
   });
 

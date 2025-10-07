@@ -140,9 +140,9 @@ This CloudFormation template creates a secure RDS PostgreSQL database infrastruc
   },
   "Mappings": {
     "RegionConfig": {
-      "us-east-1": {
-        "AZ1": "us-east-1a",
-        "AZ2": "us-east-1b"
+      "us-west-2": {
+        "AZ1": "us-west-2a",
+        "AZ2": "us-west-2b"
       }
     }
   },

@@ -38,7 +38,7 @@ Requirements:
 - IAM role and policy for S3 backup access
 
 Constraints:
-- Region: us-east-1
+- Region: us-west-2
 - RDS must be deployed in private subnets only
 - All data must be encrypted using KMS
 - Backup retention must be exactly 7 days

@@ -41,7 +41,7 @@ import {
 // Get stack name from environment or use default
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const STACK_NAME = process.env.STACK_NAME || `TapStack${ENVIRONMENT_SUFFIX}`;
-const REGION = process.env.AWS_REGION || 'us-east-1';
+const REGION = process.env.AWS_REGION || 'us-west-2';
 
 // Initialize AWS SDK clients
 const cfClient = new CloudFormationClient({ region: REGION });
