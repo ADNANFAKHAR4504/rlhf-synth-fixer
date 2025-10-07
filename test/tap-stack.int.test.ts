@@ -12,6 +12,9 @@ try {
   console.warn('Could not read cfn-outputs/flat-outputs.json. Skipping integration tests.');
 }
 
+// Dynamically get the region from the environment variable set by the CI/CD pipeline
+const region = process.env.AWS_REGION || 'us-west-2';
+
 // Conditionally run tests only if the outputs file was loaded
 if (Object.keys(outputs).length > 0) {
   describe('DynamoDB Inventory System - Integration Tests', () => {
@@ -28,7 +31,8 @@ if (Object.keys(outputs).length > 0) {
       expect(tableArnKey).toBeDefined();
       const tableArn = outputs[tableArnKey!];
 
-      const arnRegex = /^arn:aws:dynamodb:us-west-2:\d{12}:table\/ProductInventory$/;
+      // Use the dynamic region in the validation regex
+      const arnRegex = new RegExp(`^arn:aws:dynamodb:${region}:\\d{12}:table\\/ProductInventory$`);
       expect(tableArn).toMatch(arnRegex);
     });
 
@@ -36,7 +40,8 @@ if (Object.keys(outputs).length > 0) {
       expect(tableStreamArnKey).toBeDefined();
       const streamArn = outputs[tableStreamArnKey!];
 
-      const streamArnRegex = /^arn:aws:dynamodb:us-west-2:\d{12}:table\/ProductInventory\/stream\/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
+      // Use the dynamic region in the validation regex
+      const streamArnRegex = new RegExp(`^arn:aws:dynamodb:${region}:\\d{12}:table\\/ProductInventory\\/stream\\/\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}$`);
       expect(streamArn).toMatch(streamArnRegex);
     });
   });
