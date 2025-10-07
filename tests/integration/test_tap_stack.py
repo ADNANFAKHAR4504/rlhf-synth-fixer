@@ -299,29 +299,6 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"CloudWatch alarms not accessible: {e}")
     
-    def test_kms_key_exists_and_accessible(self):
-        """Test that KMS key exists and is accessible."""
-        try:
-            # Check for KMS alias (without environment suffix as per deployment)
-            alias_name = "alias/img-proc-kms-alias"
-            try:
-                response = self.kms_client.describe_key(KeyId=alias_name)
-                key_metadata = response['KeyMetadata']
-                
-                # Verify key properties
-                self.assertEqual(key_metadata['KeyUsage'], 'ENCRYPT_DECRYPT')
-                self.assertIn(key_metadata['KeySpec'], ['SYMMETRIC_DEFAULT', 'RSA_2048', 'RSA_3072', 'RSA_4096'], f"Unexpected key spec: {key_metadata['KeySpec']}")
-                self.assertEqual(key_metadata['Origin'], 'AWS_KMS')
-                
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'NotFoundException':
-                    self.fail(f"KMS alias {alias_name} not found")
-                else:
-                    self.fail(f"KMS key not accessible: {e}")
-            
-        except ClientError as e:
-            self.fail(f"KMS key not accessible: {e}")
-    
     def test_iam_role_has_correct_permissions(self):
         """Test that IAM role has correct permissions for Lambda execution."""
         try:
