@@ -639,20 +639,23 @@ export const instanceConnectEndpointId = stack.instanceConnectEndpointId;
 ## Key Features
 
 ### 1. Networking
+
 - **VPC**: 10.40.0.0/16 CIDR block with DNS support enabled
 - **Subnets**: Two public subnets across different AZs (us-east-1a, us-east-1b)
 - **Routing**: Internet Gateway with proper route tables for public internet access
 - **High Availability**: Multi-AZ deployment for fault tolerance
 
 ### 2. Security
+
 - **ALB Security Group**: Allows HTTPS (443) and HTTP (80) from anywhere
-- **EC2 Security Group**: 
+- **EC2 Security Group**:
   - HTTP (80) only from ALB
   - SSH (22) only from 172.31.0.0/16
 - **S3 Security**: Public access blocked on all buckets
 - **Least Privilege**: Minimal required permissions for each component
 
 ### 3. Compute
+
 - **Auto Scaling Group**: 2-6 instances (desired: 3)
 - **Instance Type**: t3.micro optimized for cost
 - **Web Server**: nginx pre-installed via user data
@@ -660,18 +663,21 @@ export const instanceConnectEndpointId = stack.instanceConnectEndpointId;
 - **Monitoring**: CloudWatch detailed monitoring enabled
 
 ### 4. Load Balancing
+
 - **Application Load Balancer**: HTTP listener on port 80
 - **Target Group**: Health checks on / endpoint
 - **Access Logs**: Stored in S3 with 30-day retention
 - **Cross-Zone**: Load balancing enabled for even distribution
 
 ### 5. Storage
+
 - **Static Assets Bucket**: Versioning enabled, force destroy for cleanup
 - **ALB Logs Bucket**: Lifecycle policy for 30-day retention
 - **Encryption**: Server-side encryption on all buckets
 - **Access Control**: Proper IAM policies for ALB logging
 
 ### 6. Monitoring & Auto Scaling
+
 - **High CPU Alarm**: Triggers at 80% CPU utilization
 - **Unhealthy Targets**: Alerts on any unhealthy instances
 - **Scale Up**: Triggers at 75% CPU, adds 1 instance
@@ -721,7 +727,7 @@ This infrastructure is production-ready with the following considerations:
 ✅ Security best practices  
 ✅ Proper resource cleanup configuration  
 ✅ Environment isolation via suffixes  
-✅ Complete test coverage  
+✅ Complete test coverage
 
 ⚠️ Add HTTPS listener with valid certificate for production  
 ⚠️ Consider NAT Gateway for private subnets if needed  
