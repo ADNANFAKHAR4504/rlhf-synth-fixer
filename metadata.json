@@ -6,6 +6,10 @@
   "po_id": "59183624",
   "team": "synth",
   "startedAt": "2025-10-03T12:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
   "training_quality": 8,
   "aws_services": [
     "S3",
