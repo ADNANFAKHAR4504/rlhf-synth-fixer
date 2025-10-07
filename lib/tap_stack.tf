@@ -839,3 +839,8 @@ output "application_url" {
   description = "URL to access the application"
   value       = "http://${aws_lb.main.dns_name}"
 }
+
+output "region" {
+  description = "AWS region used for deployment"
+  value       = var.region
+}
