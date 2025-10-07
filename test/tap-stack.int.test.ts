@@ -1,22 +1,68 @@
+import { CloudFormationClient, DescribeStacksCommand, ListStacksCommand } from '@aws-sdk/client-cloudformation';
 import fs from 'fs';
 
-const outputs = (() => {
-  try {
-    return JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')) as Record<string, string>;
-  } catch (error) {
-    throw new Error(
-      'Integration tests require cfn-outputs/flat-outputs.json. Run the deploy step to generate it before executing tests.'
-    );
+let outputs: Record<string, string> | undefined;
+
+async function fetchOutputsFromCloudFormation(): Promise<Record<string, string>> {
+  const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const client = new CloudFormationClient(region ? { region } : {});
+  // Look for stacks in a COMPLETE state
+  const listRes = await client.send(
+    new ListStacksCommand({
+      StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE'],
+    })
+  );
+
+  const stackSummaries = listRes.StackSummaries ?? [];
+  for (const s of stackSummaries) {
+    if (!s.StackName) continue;
+    try {
+      const desc = await client.send(
+        new DescribeStacksCommand({ StackName: s.StackName })
+      );
+      const stack = desc.Stacks?.[0];
+      if (!stack || !stack.Outputs) continue;
+
+      const flat: Record<string, string> = {};
+      for (const o of stack.Outputs) {
+        if (o.OutputKey && o.OutputValue !== undefined) {
+          flat[o.OutputKey] = o.OutputValue;
+        }
+      }
+
+      // Accept a stack only if it contains the three Function URLs required by tests
+      if (
+        flat.UserFunctionUrl &&
+        flat.ProductFunctionUrl &&
+        flat.OrderFunctionUrl
+      ) {
+        return flat;
+      }
+    } catch {
+      // ignore and continue searching other stacks
+    }
   }
-})();
 
-const userFunctionUrl = outputs.UserFunctionUrl;
-const productFunctionUrl = outputs.ProductFunctionUrl;
-const orderFunctionUrl = outputs.OrderFunctionUrl;
-
-if (!userFunctionUrl || !productFunctionUrl || !orderFunctionUrl) {
-  throw new Error('Function URLs are missing from deployment outputs.');
+  throw new Error(
+    'Unable to locate stack outputs containing UserFunctionUrl/ProductFunctionUrl/OrderFunctionUrl. ' +
+    'Set AWS credentials and region, or create cfn-outputs/flat-outputs.json from your deploy step.'
+  );
 }
+
+const loadOutputs = async (): Promise<Record<string, string>> => {
+  // Prefer local artifact if present
+  try {
+    const path = 'cfn-outputs/flat-outputs.json';
+    if (fs.existsSync(path)) {
+      return JSON.parse(fs.readFileSync(path, 'utf8')) as Record<string, string>;
+    }
+  } catch {
+    /* fall through to CFN lookup */
+  }
+
+  // If not present locally, query CloudFormation
+  return await fetchOutputsFromCloudFormation();
+};
 
 const invokeFunctionUrl = async <T>(
   baseUrl: string,
@@ -50,6 +96,22 @@ describe('Lambda function URL integration workflow', () => {
   let createdUserId: string | undefined;
   let createdProductId: string | undefined;
   let createdOrderId: string | undefined;
+
+  let userFunctionUrl: string;
+  let productFunctionUrl: string;
+  let orderFunctionUrl: string;
+
+  beforeAll(async () => {
+    outputs = await loadOutputs();
+
+    userFunctionUrl = outputs.UserFunctionUrl;
+    productFunctionUrl = outputs.ProductFunctionUrl;
+    orderFunctionUrl = outputs.OrderFunctionUrl;
+
+    if (!userFunctionUrl || !productFunctionUrl || !orderFunctionUrl) {
+      throw new Error('Function URLs are missing from deployment outputs.');
+    }
+  });
 
   afterAll(async () => {
     if (createdOrderId) {

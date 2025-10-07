@@ -218,7 +218,7 @@ describe('TapStack infrastructure', () => {
     );
 
     const renderedTags = stack.tags.renderTags();
-    renderedTags.forEach((tag: any) => {
+    renderedTags.forEach((tag: { Value: any; }) => {
       expect(tag.Value).toMatch(/^[a-zA-Z+\-=._:/]+$/);
     });
 
