@@ -1,0 +1,733 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Quiz Platform Infrastructure with Personalization",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Unique suffix for resource naming to avoid conflicts"
+        }
+    },
+    "Resources": {
+        "QuizResultsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "quiz-results-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 7
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Service",
+                        "Value": "QuizPlatform"
+                    }
+                ]
+            }
+        },
+        "QuestionsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "quiz-questions-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "question_id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "category",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "difficulty",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "question_id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "CategoryIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "category",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "difficulty",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5
+                        }
+                    }
+                ],
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 10,
+                    "WriteCapacityUnits": 10
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ResultsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "quiz-results-${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "quiz_id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "user_id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "created_at",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "quiz_id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "UserIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "user_id",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "created_at",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        },
+                        "ProvisionedThroughput": {
+                            "ReadCapacityUnits": 5,
+                            "WriteCapacityUnits": 5
+                        }
+                    }
+                ],
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 10,
+                    "WriteCapacityUnits": 10
+                },
+                "TimeToLiveSpecification": {
+                    "AttributeName": "ttl",
+                    "Enabled": true
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizGenerationLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "quiz-generation-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "QuestionsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ResultsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${QuestionsTable.Arn}/index/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ResultsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${QuizResultsBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizGenerationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "quiz-generation-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.13",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "QuizGenerationLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 1024,
+                "Environment": {
+                    "Variables": {
+                        "QUESTIONS_TABLE": {
+                            "Ref": "QuestionsTable"
+                        },
+                        "RESULTS_TABLE": {
+                            "Ref": "ResultsTable"
+                        },
+                        "S3_BUCKET": {
+                            "Ref": "QuizResultsBucket"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime, timedelta\nimport random\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\n\ndef handler(event, context):\n    # Parse request\n    body = json.loads(event.get('body', '{}'))\n    user_id = body.get('user_id')\n    quiz_type = body.get('quiz_type', 'general')\n    difficulty = body.get('difficulty', 2)\n\n    # Generate quiz ID\n    quiz_id = str(uuid.uuid4())\n\n    # Get questions table\n    questions_table = dynamodb.Table(os.environ['QUESTIONS_TABLE'])\n\n    try:\n        # Fetch questions from DynamoDB\n        # Using scan for simplicity since we don't have pre-populated data\n        response = questions_table.scan(Limit=10)\n        questions = response.get('Items', [])\n\n        # If no questions found, create sample questions\n        if not questions:\n            questions = [\n                {\n                    'question_id': str(uuid.uuid4()),\n                    'category': quiz_type,\n                    'difficulty': difficulty,\n                    'content': f'Sample question {i+1} for {quiz_type}'\n                }\n                for i in range(10)\n            ]\n\n        # Create quiz object\n        quiz = {\n            'quiz_id': quiz_id,\n            'user_id': user_id,\n            'questions': questions,\n            'created_at': int(datetime.now().timestamp()),\n            'ttl': int((datetime.now() + timedelta(days=365)).timestamp()),\n            'status': 'active'\n        }\n\n        # Save to results table\n        results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])\n        results_table.put_item(Item=quiz)\n\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'quiz_id': quiz_id,\n                'questions': questions,\n                'message': 'Quiz generated successfully'\n            })\n        }\n\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Failed to generate quiz',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizScoringLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "quiz-scoring-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ResultsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ResultsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${QuizResultsBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizScoringFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "quiz-scoring-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.13",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "QuizScoringLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "RESULTS_TABLE": {
+                            "Ref": "ResultsTable"
+                        },
+                        "S3_BUCKET": {
+                            "Ref": "QuizResultsBucket"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\n\ndef handler(event, context):\n    # Parse request\n    body = json.loads(event.get('body', '{}'))\n    quiz_id = body.get('quiz_id')\n    answers = body.get('answers', [])\n\n    if not quiz_id or not answers:\n        return {\n            'statusCode': 400,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Missing quiz_id or answers'})\n        }\n\n    try:\n        # Get quiz from DynamoDB\n        results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])\n        response = results_table.get_item(Key={'quiz_id': quiz_id})\n\n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'Quiz not found'})\n            }\n\n        quiz = response['Item']\n        questions = quiz.get('questions', [])\n\n        # Calculate score\n        score = 0\n        total = len(questions)\n        results = []\n\n        for i, question in enumerate(questions):\n            if i < len(answers):\n                is_correct = answers[i] == question.get('correct_answer')\n                if is_correct:\n                    score += 1\n                results.append({\n                    'question_id': question['question_id'],\n                    'user_answer': answers[i],\n                    'correct_answer': question.get('correct_answer'),\n                    'is_correct': is_correct\n                })\n\n        # Calculate percentage\n        percentage = (score / total * 100) if total > 0 else 0\n\n        # Update quiz with results\n        results_table.update_item(\n            Key={'quiz_id': quiz_id},\n            UpdateExpression='SET #s = :score, #p = :percentage, #r = :results, #st = :status',\n            ExpressionAttributeNames={\n                '#s': 'score',\n                '#p': 'percentage',\n                '#r': 'results',\n                '#st': 'status'\n            },\n            ExpressionAttributeValues={\n                ':score': score,\n                ':percentage': percentage,\n                ':results': results,\n                ':status': 'completed'\n            }\n        )\n\n        # Export to S3\n        result_data = {\n            'quiz_id': quiz_id,\n            'user_id': quiz.get('user_id'),\n            'score': score,\n            'total': total,\n            'percentage': percentage,\n            'results': results,\n            'completed_at': datetime.now().isoformat()\n        }\n\n        s3_key = f\"quiz-results/{quiz_id}.json\"\n        s3.put_object(\n            Bucket=os.environ['S3_BUCKET'],\n            Key=s3_key,\n            Body=json.dumps(result_data),\n            ContentType='application/json'\n        )\n\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'quiz_id': quiz_id,\n                'score': score,\n                'total': total,\n                'percentage': percentage,\n                'message': 'Quiz scored successfully',\n                's3_location': f\"s3://{os.environ['S3_BUCKET']}/{s3_key}\"\n            })\n        }\n\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Failed to score quiz', 'message': str(e)})\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizAPI": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "quiz-platform-api-${EnvironmentSuffix}"
+                },
+                "Description": "Quiz Platform API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "QuizResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "QuizAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "quiz"
+            }
+        },
+        "GenerateResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ParentId": {
+                    "Ref": "QuizResource"
+                },
+                "PathPart": "generate"
+            }
+        },
+        "SubmitResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ParentId": {
+                    "Ref": "QuizResource"
+                },
+                "PathPart": "submit"
+            }
+        },
+        "QuizIdResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ParentId": {
+                    "Ref": "QuizResource"
+                },
+                "PathPart": "{id}"
+            }
+        },
+        "ResultsResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ParentId": {
+                    "Ref": "QuizIdResource"
+                },
+                "PathPart": "results"
+            }
+        },
+        "GenerateMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ResourceId": {
+                    "Ref": "GenerateResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizGenerationFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "SubmitMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ResourceId": {
+                    "Ref": "SubmitResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizScoringFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "GenerateLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "QuizGenerationFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*"
+                }
+            }
+        },
+        "ScoringLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "QuizScoringFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*"
+                }
+            }
+        },
+        "APIDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "GenerateMethod",
+                "SubmitMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                }
+            }
+        },
+        "QuizMetricsDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "quiz-platform-metrics-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", { \"stat\": \"Sum\", \"label\": \"Quiz Generation Invocations\" } ],\n          [ \".\", \"Errors\", { \"stat\": \"Sum\", \"label\": \"Generation Errors\" } ],\n          [ \".\", \"Duration\", { \"stat\": \"Average\", \"label\": \"Generation Duration (ms)\" } ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Quiz Generation Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${QuizGenerationFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", { \"stat\": \"Sum\", \"label\": \"Scoring Invocations\" } ],\n          [ \".\", \"Errors\", { \"stat\": \"Sum\", \"label\": \"Scoring Errors\" } ],\n          [ \".\", \"Duration\", { \"stat\": \"Average\", \"label\": \"Scoring Duration (ms)\" } ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Quiz Scoring Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${QuizScoringFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/DynamoDB\", \"UserErrors\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"SystemErrors\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ConsumedReadCapacityUnits\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ConsumedWriteCapacityUnits\", { \"stat\": \"Sum\" } ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Performance\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${QuestionsTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"Count\", { \"stat\": \"Sum\", \"label\": \"API Requests\" } ],\n          [ \".\", \"4XXError\", { \"stat\": \"Sum\", \"label\": \"4XX Errors\" } ],\n          [ \".\", \"5XXError\", { \"stat\": \"Sum\", \"label\": \"5XX Errors\" } ],\n          [ \".\", \"Latency\", { \"stat\": \"Average\", \"label\": \"Latency (ms)\" } ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"ApiName\": \"${QuizAPI}\"\n        }\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "GenerationErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "quiz-generation-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when quiz generation Lambda has errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "QuizGenerationFunction"
+                        }
+                    }
+                ]
+            }
+        },
+        "HighLatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "api-high-latency-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when API latency is high",
+                "MetricName": "Latency",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "QuizAPI"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${QuizAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+                }
+            }
+        },
+        "QuizResultsBucketName": {
+            "Description": "S3 bucket for quiz results",
+            "Value": {
+                "Ref": "QuizResultsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ResultsBucket"
+                }
+            }
+        },
+        "QuestionsTableName": {
+            "Description": "DynamoDB table for questions",
+            "Value": {
+                "Ref": "QuestionsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-QuestionsTable"
+                }
+            }
+        },
+        "ResultsTableName": {
+            "Description": "DynamoDB table for results",
+            "Value": {
+                "Ref": "ResultsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ResultsTable"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${QuizMetricsDashboard}"
+            }
+        }
+    }
+}

@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348948",
+  "team": "6",
+  "startedAt": "2025-10-02T15:19:52.622Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Network Configuration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "AWS Backup"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}
