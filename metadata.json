@@ -7,6 +7,10 @@
   "team": "synth",
   "startedAt": "2025-10-02T02:35:30+05:30",
   "training_quality": 8,
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
   "aws_services": [
     "VPC",
     "EC2",
