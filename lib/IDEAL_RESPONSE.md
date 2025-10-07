@@ -1,5 +1,6 @@
-```hcl
 # tap_stack.tf - Complete Infrastructure Stack
+
+```hcl
 
 # ==========================================
 # VARIABLES
@@ -2367,10 +2368,13 @@ output "domain_name" {
   description = "Domain name for the application"
   value       = var.domain_name
 }
+
 ```
 
-```hcl
+
 # provider.tf
+
+```hcl
 
 terraform {
   required_version = ">= 1.4.0"
@@ -2397,4 +2401,5 @@ provider "aws" {
   alias  = "eu_west_1"
   region = var.secondary_region
 }
+
 ```
