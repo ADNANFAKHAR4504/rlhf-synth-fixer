@@ -480,12 +480,20 @@ export class S3Module extends Construct {
               },
             },
           },
-          // Organization-specific CloudTrail permissions (if this is an organization trail)
           {
-            Sid: 'AWSCloudTrailOrganizationWrite',
+            Sid: 'AWSLogDeliveryAclCheck',
             Effect: 'Allow',
             Principal: {
-              Service: 'cloudtrail.amazonaws.com',
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+          },
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
             },
             Action: 's3:PutObject',
             Resource: `${this.logBucket.arn}/AWSLogs/*`,
@@ -793,7 +801,7 @@ export class CloudTrailModule extends Construct {
       enableLogging: true,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
-      isOrganizationTrail: true,
+      isOrganizationTrail: false,
       enableLogFileValidation: true,
       kmsKeyId: config.kmsKeyId,
       tags: {
