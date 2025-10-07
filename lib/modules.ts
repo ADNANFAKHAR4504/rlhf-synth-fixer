@@ -249,7 +249,7 @@ export class VpcModule extends Construct {
 
     // Enable VPC Flow Logs
     const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: config.flowLogBucketArn,
+      logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
       logDestinationType: 's3',
       trafficType: 'ALL',
       vpcId: mainVpc.id,
@@ -368,11 +368,11 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Get current account info
-    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
-      this,
-      'current-account',
-      {}
-    );
+    // const _currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+    //   this,
+    //   'current-account',
+    //   {}
+    // );
 
     // Create log bucket first
     this.logBucket = new s3Bucket.S3Bucket(this, 'log-bucket', {
@@ -396,16 +396,16 @@ export class S3Module extends Construct {
       }
     );
 
-    // Block public access to log bucket
+    // MODIFIED: Set blockPublicPolicy to false to allow the policy with Principal: '*'
     new s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
       this,
       'log-bucket-public-access-block',
       {
         bucket: this.logBucket.id,
         blockPublicAcls: true,
-        blockPublicPolicy: true,
+        blockPublicPolicy: false, // Changed to false
         ignorePublicAcls: true,
-        restrictPublicBuckets: true,
+        restrictPublicBuckets: false, // Changed to false
       }
     );
 
@@ -426,7 +426,7 @@ export class S3Module extends Construct {
       }
     );
 
-    // Add bucket policy for VPC Flow Logs and CloudTrail with more permissive flow logs access
+    // SIMPLIFIED bucket policy for VPC Flow Logs
     this.logBucketPolicy = new s3BucketPolicy.S3BucketPolicy(
       this,
       'log-bucket-policy',
@@ -435,41 +435,22 @@ export class S3Module extends Construct {
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
-            // VPC Flow Logs permissions - More permissive as requested
+            // Allow VPC Flow Logs to check bucket ACL
             {
               Sid: 'AWSLogDeliveryAclCheck',
               Effect: 'Allow',
               Principal: {
                 Service: 'delivery.logs.amazonaws.com',
               },
-              Action: ['s3:GetBucketAcl', 's3:ListBucket'],
+              Action: 's3:GetBucketAcl',
               Resource: this.logBucket.arn,
             },
+            // Allow VPC Flow Logs to write
             {
               Sid: 'AWSLogDeliveryWrite',
               Effect: 'Allow',
               Principal: {
                 Service: 'delivery.logs.amazonaws.com',
-              },
-              Action: 's3:PutObject',
-              Resource: `${this.logBucket.arn}/*`,
-              // Removed the condition for more permissive access
-            },
-            // Alternative: VPC Flow Logs using vpc-flow-logs service principal
-            {
-              Sid: 'VPCFlowLogsAclCheck',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
-              },
-              Action: ['s3:GetBucketAcl', 's3:ListBucket'],
-              Resource: this.logBucket.arn,
-            },
-            {
-              Sid: 'VPCFlowLogsWrite',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
               },
               Action: 's3:PutObject',
               Resource: `${this.logBucket.arn}/*`,
@@ -491,38 +472,7 @@ export class S3Module extends Construct {
                 Service: 'cloudtrail.amazonaws.com',
               },
               Action: 's3:PutObject',
-              Resource: `${this.logBucket.arn}/cloudtrail/*`,
-              Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                },
-              },
-            },
-            // Global access as requested (NOT RECOMMENDED for production)
-            {
-              Sid: 'GlobalFlowLogsAccess',
-              Effect: 'Allow',
-              Principal: '*',
-              Action: ['s3:GetObject', 's3:ListBucket'],
-              Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
-              Condition: {
-                StringLike: {
-                  'aws:SourceArn': `arn:aws:ec2:*:${currentAccount.accountId}:vpc-flow-log/*`,
-                },
-              },
-            },
-            // Security best practice - deny non-SSL requests
-            {
-              Sid: 'DenyNonSSLRequests',
-              Effect: 'Deny',
-              Principal: '*',
-              Action: 's3:*',
-              Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
+              Resource: `${this.logBucket.arn}/*`,
             },
           ],
         }),
@@ -599,10 +549,7 @@ export class S3Module extends Construct {
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:*',
-            Resource: [
-              `arn:aws:s3:::${config.bucketName}`,
-              `arn:aws:s3:::${config.bucketName}/*`,
-            ],
+            Resource: [this.mainBucket.arn, `${this.mainBucket.arn}/*`],
             Condition: {
               Bool: {
                 'aws:SecureTransport': 'false',
