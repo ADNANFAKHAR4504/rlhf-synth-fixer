@@ -21,7 +21,7 @@ class TestLogisticsEventProcessingStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::SNS::Topic",
             {
-                "DisplayName": "Logistics Delivery Events Topic",
+                "DisplayName": "Logistics Delivery Events Topic ",
                 "TopicName": "logistics-delivery-events"
             }
         )
