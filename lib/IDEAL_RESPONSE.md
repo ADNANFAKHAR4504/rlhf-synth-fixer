@@ -51,7 +51,6 @@ export class TapStack extends cdk.Stack {
       env: props?.env,
     });
 
-    // Stack-level outputs for integration tests
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {
       value: environmentSuffix,
       description: 'Environment suffix used for this deployment',
@@ -490,6 +489,51 @@ export class WafStack extends cdk.NestedStack {
 }
 ```
 
+**lib/certificate-stack.ts**
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import { Construct } from 'constructs';
+
+export interface CertificateStackProps extends cdk.StackProps {
+  environmentSuffix: string;
+  domainName: string;
+  subDomain: string;
+  hostedZone: route53.IHostedZone;
+}
+
+export class CertificateStack extends cdk.NestedStack {
+  public readonly certificate: certificatemanager.ICertificate;
+
+  constructor(scope: Construct, id: string, props: CertificateStackProps) {
+    super(scope, id, props);
+
+    const siteDomain = `${props.subDomain}-${props.environmentSuffix}.${props.domainName}`;
+
+    // ACM certificate (must be in us-east-1 for CloudFront)
+    this.certificate = new certificatemanager.Certificate(
+      this,
+      'SiteCertificate',
+      {
+        domainName: siteDomain,
+        certificateName: `portfolio-cert-${props.environmentSuffix}`,
+        validation: certificatemanager.CertificateValidation.fromDns(
+          props.hostedZone
+        ),
+      }
+    );
+
+    // Output
+    new cdk.CfnOutput(this, 'CertificateArn', {
+      value: this.certificate.certificateArn,
+      description: 'ACM Certificate ARN',
+      exportName: `certificate-arn-${props.environmentSuffix}`,
+    });
+  }
+}
+```
+
 **bin/tap.ts**
 ```typescript
 #!/usr/bin/env node
@@ -578,40 +622,6 @@ app.synth();
 - **CloudFront Caching**: Reduces origin requests
 - **S3 Intelligent Tiering**: Optional for long-term storage
 - **RemovalPolicy.DESTROY**: Clean resource deletion
-
-## Deployment Commands
-
-```bash
-# Set environment variables
-export ENVIRONMENT_SUFFIX=prod
-export AWS_REGION=us-west-1
-
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Synthesize CloudFormation
-npm run cdk:synth
-
-# Deploy infrastructure
-npm run cdk:deploy
-
-# Run tests
-npm run test:unit        # Unit tests with coverage
-npm run test:integration # Integration tests
-
-# Destroy infrastructure
-npm run cdk:destroy
-```
-
-## Testing Coverage
-
-- **Unit Tests**: 95.58% statement coverage
-- **Integration Tests**: Complete end-to-end validation
-- **Mock Outputs**: Support for testing without deployment
-- **Error Handling**: Graceful handling of deployment blocks
 
 ## Production Considerations
 
