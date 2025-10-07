@@ -10,5 +10,14 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "ALB, Ec2, MySQL RDS, S3, ELasticSearch,WAF, CloudWatch"
+  "aws_services": [
+    "DynamoDB"
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
