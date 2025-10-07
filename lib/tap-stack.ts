@@ -53,7 +53,7 @@ export class TapStack extends cdk.Stack {
           type: dynamodb.AttributeType.STRING,
         },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        pointInTimeRecovery: true,
+        // pointInTimeRecovery: true, // <-- REMOVED deprecated property
         stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
         contributorInsightsEnabled: true,
         timeToLiveAttribute: 'expirationTime',
@@ -63,11 +63,14 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // 3. Add Local Secondary Index during table creation
-    // Note: LSIs must be added during table creation in CDK v2
-    // We need to use the lower-level CFN resource to add LSI
+    // Get the underlying CloudFormation table resource to modify
     const cfnTable = this.productInventoryTable.node
       .defaultChild as dynamodb.CfnTable;
+
+    // ADDED non-deprecated property for Point-in-Time Recovery
+    cfnTable.pointInTimeRecoverySpecification = {
+      pointInTimeRecoveryEnabled: true,
+    };
 
     // Add LSI to the CloudFormation template
     cfnTable.localSecondaryIndexes = [
@@ -93,8 +96,6 @@ export class TapStack extends cdk.Stack {
     if (!cfnTable.attributeDefinitions) {
       cfnTable.attributeDefinitions = [];
     }
-
-    // Type assertion needed because attributeDefinitions can be IResolvable or array
     (
       cfnTable.attributeDefinitions as dynamodb.CfnTable.AttributeDefinitionProperty[]
     ).push({
@@ -117,19 +118,12 @@ export class TapStack extends cdk.Stack {
     });
 
     // 5. Create CloudWatch Alarms for table metrics
-
-    // Alarm for Consumed Read Capacity Units
     const readCapacityAlarm = new cloudwatch.Alarm(
       this,
       'ConsumedReadCapacityAlarm',
       {
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/DynamoDB',
-          metricName: 'ConsumedReadCapacityUnits',
-          dimensionsMap: {
-            TableName: this.productInventoryTable.tableName,
-          },
-          statistic: cloudwatch.Stats.SUM,
+        metric: this.productInventoryTable.metricConsumedReadCapacityUnits({
+          statistic: 'Sum',
           period: cdk.Duration.minutes(5),
         }),
         threshold: 10000,
@@ -141,18 +135,12 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Alarm for Consumed Write Capacity Units
     const writeCapacityAlarm = new cloudwatch.Alarm(
       this,
       'ConsumedWriteCapacityAlarm',
       {
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/DynamoDB',
-          metricName: 'ConsumedWriteCapacityUnits',
-          dimensionsMap: {
-            TableName: this.productInventoryTable.tableName,
-          },
-          statistic: cloudwatch.Stats.SUM,
+        metric: this.productInventoryTable.metricConsumedWriteCapacityUnits({
+          statistic: 'Sum',
           period: cdk.Duration.minutes(5),
         }),
         threshold: 10000,
