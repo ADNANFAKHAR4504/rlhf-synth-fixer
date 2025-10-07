@@ -29,22 +29,9 @@ export class TapStack extends cdk.Stack {
     // 1. NETWORKING & SECURITY INFRASTRUCTURE
     // ========================================
 
-    // Create VPC for ElastiCache Redis (using high-level construct)
-    const vpc = new ec2.Vpc(this, 'AIplatformVPC', {
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      ],
+    // Use existing VPC to avoid VPC limit issues
+    const vpc = ec2.Vpc.fromLookup(this, 'AIplatformVPC', {
+      vpcId: 'vpc-05268f2804fb3a5f5', // Using existing 'main-vpc' with public/private subnets
     });
 
     // Security group for Lambda
@@ -98,7 +85,7 @@ export class TapStack extends cdk.Stack {
       {
         description: 'Subnet group for Redis cluster',
         subnetIds: vpc.selectSubnets({
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         }).subnetIds,
       }
     );
@@ -156,34 +143,87 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Kinesis Firehose Delivery Stream to S3
+    // ========================================
+    // Kinesis Firehose Delivery Role (robust fix)
+    // ========================================
     const deliveryStreamRole = new iam.Role(this, 'FirehoseDeliveryRole', {
       assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'),
+      inlinePolicies: {
+        FirehosePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: [
+                's3:AbortMultipartUpload',
+                's3:GetBucketLocation',
+                's3:GetObject',
+                's3:ListBucket',
+                's3:ListBucketMultipartUploads',
+                's3:PutObject',
+              ],
+              resources: [
+                dataLakeBucket.bucketArn,
+                `${dataLakeBucket.bucketArn}/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              actions: [
+                'kinesis:DescribeStream',
+                'kinesis:DescribeStreamSummary',
+                'kinesis:GetRecords',
+                'kinesis:GetShardIterator',
+                'kinesis:ListStreams',
+                'kinesis:SubscribeToShard',
+              ],
+              resources: ['*'],
+            }),
+            new iam.PolicyStatement({
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
 
-    // EXPLICIT PERMISSIONS: Grant Firehose access to S3 and Kinesis
-    dataLakeBucket.grantWrite(deliveryStreamRole);
-    eventStream.grantRead(deliveryStreamRole);
-
-    new firehose.CfnDeliveryStream(this, 'ConversationFirehose', {
-      deliveryStreamType: 'KinesisStreamAsSource',
-      kinesisStreamSourceConfiguration: {
-        kinesisStreamArn: eventStream.streamArn,
-        roleArn: deliveryStreamRole.roleArn,
-      },
-      s3DestinationConfiguration: {
-        bucketArn: dataLakeBucket.bucketArn,
-        roleArn: deliveryStreamRole.roleArn,
-        prefix:
-          'conversations/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-        errorOutputPrefix: 'errors/',
-        bufferingHints: {
-          intervalInSeconds: 60,
-          sizeInMBs: 128,
+    // ========================================
+    // Firehose Delivery Stream (robust fix)
+    // ========================================
+    const deliveryStream = new firehose.CfnDeliveryStream(
+      this,
+      'ConversationFirehose',
+      {
+        deliveryStreamType: 'KinesisStreamAsSource',
+        kinesisStreamSourceConfiguration: {
+          kinesisStreamArn: eventStream.streamArn,
+          roleArn: deliveryStreamRole.roleArn,
         },
-        compressionFormat: 'GZIP',
-      },
-    });
+        s3DestinationConfiguration: {
+          bucketArn: dataLakeBucket.bucketArn,
+          roleArn: deliveryStreamRole.roleArn,
+          prefix:
+            'conversations/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+          errorOutputPrefix: 'errors/',
+          bufferingHints: {
+            intervalInSeconds: 60,
+            sizeInMBs: 128,
+          },
+          compressionFormat: 'GZIP',
+          cloudWatchLoggingOptions: {
+            enabled: true,
+            logGroupName: `/aws/kinesisfirehose/${environmentSuffix}-conversation-firehose`,
+            logStreamName: 'S3Delivery',
+          },
+        },
+      }
+    );
+
+    // Explicit dependency: wait until stream exists
+    deliveryStream.node.addDependency(eventStream);
+    deliveryStream.node.addDependency(dataLakeBucket);
 
     // ========================================
     // 4. FULFILLMENT LAMBDA FUNCTION
@@ -198,7 +238,7 @@ export class TapStack extends cdk.Stack {
       memorySize: 512,
       vpc,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
       securityGroups: [lambdaSG],
       // CRUCIAL: Enable X-Ray tracing
@@ -269,18 +309,54 @@ export class TapStack extends cdk.Stack {
     // EXPLICIT PERMISSION: Grant Lex permission to invoke Lambda
     fulfillmentLambda.grantInvoke(lexBotRole);
 
-    // Custom slot type
+    // 1️⃣ Slot type definition
     const productSlotType = {
-      name: 'ProductType',
-      description: 'Types of products in our catalog',
-      slotTypeValues: [
-        { sampleValue: { value: 'laptop' } },
-        { sampleValue: { value: 'phone' } },
-        { sampleValue: { value: 'tablet' } },
-        { sampleValue: { value: 'headphones' } },
+      Name: 'ProductType',
+      Description: 'Types of products in our catalog',
+      SlotTypeValues: [
+        { SampleValue: { Value: 'laptop' } },
+        { SampleValue: { Value: 'phone' } },
+        { SampleValue: { Value: 'tablet' } },
+        { SampleValue: { Value: 'headphones' } },
       ],
-      valueSelectionSetting: {
-        resolutionStrategy: 'ORIGINAL_VALUE',
+      ValueSelectionSetting: {
+        ResolutionStrategy: 'ORIGINAL_VALUE',
+      },
+    };
+
+    // 2️⃣ Intent definition
+    const productInquiryIntent = {
+      Name: 'ProductInquiry',
+      Description: 'Handle product inquiries',
+      SampleUtterances: [
+        { Utterance: 'I want to know about {ProductType}' },
+        { Utterance: 'Tell me about your {ProductType} options' },
+        { Utterance: 'What {ProductType} do you have?' },
+      ],
+      Slots: [
+        {
+          Name: 'ProductType',
+          Description: 'The type of product',
+          SlotTypeName: 'ProductType', // keep only here, valid under Slot
+          ValueElicitationSetting: {
+            SlotConstraint: 'Required',
+            PromptSpecification: {
+              MessageGroupsList: [
+                {
+                  Message: {
+                    PlainTextMessage: {
+                      Value: 'What type of product are you interested in?',
+                    },
+                  },
+                },
+              ],
+              MaxRetries: 2,
+            },
+          },
+        },
+      ],
+      FulfillmentCodeHook: {
+        Enabled: true,
       },
     };
 
@@ -288,105 +364,83 @@ export class TapStack extends cdk.Stack {
     const lexBot = new cdk.CfnResource(this, 'OmnichannelAIBot', {
       type: 'AWS::Lex::Bot',
       properties: {
-        name: `OmnichannelAIBot-${environmentSuffix}`,
-        roleArn: lexBotRole.roleArn,
-        dataPrivacy: {
-          childDirected: false,
+        Name: `OmnichannelAIBot-${environmentSuffix}`,
+        RoleArn: lexBotRole.roleArn,
+        DataPrivacy: {
+          ChildDirected: false,
         },
-        idleSessionTtlInSeconds: 300,
-        // Bot locales configuration
-        botLocales: [
+        IdleSessionTTLInSeconds: 300,
+        AutoBuildBotLocales: true,
+        BotLocales: [
           {
-            localeId: 'en_US',
-            nluConfidenceThreshold: 0.7,
-            description: 'English US locale',
-            voiceSettings: {
-              voiceId: 'Joanna',
-              engine: 'neural',
+            LocaleId: 'en_US',
+            NluConfidenceThreshold: 0.7,
+            Description: 'English US locale',
+            VoiceSettings: {
+              VoiceId: 'Joanna',
+              Engine: 'neural',
             },
-            slotTypes: [productSlotType],
-            intents: [
+            SlotTypes: [productSlotType],
+            Intents: [
+              productInquiryIntent,
               {
-                intentName: 'ProductInquiry',
-                description: 'Handle product inquiries',
-                sampleUtterances: [
-                  { utterance: 'I want to know about {ProductType}' },
-                  { utterance: 'Tell me about your {ProductType} options' },
-                  { utterance: 'What {ProductType} do you have?' },
-                ],
-                slots: [
-                  {
-                    slotName: 'ProductType',
-                    description: 'The type of product',
-                    slotTypeName: 'ProductType',
-                    valueElicitationSetting: {
-                      slotConstraint: 'Required',
-                      promptSpecification: {
-                        messageGroupsList: [
-                          {
-                            message: {
-                              plainTextMessage: {
-                                value:
-                                  'What type of product are you interested in?',
-                              },
-                            },
-                          },
-                        ],
-                        maxRetries: 2,
-                      },
-                    },
-                  },
-                ],
-                fulfillmentCodeHook: {
-                  enabled: true,
-                },
+                Name: 'FallbackIntent',
+                Description:
+                  'Default fallback intent when no other intent matches',
+                ParentIntentSignature: 'AMAZON.FallbackIntent',
+                FulfillmentCodeHook: { Enabled: false },
               },
             ],
           },
           {
-            localeId: 'es_ES',
-            nluConfidenceThreshold: 0.7,
-            description: 'Spanish Spain locale',
-            voiceSettings: {
-              voiceId: 'Lucia',
-              engine: 'neural',
+            LocaleId: 'es_ES',
+            NluConfidenceThreshold: 0.7,
+            Description: 'Spanish Spain locale',
+            VoiceSettings: {
+              VoiceId: 'Lucia',
+              Engine: 'neural',
             },
-            slotTypes: [productSlotType],
-            intents: [
+            SlotTypes: [productSlotType],
+            Intents: [
               {
-                intentName: 'ProductInquiry',
-                description: 'Manejar consultas de productos',
-                sampleUtterances: [
-                  { utterance: 'Quiero saber sobre {ProductType}' },
-                  { utterance: 'Cuéntame sobre sus opciones de {ProductType}' },
-                  { utterance: '¿Qué {ProductType} tienen?' },
+                ...productInquiryIntent,
+                Name: 'ConsultaProducto',
+                Description: 'Manejar consultas de productos',
+                SampleUtterances: [
+                  { Utterance: 'Quiero saber sobre {ProductType}' },
+                  { Utterance: 'Cuéntame sobre sus opciones de {ProductType}' },
+                  { Utterance: '¿Qué {ProductType} tienen?' },
                 ],
-                slots: [
+                Slots: [
                   {
-                    slotName: 'ProductType',
-                    description: 'El tipo de producto',
-                    slotTypeName: 'ProductType',
-                    valueElicitationSetting: {
-                      slotConstraint: 'Required',
-                      promptSpecification: {
-                        messageGroupsList: [
+                    Name: 'ProductType',
+                    Description: 'El tipo de producto',
+                    SlotTypeName: 'ProductType',
+                    ValueElicitationSetting: {
+                      SlotConstraint: 'Required',
+                      PromptSpecification: {
+                        MessageGroupsList: [
                           {
-                            message: {
-                              plainTextMessage: {
-                                value:
+                            Message: {
+                              PlainTextMessage: {
+                                Value:
                                   '¿En qué tipo de producto está interesado?',
                               },
                             },
                           },
                         ],
-                        maxRetries: 2,
+                        MaxRetries: 2,
                       },
                     },
                   },
                 ],
-                fulfillmentCodeHook: {
-                  enabled: true,
-                },
+              },
+              {
+                Name: 'FallbackIntent',
+                Description:
+                  'Intención predeterminada cuando no hay coincidencias',
+                ParentIntentSignature: 'AMAZON.FallbackIntent',
+                FulfillmentCodeHook: { Enabled: false },
               },
             ],
           },
@@ -394,36 +448,76 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Bot alias with Lambda association
-    const botAlias = new cdk.CfnResource(this, 'ProdBotAlias', {
-      type: 'AWS::Lex::BotAlias',
+    // ========================================
+    // Create a Bot Version after Lex Bot
+    // ========================================
+    const lexBotVersion = new cdk.CfnResource(this, 'OmnichannelAIBotVersion', {
+      type: 'AWS::Lex::BotVersion',
       properties: {
-        botId: lexBot.getAtt('Id').toString(),
-        botAliasName: 'Production',
-        botAliasLocaleSettings: [
+        BotId: lexBot.getAtt('Id').toString(),
+        Description: `Version for OmnichannelAIBot-${environmentSuffix}`,
+        BotVersionLocaleSpecification: [
           {
-            botAliasLocaleSettingsId: 'en_US',
-            enabled: true,
-            codeHookSpecification: {
-              lambdaCodeHook: {
-                lambdaArn: fulfillmentLambda.functionArn,
-                codeHookInterfaceVersion: '1.0',
-              },
+            LocaleId: 'en_US',
+            BotVersionLocaleDetails: {
+              SourceBotVersion: 'DRAFT', // ✅ required: take the current draft locale
             },
           },
           {
-            botAliasLocaleSettingsId: 'es_ES',
-            enabled: true,
-            codeHookSpecification: {
-              lambdaCodeHook: {
-                lambdaArn: fulfillmentLambda.functionArn,
-                codeHookInterfaceVersion: '1.0',
-              },
+            LocaleId: 'es_ES',
+            BotVersionLocaleDetails: {
+              SourceBotVersion: 'DRAFT',
             },
           },
         ],
       },
     });
+
+    // Ensure alias waits for version creation
+    lexBotVersion.node.addDependency(lexBot);
+
+    // ========================================
+    // Bot alias with Lambda association
+    // ========================================
+    const botAlias = new cdk.CfnResource(this, 'ProdBotAlias', {
+      type: 'AWS::Lex::BotAlias',
+      properties: {
+        BotId: lexBot.getAtt('Id').toString(),
+        BotAliasName: 'Production',
+        // Use the dynamically created BotVersion
+        BotVersion: lexBotVersion.getAtt('BotVersion').toString(),
+        BotAliasLocaleSettings: [
+          {
+            LocaleId: 'en_US',
+            BotAliasLocaleSetting: {
+              Enabled: true,
+              CodeHookSpecification: {
+                LambdaCodeHook: {
+                  LambdaArn: fulfillmentLambda.functionArn,
+                  CodeHookInterfaceVersion: '1.0',
+                },
+              },
+            },
+          },
+          {
+            LocaleId: 'es_ES',
+            BotAliasLocaleSetting: {
+              Enabled: true,
+              CodeHookSpecification: {
+                LambdaCodeHook: {
+                  LambdaArn: fulfillmentLambda.functionArn,
+                  CodeHookInterfaceVersion: '1.0',
+                },
+              },
+            },
+          },
+        ],
+        SentimentAnalysisSettings: {
+          DetectSentiment: false,
+        },
+      },
+    });
+    botAlias.node.addDependency(lexBotVersion);
 
     // ========================================
     // 7. OPERATIONAL OBSERVABILITY
@@ -493,15 +587,8 @@ export class TapStack extends cdk.Stack {
 // ========================================
 
 const LAMBDA_CODE = `
-const AWS = require('aws-sdk');
-const redis = require('redis');
-const { v4: uuidv4 } = require('uuid');
-
-// Initialize AWS services
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const kinesis = new AWS.Kinesis();
-const comprehend = new AWS.Comprehend();
-const translate = new AWS.Translate();
+// Simple Lambda function for Lex fulfillment
+// Note: This is a simplified version for testing purposes
 
 // Redis client configuration
 let redisClient;
