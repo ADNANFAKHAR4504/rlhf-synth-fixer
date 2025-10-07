@@ -92,15 +92,6 @@ common_layer = _lambda.LayerVersion(
 )
 ```
 
-### Required AWS Lambda Layer Structure
-For Python Lambda layers, AWS requires:
-```
-lambda_layers/
-    └── common/
-        └── python/          # REQUIRED subdirectory
-            └── utils.py
-```
-
 ### Why This is Critical
 - AWS Lambda requires Python code in layers to be inside a `python/` subdirectory
 - The code references `"lambda_layers/common"` but doesn't validate the internal structure
@@ -131,16 +122,6 @@ lambda_layers/
 - Uses `add_to_policy` with manually defined permissions
 - IDEAL_RESPONSE uses CDK's higher-level `grant_read_write_data()` methods
 - These are more maintainable and follow least-privilege principles better
-
----
-
-## Summary Table
-
-| Fault # | Issue | Error Type | When It Fails | Severity |
-|---------|-------|------------|---------------|----------|
-| 1 | Missing `cloudwatch_actions` import | NameError | Stack synthesis | CRITICAL |
-| 2 | Missing `CfnOutput` import | NameError | Stack instantiation | CRITICAL |
-| 3 | Incorrect Lambda Layer structure | ModuleNotFoundError | Lambda runtime | CRITICAL |
 
 ---
 
