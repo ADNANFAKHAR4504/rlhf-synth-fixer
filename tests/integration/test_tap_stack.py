@@ -93,9 +93,12 @@ class TestTapStackDeployment:
         outputs = get_cfn_outputs(STACK_NAME)
         tasks_table_name = outputs.get("TasksTableName", "")
         env_suffix = tasks_table_name.split("-")[-1] if tasks_table_name else "dev"
-        function_name = f"tasks-crud-{env_suffix}"
         
-        # Create mock event simulating API Gateway request
+        # First, create a project
+        project_id = self._create_test_project(env_suffix)
+        
+        # Now create a task with the project ID
+        function_name = f"tasks-crud-{env_suffix}"
         task_id = f"task-{generate_random_suffix()}"
         event = {
             "httpMethod": "POST",
@@ -103,10 +106,11 @@ class TestTapStackDeployment:
             "pathParameters": None,
             "queryStringParameters": None,
             "body": json.dumps({
+                "projectId": project_id,
                 "title": "Integration Test Task",
                 "description": "Created by integration test",
-                "status": "pending",
-                "priority": "high",
+                "status": "TODO",
+                "priority": "MEDIUM",
                 "dueDate": "2025-12-31"
             }),
             "requestContext": {
@@ -124,11 +128,11 @@ class TestTapStackDeployment:
         
         # Verify response
         assert "statusCode" in response
-        assert response["statusCode"] in [200, 201], f"Expected 200/201, got {response['statusCode']}"
+        assert response["statusCode"] in [200, 201], f"Expected 200/201, got {response['statusCode']}: {response.get('body', '')}"
         
         body = json.loads(response.get("body", "{}"))
-        assert "taskId" in body or "task" in body, "Response should contain task data"
-        print(f"✓ Task created successfully: {body}")
+        assert "taskId" in body, "Response should contain taskId"
+        print(f"✓ Task created successfully: {body.get('taskId')}")
 
     def test_lambda_list_tasks(self):
         """Test Lambda function - List Tasks operation."""
