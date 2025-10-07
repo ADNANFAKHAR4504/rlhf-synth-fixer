@@ -113,6 +113,7 @@ class MyMocks(pulumi.runtime.Mocks):
         elif args.token == "aws:index/getRegion:getRegion":
             return {
                 "name": "us-east-1",
+                "region": "us-east-1",
                 "id": "us-east-1",
             }
         return {}
