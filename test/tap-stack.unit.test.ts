@@ -191,11 +191,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.CloudTrail).toBeDefined();
       expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
 
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      expect(template.Resources.ConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-
       expect(template.Resources.WebACL).toBeDefined();
       expect(template.Resources.WebACL.Type).toBe('AWS::WAFv2::WebACL');
+
+      // CloudWatch Log Groups
+      expect(template.Resources.AppLogGroup).toBeDefined();
+      expect(template.Resources.LambdaLogGroup).toBeDefined();
     });
   });
 
@@ -324,11 +325,6 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('ConfigRecorder should depend on ConfigDeliveryChannel', () => {
-      const configRecorder = template.Resources.ConfigRecorder;
-      expect(configRecorder.DependsOn).toBe('ConfigDeliveryChannel');
-    });
-
     test('SecretRotationSchedule should reference SecretRotationLambda via GetAtt', () => {
       const rotationSchedule = template.Resources.SecretRotationSchedule;
       expect(rotationSchedule.Properties.RotationLambdaARN['Fn::GetAtt']).toEqual(['SecretRotationLambda', 'Arn']);

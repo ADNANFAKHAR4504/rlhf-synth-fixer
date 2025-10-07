@@ -17,15 +17,6 @@
             "Type": "CommaDelimitedList",
             "Default": ""
         },
-        "CreateConfigResources": {
-            "Description": "Whether to create AWS Config resources (set to false if Config is already set up in this region)",
-            "Type": "String",
-            "Default": "false",
-            "AllowedValues": [
-                "true",
-                "false"
-            ]
-        },
         "DBInstanceClass": {
             "Description": "RDS instance class",
             "Type": "String",
@@ -131,19 +122,12 @@
                     ]
                 }
             ]
-        },
-        "ShouldCreateConfig": {
-            "Fn::Equals": [
-                {
-                    "Ref": "CreateConfigResources"
-                },
-                "true"
-            ]
         }
     },
     "Resources": {
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}"
@@ -1107,6 +1091,7 @@
         },
         "DbInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${EnvironmentSuffix}-db"
@@ -1174,6 +1159,7 @@
                     ]
                 },
                 "DeletionProtection": false,
+                "DeleteAutomatedBackups": true,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1206,6 +1192,7 @@
         },
         "SecretRotationSchedule": {
             "Type": "AWS::SecretsManager::RotationSchedule",
+            "DependsOn": "SecretRotationLambdaPermission",
             "Properties": {
                 "SecretId": {
                     "Ref": "DbSecret"
@@ -1248,6 +1235,19 @@
                 },
                 "Code": {
                     "ZipFile": "import boto3\nimport os\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    # Note: This is a placeholder for a real rotation function\n    # Actual implementation would handle secret rotation logic\n    return {\n        'statusCode': 200,\n        'body': 'Secret rotation processed'\n    }\n"
+                }
+            }
+        },
+        "SecretRotationLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "SecretRotationLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "secretsmanager.amazonaws.com",
+                "SourceArn": {
+                    "Ref": "DbSecret"
                 }
             }
         },
@@ -1479,9 +1479,7 @@
                     {
                         "ResourcePath": "/*",
                         "HttpMethod": "*",
-                        "MetricsEnabled": true,
-                        "LoggingLevel": "INFO",
-                        "DataTraceEnabled": true
+                        "MetricsEnabled": true
                     }
                 ]
             }
@@ -1500,7 +1498,10 @@
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
                 "CloudWatchLogsLogGroupArn": {
-                    "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
+                    "Fn::GetAtt": [
+                        "CloudTrailLogGroup",
+                        "Arn"
+                    ]
                 },
                 "CloudWatchLogsRoleArn": {
                     "Fn::GetAtt": [
@@ -1520,6 +1521,7 @@
         },
         "CloudTrailS3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-cloudtrail-logs-${RandomSuffix}"
@@ -1652,172 +1654,6 @@
                     "Fn::Sub": "/aws/lambda/${EnvironmentSuffix}-webapp-lambda"
                 },
                 "RetentionInDays": 90
-            }
-        },
-        "ConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Condition": "ShouldCreateConfig",
-            "DependsOn": "ConfigDeliveryChannel",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-config-recorder"
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                },
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRecorderRole",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "ConfigRecorderRole": {
-            "Type": "AWS::IAM::Role",
-            "Condition": "ShouldCreateConfig",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-                ]
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Condition": "ShouldCreateConfig",
-            "Properties": {
-                "ConfigSnapshotDeliveryProperties": {
-                    "DeliveryFrequency": "Six_Hours"
-                },
-                "S3BucketName": {
-                    "Ref": "ConfigS3Bucket"
-                },
-                "S3KeyPrefix": "config"
-            }
-        },
-        "ConfigS3Bucket": {
-            "Type": "AWS::S3::Bucket",
-            "Condition": "ShouldCreateConfig",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}"
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                }
-            }
-        },
-        "ConfigS3BucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Condition": "ShouldCreateConfig",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "ConfigS3Bucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSConfigBucketPermissionsCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigS3Bucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketExistenceCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:ListBucket",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigS3Bucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketDelivery",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${ConfigS3Bucket.Arn}/config/AWSLogs/${AWS::AccountId}/Config/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "RequiredTagsConfigRule": {
-            "Type": "AWS::Config::ConfigRule",
-            "Condition": "ShouldCreateConfig",
-            "Properties": {
-                "ConfigRuleName": {
-                    "Fn::Sub": "${EnvironmentSuffix}-required-tags"
-                },
-                "Description": "Checks if resources have the required tags",
-                "Scope": {
-                    "ComplianceResourceTypes": [
-                        "AWS::EC2::Instance",
-                        "AWS::S3::Bucket",
-                        "AWS::RDS::DBInstance",
-                        "AWS::AutoScaling::AutoScalingGroup"
-                    ]
-                },
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "REQUIRED_TAGS"
-                },
-                "InputParameters": {
-                    "tag1Key": "Environment",
-                    "tag2Key": "Name",
-                    "tag3Key": "Owner"
-                }
             }
         },
         "WebACL": {
@@ -2195,18 +2031,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-WebACLArn"
-                }
-            }
-        },
-        "ConfigRuleName": {
-            "Condition": "ShouldCreateConfig",
-            "Description": "Name of the AWS Config rule for required tags",
-            "Value": {
-                "Ref": "RequiredTagsConfigRule"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ConfigRuleName"
                 }
             }
         }

@@ -21,15 +21,6 @@ Parameters:
     Type: CommaDelimitedList
     Default: ""
   
-  # Config parameters
-  CreateConfigResources:
-    Description: Whether to create AWS Config resources (set to false if Config is already set up in this region)
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-  
   # RDS parameters
   DBInstanceClass:
     Description: RDS instance class
@@ -114,9 +105,6 @@ Mappings:
 Conditions:
   # Condition to check if cross-region replication buckets are provided
   HasReplicationBuckets: !Not [!Equals [!Join ['', !Ref CrossRegionReplicationBuckets], '']]
-  
-  # Condition to check if Config resources should be created
-  ShouldCreateConfig: !Equals [!Ref CreateConfigResources, "true"]
 
 Resources:
   # S3 Bucket with versioning and encryption
@@ -991,117 +979,6 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${EnvironmentSuffix}-webapp-lambda'
       RetentionInDays: 90
 
-  # AWS Config - COMMENTED OUT FOR NOW
-  # ConfigRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   Condition: ShouldCreateConfig
-  #   DependsOn: 
-  #     - ConfigRecorderRole
-  #     - ConfigDeliveryChannel
-  #   Properties:
-  #     Name: !Sub '${EnvironmentSuffix}-config-recorder'
-  #     RecordingGroup:
-  #       AllSupported: true
-  #       IncludeGlobalResourceTypes: true
-  #     RoleARN: !GetAtt ConfigRecorderRole.Arn
-
-  # ConfigRecorderRole:
-  #   Type: AWS::IAM::Role
-  #   Condition: ShouldCreateConfig
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: 'sts:AssumeRole'
-  #     ManagedPolicyArns:
-  #       - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
-
-  # ConfigDeliveryChannel:
-  #   Type: AWS::Config::DeliveryChannel
-  #   Condition: ShouldCreateConfig
-  #   DependsOn: 
-  #     - ConfigS3Bucket
-  #     - ConfigS3BucketPolicy
-  #   Properties:
-  #     ConfigSnapshotDeliveryProperties:
-  #       DeliveryFrequency: Six_Hours
-  #     S3BucketName: !Ref ConfigS3Bucket
-  #     S3KeyPrefix: config
-      
-  # ConfigS3Bucket:
-  #   Type: AWS::S3::Bucket
-  #   Condition: ShouldCreateConfig
-  #   DeletionPolicy: Delete
-  #   Properties:
-  #     BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-logs-${RandomSuffix}'
-  #     VersioningConfiguration:
-  #       Status: Enabled
-  #     BucketEncryption:
-  #       ServerSideEncryptionConfiguration:
-  #         - ServerSideEncryptionByDefault:
-  #             SSEAlgorithm: AES256
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: true
-  #       BlockPublicPolicy: true
-  #       IgnorePublicAcls: true
-  #       RestrictPublicBuckets: true
-
-  # ConfigS3BucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Condition: ShouldCreateConfig
-  #   DependsOn: ConfigS3Bucket
-  #   Properties:
-  #     Bucket: !Ref ConfigS3Bucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: AWSConfigBucketPermissionsCheck
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: 's3:GetBucketAcl'
-  #           Resource: !GetAtt ConfigS3Bucket.Arn
-  #         - Sid: AWSConfigBucketExistenceCheck
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: 's3:ListBucket'
-  #           Resource: !GetAtt ConfigS3Bucket.Arn
-  #         - Sid: AWSConfigBucketDelivery
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: 's3:PutObject'
-  #           Resource: !Sub '${ConfigS3Bucket.Arn}/config/AWSLogs/${AWS::AccountId}/Config/*'
-  #           Condition:
-  #             StringEquals:
-  #               's3:x-amz-acl': 'bucket-owner-full-control'
-
-  # AWS Config Rule for tagging compliance - COMMENTED OUT
-  # RequiredTagsConfigRule:
-  #   Type: AWS::Config::ConfigRule
-  #   Condition: ShouldCreateConfig
-  #   DependsOn: ConfigRecorder
-  #   Properties:
-  #     ConfigRuleName: !Sub '${EnvironmentSuffix}-required-tags'
-  #     Description: Checks if resources have the required tags
-  #     Scope:
-  #       ComplianceResourceTypes:
-  #         - AWS::EC2::Instance
-  #         - AWS::S3::Bucket
-  #         - AWS::RDS::DBInstance
-  #         - AWS::AutoScaling::AutoScalingGroup
-  #     Source:
-  #       Owner: AWS
-  #       SourceIdentifier: REQUIRED_TAGS
-  #     InputParameters:
-  #       tag1Key: Environment
-  #       tag2Key: Name
-  #       tag3Key: Owner
-
   # AWS WAF
   WebACL:
     Type: AWS::WAFv2::WebACL
@@ -1296,10 +1173,3 @@ Outputs:
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebACLArn'
-
-  # ConfigRuleName:
-  #   Condition: ShouldCreateConfig
-  #   Description: Name of the AWS Config rule for required tags
-  #   Value: !Ref RequiredTagsConfigRule
-  #   Export:
-  #     Name: !Sub '${AWS::StackName}-ConfigRuleName'
