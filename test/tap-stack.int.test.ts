@@ -65,6 +65,8 @@ import {
 } from '@aws-sdk/client-sns';
 import {
   SSMClient,
+  SendCommandCommand,
+  GetCommandInvocationCommand,
 } from '@aws-sdk/client-ssm';
 import {
   IAMClient,
@@ -72,10 +74,14 @@ import {
   ListAttachedRolePoliciesCommand,
   GetInstanceProfileCommand,
 } from '@aws-sdk/client-iam';
+import {
+  GetSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
+import * as net from 'net';
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -955,54 +961,54 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     ssmClient = new SSMClient({ region });
   });
 
-  test('RDS should NOT be accessible from the internet (external connectivity test)', async () => {
+  test('RDS should NOT be accessible from the internet (ACTUAL connection attempt)', async () => {
     const rdsEndpoint = outputs.RDSEndpoint;
+    const rdsPort = 3306;
+
+    // ACTUAL CONNECTION TEST: Try to connect to RDS from outside the VPC
+    // This test runner is external to the VPC, so connection should FAIL
+    const socket = new net.Socket();
+
+    const connectionAttempt = new Promise<string>((resolve, reject) => {
+      socket.setTimeout(10000);
+
+      socket.on('connect', () => {
+        socket.destroy();
+        reject(new Error('SECURITY VIOLATION: RDS is accessible from internet! Connection succeeded when it should have been blocked.'));
+      });
+
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve('Connection timeout - RDS is properly isolated from internet');
+      });
+
+      socket.on('error', (err: any) => {
+        socket.destroy();
+        // These errors indicate the connection was blocked (which is good!)
+        if (err.code === 'ETIMEDOUT' || err.code === 'EHOSTUNREACH' || err.code === 'ECONNREFUSED' || err.errno === 'ETIMEDOUT') {
+          resolve(`Connection blocked (${err.code || err.errno}) - RDS is properly isolated from internet`);
+        } else {
+          // Unexpected error - might indicate network issue
+          reject(new Error(`Unexpected error during RDS connection test: ${err.message}`));
+        }
+      });
+
+      try {
+        socket.connect(rdsPort, rdsEndpoint);
+      } catch (err: any) {
+        socket.destroy();
+        resolve(`Connection blocked (${err.message}) - RDS is properly isolated`);
+      }
+    });
+
+    // Expect the connection to FAIL (which means security is working)
+    const result = await connectionAttempt;
+    expect(result).toMatch(/isolated|blocked|timeout/i);
+
+    // Also verify configuration as secondary check
     const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
     const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
-
-    // 1. Verify RDS is configured as NOT publicly accessible
     expect(db?.PubliclyAccessible).toBe(false);
-
-    // 2. Verify RDS security group does NOT allow internet access (0.0.0.0/0)
-    const dbSgId = outputs.DatabaseSecurityGroup;
-    const sgs = await ec2Client.send(
-      new DescribeSecurityGroupsCommand({ GroupIds: [dbSgId] })
-    );
-
-    const sg = sgs.SecurityGroups?.[0];
-    const hasPublicAccess = sg?.IpPermissions?.some(rule =>
-      rule.IpRanges?.some(ip => ip.CidrIp === '0.0.0.0/0')
-    );
-
-    expect(hasPublicAccess).toBe(false);
-
-    // 3. Verify RDS is in private subnets only
-    const privateSubnets = outputs.PrivateSubnets?.split(',').map(s => s.trim());
-    const dbSubnetIds = db?.DBSubnetGroup?.Subnets?.map(s => s.SubnetIdentifier);
-
-    for (const subnetId of dbSubnetIds || []) {
-      expect(privateSubnets).toContain(subnetId);
-    }
-
-    // 4. Verify private subnets have NO direct route to internet gateway
-    const routeTables = await ec2Client.send(
-      new DescribeRouteTablesCommand({
-        Filters: [{ Name: 'vpc-id', Values: [outputs.VPC || outputs.VpcId] }]
-      })
-    );
-
-    for (const subnetId of privateSubnets || []) {
-      const subnetRT = routeTables.RouteTables?.find(rt =>
-        rt.Associations?.some(assoc => assoc.SubnetId === subnetId)
-      );
-
-      if (subnetRT) {
-        const hasDirectIGWRoute = subnetRT.Routes?.some(route =>
-          route.GatewayId?.startsWith('igw-') && route.DestinationCidrBlock === '0.0.0.0/0'
-        );
-        expect(hasDirectIGWRoute).toBe(false);
-      }
-    }
   }, 60000);
 
   test('RDS should NOT be accessible from unauthorized security groups', async () => {
@@ -1033,7 +1039,7 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     }
   }, 30000);
 
-  test('Web servers SHOULD be able to connect to RDS (functional validation)', async () => {
+  test('Web servers CAN successfully connect to RDS (ACTUAL MySQL connection via SSM)', async () => {
     const asgClient = new AutoScalingClient({ region });
     const asgName = outputs.WebAppAutoScalingGroup;
 
@@ -1049,40 +1055,112 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
       i => i.HealthStatus === 'Healthy' && i.LifecycleState === 'InService'
     );
 
+    expect(healthyInstance).toBeDefined();
+
     if (healthyInstance) {
-      // Verify the instance has the correct security group
-      const instanceDetails = await ec2Client.send(
-        new DescribeInstancesCommand({ InstanceIds: [healthyInstance.InstanceId!] })
-      );
+      const rdsEndpoint = outputs.RDSEndpoint;
+      const secretsClient = new SecretsManagerClient({ region });
 
-      const instance = instanceDetails.Reservations?.[0]?.Instances?.[0];
-      const instanceSgs = instance?.SecurityGroups?.map(sg => sg.GroupId);
-      const webSgId = outputs.WebServerSecurityGroup;
+      // Get RDS credentials from Secrets Manager
+      let dbUsername = 'admin';
+      let dbPassword = '';
 
-      expect(instanceSgs).toContain(webSgId);
+      try {
+        // Try to get credentials from secrets manager if secret exists
+        const dbs = await rdsClient.send(new DescribeDBInstancesCommand({}));
+        const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsEndpoint);
+        const dbIdentifier = db?.DBInstanceIdentifier;
 
-      // Verify instance is in a subnet that can reach RDS
-      const instanceSubnetId = instance?.SubnetId;
-      const routeTables = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [{ Name: 'vpc-id', Values: [outputs.VPC || outputs.VpcId] }]
+        if (dbIdentifier) {
+          const secret = await secretsClient.send(
+            new GetSecretValueCommand({ SecretId: `${dbIdentifier}-rds-credentials` })
+          ).catch(() => null);
+
+          if (secret?.SecretString) {
+            const credentials = JSON.parse(secret.SecretString);
+            dbUsername = credentials.username || 'admin';
+            dbPassword = credentials.password || '';
+          }
+        }
+      } catch (err) {
+        console.log('Could not retrieve secrets, will test with telnet instead');
+      }
+
+      // ACTUAL CONNECTION TEST: Use SSM Run Command to test MySQL connection from EC2
+      const command = await ssmClient.send(
+        new SendCommandCommand({
+          DocumentName: 'AWS-RunShellScript',
+          InstanceIds: [healthyInstance.InstanceId!],
+          Parameters: {
+            commands: [
+              '#!/bin/bash',
+              'set -e',
+              'echo "Testing MySQL connectivity to RDS..."',
+              '',
+              '# Test 1: TCP connection using nc (netcat) or telnet',
+              'if command -v nc &> /dev/null; then',
+              `  timeout 5 nc -zv ${rdsEndpoint} 3306 2>&1 && echo "TCP_CONNECTION_SUCCESS" || echo "TCP_CONNECTION_FAILED"`,
+              'elif command -v telnet &> /dev/null; then',
+              `  timeout 5 bash -c "echo quit | telnet ${rdsEndpoint} 3306" 2>&1 | grep -q "Connected\\|Escape" && echo "TCP_CONNECTION_SUCCESS" || echo "TCP_CONNECTION_FAILED"`,
+              'else',
+              '  echo "Neither nc nor telnet available, installing nc..."',
+              '  sudo yum install -y nc 2>&1 || sudo apt-get install -y netcat 2>&1',
+              `  timeout 5 nc -zv ${rdsEndpoint} 3306 2>&1 && echo "TCP_CONNECTION_SUCCESS" || echo "TCP_CONNECTION_FAILED"`,
+              'fi',
+              '',
+              '# Test 2: MySQL connection if credentials available',
+              ...(dbPassword ? [
+                'echo "Installing MySQL client..."',
+                'sudo yum install -y mysql 2>&1 || sudo apt-get install -y mysql-client 2>&1 || echo "MySQL client installation failed"',
+                'if command -v mysql &> /dev/null; then',
+                `  timeout 10 mysql -h ${rdsEndpoint} -u ${dbUsername} -p'${dbPassword}' -e "SELECT 1 as test, 'MySQL_Connection_Successful' as status;" 2>&1 | grep -q "MySQL_Connection_Successful" && echo "MYSQL_QUERY_SUCCESS" || echo "MYSQL_QUERY_FAILED"`,
+                'else',
+                '  echo "MySQL client not available, skipping query test"',
+                'fi'
+              ] : ['echo "No credentials available, skipping MySQL query test"']),
+              '',
+              'echo "Connection test completed"'
+            ]
+          },
+          TimeoutSeconds: 60
         })
       );
 
-      const instanceRT = routeTables.RouteTables?.find(rt =>
-        rt.Associations?.some(assoc => assoc.SubnetId === instanceSubnetId)
-      );
+      expect(command.Command?.CommandId).toBeDefined();
 
-      // Instance should have NAT gateway route for outbound connectivity
-      const hasNATRoute = instanceRT?.Routes?.some(route =>
-        route.NatGatewayId?.startsWith('nat-')
-      );
+      // Wait for command to complete
+      let result;
+      let attempts = 0;
+      const maxAttempts = 12; // 60 seconds total
 
-      // Note: Instances in public subnets connect to RDS via VPC internal routing
-      // This is allowed because both are in the same VPC and security groups permit it
-      expect(instanceRT).toBeDefined();
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        result = await ssmClient.send(
+          new GetCommandInvocationCommand({
+            CommandId: command.Command!.CommandId!,
+            InstanceId: healthyInstance.InstanceId!
+          })
+        );
+
+        if (result.Status === 'Success' || result.Status === 'Failed') {
+          break;
+        }
+        attempts++;
+      }
+
+      expect(result).toBeDefined();
+      console.log('SSM Command Output:', result?.StandardOutputContent);
+      console.log('SSM Command Errors:', result?.StandardErrorContent);
+
+      // Verify TCP connection succeeded
+      expect(result?.StandardOutputContent).toContain('TCP_CONNECTION_SUCCESS');
+
+      // Verify command completed successfully
+      expect(result?.Status).toBe('Success');
+      expect(result?.StandardOutputContent).not.toContain('TCP_CONNECTION_FAILED');
     }
-  }, 60000);
+  }, 120000);
 
   test('ALB should be accessible from internet and reach healthy web servers', async () => {
     const elbClient = new ElasticLoadBalancingV2Client({ region });
@@ -1130,42 +1208,48 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     // At least one target should be healthy for the ALB to serve traffic
     expect(healthyTargets?.length).toBeGreaterThan(0);
 
-    // 4. Test actual HTTP connectivity to ALB
-    try {
-      const testConnectivity = new Promise((resolve, reject) => {
-        const req = http.request(
-          `http://${albDns}/health`,
-          { method: 'GET', timeout: 10000 },
-          (res) => {
+    // 4. ACTUAL HTTP CONNECTION TEST to ALB
+    const testConnectivity = new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        `http://${albDns}/health`,
+        { method: 'GET', timeout: 30000 },
+        (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
             if (res.statusCode && res.statusCode >= 200 && res.statusCode < 500) {
+              console.log(`ALB responded with status ${res.statusCode}`);
               resolve(res.statusCode);
             } else {
-              reject(new Error(`Unexpected status code: ${res.statusCode}`));
+              reject(new Error(`ALB returned unexpected status code: ${res.statusCode}, body: ${data}`));
             }
-          }
-        );
-        req.on('error', () => {
-          // Connection errors are expected if the ALB is being set up
-          // We've already verified configuration, so this is optional
-          resolve('connection_validated_via_aws_api');
-        });
-        req.on('timeout', () => {
-          req.destroy();
-          resolve('connection_validated_via_aws_api');
-        });
-        req.end();
+          });
+        }
+      );
+
+      req.on('error', (err) => {
+        reject(new Error(`Failed to connect to ALB at ${albDns}: ${err.message}`));
       });
 
-      await testConnectivity;
-    } catch (error) {
-      // If direct HTTP test fails, we've already validated via AWS APIs
-      // that the ALB is properly configured and has healthy targets
-    }
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error(`Connection to ALB at ${albDns} timed out after 30 seconds`));
+      });
+
+      req.end();
+    });
+
+    // Actually wait for and validate the connection
+    const statusCode = await testConnectivity;
+    expect(statusCode).toBeGreaterThanOrEqual(200);
+    expect(statusCode).toBeLessThan(500);
   }, 90000);
 
-  test('Web servers should be able to access S3 bucket for application data', async () => {
+  test('Web servers CAN access S3 bucket (ACTUAL upload/download via SSM)', async () => {
     const asgClient = new AutoScalingClient({ region });
-    const iamClient = new IAMClient({ region });
+    const appDataBucket = outputs.AppDataBucket;
+
+    expect(appDataBucket).toBeDefined();
 
     // Get the IAM role attached to EC2 instances
     const asgName = outputs.WebAppAutoScalingGroup;
@@ -1173,96 +1257,98 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
       new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
     );
 
-    const launchTemplate = asgs.AutoScalingGroups?.[0].LaunchTemplate;
-    expect(launchTemplate).toBeDefined();
-
-    // Get instance profile from one of the running instances
     const instances = asgs.AutoScalingGroups?.[0].Instances;
-    if (instances && instances.length > 0) {
-      const instanceDetails = await ec2Client.send(
-        new DescribeInstancesCommand({ InstanceIds: [instances[0].InstanceId!] })
-      );
+    expect(instances?.length).toBeGreaterThan(0);
 
-      const instance = instanceDetails.Reservations?.[0]?.Instances?.[0];
-      const iamInstanceProfile = instance?.IamInstanceProfile;
-
-      if (iamInstanceProfile) {
-        const profileArn = iamInstanceProfile.Arn!;
-        const profileName = profileArn.split('/').pop();
-
-        // Get the instance profile to find the role name
-        const profileDetails = await iamClient.send(
-          new GetInstanceProfileCommand({ InstanceProfileName: profileName })
-        );
-
-        const roleName = profileDetails.InstanceProfile?.Roles?.[0]?.RoleName;
-        expect(roleName).toBeDefined();
-
-        // Verify role exists and has policies (may include S3 or other permissions)
-        const attachedPolicies = await iamClient.send(
-          new ListAttachedRolePoliciesCommand({ RoleName: roleName! })
-        );
-
-        const inlinePolicies = await iamClient.send(
-          new ListRolePoliciesCommand({ RoleName: roleName! })
-        );
-
-        // Check if role has S3 access through attached policies
-        const hasS3AttachedPolicy = attachedPolicies.AttachedPolicies?.some(policy =>
-          policy.PolicyName?.toLowerCase().includes('s3') ||
-          policy.PolicyArn?.toLowerCase().includes('s3')
-        );
-
-        // Check if role has S3 access through inline policies
-        const hasS3InlinePolicy = inlinePolicies.PolicyNames?.some(name =>
-          name.toLowerCase().includes('s3')
-        );
-
-        // If no S3-specific policies, check for broad policies like PowerUserAccess, AdministratorAccess
-        const hasBroadPolicy = attachedPolicies.AttachedPolicies?.some(policy =>
-          policy.PolicyName?.includes('PowerUser') ||
-          policy.PolicyName?.includes('Administrator') ||
-          policy.PolicyName?.includes('FullAccess')
-        );
-
-        // The role should have either S3-specific access or broad access policies
-        // If neither, log what policies exist for debugging
-        const hasS3Access = hasS3AttachedPolicy || hasS3InlinePolicy || hasBroadPolicy;
-
-        if (!hasS3Access) {
-          console.log('Attached Policies:', attachedPolicies.AttachedPolicies?.map(p => p.PolicyName));
-          console.log('Inline Policies:', inlinePolicies.PolicyNames);
-        }
-
-        // For this test, we verify the role has at least some policies
-        // In production, you'd want to verify specific S3 permissions
-        const hasPolicies = (attachedPolicies.AttachedPolicies?.length ?? 0) > 0 ||
-                           (inlinePolicies.PolicyNames?.length ?? 0) > 0;
-
-        expect(hasPolicies).toBe(true);
-      }
-    }
-
-    // Verify S3 bucket exists and has proper VPC endpoint configuration
-    const appDataBucket = outputs.AppDataBucket;
-    expect(appDataBucket).toBeDefined();
-
-    // Check if VPC has S3 endpoint for private connectivity
-    const vpcEndpoints = await ec2Client.send(
-      new DescribeVpcEndpointsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPC || outputs.VpcId] },
-          { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] }
-        ]
-      })
+    const healthyInstance = instances?.find(
+      i => i.HealthStatus === 'Healthy' && i.LifecycleState === 'InService'
     );
 
-    // S3 VPC endpoint is optional but recommended for security
-    // If it exists, verify it's available
-    if (vpcEndpoints.VpcEndpoints && vpcEndpoints.VpcEndpoints.length > 0) {
-      expect(vpcEndpoints.VpcEndpoints[0].State).toBe('available');
+    expect(healthyInstance).toBeDefined();
+
+    if (healthyInstance) {
+      const testFileName = `integration-test-${Date.now()}.txt`;
+      const testContent = `Integration test file created at ${new Date().toISOString()}`;
+
+      // ACTUAL S3 ACCESS TEST: Upload and download file via SSM
+      const command = await ssmClient.send(
+        new SendCommandCommand({
+          DocumentName: 'AWS-RunShellScript',
+          InstanceIds: [healthyInstance.InstanceId!],
+          Parameters: {
+            commands: [
+              '#!/bin/bash',
+              'set -e',
+              'echo "Testing S3 connectivity..."',
+              '',
+              '# Test 1: Upload file to S3',
+              `echo "${testContent}" > /tmp/${testFileName}`,
+              `aws s3 cp /tmp/${testFileName} s3://${appDataBucket}/${testFileName} 2>&1 && echo "S3_UPLOAD_SUCCESS" || echo "S3_UPLOAD_FAILED"`,
+              '',
+              '# Test 2: Download file from S3',
+              `aws s3 cp s3://${appDataBucket}/${testFileName} /tmp/${testFileName}.downloaded 2>&1 && echo "S3_DOWNLOAD_SUCCESS" || echo "S3_DOWNLOAD_FAILED"`,
+              '',
+              '# Test 3: Verify content matches',
+              `if diff /tmp/${testFileName} /tmp/${testFileName}.downloaded > /dev/null 2>&1; then`,
+              '  echo "S3_CONTENT_VERIFIED"',
+              'else',
+              '  echo "S3_CONTENT_MISMATCH"',
+              'fi',
+              '',
+              '# Cleanup: Delete test file from S3',
+              `aws s3 rm s3://${appDataBucket}/${testFileName} 2>&1 && echo "S3_CLEANUP_SUCCESS" || echo "S3_CLEANUP_FAILED"`,
+              '',
+              '# Cleanup local files',
+              `rm -f /tmp/${testFileName} /tmp/${testFileName}.downloaded`,
+              '',
+              'echo "S3 access test completed"'
+            ]
+          },
+          TimeoutSeconds: 60
+        })
+      );
+
+      expect(command.Command?.CommandId).toBeDefined();
+
+      // Wait for command to complete
+      let result;
+      let attempts = 0;
+      const maxAttempts = 12; // 60 seconds total
+
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        result = await ssmClient.send(
+          new GetCommandInvocationCommand({
+            CommandId: command.Command!.CommandId!,
+            InstanceId: healthyInstance.InstanceId!
+          })
+        );
+
+        if (result.Status === 'Success' || result.Status === 'Failed') {
+          break;
+        }
+        attempts++;
+      }
+
+      expect(result).toBeDefined();
+      console.log('S3 Test Output:', result?.StandardOutputContent);
+      console.log('S3 Test Errors:', result?.StandardErrorContent);
+
+      // Verify all S3 operations succeeded
+      expect(result?.StandardOutputContent).toContain('S3_UPLOAD_SUCCESS');
+      expect(result?.StandardOutputContent).toContain('S3_DOWNLOAD_SUCCESS');
+      expect(result?.StandardOutputContent).toContain('S3_CONTENT_VERIFIED');
+      expect(result?.StandardOutputContent).toContain('S3_CLEANUP_SUCCESS');
+
+      // Verify no failures
+      expect(result?.StandardOutputContent).not.toContain('S3_UPLOAD_FAILED');
+      expect(result?.StandardOutputContent).not.toContain('S3_DOWNLOAD_FAILED');
+      expect(result?.StandardOutputContent).not.toContain('S3_CONTENT_MISMATCH');
+
+      expect(result?.Status).toBe('Success');
     }
-  }, 60000);
+  }, 120000);
 
   test('Network isolation: Public subnets should route through IGW, private through NAT', async () => {
     const vpcId = outputs.VPC || outputs.VpcId;
