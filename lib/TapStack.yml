@@ -140,7 +140,7 @@ Resources:
       # Server-side encryption
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ApplyServerSideEncryptionByDefault:
+          - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
       Tags:
         - Key: 'Name'
