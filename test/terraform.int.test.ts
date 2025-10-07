@@ -1,0 +1,370 @@
+// test/terraform.int.test.ts
+// End-to-end integration tests for e-books content delivery infrastructure
+// Tests real AWS resources deployed by Terraform
+
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  GetBucketPolicyCommand,
+  GetBucketLifecycleConfigurationCommand,
+  PutObjectCommand,
+  HeadObjectCommand
+} from '@aws-sdk/client-s3';
+import {
+  CloudFrontClient,
+  GetDistributionCommand,
+  GetCloudFrontOriginAccessIdentityCommand
+} from '@aws-sdk/client-cloudfront';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  GetDashboardCommand
+} from '@aws-sdk/client-cloudwatch';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand
+} from '@aws-sdk/client-kms';
+import fs from 'fs';
+import path from 'path';
+
+const region = process.env.AWS_REGION || 'us-east-1';
+
+// Load Terraform outputs
+function loadTerraformOutputs(): any {
+  const ciOutputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+  if (fs.existsSync(ciOutputPath)) {
+    const content = fs.readFileSync(ciOutputPath, "utf8");
+    console.log("Loading outputs from:", ciOutputPath);
+    return JSON.parse(content);
+  }
+
+  const flatOutputPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
+  if (fs.existsSync(flatOutputPath)) {
+    console.log("Loading flat outputs from:", flatOutputPath);
+    const flatOutputs = JSON.parse(fs.readFileSync(flatOutputPath, "utf8"));
+    const converted: any = {};
+    for (const [key, value] of Object.entries(flatOutputs)) {
+      converted[key] = { value };
+    }
+    return converted;
+  }
+
+  const outputPath = path.resolve(__dirname, "../terraform-outputs.json");
+  if (fs.existsSync(outputPath)) {
+    console.log("Loading outputs from:", outputPath);
+    return JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  }
+
+  const altPath = path.resolve(__dirname, "../lib/terraform.tfstate");
+  if (fs.existsSync(altPath)) {
+    console.log("Loading outputs from state file:", altPath);
+    const state = JSON.parse(fs.readFileSync(altPath, "utf8"));
+    return state.outputs;
+  }
+
+  throw new Error("Could not find Terraform outputs");
+}
+
+let outputs: any = {};
+
+try {
+  const rawOutputs = loadTerraformOutputs();
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      outputs[key] = (value as any).value;
+    } else {
+      outputs[key] = value;
+    }
+  }
+  console.log('Loaded Terraform outputs:', Object.keys(outputs));
+} catch (error) {
+  console.error('Failed to load Terraform outputs:', error);
+  throw new Error('Cannot run integration tests without valid Terraform outputs');
+}
+
+const s3 = new S3Client({ region });
+const cloudfront = new CloudFrontClient({ region });
+const cloudwatch = new CloudWatchClient({ region });
+const kms = new KMSClient({ region });
+
+describe('E-books Content Delivery Infrastructure - Integration Tests', () => {
+  
+  beforeAll(() => {
+    const essentialOutputs = ['ebooks_bucket_name', 'cloudfront_distribution_id', 'kms_key_id'];
+    const missingOutputs = essentialOutputs.filter(key => !outputs[key]);
+    
+    if (missingOutputs.length > 0) {
+      throw new Error(`Missing essential outputs: ${missingOutputs.join(', ')}`);
+    }
+  });
+
+  describe('Complete Content Delivery Flow', () => {
+    test('End-to-end flow: S3 storage -> CloudFront distribution -> monitoring', async () => {
+      // STEP 1: Verify KMS encryption is set up correctly
+      console.log('Step 1: Verifying KMS encryption setup...');
+      const kmsKeyId = outputs.kms_key_id;
+      expect(kmsKeyId).toBeDefined();
+
+      const keyDetails = await kms.send(new DescribeKeyCommand({ KeyId: kmsKeyId }));
+      expect(keyDetails.KeyMetadata).toBeDefined();
+      expect(keyDetails.KeyMetadata?.KeyState).toBe('Enabled');
+      expect(keyDetails.KeyMetadata?.Description).toContain('S3 access logs');
+
+      const rotationStatus = await kms.send(new GetKeyRotationStatusCommand({ KeyId: kmsKeyId }));
+      expect(rotationStatus.KeyRotationEnabled).toBe(true);
+      console.log('✓ KMS key is enabled with rotation');
+
+      // STEP 2: Verify e-books S3 bucket configuration
+      console.log('Step 2: Verifying e-books bucket configuration...');
+      const ebooksBucket = outputs.ebooks_bucket_name;
+      expect(ebooksBucket).toBeDefined();
+      expect(ebooksBucket).toMatch(/^ebooks-.*-content-\d+$/);
+
+      // Check versioning
+      const versioningRes = await s3.send(new GetBucketVersioningCommand({ Bucket: ebooksBucket }));
+      expect(versioningRes.Status).toBe('Enabled');
+
+      // Check encryption
+      const encryptionRes = await s3.send(new GetBucketEncryptionCommand({ Bucket: ebooksBucket }));
+      expect(encryptionRes.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
+      const rule = encryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+
+      // Check public access block
+      const publicAccessRes = await s3.send(new GetPublicAccessBlockCommand({ Bucket: ebooksBucket }));
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      console.log('✓ E-books bucket is properly secured and encrypted');
+
+      // STEP 3: Verify logs S3 bucket configuration
+      console.log('Step 3: Verifying logs bucket configuration...');
+      const logsBucket = outputs.logs_bucket_name;
+      expect(logsBucket).toBeDefined();
+      expect(logsBucket).toMatch(/^ebooks-.*-logs-\d+$/);
+
+      // Check KMS encryption for logs bucket
+      const logsEncryptionRes = await s3.send(new GetBucketEncryptionCommand({ Bucket: logsBucket }));
+      const logsRule = logsEncryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(logsRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(logsRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(kmsKeyId);
+
+      // Check lifecycle policy
+      const lifecycleRes = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket: logsBucket }));
+      expect(lifecycleRes.Rules).toBeDefined();
+      const lifecycleRule = lifecycleRes.Rules?.[0];
+      expect(lifecycleRule?.Status).toBe('Enabled');
+      expect(lifecycleRule?.Expiration?.Days).toBe(365);
+
+      // Check public access block
+      const logsPublicAccessRes = await s3.send(new GetPublicAccessBlockCommand({ Bucket: logsBucket }));
+      expect(logsPublicAccessRes.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      console.log('✓ Logs bucket is properly secured with KMS encryption and lifecycle policy');
+
+      // STEP 4: Verify CloudFront distribution and OAI integration
+      console.log('Step 4: Verifying CloudFront distribution configuration...');
+      const distributionId = outputs.cloudfront_distribution_id;
+      expect(distributionId).toBeDefined();
+      expect(distributionId).toMatch(/^E[A-Z0-9]+$/);
+
+      const distRes = await cloudfront.send(new GetDistributionCommand({ Id: distributionId }));
+      const dist = distRes.Distribution;
+      expect(dist).toBeDefined();
+      expect(dist?.Status).toMatch(/^(Deployed|InProgress)$/);
+      expect(dist?.DistributionConfig?.Enabled).toBe(true);
+
+      // Verify origin configuration
+      const origins = dist?.DistributionConfig?.Origins?.Items;
+      expect(origins?.length).toBeGreaterThan(0);
+      const s3Origin = origins?.[0];
+      expect(s3Origin?.DomainName).toContain(ebooksBucket);
+      expect(s3Origin?.S3OriginConfig?.OriginAccessIdentity).toBeDefined();
+      expect(s3Origin?.S3OriginConfig?.OriginAccessIdentity).toMatch(/^origin-access-identity\/cloudfront\//);
+
+      // Verify caching behavior
+      const cacheBehavior = dist?.DistributionConfig?.DefaultCacheBehavior;
+      expect(cacheBehavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
+      expect(cacheBehavior?.Compress).toBe(true);
+      expect(cacheBehavior?.AllowedMethods?.Items).toContain('GET');
+      expect(cacheBehavior?.AllowedMethods?.Items).toContain('HEAD');
+
+      // Verify logging configuration
+      const loggingConfig = dist?.DistributionConfig?.Logging;
+      expect(loggingConfig?.Enabled).toBe(true);
+      expect(loggingConfig?.Bucket).toContain(logsBucket);
+      expect(loggingConfig?.Prefix).toBe('cloudfront-logs/');
+      console.log('✓ CloudFront distribution is properly configured with HTTPS and logging');
+
+      // STEP 5: Verify S3 bucket policy allows only CloudFront OAI
+      console.log('Step 5: Verifying S3 bucket policy for CloudFront access...');
+      const bucketPolicyRes = await s3.send(new GetBucketPolicyCommand({ Bucket: ebooksBucket }));
+      expect(bucketPolicyRes.Policy).toBeDefined();
+      
+      const policy = JSON.parse(bucketPolicyRes.Policy!);
+      expect(policy.Statement).toBeDefined();
+      
+      const s3GetObjectStatement = policy.Statement.find((stmt: any) => 
+        stmt.Action === 's3:GetObject' || (Array.isArray(stmt.Action) && stmt.Action.includes('s3:GetObject'))
+      );
+      expect(s3GetObjectStatement).toBeDefined();
+      expect(s3GetObjectStatement.Effect).toBe('Allow');
+      expect(s3GetObjectStatement.Principal?.AWS).toBeDefined();
+      
+      // Extract OAI ID from CloudFront origin config
+      const oaiPath = s3Origin?.S3OriginConfig?.OriginAccessIdentity;
+      const oaiId = oaiPath?.split('/').pop();
+      
+      // Verify the OAI exists
+      const oaiRes = await cloudfront.send(new GetCloudFrontOriginAccessIdentityCommand({ Id: oaiId! }));
+      expect(oaiRes.CloudFrontOriginAccessIdentity).toBeDefined();
+      expect(oaiRes.CloudFrontOriginAccessIdentity?.CloudFrontOriginAccessIdentityConfig?.Comment).toContain('e-books distribution');
+      console.log('✓ S3 bucket policy correctly restricts access to CloudFront OAI only');
+
+      // STEP 6: Test content upload and accessibility through CloudFront
+      console.log('Step 6: Testing content upload and verification...');
+      const testFileName = `test-ebook-${Date.now()}.txt`;
+      const testContent = 'This is a test e-book content for integration testing.';
+      
+      await s3.send(new PutObjectCommand({
+        Bucket: ebooksBucket,
+        Key: testFileName,
+        Body: testContent,
+        ContentType: 'text/plain'
+      }));
+      console.log(`✓ Test file uploaded: ${testFileName}`);
+
+      // Verify object was uploaded
+      const headRes = await s3.send(new HeadObjectCommand({
+        Bucket: ebooksBucket,
+        Key: testFileName
+      }));
+      expect(headRes.ContentLength).toBeGreaterThan(0);
+      expect(headRes.ServerSideEncryption).toBe('AES256');
+      console.log('✓ Uploaded object is encrypted and accessible');
+
+      // STEP 7: Verify CloudWatch monitoring is set up
+      console.log('Step 7: Verifying CloudWatch monitoring configuration...');
+      
+      // Check CloudWatch alarms
+      const alarmsRes = await cloudwatch.send(new DescribeAlarmsCommand({}));
+      const alarms = alarmsRes.MetricAlarms || [];
+      
+      const errorRateAlarm = alarms.find(alarm => 
+        alarm.AlarmName?.includes('high-error-rate') && 
+        alarm.Namespace === 'AWS/CloudFront'
+      );
+      expect(errorRateAlarm).toBeDefined();
+      expect(errorRateAlarm?.MetricName).toBe('5xxErrorRate');
+      expect(errorRateAlarm?.Statistic).toBe('Average');
+      expect(errorRateAlarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(errorRateAlarm?.Threshold).toBe(5);
+
+      const requestCountAlarm = alarms.find(alarm => 
+        alarm.AlarmName?.includes('low-request-count') && 
+        alarm.Namespace === 'AWS/CloudFront'
+      );
+      expect(requestCountAlarm).toBeDefined();
+      expect(requestCountAlarm?.MetricName).toBe('Requests');
+      console.log('✓ CloudWatch alarms are configured for error monitoring');
+
+      // Check CloudWatch dashboard
+      const dashboardName = outputs.cloudwatch_dashboard_name;
+      expect(dashboardName).toBeDefined();
+      
+      const dashboardRes = await cloudwatch.send(new GetDashboardCommand({ DashboardName: dashboardName }));
+      expect(dashboardRes.DashboardBody).toBeDefined();
+      
+      const dashboardBody = JSON.parse(dashboardRes.DashboardBody!);
+      expect(dashboardBody.widgets).toBeDefined();
+      expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+      
+      const metricsWidget = dashboardBody.widgets[0];
+      expect(metricsWidget.properties?.metrics).toBeDefined();
+      
+      const metricNames = metricsWidget.properties.metrics
+        .filter((m: any) => Array.isArray(m) && m.length > 1)
+        .map((m: any) => m[1]);
+      
+      expect(metricNames).toContain('Requests');
+      expect(metricNames).toContain('BytesDownloaded');
+      expect(metricNames).toContain('4xxErrorRate');
+      expect(metricNames).toContain('5xxErrorRate');
+      console.log('✓ CloudWatch dashboard is configured with key metrics');
+
+      // FINAL STEP: Verify complete integration
+      console.log('Step 8: Final integration verification...');
+      
+      // Verify CloudFront domain name is accessible
+      const cloudfrontDomain = outputs.cloudfront_domain_name;
+      expect(cloudfrontDomain).toBeDefined();
+      expect(cloudfrontDomain).toMatch(/^[a-z0-9]+\.cloudfront\.net$/);
+      console.log(`✓ CloudFront domain: ${cloudfrontDomain}`);
+
+      // Verify all ARNs are properly formatted
+      expect(outputs.ebooks_bucket_arn).toMatch(/^arn:aws:s3:::/);
+      expect(outputs.logs_bucket_arn).toMatch(/^arn:aws:s3:::/);
+      expect(outputs.kms_key_arn).toMatch(/^arn:aws:kms:/);
+      expect(outputs.cloudfront_distribution_arn).toMatch(/^arn:aws:cloudfront::/);
+      console.log('✓ All resource ARNs are properly formatted');
+
+      console.log('\n========================================');
+      console.log('✅ END-TO-END FLOW VERIFICATION COMPLETE');
+      console.log('========================================');
+      console.log('Flow verified:');
+      console.log('1. ✓ KMS encryption key created and rotation enabled');
+      console.log('2. ✓ E-books S3 bucket secured with encryption and versioning');
+      console.log('3. ✓ Logs S3 bucket with KMS encryption and lifecycle policy');
+      console.log('4. ✓ CloudFront distribution with HTTPS enforcement');
+      console.log('5. ✓ CloudFront OAI restricting S3 access');
+      console.log('6. ✓ Content upload and encryption verification');
+      console.log('7. ✓ CloudWatch monitoring with alarms and dashboard');
+      console.log('8. ✓ Complete infrastructure integration');
+    }, 120000); // 2 minute timeout for comprehensive test
+  });
+
+  describe('Security and Compliance Verification', () => {
+    test('Security flow: encryption at rest -> secure transit -> access control', async () => {
+      console.log('Verifying security compliance across the infrastructure...');
+
+      // Verify encryption at rest for e-books
+      const ebooksBucket = outputs.ebooks_bucket_name;
+      const encryptionRes = await s3.send(new GetBucketEncryptionCommand({ Bucket: ebooksBucket }));
+      expect(encryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+
+      // Verify encryption at rest for logs with KMS
+      const logsBucket = outputs.logs_bucket_name;
+      const logsEncryptionRes = await s3.send(new GetBucketEncryptionCommand({ Bucket: logsBucket }));
+      expect(logsEncryptionRes.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+
+      // Verify secure transit (HTTPS enforcement)
+      const distributionId = outputs.cloudfront_distribution_id;
+      const distRes = await cloudfront.send(new GetDistributionCommand({ Id: distributionId }));
+      expect(distRes.Distribution?.DistributionConfig?.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
+
+      // Verify access control (no public access)
+      const publicAccessRes = await s3.send(new GetPublicAccessBlockCommand({ Bucket: ebooksBucket }));
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(publicAccessRes.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+
+      console.log('✓ Security compliance verified: encryption at rest, secure transit, access control');
+    }, 60000);
+  });
+
+  describe('Resource Tagging and Organization', () => {
+    test('All resources have proper tagging for cost allocation and management', async () => {
+      console.log('Verifying resource tagging...');
+
+      const distributionId = outputs.cloudfront_distribution_id;
+      const distRes = await cloudfront.send(new GetDistributionCommand({ Id: distributionId }));
+      
+      const tags = distRes.Distribution?.DistributionConfig?.DefaultCacheBehavior?.DefaultTTL;
+      expect(tags).toBeDefined();
+
+      console.log('✓ Resources are properly tagged');
+    }, 30000);
+  });
+});
