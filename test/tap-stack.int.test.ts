@@ -1,5 +1,9 @@
 import { CloudFormationClient, DescribeStacksCommand, ListStacksCommand } from '@aws-sdk/client-cloudformation';
 import fs from 'fs';
+import { SignatureV4 } from '@smithy/signature-v4';
+import { defaultProvider } from '@aws-sdk/credential-provider-node';
+import { HttpRequest as SmithyHttpRequest } from '@smithy/protocol-http';
+import { Sha256 } from '@aws-crypto/sha256-js';
 
 let outputs: Record<string, string> | undefined;
 
@@ -77,7 +81,47 @@ const invokeFunctionUrl = async <T>(
     body: body ? JSON.stringify(body) : undefined,
   };
 
-  const response = await fetch(targetUrl, init);
+  let response = await fetch(targetUrl, init);
+
+  if (response.status === 403) {
+    try {
+      const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+      if (region) {
+        const credsProvider = defaultProvider();
+        const urlObj = new URL(targetUrl);
+        const awsReq = new SmithyHttpRequest({
+          protocol: urlObj.protocol,
+          hostname: urlObj.hostname,
+          path: `${urlObj.pathname}${urlObj.search}`,
+          method,
+          headers: {
+            ...(init.headers as Record<string, string> | undefined),
+            host: urlObj.host,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+
+        const signer = new SignatureV4({
+          credentials: credsProvider,
+          service: 'lambda',
+          region,
+          sha256: Sha256,
+        });
+
+        const signed = await signer.sign(awsReq);
+
+        const signedInit: RequestInit = {
+          method,
+          headers: signed.headers as Record<string, string>,
+          body: awsReq.body,
+        };
+
+        response = await fetch(targetUrl, signedInit);
+      }
+    } catch {
+      // fall back to original 403 response
+    }
+  }
 
   if (response.status === 204) {
     return { status: response.status, headers: response.headers };
