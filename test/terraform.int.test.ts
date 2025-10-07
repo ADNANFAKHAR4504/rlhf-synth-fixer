@@ -501,17 +501,14 @@ describe("Multi-Region Disaster Recovery Infrastructure Integration Tests", () =
         b.Name?.includes("alb-logs") && b.Name?.includes(primaryRegion)
       );
 
-      if (albLogsBucket) {
-        const publicAccess = await s3Regional.send(
-          new GetPublicAccessBlockCommand({ Bucket: albLogsBucket.Name! })
-        );
+      expect(albLogsBucket).toBeDefined();
 
-        expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-        expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      } else {
-        // Skip if bucket doesn't exist (infrastructure may be destroyed)
-        console.log("Skipping: ALB logs bucket not found");
-      }
+      const publicAccess = await s3Regional.send(
+        new GetPublicAccessBlockCommand({ Bucket: albLogsBucket!.Name! })
+      );
+
+      expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
     });
 
     test("should have Lambda failover function", async () => {
@@ -628,17 +625,13 @@ describe("Multi-Region Disaster Recovery Infrastructure Integration Tests", () =
       test("Global Accelerator endpoint should respond", async () => {
         const globalEndpoint = outputs.failover_endpoint!;
 
-        try {
-          const response = await axios.get(globalEndpoint, {
-            timeout: 10000,
-            maxRedirects: 5
-          });
-          expect(response.status).toBe(200);
-        } catch (error: any) {
-          console.error("Global Accelerator endpoint failed:", error.message);
-          throw error;
-        }
-      }, 15000);
+        const response = await axios.get(globalEndpoint, {
+          timeout: 20000,
+          maxRedirects: 5
+        });
+
+        expect(response.status).toBe(200);
+      }, 30000);
 
       test("primary ALB main page should return HTML", async () => {
         const albUrl = `http://${outputs.primary_alb_dns}`;
@@ -657,25 +650,16 @@ describe("Multi-Region Disaster Recovery Infrastructure Integration Tests", () =
       test("should handle multiple concurrent requests", async () => {
         const globalEndpoint = outputs.failover_endpoint!;
 
-        // Make fewer concurrent requests with longer timeout
         const requests = Array(5).fill(null).map(() =>
           axios.get(`${globalEndpoint}/health`, {
-            timeout: 15000,
-            validateStatus: (status) => status === 200 || status === 502 || status === 503
+            timeout: 20000
           })
         );
 
-        try {
-          const responses = await Promise.all(requests);
-          const successfulResponses = responses.filter((r) => r.status === 200);
-
-          // At least some requests should succeed
-          expect(successfulResponses.length).toBeGreaterThan(0);
-        } catch (error: any) {
-          console.error("Concurrent requests failed:", error.message);
-          // Skip if infrastructure is not available
-          expect(true).toBe(true);
-        }
+        const responses = await Promise.all(requests);
+        responses.forEach((response) => {
+          expect(response.status).toBe(200);
+        });
       }, 60000);
     });
 
