@@ -14,6 +14,7 @@ Environment Variables Used:
 import base64
 import json
 import os
+import subprocess
 import time
 import unittest
 from io import BytesIO
@@ -28,23 +29,50 @@ class TestImageProcessingPipelineIntegration(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        """Set up test environment and AWS clients."""
-        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
-        cls.aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        """Set up integration test with live stack outputs."""
+        # Get Pulumi stack outputs dynamically
+        try:
+            result = subprocess.run(
+                ['pulumi', 'stack', 'output', '--json'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            cls.outputs = json.loads(result.stdout)
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+            raise unittest.SkipTest(f"Could not retrieve Pulumi outputs: {e}")
+
+        if not cls.outputs:
+            raise unittest.SkipTest("No Pulumi outputs found. Stack may not be deployed.")
+
+        # Extract required outputs
+        required_outputs = [
+            'aws_region', 'source_bucket_name', 'destination_bucket_name', 'lambda_function_name',
+            'lambda_function_arn', 'log_group_name', 'kms_key_id'
+        ]
         
+        missing_outputs = [output for output in required_outputs if output not in cls.outputs]
+        if missing_outputs:
+            raise unittest.SkipTest(f"Missing required outputs: {missing_outputs}")
+
         # Initialize AWS clients
+        cls.aws_region = cls.outputs['aws_region']
         cls.s3_client = boto3.client('s3', region_name=cls.aws_region)
         cls.lambda_client = boto3.client('lambda', region_name=cls.aws_region)
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.aws_region)
         cls.cloudwatch_logs_client = boto3.client('logs', region_name=cls.aws_region)
         cls.kms_client = boto3.client('kms', region_name=cls.aws_region)
         
-        # Get deployment outputs (these would be set by CI/CD)
-        # Using dynamic naming with environment suffix
-        cls.source_bucket = os.getenv('SOURCE_BUCKET', f'img-proc-source-{cls.environment_suffix}-organization-tapstack')
-        cls.dest_bucket = os.getenv('DEST_BUCKET', f'img-proc-dest-{cls.environment_suffix}-organization-tapstack')
-        cls.lambda_function_name = os.getenv('LAMBDA_FUNCTION', f'img-proc-processor-{cls.environment_suffix}')
-        cls.log_group_name = os.getenv('LOG_GROUP', f'/aws/lambda/img-proc-processor-{cls.environment_suffix}')
+        # Get resource names from Pulumi outputs
+        cls.source_bucket = cls.outputs['source_bucket_name']
+        cls.dest_bucket = cls.outputs['destination_bucket_name']
+        cls.lambda_function_name = cls.outputs['lambda_function_name']
+        cls.lambda_function_arn = cls.outputs['lambda_function_arn']
+        cls.log_group_name = cls.outputs['log_group_name']
+        cls.kms_key_id = cls.outputs['kms_key_id']
+        
+        # Extract environment suffix from resource names for alarm patterns
+        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         
         # CloudWatch alarm names from deployment (with environment suffix)
         cls.alarm_names = [

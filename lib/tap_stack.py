@@ -114,6 +114,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Export key outputs for external consumption
+        pulumi.export("aws_region", "us-east-1")  # Add AWS region export
         pulumi.export("source_bucket_name", self.source_bucket.bucket)
         pulumi.export("destination_bucket_name", self.dest_bucket.bucket)
         pulumi.export("lambda_function_name", self.processor_function.name)
