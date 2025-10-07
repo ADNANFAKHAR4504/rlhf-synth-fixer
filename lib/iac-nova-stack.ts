@@ -139,6 +139,20 @@ export class IaCNovaStack extends NestedStack {
       default: 'emailservice',
     });
 
+    const defaultDbUsername = 'notificationadmin';
+    const rdsMasterUsernameParam = new cdk.CfnParameter(
+      this,
+      'RdsMasterUsername',
+      {
+        type: 'String',
+        description:
+          'Username stored in the generated Secrets Manager secret when no external credentials ARN is supplied.',
+        default: defaultDbUsername,
+        minLength: 4,
+        maxLength: 30,
+      }
+    );
+
     const rdsCredentialsSecretArnParam = new cdk.CfnParameter(
       this,
       'RdsCredentialsSecretArn',
@@ -179,8 +193,14 @@ export class IaCNovaStack extends NestedStack {
     this.environmentIdToken = environmentIdValue;
     this.stringSuffixToken = stringSuffixValue;
 
-    // vpcCidrValue is resolved later using context/env/default to guarantee a concrete CIDR at synth time.
-    // See the concrete resolution before creating the VPC further down in this constructor.
+    const dbMasterUsername = this.resolveStringParameter(
+      rdsMasterUsernameParam,
+      {
+        contextKey: 'rdsMasterUsername',
+        envKey: 'RDS_MASTER_USERNAME',
+        defaultValue: defaultDbUsername,
+      }
+    );
 
     const formatResourceName = (purpose: string, lowercase = false): string =>
       this.formatResourceName(purpose, lowercase);
@@ -227,19 +247,11 @@ export class IaCNovaStack extends NestedStack {
       defaultValue: defaultLambdaTimeout,
     });
 
-    // The VPC construct must receive a concrete CIDR at synth time so CDK can subdivide it.
-    // Do not pass a CloudFormation parameter token into ec2.IpAddresses.cidr.
-    // Prefer context / environment variable / default for the CIDR used to create the VPC.
-    const vpcCidrValue: string =
-      (this.node.tryGetContext('vpcCidr') as string | undefined) ??
-      process.env.VPC_CIDR ??
-      defaultVpcCidr;
-
-    if (!vpcCidrValue) {
-      throw new Error(
-        'VPC CIDR must be provided via cdk context key "vpcCidr", environment variable VPC_CIDR, or a default in the stack.'
-      );
-    }
+    const vpcCidrValue = this.resolveStringParameter(vpcCidrParam, {
+      contextKey: 'vpcCidr',
+      envKey: 'VPC_CIDR',
+      defaultValue: defaultVpcCidr,
+    });
 
     this.vpc = new ec2.Vpc(this, 'NotificationVpc', {
       ipAddresses: ec2.IpAddresses.cidr(vpcCidrValue),
@@ -389,11 +401,31 @@ export class IaCNovaStack extends NestedStack {
       })
     );
 
-    const rdsCredentialsSecret = secretsmanager.Secret.fromSecretCompleteArn(
-      this,
-      'RdsCredentialsSecret',
-      rdsCredentialsSecretArnParam.valueAsString
+    const rdsCredentialsSecretArn = this.resolveOptionalStringParameter(
+      rdsCredentialsSecretArnParam,
+      {
+        contextKey: 'rdsCredentialsSecretArn',
+        envKey: 'RDS_CREDENTIALS_SECRET_ARN',
+      }
     );
+
+    const rdsCredentialsSecret =
+      rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
+        ? secretsmanager.Secret.fromSecretCompleteArn(
+            this,
+            'ImportedRdsCredentialsSecret',
+            rdsCredentialsSecretArn
+          )
+        : this.createManagedDatabaseSecret(
+            formatResourceName('db-credentials', true),
+            dbMasterUsername
+          );
+    if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
+      applyCommonTags(
+        rdsCredentialsSecret,
+        formatResourceName('db-credentials', true)
+      );
+    }
 
     const lambdaSecurityGroup = this.sharedSecurityGroup;
 
@@ -418,7 +450,7 @@ export class IaCNovaStack extends NestedStack {
         environment: {
           EMAIL_EVENTS_BUCKET: this.emailEventsBucket.bucketName,
           EMAIL_EVENT_PREFIX: emailEventPrefixParam.valueAsString,
-          RDS_SECRET_ARN: rdsCredentialsSecretArnParam.valueAsString,
+          RDS_SECRET_ARN: rdsCredentialsSecret.secretArn,
           RDS_DATABASE_NAME: rdsDatabaseNameParam.valueAsString,
         },
       }
@@ -533,6 +565,27 @@ export class IaCNovaStack extends NestedStack {
       exportName: formatResourceName('rds-endpoint'),
       description: 'Endpoint for the RDS MySQL instance.',
     });
+
+    new cdk.CfnOutput(this, 'DatabaseCredentialsSecretArn', {
+      value: rdsCredentialsSecret.secretArn,
+      exportName: formatResourceName('db-credentials-secret-arn'),
+      description: 'Secrets Manager ARN containing the database credentials.',
+    });
+  }
+
+  private createManagedDatabaseSecret(
+    secretName: string,
+    username: string
+  ): secretsmanager.Secret {
+    return new secretsmanager.Secret(this, 'GeneratedRdsCredentialsSecret', {
+      secretName,
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username }),
+        generateStringKey: 'password',
+        excludeCharacters: '"@\\/`',
+        passwordLength: 24,
+      },
+    });
   }
 
   public formatResourceName(purpose: string, lowercase = false): string {
@@ -558,10 +611,15 @@ export class IaCNovaStack extends NestedStack {
 
   private resolveStringParameter(
     parameter: cdk.CfnParameter,
-    options: { contextKey: string; envKey: string; defaultValue: string }
+    options: {
+      contextKey: string;
+      envKey: string;
+      defaultValue?: string;
+      required?: boolean;
+    }
   ): string {
     const paramValue = parameter.valueAsString;
-    if (!cdk.Token.isUnresolved(paramValue)) {
+    if (!cdk.Token.isUnresolved(paramValue) && paramValue !== '') {
       return paramValue;
     }
 
@@ -571,13 +629,40 @@ export class IaCNovaStack extends NestedStack {
     const envValue = process.env[options.envKey];
     const candidate = contextValue ?? envValue ?? options.defaultValue;
 
-    if (!candidate) {
-      throw new Error(
-        `Unable to resolve string parameter for ${parameter.logicalId}. Provide a value via context key "${options.contextKey}", environment variable "${options.envKey}", or adjust the default.`
-      );
+    if (candidate === undefined || candidate === '') {
+      if (options.required) {
+        throw new Error(
+          `Unable to resolve string parameter for ${parameter.logicalId}. Provide a value via context key "${options.contextKey}" or environment variable "${options.envKey}".`
+        );
+      }
+      return '';
     }
 
     return candidate;
+  }
+
+  private resolveOptionalStringParameter(
+    parameter: cdk.CfnParameter,
+    options: { contextKey: string; envKey: string }
+  ): string | undefined {
+    const paramValue = parameter.valueAsString;
+    if (!cdk.Token.isUnresolved(paramValue) && paramValue !== '') {
+      return paramValue;
+    }
+
+    const contextValue = this.node.tryGetContext(options.contextKey) as
+      | string
+      | undefined;
+    if (contextValue && contextValue !== '') {
+      return contextValue;
+    }
+
+    const envValue = process.env[options.envKey];
+    if (envValue && envValue !== '') {
+      return envValue;
+    }
+
+    return undefined;
   }
 
   private resolveNumberParameter(
