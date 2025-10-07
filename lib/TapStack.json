@@ -36,7 +36,8 @@
             "BastionInstanceType",
             "AppInstanceType",
             "KeyPairName",
-            "AllowedBastionSshCidr"
+            "AllowedBastionSshCidr",
+            "LatestAmiId"
           ]
         },
         {
@@ -47,8 +48,7 @@
             "RdsEngineVersion",
             "RdsInstanceClass",
             "RdsAllocatedStorage",
-            "RdsUsername",
-            "RdsPassword"
+            "RdsSecretArn"
           ]
         },
         {
@@ -173,7 +173,7 @@
     },
     "RdsEngineVersion": {
       "Type": "String",
-      "Default": "15.4",
+      "Default": "15.0",
       "Description": "PostgreSQL engine version"
     },
     "RdsInstanceClass": {
@@ -188,21 +188,10 @@
       "MaxValue": 100,
       "Description": "RDS allocated storage in GB"
     },
-    "RdsUsername": {
+    "RdsSecretArn": {
       "Type": "String",
-      "NoEcho": true,
-      "MinLength": 1,
-      "MaxLength": 16,
-      "Description": "RDS master username",
-      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
-    },
-    "RdsPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Description": "RDS master password",
-      "AllowedPattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
+      "Default": "",
+      "Description": "Secrets Manager ARN with keys 'username' and 'password' for RDS master credentials (recommended)"
     },
     "AllowedBastionSshCidr": {
       "Type": "String",
@@ -215,6 +204,11 @@
       "Default": "",
       "Description": "Email address for alarm notifications (optional)",
       "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+      "Description": "Latest Amazon Linux 2023 AMI ID via SSM public parameter"
     }
   },
   "Mappings": {
@@ -232,6 +226,12 @@
         "Ec2Principal": "ec2.amazonaws.com"
       },
       "eu-west-1": {
+        "Partition": "aws",
+        "S3Principal": "s3.amazonaws.com",
+        "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
+        "Ec2Principal": "ec2.amazonaws.com"
+      },
+      "eu-central-1": {
         "Partition": "aws",
         "S3Principal": "s3.amazonaws.com",
         "CloudTrailPrincipal": "cloudtrail.amazonaws.com",
@@ -259,17 +259,6 @@
         "RdsBackupRetention": "30",
         "RdsDeletionProtection": "true",
         "EnableDetailedMonitoring": "true"
-      }
-    },
-    "AmiMap": {
-      "us-east-1": {
-        "AmiId": "ami-0c02fb55731490381"
-      },
-      "us-west-2": {
-        "AmiId": "ami-0352d5a37fb4f603f"
-      },
-      "eu-west-1": {
-        "AmiId": "ami-0f29c8402f8cce65c"
       }
     }
   },
@@ -314,22 +303,14 @@
         }
       ]
     },
-    "IsProdOrStg": {
-      "Fn::Or": [
+    "UseRdsSecret": {
+      "Fn::Not": [
         {
           "Fn::Equals": [
             {
-              "Ref": "Environment"
+              "Ref": "RdsSecretArn"
             },
-            "prod"
-          ]
-        },
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "Environment"
-            },
-            "stg"
+            ""
           ]
         }
       ]
@@ -1084,7 +1065,7 @@
               }
             },
             {
-              "Sid": "AllowCloudTrailAccess",
+              "Sid": "AllowCloudTrailWrite",
               "Effect": "Allow",
               "Principal": {
                 "Service": {
@@ -1099,6 +1080,7 @@
               },
               "Action": [
                 "s3:GetBucketAcl",
+                "s3:GetBucketLocation",
                 "s3:PutObject"
               ],
               "Resource": [
@@ -1107,6 +1089,9 @@
                     "DataBucket",
                     "Arn"
                   ]
+                },
+                {
+                  "Fn::Sub": "${DataBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
                 },
                 {
                   "Fn::Sub": "${DataBucket.Arn}/cloudtrail/*"
@@ -1411,13 +1396,7 @@
           "Ref": "BastionInstanceType"
         },
         "ImageId": {
-          "Fn::FindInMap": [
-            "AmiMap",
-            {
-              "Ref": "AWS::Region"
-            },
-            "AmiId"
-          ]
+          "Ref": "LatestAmiId"
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -1457,9 +1436,7 @@
           }
         ],
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
         },
         "Tags": [
           {
@@ -1484,13 +1461,7 @@
           "Ref": "AppInstanceType"
         },
         "ImageId": {
-          "Fn::FindInMap": [
-            "AmiMap",
-            {
-              "Ref": "AWS::Region"
-            },
-            "AmiId"
-          ]
+          "Ref": "LatestAmiId"
         },
         "SubnetId": {
           "Ref": "PrivateSubnet1"
@@ -1527,9 +1498,7 @@
           }
         ],
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent postgresql15\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-ssm-agent postgresql15\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
         },
         "Tags": [
           {
@@ -1608,10 +1577,24 @@
           ]
         },
         "MasterUsername": {
-          "Ref": "RdsUsername"
+          "Fn::If": [
+            "UseRdsSecret",
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:username}}"
+            },
+            "masteruser"
+          ]
         },
         "MasterUserPassword": {
-          "Ref": "RdsPassword"
+          "Fn::If": [
+            "UseRdsSecret",
+            {
+              "Fn::Sub": "{{resolve:secretsmanager:${RdsSecretArn}:SecretString:password}}"
+            },
+            {
+              "Fn::Sub": "{{resolve:ssm-secure:/tap/${ProjectPrefix}/${Environment}/db/master/password:1}}"
+            }
+          ]
         },
         "DBSubnetGroupName": {
           "Ref": "DbSubnetGroup"
@@ -1690,9 +1673,6 @@
     },
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": [
-        "DataBucketPolicy"
-      ],
       "Properties": {
         "TrailName": {
           "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
