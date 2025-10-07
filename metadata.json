@@ -10,5 +10,5 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3, Sns"
+  "aws_services": "S3, Sns, Lambda, CloudWatch, IAM"
 }
