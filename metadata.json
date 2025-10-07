@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "y"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Route53",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "VPC Flow Logs"
+  ]
 }
