@@ -368,11 +368,11 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Get current account information
-    const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
-      this,
-      'current',
-      {}
-    );
+    // const currentAccount = new dataAwsCallerIdentity.DataAwsCallerIdentity(
+    //   this,
+    //   'current',
+    //   {}
+    // );
 
     // Create log bucket first
     this.logBucket = new s3Bucket.S3Bucket(this, 'log-bucket', {
@@ -432,21 +432,7 @@ export class S3Module extends Construct {
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
-          {
-            Sid: 'AWSLogDeliveryWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-acl': 'bucket-owner-full-control',
-                'aws:SourceAccount': currentAccount.accountId,
-              },
-            },
-          },
+          // VPC Flow Logs permissions
           {
             Sid: 'AWSLogDeliveryAclCheck',
             Effect: 'Allow',
@@ -455,14 +441,24 @@ export class S3Module extends Construct {
             },
             Action: 's3:GetBucketAcl',
             Resource: this.logBucket.arn,
+          },
+          {
+            Sid: 'AWSLogDeliveryWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/vpc-flow-logs/*`,
             Condition: {
               StringEquals: {
-                'aws:SourceAccount': currentAccount.accountId,
+                's3:x-amz-acl': 'bucket-owner-full-control', // Fixed key name
               },
             },
           },
+          // CloudTrail permissions
           {
-            Sid: 'CloudTrailAclCheck',
+            Sid: 'AWSCloudTrailAclCheck',
             Effect: 'Allow',
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
@@ -471,19 +467,20 @@ export class S3Module extends Construct {
             Resource: this.logBucket.arn,
           },
           {
-            Sid: 'CloudTrailWrite',
+            Sid: 'AWSCloudTrailWrite',
             Effect: 'Allow',
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/*`,
+            Resource: `${this.logBucket.arn}/cloudtrail/*`,
             Condition: {
               StringEquals: {
-                's3:x-acl': 'bucket-owner-full-control',
+                's3:x-amz-acl': 'bucket-owner-full-control', // Fixed key name
               },
             },
           },
+          // Security best practice - deny non-SSL requests
           {
             Sid: 'DenyNonSSLRequests',
             Effect: 'Deny',
