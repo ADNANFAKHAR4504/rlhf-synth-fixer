@@ -143,6 +143,7 @@ describe("Multi-Region Disaster Recovery Infrastructure - Unit Tests", () => {
       expect(content).toMatch(/primary\s*=\s*"10\.[0-9]+\.0\.0\/16"/);
       expect(content).toMatch(/secondary\s*=\s*"10\.[0-9]+\.0\.0\/16"/);
     });
+  });
 
   describe("Networking Module Validation", () => {
     const networkingModulePath = path.join(MODULES_DIR, "networking");
