@@ -70,6 +70,7 @@ import {
   IAMClient,
   ListRolePoliciesCommand,
   ListAttachedRolePoliciesCommand,
+  GetInstanceProfileCommand,
 } from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1187,11 +1188,19 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
 
       if (iamInstanceProfile) {
         const profileArn = iamInstanceProfile.Arn!;
-        const roleName = profileArn.split('/').pop();
+        const profileName = profileArn.split('/').pop();
+
+        // Get the instance profile to find the role name
+        const profileDetails = await iamClient.send(
+          new GetInstanceProfileCommand({ InstanceProfileName: profileName })
+        );
+
+        const roleName = profileDetails.InstanceProfile?.Roles?.[0]?.RoleName;
+        expect(roleName).toBeDefined();
 
         // Verify role has S3 access policies
         const attachedPolicies = await iamClient.send(
-          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+          new ListAttachedRolePoliciesCommand({ RoleName: roleName! })
         );
 
         const hasS3Access = attachedPolicies.AttachedPolicies?.some(policy =>
@@ -1201,7 +1210,7 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
 
         // Check for inline policies as well
         const inlinePolicies = await iamClient.send(
-          new ListRolePoliciesCommand({ RoleName: roleName })
+          new ListRolePoliciesCommand({ RoleName: roleName! })
         );
 
         const hasInlineS3Policy = inlinePolicies.PolicyNames?.some(name =>
