@@ -7,6 +7,7 @@ import {
   ListObjectsV2Command, PutObjectCommand, S3Client
 } from '@aws-sdk/client-s3';
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -35,8 +36,39 @@ describe('Terraform S3 Static Website Integration Tests', () => {
     // Ensure we're in the correct directory
     process.chdir(TERRAFORM_DIR);
 
-    // Initialize Terraform
+    // Create a local backend configuration for testing
     console.log('📦 Initializing Terraform...');
+
+    // Create a test-specific provider configuration
+    const testProviderConfig = `
+terraform {
+  required_version = ">= 1.2.0"
+  
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"  
+      version = "~> 3.1"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+provider "random" {}
+`;
+
+    // Backup original provider.tf and create test version
+    const originalProvider = fs.readFileSync('provider.tf', 'utf8');
+    fs.writeFileSync('provider.tf.backup', originalProvider);
+    fs.writeFileSync('provider.tf', testProviderConfig);
+
+    // Initialize with local backend
     execSync('terraform init', { stdio: 'pipe' });
 
     // Apply Terraform configuration
@@ -66,10 +98,28 @@ describe('Terraform S3 Static Website Integration Tests', () => {
 
       // Destroy Terraform resources
       execSync('terraform destroy -auto-approve', { stdio: 'pipe' });
+
+      // Restore original provider.tf
+      if (fs.existsSync('provider.tf.backup')) {
+        const originalProvider = fs.readFileSync('provider.tf.backup', 'utf8');
+        fs.writeFileSync('provider.tf', originalProvider);
+        fs.unlinkSync('provider.tf.backup');
+      }
+
       console.log('✅ Resources cleaned up successfully!');
     } catch (error) {
       console.error('❌ Error during cleanup:', error);
-      // Don't fail the test suite if cleanup fails
+
+      // Always try to restore provider.tf even if other cleanup fails
+      try {
+        if (fs.existsSync('provider.tf.backup')) {
+          const originalProvider = fs.readFileSync('provider.tf.backup', 'utf8');
+          fs.writeFileSync('provider.tf', originalProvider);
+          fs.unlinkSync('provider.tf.backup');
+        }
+      } catch (restoreError) {
+        console.error('❌ Error restoring provider.tf:', restoreError);
+      }
     }
   }, TEST_TIMEOUT);
 
