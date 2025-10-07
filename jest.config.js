@@ -2,10 +2,10 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs'],
-  preset: 'ts-jest/presets/default-esm',
+  preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
+    '^.+\\.tsx?$': 'ts-jest',
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
