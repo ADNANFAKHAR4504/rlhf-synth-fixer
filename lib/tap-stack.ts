@@ -2,18 +2,11 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { IaCNovaStack } from './iac-nova-stack';
 
-interface TapStackProps extends cdk.StageProps {
+interface TapStackProps extends cdk.StackProps {
   /**
    * Optional suffix used when generating child stack identifiers.
    */
   environmentSuffix?: string;
-
-  /**
-   * Optional inherited stackName value forwarded by existing tooling.
-   * It is ignored because child stacks manage their own names, but we accept it
-   * to remain compatible with the default TAP bootstrap script.
-   */
-  stackName?: string;
 
   /**
    * Explicit identifier for the IaC stack created within this stage.
@@ -26,7 +19,9 @@ interface TapStackProps extends cdk.StageProps {
   stackDescription?: string;
 }
 
-export class TapStack extends cdk.Stage {
+export class TapStack extends cdk.Stack {
+  public readonly emailInfrastructure: IaCNovaStack;
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
@@ -35,16 +30,25 @@ export class TapStack extends cdk.Stage {
       this.node.tryGetContext('environmentSuffix') ??
       'dev';
 
+    const contextStackId = this.node.tryGetContext('stackId') as
+      | string
+      | undefined;
     const stackId =
-      props?.stackId ?? `IaCNovaEmailNotification-${environmentSuffix}`;
+      props?.stackId ??
+      contextStackId ??
+      `IaCNovaEmailNotification-${environmentSuffix}`;
 
+    const contextDescription = this.node.tryGetContext('stackDescription') as
+      | string
+      | undefined;
     const stackDescription =
       props?.stackDescription ??
-      'Email notification infrastructure (IAC-349955) composed via TAP stage.';
+      contextDescription ??
+      'Email notification infrastructure (IAC-349955) synthesized by TapStack.';
 
-    new IaCNovaStack(this, stackId, {
-      env: props?.env,
+    this.emailInfrastructure = new IaCNovaStack(this, stackId, {
       description: stackDescription,
+      initialEnvironmentId: environmentSuffix,
     });
   }
 }

@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import { NestedStack, NestedStackProps } from 'aws-cdk-lib';
+import { Construct, IConstruct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -9,19 +10,37 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 
+export interface IaCNovaStackProps extends NestedStackProps {
+  /**
+   * Default value used for the EnvironmentId parameter when not provided explicitly.
+   */
+  readonly initialEnvironmentId?: string;
+}
+
 /**
  * CDK stack that provisions the email notification infrastructure described in IAC-349955.
  * Configuration is driven by CloudFormation parameters and environment variables to avoid hard-coded values.
  */
-export class IaCNovaStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+export class IaCNovaStack extends NestedStack {
+  public readonly vpc: ec2.Vpc;
+  public readonly sharedSecurityGroup: ec2.SecurityGroup;
+  public readonly rdsSecurityGroup: ec2.SecurityGroup;
+  public readonly emailEventsBucket: s3.Bucket;
+  public readonly emailProcessorFunction: lambda.Function;
+  public readonly databaseInstance: rds.DatabaseInstance;
+  private readonly environmentIdToken: string;
+  private readonly stringSuffixToken: string;
+
+  constructor(scope: Construct, id: string, props?: IaCNovaStackProps) {
     super(scope, id, props);
+
+    const environmentIdDefault = props?.initialEnvironmentId ?? 'development';
 
     const environmentIdParam = new cdk.CfnParameter(this, 'EnvironmentId', {
       type: 'String',
       description:
         'Lowercase identifier for the deployment environment (used in resource names).',
-      default: 'development',
+      default: environmentIdDefault,
     });
 
     const stringSuffixParam = new cdk.CfnParameter(this, 'StringSuffix', {
@@ -136,15 +155,13 @@ export class IaCNovaStack extends cdk.Stack {
       }
     );
 
-    const environmentId = environmentIdParam.valueAsString;
-    const stringSuffix = stringSuffixParam.valueAsString;
+    this.environmentIdToken = environmentIdParam.valueAsString;
+    this.stringSuffixToken = stringSuffixParam.valueAsString;
 
-    const formatResourceName = (purpose: string, lowercase = false): string => {
-      const composed = `app-${purpose}-${environmentId}-${stringSuffix}`;
-      return lowercase ? composed.toLowerCase() : composed;
-    };
+    const formatResourceName = (purpose: string, lowercase = false): string =>
+      this.formatResourceName(purpose, lowercase);
 
-    const applyCommonTags = (resource: cdk.IConstruct, name?: string): void => {
+    const applyCommonTags = (resource: IConstruct, name?: string): void => {
       if (name) {
         cdk.Tags.of(resource).add('Name', name);
       }
@@ -155,7 +172,7 @@ export class IaCNovaStack extends cdk.Stack {
     const lambdaRuntime = this.resolveRuntime(lambdaRuntimeParam.valueAsString);
     const lambdaCodePath = this.resolveLambdaCodePath();
 
-    const vpc = new ec2.Vpc(this, 'NotificationVpc', {
+    this.vpc = new ec2.Vpc(this, 'NotificationVpc', {
       cidr: vpcCidrParam.valueAsString,
       maxAzs: maxAzsParam.valueAsNumber,
       natGatewayProvider: ec2.NatProvider.gateway(),
@@ -179,30 +196,30 @@ export class IaCNovaStack extends cdk.Stack {
       ],
     });
 
-    applyCommonTags(vpc, formatResourceName('vpc'));
+    applyCommonTags(this.vpc, formatResourceName('vpc'));
 
-    vpc.publicSubnets.forEach((subnet, index) => {
+    this.vpc.publicSubnets.forEach((subnet, index) => {
       applyCommonTags(
         subnet,
         formatResourceName(`public-subnet-${String.fromCharCode(97 + index)}`)
       );
     });
 
-    vpc.privateSubnets.forEach((subnet, index) => {
+    this.vpc.privateSubnets.forEach((subnet, index) => {
       applyCommonTags(
         subnet,
         formatResourceName(`private-subnet-${String.fromCharCode(97 + index)}`)
       );
     });
 
-    vpc.isolatedSubnets.forEach((subnet, index) => {
+    this.vpc.isolatedSubnets.forEach((subnet, index) => {
       applyCommonTags(
         subnet,
         formatResourceName(`database-subnet-${String.fromCharCode(97 + index)}`)
       );
     });
 
-    vpc.node
+    this.vpc.node
       .findAll()
       .filter(
         (child): child is ec2.CfnNatGateway =>
@@ -215,52 +232,55 @@ export class IaCNovaStack extends cdk.Stack {
         );
       });
 
-    const sharedSecurityGroup = new ec2.SecurityGroup(
+    this.sharedSecurityGroup = new ec2.SecurityGroup(
       this,
       'SharedSecurityGroup',
       {
-        vpc,
+        vpc: this.vpc,
         securityGroupName: formatResourceName('sg'),
         description:
           'Restricts ingress to HTTP and SSH as required by the architecture specification.',
         allowAllOutbound: true,
       }
     );
-    sharedSecurityGroup.addIngressRule(
+    this.sharedSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'HTTP access'
     );
-    sharedSecurityGroup.addIngressRule(
+    this.sharedSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(22),
       'SSH access'
     );
-    applyCommonTags(sharedSecurityGroup, formatResourceName('sg'));
+    applyCommonTags(this.sharedSecurityGroup, formatResourceName('sg'));
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
-      vpc,
+    this.rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc: this.vpc,
       securityGroupName: formatResourceName('rds-sg'),
       description:
         'Controls database connectivity for the email notification service.',
       allowAllOutbound: false,
     });
-    applyCommonTags(rdsSecurityGroup, formatResourceName('rds-sg'));
+    applyCommonTags(this.rdsSecurityGroup, formatResourceName('rds-sg'));
 
-    rdsSecurityGroup.addIngressRule(
-      sharedSecurityGroup,
+    this.rdsSecurityGroup.addIngressRule(
+      this.sharedSecurityGroup,
       ec2.Port.tcp(3306),
       'Allow database traffic from application security group'
     );
 
-    const bucket = new s3.Bucket(this, 'EmailEventsBucket', {
+    this.emailEventsBucket = new s3.Bucket(this, 'EmailEventsBucket', {
       bucketName: formatResourceName('email-events', true),
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
     });
-    applyCommonTags(bucket, formatResourceName('email-events', true));
+    applyCommonTags(
+      this.emailEventsBucket,
+      formatResourceName('email-events', true)
+    );
 
     const lambdaRole = new iam.Role(this, 'EmailProcessorRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -306,9 +326,9 @@ export class IaCNovaStack extends cdk.Stack {
       rdsCredentialsSecretArnParam.valueAsString
     );
 
-    const lambdaSecurityGroup = sharedSecurityGroup;
+    const lambdaSecurityGroup = this.sharedSecurityGroup;
 
-    const emailProcessorFunction = new lambda.Function(
+    this.emailProcessorFunction = new lambda.Function(
       this,
       'EmailProcessorFunction',
       {
@@ -321,27 +341,27 @@ export class IaCNovaStack extends cdk.Stack {
         functionName: formatResourceName('email-processor'),
         description:
           'Processes stored email delivery events from S3, normalizes metadata, and writes tracking data into the RDS backend.',
-        vpc,
+        vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         securityGroups: [lambdaSecurityGroup],
         environment: {
-          EMAIL_EVENTS_BUCKET: bucket.bucketName,
+          EMAIL_EVENTS_BUCKET: this.emailEventsBucket.bucketName,
           EMAIL_EVENT_PREFIX: emailEventPrefixParam.valueAsString,
           RDS_SECRET_ARN: rdsCredentialsSecretArnParam.valueAsString,
           RDS_DATABASE_NAME: rdsDatabaseNameParam.valueAsString,
         },
       }
     );
-    applyCommonTags(emailProcessorFunction, formatResourceName('lambda'));
+    applyCommonTags(this.emailProcessorFunction, formatResourceName('lambda'));
 
-    bucket.grantRead(emailProcessorFunction);
-    rdsCredentialsSecret.grantRead(emailProcessorFunction);
+    this.emailEventsBucket.grantRead(this.emailProcessorFunction);
+    rdsCredentialsSecret.grantRead(this.emailProcessorFunction);
 
-    bucket.addEventNotification(
+    this.emailEventsBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(emailProcessorFunction),
+      new s3n.LambdaDestination(this.emailProcessorFunction),
       { prefix: emailEventPrefixParam.valueAsString }
     );
 
@@ -351,7 +371,7 @@ export class IaCNovaStack extends cdk.Stack {
       {
         description:
           'Subnet group for the email notification relational store.',
-        vpc,
+        vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
@@ -360,7 +380,7 @@ export class IaCNovaStack extends cdk.Stack {
     );
     applyCommonTags(dbSubnetGroup, formatResourceName('db-subnet-group'));
 
-    const databaseInstance = new rds.DatabaseInstance(
+    this.databaseInstance = new rds.DatabaseInstance(
       this,
       'EmailNotificationDatabase',
       {
@@ -368,7 +388,7 @@ export class IaCNovaStack extends cdk.Stack {
           version: rds.MysqlEngineVersion.VER_8_0,
         }),
         instanceType: new ec2.InstanceType(rdsInstanceTypeParam.valueAsString),
-        vpc,
+        vpc: this.vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
@@ -376,7 +396,7 @@ export class IaCNovaStack extends cdk.Stack {
         allocatedStorage: rdsAllocatedStorageParam.valueAsNumber,
         databaseName: rdsDatabaseNameParam.valueAsString,
         credentials: rds.Credentials.fromSecret(rdsCredentialsSecret),
-        securityGroups: [rdsSecurityGroup],
+        securityGroups: [this.rdsSecurityGroup],
         backupRetention: cdk.Duration.days(
           rdsBackupRetentionParam.valueAsNumber
         ),
@@ -390,27 +410,27 @@ export class IaCNovaStack extends cdk.Stack {
         preferredMaintenanceWindow: 'Sun:01:00-Sun:03:00',
       }
     );
-    applyCommonTags(databaseInstance, formatResourceName('rds-instance'));
+    applyCommonTags(this.databaseInstance, formatResourceName('rds-instance'));
 
-    emailProcessorFunction.connections.allowTo(
-      databaseInstance,
+    this.emailProcessorFunction.connections.allowTo(
+      this.databaseInstance,
       ec2.Port.tcp(3306),
       'Lambda to RDS connectivity'
     );
 
     new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
+      value: this.vpc.vpcId,
       exportName: formatResourceName('vpc-id'),
       description: 'Identifier for the provisioned VPC.',
     });
 
     new cdk.CfnOutput(this, 'SecurityGroupId', {
-      value: sharedSecurityGroup.securityGroupId,
+      value: this.sharedSecurityGroup.securityGroupId,
       exportName: formatResourceName('sg-id'),
       description: 'Security group that restricts ingress to HTTP and SSH.',
     });
 
-    vpc.publicSubnets.forEach((subnet, index) => {
+    this.vpc.publicSubnets.forEach((subnet, index) => {
       new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
         value: subnet.subnetId,
         exportName: formatResourceName(`public-subnet-${index + 1}-id`),
@@ -418,7 +438,7 @@ export class IaCNovaStack extends cdk.Stack {
       });
     });
 
-    vpc.privateSubnets.forEach((subnet, index) => {
+    this.vpc.privateSubnets.forEach((subnet, index) => {
       new cdk.CfnOutput(this, `PrivateSubnet${index + 1}Id`, {
         value: subnet.subnetId,
         exportName: formatResourceName(`private-subnet-${index + 1}-id`),
@@ -427,23 +447,28 @@ export class IaCNovaStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'EmailEventsBucketName', {
-      value: bucket.bucketName,
+      value: this.emailEventsBucket.bucketName,
       exportName: formatResourceName('email-events-bucket-name'),
       description: 'S3 bucket that stores email delivery event payloads.',
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
-      value: emailProcessorFunction.functionName,
+      value: this.emailProcessorFunction.functionName,
       exportName: formatResourceName('lambda-name'),
       description:
         'Name of the Lambda function that processes email delivery events.',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: databaseInstance.instanceEndpoint.hostname,
+      value: this.databaseInstance.instanceEndpoint.hostname,
       exportName: formatResourceName('rds-endpoint'),
       description: 'Endpoint for the RDS MySQL instance.',
     });
+  }
+
+  public formatResourceName(purpose: string, lowercase = false): string {
+    const composed = `app-${purpose}-${this.environmentIdToken}-${this.stringSuffixToken}`;
+    return lowercase ? composed.toLowerCase() : composed;
   }
 
   private resolveRuntime(value: string): lambda.Runtime {

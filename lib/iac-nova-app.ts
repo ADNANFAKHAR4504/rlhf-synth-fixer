@@ -5,12 +5,12 @@ import { TapStack } from './tap-stack';
 
 const app = new cdk.App();
 
-const stageId =
+const tapStackId =
   process.env.CDK_STAGE_ID ??
   (app.node.tryGetContext('stageId') as string | undefined) ??
-  'IaCNovaStage';
+  'IaCNovaTapStack';
 
-new TapStack(app, stageId, {
+new TapStack(app, tapStackId, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
@@ -20,7 +20,7 @@ new TapStack(app, stageId, {
     (app.node.tryGetContext('stackId') as string | undefined),
   stackDescription:
     process.env.CDK_STACK_DESCRIPTION ??
-    'Email notification infrastructure synthesized via TapStack stage.',
+    'Email notification infrastructure synthesized via TapStack.',
   environmentSuffix:
     process.env.ENVIRONMENT_SUFFIX ??
     (app.node.tryGetContext('environmentSuffix') as string | undefined),
