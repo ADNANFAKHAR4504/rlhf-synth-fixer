@@ -249,7 +249,7 @@ export class VpcModule extends Construct {
 
     // Enable VPC Flow Logs
     const vpcFlowLog = new flowLog.FlowLog(this, 'flow-log', {
-      logDestination: `${config.flowLogBucketArn}/vpc-flow-logs/`,
+      logDestination: config.flowLogBucketArn,
       logDestinationType: 's3',
       trafficType: 'ALL',
       vpcId: mainVpc.id,
@@ -449,10 +449,10 @@ export class S3Module extends Construct {
               Service: 'delivery.logs.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/vpc-flow-logs/*`,
+            Resource: `${this.logBucket.arn}/*`, // Broader permission for any path
             Condition: {
               StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control', // Fixed key name
+                's3:x-amz-acl': 'bucket-owner-full-control',
               },
             },
           },
@@ -473,10 +473,25 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/cloudtrail/*`,
+            Resource: `${this.logBucket.arn}/*`, // Broader permission for any path
             Condition: {
               StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control', // Fixed key name
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          // Organization-specific CloudTrail permissions (if this is an organization trail)
+          {
+            Sid: 'AWSCloudTrailOrganizationWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/AWSLogs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
               },
             },
           },
@@ -778,6 +793,7 @@ export class CloudTrailModule extends Construct {
       enableLogging: true,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
+      isOrganizationTrail: true,
       enableLogFileValidation: true,
       kmsKeyId: config.kmsKeyId,
       tags: {
