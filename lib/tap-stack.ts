@@ -168,7 +168,8 @@ export class TapStack extends cdk.Stack {
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     const userTable = new dynamodb.Table(this, 'UsersTable', {
@@ -178,7 +179,7 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const productTable = new dynamodb.Table(this, 'ProductsTable', {
@@ -188,7 +189,7 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const orderTable = new dynamodb.Table(this, 'OrdersTable', {
@@ -198,7 +199,7 @@ export class TapStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey,
       pointInTimeRecovery: true,
-      removalPolicy: RemovalPolicy.RETAIN,
+      removalPolicy: RemovalPolicy.DESTROY,
     });
 
     const apiAccessLogGroup = new logs.LogGroup(this, 'ApiAccessLogs', {
