@@ -3,12 +3,17 @@ import fs from "fs";
 import path from "path";
 
 const stackPath = path.resolve(__dirname, "../lib/tap_stack.tf");
+const providerPath = path.resolve(__dirname, "../lib/provider.tf");
 
 describe("Terraform Multi-Region Infrastructure - Unit Tests", () => {
   let tfContent: string;
+  let providerContent: string;
+  let allContent: string;
 
   beforeAll(() => {
     tfContent = fs.readFileSync(stackPath, "utf8");
+    providerContent = fs.readFileSync(providerPath, "utf8");
+    allContent = providerContent + "\n" + tfContent; // Combined content for provider tests
   });
 
   describe("File Structure", () => {
@@ -23,18 +28,18 @@ describe("Terraform Multi-Region Infrastructure - Unit Tests", () => {
 
   describe("Provider Configuration", () => {
     test("declares terraform block with required providers", () => {
-      expect(tfContent).toMatch(/terraform\s*{/);
-      expect(tfContent).toMatch(/required_providers\s*{/);
+      expect(allContent).toMatch(/terraform\s*{/);
+      expect(allContent).toMatch(/required_providers\s*{/);
     });
 
     test("configures AWS provider", () => {
-      expect(tfContent).toMatch(/aws\s*=\s*{/);
-      expect(tfContent).toMatch(/source\s*=\s*"hashicorp\/aws"/);
+      expect(allContent).toMatch(/aws\s*=\s*{/);
+      expect(allContent).toMatch(/source\s*=\s*"hashicorp\/aws"/);
     });
 
     test("configures archive provider for Lambda", () => {
-      expect(tfContent).toMatch(/archive\s*=\s*{/);
-      expect(tfContent).toMatch(/source\s*=\s*"hashicorp\/archive"/);
+      expect(allContent).toMatch(/archive\s*=\s*{/);
+      expect(allContent).toMatch(/source\s*=\s*"hashicorp\/archive"/);
     });
 
     test("declares multiple AWS provider aliases for regions", () => {

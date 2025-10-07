@@ -1,19 +1,5 @@
-# main.tf - Multi-region highly available AWS infrastructure
+# tap_stack.tf - Multi-region highly available AWS infrastructure
 # This configuration deploys resources across us-east-1 and us-west-2 for high availability
-
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.0"
-    }
-  }
-}
 
 # Provider configuration for us-east-1 (primary region)
 provider "aws" {
@@ -25,11 +11,6 @@ provider "aws" {
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
-}
-
-# Default provider (us-east-1)
-provider "aws" {
-  region = "us-east-1"
 }
 
 # Local variables for common configurations
