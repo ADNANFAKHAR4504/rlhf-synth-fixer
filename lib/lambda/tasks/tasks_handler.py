@@ -124,10 +124,12 @@ def create_task(body, user_id, user_email):
             'createdBy': user_id,
             'createdAt': timestamp,
             'updatedAt': timestamp,
-            'dueDate': body.get('dueDate', ''),
             'tags': body.get('tags', []),
             'attachments': body.get('attachments', [])
         }
+        # Only include dueDate if provided and non-empty to satisfy GSI key constraints
+        if 'dueDate' in body and str(body['dueDate']).strip() != '':
+            task_item['dueDate'] = body['dueDate']
 
         # Save to DynamoDB
         tasks_table.put_item(Item=task_item)
