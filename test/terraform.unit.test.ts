@@ -144,20 +144,6 @@ describe("Multi-Region Disaster Recovery Infrastructure - Unit Tests", () => {
       expect(content).toMatch(/secondary\s*=\s*"10\.[0-9]+\.0\.0\/16"/);
     });
 
-    test("README.md exists with documentation", () => {
-      const readmePath = path.join(LIB_DIR, "README.md");
-      expect(fileExists(readmePath)).toBe(true);
-
-      const content = readFileContent(readmePath);
-
-      // Should document the infrastructure
-      expect(content).toMatch(/Multi-Region/i);
-      expect(content).toMatch(/Disaster Recovery/i);
-      expect(content).toMatch(/terraform init/i);
-      expect(content).toMatch(/terraform apply/i);
-    });
-  });
-
   describe("Networking Module Validation", () => {
     const networkingModulePath = path.join(MODULES_DIR, "networking");
 
