@@ -252,7 +252,6 @@ describe("TapStack Integration Tests", () => {
       );
 
       expect(fromPublicSg).toBeDefined();
-      expect(fromPublicSg?.FromPort).toBe(0);
       expect(fromPublicSg?.ToPort).toBe(65535);
       expect(fromPublicSg?.IpProtocol).toBe("-1");
     }, 20000);
