@@ -10,5 +10,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3, Lambda, KMS, IAM, CloudWatch, SQS"
+  "aws_services": "S3, Lambda, KMS, IAM, CloudWatch, SQS",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
