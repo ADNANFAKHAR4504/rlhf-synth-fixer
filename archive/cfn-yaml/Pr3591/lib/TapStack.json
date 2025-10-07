@@ -1,0 +1,616 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Inventory Update Scheduling System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "Default": "prod",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Default": "test@test.com",
+      "Description": "Email address for SNS alert notifications",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "ScheduleExpression": {
+      "Type": "String",
+      "Description": "EventBridge schedule expression (e.g., rate(1 hour) or cron expression)",
+      "Default": "rate(1 hour)"
+    },
+    "JobBatchSize": {
+      "Type": "Number",
+      "Description": "Number of inventory items to process per Lambda invocation",
+      "Default": 50,
+      "MinValue": 1,
+      "MaxValue": 100
+    }
+  },
+  "Resources": {
+    "InventoryTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "inventory-data-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "itemId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "lastUpdated",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "itemId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "LastUpdatedIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "lastUpdated",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "JobExecutionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "job-execution-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "executionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "executionId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "TimestampIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "AlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "inventory-scheduler-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Inventory Scheduler Alerts",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "InventoryUpdatePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:BatchWriteItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": "InventoryTable.Arn"
+                    },
+                    {
+                      "Fn::Sub": "${InventoryTable.Arn}/index/*"
+                    },
+                    {
+                      "Fn::GetAtt": "JobExecutionTable.Arn"
+                    },
+                    {
+                      "Fn::Sub": "${JobExecutionTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "AlertTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "InventoryUpdateFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "inventory-update-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": "LambdaExecutionRole.Arn"
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "INVENTORY_TABLE": {
+              "Ref": "InventoryTable"
+            },
+            "JOB_EXECUTION_TABLE": {
+              "Ref": "JobExecutionTable"
+            },
+            "ALERT_TOPIC_ARN": {
+              "Ref": "AlertTopic"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "BATCH_SIZE": {
+              "Ref": "JobBatchSize"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nimport uuid\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\nsns = boto3.client('sns')\ncloudwatch = boto3.client('cloudwatch')\n\nINVENTORY_TABLE = os.environ['INVENTORY_TABLE']\nJOB_EXECUTION_TABLE = os.environ['JOB_EXECUTION_TABLE']\nALERT_TOPIC_ARN = os.environ['ALERT_TOPIC_ARN']\nENVIRONMENT = os.environ['ENVIRONMENT']\nBATCH_SIZE = int(os.environ.get('BATCH_SIZE', 50))\n\ndef lambda_handler(event, context):\n    execution_id = str(uuid.uuid4())\n    start_time = time.time()\n    \n    print(f\"Starting inventory update job: {execution_id}\")\n    \n    try:\n        # Track job execution\n        job_table = dynamodb.Table(JOB_EXECUTION_TABLE)\n        inventory_table = dynamodb.Table(INVENTORY_TABLE)\n        \n        # Record job start\n        timestamp = int(datetime.now().timestamp())\n        job_table.put_item(\n            Item={\n                'executionId': execution_id,\n                'timestamp': timestamp,\n                'status': 'RUNNING',\n                'startTime': timestamp,\n                'ttl': timestamp + (30 * 24 * 60 * 60)  # 30 days TTL\n            }\n        )\n        \n        # Simulate inventory update logic\n        items_processed = 0\n        items_failed = 0\n        \n        # Scan inventory items that need updating\n        # In production, you'd use a more sophisticated selection logic\n        response = inventory_table.scan(Limit=BATCH_SIZE)\n        items = response.get('Items', [])\n        \n        # If no items exist, create sample data\n        if not items:\n            print(\"No items found. Creating sample inventory data...\")\n            items = create_sample_inventory(inventory_table)\n        \n        # Process each item\n        for item in items:\n            try:\n                # Update inventory item\n                item_id = item['itemId']\n                current_stock = int(item.get('stock', 0))\n                \n                # Simulate stock update logic\n                new_stock = current_stock + 10  # Example: restock\n                \n                inventory_table.update_item(\n                    Key={'itemId': item_id},\n                    UpdateExpression='SET stock = :stock, lastUpdated = :updated, lastExecutionId = :execId',\n                    ExpressionAttributeValues={\n                        ':stock': new_stock,\n                        ':updated': timestamp,\n                        ':execId': execution_id\n                    }\n                )\n                items_processed += 1\n                \n            except Exception as e:\n                print(f\"Error processing item {item.get('itemId', 'unknown')}: {str(e)}\")\n                items_failed += 1\n        \n        # Calculate execution time\n        execution_time = time.time() - start_time\n        \n        # Update job execution record\n        job_table.update_item(\n            Key={'executionId': execution_id},\n            UpdateExpression='SET #status = :status, endTime = :endTime, itemsProcessed = :processed, itemsFailed = :failed, executionTime = :execTime',\n            ExpressionAttributeNames={'#status': 'status'},\n            ExpressionAttributeValues={\n                ':status': 'COMPLETED',\n                ':endTime': int(datetime.now().timestamp()),\n                ':processed': items_processed,\n                ':failed': items_failed,\n                ':execTime': Decimal(str(round(execution_time, 2)))\n            }\n        )\n        \n        # Publish CloudWatch metrics\n        publish_metrics(items_processed, items_failed, execution_time)\n        \n        # Send alert if failure rate is high\n        if items_failed > 0 and items_processed > 0:\n            failure_rate = (items_failed / (items_processed + items_failed)) * 100\n            if failure_rate > 10:  # Alert if >10% failure rate\n                send_alert(\n                    f\"High Failure Rate Detected\",\n                    f\"Execution {execution_id} had {failure_rate:.1f}% failure rate. \"\n                    f\"Processed: {items_processed}, Failed: {items_failed}\"\n                )\n        \n        print(f\"Job completed successfully. Processed: {items_processed}, Failed: {items_failed}\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'executionId': execution_id,\n                'itemsProcessed': items_processed,\n                'itemsFailed': items_failed,\n                'executionTime': round(execution_time, 2)\n            })\n        }\n        \n    except Exception as e:\n        error_message = f\"Job execution failed: {str(e)}\"\n        print(error_message)\n        \n        # Update job status to FAILED\n        try:\n            job_table.update_item(\n                Key={'executionId': execution_id},\n                UpdateExpression='SET #status = :status, errorMessage = :error, endTime = :endTime',\n                ExpressionAttributeNames={'#status': 'status'},\n                ExpressionAttributeValues={\n                    ':status': 'FAILED',\n                    ':error': str(e),\n                    ':endTime': int(datetime.now().timestamp())\n                }\n            )\n        except Exception as update_error:\n            print(f\"Failed to update job status: {str(update_error)}\")\n        \n        # Send alert\n        send_alert(f\"Job Execution Failed\", error_message)\n        \n        raise\n\ndef create_sample_inventory(table):\n    \"\"\"Create sample inventory data for testing\"\"\"\n    sample_items = []\n    timestamp = int(datetime.now().timestamp())\n    \n    for i in range(min(BATCH_SIZE, 20)):\n        item = {\n            'itemId': f'ITEM-{str(uuid.uuid4())[:8]}',\n            'name': f'Product {i+1}',\n            'stock': 100 + (i * 10),\n            'price': Decimal(str(19.99 + i)),\n            'lastUpdated': timestamp - 3600,  # 1 hour ago\n            'category': ['Electronics', 'Clothing', 'Food', 'Books'][i % 4]\n        }\n        table.put_item(Item=item)\n        sample_items.append(item)\n    \n    print(f\"Created {len(sample_items)} sample inventory items\")\n    return sample_items\n\ndef publish_metrics(processed, failed, execution_time):\n    \"\"\"Publish custom metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace=f'InventoryScheduler/{ENVIRONMENT}',\n            MetricData=[\n                {\n                    'MetricName': 'ItemsProcessed',\n                    'Value': processed,\n                    'Unit': 'Count',\n                    'Timestamp': datetime.now()\n                },\n                {\n                    'MetricName': 'ItemsFailed',\n                    'Value': failed,\n                    'Unit': 'Count',\n                    'Timestamp': datetime.now()\n                },\n                {\n                    'MetricName': 'ExecutionTime',\n                    'Value': execution_time,\n                    'Unit': 'Seconds',\n                    'Timestamp': datetime.now()\n                },\n                {\n                    'MetricName': 'SuccessRate',\n                    'Value': (processed / (processed + failed) * 100) if (processed + failed) > 0 else 100,\n                    'Unit': 'Percent',\n                    'Timestamp': datetime.now()\n                }\n            ]\n        )\n    except Exception as e:\n        print(f\"Failed to publish metrics: {str(e)}\")\n\ndef send_alert(subject, message):\n    \"\"\"Send SNS alert notification\"\"\"\n    try:\n        sns.publish(\n            TopicArn=ALERT_TOPIC_ARN,\n            Subject=f\"[{ENVIRONMENT}] {subject}\",\n            Message=message\n        )\n    except Exception as e:\n        print(f\"Failed to send alert: {str(e)}\")\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "InventoryUpdateLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/inventory-update-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": "InventoryUpdateFunction.Arn"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "InventoryScheduler"
+          }
+        ]
+      }
+    },
+    "InventoryUpdateSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "inventory-update-schedule-${EnvironmentSuffix}"
+        },
+        "Description": "Scheduled trigger for inventory update jobs",
+        "ScheduleExpression": {
+          "Ref": "ScheduleExpression"
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": "InventoryUpdateFunction.Arn"
+            },
+            "Id": "InventoryUpdateTarget",
+            "RoleArn": {
+              "Fn::GetAtt": "EventBridgeRole.Arn"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "InventoryUpdateFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": "InventoryUpdateSchedule.Arn"
+        }
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "inventory-update-lambda-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function encounters errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "InventoryUpdateFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "inventory-update-lambda-duration-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda execution time is too high",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 240000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "InventoryUpdateFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "inventory-update-lambda-throttles-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function is being throttled",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "InventoryUpdateFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBReadAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "inventory-table-read-throttles-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when DynamoDB table is experiencing read throttles",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "InventoryTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "AlertTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "inventory-scheduler-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Invocations & Errors\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${InventoryUpdateFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}],\n          [\"...\", {\"stat\": \"Maximum\", \"label\": \"Max Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"label\": \"Milliseconds\"\n          }\n        },\n        \"dimensions\": {\n          \"FunctionName\": \"${InventoryUpdateFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"InventoryScheduler/${EnvironmentSuffix}\", \"ItemsProcessed\", {\"stat\": \"Sum\"}],\n          [\".\", \"ItemsFailed\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Items Processed vs Failed\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"InventoryScheduler/${EnvironmentSuffix}\", \"SuccessRate\", {\"stat\": \"Average\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Success Rate\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0,\n            \"max\": 100,\n            \"label\": \"Percent\"\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity Units\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${InventoryTable}\"\n        }\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "InventoryTableName": {
+      "Description": "Name of the DynamoDB inventory table",
+      "Value": {
+        "Ref": "InventoryTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-InventoryTable"
+        }
+      }
+    },
+    "JobExecutionTableName": {
+      "Description": "Name of the DynamoDB job execution table",
+      "Value": {
+        "Ref": "JobExecutionTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-JobExecutionTable"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Lambda function",
+      "Value": {
+        "Ref": "InventoryUpdateFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": "InventoryUpdateFunction.Arn"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "AlertTopicArn": {
+      "Description": "ARN of the SNS alert topic",
+      "Value": {
+        "Ref": "AlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopic"
+        }
+      }
+    },
+    "ScheduleRuleName": {
+      "Description": "Name of the EventBridge schedule rule",
+      "Value": {
+        "Ref": "InventoryUpdateSchedule"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ScheduleRule"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "URL to the CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=inventory-scheduler-${EnvironmentSuffix}"
+      }
+    },
+    "MonitoringNamespace": {
+      "Description": "CloudWatch custom metrics namespace",
+      "Value": {
+        "Fn::Sub": "InventoryScheduler/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricsNamespace"
+        }
+      }
+    }
+  }
+}
