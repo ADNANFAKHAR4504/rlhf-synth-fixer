@@ -1,9 +1,10 @@
+```typescript
 import _ as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import _ as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import _ as sns from 'aws-cdk-lib/aws-sns';
 import _ as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import \* as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 
 export class DynamoInventoryStack extends cdk.Stack {
 constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -130,3 +131,4 @@ region: 'us-west-2',
 
 }
 }
+```
