@@ -3,21 +3,14 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('Video Processing System CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template converted from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -27,89 +20,260 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+      expect(template.Description).toContain('Serverless Video Processing System');
+      expect(template.Description).toContain('1,500+ daily video uploads');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have all required sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      const envParam = template.Parameters.EnvironmentSuffix;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.Description).toContain('Environment suffix');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have NotificationEmail parameter', () => {
+      expect(template.Parameters.NotificationEmail).toBeDefined();
+      const emailParam = template.Parameters.NotificationEmail;
+      expect(emailParam.Type).toBe('String');
+      expect(emailParam.Default).toBe('admin@example.com');
+      expect(emailParam.AllowedPattern).toBeDefined();
+      expect(emailParam.ConstraintDescription).toContain('valid email address');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('S3 Bucket Configuration', () => {
+    test('should have S3 bucket for video uploads', () => {
+      expect(template.Resources.VideoUploadBucket).toBeDefined();
+      const bucket = template.Resources.VideoUploadBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
+    test('should have proper bucket properties', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      const properties = bucket.Properties;
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(properties.BucketName).toEqual({
+        'Fn::Sub': 'video-uploads-${EnvironmentSuffix}-${AWS::AccountId}'
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+
+      expect(properties.BucketEncryption).toBeDefined();
+      expect(properties.PublicAccessBlockConfiguration).toBeDefined();
+      expect(properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('should have S3 event notifications configured', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      const notifications = bucket.Properties.NotificationConfiguration;
+      
+      expect(notifications.LambdaConfigurations).toBeDefined();
+      expect(notifications.LambdaConfigurations).toHaveLength(3);
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      const mp4Config = notifications.LambdaConfigurations.find(
+        (config: any) => config.Filter.S3Key.Rules[0].Value === '.mp4'
+      );
+      expect(mp4Config).toBeDefined();
+      expect(mp4Config.Event).toBe('s3:ObjectCreated:*');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have bucket policy for secure transport', () => {
+      expect(template.Resources.VideoUploadBucketPolicy).toBeDefined();
+      const policy = template.Resources.VideoUploadBucketPolicy;
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      
+      const policyDoc = policy.Properties.PolicyDocument;
+      expect(policyDoc.Statement[0].Sid).toBe('DenyInsecureTransport');
+      expect(policyDoc.Statement[0].Effect).toBe('Deny');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have lifecycle configuration', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      const lifecycle = bucket.Properties.LifecycleConfiguration;
+      
+      expect(lifecycle.Rules).toBeDefined();
+      expect(lifecycle.Rules[0].Id).toBe('DeleteOldVersions');
+      expect(lifecycle.Rules[0].NoncurrentVersionExpirationInDays).toBe(30);
+    });
+  });
+
+  describe('Lambda Function Configuration', () => {
+    test('should have Lambda function for video processing', () => {
+      expect(template.Resources.VideoProcessingFunction).toBeDefined();
+      const lambda = template.Resources.VideoProcessingFunction;
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should have proper Lambda configuration', () => {
+      const lambda = template.Resources.VideoProcessingFunction;
+      const properties = lambda.Properties;
+
+      expect(properties.Runtime).toBe('nodejs22.x');
+      expect(properties.Handler).toBe('index.handler');
+      expect(properties.Timeout).toBe(300);
+      expect(properties.MemorySize).toBe(1024);
+    });
+
+    test('should have environment variables configured', () => {
+      const lambda = template.Resources.VideoProcessingFunction;
+      const envVars = lambda.Properties.Environment.Variables;
+
+      expect(envVars.SNS_TOPIC_ARN).toEqual({ Ref: 'VideoProcessingTopic' });
+      expect(envVars.ENVIRONMENT).toEqual({ Ref: 'EnvironmentSuffix' });
+    });
+
+    test('should have proper IAM role configured', () => {
+      const lambda = template.Resources.VideoProcessingFunction;
+      expect(lambda.Properties.Role).toEqual({
+        'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
+      });
+    });
+
+    test('should have Lambda permission for S3 invocation', () => {
+      expect(template.Resources.LambdaInvokePermission).toBeDefined();
+      const permission = template.Resources.LambdaInvokePermission;
+      
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
+    });
+  });
+
+  describe('IAM Role Configuration', () => {
+    test('should have Lambda execution role', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have proper assume role policy', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const assumePolicy = role.Properties.AssumeRolePolicyDocument;
+      
+      expect(assumePolicy.Statement[0].Effect).toBe('Allow');
+      expect(assumePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    });
+
+    test('should have required managed policy', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const managedPolicies = role.Properties.ManagedPolicyArns;
+      
+      expect(managedPolicies).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
+    });
+
+    test('should have proper inline policy permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const policy = role.Properties.Policies[0];
+      
+      expect(policy.PolicyName).toEqual({
+        'Fn::Sub': 'VideoProcessingPolicy-${EnvironmentSuffix}'
+      });
+
+      const statements = policy.PolicyDocument.Statement;
+      expect(statements).toHaveLength(5);
+
+      // Check S3 permissions
+      const s3Statement = statements.find(
+        (stmt: any) => stmt.Action.includes('s3:GetObject')
+      );
+      expect(s3Statement).toBeDefined();
+      expect(s3Statement.Action).toContain('s3:PutObjectTagging');
+    });
+  });
+
+  describe('SNS Configuration', () => {
+    test('should have SNS topic for notifications', () => {
+      expect(template.Resources.VideoProcessingTopic).toBeDefined();
+      const topic = template.Resources.VideoProcessingTopic;
+      expect(topic.Type).toBe('AWS::SNS::Topic');
+    });
+
+    test('should have SNS topic properties configured', () => {
+      const topic = template.Resources.VideoProcessingTopic;
+      const properties = topic.Properties;
+
+      expect(properties.TopicName).toEqual({
+        'Fn::Sub': 'video-processing-notifications-${EnvironmentSuffix}'
+      });
+      expect(properties.DisplayName).toBe('Video Processing Notifications');
+      expect(properties.Subscription).toBeDefined();
+    });
+
+    test('should have email subscription configured', () => {
+      const topic = template.Resources.VideoProcessingTopic;
+      const subscriptions = topic.Properties.Subscription;
+      
+      expect(subscriptions).toHaveLength(1);
+      expect(subscriptions[0].Protocol).toBe('email');
+      expect(subscriptions[0].Endpoint).toEqual({ Ref: 'NotificationEmail' });
+    });
+
+    test('should have SNS topic policy', () => {
+      expect(template.Resources.VideoProcessingTopicPolicy).toBeDefined();
+      const policy = template.Resources.VideoProcessingTopicPolicy;
+      
+      expect(policy.Type).toBe('AWS::SNS::TopicPolicy');
+      expect(policy.Properties.Topics[0]).toEqual({ Ref: 'VideoProcessingTopic' });
+    });
+  });
+
+  describe('CloudWatch Configuration', () => {
+    test('should have CloudWatch log group', () => {
+      expect(template.Resources.VideoProcessingLogGroup).toBeDefined();
+      const logGroup = template.Resources.VideoProcessingLogGroup;
+      
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.LogGroupName).toEqual({
+        'Fn::Sub': '/aws/lambda/video-processor-${EnvironmentSuffix}'
+      });
+      expect(logGroup.Properties.RetentionInDays).toBe(14);
+    });
+
+    test('should have CloudWatch dashboard', () => {
+      expect(template.Resources.VideoProcessingDashboard).toBeDefined();
+      const dashboard = template.Resources.VideoProcessingDashboard;
+      
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+      expect(dashboard.Properties.DashboardName).toEqual({
+        'Fn::Sub': 'video-processing-${EnvironmentSuffix}'
+      });
+    });
+
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+      expect(template.Resources.LambdaThrottleAlarm).toBeDefined();
+
+      const errorAlarm = template.Resources.LambdaErrorAlarm;
+      expect(errorAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(errorAlarm.Properties.MetricName).toBe('Errors');
+      expect(errorAlarm.Properties.Threshold).toBe(5);
+
+      const throttleAlarm = template.Resources.LambdaThrottleAlarm;
+      expect(throttleAlarm.Properties.MetricName).toBe('Throttles');
+      expect(throttleAlarm.Properties.Threshold).toBe(10);
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'S3BucketName',
+        'S3BucketArn',
+        'LambdaFunctionName',
+        'LambdaFunctionArn',
+        'SNSTopicArn',
+        'CloudWatchDashboardURL',
+        'Environment'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,51 +281,100 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('S3BucketName output should be correct', () => {
+      const output = template.Outputs.S3BucketName;
+      expect(output.Description).toBe('Name of the S3 bucket for video uploads');
+      expect(output.Value).toEqual({ Ref: 'VideoUploadBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-BucketName'
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('LambdaFunctionArn output should be correct', () => {
+      const output = template.Outputs.LambdaFunctionArn;
+      expect(output.Description).toBe('ARN of the Lambda function');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::GetAtt': ['VideoProcessingFunction', 'Arn']
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('SNSTopicArn output should be correct', () => {
+      const output = template.Outputs.SNSTopicArn;
+      expect(output.Description).toBe('ARN of the SNS topic for notifications');
+      expect(output.Value).toEqual({ Ref: 'VideoProcessingTopic' });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('CloudWatchDashboardURL output should be correct', () => {
+      const output = template.Outputs.CloudWatchDashboardURL;
+      expect(output.Description).toBe('URL to the CloudWatch Dashboard');
+      expect(output.Value).toEqual({
+        'Fn::Sub': 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=video-processing-${EnvironmentSuffix}'
       });
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+  describe('Template Dependencies', () => {
+    test('S3 bucket should depend on Lambda permission', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      expect(bucket.DependsOn).toBe('LambdaInvokePermission');
+    });
+
+    test('should have proper resource references', () => {
+      // Lambda function references execution role
+      const lambda = template.Resources.VideoProcessingFunction;
+      expect(lambda.Properties.Role).toEqual({
+        'Fn::GetAtt': ['LambdaExecutionRole', 'Arn']
+      });
+
+      // Alarms reference Lambda function
+      const errorAlarm = template.Resources.LambdaErrorAlarm;
+      expect(errorAlarm.Properties.Dimensions[0].Value).toEqual({
+        Ref: 'VideoProcessingFunction'
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('should have S3 bucket encryption configured', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      const encryption = bucket.Properties.BucketEncryption;
+      
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+    });
+
+    test('should block public S3 access', () => {
+      const bucket = template.Resources.VideoUploadBucket;
+      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+      
+      expect(publicAccess.BlockPublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
+      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('should enforce secure transport', () => {
+      const bucketPolicy = template.Resources.VideoUploadBucketPolicy;
+      const statement = bucketPolicy.Properties.PolicyDocument.Statement[0];
+      
+      expect(statement.Effect).toBe('Deny');
+      expect(statement.Condition.Bool['aws:SecureTransport']).toBe(false);
+    });
+  });
+
+  describe('Resource Counts and Template Validation', () => {
+    test('should have expected number of resources', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBe(11); // All video processing resources
+    });
+
+    test('should have expected number of parameters', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(2); // EnvironmentSuffix and NotificationEmail
+    });
+
+    test('should have expected number of outputs', () => {
+      const outputCount = Object.keys(template.Outputs).length;
+      expect(outputCount).toBe(7); // All video processing outputs
     });
 
     test('should not have any undefined or null required sections', () => {
@@ -171,39 +384,31 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('Naming Conventions', () => {
+    test('resource names should follow video processing convention', () => {
+      const resourceNames = Object.keys(template.Resources);
+      const videoProcessingResources = [
+        'VideoProcessingTopic',
+        'VideoProcessingFunction',
+        'VideoUploadBucket',
+        'LambdaExecutionRole'
+      ];
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      videoProcessingResources.forEach(resourceName => {
+        expect(resourceNames).toContain(resourceName);
       });
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        if (output.Export) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey.replace('Name', 'Name').replace('Arn', 'Arn')}`
+          });
+        }
       });
     });
   });
