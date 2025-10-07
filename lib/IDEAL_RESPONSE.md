@@ -45,11 +45,6 @@ export {};
       "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
       "AllowedPattern": "^[a-zA-Z0-9]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters"
-    },
-    "SenderEmailAddress": {
-      "Type": "String",
-      "Description": "Verified email address for sending documents via SES",
-      "Default": "noreply@example.com"
     }
   },
   "Resources": {
@@ -602,10 +597,7 @@ export {};
             "Value": "true"
           }
         ]
-      },
-      "DependsOn": [
-        "DocumentGenerationRole"
-      ]
+      }
     },
     "DocumentAnalysisFunction": {
       "Type": "AWS::Lambda::Function",
@@ -651,10 +643,7 @@ export {};
             "Value": "true"
           }
         ]
-      },
-      "DependsOn": [
-        "DocumentGenerationRole"
-      ]
+      }
     },
     "DocumentAPI": {
       "Type": "AWS::ApiGateway::RestApi",
@@ -1974,11 +1963,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-    });
-
-    test('should have SenderEmailAddress parameter', () => {
-      expect(template.Parameters.SenderEmailAddress).toBeDefined();
-      expect(template.Parameters.SenderEmailAddress.Type).toBe('String');
     });
   });
 

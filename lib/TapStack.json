@@ -30,11 +30,6 @@
       "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
       "AllowedPattern": "^[a-zA-Z0-9]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters"
-    },
-    "SenderEmailAddress": {
-      "Type": "String",
-      "Description": "Verified email address for sending documents via SES",
-      "Default": "noreply@example.com"
     }
   },
   "Resources": {
@@ -587,10 +582,7 @@
             "Value": "true"
           }
         ]
-      },
-      "DependsOn": [
-        "DocumentGenerationRole"
-      ]
+      }
     },
     "DocumentAnalysisFunction": {
       "Type": "AWS::Lambda::Function",
@@ -636,10 +628,7 @@
             "Value": "true"
           }
         ]
-      },
-      "DependsOn": [
-        "DocumentGenerationRole"
-      ]
+      }
     },
     "DocumentAPI": {
       "Type": "AWS::ApiGateway::RestApi",

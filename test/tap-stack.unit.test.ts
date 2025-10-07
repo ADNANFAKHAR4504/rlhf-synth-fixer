@@ -39,11 +39,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
-
-    test('should have SenderEmailAddress parameter', () => {
-      expect(template.Parameters.SenderEmailAddress).toBeDefined();
-      expect(template.Parameters.SenderEmailAddress.Type).toBe('String');
-    });
   });
 
   describe('DynamoDB Tables', () => {
