@@ -1,6 +1,6 @@
-# Serverless Logistics Tracking API Infrastructure - Production Deployment
+# Serverless Logistics Tracking API Infrastructure
 
-Here's the complete working Pulumi Python infrastructure code that was successfully deployed to AWS:
+Here's the complete Pulumi Python infrastructure code for your serverless logistics tracking API:
 
 ## Main Stack Implementation (lib/tap_stack.py)
 
@@ -19,6 +19,7 @@ from typing import Optional
 import json
 import pulumi
 from pulumi import ResourceOptions, Output
+import pulumi_aws
 from pulumi_aws import (
     s3, dynamodb, lambda_, apigateway, iam, ssm,
     cloudwatch, sqs, config
@@ -62,7 +63,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Get current AWS region and account ID
         aws_region = config.region or 'us-west-2'
-        aws_account_id = '342597974367'  # Hardcoded for this deployment
+        current = pulumi_aws.get_caller_identity()
+        aws_account_id = current.account_id
 
         # Create DLQ for Lambda
         dlq = sqs.Queue(
@@ -204,7 +206,7 @@ class TapStack(pulumi.ComponentResource):
                             "logs:CreateLogStream",
                             "logs:PutLogEvents"
                         ],
-                        "Resource": f"arn:aws:logs:{aws_region}:*:*"
+                        "Resource": f"arn:aws:logs:{aws_region}:{aws_account_id}:log-group:/aws/lambda/tracking-processor-{self.environment_suffix}:*"
                     },
                     {
                         "Effect": "Allow",
@@ -214,7 +216,7 @@ class TapStack(pulumi.ComponentResource):
                             "ssm:GetParametersByPath"
                         ],
                         "Resource": [
-                            f"arn:aws:ssm:{aws_region}:*:parameter/logistics/*"
+                            f"arn:aws:ssm:{aws_region}:{aws_account_id}:parameter/logistics/*"
                         ]
                     },
                     {
@@ -662,17 +664,31 @@ CONFIG_PARAM = os.environ.get('CONFIG_PARAM')
 DB_PARAM = os.environ.get('DB_PARAM')
 FEATURE_FLAGS_PARAM = os.environ.get('FEATURE_FLAGS_PARAM')
 
-# Cache for SSM parameters
+# Cache for SSM parameters with size limit
 _parameter_cache = {}
 _cache_expiry = {}
 CACHE_TTL = 300  # 5 minutes
+MAX_CACHE_SIZE = 50  # Prevent memory bloat
 
 def get_parameter(name: str, decrypt: bool = True) -> str:
-    """Get parameter from SSM with caching."""
+    """Get parameter from SSM with size-limited caching."""
     current_time = time.time()
 
+    # Clean expired entries
+    expired_keys = [k for k, expiry in _cache_expiry.items() if current_time >= expiry]
+    for key in expired_keys:
+        _parameter_cache.pop(key, None)
+        _cache_expiry.pop(key, None)
+
+    # Check cache
     if name in _parameter_cache and current_time < _cache_expiry.get(name, 0):
         return _parameter_cache[name]
+
+    # Limit cache size
+    if len(_parameter_cache) >= MAX_CACHE_SIZE:
+        oldest_key = min(_cache_expiry.keys(), key=lambda k: _cache_expiry[k])
+        _parameter_cache.pop(oldest_key, None)
+        _cache_expiry.pop(oldest_key, None)
 
     try:
         response = ssm.get_parameter(Name=name, WithDecryption=decrypt)
@@ -733,22 +749,31 @@ def store_tracking_update(data: Dict[str, Any]) -> Dict[str, Any]:
         raise
 
 @tracer.capture_method
-def get_tracking_status(tracking_id: str) -> list:
-    """Get tracking status from DynamoDB."""
+def get_tracking_status(tracking_id: str, limit: int = 10, last_evaluated_key: dict = None) -> dict:
+    """Get tracking status from DynamoDB with pagination support."""
     table = dynamodb.Table(TABLE_NAME)
 
     try:
-        response = table.query(
-            KeyConditionExpression='tracking_id = :tid',
-            ExpressionAttributeValues={
+        query_params = {
+            'KeyConditionExpression': 'tracking_id = :tid',
+            'ExpressionAttributeValues': {
                 ':tid': tracking_id
             },
-            ScanIndexForward=False,
-            Limit=10
-        )
+            'ScanIndexForward': False,
+            'Limit': limit
+        }
+        
+        if last_evaluated_key:
+            query_params['ExclusiveStartKey'] = last_evaluated_key
+            
+        response = table.query(**query_params)
 
         metrics.add_metric(name="StatusQuerySuccess", unit=MetricUnit.Count, value=1)
-        return response.get('Items', [])
+        return {
+            'items': response.get('Items', []),
+            'last_evaluated_key': response.get('LastEvaluatedKey'),
+            'count': response.get('Count', 0)
+        }
     except Exception as e:
         logger.error(f"Failed to get tracking status: {str(e)}")
         metrics.add_metric(name="StatusQueryFailed", unit=MetricUnit.Count, value=1)
@@ -795,7 +820,8 @@ def main(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
 
         if http_method == 'GET' and path == '/status':
             # Handle status query
-            tracking_id = event.get('queryStringParameters', {}).get('tracking_id')
+            query_params = event.get('queryStringParameters') or {}
+            tracking_id = query_params.get('tracking_id')
 
             if not tracking_id:
                 return {
@@ -804,15 +830,25 @@ def main(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                     'headers': {'Content-Type': 'application/json'}
                 }
 
-            items = get_tracking_status(tracking_id)
+            # Parse pagination parameters
+            limit = int(query_params.get('limit', 10))
+            last_key_str = query_params.get('last_key')
+            last_evaluated_key = json.loads(last_key_str) if last_key_str else None
+
+            result = get_tracking_status(tracking_id, limit, last_evaluated_key)
+
+            response_body = {
+                'tracking_id': tracking_id,
+                'updates': result['items'],
+                'count': result['count']
+            }
+            
+            if result['last_evaluated_key']:
+                response_body['next_key'] = json.dumps(result['last_evaluated_key'])
 
             return {
                 'statusCode': 200,
-                'body': json.dumps({
-                    'tracking_id': tracking_id,
-                    'updates': items,
-                    'count': len(items)
-                }),
+                'body': json.dumps(response_body),
                 'headers': {'Content-Type': 'application/json'}
             }
 
@@ -887,25 +923,3 @@ aws-lambda-powertools==2.31.0
 boto3==1.34.11
 ```
 
-## Key Infrastructure Features
-
-### Successfully Deployed Resources:
-1. **DynamoDB Table** - On-demand billing with global secondary index
-2. **Lambda Function** - Python 3.9 with proper IAM permissions and environment variables
-3. **API Gateway** - REST API with proper validation and stage deployment
-4. **CloudWatch** - Monitoring dashboard and alarms for operational visibility
-5. **SSM Parameters** - Secure configuration management
-6. **SQS Queue** - Dead letter queue for failed Lambda executions
-7. **IAM Roles and Policies** - Least privilege security model
-
-### Monitoring and Observability:
-- CloudWatch dashboard with API Gateway, Lambda, and DynamoDB metrics
-- Metric alarms for 4XX/5XX errors, latency, and Lambda throttling
-- AWS X-Ray tracing enabled
-- Structured logging with AWS Lambda Powertools
-
-### Security Features:
-- AWS IAM authentication for API endpoints
-- Encrypted SSM parameters for sensitive configuration
-- Lambda dead letter queue for error handling
-- Proper IAM role separation and least privilege access

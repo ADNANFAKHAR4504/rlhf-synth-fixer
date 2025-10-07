@@ -12,6 +12,7 @@ from typing import Optional
 import json
 import pulumi
 from pulumi import ResourceOptions, Output
+import pulumi_aws
 from pulumi_aws import (
     s3, dynamodb, lambda_, apigateway, iam, ssm,
     cloudwatch, sqs, config
@@ -55,7 +56,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Get current AWS region and account ID
         aws_region = config.region or 'us-west-2'
-        aws_account_id = '342597974367'  # Hardcoded for this deployment
+        current = pulumi_aws.get_caller_identity()
+        aws_account_id = current.account_id
 
         # Create DLQ for Lambda
         dlq = sqs.Queue(
@@ -197,7 +199,7 @@ class TapStack(pulumi.ComponentResource):
                             "logs:CreateLogStream",
                             "logs:PutLogEvents"
                         ],
-                        "Resource": f"arn:aws:logs:{aws_region}:*:*"
+                        "Resource": f"arn:aws:logs:{aws_region}:{aws_account_id}:log-group:/aws/lambda/tracking-processor-{self.environment_suffix}:*"
                     },
                     {
                         "Effect": "Allow",
@@ -207,7 +209,7 @@ class TapStack(pulumi.ComponentResource):
                             "ssm:GetParametersByPath"
                         ],
                         "Resource": [
-                            f"arn:aws:ssm:{aws_region}:*:parameter/logistics/*"
+                            f"arn:aws:ssm:{aws_region}:{aws_account_id}:parameter/logistics/*"
                         ]
                     },
                     {
