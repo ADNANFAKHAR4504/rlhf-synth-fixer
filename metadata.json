@@ -10,5 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, IAM, S3, EC2, RDS, CloudTrail, KMS"
+  "aws_services": "VPC, IAM, S3, EC2, RDS, CloudTrail, KMS",
+  "training_quality": "high"
 }
