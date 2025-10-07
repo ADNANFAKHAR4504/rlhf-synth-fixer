@@ -192,9 +192,6 @@
     "NotificationProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "notification-processor-role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -394,9 +391,6 @@
     "SchedulerRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "eventbridge-scheduler-role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -464,9 +458,6 @@
     "EventBridgePipeRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "eventbridge-pipe-role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
