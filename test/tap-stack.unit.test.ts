@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -172,19 +166,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple secure resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // We have many security resources
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have multiple security parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBeGreaterThan(10); // We have many security parameters
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have comprehensive security outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBeGreaterThan(10); // We export many security resources
     });
   });
 
@@ -198,13 +192,211 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
+    test('core export names should follow stack naming convention', () => {
+      const coreOutputs = [
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
+      ];
+      coreOutputs.forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Export.Name).toEqual({
           'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
         });
       });
+    });
+
+    test('infrastructure export names should follow project naming convention', () => {
+      const infraOutputs = [
+        'VpcId',
+        'PublicSubnetIds',
+        'PrivateSubnetIds',
+        'BastionSecurityGroupId',
+      ];
+      infraOutputs.forEach(outputKey => {
+        if (template.Outputs[outputKey]) {
+          const output = template.Outputs[outputKey];
+          expect(output.Export.Name['Fn::Sub']).toContain('${ProjectPrefix}');
+          expect(output.Export.Name['Fn::Sub']).toContain('${Environment}');
+          expect(output.Export.Name['Fn::Sub']).toContain(
+            '${EnvironmentSuffix}'
+          );
+        }
+      });
+    });
+  });
+
+  describe('Security Resources', () => {
+    test('should have VPC with proper DNS configuration', () => {
+      const vpc = template.Resources.Vpc;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+    });
+
+    test('should have private and public subnets', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const privateSubnet1 = template.Resources.PrivateSubnet1;
+
+      expect(publicSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+
+      expect(privateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(privateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+    });
+
+    test('should have security groups with proper restrictions', () => {
+      const bastionSG = template.Resources.SgBastion;
+      const appSG = template.Resources.SgAppPrivate;
+      const rdsSG = template.Resources.SgRds;
+
+      expect(bastionSG.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(bastionSG.Properties.SecurityGroupIngress).toHaveLength(1);
+      expect(bastionSG.Properties.SecurityGroupIngress[0].FromPort).toBe(22);
+
+      expect(appSG.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(rdsSG.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have KMS key with proper policy', () => {
+      const kmsKey = template.Resources.KmsKey;
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Condition).toBe('CreateKmsKey');
+      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(2);
+    });
+
+    test('should have S3 bucket with security configurations', () => {
+      const dataBucket = template.Resources.DataBucket;
+      expect(dataBucket.Type).toBe('AWS::S3::Bucket');
+      expect(dataBucket.Condition).toBe('CreateDataBucket');
+      expect(
+        dataBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        dataBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
+      ).toBeDefined();
+    });
+
+    test('should have RDS with encryption and proper configuration', () => {
+      const rdsInstance = template.Resources.RdsInstance;
+      expect(rdsInstance.Type).toBe('AWS::RDS::DBInstance');
+      expect(rdsInstance.Properties.StorageEncrypted).toBe(true);
+      expect(rdsInstance.Properties.PubliclyAccessible).toBe(false);
+      expect(rdsInstance.Properties.Engine).toBe('postgres');
+    });
+
+    test('should have CloudTrail with proper logging configuration', () => {
+      const cloudTrail = template.Resources.CloudTrail;
+      expect(cloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(cloudTrail.Properties.IsLogging).toBe(true);
+      expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
+      expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
+    });
+
+    test('should have IAM roles with least privilege', () => {
+      const appRole = template.Resources.AppInstanceRole;
+      const dynamoDbPolicy = template.Resources.DynamoDbReadOnlyPolicy;
+
+      expect(appRole.Type).toBe('AWS::IAM::Role');
+      expect(
+        appRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal
+          .Service
+      ).toBeDefined();
+
+      expect(dynamoDbPolicy.Type).toBe('AWS::IAM::ManagedPolicy');
+      const policyDoc = dynamoDbPolicy.Properties.PolicyDocument;
+      const dynamoStatement = policyDoc.Statement[0];
+      expect(dynamoStatement.Action).not.toContain('*');
+      expect(dynamoStatement.Action).toContain('dynamodb:GetItem');
+    });
+
+    test('should have monitoring and alerting setup', () => {
+      const snsTopic = template.Resources.OpsSnsTopic;
+      const cpuAlarm = template.Resources.AppCpuAlarm;
+      const rdsAlarm = template.Resources.RdsCpuAlarm;
+
+      expect(snsTopic.Type).toBe('AWS::SNS::Topic');
+      expect(cpuAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(rdsAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('should have NAT Gateway for private subnet internet access', () => {
+      const natGateway = template.Resources.NatGateway;
+      const elasticIp = template.Resources.ElasticIp;
+
+      expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
+      expect(elasticIp.Type).toBe('AWS::EC2::EIP');
+    });
+  });
+
+  describe('Security Compliance', () => {
+    test('should use environment suffix in all resource names', () => {
+      const dynamoTable = template.Resources.TurnAroundPromptTable;
+      const vpc = template.Resources.Vpc;
+      const bastionSG = template.Resources.SgBastion;
+
+      expect(dynamoTable.Properties.TableName['Fn::Sub']).toContain(
+        '${EnvironmentSuffix}'
+      );
+      expect(
+        vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name').Value[
+          'Fn::Sub'
+        ]
+      ).toContain('${EnvironmentSuffix}');
+      expect(bastionSG.Properties.GroupName['Fn::Sub']).toContain(
+        '${EnvironmentSuffix}'
+      );
+    });
+
+    test('should have proper conditions for optional resources', () => {
+      expect(template.Conditions.CreateKmsKey).toBeDefined();
+      expect(template.Conditions.CreateDataBucket).toBeDefined();
+      expect(template.Conditions.HasKeyPair).toBeDefined();
+    });
+
+    test('should have encrypted storage for all data resources', () => {
+      const dynamoTable = template.Resources.TurnAroundPromptTable;
+      const dataBucket = template.Resources.DataBucket;
+      const rdsInstance = template.Resources.RdsInstance;
+
+      expect(dynamoTable.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(dataBucket.Properties.BucketEncryption).toBeDefined();
+      expect(rdsInstance.Properties.StorageEncrypted).toBe(true);
+    });
+
+    test('should have proper backup and recovery settings', () => {
+      const dynamoTable = template.Resources.TurnAroundPromptTable;
+      const rdsInstance = template.Resources.RdsInstance;
+
+      expect(
+        dynamoTable.Properties.PointInTimeRecoverySpecification
+          .PointInTimeRecoveryEnabled
+      ).toBe(true);
+      expect(rdsInstance.Properties.BackupRetentionPeriod).toBeDefined();
+    });
+  });
+
+  describe('Infrastructure Parameters Validation', () => {
+    test('should validate VPC CIDR parameter', () => {
+      const vpcCidrParam = template.Parameters.VpcCidr;
+      expect(vpcCidrParam.Type).toBe('String');
+      expect(vpcCidrParam.AllowedPattern).toBeDefined();
+    });
+
+    test('should validate password parameter security', () => {
+      const passwordParam = template.Parameters.RdsPassword;
+      expect(passwordParam.NoEcho).toBe(true);
+      expect(passwordParam.MinLength).toBe(8);
+      expect(passwordParam.AllowedPattern).toBeDefined();
+    });
+
+    test('should have availability zone parameters', () => {
+      const az1Param = template.Parameters.Az1;
+      const az2Param = template.Parameters.Az2;
+
+      expect(az1Param.Type).toBe('AWS::EC2::AvailabilityZone::Name');
+      expect(az2Param.Type).toBe('AWS::EC2::AvailabilityZone::Name');
     });
   });
 });

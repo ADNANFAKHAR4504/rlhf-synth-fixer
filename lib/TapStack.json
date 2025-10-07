@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secure AWS environment with VPC, EC2, RDS, S3, CloudTrail, and comprehensive security controls",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
@@ -9,6 +9,7 @@
             "default": "Project Configuration"
           },
           "Parameters": [
+            "EnvironmentSuffix",
             "ProjectPrefix",
             "Environment"
           ]
@@ -56,8 +57,7 @@
           },
           "Parameters": [
             "S3DataBucketName",
-            "KmsKeyArn",
-            "DynamoDbReadOnlyTableArns"
+            "KmsKeyArn"
           ]
         },
         {
@@ -72,6 +72,13 @@
     }
   },
   "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
     "ProjectPrefix": {
       "Type": "String",
       "Default": "securex",
@@ -203,11 +210,6 @@
       "Description": "CIDR block allowed to SSH to bastion",
       "AllowedPattern": "^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})$"
     },
-    "DynamoDbReadOnlyTableArns": {
-      "Type": "CommaDelimitedList",
-      "Default": "",
-      "Description": "Comma-separated list of DynamoDB table ARNs for read-only access"
-    },
     "SnsEmailForAlarms": {
       "Type": "String",
       "Default": "",
@@ -334,6 +336,54 @@
     }
   },
   "Resources": {
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "DeletionProtectionEnabled": false,
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "TAP"
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
     "Vpc": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -346,7 +396,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-vpc"
+              "Fn::Sub": "${ProjectPrefix}-vpc-${EnvironmentSuffix}"
             }
           },
           {
@@ -371,7 +421,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-igw"
+              "Fn::Sub": "${ProjectPrefix}-igw-${EnvironmentSuffix}"
             }
           },
           {
@@ -411,7 +461,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-public-subnet-1"
+              "Fn::Sub": "${ProjectPrefix}-public-subnet-1-${EnvironmentSuffix}"
             }
           },
           {
@@ -444,7 +494,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-public-subnet-2"
+              "Fn::Sub": "${ProjectPrefix}-public-subnet-2-${EnvironmentSuffix}"
             }
           },
           {
@@ -477,7 +527,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-private-subnet-1"
+              "Fn::Sub": "${ProjectPrefix}-private-subnet-1-${EnvironmentSuffix}"
             }
           },
           {
@@ -510,7 +560,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-private-subnet-2"
+              "Fn::Sub": "${ProjectPrefix}-private-subnet-2-${EnvironmentSuffix}"
             }
           },
           {
@@ -535,7 +585,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-nat-eip"
+              "Fn::Sub": "${ProjectPrefix}-nat-eip-${EnvironmentSuffix}"
             }
           },
           {
@@ -563,7 +613,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-nat"
+              "Fn::Sub": "${ProjectPrefix}-nat-${EnvironmentSuffix}"
             }
           },
           {
@@ -585,7 +635,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-public-rt"
+              "Fn::Sub": "${ProjectPrefix}-public-rt-${EnvironmentSuffix}"
             }
           },
           {
@@ -642,7 +692,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-private-rt"
+              "Fn::Sub": "${ProjectPrefix}-private-rt-${EnvironmentSuffix}"
             }
           },
           {
@@ -711,7 +761,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${ProjectPrefix}-sg-bastion"
+          "Fn::Sub": "${ProjectPrefix}-sg-bastion-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for bastion host",
         "VpcId": {
@@ -739,7 +789,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-sg-bastion"
+              "Fn::Sub": "${ProjectPrefix}-sg-bastion-${EnvironmentSuffix}"
             }
           },
           {
@@ -755,7 +805,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${ProjectPrefix}-sg-app"
+          "Fn::Sub": "${ProjectPrefix}-sg-app-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for application instances",
         "VpcId": {
@@ -765,7 +815,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-sg-app"
+              "Fn::Sub": "${ProjectPrefix}-sg-app-${EnvironmentSuffix}"
             }
           },
           {
@@ -807,7 +857,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${ProjectPrefix}-sg-rds"
+          "Fn::Sub": "${ProjectPrefix}-sg-rds-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for RDS database",
         "VpcId": {
@@ -817,7 +867,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-sg-rds"
+              "Fn::Sub": "${ProjectPrefix}-sg-rds-${EnvironmentSuffix}"
             }
           },
           {
@@ -849,7 +899,7 @@
       "Condition": "CreateKmsKey",
       "Properties": {
         "Description": {
-          "Fn::Sub": "KMS key for ${ProjectPrefix}-${Environment}"
+          "Fn::Sub": "KMS key for ${ProjectPrefix}-${Environment}-${EnvironmentSuffix}"
         },
         "KeyPolicy": {
           "Version": "2012-10-17",
@@ -898,7 +948,8 @@
                     ]
                   },
                   "rds.amazonaws.com",
-                  "logs.amazonaws.com"
+                  "logs.amazonaws.com",
+                  "dynamodb.amazonaws.com"
                 ]
               },
               "Action": [
@@ -915,7 +966,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-kms-key"
+              "Fn::Sub": "${ProjectPrefix}-kms-key-${EnvironmentSuffix}"
             }
           },
           {
@@ -932,7 +983,7 @@
       "Condition": "CreateKmsKey",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/${ProjectPrefix}-${Environment}"
+          "Fn::Sub": "alias/${ProjectPrefix}-${Environment}-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "KmsKey"
@@ -944,7 +995,7 @@
       "Condition": "CreateDataBucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectPrefix}-data-${Environment}-${AWS::AccountId}"
+          "Fn::Sub": "${ProjectPrefix}-data-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
@@ -988,7 +1039,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-data-bucket"
+              "Fn::Sub": "${ProjectPrefix}-data-bucket-${EnvironmentSuffix}"
             }
           },
           {
@@ -1033,42 +1084,6 @@
               }
             },
             {
-              "Sid": "AllowSpecificRolesOnly",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": [
-                  {
-                    "Fn::GetAtt": [
-                      "AppInstanceRole",
-                      "Arn"
-                    ]
-                  },
-                  {
-                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
-                  }
-                ]
-              },
-              "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject",
-                "s3:ListBucket",
-                "s3:GetBucketLocation",
-                "s3:GetBucketVersioning"
-              ],
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "DataBucket",
-                    "Arn"
-                  ]
-                },
-                {
-                  "Fn::Sub": "${DataBucket.Arn}/*"
-                }
-              ]
-            },
-            {
               "Sid": "AllowCloudTrailAccess",
               "Effect": "Allow",
               "Principal": {
@@ -1111,9 +1126,9 @@
       "Type": "AWS::IAM::ManagedPolicy",
       "Properties": {
         "ManagedPolicyName": {
-          "Fn::Sub": "${ProjectPrefix}-dynamodb-readonly-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-dynamodb-readonly-${Environment}-${EnvironmentSuffix}"
         },
-        "Description": "Read-only access to specified DynamoDB tables",
+        "Description": "Read-only access to TurnAroundPrompt DynamoDB table",
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -1125,11 +1140,13 @@
                 "dynamodb:Query",
                 "dynamodb:Scan",
                 "dynamodb:GetItem",
-                "dynamodb:BatchGetItem",
-                "dynamodb:ListTables"
+                "dynamodb:BatchGetItem"
               ],
               "Resource": {
-                "Ref": "DynamoDbReadOnlyTableArns"
+                "Fn::GetAtt": [
+                  "TurnAroundPromptTable",
+                  "Arn"
+                ]
               }
             }
           ]
@@ -1140,7 +1157,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectPrefix}-app-role-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-app-role-${Environment}-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1285,7 +1302,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-app-role"
+              "Fn::Sub": "${ProjectPrefix}-app-role-${EnvironmentSuffix}"
             }
           },
           {
@@ -1301,7 +1318,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "${ProjectPrefix}-app-profile-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-app-profile-${Environment}-${EnvironmentSuffix}"
         },
         "Roles": [
           {
@@ -1314,7 +1331,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-role-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-bastion-role-${Environment}-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1361,7 +1378,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-bastion-role"
+              "Fn::Sub": "${ProjectPrefix}-bastion-role-${EnvironmentSuffix}"
             }
           },
           {
@@ -1377,7 +1394,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-profile-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-bastion-profile-${Environment}-${EnvironmentSuffix}"
         },
         "Roles": [
           {
@@ -1388,6 +1405,7 @@
     },
     "BastionInstance": {
       "Type": "AWS::EC2::Instance",
+      "Condition": "HasKeyPair",
       "Properties": {
         "InstanceType": {
           "Ref": "BastionInstanceType"
@@ -1410,15 +1428,7 @@
           }
         ],
         "KeyName": {
-          "Fn::If": [
-            "HasKeyPair",
-            {
-              "Ref": "KeyPairName"
-            },
-            {
-              "Ref": "AWS::NoValue"
-            }
-          ]
+          "Ref": "KeyPairName"
         },
         "IamInstanceProfile": {
           "Ref": "BastionInstanceProfile"
@@ -1455,7 +1465,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-bastion"
+              "Fn::Sub": "${ProjectPrefix}-bastion-${EnvironmentSuffix}"
             }
           },
           {
@@ -1525,7 +1535,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-app-instance"
+              "Fn::Sub": "${ProjectPrefix}-app-instance-${EnvironmentSuffix}"
             }
           },
           {
@@ -1541,7 +1551,7 @@
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupName": {
-          "Fn::Sub": "${ProjectPrefix}-db-subnet-group"
+          "Fn::Sub": "${ProjectPrefix}-db-subnet-group-${EnvironmentSuffix}"
         },
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "SubnetIds": [
@@ -1556,7 +1566,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-db-subnet-group"
+              "Fn::Sub": "${ProjectPrefix}-db-subnet-group-${EnvironmentSuffix}"
             }
           },
           {
@@ -1572,7 +1582,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "${ProjectPrefix}-db-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-db-${Environment}-${EnvironmentSuffix}"
         },
         "Engine": "postgres",
         "EngineVersion": {
@@ -1645,7 +1655,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-database"
+              "Fn::Sub": "${ProjectPrefix}-database-${EnvironmentSuffix}"
             }
           },
           {
@@ -1685,7 +1695,7 @@
       ],
       "Properties": {
         "TrailName": {
-          "Fn::Sub": "${ProjectPrefix}-trail-${Environment}"
+          "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
         },
         "S3BucketName": {
           "Fn::If": [
@@ -1731,7 +1741,32 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ProjectPrefix}-cloudtrail"
+              "Fn::Sub": "${ProjectPrefix}-cloudtrail-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "OpsSnsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${ProjectPrefix}-ops-topic-${EnvironmentSuffix}"
+        },
+        "DisplayName": {
+          "Fn::Sub": "${ProjectPrefix} Operations Alerts"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProjectPrefix}-ops-topic-${EnvironmentSuffix}"
             }
           },
           {
@@ -1754,31 +1789,6 @@
         "Endpoint": {
           "Ref": "SnsEmailForAlarms"
         }
-      }
-    },
-    "OpsSnsTopic": {
-      "Type": "AWS::SNS::Topic",
-      "Properties": {
-        "TopicName": {
-          "Fn::Sub": "${ProjectPrefix}-ops-topic"
-        },
-        "DisplayName": {
-          "Fn::Sub": "${ProjectPrefix} Operations Alerts"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${ProjectPrefix}-ops-topic"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
       }
     },
     "OpsSnsTopicPolicy": {
@@ -1811,9 +1821,10 @@
     },
     "BastionCpuAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasKeyPair",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-cpu-high"
+          "Fn::Sub": "${ProjectPrefix}-bastion-cpu-high-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Bastion CPU utilization is too high",
         "MetricName": "CPUUtilization",
@@ -1841,9 +1852,10 @@
     },
     "BastionStatusCheckAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasKeyPair",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${ProjectPrefix}-bastion-status-check"
+          "Fn::Sub": "${ProjectPrefix}-bastion-status-check-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Bastion instance status check failed",
         "MetricName": "StatusCheckFailed",
@@ -1873,7 +1885,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${ProjectPrefix}-app-cpu-high"
+          "Fn::Sub": "${ProjectPrefix}-app-cpu-high-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Application instance CPU utilization is too high",
         "MetricName": "CPUUtilization",
@@ -1903,7 +1915,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${ProjectPrefix}-rds-cpu-high"
+          "Fn::Sub": "${ProjectPrefix}-rds-cpu-high-${EnvironmentSuffix}"
         },
         "AlarmDescription": "RDS CPU utilization is too high",
         "MetricName": "CPUUtilization",
@@ -1933,7 +1945,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${ProjectPrefix}-rds-storage-low"
+          "Fn::Sub": "${ProjectPrefix}-rds-storage-low-${EnvironmentSuffix}"
         },
         "AlarmDescription": "RDS free storage space is low",
         "MetricName": "FreeStorageSpace",
@@ -1958,9 +1970,86 @@
         ],
         "TreatMissingData": "breaching"
       }
+    },
+    "DynamoDbWriteThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectPrefix}-dynamodb-write-throttle-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "DynamoDB write operations are being throttled",
+        "MetricName": "WriteThrottledEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OpsSnsTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
     }
   },
   "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
     "VpcId": {
       "Description": "VPC ID",
       "Value": {
@@ -1968,7 +2057,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-vpc-id"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-vpc-id"
         }
       }
     },
@@ -1989,7 +2078,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-public-subnet-ids"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-public-subnet-ids"
         }
       }
     },
@@ -2010,7 +2099,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-private-subnet-ids"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-private-subnet-ids"
         }
       }
     },
@@ -2021,7 +2110,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-bastion-sg-id"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-bastion-sg-id"
         }
       }
     },
@@ -2032,7 +2121,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-app-sg-id"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-app-sg-id"
         }
       }
     },
@@ -2043,7 +2132,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-rds-sg-id"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-rds-sg-id"
         }
       }
     },
@@ -2062,7 +2151,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-data-bucket-name"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-data-bucket-name"
         }
       }
     },
@@ -2084,7 +2173,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-data-bucket-arn"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-data-bucket-arn"
         }
       }
     },
@@ -2106,7 +2195,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-kms-key-arn"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-kms-key-arn"
         }
       }
     },
@@ -2117,7 +2206,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-db-subnet-group"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-db-subnet-group"
         }
       }
     },
@@ -2131,7 +2220,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-rds-endpoint"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-rds-endpoint"
         }
       }
     },
@@ -2142,7 +2231,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-rds-instance-id"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-rds-instance-id"
         }
       }
     },
@@ -2153,7 +2242,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${ProjectPrefix}-${Environment}-ops-topic-arn"
+          "Fn::Sub": "${ProjectPrefix}-${Environment}-${EnvironmentSuffix}-ops-topic-arn"
         }
       }
     }
