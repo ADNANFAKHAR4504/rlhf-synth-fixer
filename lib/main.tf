@@ -147,6 +147,7 @@ output "website_endpoint_url" {
   value       = aws_s3_bucket_website_configuration.media_assets_website.website_endpoint
 }
 
+#Empty Commit
 output "bucket_arn" {
   description = "ARN of the S3 bucket for cross-service references"
   value       = aws_s3_bucket.media_assets.arn
