@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Construct } from 'constructs';
 
 interface DatabaseStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -27,12 +27,21 @@ export class DatabaseStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow MySQL/PostgreSQL traffic from EC2 instances in the VPC
+    // Allow PostgreSQL traffic from EC2 instances in the VPC
     dbSg.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-      ec2.Port.tcp(5432), // Assuming PostgreSQL
+      ec2.Port.tcp(5432),
       'Allow database traffic from within the VPC'
     );
+
+    // Also allow from all private subnets explicitly
+    props.vpc.privateSubnets.forEach((subnet, index) => {
+      dbSg.addIngressRule(
+        ec2.Peer.ipv4(subnet.ipv4CidrBlock),
+        ec2.Port.tcp(5432),
+        `Allow database traffic from private subnet ${index + 1}`
+      );
+    });
 
     // Create a parameter group
     const parameterGroup = new rds.ParameterGroup(this, 'DbParameterGroup', {

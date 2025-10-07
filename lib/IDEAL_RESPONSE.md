@@ -486,10 +486,10 @@ export class StorageStack extends cdk.Stack {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Construct } from 'constructs';
 
 interface DatabaseStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -514,12 +514,21 @@ export class DatabaseStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow MySQL/PostgreSQL traffic from EC2 instances in the VPC
+    // Allow PostgreSQL traffic from EC2 instances in the VPC
     dbSg.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-      ec2.Port.tcp(5432), // Assuming PostgreSQL
+      ec2.Port.tcp(5432),
       'Allow database traffic from within the VPC'
     );
+
+    // Also allow from all private subnets explicitly
+    props.vpc.privateSubnets.forEach((subnet, index) => {
+      dbSg.addIngressRule(
+        ec2.Peer.ipv4(subnet.ipv4CidrBlock),
+        ec2.Port.tcp(5432),
+        `Allow database traffic from private subnet ${index + 1}`
+      );
+    });
 
     // Create a parameter group
     const parameterGroup = new rds.ParameterGroup(this, 'DbParameterGroup', {
@@ -608,14 +617,14 @@ export class DatabaseStack extends cdk.Stack {
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as efs from 'aws-cdk-lib/aws-efs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import { Construct } from 'constructs';
 
 interface ComputeStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -729,6 +738,7 @@ export class ComputeStack extends cdk.Stack {
       'set -e',
       'exec > >(tee /var/log/user-data.log) 2>&1',
       'echo "Starting user data script at $(date)"',
+      '# Instance template updated: 2025-10-07T09:30:00Z - EFS mount fixed',
       '',
       '# Update system and install packages',
       'yum update -y',
@@ -736,7 +746,7 @@ export class ComputeStack extends cdk.Stack {
       '',
       '# Mount EFS',
       'mkdir -p /mnt/efs',
-      `mount -t efs ${props.fileSystem.fileSystemId}:/ /mnt/efs || echo "EFS mount failed"`,
+      `mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${props.fileSystem.fileSystemId}.efs.${this.region}.amazonaws.com:/ /mnt/efs`,
       'echo "EFS mounted successfully"',
       '',
       '# Create index page',
@@ -884,7 +894,7 @@ export class DnsStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DnsStackProps) {
     super(scope, id, props);
 
-    // Always create health checks for ALB monitoring (works without domain)
+    // Always create health checks for ALB monitoring (useful even without custom domain)
     this.primaryHealthCheck = new route53.CfnHealthCheck(
       this,
       'PrimaryHealthCheck',

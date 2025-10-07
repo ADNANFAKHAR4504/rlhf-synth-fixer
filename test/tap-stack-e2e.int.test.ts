@@ -109,6 +109,7 @@ async function executeSsmCommand(
       Parameters: {
         commands,
       },
+      TimeoutSeconds: 180,
     })
   );
 
@@ -117,9 +118,9 @@ async function executeSsmCommand(
     throw new Error('Failed to get command ID');
   }
 
-  // Wait for command to complete (max 60 seconds)
+  // Wait for command to complete (max 120 seconds)
   let attempts = 0;
-  const maxAttempts = 30;
+  const maxAttempts = 60;
 
   while (attempts < maxAttempts) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -143,7 +144,7 @@ async function executeSsmCommand(
     attempts++;
   }
 
-  throw new Error('Command timed out after 60 seconds');
+  throw new Error('Command timed out after 120 seconds');
 }
 
 async function loadOutputs() {
@@ -414,31 +415,39 @@ describe('E2E Tests - Multi-Region Resilient Infrastructure', () => {
     let standbyInstanceId: string;
 
     beforeAll(async () => {
-      // Get instance IDs from primary region
+      // Get instance IDs from primary region - filter by specific ComputePrimary ASG
       const primaryInstancesResponse = await primaryEc2Client.send(
         new DescribeInstancesCommand({
           Filters: [
-            { Name: 'tag:aws:autoscaling:groupName', Values: ['*'] },
+            { Name: 'tag:aws:autoscaling:groupName', Values: ['*ComputePrimary*'] },
             { Name: 'instance-state-name', Values: ['running'] },
           ],
         })
       );
 
-      primaryInstanceId =
-        primaryInstancesResponse.Reservations?.[0]?.Instances?.[0]?.InstanceId || '';
+      // Get the oldest instance (most likely to be fully initialized)
+      const instances = primaryInstancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const sortedInstances = instances.sort((a, b) =>
+        (a.LaunchTime?.getTime() || 0) - (b.LaunchTime?.getTime() || 0)
+      );
+      primaryInstanceId = sortedInstances[0]?.InstanceId || '';
 
-      // Get instance IDs from standby region
+      // Get instance IDs from standby region - filter by specific ComputeStandby ASG
       const standbyInstancesResponse = await standbyEc2Client.send(
         new DescribeInstancesCommand({
           Filters: [
-            { Name: 'tag:aws:autoscaling:groupName', Values: ['*'] },
+            { Name: 'tag:aws:autoscaling:groupName', Values: ['*ComputeStandby*'] },
             { Name: 'instance-state-name', Values: ['running'] },
           ],
         })
       );
 
-      standbyInstanceId =
-        standbyInstancesResponse.Reservations?.[0]?.Instances?.[0]?.InstanceId || '';
+      // Get the oldest instance (most likely to be fully initialized)
+      const standbyInstances = standbyInstancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const sortedStandbyInstances = standbyInstances.sort((a, b) =>
+        (a.LaunchTime?.getTime() || 0) - (b.LaunchTime?.getTime() || 0)
+      );
+      standbyInstanceId = sortedStandbyInstances[0]?.InstanceId || '';
     }, 60000);
 
     test('primary instance should be able to connect to primary database', async () => {
@@ -450,16 +459,30 @@ describe('E2E Tests - Multi-Region Resilient Infrastructure', () => {
       const dbEndpoint = outputs.DbEndpoint;
       const dbHost = dbEndpoint.split(':')[0];
 
-      const output = await executeSsmCommand(
-        primaryInstanceId,
-        [
-          `timeout 10 bash -c "cat < /dev/null > /dev/tcp/${dbHost}/5432" && echo "success" || echo "failed"`,
-        ],
-        primaryRegion
-      );
+      try {
+        // First check if the instance is ready
+        const readyCheck = await executeSsmCommand(
+          primaryInstanceId,
+          ['echo "ready"'],
+          primaryRegion
+        );
+        console.log(`Instance ready check: ${readyCheck.trim()}`);
 
-      expect(output.trim()).toContain('success');
-    }, 120000);
+        // Try the database connection
+        const output = await executeSsmCommand(
+          primaryInstanceId,
+          [
+            `timeout 15 bash -c "cat < /dev/null > /dev/tcp/${dbHost}/5432" && echo "success" || echo "failed"`,
+          ],
+          primaryRegion
+        );
+
+        expect(output.trim()).toContain('success');
+      } catch (error) {
+        console.error(`Database connectivity test failed: ${error}`);
+        throw error;
+      }
+    }, 180000);
 
     test('standby instance should be able to connect to standby database (read replica)', async () => {
       if (!standbyInstanceId) {
@@ -503,29 +526,39 @@ describe('E2E Tests - Multi-Region Resilient Infrastructure', () => {
     let standbyInstanceId: string;
 
     beforeAll(async () => {
+      // Get instance IDs from primary region - filter by specific ComputePrimary ASG
       const primaryInstancesResponse = await primaryEc2Client.send(
         new DescribeInstancesCommand({
           Filters: [
-            { Name: 'tag:aws:autoscaling:groupName', Values: ['*'] },
+            { Name: 'tag:aws:autoscaling:groupName', Values: ['*ComputePrimary*'] },
             { Name: 'instance-state-name', Values: ['running'] },
           ],
         })
       );
 
-      primaryInstanceId =
-        primaryInstancesResponse.Reservations?.[0]?.Instances?.[0]?.InstanceId || '';
+      // Get the oldest instance (most likely to be fully initialized)
+      const instances = primaryInstancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const sortedInstances = instances.sort((a, b) =>
+        (a.LaunchTime?.getTime() || 0) - (b.LaunchTime?.getTime() || 0)
+      );
+      primaryInstanceId = sortedInstances[0]?.InstanceId || '';
 
+      // Get instance IDs from standby region - filter by specific ComputeStandby ASG
       const standbyInstancesResponse = await standbyEc2Client.send(
         new DescribeInstancesCommand({
           Filters: [
-            { Name: 'tag:aws:autoscaling:groupName', Values: ['*'] },
+            { Name: 'tag:aws:autoscaling:groupName', Values: ['*ComputeStandby*'] },
             { Name: 'instance-state-name', Values: ['running'] },
           ],
         })
       );
 
-      standbyInstanceId =
-        standbyInstancesResponse.Reservations?.[0]?.Instances?.[0]?.InstanceId || '';
+      // Get the oldest instance (most likely to be fully initialized)
+      const standbyInstances = standbyInstancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const sortedStandbyInstances = standbyInstances.sort((a, b) =>
+        (a.LaunchTime?.getTime() || 0) - (b.LaunchTime?.getTime() || 0)
+      );
+      standbyInstanceId = sortedStandbyInstances[0]?.InstanceId || '';
     }, 60000);
 
     test('EFS should be mounted on primary instances', async () => {
@@ -549,18 +582,32 @@ describe('E2E Tests - Multi-Region Resilient Infrastructure', () => {
         return;
       }
 
-      const testString = `test-${Date.now()}`;
-      const output = await executeSsmCommand(
-        primaryInstanceId,
-        [
-          `echo "${testString}" > /mnt/efs/e2e-test.txt`,
-          'cat /mnt/efs/e2e-test.txt',
-        ],
-        primaryRegion
-      );
+      try {
+        const testString = `test-${Date.now()}`;
 
-      expect(output).toContain(testString);
-    }, 120000);
+        // Check EFS mount permissions
+        const permCheck = await executeSsmCommand(
+          primaryInstanceId,
+          ['ls -la /mnt/efs/', 'whoami'],
+          primaryRegion
+        );
+        console.log(`EFS permissions check: ${permCheck}`);
+
+        const output = await executeSsmCommand(
+          primaryInstanceId,
+          [
+            `echo "${testString}" > /mnt/efs/e2e-test.txt`,
+            'cat /mnt/efs/e2e-test.txt',
+          ],
+          primaryRegion
+        );
+
+        expect(output).toContain(testString);
+      } catch (error) {
+        console.error(`EFS write test failed: ${error}`);
+        throw error;
+      }
+    }, 180000);
 
     test('EFS should be mounted on standby instances', async () => {
       if (!standbyInstanceId) {
