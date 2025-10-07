@@ -160,6 +160,7 @@ export class IaCNovaStack extends NestedStack {
         type: 'String',
         description:
           'ARN of an AWS Secrets Manager secret containing the username and password for the RDS instance. The secret must include the keys username and password.',
+        default: '',
       }
     );
 
