@@ -31,11 +31,12 @@ export class TapStack extends cdk.Stage {
     super(scope, id, props);
 
     const environmentSuffix =
-      props?.environmentSuffix ?? this.node.tryGetContext('environmentSuffix') ?? 'dev';
+      props?.environmentSuffix ??
+      this.node.tryGetContext('environmentSuffix') ??
+      'dev';
 
     const stackId =
-      props?.stackId ??
-      `IaCNovaEmailNotification-${environmentSuffix}`;
+      props?.stackId ?? `IaCNovaEmailNotification-${environmentSuffix}`;
 
     const stackDescription =
       props?.stackDescription ??
