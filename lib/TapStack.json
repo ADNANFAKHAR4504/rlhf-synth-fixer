@@ -399,20 +399,6 @@
     "ResultsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Join": [
-            "",
-            [
-              {
-                "Fn::Sub": "${AWS::StackName}"
-              },
-              "-results-",
-              {
-                "Ref": "AWS::AccountId"
-              }
-            ]
-          ]
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {

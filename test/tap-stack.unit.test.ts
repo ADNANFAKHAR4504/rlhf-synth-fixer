@@ -206,14 +206,11 @@ describe('Serverless Polling and Voting System - CloudFormation Template', () =>
       ).toBe('AES256');
     });
 
-    test('S3 bucket name should be properly formatted', () => {
+    test('S3 bucket should use auto-generated name', () => {
       const bucket = template.Resources.ResultsBucket;
-      expect(bucket.Properties.BucketName).toBeDefined();
-      expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
-      // Verify it includes stack name and account ID
-      const joinParts = bucket.Properties.BucketName['Fn::Join'][1];
-      expect(joinParts).toContainEqual({ 'Fn::Sub': '${AWS::StackName}' });
-      expect(joinParts).toContainEqual({ Ref: 'AWS::AccountId' });
+      // BucketName should not be specified to allow CloudFormation auto-generation
+      // This avoids issues with uppercase characters in stack names
+      expect(bucket.Properties.BucketName).toBeUndefined();
     });
 
     test('S3 bucket should have versioning enabled', () => {

@@ -429,47 +429,73 @@ When the stack name contains uppercase characters (e.g., `TapStack-test-17598425
 
 ### Solution Applied
 
-**Option 1: Changed Bucket Name to Use Fn::Join** (Implemented)
+**Removed BucketName Property - Let CloudFormation Auto-Generate** (Final Solution)
+
+CloudFormation doesn't have a native function to convert strings to lowercase. The most reliable solution is to **remove the BucketName property entirely** and let CloudFormation automatically generate a unique, compliant bucket name.
+
+**Before:**
 ```json
-"BucketName": {
-  "Fn::Join": ["", [
-    {"Fn::Sub": "${AWS::StackName}"},
-    "-results-",
-    {"Ref": "AWS::AccountId"}
-  ]]
+"ResultsBucket": {
+  "Type": "AWS::S3::Bucket",
+  "Properties": {
+    "BucketName": {
+      "Fn::Join": ["", [
+        {"Fn::Sub": "${AWS::StackName}"},
+        "-results-",
+        {"Ref": "AWS::AccountId"}
+      ]]
+    },
+    ...
+  }
 }
 ```
 
-**Option 2: Use Lowercase Stack Names** (Recommended for deployment)
-Deploy with lowercase stack names to avoid the issue entirely:
-```bash
-STACK_NAME="tapstack-test-$(date +%s)"
-aws cloudformation deploy --stack-name "$STACK_NAME" ...
+**After:**
+```json
+"ResultsBucket": {
+  "Type": "AWS::S3::Bucket",
+  "Properties": {
+    "BucketEncryption": { ... },
+    // BucketName removed - CloudFormation auto-generates
+  }
+}
 ```
 
-**Files Modified:**
-- `lib/TapStack.json` - Updated ResultsBucket BucketName property
-- `test/tap-stack.unit.test.ts` - Added test to verify bucket name format
-- `deploy-test-cleanup.sh` - Created deployment script with lowercase stack name
+**Benefits of Auto-Generated Names:**
+- ✅ Always compliant with S3 naming rules (lowercase, unique)
+- ✅ Works with any stack name (uppercase or lowercase)
+- ✅ Guaranteed uniqueness across AWS
+- ✅ No manual naming conflicts
 
-**Test Added:**
+**How to Reference the Bucket:**
+The bucket can still be referenced using `{ Ref: "ResultsBucket" }` in:
+- Lambda environment variables
+- IAM policies
+- Stack outputs
+- QuickSight data sources
+
+**Files Modified:**
+- `lib/TapStack.json` - Removed BucketName property from ResultsBucket
+- `test/tap-stack.unit.test.ts` - Updated test to verify BucketName is undefined
+- `deploy-test-cleanup.sh` - Deployment script (works with any stack name now)
+
+**Test Updated:**
 ```typescript
-test('S3 bucket name should be properly formatted', () => {
+test('S3 bucket should use auto-generated name', () => {
   const bucket = template.Resources.ResultsBucket;
-  expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
-  const joinParts = bucket.Properties.BucketName['Fn::Join'][1];
-  expect(joinParts).toContainEqual({ 'Fn::Sub': '${AWS::StackName}' });
-  expect(joinParts).toContainEqual({ Ref: 'AWS::AccountId' });
+  // BucketName should not be specified to allow CloudFormation auto-generation
+  // This avoids issues with uppercase characters in stack names
+  expect(bucket.Properties.BucketName).toBeUndefined();
 });
 ```
 
 **Result:** 
-- ✅ Template now handles bucket naming correctly
-- ✅ Deployment script uses lowercase stack names
+- ✅ Template works with ANY stack name (uppercase or lowercase)
+- ✅ No S3 naming conflicts or errors
 - ✅ Unit tests updated (78/78 passing)
-- ✅ Bucket name format validated in tests
+- ✅ Fully portable across environments
 
-**Key Lesson:** Always use lowercase for AWS resource names that have strict naming requirements (S3 buckets, DynamoDB tables with certain configurations). Use lowercase stack names or transform functions to ensure compliance.
+**Key Lesson:** For resources with strict naming requirements (S3 buckets), prefer CloudFormation auto-generated names over custom names. This eliminates naming conflicts and ensures compliance with service-specific naming rules.
 
 ---
 
