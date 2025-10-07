@@ -18,7 +18,6 @@ locals {
       Terraform         = "true"
       AccountId         = local.account_id
       Region            = local.region
-      CreatedDate       = timestamp()
       EnvironmentSuffix = local.env_suffix
     }
   )
