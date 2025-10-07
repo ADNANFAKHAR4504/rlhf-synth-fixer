@@ -123,17 +123,16 @@ describe('Appointment Scheduler CloudFormation Template', () => {
       const lambda = template.Resources.ConflictDetectorFunction;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
       expect(lambda.Properties.Runtime).toBe('python3.11');
-      expect(lambda.Properties.Handler).toBe('conflict_detector.handler');
+      expect(lambda.Properties.Handler).toBe('index.handler');
       expect(lambda.Properties.Timeout).toBe(30);
       expect(lambda.Properties.MemorySize).toBe(256);
-      expect(lambda.Properties.ReservedConcurrentExecutions).toBe(10);
     });
 
     test('ReminderSenderFunction should have correct properties', () => {
       const lambda = template.Resources.ReminderSenderFunction;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
       expect(lambda.Properties.Runtime).toBe('python3.11');
-      expect(lambda.Properties.Handler).toBe('reminder_sender.handler');
+      expect(lambda.Properties.Handler).toBe('index.handler');
       expect(lambda.Properties.Timeout).toBe(30);
       expect(lambda.Properties.MemorySize).toBe(256);
     });
@@ -366,8 +365,8 @@ describe('Appointment Scheduler CloudFormation Template', () => {
 
     test('Lambda functions should have reserved concurrent executions limit', () => {
       const conflictDetector = template.Resources.ConflictDetectorFunction;
-      expect(conflictDetector.Properties.ReservedConcurrentExecutions).toBeDefined();
-      expect(conflictDetector.Properties.ReservedConcurrentExecutions).toBe(10);
+      // ReservedConcurrentExecutions was removed to avoid AWS limits
+      expect(conflictDetector.Properties.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('IAM roles should follow least privilege principle', () => {

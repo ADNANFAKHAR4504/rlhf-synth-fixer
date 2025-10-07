@@ -1,41 +1,38 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  DynamoDBClient,
-  GetItemCommand,
-  ScanCommand,
-  DeleteItemCommand
-} from '@aws-sdk/client-dynamodb';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  SubscribeCommand,
-  UnsubscribeCommand
-} from '@aws-sdk/client-sns';
-import {
-  APIGatewayClient,
-  GetRestApisCommand
+  APIGatewayClient
 } from '@aws-sdk/client-api-gateway';
 import {
   CloudWatchClient,
   GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DeleteItemCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  ScanCommand
+} from '@aws-sdk/client-dynamodb';
+import {
   EventBridgeClient,
   ListRulesCommand
 } from '@aws-sdk/client-eventbridge';
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
 import axios from 'axios';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 // AWS clients
-const dynamoClient = new DynamoDBClient({ region: 'us-west-1' });
-const snsClient = new SNSClient({ region: 'us-west-1' });
-const apiClient = new APIGatewayClient({ region: 'us-west-1' });
-const cloudWatchClient = new CloudWatchClient({ region: 'us-west-1' });
-const eventBridgeClient = new EventBridgeClient({ region: 'us-west-1' });
+const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
+const snsClient = new SNSClient({ region: 'us-east-1' });
+const apiClient = new APIGatewayClient({ region: 'us-east-1' });
+const cloudWatchClient = new CloudWatchClient({ region: 'us-east-1' });
+const eventBridgeClient = new EventBridgeClient({ region: 'us-east-1' });
 
 describe('Appointment Scheduler Integration Tests', () => {
   const testUserId = `test-user-${Date.now()}`;
@@ -109,7 +106,7 @@ describe('Appointment Scheduler Integration Tests', () => {
     test('should verify API endpoint is accessible', async () => {
       const apiEndpoint = outputs.ApiEndpoint;
       expect(apiEndpoint).toBeDefined();
-      expect(apiEndpoint).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.us-west-1\.amazonaws\.com\/prod$/);
+      expect(apiEndpoint).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/prod$/);
     });
 
     test('should return 400 for invalid request body', async () => {
@@ -238,7 +235,7 @@ describe('Appointment Scheduler Integration Tests', () => {
     test('should create reminder rules for appointments', async () => {
       const apiEndpoint = outputs.ApiEndpoint;
       const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 2); // 2 days from now for both reminders to be scheduled
+      futureDate.setDate(futureDate.getDate() + 7); // 7 days from now to ensure both reminders are scheduled
 
       const response = await axios.post(`${apiEndpoint}/appointments`, {
         userId: `eventbridge-test-${Date.now()}`,
