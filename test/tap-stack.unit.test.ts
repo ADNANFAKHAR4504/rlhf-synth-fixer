@@ -75,6 +75,44 @@ describe('TapStack', () => {
         }
       });
     });
+
+    test('uses context environment suffix when props is undefined', () => {
+      // Set context value and create stack without environmentSuffix prop
+      app.node.setContext('environmentSuffix', 'context-env');
+      stack = new TapStack(app, 'ContextStack', {});
+      template = Template.fromStack(stack);
+
+      template.hasOutput('EnvironmentSuffix', {
+        Value: 'context-env',
+        Export: {
+          Name: 'environment-suffix-context-env'
+        }
+      });
+    });
+
+    test('uses environment variable for SKIP_CERTIFICATE', () => {
+      // Mock environment variable
+      const originalEnv = process.env.SKIP_CERTIFICATE;
+      process.env.SKIP_CERTIFICATE = 'false';
+
+      try {
+        stack = new TapStack(app, 'EnvVarStack', {
+          environmentSuffix: 'env-test'
+        });
+        template = Template.fromStack(stack);
+
+        // Should still create the stack successfully
+        const outputs = template.findOutputs('*');
+        expect(outputs).toHaveProperty('EnvironmentSuffix');
+      } finally {
+        // Restore original environment variable
+        if (originalEnv !== undefined) {
+          process.env.SKIP_CERTIFICATE = originalEnv;
+        } else {
+          delete process.env.SKIP_CERTIFICATE;
+        }
+      }
+    });
   });
 
   describe('Nested Stack References', () => {
