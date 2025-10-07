@@ -249,7 +249,7 @@ export class VpcModule extends Construct {
       }
     }
 
-    // First, add IAM role for Flow Logs 
+    // First, add IAM role for Flow Logs
     const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
       name: 'vpc-flow-log-role',
       assumeRolePolicy: JSON.stringify({
