@@ -4,8 +4,7 @@ import {
 } from '@aws-sdk/client-acm';
 import {
   AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-  DescribeLaunchTemplatesCommand
+  DescribeAutoScalingGroupsCommand
 } from '@aws-sdk/client-auto-scaling';
 import {
   CloudWatchClient,
@@ -23,6 +22,7 @@ import {
   PutItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
+  DescribeLaunchTemplatesCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
@@ -67,17 +67,32 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 const hasOutputs = Object.keys(outputs).length > 0;
 
-// Initialize AWS SDK clients
-const dynamoClient = new DynamoDBClient({ region });
-const ec2Client = new EC2Client({ region });
-const elbv2Client = new ElasticLoadBalancingV2Client({ region });
-const asgClient = new AutoScalingClient({ region });
-const rdsClient = new RDSClient({ region });
-const lambdaClient = new LambdaClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-const eventBridgeClient = new EventBridgeClient({ region });
-const acmClient = new ACMClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
+// Initialize AWS SDK clients only when needed
+let dynamoClient: DynamoDBClient;
+let ec2Client: EC2Client;
+let elbv2Client: ElasticLoadBalancingV2Client;
+let asgClient: AutoScalingClient;
+let rdsClient: RDSClient;
+let lambdaClient: LambdaClient;
+let logsClient: CloudWatchLogsClient;
+let eventBridgeClient: EventBridgeClient;
+let acmClient: ACMClient;
+let cloudWatchClient: CloudWatchClient;
+
+const initializeClients = () => {
+  if (!dynamoClient) {
+    dynamoClient = new DynamoDBClient({ region });
+    ec2Client = new EC2Client({ region });
+    elbv2Client = new ElasticLoadBalancingV2Client({ region });
+    asgClient = new AutoScalingClient({ region });
+    rdsClient = new RDSClient({ region });
+    lambdaClient = new LambdaClient({ region });
+    logsClient = new CloudWatchLogsClient({ region });
+    eventBridgeClient = new EventBridgeClient({ region });
+    acmClient = new ACMClient({ region });
+    cloudWatchClient = new CloudWatchClient({ region });
+  }
+};
 
 describe('TapStack Integration Tests', () => {
   // Skip all integration tests if we don't have AWS credentials or outputs
@@ -91,6 +106,11 @@ describe('TapStack Integration Tests', () => {
     }
     return false;
   };
+
+  // Initialize clients before running tests
+  beforeAll(() => {
+    initializeClients();
+  });
 
   describe('DynamoDB Table', () => {
     test('TurnAroundPromptTable should exist and be accessible', async () => {
@@ -269,8 +289,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Launch template should exist', async () => {
+      if (skipIfNoAws()) return;
       const command = new DescribeLaunchTemplatesCommand({});
-      const response = await asgClient.send(command);
+      const response = await ec2Client.send(command);
 
       expect(response.LaunchTemplates).toBeDefined();
       expect(response.LaunchTemplates?.length).toBeGreaterThan(0);
