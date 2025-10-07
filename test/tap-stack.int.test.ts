@@ -14,8 +14,6 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
 describe('Serverless Image Processing System - E2E Integration Tests', () => {
   const region = process.env.AWS_REGION || outputs.Region || 'us-east-1';
-  const stackName = outputs.StackName || `image-processing-${environmentSuffix}`;
-  const testEmail = process.env.TEST_EMAIL || outputs.NotificationEmail || 'test@example.com';
 
   let cfnClient: CloudFormationClient;
   let s3Client: S3Client;
@@ -454,12 +452,14 @@ describe('Serverless Image Processing System - E2E Integration Tests', () => {
         const response = await s3Client.send(listCommand);
 
         if (response.Contents && response.Contents.length > 0) {
-          const deletePromises = response.Contents.map(object => {
+          const deletePromises = response.Contents.map((object: any) => {
             if (object.Key) {
               return s3Client.send(new DeleteObjectCommand({
                 Bucket: bucket,
                 Key: object.Key
               }));
+            } else {
+              return Promise.resolve();
             }
           });
 
