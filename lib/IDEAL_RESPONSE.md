@@ -516,4 +516,4 @@ new TapStack(app, stackName, {
 - **VPC Endpoints**: Private connectivity to S3
 - **Version Control**: Minor version auto-upgrades for security patches
 
-This implementation provides a production-ready, secure, and cost-effective infrastructure for a retail database system processing 1,500 daily orders, with comprehensive monitoring and operational controls.
+This implementation provides a production-ready, secure, and cost-effective infrastructure for a retail database system processing 1,500 daily orders, with comprehensive monitoring and operational control.
