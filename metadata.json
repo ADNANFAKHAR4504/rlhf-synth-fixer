@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "A7B9B2",
+  "team": "1",
+  "startedAt": "2025-10-07T17:44:44.701Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "VPC, DynamoDB, DynamoDB Global Tables, S3 Bucket, S3 Cross-Region Replication, KMS, IAM, Route 53, Route 53 Health Checks, Lambda, EventBridge, CloudWatch, CloudWatch Alarms, CloudWatch LogGroup, CloudTrail"
+}
