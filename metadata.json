@@ -6,7 +6,14 @@
   "po_id": "78029461",
   "team": "synth",
   "startedAt": "2025-10-03T19:21:22+05:30",
-  "training_quality": 8.5,
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Infrastructure Analysis/Monitoring"
+  ],
   "aws_services": [
     "Security Hub",
     "GuardDuty",
@@ -19,5 +26,10 @@
     "Glacier",
     "KMS",
     "IAM"
-  ]
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
