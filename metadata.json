@@ -7,6 +7,10 @@
   "team": "synth",
   "startedAt": "2025-10-01T15:27:12+00:00",
   "training_quality": 8,
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
   "aws_services": [
     "Amazon VPC",
     "Amazon RDS",
