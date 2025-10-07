@@ -218,6 +218,15 @@ describe('iac-nova-app bootstrap', () => {
   });
 
   test('uses defaults when no overrides are present', () => {
+    // Clear all environment variables that could affect the test
+    delete process.env.CDK_STAGE_ID;
+    delete process.env.CDK_STACK_ID;
+    delete process.env.CDK_STACK_DESCRIPTION;
+    delete process.env.ENVIRONMENT_SUFFIX;
+    delete process.env.STRING_SUFFIX;
+    delete process.env.CDK_DEFAULT_ACCOUNT;
+    delete process.env.CDK_DEFAULT_REGION;
+
     const synthSpy = jest
       .spyOn(cdk.App.prototype, 'synth')
       .mockImplementation(() => ({} as never));
