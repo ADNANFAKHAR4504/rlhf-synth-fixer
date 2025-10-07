@@ -84,12 +84,11 @@ describe('Image Processing Pipeline CloudFormation Template', () => {
     });
 
     test('UploadBucket should have Lambda notification configurations', () => {
-      // Check that the Custom Resource for bucket notifications exists
-      const notificationResource = template.Resources.UploadBucketNotification;
-      expect(notificationResource).toBeDefined();
-      expect(notificationResource.Type).toBe('Custom::S3BucketNotification');
-
-      const lambdaConfigs = notificationResource.Properties.LambdaConfigurations;
+      // Check that the bucket has NotificationConfiguration property
+      const bucket = template.Resources.UploadBucket;
+      expect(bucket.Properties.NotificationConfiguration).toBeDefined();
+      
+      const lambdaConfigs = bucket.Properties.NotificationConfiguration.LambdaConfigurations;
       expect(lambdaConfigs).toBeDefined();
       expect(lambdaConfigs.length).toBe(3);
 
@@ -394,7 +393,7 @@ describe('Image Processing Pipeline CloudFormation Template', () => {
   describe('Resource Count', () => {
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(14);
+      expect(resourceCount).toBe(11);
     });
 
     test('should have 3 parameters', () => {
