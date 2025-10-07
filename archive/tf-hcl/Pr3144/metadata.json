@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348936",
+  "team": "6",
+  "startedAt": "2025-09-29T08:46:36.037Z",
+  "task_sub_category": "IaC-Security-Hardening",
+  "use_case_category": "Security, Compliance, and Governance",
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch Logs",
+    "KMS",
+    "VPC",
+    "EC2",
+    "RDS",
+    "CloudTrail",
+    "GuardDuty",
+    "AWS Config",
+    "Systems Manager Parameter Store",
+    "EBS"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High training value due to: (1) Complex multi-service security architecture demonstrating advanced AWS security patterns, (2) Multiple critical infrastructure failures requiring sophisticated debugging (S3 policy lockout, regional compatibility, service-to-service permissions), (3) Real-world lessons in balancing security with operational requirements, (4) Comprehensive coverage of 13+ AWS services with proper integration patterns, (5) Demonstrates importance of regional testing and AWS API validation rules. The model's original response had 11 distinct failures across high/medium/low severity, providing excellent learning opportunities for security hardening, regional service availability, and Terraform best practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}

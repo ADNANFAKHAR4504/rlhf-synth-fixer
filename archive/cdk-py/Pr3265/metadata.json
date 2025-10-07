@@ -1,0 +1,24 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "57192043",
+  "team": "synth",
+  "startedAt": "2025-10-01T23:49:41+05:30",
+  "subtask": "Serverless Infrastructure",
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
