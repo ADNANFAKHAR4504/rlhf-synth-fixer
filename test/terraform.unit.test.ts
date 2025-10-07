@@ -5,7 +5,7 @@ describe("TapStack Terraform Unit Tests (accurate and fixed)", () => {
   let tfContent: string;
 
   beforeAll(() => {
-    const tfPath = path.join(__dirname, "../tap_stack.tf");
+    const tfPath = path.join(__dirname, "../lib/tap_stack.tf");
     tfContent = fs.readFileSync(tfPath, "utf8");
   });
 
