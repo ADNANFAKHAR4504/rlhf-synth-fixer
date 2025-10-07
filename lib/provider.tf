@@ -1,39 +1,19 @@
-terraform {# provider.tf
-
+﻿terraform {
   required_version = ">= 1.2.0"
-
-  required_providers {terraform {
-
-    aws = {  required_version = ">= 1.2.0"
-
+  required_providers {
+    aws = {
       source  = "hashicorp/aws"
-
-      version = "~> 5.0"  required_providers {
-
-    }    aws = {
-
-    random = {      source  = "hashicorp/aws"
-
-      source  = "hashicorp/random"      version = "~> 5.0"
-
-      version = "~> 3.1"    }
-
-    }    random = {
-
-  }      source  = "hashicorp/random"
-
-}      version = "~> 3.1"
-
+      version = "~> 5.0"
     }
-
-provider "aws" {  }
-
-  region = var.aws_region}
-
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
+  }
 }
 
-# Primary AWS provider for general resources
-
-provider "random" {}provider "aws" {
+provider "aws" {
   region = var.aws_region
 }
+
+provider "random" {}
