@@ -84,6 +84,37 @@ def _extract_first_json_object(text: str) -> Optional[dict]:
     return None
 
 
+def _parse_lambda_response(response: dict) -> (int, dict):
+    """Return (statusCode, body_dict) from a Lambda invocation response."""
+    if not isinstance(response, dict):
+        return 0, {}
+    status_code = response.get("statusCode") or 0
+    body_raw = response.get("body")
+    body: dict = {}
+    if isinstance(body_raw, str):
+        # Body is usually a JSON string
+        try:
+            # Body may itself contain nested JSON as a string
+            body = json.loads(body_raw)
+        except Exception:
+            # Try to extract first JSON from body_raw (in case of noise)
+            extracted = _extract_first_json_object(body_raw)
+            body = extracted or {}
+    elif isinstance(body_raw, dict):
+        body = body_raw
+    elif body_raw is None and "rawOutput" in response:
+        # Fallback: parse from rawOutput
+        extracted = _extract_first_json_object(response.get("rawOutput", ""))
+        if isinstance(extracted, dict):
+            status_code = extracted.get("statusCode") or status_code
+            inner_body = extracted.get("body")
+            try:
+                body = json.loads(inner_body) if isinstance(inner_body, str) else (inner_body or {})
+            except Exception:
+                body = {}
+    return int(status_code), body
+
+
 def invoke_lambda(function_name, payload):
     """Invoke Lambda function and return response."""
     payload_json = json.dumps(payload)
@@ -291,7 +322,8 @@ class TestTapStackDeployment:
         }
         
         create_response = invoke_lambda(function_name, create_event)
-        create_body = json.loads(create_response.get("body", "{}"))
+        status, create_body = _parse_lambda_response(create_response)
+        assert status in [200, 201], f"Task create failed: {create_response}"
         created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Now get the task
@@ -313,13 +345,21 @@ class TestTapStackDeployment:
             }
         }
         
-        response = invoke_lambda(function_name, get_event)
+        # Retry a few times to handle eventual consistency
+        attempts = 0
+        status = 0
+        body = {}
+        while attempts < 3:
+            response = invoke_lambda(function_name, get_event)
+            status, body = _parse_lambda_response(response)
+            if status in [200, 404]:
+                break
+            time.sleep(1)
+            attempts += 1
+
+        assert status in [200, 404], f"Expected 200 or 404, got {status}"
         
-        assert "statusCode" in response
-        assert response["statusCode"] in [200, 404], f"Expected 200 or 404, got {response['statusCode']}"
-        
-        if response["statusCode"] == 200:
-            body = json.loads(response.get("body", "{}"))
+        if status == 200:
             assert "taskId" in body or "task" in body, "Response should contain task data"
             print(f"✓ Task retrieved successfully: {created_task_id}")
 
@@ -354,7 +394,8 @@ class TestTapStackDeployment:
         }
         
         create_response = invoke_lambda(function_name, create_event)
-        create_body = json.loads(create_response.get("body", "{}"))
+        status, create_body = _parse_lambda_response(create_response)
+        assert status in [200, 201], f"Task create failed: {create_response}"
         created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Wait a bit to ensure task is created
@@ -383,12 +424,9 @@ class TestTapStackDeployment:
         }
         
         response = invoke_lambda(function_name, update_event)
-        
-        assert "statusCode" in response
-        assert response["statusCode"] in [200, 404], f"Expected 200 or 404, got {response['statusCode']}"
-        
-        if response["statusCode"] == 200:
-            body = json.loads(response.get("body", "{}"))
+        status, body = _parse_lambda_response(response)
+        assert status in [200, 404], f"Expected 200 or 404, got {status}"
+        if status == 200:
             print(f"✓ Task updated successfully: {created_task_id}")
 
     def test_lambda_delete_task(self):
@@ -422,7 +460,8 @@ class TestTapStackDeployment:
         }
         
         create_response = invoke_lambda(function_name, create_event)
-        create_body = json.loads(create_response.get("body", "{}"))
+        status, create_body = _parse_lambda_response(create_response)
+        assert status in [200, 201], f"Task create failed: {create_response}"
         created_task_id = create_body.get("taskId") or (create_body.get("task") or {}).get("taskId")
         
         # Wait a bit to ensure task is created
@@ -448,9 +487,8 @@ class TestTapStackDeployment:
         }
         
         response = invoke_lambda(function_name, delete_event)
-        
-        assert "statusCode" in response
-        assert response["statusCode"] in [200, 204, 404], f"Expected 200/204/404, got {response['statusCode']}"
+        status, body = _parse_lambda_response(response)
+        assert status in [200, 204, 404], f"Expected 200/204/404, got {status}"
         print(f"✓ Task deleted successfully: {created_task_id}")
 
     def test_lambda_invalid_request(self):
