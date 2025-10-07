@@ -1,6 +1,5 @@
 # Overview
 
-Please find solution files below.
 
 ## ./bin/tap.d.ts
 
