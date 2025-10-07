@@ -3,22 +3,14 @@ import { CloudWatchClient, GetMetricStatisticsCommand, Statistic } from '@aws-sd
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { SNSClient } from '@aws-sdk/client-sns';
-
+import fs from 'fs';
 // Configuration - Read from cfn-outputs after deployment
-// let outputs = JSON.parse(
-//   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-// );
-let outputs: any = {
-  "UploadInstructions": "Upload images to s3://image-upload-bucket-pr89-149536495831/uploads/ with .jpg, .jpeg, or .png extensions",
-  "ProcessedBucketName": "processed-images-bucket-pr89-149536495831",
-  "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:149536495831:function:image-processor-pr89",
-  "SNSTopicArn": "arn:aws:sns:ap-south-1:149536495831:image-processing-notifications-pr89",
-  "UploadBucketName": "image-upload-bucket-pr89-149536495831",
-  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=image-processing-dashboard-pr89"
-}
+let outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "pr89";
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
 describe('Serverless Image Processing System - E2E Integration Tests', () => {
   const region = process.env.AWS_REGION || outputs.Region || 'us-east-1';
@@ -416,7 +408,7 @@ describe('Serverless Image Processing System - E2E Integration Tests', () => {
         expect(metricsAfterTest.avgDuration).toBeLessThan(30000);
       }
 
-      const concurrentExecutions = await getMetricValue('ConcurrentExecutions', Statistic.Maximum);
+      await getMetricValue('ConcurrentExecutions', Statistic.Maximum);
       const snsMetrics = await getSNSMetrics();
       expect(snsMetrics.messagesPublished).toBeGreaterThanOrEqual(0);
 
