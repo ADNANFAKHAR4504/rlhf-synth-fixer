@@ -14,27 +14,27 @@ from typing import Optional
 
 
 class LogisticsEventProcessingStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str = "", **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Create SNS Topic for publishing delivery events
         delivery_events_topic = sns.Topic(
             self, "DeliveryEventsTopic",
-            display_name="Logistics Delivery Events Topic",
-            topic_name="logistics-delivery-events"
+            display_name=f"Logistics Delivery Events Topic {environment_suffix}",
+            topic_name=f"logistics-delivery-events{environment_suffix}"
         )
 
         # Create Dead Letter Queue for failed message processing
         dead_letter_queue = sqs.Queue(
             self, "DeliveryEventsDLQ",
-            queue_name="logistics-delivery-events-dlq",
+            queue_name=f"logistics-delivery-events-dlq{environment_suffix}",
             retention_period=Duration.days(14)  # Keep failed messages longer for analysis
         )
 
         # Create SQS Queue for processing events with DLQ configuration
         events_queue = sqs.Queue(
             self, "DeliveryEventsQueue",
-            queue_name="logistics-delivery-events-queue",
+            queue_name=f"logistics-delivery-events-queue{environment_suffix}",
             visibility_timeout=Duration.seconds(300),  # 5 minutes
             retention_period=Duration.days(7),  # Keep messages for 7 days
             dead_letter_queue=sqs.DeadLetterQueue(
@@ -51,7 +51,7 @@ class LogisticsEventProcessingStack(Stack):
         # Create DynamoDB table to store processed events
         events_table = dynamodb.Table(
             self, "ProcessedEventsTable",
-            table_name="logistics-processed-events",
+            table_name=f"logistics-processed-events{environment_suffix}",
             partition_key=dynamodb.Attribute(
                 name="event_id",
                 type=dynamodb.AttributeType.STRING
@@ -61,7 +61,7 @@ class LogisticsEventProcessingStack(Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.RETAIN,  # Important data, don't delete by default
+            removal_policy=RemovalPolicy.DESTROY,  # Make destroyable to avoid conflicts
             time_to_live_attribute="ttl"  # Time-to-live for event records (90 days)
         )
 
@@ -148,7 +148,7 @@ def handler(event, context):
         # Create Lambda function to process events
         event_processor_function = lambda_.Function(
             self, "EventProcessorFunction",
-            function_name="logistics-event-processor",
+            function_name=f"logistics-event-processor{environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             code=lambda_.Code.from_inline(lambda_code),
             handler="index.handler",
@@ -179,7 +179,7 @@ def handler(event, context):
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             alarm_description="Alarm when more than 10 messages in DLQ",
-            alarm_name="LogisticsDLQMessagesAlarm"
+            alarm_name=f"LogisticsDLQMessagesAlarm{environment_suffix}"
         )
 
         # Alarm for Lambda errors
@@ -190,7 +190,7 @@ def handler(event, context):
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             alarm_description="Alarm when Lambda has more than 5 errors",
-            alarm_name="LogisticsLambdaErrorsAlarm"
+            alarm_name=f"LogisticsLambdaErrorsAlarm{environment_suffix}"
         )
 
         # Alarm for SQS queue delay
@@ -201,14 +201,14 @@ def handler(event, context):
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             alarm_description="Alarm when messages wait in queue longer than 5 minutes",
-            alarm_name="LogisticsQueueDelayAlarm"
+            alarm_name=f"LogisticsQueueDelayAlarm{environment_suffix}"
         )
 
         # SNS Topic for operational alerts
         alerts_topic = sns.Topic(
             self, "OperationalAlertsTopic",
-            display_name="Logistics Operational Alerts",
-            topic_name="logistics-operational-alerts"
+            display_name=f"Logistics Operational Alerts {environment_suffix}",
+            topic_name=f"logistics-operational-alerts{environment_suffix}"
         )
 
         # Connect alarms to SNS topic
@@ -225,7 +225,7 @@ def handler(event, context):
         # Dashboard for monitoring the system
         dashboard = cloudwatch.Dashboard(
             self, "LogisticsEventsDashboard",
-            dashboard_name="LogisticsEventsProcessing"
+            dashboard_name=f"LogisticsEventsProcessing{environment_suffix}"
         )
 
         # Add widgets to the dashboard
@@ -309,7 +309,7 @@ class TapStack(LogisticsEventProcessingStack):
         if props.env:
             kwargs['env'] = props.env
         
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id, props.environment_suffix, **kwargs)
         
         # Store the environment suffix for potential future use
         self.environment_suffix = props.environment_suffix
