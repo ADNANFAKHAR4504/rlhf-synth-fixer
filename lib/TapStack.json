@@ -225,14 +225,6 @@
     }
   },
   "Conditions": {
-    "CreateCertificateCondition": {
-      "Fn::Equals": [
-        {
-          "Ref": "CreateCertificate"
-        },
-        "true"
-      ]
-    },
     "HasDomainName": {
       "Fn::Not": [
         {

@@ -201,7 +201,6 @@ Mappings:
       AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
 
 Conditions:
-  CreateCertificateCondition: !Equals [!Ref CreateCertificate, "true"]
   HasDomainName: !Not [!Equals [!Ref DomainName, ""]]
   HasProvidedCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
   CreateCertificateWithDomainCondition: !And
@@ -1579,6 +1578,7 @@ aws secretsmanager get-secret-value --secret-id "TapApp-dev-db-password" --query
 - **Parameters**: 19 (with sensible defaults, DBPassword removed for security)
 - **Resources**: 35+ AWS resources
 - **Outputs**: 17 (conditional exports)
+- **Conditions**: 4 (optimized, removed unused condition)
 - **Regions**: 8 supported regions
 - **Security Groups**: 4 properly configured
 - **IAM Roles**: 2 with least privilege policies
@@ -1600,6 +1600,11 @@ This template follows AWS CloudFormation best practices and addresses common war
 - **Solution**: Replaced `DBPassword` parameter with AWS Secrets Manager dynamic reference
 - **Benefit**: Enhanced security with encrypted secret storage and automatic rotation support
 
+### **W8001 - Unused Conditions**
+- **Issue**: Condition `CreateCertificateCondition` was defined but never used
+- **Solution**: Removed unused condition, functionality covered by `CreateCertificateWithDomainCondition`
+- **Benefit**: Cleaner template with no redundant conditions, improved maintainability
+
 ### **Template Validation**
 - All CloudFormation warnings resolved
 - Follows AWS Well-Architected Framework principles
@@ -1616,3 +1621,5 @@ This template is production-ready with:
 - Multi-environment support
 - Cost optimization features
 - **CloudFormation best practices compliance**
+- **Optimized template structure** (no unused conditions)
+- **Clean YAML formatting** for better readability

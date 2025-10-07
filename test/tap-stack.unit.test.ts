@@ -39,7 +39,6 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have conditions section', () => {
       expect(template.Conditions).toBeDefined();
-      expect(template.Conditions.CreateCertificateCondition).toBeDefined();
       expect(template.Conditions.HasDomainName).toBeDefined();
       expect(template.Conditions.HasProvidedCertificate).toBeDefined();
       expect(template.Conditions.CreateCertificateWithDomainCondition).toBeDefined();
@@ -151,11 +150,6 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Conditions', () => {
-    test('CreateCertificateCondition should check CreateCertificate equals true', () => {
-      const condition = template.Conditions.CreateCertificateCondition;
-      expect(condition['Fn::Equals']).toEqual([{ Ref: 'CreateCertificate' }, 'true']);
-    });
-
     test('HasDomainName should check DomainName is not empty', () => {
       const condition = template.Conditions.HasDomainName;
       expect(condition['Fn::Not']).toEqual([{ 'Fn::Equals': [{ Ref: 'DomainName' }, ''] }]);

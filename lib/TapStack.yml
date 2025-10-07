@@ -1,33 +1,33 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: TAP Stack - Task Assignment Platform CloudFormation Template
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-    - Label:
-        default: Environment Configuration
-      Parameters:
-      - EnvironmentSuffix
-      - Environment
-    - Label:
-        default: Network Configuration
-      Parameters:
-      - VpcCidr
-      - PublicSubnetCidr1
-      - PublicSubnetCidr2
-      - PrivateSubnetCidr1
-      - PrivateSubnetCidr2
-    - Label:
-        default: Database Configuration
-      Parameters:
-      - DBName
-      - DBUser
-      - DBInstanceClass
-    - Label:
-        default: SSL Certificate Configuration
-      Parameters:
-      - DomainName
-      - CreateCertificate
-      - CertificateArn
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - EnvironmentSuffix
+          - Environment
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCidr
+          - PublicSubnetCidr1
+          - PublicSubnetCidr2
+          - PrivateSubnetCidr1
+          - PrivateSubnetCidr2
+      - Label:
+          default: Database Configuration
+        Parameters:
+          - DBName
+          - DBUser
+          - DBInstanceClass
+      - Label:
+          default: SSL Certificate Configuration
+        Parameters:
+          - DomainName
+          - CreateCertificate
+          - CertificateArn
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -40,10 +40,10 @@ Parameters:
     Default: dev
     Description: Environment name (dev, staging, prod)
     AllowedValues:
-    - dev
-    - staging
-    - prod
-    ConstraintDescription: 'Must be one of: dev, staging, prod'
+      - dev
+      - staging
+      - prod
+    ConstraintDescription: "Must be one of: dev, staging, prod"
   AppName:
     Type: String
     Default: TapApp
@@ -82,55 +82,58 @@ Parameters:
     ConstraintDescription: Must be a valid CIDR block (e.g., 10.0.20.0/24)
   DomainName:
     Type: String
-    Default: ''
-    Description: Domain name for the application (e.g., example.com). Leave empty
+    Default: ""
+    Description:
+      Domain name for the application (e.g., example.com). Leave empty
       to use ALB DNS name only.
     MaxLength: 255
   CertificateArn:
     Type: String
-    Default: ''
-    Description: ARN of the ACM certificate for HTTPS. Leave empty to create a new
+    Default: ""
+    Description:
+      ARN of the ACM certificate for HTTPS. Leave empty to create a new
       certificate.
     AllowedPattern: ^$|^arn:aws:acm:.*
   CreateCertificate:
     Type: String
-    Default: 'false'
-    Description: Whether to create a new ACM certificate (requires DomainName to be
+    Default: "false"
+    Description:
+      Whether to create a new ACM certificate (requires DomainName to be
       set)
     AllowedValues:
-    - 'true'
-    - 'false'
+      - "true"
+      - "false"
   InstanceType:
     Type: String
     Default: t3.micro
     Description: EC2 instance type for the web servers
     AllowedValues:
-    - t3.micro
-    - t3.small
-    - t3.medium
-    - t3.large
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
   DBInstanceClass:
     Type: String
     Default: db.t3.micro
     Description: RDS instance class
     AllowedValues:
-    - db.t3.micro
-    - db.t3.small
-    - db.t3.medium
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
   DBName:
     Type: String
     Default: tapdb
     Description: Database name
     MinLength: 1
     MaxLength: 64
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
   DBUser:
     Type: String
     Default: admin
     Description: Database master username
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
   MinSize:
     Type: Number
     Default: 2
@@ -174,41 +177,37 @@ Mappings:
     ap-southeast-2:
       AMI: ami-0c55b4c4b4b4b4b4b
 Conditions:
-  CreateCertificateCondition:
-    Fn::Equals:
-    - Ref: CreateCertificate
-    - 'true'
   HasDomainName:
     Fn::Not:
-    - Fn::Equals:
-      - Ref: DomainName
-      - ''
+      - Fn::Equals:
+          - Ref: DomainName
+          - ""
   HasProvidedCertificate:
     Fn::Not:
-    - Fn::Equals:
-      - Ref: CertificateArn
-      - ''
+      - Fn::Equals:
+          - Ref: CertificateArn
+          - ""
   CreateCertificateWithDomainCondition:
     Fn::And:
-    - Fn::Equals:
-      - Ref: CreateCertificate
-      - 'true'
-    - Fn::Not:
       - Fn::Equals:
-        - Ref: DomainName
-        - ''
-    - Fn::Not:
-      - Fn::Equals:
-        - Ref: DomainName
-        - 'null'
+          - Ref: CreateCertificate
+          - "true"
+      - Fn::Not:
+          - Fn::Equals:
+              - Ref: DomainName
+              - ""
+      - Fn::Not:
+          - Fn::Equals:
+              - Ref: DomainName
+              - "null"
   NoCertificateCondition:
     Fn::And:
-    - Fn::Equals:
-      - Ref: CertificateArn
-      - ''
-    - Fn::Equals:
-      - Ref: CreateCertificate
-      - 'false'
+      - Fn::Equals:
+          - Ref: CertificateArn
+          - ""
+      - Fn::Equals:
+          - Ref: CreateCertificate
+          - "false"
 Resources:
   TurnAroundPromptTable:
     Type: AWS::DynamoDB::Table
@@ -218,22 +217,22 @@ Resources:
       TableName:
         Fn::Sub: TurnAroundPromptTable${EnvironmentSuffix}
       AttributeDefinitions:
-      - AttributeName: id
-        AttributeType: S
+        - AttributeName: id
+          AttributeType: S
       KeySchema:
-      - AttributeName: id
-        KeyType: HASH
+        - AttributeName: id
+          KeyType: HASH
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-turnaround-prompt-table
-      - Key: Environment
-        Value:
-          Ref: Environment
-      - Key: Purpose
-        Value: Store turnaround prompt data
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-turnaround-prompt-table
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: Purpose
+          Value: Store turnaround prompt data
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -242,22 +241,22 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-vpc
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-vpc
+        - Key: Environment
+          Value:
+            Ref: Environment
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-igw
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-igw
+        - Key: Environment
+          Value:
+            Ref: Environment
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -274,18 +273,18 @@ Resources:
         Ref: PublicSubnetCidr1
       AvailabilityZone:
         Fn::Select:
-        - 0
-        - Fn::GetAZs: ''
+          - 0
+          - Fn::GetAZs: ""
       MapPublicIpOnLaunch: true
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-public-subnet-1
-      - Key: Environment
-        Value:
-          Ref: Environment
-      - Key: Type
-        Value: Public
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-public-subnet-1
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: Type
+          Value: Public
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -295,18 +294,18 @@ Resources:
         Ref: PublicSubnetCidr2
       AvailabilityZone:
         Fn::Select:
-        - 1
-        - Fn::GetAZs: ''
+          - 1
+          - Fn::GetAZs: ""
       MapPublicIpOnLaunch: true
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-public-subnet-2
-      - Key: Environment
-        Value:
-          Ref: Environment
-      - Key: Type
-        Value: Public
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-public-subnet-2
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: Type
+          Value: Public
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -316,17 +315,17 @@ Resources:
         Ref: PrivateSubnetCidr1
       AvailabilityZone:
         Fn::Select:
-        - 0
-        - Fn::GetAZs: ''
+          - 0
+          - Fn::GetAZs: ""
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-private-subnet-1
-      - Key: Environment
-        Value:
-          Ref: Environment
-      - Key: Type
-        Value: Private
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-private-subnet-1
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: Type
+          Value: Private
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -336,29 +335,29 @@ Resources:
         Ref: PrivateSubnetCidr2
       AvailabilityZone:
         Fn::Select:
-        - 1
-        - Fn::GetAZs: ''
+          - 1
+          - Fn::GetAZs: ""
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-private-subnet-2
-      - Key: Environment
-        Value:
-          Ref: Environment
-      - Key: Type
-        Value: Private
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-private-subnet-2
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: Type
+          Value: Private
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId:
         Ref: VPC
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-public-rt
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-public-rt
+        - Key: Environment
+          Value:
+            Ref: Environment
   DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
@@ -388,12 +387,12 @@ Resources:
       VpcId:
         Ref: VPC
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-private-rt-1
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-private-rt-1
+        - Key: Environment
+          Value:
+            Ref: Environment
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -407,12 +406,12 @@ Resources:
       VpcId:
         Ref: VPC
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-private-rt-2
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-private-rt-2
+        - Key: Environment
+          Value:
+            Ref: Environment
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -428,14 +427,14 @@ Resources:
         Ref: DomainName
       ValidationMethod: DNS
       SubjectAlternativeNames:
-      - Fn::Sub: '*.${DomainName}'
+        - Fn::Sub: "*.${DomainName}"
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-ssl-certificate
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-ssl-certificate
+        - Key: Environment
+          Value:
+            Ref: Environment
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -445,21 +444,21 @@ Resources:
       VpcId:
         Ref: VPC
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-alb-sg
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-alb-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -469,23 +468,23 @@ Resources:
       VpcId:
         Ref: VPC
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        SourceSecurityGroupId:
-          Ref: ALBSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp:
-          Ref: AllowedSSHCidr
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId:
+            Ref: ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Ref: AllowedSSHCidr
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-ec2-sg
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-ec2-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -495,23 +494,23 @@ Resources:
       VpcId:
         Ref: VPC
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId:
-          Ref: EC2SecurityGroup
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId:
-          Ref: LambdaSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId:
+            Ref: EC2SecurityGroup
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId:
+            Ref: LambdaSecurityGroup
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-rds-sg
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-rds-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -521,93 +520,93 @@ Resources:
       VpcId:
         Ref: VPC
       SecurityGroupEgress:
-      - IpProtocol: -1
-        CidrIp: 0.0.0.0/0
-        Description: All outbound traffic
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-lambda-sg
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-lambda-sg
+        - Key: Environment
+          Value:
+            Ref: Environment
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
         Fn::Sub: ${AppName}-ec2-role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-        - Effect: Allow
-          Principal:
-            Service: ec2.amazonaws.com
-          Action: sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-      Policies:
-      - PolicyName: CloudWatchLogsPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
           - Effect: Allow
-            Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-            - logs:DescribeLogStreams
-            Resource:
-              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource:
+                  Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
       Tags:
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Environment
+          Value:
+            Ref: Environment
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-      - Ref: EC2Role
+        - Ref: EC2Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
         Fn::Sub: ${AppName}-lambda-role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-        - Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
-      - PolicyName: CloudWatchMetricsPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - cloudwatch:PutMetricData
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-            Resource:
-            - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AppName}-*
-            - Fn::Sub: arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:*
-          - Effect: Allow
-            Action:
-            - rds:DescribeDBInstances
-            - elasticloadbalancing:DescribeTargetHealth
-            - autoscaling:DescribeAutoScalingGroups
-            Resource:
-            - Fn::Sub: arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${AppName}-*
-            - Fn::Sub: arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*
-            - Fn::Sub: arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AppName}-*
+        - PolicyName: CloudWatchMetricsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AppName}-*
+                  - Fn::Sub: arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:*
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - elasticloadbalancing:DescribeTargetHealth
+                  - autoscaling:DescribeAutoScalingGroups
+                Resource:
+                  - Fn::Sub: arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${AppName}-*
+                  - Fn::Sub: arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*
+                  - Fn::Sub: arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AppName}-*
       Tags:
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Environment
+          Value:
+            Ref: Environment
   WebAppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -615,9 +614,9 @@ Resources:
         Fn::Sub: /aws/webapp/${AppName}
       RetentionInDays: 7
       Tags:
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Environment
+          Value:
+            Ref: Environment
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -625,9 +624,9 @@ Resources:
         Fn::Sub: /aws/lambda/${AppName}-monitor
       RetentionInDays: 7
       Tags:
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Environment
+          Value:
+            Ref: Environment
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -637,17 +636,17 @@ Resources:
       Scheme: internet-facing
       IpAddressType: ipv4
       SecurityGroups:
-      - Ref: ALBSecurityGroup
+        - Ref: ALBSecurityGroup
       Subnets:
-      - Ref: PublicSubnet1
-      - Ref: PublicSubnet2
+        - Ref: PublicSubnet1
+        - Ref: PublicSubnet2
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-alb
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-alb
+        - Key: Environment
+          Value:
+            Ref: Environment
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -668,25 +667,25 @@ Resources:
       Matcher:
         HttpCode: 200
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-tg
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-tg
+        - Key: Environment
+          Value:
+            Ref: Environment
   HTTPListenerWithRedirect:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HasProvidedCertificate
     Properties:
       DefaultActions:
-      - Type: redirect
-        RedirectConfig:
-          Protocol: HTTPS
-          Port: '443'
-          Host: '#{host}'
-          Path: /#{path}
-          Query: '#{query}'
-          StatusCode: HTTP_301
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            Host: "#{host}"
+            Path: /#{path}
+            Query: "#{query}"
+            StatusCode: HTTP_301
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
       Port: 80
@@ -696,14 +695,14 @@ Resources:
     Condition: CreateCertificateWithDomainCondition
     Properties:
       DefaultActions:
-      - Type: redirect
-        RedirectConfig:
-          Protocol: HTTPS
-          Port: '443'
-          Host: '#{host}'
-          Path: /#{path}
-          Query: '#{query}'
-          StatusCode: HTTP_301
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            Host: "#{host}"
+            Path: /#{path}
+            Query: "#{query}"
+            StatusCode: HTTP_301
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
       Port: 80
@@ -713,9 +712,9 @@ Resources:
     Condition: NoCertificateCondition
     Properties:
       DefaultActions:
-      - Type: forward
-        TargetGroupArn:
-          Ref: ALBTargetGroup
+        - Type: forward
+          TargetGroupArn:
+            Ref: ALBTargetGroup
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
       Port: 80
@@ -725,32 +724,32 @@ Resources:
     Condition: HasProvidedCertificate
     Properties:
       DefaultActions:
-      - Type: forward
-        TargetGroupArn:
-          Ref: ALBTargetGroup
+        - Type: forward
+          TargetGroupArn:
+            Ref: ALBTargetGroup
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-      - CertificateArn:
-          Ref: CertificateArn
+        - CertificateArn:
+            Ref: CertificateArn
       SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
   HTTPSListenerWithNewCert:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: CreateCertificateWithDomainCondition
     Properties:
       DefaultActions:
-      - Type: forward
-        TargetGroupArn:
-          Ref: ALBTargetGroup
+        - Type: forward
+          TargetGroupArn:
+            Ref: ALBTargetGroup
       LoadBalancerArn:
         Ref: ApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-      - CertificateArn:
-          Ref: SSLCertificate
+        - CertificateArn:
+            Ref: SSLCertificate
       SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -760,29 +759,30 @@ Resources:
       LaunchTemplateData:
         ImageId:
           Fn::FindInMap:
-          - RegionMap
-          - Ref: AWS::Region
-          - AMI
+            - RegionMap
+            - Ref: AWS::Region
+            - AMI
         InstanceType:
           Ref: InstanceType
         IamInstanceProfile:
           Arn:
             Fn::GetAtt:
-            - EC2InstanceProfile
-            - Arn
+              - EC2InstanceProfile
+              - Arn
         SecurityGroupIds:
-        - Ref: EC2SecurityGroup
+          - Ref: EC2SecurityGroup
         TagSpecifications:
-        - ResourceType: instance
-          Tags:
-          - Key: Name
-            Value:
-              Fn::Sub: ${AppName}-instance
-          - Key: Environment
-            Value: Production
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value:
+                  Fn::Sub: ${AppName}-instance
+              - Key: Environment
+                Value: Production
         UserData:
           Fn::Base64:
-            Fn::Sub: "#!/bin/bash\nyum update -y\nyum install -y nginx amazon-cloudwatch-agent\n\
+            Fn::Sub:
+              "#!/bin/bash\nyum update -y\nyum install -y nginx amazon-cloudwatch-agent\n\
               \n# Configure nginx\ncat > /etc/nginx/conf.d/app.conf <<EOF\nserver\
               \ {\n    listen 80;\n    server_name _;\n    location / {\n        return\
               \ 200 '<h1>Welcome to ${AppName}</h1><p>Environment: ${Environment}</p><p>Instance:\
@@ -818,8 +818,8 @@ Resources:
           Ref: LaunchTemplate
         Version:
           Fn::GetAtt:
-          - LaunchTemplate
-          - LatestVersionNumber
+            - LaunchTemplate
+            - LatestVersionNumber
       MinSize:
         Ref: MinSize
       MaxSize:
@@ -827,23 +827,23 @@ Resources:
       DesiredCapacity:
         Ref: DesiredCapacity
       VPCZoneIdentifier:
-      - Ref: PrivateSubnet1
-      - Ref: PrivateSubnet2
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
       TargetGroupARNs:
-      - Ref: ALBTargetGroup
+        - Ref: ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       MetricsCollection:
-      - Granularity: 1Minute
+        - Granularity: 1Minute
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-asg-instance
-        PropagateAtLaunch: true
-      - Key: Environment
-        Value:
-          Ref: Environment
-        PropagateAtLaunch: true
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-asg-instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value:
+            Ref: Environment
+          PropagateAtLaunch: true
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MinInstancesInService: 1
@@ -880,11 +880,11 @@ Resources:
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-      - Name: AutoScalingGroupName
-        Value:
-          Ref: AutoScalingGroup
+        - Name: AutoScalingGroupName
+          Value:
+            Ref: AutoScalingGroup
       AlarmActions:
-      - Ref: ScaleUpPolicy
+        - Ref: ScaleUpPolicy
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -899,11 +899,11 @@ Resources:
       Threshold: 30
       ComparisonOperator: LessThanThreshold
       Dimensions:
-      - Name: AutoScalingGroupName
-        Value:
-          Ref: AutoScalingGroup
+        - Name: AutoScalingGroupName
+          Value:
+            Ref: AutoScalingGroup
       AlarmActions:
-      - Ref: ScaleDownPolicy
+        - Ref: ScaleDownPolicy
   TargetTrackingScalingPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -915,13 +915,13 @@ Resources:
           PredefinedMetricType: ALBRequestCountPerTarget
           ResourceLabel:
             Fn::Join:
-            - /
-            - - Fn::GetAtt:
-                - ApplicationLoadBalancer
-                - LoadBalancerFullName
-              - Fn::GetAtt:
-                - ALBTargetGroup
-                - TargetGroupFullName
+              - /
+              - - Fn::GetAtt:
+                    - ApplicationLoadBalancer
+                    - LoadBalancerFullName
+                - Fn::GetAtt:
+                    - ALBTargetGroup
+                    - TargetGroupFullName
         TargetValue: 100
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -930,15 +930,15 @@ Resources:
         Fn::Sub: ${AppName}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
-      - Ref: PrivateSubnet1
-      - Ref: PrivateSubnet2
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-db-subnet-group
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-db-subnet-group
+        - Key: Environment
+          Value:
+            Ref: Environment
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -958,9 +958,9 @@ Resources:
       MasterUsername:
         Ref: DBUser
       MasterUserPassword:
-        Fn::Sub: '{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}'
+        Fn::Sub: "{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}"
       VPCSecurityGroups:
-      - Ref: RDSSecurityGroup
+        - Ref: RDSSecurityGroup
       DBSubnetGroupName:
         Ref: DBSubnetGroup
       BackupRetentionPeriod: 7
@@ -970,12 +970,12 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       Tags:
-      - Key: Name
-        Value:
-          Fn::Sub: ${AppName}-db
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-db
+        - Key: Environment
+          Value:
+            Ref: Environment
   MonitoringLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -985,8 +985,8 @@ Resources:
       Handler: index.handler
       Role:
         Fn::GetAtt:
-        - LambdaExecutionRole
-        - Arn
+          - LambdaExecutionRole
+          - Arn
       Timeout: 60
       MemorySize: 256
       Environment:
@@ -995,20 +995,21 @@ Resources:
             Ref: AppName
           ALB_NAME:
             Fn::GetAtt:
-            - ApplicationLoadBalancer
-            - LoadBalancerFullName
+              - ApplicationLoadBalancer
+              - LoadBalancerFullName
           ASG_NAME:
             Ref: AutoScalingGroup
           DB_INSTANCE_ID:
             Ref: RDSDatabase
       VpcConfig:
         SecurityGroupIds:
-        - Ref: LambdaSecurityGroup
+          - Ref: LambdaSecurityGroup
         SubnetIds:
-        - Ref: PrivateSubnet1
-        - Ref: PrivateSubnet2
+          - Ref: PrivateSubnet1
+          - Ref: PrivateSubnet2
       Code:
-        ZipFile: "import json\nimport boto3\nimport os\nfrom datetime import datetime,\
+        ZipFile:
+          "import json\nimport boto3\nimport os\nfrom datetime import datetime,\
           \ timedelta\n\ndef handler(event, context):\n    cloudwatch = boto3.client('cloudwatch')\n\
           \    elb = boto3.client('elbv2')\n    asg = boto3.client('autoscaling')\n\
           \    rds = boto3.client('rds')\n    \n    app_name = os.environ['APP_NAME']\n\
@@ -1044,9 +1045,9 @@ Resources:
           Error putting metric: {e}\")\n    \n    return {\n        'statusCode':\
           \ 200,\n        'body': json.dumps(metrics)\n    }\n"
       Tags:
-      - Key: Environment
-        Value:
-          Ref: Environment
+        - Key: Environment
+          Value:
+            Ref: Environment
   LambdaScheduleRule:
     Type: AWS::Events::Rule
     Properties:
@@ -1056,11 +1057,11 @@ Resources:
       ScheduleExpression: rate(5 minutes)
       State: ENABLED
       Targets:
-      - Arn:
-          Fn::GetAtt:
-          - MonitoringLambda
-          - Arn
-        Id: MonitoringLambdaTarget
+        - Arn:
+            Fn::GetAtt:
+              - MonitoringLambda
+              - Arn
+          Id: MonitoringLambdaTarget
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -1070,15 +1071,16 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn:
         Fn::GetAtt:
-        - LambdaScheduleRule
-        - Arn
+          - LambdaScheduleRule
+          - Arn
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName:
         Fn::Sub: ${AppName}-dashboard
       DashboardBody:
-        Fn::Sub: "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"\
+        Fn::Sub:
+          "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"\
           properties\": {\n        \"metrics\": [\n          [\"AWS/ApplicationELB\"\
           , \"HTTPCode_Target_5XX_Count\", {\"stat\": \"Sum\", \"label\": \"ALB 5xx\
           \ Errors\"}],\n          [\".\", \"HTTPCode_Target_4XX_Count\", {\"stat\"\
@@ -1149,8 +1151,8 @@ Outputs:
     Description: ARN of the DynamoDB table
     Value:
       Fn::GetAtt:
-      - TurnAroundPromptTable
-      - Arn
+        - TurnAroundPromptTable
+        - Arn
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-TurnAroundPromptTableArn
@@ -1186,8 +1188,8 @@ Outputs:
     Description: DNS name of the Application Load Balancer
     Value:
       Fn::GetAtt:
-      - ApplicationLoadBalancer
-      - DNSName
+        - ApplicationLoadBalancer
+        - DNSName
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-ApplicationLoadBalancerDNS
@@ -1195,8 +1197,8 @@ Outputs:
     Description: RDS Database Endpoint
     Value:
       Fn::GetAtt:
-      - RDSDatabase
-      - Endpoint.Address
+        - RDSDatabase
+        - Endpoint.Address
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-DatabaseEndpoint
@@ -1204,8 +1206,8 @@ Outputs:
     Description: RDS Database Port
     Value:
       Fn::GetAtt:
-      - RDSDatabase
-      - Endpoint.Port
+        - RDSDatabase
+        - Endpoint.Port
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-DatabasePort
@@ -1227,8 +1229,8 @@ Outputs:
     Description: ARN of the monitoring Lambda function
     Value:
       Fn::GetAtt:
-      - MonitoringLambda
-      - Arn
+        - MonitoringLambda
+        - Arn
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-MonitoringLambdaArn
