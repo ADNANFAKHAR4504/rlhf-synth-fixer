@@ -83,7 +83,7 @@ Resources:
   EbooksS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "ebooks-storage-${Environment}-${AWS::AccountId}"
+      BucketName: !Sub "ebooks123-storage-${Environment}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
