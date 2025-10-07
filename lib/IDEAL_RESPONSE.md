@@ -337,30 +337,6 @@ terraform destroy -auto-approve
 - Verify all resources are deleted to avoid ongoing charges
 - Check for any manually created resources that may have dependencies
 
-## Testing
-
-### Unit Tests
-Run comprehensive unit tests to validate Terraform configuration:
-```bash
-npm run test:unit
-```
-
-### Integration Tests
-Deploy infrastructure and run integration tests:
-```bash
-npm run test:integration
-```
-
-Integration tests verify:
-- VPC and networking configuration
-- EC2 instances are running
-- Load balancers are active
-- RDS database is available
-- S3 buckets are properly configured
-- Lambda function is deployed
-- CloudWatch alarms exist
-- Route 53 DNS is configured
-
 ## Design Decisions
 
 1. **Single File Approach:** All resources in one file for simplicity and clarity

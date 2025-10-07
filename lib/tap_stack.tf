@@ -25,8 +25,8 @@ locals {
   vpc_cidr_us_east_1 = "10.0.0.0/16"
   vpc_cidr_us_west_2 = "10.1.0.0/16"
 
-  # Your IP for SSH access (replace with your actual IP)
-  ssh_allowed_ip = "0.0.0.0/32" # CHANGE THIS to your actual IP
+  # Your IP for SSH access (from variables)
+  ssh_allowed_ip = var.ssh_allowed_ip
 
   # Domain name for Route 53
   domain_name = "example.com" # CHANGE THIS to your actual domain
@@ -1129,7 +1129,7 @@ resource "aws_db_instance" "mysql" {
 
   db_name  = "appdb"
   username = "admin"
-  password = "ChangeMePlease123!" # CHANGE THIS in production
+  password = var.db_password # Use AWS Secrets Manager in production
 
   vpc_security_group_ids = [aws_security_group.rds_us_east_1.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name

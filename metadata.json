@@ -12,7 +12,23 @@
     "Multi-Region Deployment",
     "High Availability Architecture"
   ],
-  "aws_services": "S3 Bucket, Lambda, RDS, Route 53, Cloud Watch, EC2, VPC, ALB, IAM, Auto Scaling, NAT Gateway, VPC Endpoints, AWS Backup",
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "Route 53",
+    "AWS Backup",
+    "NAT Gateway",
+    "VPC Endpoints",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.883.0",
     "@aws-sdk/client-rds": "^3.883.0",
