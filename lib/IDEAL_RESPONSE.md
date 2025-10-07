@@ -91,6 +91,12 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
+
+variable "lambda_name" {
+  description = "Name of the Lambda function"
+  default     = "app-processor"
+}
+
 data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 
@@ -632,6 +638,13 @@ resource "aws_autoscaling_policy" "scale_down" {
 # LAMBDA RESOURCES
 # =============================================================================
 
+
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/${local.name_prefix}${var.lambda_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
 data "archive_file" "inline_lambda" {
   type        = "zip"
   output_path = "${path.module}/lambda_inline.zip"
@@ -640,21 +653,58 @@ data "archive_file" "inline_lambda" {
     content  = <<-JS
       // index.js
       // Simple processor: accepts an array of numbers and returns { sum, avg, count }
-      exports.handler = async (event) => {
-        let payload;
-        try {
-          payload = (typeof event?.body === "string") ? JSON.parse(event.body) : event;
-        } catch (e) {
-          return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3();
+
+      const parseNumbers = text =>
+        text
+          .split(/[ \t\r\n,]+/)
+          .map(value => value.trim())
+          .filter(Boolean)
+          .map(Number)
+          .filter(Number.isFinite);
+
+      exports.handler = async event => {
+        console.log("Received event", JSON.stringify(event));
+        const records = Array.isArray(event?.Records) ? event.Records : [];
+        if (!records.length) {
+          console.log("No S3 records found in event");
+          return { statusCode: 200, body: JSON.stringify({ recordsProcessed: 0 }) };
         }
-        const items = Array.isArray(payload?.data) ? payload.data : [];
-        if (!Array.isArray(items) || items.some(n => typeof n !== "number")) {
-          return { statusCode: 400, body: JSON.stringify({ error: "data must be an array of numbers" }) };
+
+        const results = [];
+
+        for (const record of records) {
+          const bucket = record?.s3?.bucket?.name;
+          const rawKey = record?.s3?.object?.key;
+          if (!bucket || !rawKey) {
+            console.log("Skipping record missing bucket or key", JSON.stringify(record));
+            continue;
+          }
+
+          const key = decodeURIComponent(rawKey.replace(/\+/g, " "));
+          try {
+            const object = await s3.getObject({ Bucket: bucket, Key: key }).promise();
+            const body = object.Body ? object.Body.toString("utf-8") : "";
+            const numbers = parseNumbers(body);
+
+            if (!numbers.length) {
+              console.log(`No numeric data found for s3://$${bucket}/$${key}`);
+              continue;
+            }
+
+            const count = numbers.length;
+            const sum = numbers.reduce((total, value) => total + value, 0);
+            const avg = count ? sum / count : 0;
+
+            console.log(`Processed s3://execution count=$${count} sum=$${sum} avg=$${avg}`);
+            results.push({ bucket, key, count, sum, avg });
+          } catch (error) {
+            console.log(`Error processing s3://error`, error?.message ?? String(error));
+          }
         }
-        const count = items.length;
-        const sum   = items.reduce((a, b) => a + b, 0);
-        const avg   = count ? sum / count : 0;
-        return { statusCode: 200, body: JSON.stringify({ count, sum, avg }) };
+
+        return { statusCode: 200, body: JSON.stringify({ processed: results.length, results }) };
       };
     JS
     filename = "index.js"
@@ -662,12 +712,13 @@ data "archive_file" "inline_lambda" {
 }
 
 resource "aws_lambda_function" "app" {
-  function_name = "${local.name_prefix}app-processor"
+  function_name = "${local.name_prefix}${var.lambda_name}"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
   filename         = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
+  depends_on     = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
 
   environment {
     variables = {
@@ -700,12 +751,6 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 # =============================================================================
 # CLOUDWATCH RESOURCES
 # =============================================================================
-
-resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.app.function_name}"
-  retention_in_days = 14
-  tags              = local.common_tags
-}
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${local.name_prefix}high-cpu-utilization"
