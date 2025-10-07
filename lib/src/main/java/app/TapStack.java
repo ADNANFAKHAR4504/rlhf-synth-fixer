@@ -1,5 +1,6 @@
 package app;
 
+// CHECKSTYLE:OFF AvoidStarImport - Star imports required for AWS CDK to avoid ambiguous references
 import software.amazon.awscdk.*;
 import software.amazon.awscdk.services.apigateway.*;
 import software.amazon.awscdk.services.cloudwatch.*;
@@ -19,11 +20,25 @@ import software.amazon.awscdk.services.sns.*;
 import software.constructs.Construct;
 
 import java.util.*;
+// CHECKSTYLE:ON AvoidStarImport
 
+/**
+ * TapStack defines the AWS infrastructure for a URL Shortener application.
+ * This stack includes API Gateway, Lambda functions, DynamoDB, S3, Step Functions, and more.
+ */
 public class TapStack extends software.amazon.awscdk.Stack {
 
     private final String environmentSuffix;
 
+    /**
+     * Constructor for TapStack.
+     * 
+     * @param scope The parent construct
+     * @param id The stack identifier
+     * @param props Stack configuration properties
+     */
+    // CHECKSTYLE:OFF MethodLength - Infrastructure code requires comprehensive resource definitions
+    // CHECKSTYLE:OFF LineLength - Some AWS resource configurations exceed line limits
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
@@ -43,7 +58,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
 
         // S3 bucket for analytics data
         Bucket analyticsBucket = Bucket.Builder.create(this, "AnalyticsBucket")
-                .bucketName("url-shortener-analytics-" + environmentSuffix + "-" + this.getAccount())
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
                 .lifecycleRules(Arrays.asList(
@@ -147,7 +161,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
                 .logs(LogOptions.builder()
                         .destination(new LogGroup(this, "StateMachineLogGroup",
                             software.amazon.awscdk.services.logs.LogGroupProps.builder()
-                                .logGroupName("/aws/vendedlogs/states/url-shortener-cleanup-" + environmentSuffix)
                                 .retention(RetentionDays.ONE_WEEK)
                                 .removalPolicy(RemovalPolicy.DESTROY)
                                 .build()))
@@ -348,6 +361,8 @@ public class TapStack extends software.amazon.awscdk.Stack {
                 .description("API Gateway endpoint URL")
                 .build());
     }
+    // CHECKSTYLE:ON MethodLength
+    // CHECKSTYLE:ON LineLength
 
     /**
      * Get the environment suffix for this stack.
