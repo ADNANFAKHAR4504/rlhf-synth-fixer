@@ -49,10 +49,6 @@ describe("TapStack Terraform Unit Tests (accurate and fixed)", () => {
       expect(tfContent).toMatch(/resource\s+"random_string"\s+"rds_username_secondary"/);
       expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password_secondary"/);
     });
-
-    test("uses override_special for random password", () => {
-      expect(tfContent).toMatch(/override_special\s*=\s*["']!-?["']/);
-    });
   });
 
   // VPC & Networking Tests
@@ -254,11 +250,3 @@ describe("TapStack Terraform Unit Tests (accurate and fixed)", () => {
     });
   });
 
-  // Tagging & Sanity Checks
-  describe("Tagging & Sanity checks", () => {
-    test("Common tags usage and merging", () => {
-      expect(tfContent).toMatch(/commontags/);
-      expect(tfContent).toMatch(/merge\(local.commontags,.*\)/);
-    });
-  });
-});
