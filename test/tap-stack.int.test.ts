@@ -422,7 +422,6 @@ describe("TapStack Integration Tests - Service Interactions", () => {
 
       Subnets?.forEach(subnet => {
         const subnetTags = subnet.Tags || [];
-        // Just verify tags exist, don't enforce specific values
         expect(subnetTags.length).toBeGreaterThanOrEqual(0);
         
         const projectTag = subnetTags.find(t => t.Key === 'Project');
