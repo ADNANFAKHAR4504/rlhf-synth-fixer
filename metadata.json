@@ -6,6 +6,7 @@
   "po_id": "10000099",
   "team": "1",
   "startedAt": "2025-10-07T07:43:38.383Z",
+  "training_quality": "8",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "IaC Optimization"
