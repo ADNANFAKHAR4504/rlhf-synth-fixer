@@ -1,11 +1,14 @@
 {
   "language": "typescript",
-  "app": "npx ts-node bin/tap.ts",
-  "projectId": "a1f0fa63-a084-47eb-b26e-817cf3972bae",
+  "app": "npx ts-node lib/main.ts",
+  "projectId": "financial-processor-cdktf",
   "sendCrashReports": "false",
   "terraformProviders": [
-    "aws@~> 6.0"
+    "aws@~>5.0"
   ],
   "terraformModules": [],
-  "context": {}
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
 }
