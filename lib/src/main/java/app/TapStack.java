@@ -7,13 +7,13 @@ import software.amazon.awscdk.services.cloudfront.origins.*;
 import software.amazon.awscdk.services.cloudwatch.*;
 import software.amazon.awscdk.services.dynamodb.*;
 import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.lambda.*;
+import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Runtime;
+import software.amazon.awscdk.services.lambda.Tracing;
 import software.amazon.awscdk.services.logs.*;
 import software.amazon.awscdk.services.s3.*;
 import software.amazon.awscdk.services.applicationinsights.*;
 import software.amazon.awscdk.services.wafv2.*;
-import software.amazon.awscdk.services.events.*;
 import software.amazon.awscdk.services.events.targets.*;
 import software.amazon.awscdk.services.stepfunctions.*;
 import software.amazon.awscdk.services.stepfunctions.tasks.*;
@@ -22,7 +22,7 @@ import software.constructs.Construct;
 
 import java.util.*;
 
-public class TapStack extends Stack {
+public class TapStack extends software.amazon.awscdk.Stack {
 
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
@@ -85,7 +85,7 @@ public class TapStack extends Stack {
         analyticsBucket.grantWrite(lambdaRole);
 
         // Lambda function for URL shortening
-        Function urlShortenerFunction = Function.Builder.create(this, "URLShortenerFunction")
+        software.amazon.awscdk.services.lambda.Function urlShortenerFunction = software.amazon.awscdk.services.lambda.Function.Builder.create(this, "URLShortenerFunction")
                 .functionName("url-shortener-" + environmentSuffix)
                 .runtime(Runtime.JAVA_17)
                 .code(Code.fromAsset("lib/lambda-handler"))
@@ -93,7 +93,7 @@ public class TapStack extends Stack {
                 .role(lambdaRole)
                 .memorySize(512)
                 .timeout(Duration.seconds(30))
-                .environment(Map.of(
+                .environment(java.util.Map.of(
                     "TABLE_NAME", urlTable.getTableName(),
                     "ANALYTICS_BUCKET", analyticsBucket.getBucketName()
                 ))
@@ -102,14 +102,14 @@ public class TapStack extends Stack {
                 .build();
 
         // Lambda function for cleanup operations
-        Function cleanupFunction = Function.Builder.create(this, "CleanupFunction")
+        software.amazon.awscdk.services.lambda.Function cleanupFunction = software.amazon.awscdk.services.lambda.Function.Builder.create(this, "CleanupFunction")
                 .functionName("url-shortener-cleanup-" + environmentSuffix)
                 .runtime(Runtime.JAVA_17)
                 .code(Code.fromAsset("lib/cleanup-handler"))
                 .handler("app.CleanupHandler::handleRequest")
                 .memorySize(512)
                 .timeout(Duration.minutes(5))
-                .environment(Map.of(
+                .environment(java.util.Map.of(
                     "TABLE_NAME", urlTable.getTableName(),
                     "SNS_TOPIC_ARN", expirationTopic.getTopicArn(),
                     "ANALYTICS_BUCKET", analyticsBucket.getBucketName()
@@ -124,12 +124,10 @@ public class TapStack extends Stack {
         // Lambda@Edge for click tracking
         Role edgeRole = Role.Builder.create(this, "EdgeRole")
                 .roleName("url-shortener-edge-role-" + environmentSuffix)
-                .assumedBy(CompositePrincipal.Builder.create()
-                    .addPrincipals(
+                .assumedBy(new CompositePrincipal(
                         new ServicePrincipal("lambda.amazonaws.com"),
                         new ServicePrincipal("edgelambda.amazonaws.com")
-                    )
-                    .build())
+                    ))
                 .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
                 ))
@@ -137,7 +135,7 @@ public class TapStack extends Stack {
 
         analyticsBucket.grantWrite(edgeRole);
 
-        Function edgeFunction = Function.Builder.create(this, "EdgeFunction")
+        software.amazon.awscdk.services.lambda.Function edgeFunction = software.amazon.awscdk.services.lambda.Function.Builder.create(this, "EdgeFunction")
                 .functionName("url-shortener-edge-" + environmentSuffix)
                 .runtime(Runtime.NODEJS_20_X)
                 .code(Code.fromAsset("lib/edge-handler"))
@@ -145,7 +143,7 @@ public class TapStack extends Stack {
                 .role(edgeRole)
                 .memorySize(128)
                 .timeout(Duration.seconds(5))
-                .environment(Map.of(
+                .environment(java.util.Map.of(
                     "ANALYTICS_BUCKET", analyticsBucket.getBucketName()
                 ))
                 .build();
@@ -162,7 +160,7 @@ public class TapStack extends Stack {
                 .build();
 
         Pass successState = Pass.Builder.create(this, "SuccessState")
-                .result(Result.fromObject(Map.of("status", "completed")))
+                .result(Result.fromObject(java.util.Map.of("status", "completed")))
                 .build();
 
         StateMachine cleanupStateMachine = StateMachine.Builder.create(this, "CleanupStateMachine")
@@ -171,7 +169,7 @@ public class TapStack extends Stack {
                 .stateMachineType(StateMachineType.EXPRESS)
                 .logs(LogOptions.builder()
                         .destination(new LogGroup(this, "StateMachineLogGroup",
-                            LogGroupProps.builder()
+                            software.amazon.awscdk.services.logs.LogGroupProps.builder()
                                 .logGroupName("/aws/vendedlogs/states/url-shortener-cleanup-" + environmentSuffix)
                                 .retention(RetentionDays.ONE_WEEK)
                                 .build()))
@@ -180,9 +178,9 @@ public class TapStack extends Stack {
                 .build();
 
         // EventBridge scheduled rule
-        Rule cleanupRule = Rule.Builder.create(this, "CleanupSchedule")
+        software.amazon.awscdk.services.events.Rule cleanupRule = software.amazon.awscdk.services.events.Rule.Builder.create(this, "CleanupSchedule")
                 .ruleName("url-shortener-cleanup-schedule-" + environmentSuffix)
-                .schedule(Schedule.rate(Duration.hours(6)))
+                .schedule(software.amazon.awscdk.services.events.Schedule.rate(Duration.hours(6)))
                 .description("Triggers cleanup of expired URLs every 6 hours")
                 .build();
 
@@ -207,7 +205,7 @@ public class TapStack extends Stack {
                 .integrationResponses(Arrays.asList(
                     IntegrationResponse.builder()
                         .statusCode("200")
-                        .responseTemplates(Map.of(
+                        .responseTemplates(java.util.Map.of(
                             "application/json", "$input.json('$')"
                         ))
                         .build()
@@ -215,7 +213,7 @@ public class TapStack extends Stack {
                 .build();
 
         // POST /shorten endpoint
-        Resource shortenResource = api.getRoot().addResource("shorten");
+        software.amazon.awscdk.services.apigateway.Resource shortenResource = api.getRoot().addResource("shorten");
         shortenResource.addMethod("POST", lambdaIntegration,
             MethodOptions.builder()
                 .methodResponses(Arrays.asList(
@@ -226,16 +224,16 @@ public class TapStack extends Stack {
                 .build());
 
         // GET /{shortId} endpoint
-        Resource shortIdResource = api.getRoot().addResource("{shortId}");
+        software.amazon.awscdk.services.apigateway.Resource shortIdResource = api.getRoot().addResource("{shortId}");
         shortIdResource.addMethod("GET", lambdaIntegration,
             MethodOptions.builder()
-                .requestParameters(Map.of(
+                .requestParameters(java.util.Map.of(
                     "method.request.path.shortId", true
                 ))
                 .methodResponses(Arrays.asList(
                     MethodResponse.builder()
                         .statusCode("301")
-                        .responseParameters(Map.of(
+                        .responseParameters(java.util.Map.of(
                             "method.response.header.Location", true
                         ))
                         .build()
@@ -304,7 +302,7 @@ public class TapStack extends Stack {
                 .build();
 
         // CloudFront distribution
-        Distribution distribution = Distribution.Builder.create(this, "URLShortenerDistribution")
+        software.amazon.awscdk.services.cloudfront.Distribution distribution = software.amazon.awscdk.services.cloudfront.Distribution.Builder.create(this, "URLShortenerDistribution")
                 .comment("URL Shortener CloudFront Distribution " + environmentSuffix)
                 .defaultBehavior(BehaviorOptions.builder()
                     .origin(new HttpOrigin(api.getUrl().replace("https://", "").replace("/", "")))
@@ -338,7 +336,7 @@ public class TapStack extends Stack {
                             Metric.Builder.create()
                                 .namespace("AWS/ApiGateway")
                                 .metricName("Count")
-                                .dimensionsMap(Map.of(
+                                .dimensionsMap(java.util.Map.of(
                                     "ApiName", api.getRestApiName(),
                                     "Stage", environmentSuffix
                                 ))
@@ -352,7 +350,7 @@ public class TapStack extends Stack {
                             Metric.Builder.create()
                                 .namespace("AWS/Lambda")
                                 .metricName("Invocations")
-                                .dimensionsMap(Map.of(
+                                .dimensionsMap(java.util.Map.of(
                                     "FunctionName", urlShortenerFunction.getFunctionName()
                                 ))
                                 .statistic("Sum")
@@ -365,7 +363,7 @@ public class TapStack extends Stack {
                             Metric.Builder.create()
                                 .namespace("AWS/DynamoDB")
                                 .metricName("UserErrors")
-                                .dimensionsMap(Map.of(
+                                .dimensionsMap(java.util.Map.of(
                                     "TableName", urlTable.getTableName()
                                 ))
                                 .statistic("Sum")
@@ -378,7 +376,7 @@ public class TapStack extends Stack {
                             Metric.Builder.create()
                                 .namespace("AWS/CloudFront")
                                 .metricName("CacheHitRate")
-                                .dimensionsMap(Map.of(
+                                .dimensionsMap(java.util.Map.of(
                                     "DistributionId", distribution.getDistributionId()
                                 ))
                                 .statistic("Average")

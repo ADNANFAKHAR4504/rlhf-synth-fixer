@@ -6,8 +6,23 @@
   "po_id": "83057192",
   "team": "synth",
   "startedAt": "2025-10-03T21:12:33+05:30",
-  "subtask": "Serverless Infrastructure",
-  "subject_labels": ["Application Deployment"],
-  "aws_services": ["API Gateway", "Lambda", "DynamoDB", "CloudFront", "S3", "CloudWatch", "IAM", "X-Ray", "WAF", "EventBridge", "Step Functions", "SNS"],
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudFront",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "X-Ray",
+    "WAF",
+    "EventBridge",
+    "Step Functions",
+    "SNS"
+  ],
   "training_quality": 9
 }
