@@ -7,6 +7,19 @@
   "team": "synth",
   "startedAt": "2025-10-02T02:52:46+05:30",
   "training_quality": 8.5,
+  "subtask": "Logistics Tracking API (Pulumi Python)",
+  "subject_labels": [
+    "serverless",
+    "pulumi",
+    "python",
+    "api-gateway",
+    "lambda",
+    "dynamodb",
+    "cloudwatch",
+    "ssm-parameter-store",
+    "sqs",
+    "observability"
+  ],
   "aws_services": [
     "API Gateway",
     "Lambda",
