@@ -25,6 +25,8 @@ import {
   DescribeNetworkAclsCommand,
   DescribeVpcAttributeCommand,
   DescribeKeyPairsCommand,
+  DescribeInstancesCommand,
+  DescribeVpcEndpointsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
@@ -61,8 +63,18 @@ import {
   ListTopicsCommand,
   GetTopicAttributesCommand,
 } from '@aws-sdk/client-sns';
+import {
+  SSMClient,
+} from '@aws-sdk/client-ssm';
+import {
+  IAMClient,
+  ListRolePoliciesCommand,
+  ListAttachedRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as http from 'http';
+import * as https from 'https';
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -934,12 +946,11 @@ describe('TapStack E2E Tests - Region Independence', () => {
 describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)', () => {
   let ec2Client: EC2Client;
   let rdsClient: RDSClient;
-  let ssmClient: any;
+  let ssmClient: SSMClient;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     ec2Client = new EC2Client({ region });
     rdsClient = new RDSClient({ region });
-    const { SSMClient } = await import('@aws-sdk/client-ssm');
     ssmClient = new SSMClient({ region });
   });
 
@@ -1039,7 +1050,6 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
 
     if (healthyInstance) {
       // Verify the instance has the correct security group
-      const { DescribeInstancesCommand } = await import('@aws-sdk/client-ec2');
       const instanceDetails = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [healthyInstance.InstanceId!] })
       );
@@ -1120,11 +1130,7 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     expect(healthyTargets?.length).toBeGreaterThan(0);
 
     // 4. Test actual HTTP connectivity to ALB
-    const https = await import('https');
-    const http = await import('http');
-
     try {
-      const client = albDns.includes('https') ? https : http;
       const testConnectivity = new Promise((resolve, reject) => {
         const req = http.request(
           `http://${albDns}/health`,
@@ -1158,7 +1164,6 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
 
   test('Web servers should be able to access S3 bucket for application data', async () => {
     const asgClient = new AutoScalingClient({ region });
-    const { IAMClient, GetRolePolicyCommand, ListRolePoliciesCommand, ListAttachedRolePoliciesCommand } = await import('@aws-sdk/client-iam');
     const iamClient = new IAMClient({ region });
 
     // Get the IAM role attached to EC2 instances
@@ -1173,7 +1178,6 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     // Get instance profile from one of the running instances
     const instances = asgs.AutoScalingGroups?.[0].Instances;
     if (instances && instances.length > 0) {
-      const { DescribeInstancesCommand, DescribeIamInstanceProfileAssociationsCommand } = await import('@aws-sdk/client-ec2');
       const instanceDetails = await ec2Client.send(
         new DescribeInstancesCommand({ InstanceIds: [instances[0].InstanceId!] })
       );
@@ -1213,7 +1217,6 @@ describe('TapStack E2E Tests - Security Validation (Actual Connectivity Tests)',
     expect(appDataBucket).toBeDefined();
 
     // Check if VPC has S3 endpoint for private connectivity
-    const { DescribeVpcEndpointsCommand } = await import('@aws-sdk/client-ec2');
     const vpcEndpoints = await ec2Client.send(
       new DescribeVpcEndpointsCommand({
         Filters: [
