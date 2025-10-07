@@ -765,6 +765,13 @@
         "BucketName": {
           "Fn::Sub": "${ProjectPrefix}-data-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
         },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
@@ -829,7 +836,7 @@
               }
             },
             {
-              "Sid": "AllowCloudTrailWrite",
+              "Sid": "AWSCloudTrailAclCheck",
               "Effect": "Allow",
               "Principal": {
                 "Service": {
@@ -844,23 +851,33 @@
               },
               "Action": [
                 "s3:GetBucketAcl",
-                "s3:GetBucketLocation",
-                "s3:PutObject"
+                "s3:GetBucketLocation"
               ],
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "DataBucket",
-                    "Arn"
+              "Resource": {
+                "Fn::GetAtt": [
+                  "DataBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "CloudTrailPrincipal"
                   ]
-                },
-                {
-                  "Fn::Sub": "${DataBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-                },
-                {
-                  "Fn::Sub": "${DataBucket.Arn}/cloudtrail/*"
                 }
-              ],
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${DataBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              },
               "Condition": {
                 "StringEquals": {
                   "s3:x-amz-acl": "bucket-owner-full-control"
@@ -1386,6 +1403,9 @@
     },
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": [
+        "DataBucketPolicy"
+      ],
       "Properties": {
         "TrailName": {
           "Fn::Sub": "${ProjectPrefix}-trail-${Environment}-${EnvironmentSuffix}"
