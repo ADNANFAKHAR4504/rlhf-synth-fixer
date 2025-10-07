@@ -7,8 +7,11 @@ terraform {
   }
 }
 
+# Use primary provider for Global Accelerator (must be in same region as primary ALB)
+
 # AWS Global Accelerator
 resource "aws_globalaccelerator_accelerator" "main" {
+  provider        = aws.primary
   name            = "${var.environment}-global-accelerator"
   ip_address_type = "IPV4"
   enabled         = true
@@ -26,6 +29,7 @@ resource "aws_globalaccelerator_accelerator" "main" {
 
 # Global Accelerator Listener
 resource "aws_globalaccelerator_listener" "main" {
+  provider        = aws.primary
   accelerator_arn = aws_globalaccelerator_accelerator.main.id
   protocol        = "TCP"
 
@@ -37,6 +41,7 @@ resource "aws_globalaccelerator_listener" "main" {
 
 # Primary Endpoint Group (Primary Region)
 resource "aws_globalaccelerator_endpoint_group" "primary" {
+  provider     = aws.primary
   listener_arn = aws_globalaccelerator_listener.main.id
 
   endpoint_configuration {
@@ -44,6 +49,20 @@ resource "aws_globalaccelerator_endpoint_group" "primary" {
     weight                         = 100
     client_ip_preservation_enabled = true
   }
+
+
+  health_check_interval_seconds = var.health_check_interval
+  health_check_path             = "/health"
+  health_check_port             = 80
+  health_check_protocol         = "HTTP"
+  threshold_count               = var.failover_threshold
+  traffic_dial_percentage       = 100
+}
+
+# Secondary Endpoint Group (Secondary Region)
+resource "aws_globalaccelerator_endpoint_group" "secondary" {
+  provider     = aws.secondary
+  listener_arn = aws_globalaccelerator_listener.main.id
 
   endpoint_configuration {
     endpoint_id                    = var.secondary_alb_arn
@@ -61,7 +80,8 @@ resource "aws_globalaccelerator_endpoint_group" "primary" {
 
 # S3 Bucket for Global Accelerator Flow Logs
 resource "aws_s3_bucket" "global_accelerator_logs" {
-  bucket = "${var.environment}-global-accelerator-logs-${data.aws_caller_identity.current.account_id}"
+  provider = aws.primary
+  bucket   = "${var.environment}-global-accelerator-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(var.tags, {
     Name = "${var.environment}-global-accelerator-logs"
@@ -69,7 +89,8 @@ resource "aws_s3_bucket" "global_accelerator_logs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "global_accelerator_logs" {
-  bucket = aws_s3_bucket.global_accelerator_logs.id
+  provider = aws.primary
+  bucket   = aws_s3_bucket.global_accelerator_logs.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -78,7 +99,8 @@ resource "aws_s3_bucket_public_access_block" "global_accelerator_logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "global_accelerator_logs" {
-  bucket = aws_s3_bucket.global_accelerator_logs.id
+  provider = aws.primary
+  bucket   = aws_s3_bucket.global_accelerator_logs.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -87,7 +109,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "global_accelerato
   }
 }
 
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+  provider = aws.primary
+}
 
 # Lambda Function for Automated Failover
 resource "aws_lambda_function" "failover" {

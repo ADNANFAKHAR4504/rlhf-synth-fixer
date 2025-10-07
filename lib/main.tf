@@ -36,6 +36,7 @@ module "primary_compute" {
   vpc_id             = module.primary_networking.vpc_id
   public_subnet_ids  = module.primary_networking.public_subnet_ids
   private_subnet_ids = module.primary_networking.private_subnet_ids
+  nat_gateway_ids    = module.primary_networking.nat_gateway_ids
   instance_type      = var.instance_type
   min_size           = var.min_size
   max_size           = var.max_size
@@ -100,6 +101,7 @@ module "secondary_compute" {
   vpc_id             = module.secondary_networking.vpc_id
   public_subnet_ids  = module.secondary_networking.public_subnet_ids
   private_subnet_ids = module.secondary_networking.private_subnet_ids
+  nat_gateway_ids    = module.secondary_networking.nat_gateway_ids
   instance_type      = var.instance_type
   min_size           = var.min_size
   max_size           = var.max_size

@@ -55,12 +55,19 @@ EOF
 
 # Try to install packages in background (non-blocking)
 nohup bash -c '
-    # Wait a bit for network to be fully ready
-    sleep 30
+    # Wait for network to be fully ready and NAT Gateway to be available
+    sleep 60
     
-    # Try to update and install packages
-    yum update -y || echo "Package update failed"
-    yum install -y httpd php php-mysqlnd git || echo "Package installation failed"
+    # Test connectivity to ensure NAT Gateway is working
+    if ping -c 3 8.8.8.8 > /dev/null 2>&1; then
+        echo "Network connectivity confirmed" >> /var/log/user-data.log
+        
+        # Try to update and install packages
+        yum update -y || echo "Package update failed"
+        yum install -y httpd php php-mysqlnd git || echo "Package installation failed"
+    else
+        echo "Network connectivity failed - NAT Gateway may not be ready" >> /var/log/user-data.log
+    fi
     
     # If packages installed successfully, configure Apache
     if command -v httpd >/dev/null 2>&1; then

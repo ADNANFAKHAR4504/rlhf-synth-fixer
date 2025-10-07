@@ -13,6 +13,11 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "nat_gateway_ids" {
+  description = "List of NAT Gateway IDs"
+  type        = list(string)
+}
+
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string

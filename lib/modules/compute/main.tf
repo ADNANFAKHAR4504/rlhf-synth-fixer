@@ -203,6 +203,9 @@ resource "aws_launch_template" "main" {
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
+  # Ensure NAT Gateways are ready before launching instances
+  depends_on = [var.nat_gateway_ids]
+
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2.arn
   }
@@ -262,6 +265,9 @@ resource "aws_autoscaling_group" "main" {
   min_size                  = var.min_size
   max_size                  = var.max_size
   desired_capacity          = var.desired_capacity
+
+  # Ensure NAT Gateways are ready before launching instances
+  depends_on = [var.nat_gateway_ids]
 
   launch_template {
     id      = aws_launch_template.main.id
