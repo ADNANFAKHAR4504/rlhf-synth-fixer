@@ -1,6 +1,7 @@
 Create infrastructure code using Pulumi with TypeScript for an educational platform web application serving 3,200 daily users.
 
 Requirements:
+
 - Create a VPC with CIDR block 10.40.0.0/16 in us-east-1
 - Set up an Application Load Balancer configured for HTTPS on port 443
 - Deploy EC2 instances (t3.micro) running nginx web server

@@ -673,7 +673,7 @@ export const instanceConnectEndpointId = stack.instanceConnectEndpointId;
 
 - **Static Assets Bucket**: Versioning enabled, force destroy for cleanup
 - **ALB Logs Bucket**: Lifecycle policy for 30-day retention
-- **Encryption**: Server-side encryption on all buckets
+- **Public Access Blocked**: BucketPublicAccessBlock configured for both buckets
 - **Access Control**: Proper IAM policies for ALB logging
 
 ### 6. Monitoring & Auto Scaling
@@ -726,8 +726,7 @@ This infrastructure is production-ready with the following considerations:
 ✅ Comprehensive monitoring and alerting  
 ✅ Security best practices  
 ✅ Proper resource cleanup configuration  
-✅ Environment isolation via suffixes  
-✅ Complete test coverage
+✅ Environment isolation via suffixes
 
 ⚠️ Add HTTPS listener with valid certificate for production  
 ⚠️ Consider NAT Gateway for private subnets if needed  
