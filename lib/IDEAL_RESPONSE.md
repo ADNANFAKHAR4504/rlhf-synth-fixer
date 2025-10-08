@@ -4,50 +4,7 @@
 
 A production-grade serverless crowdfunding platform supporting 5,000 active campaigns with milestone-based fund release, comprehensive fraud prevention, and real-time analytics.
 
-### **Architecture Diagram**
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Layer                           │
-│  Creators & Backers → Cognito User Pool (Authentication)    │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────┐
-│                     API Layer                               │
-│  API Gateway (REST) → Cognito Authorizer                   │
-│  ├─ /campaigns (POST, GET)                                 │
-│  └─ /contributions (POST)                                  │
-└─────────────┬───────────────────────────────────────────────┘
-              │
-┌─────────────▼───────────────────────────────────────────────┐
-│              Compute Layer (Lambda)                         │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │  CampaignManagement  PaymentProcessing  Contribution    ││
-│  │  Function            Function           Screening       ││
-│  │  (Node.js 22.x)      (Node.js 22.x)    (Node.js 22.x)  ││
-│  └─────────────────────────────────────────────────────────┘│
-└──────┬────────────────┬────────────────────────────────────┘
-       │                │
-┌──────▼────────┐ ┌─────▼───────────────────────────────────┐
-│   DynamoDB    │ │         Step Functions                  │
-│   Tables      │ │    (Milestone Workflow)                 │
-│   ├─Campaigns │ │    ├─ Validate                          │
-│   └─Contrib.  │ │    ├─ Approval Wait                     │
-│   (KMS Encrypt)││    └─ Fund Release                      │
-└───────────────┘ └─────────────────────────────────────────┘
-       │
-┌──────▼─────────────────────────────────────────────────────┐
-│           Storage & Content Delivery                       │
-│  S3 (Campaign Media) ←→ CloudFront CDN (Global Distribution)│
-│  S3 (Athena Results) ←→ Athena Workgroup (Analytics)       │
-└────────────────────────────────────────────────────────────┘
-       │
-┌──────▼─────────────────────────────────────────────────────┐
-│        Monitoring & Notifications                          │
-│  CloudWatch (Logs, Metrics, Alarms) → SNS → Email/SMS     │
-│  EventBridge (Automated Triggers)                         │
-└────────────────────────────────────────────────────────────┘
-```
 
 ## **Implementation Details**
 
