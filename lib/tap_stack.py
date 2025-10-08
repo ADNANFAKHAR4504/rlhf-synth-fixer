@@ -178,7 +178,7 @@ class HighAvailabilityWebAppStack(NestedStack):
         role = iam.Role(
             self,
             "Ec2InstanceRole",
-            role_name=f"{self.stack_name}-Ec2InstanceRole",
+            role_name=f"{self.project_name}-{self.environment_name}-Ec2InstanceRole",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description="IAM role for EC2 instances in the web application",
             managed_policies=[
@@ -300,7 +300,7 @@ class HighAvailabilityWebAppStack(NestedStack):
         lambda_role = iam.Role(
             self,
             "BackupLambdaRole",
-            role_name=f"{self.stack_name}-BackupLambdaRole",
+            role_name=f"{self.project_name}-{self.environment_name}-BackupLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole")])
