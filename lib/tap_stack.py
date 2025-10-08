@@ -112,11 +112,19 @@ def handler(event, context):
             ttl_date = datetime.now() + timedelta(days=90)
             delivery_event['ttl'] = int(ttl_date.timestamp())
             
-            # Store in DynamoDB
+            # Store in DynamoDB - ensure timestamp is always a string
+            timestamp_value = delivery_event.get('timestamp', current_time)
+            if isinstance(timestamp_value, (int, float)):
+                # Convert numeric timestamp to ISO string format
+                timestamp_str = datetime.fromtimestamp(timestamp_value).isoformat()
+            else:
+                # Assume it's already a string or use current_time
+                timestamp_str = str(timestamp_value) if timestamp_value else current_time
+            
             table.put_item(
                 Item={
                     'event_id': delivery_event['event_id'],
-                    'timestamp': delivery_event.get('timestamp', current_time),
+                    'timestamp': timestamp_str,
                     'data': delivery_event,
                     'ttl': delivery_event['ttl']
                 }
