@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from unittest.mock import patch, MagicMock
+
 import boto3
 from botocore.exceptions import ClientError
 from pytest import mark
