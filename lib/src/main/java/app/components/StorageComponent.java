@@ -26,6 +26,29 @@ public class StorageComponent {
     // private final Table timestreamTable;
 
     /**
+     * Validates component name is not null or empty.
+     *
+     * @param name the name to validate
+     * @return true if valid
+     */
+    public static boolean isValidComponentName(final String name) {
+        return name != null && !name.trim().isEmpty();
+    }
+
+    /**
+     * Validates AWS region format.
+     *
+     * @param region the region to validate
+     * @return true if valid format
+     */
+    public static boolean isValidRegion(final String region) {
+        if (region == null) {
+            return false;
+        }
+        return region.matches("^[a-z]{2}-[a-z]+-\\d{1}$");
+    }
+
+    /**
      * Creates storage infrastructure.
      *
      * @param name component name
