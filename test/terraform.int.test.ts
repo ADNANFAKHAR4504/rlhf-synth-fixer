@@ -1,58 +1,57 @@
 // tests/integration/terraform.int.test.ts
 // Comprehensive integration tests using actual deployed resources
 
-import fs from "fs";
-import path from "path";
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-} from "@aws-sdk/client-ec2";
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  PutItemCommand,
-  GetItemCommand,
-  QueryCommand,
-} from "@aws-sdk/client-dynamodb";
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import {
-  CloudFrontClient,
-  GetDistributionCommand,
-} from "@aws-sdk/client-cloudfront";
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from "@aws-sdk/client-auto-scaling";
 import {
-  IAMClient,
-  GetRoleCommand,
-  GetInstanceProfileCommand,
-} from "@aws-sdk/client-iam";
+  CloudFrontClient,
+  GetDistributionCommand,
+} from "@aws-sdk/client-cloudfront";
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from "@aws-sdk/client-cloudwatch";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from "@aws-sdk/client-cloudwatch";
+  DescribeTableCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+  QueryCommand,
+} from "@aws-sdk/client-dynamodb";
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from "@aws-sdk/client-ec2";
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  GetRoleCommand,
+  IAMClient
+} from "@aws-sdk/client-iam";
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import fs from "fs";
+import path from "path";
 
 const AWS_REGION = "us-west-1";
 
@@ -414,8 +413,8 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
     const response = await cloudfrontClient.send(command);
 
     expect(response.Distribution).toBeDefined();
-    expect(response.Distribution!.Status).toBe("Deployed");
-    expect(response.Distribution!.DistributionConfig.Enabled).toBe(true);
+    expect(response.Distribution?.Status).toBe("Deployed");
+    expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
   }, 30000);
 
   test("CloudFront distribution has both S3 and ALB origins", async () => {
@@ -424,11 +423,15 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
     });
     const response = await cloudfrontClient.send(command);
 
-    const origins = response.Distribution!.DistributionConfig.Origins.Items;
-    expect(origins.length).toBeGreaterThanOrEqual(2);
+    expect(response.Distribution).toBeDefined();
+    expect(response.Distribution?.DistributionConfig?.Origins?.Items).toBeDefined();
 
-    const hasS3Origin = origins.some(o => o.DomainName.includes(outputs.s3_bucket_name));
-    const hasAlbOrigin = origins.some(o => o.DomainName.includes("elb.amazonaws.com"));
+    const origins = response.Distribution!.DistributionConfig!.Origins!.Items;
+    expect(origins).toBeDefined();
+    expect(origins!.length).toBeGreaterThanOrEqual(2);
+
+    const hasS3Origin = origins!.some(o => o.DomainName && o.DomainName.includes(outputs.s3_bucket_name));
+    const hasAlbOrigin = origins!.some(o => o.DomainName && o.DomainName.includes("elb.amazonaws.com"));
 
     expect(hasS3Origin).toBe(true);
     expect(hasAlbOrigin).toBe(true);
