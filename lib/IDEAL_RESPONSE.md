@@ -591,15 +591,4 @@ This implementation provides:
 9. **Dynamic Access Control**: S3 Access Grants instance for more dynamic access patterns
 10. **Environment Isolation**: All resources include environment suffix to support multiple deployments
 
-## Improvements Over Original
-
-1. **Correct Imports**: Fixed import statement from `com.pulumi.Output` to `com.pulumi.core.Output`
-2. **Type Safety**: Used `Either.ofLeft()` for bucket policy to match expected type
-3. **KMS Policy**: Uses AWS account ID instead of stack name for proper ARN references
-4. **IAM Role Policies**: Uses `Output.all()` to properly combine multiple outputs before transformation
-5. **Environment Suffix**: All resource names include environment suffix for deployment isolation
-6. **Access Point Policy**: Removed optional policy parameter to avoid complex ARN formatting issues
-7. **Code Quality**: Fixed checkstyle violations including star imports, line length, final parameters, and operator wrap
-8. **Proper Dependencies**: Added explicit dependencies between related resources using CustomResourceOptions
-
-All resources are properly tagged and follow AWS naming conventions. The code compiles successfully and passes all structural unit tests.
+All resources are properly tagged with Tenant, Environment, ManagedBy, and EnvironmentSuffix tags for proper organization and cost tracking.
