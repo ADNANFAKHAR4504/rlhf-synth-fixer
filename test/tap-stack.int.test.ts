@@ -1,36 +1,36 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  LambdaClient,
-  InvokeCommand,
-  GetFunctionCommand
-} from '@aws-sdk/client-lambda';
-import {
-  S3Client,
-  HeadBucketCommand,
-  PutObjectCommand,
-  GetObjectCommand
-} from '@aws-sdk/client-s3';
-import {
-  SNSClient,
-  GetTopicAttributesCommand
-} from '@aws-sdk/client-sns';
-import {
-  SQSClient,
-  GetQueueAttributesCommand
-} from '@aws-sdk/client-sqs';
-import {
-  EventBridgeClient,
-  DescribeRuleCommand
-} from '@aws-sdk/client-eventbridge';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
-  SecretsManagerClient,
-  GetSecretValueCommand
+  DescribeRuleCommand,
+  EventBridgeClient
+} from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient
 } from '@aws-sdk/client-secrets-manager';
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
+import {
+  GetQueueAttributesCommand,
+  SQSClient
+} from '@aws-sdk/client-sqs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('CloudFormation Stack Integration Tests', () => {
   let outputs: any;
@@ -51,7 +51,7 @@ describe('CloudFormation Stack Integration Tests', () => {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
     // Initialize AWS clients
-    const region = 'us-east-1';
+    const region = 'us-east-2';
     lambdaClient = new LambdaClient({ region });
     s3Client = new S3Client({ region });
     snsClient = new SNSClient({ region });
