@@ -1,89 +1,31 @@
-# Customer Feedback Analytics Platform - Ideal Terraform Solution
+# Serverless Feedback Processing System with Sentiment Analysis
 
-This document describes the ideal Terraform infrastructure for a Customer Feedback Analytics Platform that successfully deploys and passes all quality checks.
+This infrastructure implements a complete serverless feedback processing pipeline on AWS using Terraform. The solution captures customer feedback via API Gateway, processes it through Lambda with AWS Comprehend sentiment analysis, stores data in DynamoDB and S3, and enables analytics through Glue and Athena.
 
 ## Infrastructure Overview
 
-The solution creates a serverless data analytics platform with the following components:
+The system consists of the following components:
 
-### Data Storage
+- **API Gateway**: REST API endpoint for feedback submission
+- **Lambda Function**: Python 3.11 function for processing feedback and sentiment analysis
+- **DynamoDB**: NoSQL database for real-time feedback storage with point-in-time recovery
+- **S3 Data Lake**: Partitioned storage (year/month/day) for long-term analytics
+- **AWS Comprehend**: Sentiment analysis service
+- **Glue Crawler**: Automated schema discovery running daily at midnight UTC
+- **Athena**: SQL-based analytics with encrypted results
+- **CloudWatch**: Monitoring, logging, and custom metrics
+- **IAM**: Least-privilege security roles and policies
 
-- S3 Data Lake Bucket with versioning enabled for customer feedback storage
-- S3 Athena Results Bucket with 30-day lifecycle policy for query results
-- DynamoDB Table with PAY_PER_REQUEST billing for real-time feedback storage
-- Point-in-time recovery enabled for data protection
+## Key Architecture Features
 
-### Compute and Processing
-
-- Lambda Function for feedback processing and sentiment analysis
-- Python 3.11 runtime with 512 MB memory and 30-second timeout
-- Integration with AWS Comprehend for sentiment analysis
-- Automatic data partitioning by year/month/day in S3
-
-### API Gateway
-
-- REST API with regional endpoint configuration
-- POST method for feedback submission at /feedback endpoint
-- AWS_PROXY integration with Lambda function
-- Production stage deployment
-
-### Data Catalog and Analytics
-
-- AWS Glue Database for metadata management
-- Glue Crawler with daily schedule (cron: 0 0 \* _ ? _)
-- Athena Workgroup with encrypted results
-- Schema evolution support with UPDATE_IN_DATABASE policy
-
-### Monitoring and Alarms
-
-- CloudWatch Log Group with 14-day retention
-- Lambda error alarm (threshold: 5 errors in 5 minutes)
-- DynamoDB throttle alarm (threshold: 10 errors in 5 minutes)
-- Custom CloudWatch metrics for feedback processing
-
-### Security and IAM
-
-- Lambda execution role with least privilege permissions
-- Glue crawler role with S3 and Glue access
-- Comprehensive CloudWatch logging
+- Cross-region support for AWS Comprehend (us-west-2) while maintaining primary resources in us-west-1
+- Environment isolation using configurable suffix for resource naming
+- S3 versioning and lifecycle policies
+- DynamoDB point-in-time recovery
+- Automated Glue crawler scheduling
+- CloudWatch alarms for Lambda errors and DynamoDB throttling
 - Encrypted Athena query results with SSE-S3
-
-## Key Quality Attributes
-
-### Deployability
-
-- Successfully deploys to AWS us-west-1 region
-- All resources created without errors
-- Proper dependency management with depends_on
-- Uses environment_suffix for resource isolation
-
-### Security
-
-- IAM roles follow least privilege principle
-- Encrypted data at rest for Athena results
-- Versioning enabled for S3 data lake
-- Point-in-time recovery for DynamoDB
-
-### Scalability
-
-- Serverless architecture with auto-scaling
-- DynamoDB PAY_PER_REQUEST billing mode
-- Lambda concurrency management
-- S3 for unlimited data storage
-
-### Monitoring
-
-- CloudWatch alarms for Lambda errors
-- CloudWatch alarms for DynamoDB throttling
-- Custom metrics for feedback processing
-- Comprehensive logging with 14-day retention
-
-### Maintainability
-
-- Automatic resource cleanup with force_destroy
-- Lifecycle policies for old data
-- Consistent naming conventions
-- Environment suffix for isolation
+- Comprehensive tagging strategy
 
 ## Terraform Configuration Files
 
@@ -817,43 +759,14 @@ def lambda_handler(event, context):
         }
 ```
 
-## Test Results
-
-### Unit Tests
-
-- 81 test cases covering all resources
-- 100% pass rate
-- Tests validate Terraform configuration, resource properties, and relationships
-
-### Integration Tests
-
-- 24 test cases validating deployed infrastructure
-- 100% pass rate
-- Tests validate:
-  - API Gateway endpoint availability and configuration
-  - Lambda function deployment and execution
-  - DynamoDB table creation and configuration
-  - S3 buckets with proper lifecycle policies
-  - Glue database and crawler configuration
-  - Athena workgroup setup
-  - CloudWatch alarms and monitoring
-  - IAM roles and permissions
-  - End-to-end feedback submission flow
-
-### Quality Gates
-
-- Linting: PASSED (terraform validate)
-- Build: PASSED (terraform plan)
-- Validation: PASSED (All resources valid)
-
 ## Summary
 
-This Terraform configuration represents a production-ready, serverless data analytics solution that:
+This infrastructure provides a production-ready serverless feedback processing system with the following capabilities:
 
-- Follows AWS best practices for serverless architecture
-- Successfully deploys and operates in AWS
-- Passes all automated quality checks
-- Is fully tested with comprehensive unit and integration tests
-- Provides end-to-end customer feedback processing with sentiment analysis
-- Supports data analytics with Athena and Glue
-- Implements comprehensive monitoring and alerting
+- Real-time sentiment analysis on customer feedback
+- Dual storage strategy (DynamoDB for immediate access, S3 for long-term analytics)
+- Automated data cataloging and partitioning
+- SQL-based analytics through Athena
+- Comprehensive monitoring and alerting
+- Environment isolation for safe deployments
+- Cross-region service orchestration

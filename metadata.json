@@ -7,5 +7,19 @@
   "team": "synth",
   "startedAt": "2025-10-08T12:47:56+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Serverless Infrastructure"]
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "Comprehend",
+    "Glue",
+    "Athena",
+    "CloudWatch",
+    "IAM"
+  ]
 }
