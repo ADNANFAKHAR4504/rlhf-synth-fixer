@@ -6,7 +6,7 @@
   "po_id": "45820917",
   "team": "synth",
   "startedAt": "2025-10-08T11:46:41+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
@@ -23,5 +23,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
