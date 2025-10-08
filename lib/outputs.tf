@@ -49,3 +49,8 @@ output "cloudwatch_dashboard_url" {
   description = "URL to the CloudWatch dashboard"
   value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.website.dashboard_name}"
 }
+
+output "sns_alerts_topic_arn" {
+  description = "ARN of the SNS topic for CloudWatch alerts"
+  value       = aws_sns_topic.alerts.arn
+}

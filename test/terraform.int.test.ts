@@ -14,7 +14,8 @@ const loadOutputs = (): any => {
       logs_bucket_name: 'test-bucket-logs',
       cloudfront_distribution_id: 'test-distribution-id',
       cloudfront_distribution_domain: 'test.cloudfront.net',
-      website_url: 'https://test.cloudfront.net'
+      website_url: 'https://test.cloudfront.net',
+      sns_alerts_topic_arn: 'arn:aws:sns:us-east-1:123456789012:test-alerts'
     };
   }
   return JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
@@ -115,11 +116,29 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
   });
 
+  describe('CloudWatch and Alerting', () => {
+    test('SNS alerts topic ARN is defined', () => {
+      expect(outputs.sns_alerts_topic_arn).toBeDefined();
+      if (outputs.sns_alerts_topic_arn) {
+        expect(outputs.sns_alerts_topic_arn).toMatch(/^arn:aws:sns:/);
+        expect(outputs.sns_alerts_topic_arn).toContain('alerts');
+      }
+    });
+
+    test('CloudWatch dashboard URL is properly formatted', () => {
+      if (outputs.cloudwatch_dashboard_url) {
+        expect(outputs.cloudwatch_dashboard_url).toMatch(/^https:\/\/console\.aws\.amazon\.com\/cloudwatch/);
+        expect(outputs.cloudwatch_dashboard_url).toContain('dashboards');
+      }
+    });
+  });
+
   describe('Output Validation', () => {
     test('all expected outputs are present', () => {
       const expectedOutputs = [
         'website_bucket_name',
         'logs_bucket_name',
+        'sns_alerts_topic_arn'
       ];
 
       expectedOutputs.forEach(output => {
@@ -141,6 +160,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
           if (key.includes('_url')) {
             expect(typeof value).toBe('string');
             expect(value).toMatch(/^https?:\/\//);
+          }
+
+          if (key.includes('_arn')) {
+            expect(typeof value).toBe('string');
+            expect(value).toMatch(/^arn:aws:/);
           }
         }
       });

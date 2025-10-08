@@ -18,16 +18,16 @@ variable "create_dns_records" {
   default     = false
 }
 
+variable "hosted_zone_name" {
+  description = "Route 53 hosted zone name (if different from domain_name root)"
+  type        = string
+  default     = ""
+}
+
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
   default     = "donation-platform"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production"
 }
 
 variable "environment_suffix" {

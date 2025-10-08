@@ -3,6 +3,16 @@
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
 
+# CloudFront managed cache policy for static website optimization
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+# CloudFront managed origin request policy for CORS-S3Origin
+data "aws_cloudfront_origin_request_policy" "cors_s3_origin" {
+  name = "Managed-CORS-S3Origin"
+}
+
 # Random suffix for unique bucket names
 resource "random_string" "bucket_suffix" {
   length  = 8
@@ -82,14 +92,14 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   }
 }
 
-# Block public access for website bucket (will use OAC instead)
+# Block public access for website bucket (using OAC for secure access)
 resource "aws_s3_bucket_public_access_block" "website" {
   bucket = aws_s3_bucket.website.id
 
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # Block public access for logs bucket
@@ -141,6 +151,9 @@ resource "aws_cloudfront_distribution" "website" {
 
   aliases = var.domain_name != "" && var.create_dns_records ? [var.domain_name, "www.${var.domain_name}"] : []
 
+  # Ensure certificate validation is complete before creating distribution
+  depends_on = var.domain_name != "" && var.create_dns_records ? [aws_acm_certificate_validation.website[0]] : []
+
   origin {
     domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.website.id
@@ -152,19 +165,11 @@ resource "aws_cloudfront_distribution" "website" {
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${aws_s3_bucket.website.id}"
 
-    forwarded_values {
-      query_string = false
-      headers      = ["Origin"]
-
-      cookies {
-        forward = "none"
-      }
-    }
+    # Use managed cache policy for optimized static website caching
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_optimized.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3_origin.id
 
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
     compress               = true
   }
 
@@ -182,8 +187,8 @@ resource "aws_cloudfront_distribution" "website" {
     # Use CloudFront default certificate when no custom domain
     cloudfront_default_certificate = var.domain_name == "" || !var.create_dns_records
 
-    # Set minimum TLS version
-    minimum_protocol_version = "TLSv1.2_2021"
+    # Set minimum TLS version only when using custom certificate
+    minimum_protocol_version = var.domain_name != "" && var.create_dns_records ? "TLSv1.2_2021" : null
   }
 
   logging_config {
@@ -272,7 +277,12 @@ resource "aws_s3_bucket_policy" "logs" {
 data "aws_route53_zone" "main" {
   count = var.domain_name != "" && var.create_dns_records ? 1 : 0
 
-  name         = replace(var.domain_name, "/^[^.]+\\./", "")
+  name = var.hosted_zone_name != "" ? var.hosted_zone_name : (
+    # Extract root domain from domain_name (e.g., "example.com" from "www.example.com")
+    length(split(".", var.domain_name)) > 2 ? 
+    join(".", slice(split(".", var.domain_name), -2, length(split(".", var.domain_name)))) : 
+    var.domain_name
+  )
   private_zone = false
 }
 
@@ -440,6 +450,13 @@ resource "aws_cloudwatch_dashboard" "website" {
   })
 }
 
+# SNS Topic for CloudWatch Alarms
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alerts"
+
+  tags = var.tags
+}
+
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
   alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-high-4xx-errors"
@@ -451,11 +468,65 @@ resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
   statistic           = "Average"
   threshold           = "5"
   alarm_description   = "This metric monitors 4xx error rate"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DistributionId = aws_cloudfront_distribution.website.id
   }
+
+  tags = var.tags
+}
+
+# CloudWatch Application Signals
+resource "aws_applicationinsights_application" "website" {
+  resource_group_name = aws_resourcegroups_group.website.name
+  auto_config_enabled = true
+
+  tags = var.tags
+}
+
+# Resource Group for Application Signals
+resource "aws_resourcegroups_group" "website" {
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-resources"
+
+  resource_query {
+    query = jsonencode({
+      ResourceTypeFilters = [
+        "AWS::CloudFront::Distribution",
+        "AWS::S3::Bucket"
+      ]
+      TagFilters = [
+        {
+          Key    = "Name"
+          Values = ["${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}*"]
+        }
+      ]
+    })
+  }
+
+  tags = var.tags
+}
+
+# CloudWatch Composite Alarm for overall health
+resource "aws_cloudwatch_composite_alarm" "website_health" {
+  alarm_name        = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-composite-health"
+  alarm_description = "Composite alarm monitoring overall website health"
+
+  alarm_rule = format("(ALARM(%s) OR ALARM(%s))",
+    aws_cloudwatch_metric_alarm.high_4xx_errors.alarm_name,
+    aws_cloudwatch_metric_alarm.high_5xx_errors.alarm_name
+  )
+
+  actions_enabled = true
+  alarm_actions   = [aws_sns_topic.alerts.arn]
+
+  tags = var.tags
+}
+
+# CloudWatch Logs for Application Insights
+resource "aws_cloudwatch_log_group" "application_insights" {
+  name              = "/aws/applicationinsights/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
+  retention_in_days = 30
 
   tags = var.tags
 }
@@ -470,7 +541,7 @@ resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
   statistic           = "Average"
   threshold           = "1"
   alarm_description   = "This metric monitors 5xx error rate"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DistributionId = aws_cloudfront_distribution.website.id

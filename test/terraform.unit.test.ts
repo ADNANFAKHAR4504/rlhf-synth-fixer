@@ -60,16 +60,16 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(variablesContent).toMatch(/variable\s+"project_name"\s*{/);
     });
 
-    test('defines environment variable', () => {
-      expect(variablesContent).toMatch(/variable\s+"environment"\s*{/);
-    });
-
     test('defines environment_suffix variable', () => {
       expect(variablesContent).toMatch(/variable\s+"environment_suffix"\s*{/);
     });
 
     test('defines create_dns_records variable', () => {
       expect(variablesContent).toMatch(/variable\s+"create_dns_records"\s*{/);
+    });
+
+    test('defines hosted_zone_name variable', () => {
+      expect(variablesContent).toMatch(/variable\s+"hosted_zone_name"\s*{/);
     });
 
     test('defines tags variable', () => {
@@ -157,6 +157,30 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('configures public access block for logs bucket', () => {
       expect(mainContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"logs"/);
     });
+
+    test('website bucket has all public access blocks set to true', () => {
+      const websiteBucketBlockMatch = mainContent.match(/resource\s+"aws_s3_bucket_public_access_block"\s+"website"\s*{[^}]*}/s);
+      expect(websiteBucketBlockMatch).toBeTruthy();
+      if (websiteBucketBlockMatch) {
+        const blockConfig = websiteBucketBlockMatch[0];
+        expect(blockConfig).toContain('block_public_acls       = true');
+        expect(blockConfig).toContain('block_public_policy     = true');
+        expect(blockConfig).toContain('ignore_public_acls      = true');
+        expect(blockConfig).toContain('restrict_public_buckets = true');
+      }
+    });
+
+    test('logs bucket has all public access blocks set to true', () => {
+      const logsBucketBlockMatch = mainContent.match(/resource\s+"aws_s3_bucket_public_access_block"\s+"logs"\s*{[^}]*}/s);
+      expect(logsBucketBlockMatch).toBeTruthy();
+      if (logsBucketBlockMatch) {
+        const blockConfig = logsBucketBlockMatch[0];
+        expect(blockConfig).toContain('block_public_acls       = true');
+        expect(blockConfig).toContain('block_public_policy     = true');
+        expect(blockConfig).toContain('ignore_public_acls      = true');
+        expect(blockConfig).toContain('restrict_public_buckets = true');
+      }
+    });
   });
 
   describe('CloudFront Configuration', () => {
@@ -200,6 +224,25 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(mainContent).toMatch(/viewer_certificate\s*{/);
       expect(mainContent).toContain('cloudfront_default_certificate = var.domain_name == "" || !var.create_dns_records');
     });
+
+    test('uses managed cache policies instead of forwarded_values', () => {
+      expect(mainContent).toContain('cache_policy_id          = data.aws_cloudfront_cache_policy.caching_optimized.id');
+      expect(mainContent).toContain('origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3_origin.id');
+      // Ensure forwarded_values is not used
+      expect(mainContent).not.toMatch(/forwarded_values\s*{/);
+    });
+
+    test('defines CloudFront managed cache policy data sources', () => {
+      expect(mainContent).toMatch(/data\s+"aws_cloudfront_cache_policy"\s+"caching_optimized"/);
+      expect(mainContent).toContain('name = "Managed-CachingOptimized"');
+      expect(mainContent).toMatch(/data\s+"aws_cloudfront_origin_request_policy"\s+"cors_s3_origin"/);
+      expect(mainContent).toContain('name = "Managed-CORS-S3Origin"');
+    });
+
+    test('CloudFront distribution has conditional dependency', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website"/);
+      expect(mainContent).toContain('depends_on = var.domain_name != "" && var.create_dns_records ? [aws_acm_certificate_validation.website[0]] : []');
+    });
   });
 
   describe('Route 53 Configuration', () => {
@@ -227,6 +270,16 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('makes ACM certificate validation conditional', () => {
       expect(mainContent).toMatch(/resource\s+"aws_acm_certificate_validation"\s+"website"[\s\S]*count\s*=\s*var\.domain_name\s*!=\s*""\s*&&\s*var\.create_dns_records\s*\?\s*1\s*:\s*0/);
+    });
+
+    test('Route 53 zone uses improved domain parsing logic', () => {
+      const zoneDataSourceMatch = mainContent.match(/data\s+"aws_route53_zone"\s+"main"[^}]*name\s*=[^}]*}/s);
+      expect(zoneDataSourceMatch).toBeTruthy();
+      if (zoneDataSourceMatch) {
+        const zoneConfig = zoneDataSourceMatch[0];
+        expect(zoneConfig).toContain('var.hosted_zone_name != "" ? var.hosted_zone_name');
+        expect(zoneConfig).toContain('length(split(".", var.domain_name)) > 2');
+      }
     });
   });
 
@@ -258,6 +311,59 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const alarm5xxMatch = mainContent.match(/resource\s+"aws_cloudwatch_metric_alarm"\s+"high_5xx_errors"[^}]*alarm_name\s*=\s*"[^"]*\$\{var\.environment_suffix/);
       expect(alarm4xxMatch).toBeTruthy();
       expect(alarm5xxMatch).toBeTruthy();
+    });
+
+    test('creates SNS topic for alerts', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"/);
+      expect(mainContent).toContain('${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alerts');
+    });
+
+    test('alarms have SNS topic actions', () => {
+      expect(mainContent).toContain('alarm_actions       = [aws_sns_topic.alerts.arn]');
+      // Check that alarm_actions = [] is not present anymore
+      expect(mainContent).not.toContain('alarm_actions       = []');
+    });
+
+    test('composite alarm has SNS topic actions', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudwatch_composite_alarm"\s+"website_health"/);
+      expect(mainContent).toMatch(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/);
+    });
+  });
+
+  describe('CloudWatch Application Signals', () => {
+    let mainContent: string;
+
+    beforeAll(() => {
+      mainContent = readFile('main.tf');
+    });
+
+    test('creates Application Insights application', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_applicationinsights_application"\s+"website"/);
+      expect(mainContent).toContain('resource_group_name = aws_resourcegroups_group.website.name');
+      expect(mainContent).toContain('auto_config_enabled = true');
+    });
+
+    test('creates resource group for Application Signals', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_resourcegroups_group"\s+"website"/);
+      expect(mainContent).toContain('${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-resources');
+    });
+
+    test('resource group filters CloudFront and S3 resources', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_resourcegroups_group"\s+"website"/);
+      expect(mainContent).toContain('AWS::CloudFront::Distribution');
+      expect(mainContent).toContain('AWS::S3::Bucket');
+      expect(mainContent).toContain('ResourceTypeFilters');
+    });
+
+    test('creates composite alarm for website health', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudwatch_composite_alarm"\s+"website_health"/);
+      expect(mainContent).toContain('Composite alarm monitoring overall website health');
+    });
+
+    test('creates CloudWatch log group for Application Insights', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"application_insights"/);
+      expect(mainContent).toContain('/aws/applicationinsights/');
+      expect(mainContent).toContain('retention_in_days = 30');
     });
   });
 
@@ -351,6 +457,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('Route53 zone ID is conditional', () => {
       expect(outputsContent).toContain('var.domain_name != "" && var.create_dns_records ? data.aws_route53_zone.main[0].zone_id : null');
     });
+
+    test('exports SNS alerts topic ARN', () => {
+      expect(outputsContent).toMatch(/output\s+"sns_alerts_topic_arn"/);
+      expect(outputsContent).toContain('aws_sns_topic.alerts.arn');
+    });
   });
 
   describe('Security Best Practices', () => {
@@ -380,9 +491,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(mainContent).toContain('viewer_protocol_policy = "redirect-to-https"');
     });
 
-    test('minimum TLS version configured', () => {
+    test('minimum TLS version configured conditionally', () => {
       expect(mainContent).toMatch(/minimum_protocol_version\s*=/);
-      expect(mainContent).toContain('TLSv1');
+      expect(mainContent).toContain('minimum_protocol_version = var.domain_name != "" && var.create_dns_records ? "TLSv1.2_2021" : null');
     });
   });
 
