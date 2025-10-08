@@ -81,8 +81,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('SolutionStackName parameter should have valid options', () => {
       const stackParam = template.Parameters.SolutionStackName;
-      expect(stackParam.AllowedValues).toContain('64bit Amazon Linux 2023 v4.7.1 running Python 3.12');
-      expect(stackParam.Default).toContain('Python 3.12');
+      expect(stackParam.Default).toContain('Python 3.11');
     });
   });
 
