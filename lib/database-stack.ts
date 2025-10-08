@@ -63,7 +63,7 @@ export class DatabaseStack extends Construct {
     this.dbInstance = new DbInstance(this, 'postgres-db', {
       identifier: `portfolio-holdings-db-${props.environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.3',
+      engineVersion: '15.14',
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',

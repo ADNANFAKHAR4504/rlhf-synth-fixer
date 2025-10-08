@@ -19,5 +19,9 @@
     "Auto Scaling",
     "CloudWatch",
     "IAM"
+  ],
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
   ]
 }

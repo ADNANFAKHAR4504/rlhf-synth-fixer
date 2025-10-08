@@ -9,6 +9,8 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import * as path from 'path';
 
 interface ApiStackProps {
   vpc: Vpc;
@@ -63,27 +65,20 @@ export class ApiStack extends Construct {
       }),
     });
 
-    const lambdaCode = `
-exports.handler = async (event) => {
-    const { requestContext: { eventType, connectionId } } = event;
-    console.log('WebSocket event:', eventType, 'Connection:', connectionId);
-
-    if (eventType === 'CONNECT') {
-        return { statusCode: 200, body: 'Connected' };
-    } else if (eventType === 'DISCONNECT') {
-        return { statusCode: 200, body: 'Disconnected' };
-    } else {
-        return { statusCode: 200, body: 'Message received' };
-    }
-};`;
+    // Create Lambda deployment package
+    const lambdaAsset = new DataArchiveFile(this, 'websocket-lambda-archive', {
+      type: 'zip',
+      sourceDir: path.join(__dirname, 'lambda', 'websocket-handler'),
+      outputPath: path.join(__dirname, '../.terraform', `websocket-handler-${props.environmentSuffix}.zip`),
+    });
 
     const websocketLambda = new LambdaFunction(this, 'websocket-handler', {
       functionName: `portfolio-ws-handler-${props.environmentSuffix}`,
       runtime: 'nodejs18.x',
       handler: 'index.handler',
       role: lambdaRole.arn,
-      filename: 'lambda.zip',
-      sourceCodeHash: Buffer.from(lambdaCode).toString('base64'),
+      filename: lambdaAsset.outputPath,
+      sourceCodeHash: lambdaAsset.outputBase64Sha256,
       timeout: 30,
       memorySize: 256,
       environment: {
