@@ -56,8 +56,6 @@ Parameters:
     Default: '20241201-143022-xyz789'
     Description: 'Timestamp for unique resource naming (format: YYYYMMDD-HHMMSS-suffix)'
 
-Conditions:
-  IsProduction: !Equals [!Ref Environment, 'production']
 
 Metadata:
   AWS::CloudFormation::Interface:
