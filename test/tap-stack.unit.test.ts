@@ -15,6 +15,48 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Handling', () => {
+    test('should use props environmentSuffix when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'test' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'shipments-test',
+      });
+    });
+
+    test('should use context environmentSuffix when props not provided', () => {
+      const testApp = new cdk.App({ context: { environmentSuffix: 'staging' } });
+      const testStack = new TapStack(testApp, 'TestStack', {});
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'shipments-staging',
+      });
+    });
+
+    test('should default to dev when no environmentSuffix provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', {});
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'shipments-dev',
+      });
+    });
+
+    test('should default to dev when props is undefined', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'shipments-dev',
+      });
+    });
+  });
+
   describe('DynamoDB Tables', () => {
     test('should create shipments table with streams enabled', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
