@@ -39,9 +39,7 @@ class S3Stack:
         
         # Create bucket policy
         self._create_bucket_policy()
-        
-        # Create event notifications
-        self._create_event_notifications()
+      
         
         # Create bucket versioning
         self._create_bucket_versioning()

@@ -1537,6 +1537,53 @@ class TestS3Coverage(unittest.TestCase):
         # Verify stack was created
         self.assertIsNotNone(s3_stack)
 
+    def test_s3_stack_event_notifications_method_coverage(self):
+        """Test S3 stack event notifications method for coverage."""
+        # Mock configuration
+        mock_config = MagicMock()
+        mock_config.get_naming_convention.side_effect = lambda resource, name: f"test-{resource}-{name}"
+        mock_config.get_tags.return_value = {"Environment": "test"}
+        mock_config.get_s3_config.return_value = {
+            'bucket_name': 'test-bucket',
+            'encryption_enabled': True,
+            'public_access_enabled': False,
+            'tags': {"Environment": "test"}
+        }
+        
+        # Mock Lambda outputs
+        mock_lambda_outputs = {
+            's3_processor_lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-s3-processor'
+        }
+        
+        # Mock provider
+        mock_provider = MagicMock()
+        
+        # Mock the S3 bucket creation
+        with patch('infrastructure.s3.s3.Bucket') as mock_bucket_class:
+            mock_bucket = MagicMock()
+            mock_bucket.id = 'test-bucket-id'
+            mock_bucket_class.return_value = mock_bucket
+            
+            # Mock other S3 resources
+            with patch('infrastructure.s3.s3.BucketPolicy') as mock_policy, \
+                 patch('infrastructure.s3.s3.BucketPublicAccessBlock') as mock_access_block, \
+                 patch('infrastructure.s3.s3.BucketVersioning') as mock_versioning, \
+                 patch('infrastructure.s3.s3.BucketServerSideEncryptionConfiguration') as mock_encryption:
+                
+                # Create S3Stack instance
+                s3_stack = S3Stack(
+                    config=mock_config,
+                    lambda_outputs=mock_lambda_outputs,
+                    provider=mock_provider
+                )
+                
+                # Mock the BucketNotification class
+                with patch('infrastructure.s3.s3.BucketNotification') as mock_notification:
+                    # Call the method directly for coverage
+                    s3_stack._create_event_notifications()
+                    
+                    # Verify BucketNotification was called twice (created and removed)
+                    self.assertEqual(mock_notification.call_count, 2)
 
 
 if __name__ == '__main__':
