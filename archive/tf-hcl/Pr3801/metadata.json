@@ -1,0 +1,57 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350153",
+  "team": "4",
+  "startedAt": "2025-10-08T05:11:08.280Z",
+  "subtask": "Multi-tier Web Application Infrastructure Deployment",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Web Application Deployment",
+    "High Availability Architecture",
+    "Security & Encryption",
+    "Auto Scaling & Load Balancing"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9,
+  "testDependencies": {
+    "@aws-sdk/client-ec2": "^3.883.0",
+    "@aws-sdk/client-rds": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/client-iam": "^3.883.0",
+    "@aws-sdk/client-secrets-manager": "^3.883.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.883.0",
+    "@aws-sdk/client-cloudwatch": "^3.883.0",
+    "@aws-sdk/client-cloudfront": "^3.883.0",
+    "@aws-sdk/client-kms": "^3.883.0",
+    "@aws-sdk/client-auto-scaling": "^3.883.0",
+    "@aws-sdk/client-sns": "^3.883.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.0.0"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
