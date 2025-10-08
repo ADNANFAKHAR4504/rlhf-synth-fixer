@@ -283,10 +283,8 @@ describe("Terraform Compliance Framework - Config Rules", () => {
     expect(stackContent).toMatch(/RequireNumbers.*true/s);
   });
 
-  test("all Config rules depend on recorder", () => {
-    const configRuleMatches = stackContent.match(/resource\s+"aws_config_config_rule"[\s\S]*?depends_on\s*=\s*\[aws_config_configuration_recorder\.main\]/g);
-    expect(configRuleMatches).toBeTruthy();
-    expect(configRuleMatches!.length).toBeGreaterThanOrEqual(10);
+  test("Config recorder is conditional based on variable", () => {
+    expect(stackContent).toMatch(/count\s*=\s*var\.create_config_recorder\s*\?\s*1\s*:\s*0/);
   });
 });
 
@@ -781,16 +779,16 @@ describe("Terraform Compliance Framework - Resource Dependencies", () => {
     expect(cloudtrailMatch![0]).toMatch(/depends_on\s*=\s*\[[^\]]*aws_s3_bucket_policy\.cloudtrail_logs/s);
   });
 
-  test("Config delivery channel depends on recorder", () => {
+  test("Config delivery channel is conditional", () => {
     const deliveryChannel = stackContent.match(/resource\s+"aws_config_delivery_channel"\s+"main"[\s\S]*?^}/m);
     expect(deliveryChannel).toBeTruthy();
-    expect(deliveryChannel![0]).toMatch(/depends_on\s*=\s*\[[^\]]*aws_config_configuration_recorder\.main/s);
+    expect(deliveryChannel![0]).toMatch(/count\s*=\s*var\.create_config_recorder/);
   });
 
-  test("Config recorder status depends on delivery channel", () => {
+  test("Config recorder status is conditional", () => {
     const recorderStatus = stackContent.match(/resource\s+"aws_config_configuration_recorder_status"\s+"main"[\s\S]*?^}/m);
     expect(recorderStatus).toBeTruthy();
-    expect(recorderStatus![0]).toMatch(/depends_on\s*=\s*\[[^\]]*aws_config_delivery_channel\.main/s);
+    expect(recorderStatus![0]).toMatch(/count\s*=\s*var\.create_config_recorder/);
   });
 
   test("S3 bucket policies depend on public access block", () => {

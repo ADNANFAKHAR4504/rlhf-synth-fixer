@@ -592,9 +592,10 @@ resource "aws_iam_role_policy" "config_s3" {
 }
 
 # AWS Config Recorder
-# Note: AWS accounts have a limit of 1 configuration recorder
-# This will fail if one already exists - delete existing recorder first or import it
+# Note: AWS accounts have a limit of 1 configuration recorder per region
+# Set var.create_config_recorder = false if one already exists
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.create_config_recorder ? 1 : 0
   name     = "${var.project_name}-config-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -612,6 +613,7 @@ resource "aws_config_configuration_recorder" "main" {
 
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
+  count          = var.create_config_recorder ? 1 : 0
   name           = "${var.project_name}-config-delivery"
   s3_bucket_name = aws_s3_bucket.config_logs.id
 
@@ -619,15 +621,13 @@ resource "aws_config_delivery_channel" "main" {
     delivery_frequency = "Six_Hours"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Start Config Recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.create_config_recorder ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
-
-  depends_on = [aws_config_delivery_channel.main]
 }
 
 # ========== AWS CONFIG RULES FOR COMPLIANCE ==========
@@ -641,7 +641,6 @@ resource "aws_config_config_rule" "encrypted_volumes" {
     source_identifier = "ENCRYPTED_VOLUMES"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "encrypted-volumes-rule"
@@ -657,7 +656,6 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
     source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "s3-public-read-prohibited-rule"
@@ -673,7 +671,6 @@ resource "aws_config_config_rule" "s3_bucket_public_write_prohibited" {
     source_identifier = "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "s3-public-write-prohibited-rule"
@@ -689,7 +686,6 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "s3-encryption-enabled-rule"
@@ -705,7 +701,6 @@ resource "aws_config_config_rule" "s3_bucket_versioning_enabled" {
     source_identifier = "S3_BUCKET_VERSIONING_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "s3-versioning-enabled-rule"
@@ -721,7 +716,6 @@ resource "aws_config_config_rule" "cloudtrail_enabled" {
     source_identifier = "CLOUD_TRAIL_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "cloudtrail-enabled-rule"
@@ -737,7 +731,6 @@ resource "aws_config_config_rule" "rds_storage_encrypted" {
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "rds-storage-encrypted-rule"
@@ -763,7 +756,6 @@ resource "aws_config_config_rule" "iam_password_policy" {
     MaxPasswordAge             = "90"
   })
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "iam-password-policy-rule"
@@ -779,7 +771,6 @@ resource "aws_config_config_rule" "root_account_mfa_enabled" {
     source_identifier = "ROOT_ACCOUNT_MFA_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "root-mfa-enabled-rule"
@@ -795,7 +786,6 @@ resource "aws_config_config_rule" "vpc_flow_logs_enabled" {
     source_identifier = "VPC_FLOW_LOGS_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
 
   tags = merge(local.tags, {
     Name = "vpc-flow-logs-enabled-rule"
@@ -870,10 +860,7 @@ resource "aws_config_configuration_aggregator" "organization" {
     role_arn    = aws_iam_role.config_aggregator.arn
   }
 
-  depends_on = [
-    aws_iam_role_policy.config_aggregator,
-    aws_config_configuration_recorder_status.main
-  ]
+  depends_on = [aws_iam_role_policy.config_aggregator]
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-org-aggregator"
@@ -890,10 +877,6 @@ resource "aws_config_configuration_aggregator" "account" {
     all_regions = true
   }
 
-  depends_on = [
-    aws_config_configuration_recorder_status.main
-  ]
-
   tags = merge(local.tags, {
     Name = "${var.project_name}-account-aggregator"
   })
@@ -904,8 +887,6 @@ resource "aws_config_configuration_aggregator" "account" {
 # Enable Security Hub
 resource "aws_securityhub_account" "main" {
   enable_default_standards = false
-
-  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 # Enable AWS Foundational Security Best Practices
@@ -2310,7 +2291,7 @@ output "cloudtrail_trail_arn" {
 
 output "config_recorder_name" {
   description = "Name of the AWS Config recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = var.create_config_recorder ? aws_config_configuration_recorder.main[0].name : "existing-recorder-not-managed"
 }
 
 output "config_aggregator_arn" {

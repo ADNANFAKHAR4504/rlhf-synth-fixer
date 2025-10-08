@@ -46,6 +46,12 @@ variable "organizational_unit_names" {
 
 # ========== COMPLIANCE VARIABLES ==========
 
+variable "create_config_recorder" {
+  description = "Create AWS Config recorder (set to true only for fresh accounts without existing recorder)"
+  type        = bool
+  default     = false
+}
+
 variable "compliance_standards" {
   description = "Compliance standards to enable in Security Hub"
   type        = list(string)
