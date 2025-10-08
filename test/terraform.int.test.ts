@@ -1,13 +1,12 @@
 import {
   CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-  DescribeQueriesCommand,
+  DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand } from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { FirehoseClient, DescribeDeliveryStreamCommand } from '@aws-sdk/client-firehose';
-import { IAMClient, GetRoleCommand, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { DescribeDeliveryStreamCommand, FirehoseClient } from '@aws-sdk/client-firehose';
+import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetBucketEncryptionCommand, GetBucketVersioningCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
 
