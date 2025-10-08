@@ -1093,34 +1093,6 @@ terraform output
 terraform destroy -auto-approve
 ```
 
-## Testing
-
-### Unit Tests (54 tests)
-Validates Terraform configuration structure:
-- Provider and region configuration
-- Resource declarations
-- Security settings
-- Encryption configurations
-- Tagging compliance
-
-```bash
-npm run test:unit
-```
-
-### Integration Tests
-Validates deployed infrastructure:
-- VPC and networking components
-- S3 bucket configuration
-- RDS database setup
-- Security groups
-- ALB and Auto Scaling
-- CloudWatch alarms
-- End-to-end connectivity
-
-```bash
-npm run test:integration
-```
-
 ## Outputs
 
 - `alb_dns_name`: Application Load Balancer DNS
