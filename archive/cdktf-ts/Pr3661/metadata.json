@@ -10,6 +10,20 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, IAM, S3, EC2, RDS, CloudTrail, KMS",
-  "training_quality": "high"
+  "aws_services": [
+    "VPC",
+    "IAM",
+    "S3",
+    "EC2",
+    "RDS",
+    "CloudTrail",
+    "KMS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
 }
