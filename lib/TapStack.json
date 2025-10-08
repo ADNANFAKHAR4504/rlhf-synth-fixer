@@ -51,6 +51,21 @@
             "Default": "12345",
             "AllowedPattern": "[0-9]{5}",
             "ConstraintDescription": "Must be exactly 5 digits"
+        },
+        "DomainName": {
+            "Description": "Domain name for Route 53 hosted zone (can be any name like test.local, myapp.dev, etc. - doesn't need to be a real domain)",
+            "Type": "String",
+            "Default": "myapp.test",
+            "ConstraintDescription": "Can be any valid domain format (e.g., example.com, test.local, myapp.dev) - ownership not required"
+        },
+        "CreateRoute53Records": {
+            "Description": "Whether to create Route 53 hosted zone and DNS records",
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -70,6 +85,43 @@
                     ]
                 }
             ]
+        },
+        "CreateRoute53": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CreateRoute53Records"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "DomainName"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "APIGatewayHostedZoneId": "Z1UJRXOUMOOFQ8"
+            },
+            "us-east-2": {
+                "APIGatewayHostedZoneId": "ZOJJZC49E0EPZ"
+            },
+            "us-west-1": {
+                "APIGatewayHostedZoneId": "Z2MUQ32089INYE"
+            }
         }
     },
     "Resources": {
@@ -1953,6 +2005,149 @@
                     ]
                 }
             }
+        },
+        "HostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Condition": "CreateRoute53",
+            "Properties": {
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "HostedZoneConfig": {
+                    "Comment": {
+                        "Fn::Sub": "Hosted zone for ${EnvironmentSuffix} environment"
+                    }
+                },
+                "HostedZoneTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-hosted-zone"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Fn::Sub": "app.${DomainName}"
+                },
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "ALB",
+                            "DNSName"
+                        ]
+                    },
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "ALB",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                },
+                "Comment": {
+                    "Fn::Sub": "A record for ${EnvironmentSuffix} ALB (HTTP)"
+                }
+            }
+        },
+        "APIRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Fn::Sub": "api.${DomainName}"
+                },
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": {
+                        "Fn::Sub": "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+                    },
+                    "HostedZoneId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "APIGatewayHostedZoneId"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                },
+                "Comment": {
+                    "Fn::Sub": "A record for ${EnvironmentSuffix} API Gateway (points to AWS-managed endpoint)"
+                }
+            }
+        },
+        "WWWRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Fn::Sub": "www.${DomainName}"
+                },
+                "Type": "CNAME",
+                "TTL": 300,
+                "ResourceRecords": [
+                    {
+                        "Fn::Sub": "app.${DomainName}"
+                    }
+                ],
+                "Comment": {
+                    "Fn::Sub": "CNAME record for www.${DomainName} pointing to ALB"
+                }
+            }
+        },
+        "RootRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "CreateRoute53",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZone"
+                },
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "ALB",
+                            "DNSName"
+                        ]
+                    },
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "ALB",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                },
+                "Comment": {
+                    "Fn::Sub": "Root A record for ${DomainName} pointing to ALB"
+                }
+            }
         }
     },
     "Outputs": {
@@ -2449,6 +2644,98 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-PrivateRouteTable2Id"
+                }
+            }
+        },
+        "HostedZoneId": {
+            "Condition": "CreateRoute53",
+            "Description": "ID of the Route 53 hosted zone",
+            "Value": {
+                "Ref": "HostedZone"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+                }
+            }
+        },
+        "HostedZoneName": {
+            "Condition": "CreateRoute53",
+            "Description": "Name of the Route 53 hosted zone",
+            "Value": {
+                "Ref": "DomainName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HostedZoneName"
+                }
+            }
+        },
+        "DomainNameServers": {
+            "Condition": "CreateRoute53",
+            "Description": "Name servers for the hosted zone",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    {
+                        "Fn::GetAtt": [
+                            "HostedZone",
+                            "NameServers"
+                        ]
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DomainNameServers"
+                }
+            }
+        },
+        "AppDomainName": {
+            "Condition": "CreateRoute53",
+            "Description": "Domain name for the application (ALB)",
+            "Value": {
+                "Fn::Sub": "app.${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppDomainName"
+                }
+            }
+        },
+        "APIDomainName": {
+            "Condition": "CreateRoute53",
+            "Description": "Domain name for the API (API Gateway)",
+            "Value": {
+                "Fn::Sub": "api.${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIDomainName"
+                }
+            }
+        },
+        "RootDomainName": {
+            "Condition": "CreateRoute53",
+            "Description": "Root domain name",
+            "Value": {
+                "Ref": "DomainName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RootDomainName"
+                }
+            }
+        },
+        "WWWDomainName": {
+            "Condition": "CreateRoute53",
+            "Description": "WWW subdomain name",
+            "Value": {
+                "Fn::Sub": "www.${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WWWDomainName"
                 }
             }
         }

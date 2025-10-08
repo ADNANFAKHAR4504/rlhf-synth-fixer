@@ -81,12 +81,56 @@ describe('TapStack CloudFormation Template', () => {
       expect(wafParam.AllowedValues).toContain('CLOUDFRONT');
       expect(wafParam.Default).toBe('REGIONAL');
     });
+
+    test('should have Route 53 parameters', () => {
+      expect(template.Parameters.DomainName).toBeDefined();
+      expect(template.Parameters.DomainName.Type).toBe('String');
+      expect(template.Parameters.DomainName.Default).toBe('myapp.test');
+
+      expect(template.Parameters.CreateRoute53Records).toBeDefined();
+      expect(template.Parameters.CreateRoute53Records.Type).toBe('String');
+      expect(template.Parameters.CreateRoute53Records.Default).toBe('true');
+      expect(template.Parameters.CreateRoute53Records.AllowedValues).toContain('true');
+      expect(template.Parameters.CreateRoute53Records.AllowedValues).toContain('false');
+    });
   });
 
   describe('Conditions', () => {
     test('should have HasReplicationBuckets condition', () => {
       expect(template.Conditions).toBeDefined();
       expect(template.Conditions.HasReplicationBuckets).toBeDefined();
+    });
+
+    test('should have CreateRoute53 condition', () => {
+      expect(template.Conditions.CreateRoute53).toBeDefined();
+      // Should be an AND condition checking both CreateRoute53Records=true and DomainName not empty
+      expect(template.Conditions.CreateRoute53['Fn::And']).toBeDefined();
+      expect(template.Conditions.CreateRoute53['Fn::And']).toHaveLength(2);
+    });
+  });
+
+  describe('Mappings', () => {
+    test('should have RegionMap with API Gateway hosted zone IDs', () => {
+      expect(template.Mappings).toBeDefined();
+      expect(template.Mappings.RegionMap).toBeDefined();
+
+      // Test the three supported regions
+      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-east-1'].APIGatewayHostedZoneId).toBe('Z1UJRXOUMOOFQ8');
+
+      expect(template.Mappings.RegionMap['us-east-2']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-east-2'].APIGatewayHostedZoneId).toBe('ZOJJZC49E0EPZ');
+
+      expect(template.Mappings.RegionMap['us-west-1']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-west-1'].APIGatewayHostedZoneId).toBe('Z2MUQ32089INYE');
+    });
+
+    test('should only have supported regions in RegionMap', () => {
+      const regions = Object.keys(template.Mappings.RegionMap);
+      expect(regions).toHaveLength(3);
+      expect(regions).toContain('us-east-1');
+      expect(regions).toContain('us-east-2');
+      expect(regions).toContain('us-west-1');
     });
   });
 
@@ -206,6 +250,28 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.AppLogGroup).toBeDefined();
       expect(template.Resources.LambdaLogGroup).toBeDefined();
     });
+
+    test('should have Route 53 resources', () => {
+      expect(template.Resources.HostedZone).toBeDefined();
+      expect(template.Resources.HostedZone.Type).toBe('AWS::Route53::HostedZone');
+      expect(template.Resources.HostedZone.Condition).toBe('CreateRoute53');
+
+      expect(template.Resources.ALBRecord).toBeDefined();
+      expect(template.Resources.ALBRecord.Type).toBe('AWS::Route53::RecordSet');
+      expect(template.Resources.ALBRecord.Condition).toBe('CreateRoute53');
+
+      expect(template.Resources.APIRecord).toBeDefined();
+      expect(template.Resources.APIRecord.Type).toBe('AWS::Route53::RecordSet');
+      expect(template.Resources.APIRecord.Condition).toBe('CreateRoute53');
+
+      expect(template.Resources.WWWRecord).toBeDefined();
+      expect(template.Resources.WWWRecord.Type).toBe('AWS::Route53::RecordSet');
+      expect(template.Resources.WWWRecord.Condition).toBe('CreateRoute53');
+
+      expect(template.Resources.RootRecord).toBeDefined();
+      expect(template.Resources.RootRecord.Type).toBe('AWS::Route53::RecordSet');
+      expect(template.Resources.RootRecord.Condition).toBe('CreateRoute53');
+    });
   });
 
   describe('Outputs', () => {
@@ -265,6 +331,30 @@ describe('TapStack CloudFormation Template', () => {
       const apiOutput = template.Outputs.ApiUrl;
       expect(apiOutput).toBeDefined();
       expect(apiOutput.Description).toContain('API');
+    });
+
+    test('should have Route 53 related outputs', () => {
+      // These outputs should be conditional (only exist when CreateRoute53 is true)
+      expect(template.Outputs.HostedZoneId).toBeDefined();
+      expect(template.Outputs.HostedZoneId.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.HostedZoneName).toBeDefined();
+      expect(template.Outputs.HostedZoneName.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.DomainNameServers).toBeDefined();
+      expect(template.Outputs.DomainNameServers.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.AppDomainName).toBeDefined();
+      expect(template.Outputs.AppDomainName.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.APIDomainName).toBeDefined();
+      expect(template.Outputs.APIDomainName.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.RootDomainName).toBeDefined();
+      expect(template.Outputs.RootDomainName.Condition).toBe('CreateRoute53');
+
+      expect(template.Outputs.WWWDomainName).toBeDefined();
+      expect(template.Outputs.WWWDomainName.Condition).toBe('CreateRoute53');
     });
 
     test('outputs should have export names', () => {
@@ -443,6 +533,48 @@ describe('TapStack CloudFormation Template', () => {
       expect(configBucket.Properties.BucketName['Fn::Sub']).toContain('config-bucket');
       expect(configRecorder.Properties.Name['Fn::Sub']).toContain('config-recorder');
       expect(configRole.Properties.RoleName['Fn::Sub']).toContain('config-service-role');
+    });
+  });
+
+  describe('Route 53 Configuration', () => {
+    test('Route 53 records should have correct configuration', () => {
+      // ALB Record should point to ALB
+      const albRecord = template.Resources.ALBRecord;
+      expect(albRecord.Properties.Type).toBe('A');
+      expect(albRecord.Properties.AliasTarget).toBeDefined();
+      expect(albRecord.Properties.AliasTarget.DNSName['Fn::GetAtt']).toEqual(['ALB', 'DNSName']);
+      expect(albRecord.Properties.AliasTarget.HostedZoneId['Fn::GetAtt']).toEqual(['ALB', 'CanonicalHostedZoneID']);
+
+      // API Record should use mapping for hosted zone ID
+      const apiRecord = template.Resources.APIRecord;
+      expect(apiRecord.Properties.Type).toBe('A');
+      expect(apiRecord.Properties.AliasTarget.HostedZoneId['Fn::FindInMap']).toEqual(['RegionMap', { 'Ref': 'AWS::Region' }, 'APIGatewayHostedZoneId']);
+
+      // WWW Record should be CNAME type
+      const wwwRecord = template.Resources.WWWRecord;
+      expect(wwwRecord.Properties.Type).toBe('CNAME');
+      expect(wwwRecord.Properties.TTL).toBe(300);
+    });
+
+    test('Route 53 hosted zone should have proper configuration', () => {
+      const hostedZone = template.Resources.HostedZone;
+      expect(hostedZone.Properties.Name).toEqual({ 'Ref': 'DomainName' });
+      expect(hostedZone.Properties.HostedZoneConfig).toBeDefined();
+      expect(hostedZone.Properties.HostedZoneTags).toBeDefined();
+    });
+
+    test('Route 53 record names should use domain parameter', () => {
+      const albRecord = template.Resources.ALBRecord;
+      expect(albRecord.Properties.Name['Fn::Sub']).toBe('app.${DomainName}');
+
+      const apiRecord = template.Resources.APIRecord;
+      expect(apiRecord.Properties.Name['Fn::Sub']).toBe('api.${DomainName}');
+
+      const wwwRecord = template.Resources.WWWRecord;
+      expect(wwwRecord.Properties.Name['Fn::Sub']).toBe('www.${DomainName}');
+
+      const rootRecord = template.Resources.RootRecord;
+      expect(rootRecord.Properties.Name).toEqual({ 'Ref': 'DomainName' });
     });
   });
 });
