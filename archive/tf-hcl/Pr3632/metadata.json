@@ -19,10 +19,20 @@
     "S3",
     "CloudWatch",
     "IAM",
-    "Route53",
+    "Global Accelerator",
+    "Lambda",
+    "SNS",
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups",
-    "VPC Flow Logs"
-  ]
+    "VPC Flow Logs",
+    "KMS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
 }
