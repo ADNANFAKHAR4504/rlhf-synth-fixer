@@ -31,7 +31,7 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.apigateway_client = boto3.client('apigateway', region_name=cls.region)
         cls.events_client = boto3.client('events', region_name=cls.region)
 
-    def test_dynamodb_tables_exist(self):
+    def test_dynamodb_tables(self):
         """Test that DynamoDB tables exist and are accessible."""
         # Test member accounts table
         member_table_name = f"loyalty-member-accounts-{self.environment_suffix}"
@@ -52,7 +52,7 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Transactions table not accessible: {e}")
 
-    def test_s3_bucket_exists(self):
+    def test_s3_bucket(self):
         """Test that S3 bucket for campaign assets exists."""
         # Get account ID
         sts_client = boto3.client('sts')
@@ -71,7 +71,7 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"S3 bucket not accessible: {e}")
 
-    def test_lambda_functions_exist(self):
+    def test_lambda_functions(self):
         """Test that Lambda functions are deployed."""
         function_names = [
             f"loyalty-transaction-lambda-{self.environment_suffix}",
@@ -88,7 +88,7 @@ class TestTapStackIntegration(unittest.TestCase):
             except ClientError as e:
                 self.fail(f"Lambda function {function_name} not accessible: {e}")
 
-    def test_api_gateway_exists(self):
+    def test_api_gateway(self):
         """Test that API Gateway REST API exists."""
         api_name = f"loyalty-api-{self.environment_suffix}"
 
@@ -110,7 +110,7 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"API Gateway not accessible: {e}")
 
-    def test_sns_topic_exists(self):
+    def test_sns_topic(self):
         """Test that SNS topic for offers exists."""
         topic_name = f"loyalty-offers-topic-{self.environment_suffix}"
 
