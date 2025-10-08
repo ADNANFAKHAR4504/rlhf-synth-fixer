@@ -1,0 +1,765 @@
+```yaml 
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Complete Serverless Application Infrastructure - Production-ready stack with Lambda, API Gateway, S3, DynamoDB, and comprehensive monitoring'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentType
+          - ApplicationName
+      - Label:
+          default: 'Lambda Settings'
+        Parameters:
+          - LambdaTimeout
+          - LambdaMemorySize
+      - Label:
+          default: 'Logging & Monitoring'
+        Parameters:
+          - LogRetentionDays
+    ParameterLabels:
+      EnvironmentType:
+        default: 'Environment Type'
+      ApplicationName:
+        default: 'Application Name'
+      LambdaTimeout:
+        default: 'Lambda Timeout (seconds)'
+      LambdaMemorySize:
+        default: 'Lambda Memory Size (MB)'
+      LogRetentionDays:
+        default: 'Log Retention (days)'
+
+Parameters:
+  EnvironmentType:
+    Type: String
+    Default: Production
+    AllowedValues:
+      - Production
+      - Development
+      - Staging
+    Description: 'Environment type for resource tagging and configuration'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  ApplicationName:
+    Type: String
+    Default: serverlessapp
+    Description: 'Application name used for resource naming and tagging'
+    MinLength: 3
+    MaxLength: 20
+    AllowedPattern: '^[a-z0-9]*$'
+
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 3
+    MaxValue: 900
+    Description: 'Lambda function timeout in seconds'
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 256
+    AllowedValues: [128, 256, 512, 1024, 2048, 3008]
+    Description: 'Lambda function memory allocation in MB'
+
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365]
+    Description: 'CloudWatch log retention period in days'
+
+# ================================
+# RESOURCES SECTION
+# ================================
+Resources:
+  # ================================
+  # KMS ENCRYPTION KEY
+  # ================================
+  ApplicationKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS Key for ${ApplicationName} serverless application encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow Lambda Service
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  ApplicationKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/Prod-${ApplicationName}-Key'
+      TargetKeyId: !Ref ApplicationKMSKey
+
+  # ================================
+  # IAM ROLES AND POLICIES
+  # ================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'Prod-${ApplicationName}-LambdaExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt ApplicationDynamoDBTable.Arn
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !GetAtt ApplicationS3Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ApplicationS3Bucket.Arn
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/Prod-${ApplicationName}-*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # ================================
+  # S3 BUCKET FOR STATIC CONTENT
+  # ================================
+  ApplicationS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'prod-${ApplicationName}-bucket-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ApplicationKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  ApplicationS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${ApplicationS3Bucket}/*'
+
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !Sub 'arn:aws:s3:::${ApplicationS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${ApplicationS3Bucket}'
+
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # ================================
+  # DYNAMODB TABLE
+  # ================================
+  ApplicationDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'Prod-${ApplicationName}-Table'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref ApplicationKMSKey
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # ================================
+  # CLOUDWATCH LOG GROUPS
+  # ================================
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/Prod-${ApplicationName}-Function'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt ApplicationKMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # ================================
+  # LAMBDA FUNCTION
+  # ================================
+  ApplicationLambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaLogGroup
+    Properties:
+      FunctionName: !Sub 'Prod-${ApplicationName}-Function'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      KmsKeyArn: !GetAtt ApplicationKMSKey.Arn
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref ApplicationDynamoDBTable
+          S3_BUCKET_NAME: !Ref ApplicationS3Bucket
+          ENVIRONMENT: !Ref EnvironmentType
+          KMS_KEY_ID: !Ref ApplicationKMSKey
+      Code:
+        ZipFile: |
+          const { S3Client, ListBucketsCommand } = require("@aws-sdk/client-s3");
+          const {
+            DynamoDBClient,
+            GetItemCommand,
+            ScanCommand,
+            PutItemCommand,
+            UpdateItemCommand,
+            DeleteItemCommand,
+          } = require("@aws-sdk/client-dynamodb");
+          const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const {
+            KMSClient,
+            DecryptCommand,
+            EncryptCommand,
+            GenerateDataKeyCommand,
+          } = require("@aws-sdk/client-kms");
+
+          // Initialize AWS SDK v3 clients
+          const s3 = new S3Client({ region: "us-east-1" });
+          const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+          const ddbDocClient = DynamoDBDocumentClient.from(dynamoDbClient);
+          const kms = new KMSClient({ region: process.env.AWS_REGION });
+
+          // Environment variables
+          const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
+          const BUCKET_NAME = process.env.S3_BUCKET_NAME;
+          const ENVIRONMENT = process.env.ENVIRONMENT;
+          const KMS_KEY_ID = process.env.KMS_KEY_ID;
+
+          exports.handler = async (event) => {
+            console.log("Event received:", JSON.stringify(event, null, 2));
+            console.log("Environment:", ENVIRONMENT);
+
+            const response = {
+              statusCode: 200,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              },
+              body: "",
+            };
+
+            try {
+              const { httpMethod, pathParameters, body, rawPath } = event;
+
+              switch (httpMethod) {
+                case "GET":
+                  // Use endsWith to handle stage prefix (e.g., "/prod/health")
+                  if (rawPath.endsWith("/health")) {
+                    response.body = JSON.stringify({
+                      status: "healthy",
+                      timestamp: new Date().toISOString(),
+                      environment: ENVIRONMENT,
+                      version: "1.0.0",
+                    });
+                  } else if (pathParameters && pathParameters.id) {
+                    const getParams = {
+                      TableName: TABLE_NAME,
+                      Key: { pk: pathParameters.id, sk: "metadata" },
+                    };
+                    const { Item } = await ddbDocClient.send(new GetItemCommand(getParams));
+                    response.body = JSON.stringify({
+                      success: true,
+                      data: Item || null,
+                      message: Item ? "Item found" : "Item not found",
+                    });
+                    if (!Item) response.statusCode = 404;
+                  } else {
+                    const scanParams = { TableName: TABLE_NAME, Limit: 10 };
+                    const { Items, Count } = await ddbDocClient.send(new ScanCommand(scanParams));
+                    response.body = JSON.stringify({
+                      success: true,
+                      data: Items,
+                      count: Count,
+                    });
+                  }
+                  break;
+
+                case "POST":
+                  const postData = JSON.parse(body || "{}");
+                  const itemId = postData.id || Date.now().toString();
+                  const putItem = {
+                    TableName: TABLE_NAME,
+                    Item: {
+                      pk: itemId,
+                      sk: "metadata",
+                      data: postData.data || {},
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    },
+                  };
+                  await ddbDocClient.send(new PutItemCommand(putItem));
+                  response.statusCode = 201;
+                  response.body = JSON.stringify({
+                    success: true,
+                    message: "Item created successfully",
+                    id: itemId,
+                  });
+                  break;
+
+                case "PUT":
+                  if (!pathParameters || !pathParameters.id) {
+                    response.statusCode = 400;
+                    response.body = JSON.stringify({
+                      success: false,
+                      message: "ID parameter is required",
+                    });
+                    break;
+                  }
+                  const putBodyData = JSON.parse(body || "{}");
+                  const updateParams = {
+                    TableName: TABLE_NAME,
+                    Key: { pk: pathParameters.id, sk: "metadata" },
+                    UpdateExpression: "SET #data = :data, updatedAt = :updatedAt",
+                    ExpressionAttributeNames: { "#data": "data" },
+                    ExpressionAttributeValues: {
+                      ":data": putBodyData.data || {},
+                      ":updatedAt": new Date().toISOString(),
+                    },
+                    ReturnValues: "ALL_NEW",
+                  };
+                  const { Attributes } = await ddbDocClient.send(new UpdateItemCommand(updateParams));
+                  response.body = JSON.stringify({
+                    success: true,
+                    message: "Item updated successfully",
+                    data: Attributes,
+                  });
+                  break;
+
+                case "DELETE":
+                  if (!pathParameters || !pathParameters.id) {
+                    response.statusCode = 400;
+                    response.body = JSON.stringify({
+                      success: false,
+                      message: "ID parameter is required",
+                    });
+                    break;
+                  }
+                  const deleteParams = {
+                    TableName: TABLE_NAME,
+                    Key: { pk: pathParameters.id, sk: "metadata" },
+                  };
+                  await ddbDocClient.send(new DeleteItemCommand(deleteParams));
+                  response.body = JSON.stringify({
+                    success: true,
+                    message: "Item deleted successfully",
+                  });
+                  break;
+
+                case "OPTIONS":
+                  response.body = JSON.stringify({ message: "OK" });
+                  break;
+
+                default:
+                  response.statusCode = 405;
+                  response.body = JSON.stringify({
+                    success: false,
+                    message: "Method not allowed",
+                  });
+              }
+            } catch (error) {
+              console.error("Error:", error);
+              response.statusCode = 500;
+              response.body = JSON.stringify({
+                success: false,
+                message: "Internal server error",
+                error: error.message,
+              });
+            }
+
+            console.log("Response:", JSON.stringify(response, null, 2));
+            return response;
+          };
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Application
+          Value: !Ref ApplicationName
+
+  # ================================
+  # API GATEWAY HTTP API
+  # ================================
+  ApplicationHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'Prod-${ApplicationName}-API'
+      Description: 'HTTP API for serverless application'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+          - X-Amz-Security-Token
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+        MaxAge: 3600
+      Tags:
+        Environment: !Ref EnvironmentType
+        Application: !Ref ApplicationName
+
+  ApplicationHttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      StageName: prod
+      Description: 'Production stage'
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+        DetailedMetricsEnabled: true
+      Tags:
+        Environment: !Ref EnvironmentType
+        Application: !Ref ApplicationName
+
+  # Lambda Integration
+  ApplicationLambdaIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApplicationLambdaFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApplicationLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApplicationHttpApi}/*/*/*'
+
+  # API Routes
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  ItemsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'GET /items'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  ItemRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'GET /items/{id}'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  CreateItemRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'POST /items'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  UpdateItemRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'PUT /items/{id}'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  DeleteItemRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: 'DELETE /items/{id}'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  CatchAllRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApplicationHttpApi
+      RouteKey: '$default'
+      Target: !Sub 'integrations/${ApplicationLambdaIntegration}'
+
+  # ================================
+  # CLOUDWATCH ALARMS
+  # ================================
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Prod-${ApplicationName}-Lambda-Errors'
+      AlarmDescription: 'Alert when Lambda function has errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApplicationLambdaFunction
+      TreatMissingData: notBreaching
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Prod-${ApplicationName}-Lambda-Duration'
+      AlarmDescription: 'Alert when Lambda function duration approaches timeout'
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Sub
+        - '${TimeoutMs}'
+        - TimeoutMs: !Join ['', [!Ref LambdaTimeout, '000']]
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApplicationLambdaFunction
+      TreatMissingData: notBreaching
+
+  ApiGatewayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'Prod-${ApplicationName}-API-4XXErrors'
+      AlarmDescription: 'Alert when API Gateway has 4XX errors'
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'Prod-${ApplicationName}-API'
+      TreatMissingData: notBreaching
+
+# ================================
+# OUTPUTS SECTION
+# ================================
+Outputs:
+  ApiGatewayEndpointUrl:
+    Description: 'HTTP API Gateway endpoint URL'
+    Value: !Sub 'https://${ApplicationHttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayEndpointUrl'
+
+  HealthCheckUrl:
+    Description: 'Health check endpoint URL'
+    Value: !Sub 'https://${ApplicationHttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod/health'
+    Export:
+      Name: !Sub '${AWS::StackName}-HealthCheckUrl'
+
+  S3BucketName:
+    Description: 'Name of the S3 bucket for static content'
+    Value: !Ref ApplicationS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  S3BucketDomainName:
+    Description: 'Domain name of the S3 bucket'
+    Value: !GetAtt ApplicationS3Bucket.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDomainName'
+
+  DynamoDBTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref ApplicationDynamoDBTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  DynamoDBTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt ApplicationDynamoDBTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableArn'
+
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt ApplicationLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref ApplicationLambdaFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+
+  KMSKeyId:
+    Description: 'ID of the KMS key used for encryption'
+    Value: !Ref ApplicationKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  KMSKeyAlias:
+    Description: 'Alias of the KMS key'
+    Value: !Ref ApplicationKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
+
+  EnvironmentType:
+    Description: 'Environment type of the deployment'
+    Value: !Ref EnvironmentType
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentType'
+
+  StackName:
+    Description: 'Name of the CloudFormation stack'
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  ApplicationName:
+    Description: 'Name of the application'
+    Value: !Ref ApplicationName
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationName'
+```

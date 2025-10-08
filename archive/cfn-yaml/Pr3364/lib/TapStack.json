@@ -1,0 +1,1823 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure Data Lake Infrastructure for Analytics Company - 10TB Daily Processing",
+    "Parameters": {
+        "CompanyName": {
+            "Type": "String",
+            "Default": "dataanalytics",
+            "Description": "Company name for resource naming",
+            "AllowedPattern": "^[a-z0-9]+$",
+            "ConstraintDescription": "Must contain only lowercase letters and numbers"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment for deployment"
+        },
+        "DataRetentionDays": {
+            "Type": "Number",
+            "Default": 2555,
+            "MinValue": 30,
+            "MaxValue": 3650,
+            "Description": "Data retention period in days"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC"
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Organization Settings"
+                    },
+                    "Parameters": [
+                        "CompanyName",
+                        "Environment"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Data Lake Configuration"
+                    },
+                    "Parameters": [
+                        "DataRetentionDays"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcCidr"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "CompanyName": {
+                    "default": "Company Name"
+                },
+                "Environment": {
+                    "default": "Environment"
+                },
+                "DataRetentionDays": {
+                    "default": "Data Retention (Days)"
+                },
+                "VpcCidr": {
+                    "default": "VPC CIDR Block"
+                }
+            }
+        }
+    },
+    "Resources": {
+        "RawDataKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${CompanyName} Data Lake Raw Zone Encryption Key"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Glue and Firehose Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "glue.amazonaws.com",
+                                    "firehose.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-raw-kms-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "raw"
+                    }
+                ]
+            }
+        },
+        "RawDataKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${CompanyName}-datalake-raw-${Environment}"
+                },
+                "TargetKeyId": {
+                    "Ref": "RawDataKMSKey"
+                }
+            }
+        },
+        "ProcessedDataKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${CompanyName} Data Lake Processed Zone Encryption Key"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Glue Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "glue.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-processed-kms-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "processed"
+                    }
+                ]
+            }
+        },
+        "ProcessedDataKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${CompanyName}-datalake-processed-${Environment}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ProcessedDataKMSKey"
+                }
+            }
+        },
+        "CuratedDataKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${CompanyName} Data Lake Curated Zone Encryption Key"
+                },
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Athena Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "athena.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-curated-kms-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "curated"
+                    }
+                ]
+            }
+        },
+        "CuratedDataKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${CompanyName}-datalake-curated-${Environment}"
+                },
+                "TargetKeyId": {
+                    "Ref": "CuratedDataKMSKey"
+                }
+            }
+        },
+        "DataLakeVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-vpc-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataLakeVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-private-subnet-1-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataLakeVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-private-subnet-2-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataLakeVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway"
+            }
+        },
+        "GlueVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DataLakeVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.glue"
+                },
+                "VpcEndpointType": "Interface",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ]
+            }
+        },
+        "RawDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-datalake-raw-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "RawDataKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DataLakeLifecycle",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "GLACIER"
+                                },
+                                {
+                                    "TransitionInDays": 365,
+                                    "StorageClass": "DEEP_ARCHIVE"
+                                }
+                            ],
+                            "ExpirationInDays": {
+                                "Ref": "DataRetentionDays"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-raw-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "raw"
+                    }
+                ]
+            }
+        },
+        "ProcessedDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-datalake-processed-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "ProcessedDataKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "ProcessedDataLifecycle",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 60,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 180,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ],
+                            "ExpirationInDays": {
+                                "Ref": "DataRetentionDays"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-processed-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "processed"
+                    }
+                ]
+            }
+        },
+        "CuratedDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-datalake-curated-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "CuratedDataKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "CuratedDataLifecycle",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 90,
+                                    "StorageClass": "STANDARD_IA"
+                                },
+                                {
+                                    "TransitionInDays": 365,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ],
+                            "ExpirationInDays": {
+                                "Ref": "DataRetentionDays"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-curated-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "DataZone",
+                        "Value": "curated"
+                    }
+                ]
+            }
+        },
+        "AthenaQueryResultsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-athena-results-${Environment}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "CuratedDataKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "QueryResultsCleanup",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-athena-results-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ScriptsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-scripts-${Environment}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-scripts-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "GlueExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-glue-execution-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "glue.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DataLakeAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProcessedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${CuratedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ScriptsBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CuratedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ScriptsBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataKMSKey",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessedDataKMSKey",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CuratedDataKMSKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-glue-execution-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "EMRServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-emr-service-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "elasticmapreduce.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-emr-service-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "EMRInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${CompanyName}-emr-instance-profile-${Environment}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EMRInstanceRole"
+                    }
+                ]
+            }
+        },
+        "EMRInstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-emr-instance-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DataLakeAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProcessedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${CuratedDataBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProcessedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CuratedDataBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-emr-instance-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "FirehoseDeliveryRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-firehose-delivery-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "firehose.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FirehoseDeliveryPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:AbortMultipartUpload",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataKMSKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-firehose-delivery-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-lambda-execution-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DataValidationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${RawDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "RawDataKMSKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-lambda-execution-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "DataAnalystRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${CompanyName}-data-analyst-role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "AthenaQueryPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "athena:BatchGetQueryExecution",
+                                        "athena:GetQueryExecution",
+                                        "athena:GetQueryResults",
+                                        "athena:GetWorkGroup",
+                                        "athena:ListQueryExecutions",
+                                        "athena:StartQueryExecution",
+                                        "athena:StopQueryExecution"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "AthenaQueryResultsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${AthenaQueryResultsBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CuratedDataBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${CuratedDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "glue:GetDatabase",
+                                        "glue:GetDatabases",
+                                        "glue:GetTable",
+                                        "glue:GetTables",
+                                        "glue:GetPartitions"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-data-analyst-role-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LogIngestionFirehose": {
+            "Type": "AWS::KinesisFirehose::DeliveryStream",
+            "Properties": {
+                "DeliveryStreamName": {
+                    "Fn::Sub": "${CompanyName}-log-ingestion-${Environment}"
+                },
+                "DeliveryStreamType": "DirectPut",
+                "S3DestinationConfiguration": {
+                    "BucketARN": {
+                        "Fn::GetAtt": [
+                            "RawDataBucket",
+                            "Arn"
+                        ]
+                    },
+                    "BufferingHints": {
+                        "SizeInMBs": 128,
+                        "IntervalInSeconds": 60
+                    },
+                    "CompressionFormat": "GZIP",
+                    "EncryptionConfiguration": {
+                        "KMSEncryptionConfig": {
+                            "AWSKMSKeyARN": {
+                                "Fn::GetAtt": [
+                                    "RawDataKMSKey",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    },
+                    "Prefix": "logs/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/",
+                    "ErrorOutputPrefix": "errors/",
+                    "RoleARN": {
+                        "Fn::GetAtt": [
+                            "FirehoseDeliveryRole",
+                            "Arn"
+                        ]
+                    }
+                }
+            }
+        },
+        "DataValidationLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${CompanyName}-data-validation-${Environment}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 512,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport csv\nfrom io import StringIO\n\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Data validation function for incoming data\n    \"\"\"\n    for record in event['Records']:\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        \n        try:\n            # Get object from S3\n            response = s3.get_object(Bucket=bucket, Key=key)\n            content = response['Body'].read().decode('utf-8')\n            \n            # Basic validation - check if it's valid CSV/JSON\n            if key.endswith('.csv'):\n                csv_reader = csv.reader(StringIO(content))\n                row_count = sum(1 for row in csv_reader)\n                print(f\"Validated CSV file {key} with {row_count} rows\")\n            elif key.endswith('.json'):\n                json_data = json.loads(content)\n                print(f\"Validated JSON file {key}\")\n            \n            # Tag object as validated\n            s3.put_object_tagging(\n                Bucket=bucket,\n                Key=key,\n                Tagging={\n                    'TagSet': [\n                        {'Key': 'ValidationStatus', 'Value': 'PASSED'},\n                        {'Key': 'ProcessedTimestamp', 'Value': str(context.aws_request_id)}\n                    ]\n                }\n            )\n            \n        except Exception as e:\n            print(f\"Validation failed for {key}: {str(e)}\")\n            # Tag object as failed validation\n            s3.put_object_tagging(\n                Bucket=bucket,\n                Key=key,\n                Tagging={\n                    'TagSet': [\n                        {'Key': 'ValidationStatus', 'Value': 'FAILED'},\n                        {'Key': 'Error', 'Value': str(e)[:256]}\n                    ]\n                }\n            )\n    \n    return {'statusCode': 200, 'body': json.dumps('Data validation completed')}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-data-validation-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RawDataDatabase": {
+            "Type": "AWS::Glue::Database",
+            "Properties": {
+                "CatalogId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "DatabaseInput": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}_raw_data_${Environment}"
+                    },
+                    "Description": "Raw data zone database for data lake",
+                    "Parameters": {
+                        "classification": "datalake",
+                        "environment": {
+                            "Ref": "Environment"
+                        }
+                    }
+                }
+            }
+        },
+        "ProcessedDataDatabase": {
+            "Type": "AWS::Glue::Database",
+            "Properties": {
+                "CatalogId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "DatabaseInput": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}_processed_data_${Environment}"
+                    },
+                    "Description": "Processed data zone database for data lake",
+                    "Parameters": {
+                        "classification": "datalake",
+                        "environment": {
+                            "Ref": "Environment"
+                        }
+                    }
+                }
+            }
+        },
+        "CuratedDataDatabase": {
+            "Type": "AWS::Glue::Database",
+            "Properties": {
+                "CatalogId": {
+                    "Ref": "AWS::AccountId"
+                },
+                "DatabaseInput": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}_curated_data_${Environment}"
+                    },
+                    "Description": "Curated data zone database for data lake",
+                    "Parameters": {
+                        "classification": "datalake",
+                        "environment": {
+                            "Ref": "Environment"
+                        }
+                    }
+                }
+            }
+        },
+        "RawDataCrawler": {
+            "Type": "AWS::Glue::Crawler",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-raw-data-crawler-${Environment}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "DatabaseName": {
+                    "Ref": "RawDataDatabase"
+                },
+                "Targets": {
+                    "S3Targets": [
+                        {
+                            "Path": {
+                                "Fn::Sub": "s3://${RawDataBucket}/"
+                            },
+                            "Exclusions": [
+                                "**/_temporary/**",
+                                "**/_SUCCESS"
+                            ]
+                        }
+                    ]
+                },
+                "SchemaChangePolicy": {
+                    "UpdateBehavior": "UPDATE_IN_DATABASE",
+                    "DeleteBehavior": "DELETE_FROM_DATABASE"
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 2 * * ? *)"
+                },
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}-raw-data-crawler-${Environment}"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    }
+                }
+            }
+        },
+        "ProcessedDataCrawler": {
+            "Type": "AWS::Glue::Crawler",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-processed-data-crawler-${Environment}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "DatabaseName": {
+                    "Ref": "ProcessedDataDatabase"
+                },
+                "Targets": {
+                    "S3Targets": [
+                        {
+                            "Path": {
+                                "Fn::Sub": "s3://${ProcessedDataBucket}/"
+                            },
+                            "Exclusions": [
+                                "**/_temporary/**",
+                                "**/_SUCCESS"
+                            ]
+                        }
+                    ]
+                },
+                "SchemaChangePolicy": {
+                    "UpdateBehavior": "UPDATE_IN_DATABASE",
+                    "DeleteBehavior": "DELETE_FROM_DATABASE"
+                },
+                "Schedule": {
+                    "ScheduleExpression": "cron(0 3 * * ? *)"
+                },
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}-processed-data-crawler-${Environment}"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    }
+                }
+            }
+        },
+        "RawToProcessedETLJob": {
+            "Type": "AWS::Glue::Job",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-raw-to-processed-etl-${Environment}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Command": {
+                    "Name": "glueetl",
+                    "ScriptLocation": {
+                        "Fn::Sub": "s3://${ScriptsBucket}/etl-scripts/raw-to-processed.py"
+                    },
+                    "PythonVersion": "3"
+                },
+                "DefaultArguments": {
+                    "--job-language": "python",
+                    "--job-bookmark-option": "job-bookmark-enable",
+                    "--enable-metrics": "true",
+                    "--source-database": {
+                        "Ref": "RawDataDatabase"
+                    },
+                    "--target-database": {
+                        "Ref": "ProcessedDataDatabase"
+                    },
+                    "--source-bucket": {
+                        "Ref": "RawDataBucket"
+                    },
+                    "--target-bucket": {
+                        "Ref": "ProcessedDataBucket"
+                    }
+                },
+                "ExecutionProperty": {
+                    "MaxConcurrentRuns": 3
+                },
+                "MaxRetries": 3,
+                "GlueVersion": "3.0",
+                "WorkerType": "G.1X",
+                "NumberOfWorkers": {
+                    "Fn::If": [
+                        "IsProduction",
+                        10,
+                        2
+                    ]
+                },
+                "Timeout": 480,
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}-raw-to-processed-etl-${Environment}"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    }
+                }
+            }
+        },
+        "ProcessedToCuratedETLJob": {
+            "Type": "AWS::Glue::Job",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-processed-to-curated-etl-${Environment}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "GlueExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Command": {
+                    "Name": "glueetl",
+                    "ScriptLocation": {
+                        "Fn::Sub": "s3://${ScriptsBucket}/etl-scripts/processed-to-curated.py"
+                    },
+                    "PythonVersion": "3"
+                },
+                "DefaultArguments": {
+                    "--job-language": "python",
+                    "--job-bookmark-option": "job-bookmark-enable",
+                    "--enable-metrics": "true",
+                    "--source-database": {
+                        "Ref": "ProcessedDataDatabase"
+                    },
+                    "--target-database": {
+                        "Ref": "CuratedDataDatabase"
+                    },
+                    "--source-bucket": {
+                        "Ref": "ProcessedDataBucket"
+                    },
+                    "--target-bucket": {
+                        "Ref": "CuratedDataBucket"
+                    }
+                },
+                "ExecutionProperty": {
+                    "MaxConcurrentRuns": 2
+                },
+                "MaxRetries": 3,
+                "GlueVersion": "3.0",
+                "WorkerType": "G.1X",
+                "NumberOfWorkers": {
+                    "Fn::If": [
+                        "IsProduction",
+                        5,
+                        2
+                    ]
+                },
+                "Timeout": 240,
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${CompanyName}-processed-to-curated-etl-${Environment}"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    }
+                }
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${CompanyName}-datalake-alerts-${Environment}"
+                },
+                "DisplayName": "Data Lake Monitoring Alerts",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-datalake-alerts-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "Data Lake VPC ID",
+            "Value": {
+                "Ref": "DataLakeVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "RawDataBucketName": {
+            "Description": "Raw data bucket name",
+            "Value": {
+                "Ref": "RawDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDataBucket-Name"
+                }
+            }
+        },
+        "ProcessedDataBucketName": {
+            "Description": "Processed data bucket name",
+            "Value": {
+                "Ref": "ProcessedDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedDataBucket-Name"
+                }
+            }
+        },
+        "CuratedDataBucketName": {
+            "Description": "Curated data bucket name",
+            "Value": {
+                "Ref": "CuratedDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CuratedDataBucket-Name"
+                }
+            }
+        },
+        "AthenaQueryResultsBucketName": {
+            "Description": "Athena query results bucket name",
+            "Value": {
+                "Ref": "AthenaQueryResultsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AthenaResults-Name"
+                }
+            }
+        },
+        "ScriptsBucketName": {
+            "Description": "Scripts bucket name",
+            "Value": {
+                "Ref": "ScriptsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ScriptsBucket-Name"
+                }
+            }
+        },
+        "RawDataKMSKeyId": {
+            "Description": "Raw data KMS key ID",
+            "Value": {
+                "Ref": "RawDataKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDataKMS-KeyId"
+                }
+            }
+        },
+        "ProcessedDataKMSKeyId": {
+            "Description": "Processed data KMS key ID",
+            "Value": {
+                "Ref": "ProcessedDataKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedDataKMS-KeyId"
+                }
+            }
+        },
+        "CuratedDataKMSKeyId": {
+            "Description": "Curated data KMS key ID",
+            "Value": {
+                "Ref": "CuratedDataKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CuratedDataKMS-KeyId"
+                }
+            }
+        },
+        "RawDataDatabaseName": {
+            "Description": "Raw data Glue database name",
+            "Value": {
+                "Ref": "RawDataDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawDatabase-Name"
+                }
+            }
+        },
+        "ProcessedDataDatabaseName": {
+            "Description": "Processed data Glue database name",
+            "Value": {
+                "Ref": "ProcessedDataDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedDatabase-Name"
+                }
+            }
+        },
+        "CuratedDataDatabaseName": {
+            "Description": "Curated data Glue database name",
+            "Value": {
+                "Ref": "CuratedDataDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CuratedDatabase-Name"
+                }
+            }
+        },
+        "RawToProcessedETLJobName": {
+            "Description": "Raw to processed ETL job name",
+            "Value": {
+                "Ref": "RawToProcessedETLJob"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RawToProcessedETL-Name"
+                }
+            }
+        },
+        "ProcessedToCuratedETLJobName": {
+            "Description": "Processed to curated ETL job name",
+            "Value": {
+                "Ref": "ProcessedToCuratedETLJob"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProcessedToCuratedETL-Name"
+                }
+            }
+        },
+        "LogIngestionFirehoseName": {
+            "Description": "Log ingestion Firehose delivery stream name",
+            "Value": {
+                "Ref": "LogIngestionFirehose"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogIngestionFirehose-Name"
+                }
+            }
+        },
+        "DataValidationLambdaArn": {
+            "Description": "Data validation Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataValidationLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataValidationLambda-Arn"
+                }
+            }
+        },
+        "GlueExecutionRoleArn": {
+            "Description": "Glue execution role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GlueExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GlueExecutionRole-Arn"
+                }
+            }
+        },
+        "DataAnalystRoleArn": {
+            "Description": "Data analyst role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataAnalystRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DataAnalystRole-Arn"
+                }
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "SNS topic ARN for alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopic-Arn"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349859",
+  "team": "2",
+  "startedAt": "2025-09-29T18:47:06.944Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "SQS",
+    "Systems Manager Parameter Store",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
