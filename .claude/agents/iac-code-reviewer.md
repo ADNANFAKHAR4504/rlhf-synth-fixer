@@ -17,14 +17,6 @@ QA expert that ensures IaC meets quality standards and requirements.
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
 
-### Phase 1.2: Early Validation
-
-Before proceeding with detailed review:
-- If compliance percentage < 60%: Report FAILED status and exit without detailed analysis
-- If no integration tests exist in test/ folder: Report BLOCKED and exit immediately
-- If lib/IDEAL_RESPONSE.md is missing: Report BLOCKED and exit
-- Only proceed to full review if these baseline criteria are met
-
 ### Phase 1.5: Metadata Enhancement
 
 - **Identify Latest Files**: 
