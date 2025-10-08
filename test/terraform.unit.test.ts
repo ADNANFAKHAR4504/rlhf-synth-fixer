@@ -2,16 +2,16 @@ import fs from 'fs';
 import path from 'path';
 
 describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
-  let tfContent;
+  let tfContent: string;
 
   beforeAll(() => {
     const tfPath = path.join(__dirname, '../lib/tap_stack.tf');
     tfContent = fs.readFileSync(tfPath, 'utf8');
   });
 
-  const countMatches = (regex) => (tfContent.match(regex) || []).length;
+  const countMatches = (regex: RegExp): number => (tfContent.match(regex) || []).length;
 
-  // VARIABLES
+  // Variables
   describe('Variables', () => {
     test('defines expected variables', () => {
       [
@@ -20,13 +20,13 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
         'environment',
         'ssh_allowed_cidr',
         'db_instance_class'
-      ].forEach(v =>
+      ].forEach((v: string) =>
         expect(tfContent).toMatch(new RegExp(`variable\\s+"${v}"`))
       );
     });
   });
 
-  // LOCALS
+  // Locals
   describe('Locals', () => {
     test('defines expected locals including random_suffix and cidr blocks', () => {
       [
@@ -35,13 +35,13 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
         'azs',
         'public_subnet_cidrs',
         'private_subnet_cidrs'
-      ].forEach(l =>
+      ].forEach((l: string) =>
         expect(tfContent).toMatch(new RegExp(`${l}\\s*=`))
       );
     });
   });
 
-  // DATA SOURCES
+  // Data Sources
   describe('Data Sources', () => {
     test('aws_availability_zones and aws_caller_identity are defined', () => {
       expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
@@ -49,7 +49,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // RANDOM RESOURCES
+  // Random Resources
   describe('Random Resources for RDS credentials', () => {
     test('random_password for RDS master password exists with correct settings', () => {
       expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_master_password"/);
@@ -68,7 +68,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // NETWORKING
+  // Networking
   describe('Networking Resources', () => {
     test('VPC is defined with DNS hostnames and support enabled', () => {
       expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"main"/);
@@ -102,7 +102,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // SECURITY GROUPS
+  // Security Groups
   describe('Security Groups', () => {
     test('RDS security group allows MySQL from VPC CIDR and outbound all', () => {
       expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
@@ -120,7 +120,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // S3 BUCKETS
+  // S3 Buckets
   describe('S3 Buckets with encryption and versioning', () => {
     test('Main S3 bucket, public access block, versioning and SSE config exist', () => {
       expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"main"/);
@@ -140,7 +140,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // IAM ROLES AND POLICIES
+  // IAM Roles and Policies
   describe('IAM Roles and Policies', () => {
     test('EC2 IAM role and policy for S3 read access exist', () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
@@ -158,7 +158,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // SECRETS MANAGER
+  // Secrets Manager
   describe('Secrets Manager for RDS credentials', () => {
     test('Secrets manager secret and version are defined with secret string', () => {
       expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"rds_credentials"/);
@@ -167,7 +167,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // RDS DATABASE
+  // RDS Database
   describe('RDS Database', () => {
     test('DB subnet group and RDS instance exist with correct properties', () => {
       expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"main"/);
@@ -180,7 +180,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // CLOUDTRAIL
+  // CloudTrail
   describe('CloudTrail', () => {
     test('CloudTrail resource exists with multi-region and logging enabled', () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"/);
@@ -189,7 +189,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
   });
 
-  // AWS CONFIGURATION
+  // AWS Config Resources
   describe('AWS Config Resources', () => {
     test('Config recorder, delivery channel, and recorder status are defined and linked', () => {
       expect(tfContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"/);
@@ -199,22 +199,22 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     });
 
     test('Config rules for S3 encryption, RDS encryption, public access, MFA, and CloudTrail exist', () => {
-      const configRules = [
+      const configRules: string[] = [
         's3_bucket_encryption',
         'rds_encryption',
         'rds_public_access',
         'iam_mfa',
         'cloudtrail_enabled'
       ];
-      configRules.forEach(rule => {
+      configRules.forEach((rule: string) => {
         expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_config_config_rule"\\s+"${rule}"`));
       });
     });
   });
 
-  // OUTPUTS
+  // Outputs
   describe('Outputs', () => {
-    const expectedOutputs = [
+    const expectedOutputs: string[] = [
       'vpc_id',
       'vpc_cidr',
       'public_subnet_ids',
@@ -248,10 +248,12 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       'private_route_table_ids',
       'deployment_suffix'
     ];
-    expectedOutputs.forEach(output => {
+
+    expectedOutputs.forEach((output: string) => {
       test(`output ${output} exists`, () => {
         expect(tfContent).toMatch(new RegExp(`output\\s+"${output}"`));
       });
     });
   });
+
 });
