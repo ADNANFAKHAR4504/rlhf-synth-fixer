@@ -77,9 +77,6 @@ export class DatabaseStack extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       multiAz: true,
-      blueGreenUpdate: {
-        enabled: true,
-      },
       skipFinalSnapshot: true,
       deletionProtection: false,
       tags: {
