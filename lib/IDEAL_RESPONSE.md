@@ -59,10 +59,6 @@ lib/
 ├── provider.tf          # Terraform and AWS provider configuration
 ├── tap_stack.tf         # Complete infrastructure stack (1660 lines)
 └── .terraform.lock.hcl  # Provider version lock file
-
-test/
-├── terraform.unit.test.ts  # Unit tests for code validation
-└── terraform.int.test.ts   # Integration tests for live infrastructure
 ```
 
 ---
@@ -1566,57 +1562,6 @@ Expected outputs:
 - `sns_topic_arn`: arn:aws:sns:us-east-1:account:nova-alerts-prd
 - `logging_bucket`: nova-logs-prd-accountid
 - `backup_vault_name`: nova-backup-vault-prd
-
----
-
-## Testing
-
-### Unit Tests
-
-Run unit tests to validate Terraform configuration:
-
-```bash
-cd /Users/nosaomorodion/Documents/Turing/iac-test-automations
-npm test
-```
-
-The unit test suite (`terraform.unit.test.ts`) validates:
-- File existence (provider.tf, tap_stack.tf)
-- Terraform version constraints
-- Provider versions and configuration
-- Variable declarations and types
-- Data source definitions
-- Local value computations
-- Resource configurations and dependencies
-- Tagging consistency
-- Naming conventions
-- Security best practices
-- KMS key policies
-- S3 bucket configurations
-- IAM role trust relationships
-- Network topology
-
-### Integration Tests
-
-Run integration tests against live AWS infrastructure:
-
-```bash
-npm run test:integration
-```
-
-The integration test suite (`terraform.int.test.ts`) validates:
-- VPC exists with correct CIDR and DNS settings
-- Subnets are properly configured across AZs
-- Security groups have correct rules
-- KMS keys exist with rotation enabled
-- S3 buckets are encrypted with proper policies
-- CloudTrail is logging API calls
-- AWS Config is recording changes
-- CloudWatch log groups and alarms are configured
-- CloudFront distribution is operational
-- SNS topic is configured
-- Backup vault is ready
-- IAM roles have correct permissions
 
 ---
 
