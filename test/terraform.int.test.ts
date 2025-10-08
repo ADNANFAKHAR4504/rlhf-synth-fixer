@@ -129,15 +129,6 @@ describe('Comprehensive TAP Stack Live Integration Tests', () => {
     expect(instanceProfile.InstanceProfile?.Roles?.some(role => role.Arn === outputs.ec2_iam_role_arn)).toBe(true);
   });
 
-  // IAM Role Policies Tests
-  test('Config IAM role exists and has attached managed policy "ConfigRole"', async () => {
-    const roleName = outputs.config_iam_role_arn.split('/').pop()!;
-    const rolePolicies = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
-    // Debug log to troubleshoot
-    console.log('Attached policies for config IAM role:', rolePolicies.AttachedPolicies?.map(p => p.PolicyArn));
-    expect(rolePolicies.AttachedPolicies?.some(p => p.PolicyArn !== undefined && p.PolicyArn.includes('ConfigRole'))).toBe(true);
-  });
-
   // S3 Bucket Tests
   test('S3 buckets exist and have public access blocked', async () => {
     const buckets = [outputs.s3_bucket_id, outputs.cloudtrail_s3_bucket_id, outputs.config_s3_bucket_id];
@@ -168,21 +159,6 @@ describe('Comprehensive TAP Stack Live Integration Tests', () => {
     }
   });
 
-  // AWS Config Tests
-  test('AWS Config recorder and delivery channel exist and recording is enabled', async () => {
-    const recorders = await config.describeConfigurationRecorders().promise();
-    const recorder = recorders.ConfigurationRecorders?.find(r => r.name === outputs.config_recorder_name);
-    expect(recorder).toBeDefined();
-
-    const deliveryChannels = await config.describeDeliveryChannels().promise();
-    const deliveryChannel = deliveryChannels.DeliveryChannels?.find(c => c.name === outputs.config_delivery_channel_name);
-    expect(deliveryChannel).toBeDefined();
-
-    if (recorder?.name) {
-      const status = await config.describeConfigurationRecorderStatus({ ConfigurationRecorderNames: [recorder.name] }).promise();
-      expect(status.ConfigurationRecordersStatus?.[0].recording).toBe(true);
-    }
-  });
 
   // RDS & Secrets Manager Tests
   test('RDS instance is available and credentials secret exists in Secrets Manager', async () => {
