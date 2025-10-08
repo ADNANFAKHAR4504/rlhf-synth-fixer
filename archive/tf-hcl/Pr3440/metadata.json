@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "71697283",
+  "team": "1",
+  "startedAt": "2025-10-03T09:46:21.852Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "Kinesis Data Streams, Lambda, DynamoDB, S3, Glue, Personalize, Step Functions, EventBridge, API Gateway, ElastiCache, CloudWatch, SNS, IAM",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

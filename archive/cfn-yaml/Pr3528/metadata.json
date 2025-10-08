@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "53364950",
+  "team": "3",
+  "startedAt": "2025-10-03T17:22:44.158Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "IAM",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Comprehend",
+    "SES"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

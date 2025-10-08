@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "51829374",
+  "team": "synth",
+  "startedAt": "2025-10-02T11:05:15+05:30",
+  "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
