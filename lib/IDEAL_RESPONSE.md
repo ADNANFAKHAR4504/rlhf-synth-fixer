@@ -11,6 +11,1013 @@
 ---
 
 ```typescript
+// lib/runtime/normalize-event.ts
+import { APIGatewayProxyEvent } from 'aws-lambda';
+
+type Headers = Record<string, string>;
+
+type MultiValueHeaders = Record<string, string[]>;
+
+type FunctionUrlRequestContext = {
+  http?: {
+    method?: string;
+    path?: string;
+  };
+};
+
+type NormalizableEvent = {
+  httpMethod?: unknown;
+  headers?: Headers;
+  multiValueHeaders?: MultiValueHeaders;
+  body?: unknown;
+  isBase64Encoded?: boolean;
+  path?: unknown;
+  rawPath?: unknown;
+  pathParameters?: Record<string, string> | null;
+  queryStringParameters?: Record<string, string> | null;
+  multiValueQueryStringParameters?: Record<string, string[]> | null;
+  stageVariables?: Record<string, string> | null;
+  resource?: unknown;
+  requestContext?: FunctionUrlRequestContext;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function derivePathParameters(
+  path: string,
+  existing: APIGatewayProxyEvent['pathParameters'] | undefined
+): APIGatewayProxyEvent['pathParameters'] {
+  if (existing && Object.keys(existing).length > 0) {
+    return existing;
+  }
+
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 2) {
+    const [resourceSegment, identifier] = segments;
+    if (identifier) {
+      const key = resourceSegment.endsWith('s')
+        ? `${resourceSegment.slice(0, -1)}Id`
+        : `${resourceSegment}Id`;
+      const derived: Record<string, string> = {
+        [key]: decodeURIComponent(identifier),
+      };
+      return derived;
+    }
+  }
+
+  return existing ?? null;
+}
+
+function createEmptyEvent(method: string = 'GET'): APIGatewayProxyEvent {
+  return {
+    resource: '',
+    path: '/',
+    httpMethod: method,
+    headers: {},
+    multiValueHeaders: {},
+    queryStringParameters: null,
+    multiValueQueryStringParameters: null,
+    pathParameters: null,
+    stageVariables: null,
+    requestContext: {} as APIGatewayProxyEvent['requestContext'],
+    body: null,
+    isBase64Encoded: false,
+  };
+}
+
+function coerceBody(body: unknown): string | null {
+  if (typeof body === 'string') {
+    return body;
+  }
+  if (body === undefined || body === null) {
+    return null;
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
+export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
+  if (!isRecord(event)) {
+    return createEmptyEvent();
+  }
+
+  const incoming = event as NormalizableEvent;
+
+  if (typeof incoming.httpMethod === 'string') {
+    return incoming as unknown as APIGatewayProxyEvent;
+  }
+
+  if (typeof incoming.body === 'string') {
+    try {
+      const parsed = JSON.parse(incoming.body);
+      if (isRecord(parsed) && typeof parsed.httpMethod === 'string') {
+        return parsed as unknown as APIGatewayProxyEvent;
+      }
+    } catch {
+      // ignore malformed JSON bodies
+    }
+  }
+
+  const method = asString(incoming.requestContext?.http?.method);
+  if (method) {
+    const normalized = createEmptyEvent(method.toUpperCase());
+    const resolvedPath =
+      asString(incoming.rawPath) ??
+      asString(incoming.requestContext?.http?.path) ??
+      asString(incoming.path) ??
+      normalized.path;
+
+    const normalizedEvent: APIGatewayProxyEvent = {
+      ...normalized,
+      headers: (incoming.headers ?? {}) as Headers,
+      multiValueHeaders: (incoming.multiValueHeaders ??
+        {}) as MultiValueHeaders,
+      path: resolvedPath,
+      resource: asString(incoming.resource) ?? normalized.resource,
+      pathParameters: derivePathParameters(
+        resolvedPath,
+        incoming.pathParameters
+      ),
+      queryStringParameters: incoming.queryStringParameters ?? null,
+      multiValueQueryStringParameters:
+        incoming.multiValueQueryStringParameters ?? null,
+      stageVariables: incoming.stageVariables ?? null,
+      requestContext:
+        (incoming.requestContext as unknown as APIGatewayProxyEvent['requestContext']) ||
+        normalized.requestContext,
+      body: coerceBody(incoming.body),
+      isBase64Encoded: Boolean(incoming.isBase64Encoded),
+    };
+
+    return normalizedEvent;
+  }
+
+  const base = createEmptyEvent();
+
+  const fallbackEvent: APIGatewayProxyEvent = {
+    ...base,
+    headers: (incoming.headers ?? {}) as Headers,
+    multiValueHeaders: (incoming.multiValueHeaders ?? {}) as MultiValueHeaders,
+    path: asString(incoming.path) ?? base.path,
+    resource: asString(incoming.resource) ?? base.resource,
+    pathParameters: derivePathParameters(
+      asString(incoming.path) ?? base.path,
+      incoming.pathParameters
+    ),
+    queryStringParameters: incoming.queryStringParameters ?? null,
+    multiValueQueryStringParameters:
+      incoming.multiValueQueryStringParameters ?? null,
+    stageVariables: incoming.stageVariables ?? null,
+    requestContext:
+      (incoming.requestContext as unknown as APIGatewayProxyEvent['requestContext']) ||
+      base.requestContext,
+    body: coerceBody(incoming.body),
+    isBase64Encoded: Boolean(incoming.isBase64Encoded),
+  };
+
+  return fallbackEvent;
+}
+```
+
+---
+
+```typescript
+// lib/runtime/user-service.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import { normalizeEvent } from './normalize-event';
+
+const dynamoDocumentClient = DynamoDBDocumentClient.from(
+  new DynamoDBClient({}),
+  {
+    marshallOptions: {
+      removeUndefinedValues: true,
+    },
+  }
+);
+const snsClient = new SNSClient({});
+const secretsClient = new SecretsManagerClient({});
+
+let cachedSecret: string | undefined;
+
+const respond = (
+  statusCode: number,
+  payload: unknown
+): APIGatewayProxyResult => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS ?? 'https://localhost:3000',
+    'Access-Control-Allow-Credentials': 'true',
+  },
+  body: JSON.stringify(payload),
+});
+
+async function resolveApiKey(secretArn: string): Promise<string> {
+  if (cachedSecret) {
+    return cachedSecret;
+  }
+
+  const secret = await secretsClient.send(
+    new GetSecretValueCommand({
+      SecretId: secretArn,
+    })
+  );
+
+  if (!secret.SecretString) {
+    throw new Error(
+      'Secret payload is empty. Ensure the secret contains an apiKey attribute.'
+    );
+  }
+
+  const parsedSecret = JSON.parse(secret.SecretString) as { apiKey?: string };
+  if (!parsedSecret.apiKey) {
+    throw new Error('apiKey field missing from secret payload.');
+  }
+
+  cachedSecret = parsedSecret.apiKey;
+  return cachedSecret;
+}
+
+export const handler = async (
+  event: unknown,
+  context: Context
+): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
+  const tableName = process.env.USER_TABLE_NAME;
+  const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
+  const apiSecretArn = process.env.API_SECRET_ARN;
+
+  if (!tableName || !notificationTopicArn || !apiSecretArn) {
+    console.error('Missing required environment configuration.', {
+      tableName,
+      notificationTopicArn,
+      apiSecretArn,
+    });
+    return respond(500, { message: 'Service misconfiguration detected.' });
+  }
+
+  try {
+    const method = normalized.httpMethod?.toUpperCase();
+    const userId = normalized.pathParameters?.userId;
+
+    switch (method) {
+      case 'GET': {
+        if (userId) {
+          const result = await dynamoDocumentClient.send(
+            new GetCommand({
+              TableName: tableName,
+              Key: { userId },
+            })
+          );
+
+          if (!result.Item) {
+            return respond(404, { message: 'User not found.' });
+          }
+
+          return respond(200, result.Item);
+        }
+
+        const list = await dynamoDocumentClient.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'USER',
+            },
+            Limit: 50,
+            ScanIndexForward: false,
+          })
+        );
+
+        return respond(200, list.Items ?? []);
+      }
+      case 'POST': {
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+
+        const payload = JSON.parse(normalized.body) as {
+          name?: string;
+          email?: string;
+        };
+        if (!payload.name || !payload.email) {
+          return respond(422, {
+            message: 'Both name and email fields are required.',
+          });
+        }
+
+        const userItem = {
+          userId: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          entityType: 'USER',
+          name: payload.name,
+          email: payload.email.toLowerCase(),
+          audit: {
+            traceId: context.awsRequestId,
+          },
+        };
+
+        await dynamoDocumentClient.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: userItem,
+            ConditionExpression: 'attribute_not_exists(userId)',
+          })
+        );
+
+        const apiKey = await resolveApiKey(apiSecretArn);
+        await snsClient.send(
+          new PublishCommand({
+            TopicArn: notificationTopicArn,
+            Subject: 'user.created',
+            Message: JSON.stringify({
+              userId: userItem.userId,
+              email: userItem.email,
+            }),
+            MessageAttributes: {
+              purpose: { DataType: 'String', StringValue: 'lifecycle-event' },
+              apiKey: {
+                DataType: 'String',
+                StringValue: apiKey.substring(0, 4).padEnd(8, '*'),
+              },
+            },
+          })
+        );
+
+        return respond(201, { userId: userItem.userId });
+      }
+      case 'PUT': {
+        if (!userId) {
+          return respond(400, {
+            message: 'userId path parameter is required.',
+          });
+        }
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+
+        const payload = JSON.parse(normalized.body) as {
+          name?: string;
+          email?: string;
+        };
+        if (!payload.name && !payload.email) {
+          return respond(422, {
+            message: 'Provide at least one attribute to update.',
+          });
+        }
+
+        const updateExpressions: string[] = [];
+        const expressionAttributeNames: Record<string, string> = {};
+        const expressionAttributeValues: Record<string, unknown> = {};
+
+        if (payload.name) {
+          updateExpressions.push('#name = :name');
+          expressionAttributeNames['#name'] = 'name';
+          expressionAttributeValues[':name'] = payload.name;
+        }
+        if (payload.email) {
+          updateExpressions.push('#email = :email');
+          expressionAttributeNames['#email'] = 'email';
+          expressionAttributeValues[':email'] = payload.email.toLowerCase();
+        }
+
+        updateExpressions.push('#updatedAt = :updatedAt');
+        expressionAttributeNames['#updatedAt'] = 'updatedAt';
+        expressionAttributeValues[':updatedAt'] = new Date().toISOString();
+
+        await dynamoDocumentClient.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { userId },
+            UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+            ExpressionAttributeNames: expressionAttributeNames,
+            ExpressionAttributeValues: expressionAttributeValues,
+            ConditionExpression: 'attribute_exists(userId)',
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+
+        return respond(200, { message: 'User updated successfully.' });
+      }
+      case 'DELETE': {
+        if (!userId) {
+          return respond(400, {
+            message: 'userId path parameter is required.',
+          });
+        }
+
+        await dynamoDocumentClient.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: { userId },
+            ConditionExpression: 'attribute_exists(userId)',
+          })
+        );
+
+        return {
+          statusCode: 204,
+          headers: {
+            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS ?? 'https://localhost:3000',
+            'Access-Control-Allow-Credentials': 'true',
+          },
+          body: '',
+        };
+      }
+      default:
+        return respond(405, { message: `Unsupported method: ${method}` });
+    }
+  } catch (error) {
+    console.error('Unhandled error in user service.', { error });
+    return respond(500, { message: 'Internal server error.' });
+  }
+};
+```
+
+---
+
+```typescript
+// lib/runtime/product-service.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DeleteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { normalizeEvent } from './normalize-event';
+
+const dynamoDocumentClient = DynamoDBDocumentClient.from(
+  new DynamoDBClient({}),
+  {
+    marshallOptions: {
+      removeUndefinedValues: true,
+    },
+  }
+);
+const snsClient = new SNSClient({});
+
+const respond = (
+  statusCode: number,
+  payload: unknown
+): APIGatewayProxyResult => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+  },
+  body: JSON.stringify(payload),
+});
+
+export const handler = async (
+  event: unknown,
+  context: Context
+): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
+  const tableName = process.env.PRODUCT_TABLE_NAME;
+  const notificationTopicArn = process.env.NOTIFICATION_TOPIC_ARN;
+
+  if (!tableName || !notificationTopicArn) {
+    console.error(
+      'Missing required environment variables for product service.',
+      {
+        tableName,
+        notificationTopicArn,
+      }
+    );
+    return respond(500, { message: 'Service misconfiguration detected.' });
+  }
+
+  try {
+    const method = normalized.httpMethod?.toUpperCase();
+    const productId = normalized.pathParameters?.productId;
+
+    switch (method) {
+      case 'GET': {
+        if (productId) {
+          const result = await dynamoDocumentClient.send(
+            new GetCommand({
+              TableName: tableName,
+              Key: { productId },
+            })
+          );
+          if (!result.Item) {
+            return respond(404, { message: 'Product not found.' });
+          }
+          return respond(200, result.Item);
+        }
+
+        const list = await dynamoDocumentClient.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'PRODUCT',
+            },
+            ProjectionExpression:
+              'productId, #name, price, inventory, updatedAt',
+            ExpressionAttributeNames: {
+              '#name': 'name',
+            },
+            Limit: 50,
+            ScanIndexForward: false,
+          })
+        );
+
+        return respond(200, list.Items ?? []);
+      }
+      case 'POST': {
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+
+        const payload = JSON.parse(normalized.body) as {
+          name?: string;
+          description?: string;
+          price?: number;
+          inventory?: number;
+        };
+
+        if (
+          !payload.name ||
+          payload.price === undefined ||
+          payload.inventory === undefined
+        ) {
+          return respond(422, {
+            message: 'name, price, and inventory are required.',
+          });
+        }
+        if (payload.price < 0 || payload.inventory < 0) {
+          return respond(422, {
+            message: 'price and inventory must be positive values.',
+          });
+        }
+
+        const productItem = {
+          productId: `product-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          entityType: 'PRODUCT',
+          name: payload.name,
+          description: payload.description ?? '',
+          price: Number(payload.price.toFixed(2)),
+          inventory: Math.floor(payload.inventory),
+        };
+
+        await dynamoDocumentClient.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: productItem,
+            ConditionExpression: 'attribute_not_exists(productId)',
+          })
+        );
+
+        await snsClient.send(
+          new PublishCommand({
+            TopicArn: notificationTopicArn,
+            Subject: 'product.created',
+            Message: JSON.stringify({
+              productId: productItem.productId,
+              price: productItem.price,
+            }),
+            MessageAttributes: {
+              severity: { DataType: 'String', StringValue: 'info' },
+              correlationId: {
+                DataType: 'String',
+                StringValue: context.awsRequestId,
+              },
+            },
+          })
+        );
+
+        return respond(201, { productId: productItem.productId });
+      }
+      case 'PUT': {
+        if (!productId) {
+          return respond(400, {
+            message: 'productId path parameter is required.',
+          });
+        }
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+
+        const payload = JSON.parse(normalized.body) as {
+          name?: string;
+          description?: string;
+          price?: number;
+          inventory?: number;
+        };
+
+        if (
+          payload.price !== undefined &&
+          (Number.isNaN(payload.price) || payload.price < 0)
+        ) {
+          return respond(422, { message: 'price must be a positive number.' });
+        }
+        if (
+          payload.inventory !== undefined &&
+          (Number.isNaN(payload.inventory) || payload.inventory < 0)
+        ) {
+          return respond(422, {
+            message: 'inventory must be a positive integer.',
+          });
+        }
+
+        const expressionAttributeNames: Record<string, string> = {
+          '#updatedAt': 'updatedAt',
+        };
+        const expressionAttributeValues: Record<string, unknown> = {
+          ':updatedAt': new Date().toISOString(),
+        };
+        const expressionSegments: string[] = [];
+
+        if (payload.name) {
+          expressionAttributeNames['#name'] = 'name';
+          expressionAttributeValues[':name'] = payload.name;
+          expressionSegments.push('#name = :name');
+        }
+        if (payload.description !== undefined) {
+          expressionAttributeNames['#description'] = 'description';
+          expressionAttributeValues[':description'] = payload.description;
+          expressionSegments.push('#description = :description');
+        }
+        if (payload.price !== undefined) {
+          expressionAttributeNames['#price'] = 'price';
+          expressionAttributeValues[':price'] = Number(
+            payload.price.toFixed(2)
+          );
+          expressionSegments.push('#price = :price');
+        }
+        if (payload.inventory !== undefined) {
+          expressionAttributeNames['#inventory'] = 'inventory';
+          expressionAttributeValues[':inventory'] = Math.floor(
+            payload.inventory
+          );
+          expressionSegments.push('#inventory = :inventory');
+        }
+
+        if (!expressionSegments.length) {
+          return respond(422, { message: 'No updates supplied.' });
+        }
+
+        expressionSegments.push('#updatedAt = :updatedAt');
+
+        await dynamoDocumentClient.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { productId },
+            UpdateExpression: `SET ${expressionSegments.join(', ')}`,
+            ConditionExpression: 'attribute_exists(productId)',
+            ExpressionAttributeNames: expressionAttributeNames,
+            ExpressionAttributeValues: expressionAttributeValues,
+          })
+        );
+
+        return respond(200, { message: 'Product updated successfully.' });
+      }
+      case 'DELETE': {
+        if (!productId) {
+          return respond(400, {
+            message: 'productId path parameter is required.',
+          });
+        }
+
+        await dynamoDocumentClient.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: { productId },
+            ConditionExpression: 'attribute_exists(productId)',
+          })
+        );
+
+        return {
+          statusCode: 204,
+          headers: {
+            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS ?? 'https://localhost:3000',
+          },
+          body: '',
+        };
+      }
+      default:
+        return respond(405, { message: `Unsupported method: ${method}` });
+    }
+  } catch (error) {
+    console.error('Unhandled error in product service.', { error });
+    return respond(500, { message: 'Internal server error.' });
+  }
+};
+```
+
+---
+
+```typescript
+// lib/runtime/order-service.ts
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
+import { normalizeEvent } from './normalize-event';
+
+const dynamoDocumentClient = DynamoDBDocumentClient.from(
+  new DynamoDBClient({}),
+  {
+    marshallOptions: {
+      removeUndefinedValues: true,
+    },
+  }
+);
+const snsClient = new SNSClient({});
+
+const respond = (
+  statusCode: number,
+  payload: unknown
+): APIGatewayProxyResult => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS ?? 'https://localhost:3000',
+  },
+  body: JSON.stringify(payload),
+});
+
+export const handler = async (
+  event: unknown,
+  context: Context
+): Promise<APIGatewayProxyResult> => {
+  const normalized = normalizeEvent(event);
+  const orderTableName = process.env.ORDER_TABLE_NAME;
+  const productTableName = process.env.PRODUCT_TABLE_NAME;
+  const userTableName = process.env.USER_TABLE_NAME;
+  const topicArn = process.env.NOTIFICATION_TOPIC_ARN;
+
+  if (!orderTableName || !productTableName || !userTableName || !topicArn) {
+    console.error(
+      'Missing required environment configuration for order service.',
+      {
+        orderTableName,
+        productTableName,
+        userTableName,
+        topicArn,
+      }
+    );
+    return respond(500, { message: 'Service misconfiguration detected.' });
+  }
+
+  try {
+    const method = normalized.httpMethod?.toUpperCase();
+    const orderId = normalized.pathParameters?.orderId;
+
+    switch (method) {
+      case 'GET': {
+        if (orderId) {
+          const order = await dynamoDocumentClient.send(
+            new GetCommand({
+              TableName: orderTableName,
+              Key: { orderId },
+            })
+          );
+
+          if (!order.Item) {
+            return respond(404, { message: 'Order not found.' });
+          }
+
+          return respond(200, order.Item);
+        }
+
+        const list = await dynamoDocumentClient.send(
+          new QueryCommand({
+            TableName: orderTableName,
+            IndexName: 'byEntityType',
+            KeyConditionExpression: 'entityType = :entityType',
+            ExpressionAttributeValues: {
+              ':entityType': 'ORDER',
+            },
+            Limit: 50,
+            ScanIndexForward: false,
+          })
+        );
+
+        return respond(200, list.Items ?? []);
+      }
+      case 'POST': {
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+        const payload = JSON.parse(normalized.body) as {
+          userId?: string;
+          productId?: string;
+          quantity?: number;
+        };
+
+        if (!payload.userId || !payload.productId || !payload.quantity) {
+          return respond(422, {
+            message: 'userId, productId, and quantity are required.',
+          });
+        }
+        if (payload.quantity <= 0) {
+          return respond(422, {
+            message: 'quantity must be greater than zero.',
+          });
+        }
+
+        const [user, product] = await Promise.all([
+          dynamoDocumentClient.send(
+            new GetCommand({
+              TableName: userTableName,
+              Key: { userId: payload.userId },
+            })
+          ),
+          dynamoDocumentClient.send(
+            new GetCommand({
+              TableName: productTableName,
+              Key: { productId: payload.productId },
+            })
+          ),
+        ]);
+
+        if (!user.Item) {
+          return respond(404, { message: `User ${payload.userId} not found.` });
+        }
+        if (!product.Item) {
+          return respond(404, {
+            message: `Product ${payload.productId} not found.`,
+          });
+        }
+
+        const availableInventory = product.Item.inventory as number | undefined;
+        if (
+          availableInventory === undefined ||
+          availableInventory < payload.quantity
+        ) {
+          return respond(409, { message: 'Insufficient product inventory.' });
+        }
+
+        const orderRecord = {
+          orderId: `order-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          productId: payload.productId,
+          userId: payload.userId,
+          quantity: payload.quantity,
+          unitPrice: product.Item.price,
+          totalPrice: Number(
+            (product.Item.price * payload.quantity).toFixed(2)
+          ),
+          status: 'CREATED',
+          createdAt: new Date().toISOString(),
+          entityType: 'ORDER',
+          audit: {
+            traceId: context.awsRequestId,
+          },
+        };
+
+        try {
+          await dynamoDocumentClient.send(
+            new TransactWriteCommand({
+              TransactItems: [
+                {
+                  Put: {
+                    TableName: orderTableName,
+                    Item: orderRecord,
+                    ConditionExpression: 'attribute_not_exists(orderId)',
+                  },
+                },
+                {
+                  Update: {
+                    TableName: productTableName,
+                    Key: { productId: payload.productId },
+                    ConditionExpression: 'inventory >= :requested',
+                    UpdateExpression:
+                      'SET inventory = inventory - :requested, #updatedAt = :updatedAt',
+                    ExpressionAttributeValues: {
+                      ':requested': payload.quantity,
+                      ':updatedAt': new Date().toISOString(),
+                    },
+                    ExpressionAttributeNames: {
+                      '#updatedAt': 'updatedAt',
+                    },
+                  },
+                },
+              ],
+            })
+          );
+        } catch (error) {
+          if (
+            (error as { name?: string }).name === 'TransactionCanceledException'
+          ) {
+            console.warn(
+              'Order creation transaction canceled due to inventory constraint.',
+              { error }
+            );
+            return respond(409, { message: 'Insufficient product inventory.' });
+          }
+          throw error;
+        }
+
+        await snsClient.send(
+          new PublishCommand({
+            TopicArn: topicArn,
+            Subject: 'order.created',
+            Message: JSON.stringify({
+              orderId: orderRecord.orderId,
+              userId: orderRecord.userId,
+              totalPrice: orderRecord.totalPrice,
+            }),
+            MessageAttributes: {
+              eventType: { DataType: 'String', StringValue: 'order' },
+              severity: { DataType: 'String', StringValue: 'high' },
+            },
+          })
+        );
+
+        return respond(201, { orderId: orderRecord.orderId });
+      }
+      case 'PATCH': {
+        if (!orderId) {
+          return respond(400, {
+            message: 'orderId path parameter is required.',
+          });
+        }
+        if (!normalized.body) {
+          return respond(400, { message: 'Missing request body.' });
+        }
+
+        const payload = JSON.parse(normalized.body) as {
+          status?: 'SHIPPED' | 'CANCELLED';
+        };
+        if (!payload.status) {
+          return respond(422, { message: 'status field is required.' });
+        }
+
+        await dynamoDocumentClient.send(
+          new UpdateCommand({
+            TableName: orderTableName,
+            Key: { orderId },
+            UpdateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
+            ConditionExpression: 'attribute_exists(orderId)',
+            ExpressionAttributeNames: {
+              '#status': 'status',
+              '#updatedAt': 'updatedAt',
+            },
+            ExpressionAttributeValues: {
+              ':status': payload.status,
+              ':updatedAt': new Date().toISOString(),
+            },
+          })
+        );
+
+        return respond(200, { message: 'Order status updated.' });
+      }
+      default:
+        return respond(405, { message: `Unsupported method: ${method}` });
+    }
+  } catch (error) {
+    console.error('Unhandled error in order service.', { error });
+    return respond(500, { message: 'Internal server error.' });
+  }
+};
+```
+
+---
+
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import {
@@ -371,6 +1378,7 @@ export class TapStack extends cdk.Stack {
           USER_TABLE_NAME: userTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
           API_SECRET_ARN: apiSecret.secretArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );
@@ -385,6 +1393,7 @@ export class TapStack extends cdk.Stack {
         environment: {
           PRODUCT_TABLE_NAME: productTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );
@@ -401,6 +1410,7 @@ export class TapStack extends cdk.Stack {
           PRODUCT_TABLE_NAME: productTable.tableName,
           USER_TABLE_NAME: userTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );

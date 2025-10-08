@@ -6,10 +6,16 @@ import {
   TransactWriteCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { APIGatewayProxyResult, Context } from 'aws-lambda';
+import type { Context } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { normalizeEvent } from './normalize-event';
+
+type APIGatewayProxyResult = {
+  statusCode: number;
+  headers?: Record<string, string>;
+  body: string;
+};
 
 const dynamoDocumentClient = DynamoDBDocumentClient.from(
   new DynamoDBClient({}),
@@ -28,7 +34,8 @@ const respond = (
   statusCode,
   headers: {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin':
+      process.env.ALLOWED_ORIGINS ?? 'https://localhost:3000',
   },
   body: JSON.stringify(payload),
 });

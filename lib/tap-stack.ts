@@ -357,6 +357,7 @@ export class TapStack extends cdk.Stack {
           USER_TABLE_NAME: userTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
           API_SECRET_ARN: apiSecret.secretArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );
@@ -371,6 +372,7 @@ export class TapStack extends cdk.Stack {
         environment: {
           PRODUCT_TABLE_NAME: productTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );
@@ -387,6 +389,7 @@ export class TapStack extends cdk.Stack {
           PRODUCT_TABLE_NAME: productTable.tableName,
           USER_TABLE_NAME: userTable.tableName,
           NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+          ALLOWED_ORIGINS: resolvedAllowedOrigins.join(','),
         },
       }
     );
