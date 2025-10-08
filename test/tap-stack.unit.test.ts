@@ -376,8 +376,8 @@ describe('TapStack CloudFormation Template', () => {
 
     test('table should have correct deletion policies', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+      expect(table.DeletionPolicy).toBe('Retain');
+      expect(table.UpdateReplacePolicy).toBe('Retain');
     });
 
     test('table should use pay-per-request billing', () => {
@@ -553,12 +553,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have reasonable number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
       expect(resourceCount).toBeGreaterThan(30);
-      expect(resourceCount).toBeLessThan(50);
+      expect(resourceCount).toBeLessThan(55);
     });
 
     test('should have reasonable number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(20);
+      expect(parameterCount).toBe(19);
     });
 
     test('should have reasonable number of outputs', () => {

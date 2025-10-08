@@ -22,7 +22,6 @@ Metadata:
           - DBName
           - DBUser
           - DBInstanceClass
-          - DatabasePassword
       - Label:
           default: SSL Certificate Configuration
         Parameters:
@@ -136,16 +135,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
 
-  DatabasePassword:
-    Type: String
-    Default: "TapAppDevPassword123!"
-    Description: Database master password
-    MinLength: 8
-    MaxLength: 128
-    NoEcho: true
-    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$"
-    ConstraintDescription: "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character"
-
   MinSize:
     Type: Number
     Default: 2
@@ -184,17 +173,17 @@ Mappings:
     us-east-2:
       AMI: ami-0c7c4e3c6b4941f0f
     us-west-1:
-      AMI: ami-0c55b4c4b4b4b4b4b
+      AMI: ami-0d5eff06f840b45e9
     us-west-2:
       AMI: ami-0cf2b4e024cdb6960
     eu-west-1:
-      AMI: ami-0c55b4c4b4b4b4b4b
+      AMI: ami-0d71ea30463e0ff8d
     eu-west-2:
-      AMI: ami-0c55b4c4b4b4b4b4b
+      AMI: ami-0eb260c4d5475b901
     ap-southeast-1:
-      AMI: ami-0c55b4c4b4b4b4b4b
+      AMI: ami-0dc2d3e4c0f9ebd18
     ap-southeast-2:
-      AMI: ami-0c55b4c4b4b4b4b4b
+      AMI: ami-0361bbf2b99f46c94
 Conditions:
   HasDomainName:
     Fn::Not:
@@ -230,8 +219,8 @@ Conditions:
 Resources:
   TurnAroundPromptTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName:
         Fn::Sub: TurnAroundPromptTable${EnvironmentSuffix}
@@ -400,6 +389,38 @@ Resources:
         Ref: PublicRouteTable
       SubnetId:
         Ref: PublicSubnet2
+
+  # NAT Gateway for private subnet internet access
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-nat-eip
+        - Key: Environment
+          Value:
+            Ref: Environment
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - NATGatewayEIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AppName}-nat-gateway
+        - Key: Environment
+          Value:
+            Ref: Environment
+
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -412,6 +433,16 @@ Resources:
         - Key: Environment
           Value:
             Ref: Environment
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway
+
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -419,6 +450,7 @@ Resources:
         Ref: PrivateRouteTable1
       SubnetId:
         Ref: PrivateSubnet1
+
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -431,6 +463,16 @@ Resources:
         - Key: Environment
           Value:
             Ref: Environment
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATGateway
+
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -797,7 +839,8 @@ Resources:
                 Value:
                   Fn::Sub: ${AppName}-instance
               - Key: Environment
-                Value: Production
+                Value:
+                  Ref: Environment
         UserData:
           Fn::Base64:
             Fn::Sub:
@@ -947,17 +990,23 @@ Resources:
   DatabasePasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "${AppName}-${Environment}-db-password"
-      Description: !Sub "Database password for ${AppName} ${Environment} environment"
-      SecretString: !Sub |
-        {
-          "password": "${DatabasePassword}"
-        }
+      Name:
+        Fn::Sub: "${AppName}-${Environment}-db-password"
+      Description:
+        Fn::Sub: "Auto-generated database password for ${AppName} ${Environment} environment"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+        RequireEachIncludedType: true
       Tags:
         - Key: Name
-          Value: !Sub "${AppName}-db-password"
+          Value:
+            Fn::Sub: "${AppName}-db-password"
         - Key: Environment
-          Value: !Ref Environment
+          Value:
+            Ref: Environment
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -985,7 +1034,7 @@ Resources:
       DBName:
         Ref: DBName
       Engine: mysql
-      EngineVersion: 8.0.42
+      EngineVersion: "8.0.42"
       DBInstanceClass:
         Ref: DBInstanceClass
       AllocatedStorage: 20
@@ -1351,4 +1400,3 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-DomainName
-
