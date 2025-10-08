@@ -21,7 +21,7 @@ import {
   PublishCommand,
   SNSClient,
 } from '@aws-sdk/client-sns';
-import fs from 'fs';
+import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 // Configuration - Load outputs from deployment
