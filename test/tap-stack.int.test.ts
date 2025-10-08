@@ -283,12 +283,12 @@ describe('CloudFormation Stack Integration Tests', () => {
   describe('Resource Naming', () => {
     test('should use environment suffix in resource names', () => {
       // Check that all outputs contain the expected patterns
-      expect(outputs.ReportBucketName).toContain('synth31748052');
-      expect(outputs.LambdaFunctionName).toContain('synth31748052');
-      expect(outputs.SNSTopicArn).toContain('synth31748052');
-      expect(outputs.DatabaseSecretArn).toContain('synth31748052');
-      expect(outputs.EventRuleArn).toContain('synth31748052');
-      expect(outputs.CloudWatchLogGroup).toContain('synth31748052');
+      expect(outputs.ReportBucketName).toContain('pr3495');
+      expect(outputs.LambdaFunctionName).toContain('pr3495');
+      expect(outputs.SNSTopicArn).toContain('pr3495');
+      expect(outputs.DatabaseSecretArn).toContain('pr3495');
+      expect(outputs.EventRuleArn).toContain('pr3495');
+      expect(outputs.CloudWatchLogGroup).toContain('pr3495');
     });
   });
 });
