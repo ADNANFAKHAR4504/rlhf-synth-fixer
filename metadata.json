@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "92658140",
+  "team": "synth",
+  "startedAt": "2025-10-08T18:23:01+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Cloud Environment Setup"],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "Lambda",
+    "CloudWatch",
+    "DynamoDB",
+    "CloudTrail",
+    "S3 Access Points"
+  ]
+}
