@@ -1,4 +1,8 @@
-# AWS Provider Configuration
+# S3 Static Website Hosting - Terraform Implementation
+
+## provider.tf
+
+```hcl
 terraform {
   required_providers {
     aws = {
@@ -15,6 +19,11 @@ terraform {
 provider "aws" {
   region = "us-west-2"
 }
+```
+
+## main.tf
+
+```hcl
 
 # Random suffix for bucket naming
 resource "random_string" "bucket_suffix" {
@@ -128,11 +137,22 @@ output "bucket_name" {
 }
 
 output "website_endpoint_url" {
-  description = "Website endpoint URL for DNS configuration"
+  description = "Website endpoint URL"
   value       = aws_s3_bucket_website_configuration.media_assets_website.website_endpoint
 }
 
 output "bucket_arn" {
-  description = "ARN of the S3 bucket for cross-service references"
+  description = "ARN of the S3 bucket"
   value       = aws_s3_bucket.media_assets.arn
+}
+```
+
+output "website_endpoint_url" {
+description = "Website endpoint URL for DNS configuration"
+value = aws_s3_bucket_website_configuration.media_assets_website.website_endpoint
+}
+
+output "bucket_arn" {
+description = "ARN of the S3 bucket for cross-service references"
+value = aws_s3_bucket.media_assets.arn
 }
