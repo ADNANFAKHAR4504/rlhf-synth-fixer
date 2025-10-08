@@ -1,0 +1,9 @@
+{
+  "api_url": "https://nglga2d93e.execute-api.us-west-2.amazonaws.com/synth60923817/translate",
+  "appsync_api_key": "da2-er5a5qzbordcniwiomut4af5he",
+  "appsync_api_url": "https://uinw645n5fb4foqgju24alhm7q.appsync-api.us-west-2.amazonaws.com/graphql",
+  "dynamodb_table_name": "translation-cache-synth60923817",
+  "lambda_function_name": "translation-api-synth60923817",
+  "s3_bucket_name": "translation-documents-synth60923817-synth60923817",
+  "sqs_queue_url": "https://sqs.us-west-2.amazonaws.com/342597974367/translation-batch-queue-synth60923817"
+}
