@@ -21,6 +21,9 @@ const secretsManager = new AWS.SecretsManager();
 const iam = new AWS.IAM();
 const autoscaling = new AWS.AutoScaling();
 const elb = new AWS.ELBv2();
+const cloudtrail = new AWS.CloudTrail();
+const config = new AWS.ConfigService();
+const s3 = new AWS.S3();
 
 describe('TAP Stack Live Integration Tests', () => {
 
@@ -48,7 +51,7 @@ describe('TAP Stack Live Integration Tests', () => {
 
   it('Public and Private subnets exist with expected CIDRs', async () => {
     if (!outputs.public_subnet_ids || !outputs.private_subnet_ids ||
-          !outputs.public_subnet_cidrs || !outputs.private_subnet_cidrs || !outputs.vpc_id) {
+      !outputs.public_subnet_cidrs || !outputs.private_subnet_cidrs || !outputs.vpc_id) {
       console.warn('Subnet outputs missing, skipping test');
       return;
     }
@@ -88,7 +91,7 @@ describe('TAP Stack Live Integration Tests', () => {
     const natGateways = await ec2.describeNatGateways({ NatGatewayIds: natGatewayIds }).promise();
     expect(natGateways.NatGateways?.length).toBe(natGatewayIds.length);
 
-    const natPublicIps = natGateways.NatGateways?.map(n => n.NatGatewayAddresses?.[0].PublicIp);
+    const natPublicIps = natGateways.NatGateways?.map(n => n.NatGatewayAddresses?.[0]?.PublicIp);
     publicIps.forEach((ip: string) => expect(natPublicIps).toContain(ip));
   });
 
@@ -119,11 +122,9 @@ describe('TAP Stack Live Integration Tests', () => {
     expect(secret.SecretString).toBeDefined();
 
     const creds = JSON.parse(secret.SecretString!);
-    // Expect keys at least username and password
     expect(creds).toHaveProperty('username');
     expect(creds).toHaveProperty('password');
 
-    // Use creds with DB endpoint and default port 3306, dbname assumed as in your tfvars or default 'maindb'
     const connection = await mysql.createConnection({
       host: outputs.rds_instance_endpoint,
       port: 3306,
@@ -140,8 +141,6 @@ describe('TAP Stack Live Integration Tests', () => {
   }, 20000);
 
   it('S3 buckets exist and are inaccessible publicly', async () => {
-    const s3 = new AWS.S3();
-
     if (!outputs.s3_bucket_name || !outputs.cloudtrail_bucket_name || !outputs.config_bucket_name) {
       console.warn('S3 bucket outputs missing, skipping test');
       return;
@@ -152,7 +151,6 @@ describe('TAP Stack Live Integration Tests', () => {
       const acl = await s3.getBucketAcl({ Bucket: bucketName }).promise();
       expect(acl.Owner).toBeDefined();
 
-      // Verify bucket public access block: getPublicAccessBlock requires permissions
       try {
         const pab = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
         expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
@@ -166,24 +164,21 @@ describe('TAP Stack Live Integration Tests', () => {
   });
 
   it('CloudTrail logging is enabled', async () => {
-    if (!outputs.cloudtrail_bucket_name) {
-      console.warn('CloudTrail bucket name missing, skipping test');
+    if (!outputs.deployment_suffix) {
+      console.warn('Deployment suffix missing, skipping CloudTrail test');
       return;
     }
-    const cloudtrail = new AWS.CloudTrail();
     const trails = await cloudtrail.describeTrails().promise();
-    const trail = trails.trailList?.find(t => t.Name.includes(outputs.deployment_suffix));
+    const trail = trails.trailList?.find(t => t.Name !== undefined && t.Name.includes(outputs.deployment_suffix));
     expect(trail).toBeDefined();
 
-    if (trail) {
-      const status = await cloudtrail.getTrailStatus({ Name: trail.Name! }).promise();
+    if (trail && trail.Name) {
+      const status = await cloudtrail.getTrailStatus({ Name: trail.Name }).promise();
       expect(status.IsLogging).toBe(true);
     }
   });
 
   it('AWS Config recorder and delivery channel exist and enabled', async () => {
-    const config = new AWS.ConfigService();
-
     if (!outputs.config_recorder_name || !outputs.config_delivery_channel_name) {
       console.warn('Config recorder or delivery channel names missing, skipping test');
       return;
@@ -196,8 +191,8 @@ describe('TAP Stack Live Integration Tests', () => {
     const channel = deliveryChannels.DeliveryChannels?.find(c => c.name === outputs.config_delivery_channel_name);
     expect(channel).toBeDefined();
 
-    if (recorder) {
-      const status = await config.describeConfigurationRecorderStatus({ ConfigurationRecorderNames: [outputs.config_recorder_name] }).promise();
+    if (recorder && recorder.name) {
+      const status = await config.describeConfigurationRecorderStatus({ ConfigurationRecorderNames: [recorder.name] }).promise();
       expect(status.ConfigurationRecordersStatus?.[0].recording).toBe(true);
     }
   });
