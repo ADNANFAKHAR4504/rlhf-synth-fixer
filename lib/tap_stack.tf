@@ -392,17 +392,17 @@ resource "aws_cloudtrail" "main" {
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*/"]
     }
-    
+
     data_resource {
       type   = "AWS::DynamoDB::Table"
       values = ["arn:aws:dynamodb:*:*:table/*"]
     }
-    
+
     data_resource {
       type   = "AWS::Lambda::Function"
       values = ["arn:aws:lambda:*:*:function/*"]
@@ -1287,7 +1287,7 @@ resource "aws_lb" "primary" {
 
 resource "aws_lb_target_group" "primary_blue" {
   provider    = aws.primary
-  name        = "${var.app_name}-primary-tg-blue"
+  name        = "tp-pri-blue-${random_string.suffix.result}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
@@ -1314,7 +1314,7 @@ resource "aws_lb_target_group" "primary_blue" {
 
 resource "aws_lb_target_group" "primary_green" {
   provider    = aws.primary
-  name        = "${var.app_name}-primary-tg-green"
+  name        = "tp-pri-green-${random_string.suffix.result}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
@@ -1412,7 +1412,7 @@ resource "aws_lb" "secondary" {
 
 resource "aws_lb_target_group" "secondary_blue" {
   provider    = aws.secondary
-  name        = "${var.app_name}-secondary-tg-blue"
+  name        = "tp-sec-blue-${random_string.suffix.result}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.secondary.id
@@ -1439,7 +1439,7 @@ resource "aws_lb_target_group" "secondary_blue" {
 
 resource "aws_lb_target_group" "secondary_green" {
   provider    = aws.secondary
-  name        = "${var.app_name}-secondary-tg-green"
+  name        = "tp-sec-green-${random_string.suffix.result}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.secondary.id
