@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T12:05:07+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "training_quality": 8,
   "aws_services": [
     "DynamoDB",
@@ -19,5 +21,11 @@
     "SES",
     "IAM",
     "CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
