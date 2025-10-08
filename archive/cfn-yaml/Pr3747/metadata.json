@@ -26,5 +26,11 @@
     "Route53",
     "IAM"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
