@@ -1,105 +1,501 @@
-# Serverless Logistics Shipment Automation System
+# CloudFormation Template for Logistics Automation System
 
-## Architecture Overview
+I'll create a comprehensive serverless logistics automation system using CloudFormation with production-ready AWS services including monitoring, error handling, and security best practices.
 
-This solution implements a comprehensive serverless logistics automation system using AWS services to handle 2,000 daily shipment updates with reliability, scalability, and monitoring capabilities.
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless Logistics Shipment Automation System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS'
 
-## Core Components
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix to append to resource names (e.g., dev, staging, prod)
+    Default: prod
 
-### 1. Event Processing Pipeline
-- **Amazon EventBridge**: Intelligent event routing for shipment updates from logistics partners
-- **AWS Lambda (Node.js 20.x)**: Serverless compute for processing shipment events
-- **Amazon SQS Dead Letter Queue**: Captures failed events for manual review and replay
+  NotificationEmail:
+    Type: String
+    Description: Email address for SNS failure notifications
+    Default: logistics-team@example.com
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: Must be a valid email address
 
-### 2. Data Storage and Management
-- **Amazon DynamoDB**: 
-  - Primary table: `shipment-logs-{EnvironmentSuffix}`
-  - Composite key: `shipmentId` (HASH) + `timestamp` (RANGE)
-  - Global Secondary Index: `StatusIndex` for efficient status-based queries
-  - Point-in-time recovery enabled for data protection
-  - DynamoDB Streams for change data capture
+Resources:
+  # DynamoDB Table for Shipment Logs
+  ShipmentLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'shipment-logs-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: shipmentId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: shipmentId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: LogisticsAutomation
 
-### 3. Monitoring and Alerting
-- **Amazon CloudWatch**:
-  - Custom metrics namespace: `LogisticsAutomation`
-  - Comprehensive dashboard with key performance indicators
-  - Alarms for Lambda errors, throttles, and DLQ messages
-- **Amazon SNS**: Real-time email notifications for critical events and failures
+  # SNS Topic for Failure Notifications
+  ShipmentAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'shipment-alerts-${EnvironmentSuffix}'
+      DisplayName: Shipment Processing Alerts
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
-### 4. Security and Access Control
-- **AWS IAM**: Least-privilege access with specific permissions for:
-  - DynamoDB operations (PutItem, GetItem, UpdateItem, Query)
-  - SNS publishing
-  - CloudWatch metrics publication
+  # SNS Subscription
+  AlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref ShipmentAlertTopic
+      Endpoint: !Ref NotificationEmail
 
-## Key Features
+  # IAM Role for Lambda Function
+  ShipmentProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ShipmentProcessorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ShipmentLogsTable.Arn
+                  - !Sub '${ShipmentLogsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ShipmentAlertTopic
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
-### Event Processing Capabilities
-- Validates incoming shipment data with required field checking
-- Processes multiple event types: `Shipment Update`, `Shipment Status Change`
-- Automatic retry mechanism with EventBridge (2 attempts)
-- Comprehensive error handling and logging
+  # Lambda Function for Shipment Processing
+  ShipmentProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'shipment-processor-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt ShipmentProcessorRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          SHIPMENT_TABLE: !Ref ShipmentLogsTable
+          SNS_TOPIC_ARN: !Ref ShipmentAlertTopic
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          const { DynamoDBClient, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
+          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+          const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
 
-### Data Model
-```json
-{
-  "shipmentId": "string",
-  "timestamp": "number",
-  "status": "string",
-  "location": "string", 
-  "carrier": "string",
-  "eventData": "json_string",
-  "processedAt": "iso_datetime"
-}
+          const dynamodb = new DynamoDBClient();
+          const sns = new SNSClient();
+          const cloudwatch = new CloudWatchClient();
+
+          exports.handler = async (event) => {
+            console.log('Processing shipment event:', JSON.stringify(event, null, 2));
+            
+            const startTime = Date.now();
+            let processedCount = 0;
+            let failedCount = 0;
+            const errors = [];
+            
+            try {
+              // Handle EventBridge events
+              const shipmentData = event.detail || event;
+              
+              // Validate shipment data
+              if (!shipmentData.shipmentId) {
+                throw new Error('Missing required field: shipmentId');
+              }
+              
+              const timestamp = Date.now();
+              const shipmentId = shipmentData.shipmentId;
+              const status = shipmentData.status || 'RECEIVED';
+              const location = shipmentData.location || 'UNKNOWN';
+              const carrier = shipmentData.carrier || 'UNKNOWN';
+              
+              // Store shipment log in DynamoDB
+              const putParams = {
+                TableName: process.env.SHIPMENT_TABLE,
+                Item: {
+                  shipmentId: { S: shipmentId },
+                  timestamp: { N: timestamp.toString() },
+                  status: { S: status },
+                  location: { S: location },
+                  carrier: { S: carrier },
+                  eventData: { S: JSON.stringify(shipmentData) },
+                  processedAt: { S: new Date().toISOString() }
+                }
+              };
+              
+              await dynamodb.send(new PutItemCommand(putParams));
+              processedCount++;
+              
+              console.log(`Successfully processed shipment: ${shipmentId}`);
+              
+              // Publish CloudWatch metrics
+              await publishMetrics('ShipmentProcessed', 1, 'Count');
+              await publishMetrics('ProcessingDuration', Date.now() - startTime, 'Milliseconds');
+              
+              // Send SNS notification for critical status updates
+              if (['DELAYED', 'FAILED', 'LOST'].includes(status)) {
+                await sendAlert(shipmentId, status, shipmentData);
+              }
+              
+              return {
+                statusCode: 200,
+                body: JSON.stringify({
+                  message: 'Shipment processed successfully',
+                  shipmentId: shipmentId,
+                  status: status,
+                  timestamp: timestamp
+                })
+              };
+              
+            } catch (error) {
+              console.error('Error processing shipment:', error);
+              failedCount++;
+              errors.push(error.message);
+              
+              // Publish failure metrics
+              await publishMetrics('ShipmentProcessingError', 1, 'Count');
+              
+              // Send failure alert
+              await sendAlert('SYSTEM', 'PROCESSING_ERROR', { error: error.message });
+              
+              return {
+                statusCode: 500,
+                body: JSON.stringify({
+                  message: 'Error processing shipment',
+                  error: error.message
+                })
+              };
+            }
+          };
+
+          async function publishMetrics(metricName, value, unit) {
+            try {
+              const params = {
+                Namespace: 'LogisticsAutomation',
+                MetricData: [{
+                  MetricName: metricName,
+                  Value: value,
+                  Unit: unit,
+                  Timestamp: new Date(),
+                  Dimensions: [
+                    {
+                      Name: 'Environment',
+                      Value: process.env.ENVIRONMENT
+                    }
+                  ]
+                }]
+              };
+              
+              await cloudwatch.send(new PutMetricDataCommand(params));
+            } catch (error) {
+              console.error('Error publishing metrics:', error);
+            }
+          }
+
+          async function sendAlert(shipmentId, status, data) {
+            try {
+              const message = {
+                shipmentId: shipmentId,
+                status: status,
+                timestamp: new Date().toISOString(),
+                data: data,
+                environment: process.env.ENVIRONMENT
+              };
+              
+              const params = {
+                TopicArn: process.env.SNS_TOPIC_ARN,
+                Subject: `Shipment Alert: ${status} - ${shipmentId}`,
+                Message: JSON.stringify(message, null, 2)
+              };
+              
+              await sns.send(new PublishCommand(params));
+              console.log('Alert sent successfully');
+            } catch (error) {
+              console.error('Error sending alert:', error);
+            }
+          }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Lambda Log Group
+  ShipmentProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/shipment-processor-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  # EventBridge Rule for Shipment Updates
+  ShipmentUpdateRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'shipment-update-rule-${EnvironmentSuffix}'
+      Description: Route shipment update events to Lambda processor
+      State: ENABLED
+      EventPattern:
+        source:
+          - logistics.shipments
+        detail-type:
+          - Shipment Update
+          - Shipment Status Change
+      Targets:
+        - Arn: !GetAtt ShipmentProcessorFunction.Arn
+          Id: ShipmentProcessorTarget
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+          DeadLetterConfig:
+            Arn: !GetAtt DeadLetterQueue.Arn
+
+  # Permission for EventBridge to invoke Lambda
+  EventBridgeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ShipmentProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ShipmentUpdateRule.Arn
+
+  # Dead Letter Queue for Failed Events
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'shipment-dlq-${EnvironmentSuffix}'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Alarm for Lambda Errors
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'shipment-processor-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ShipmentProcessorFunction
+      AlarmActions:
+        - !Ref ShipmentAlertTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Lambda Throttles
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'shipment-processor-throttles-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ShipmentProcessorFunction
+      AlarmActions:
+        - !Ref ShipmentAlertTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for DLQ Messages
+  DLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'shipment-dlq-messages-${EnvironmentSuffix}'
+      AlarmDescription: Alert when messages are in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      AlarmActions:
+        - !Ref ShipmentAlertTopic
+
+  # CloudWatch Dashboard
+  LogisticsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'logistics-automation-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}],
+                  [".", "Throttles", {"stat": "Sum", "label": "Lambda Throttles"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Performance",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${ShipmentProcessorFunction}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["LogisticsAutomation", "ShipmentProcessed", {"stat": "Sum"}],
+                  [".", "ShipmentProcessingError", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Shipment Processing Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", {"stat": "Average"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${ShipmentProcessorFunction}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"label": "DLQ Messages"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Dead Letter Queue",
+                "period": 300,
+                "dimensions": {
+                  "QueueName": "${DeadLetterQueue.QueueName}"
+                }
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DynamoDBTableName:
+    Description: DynamoDB table for shipment logs
+    Value: !Ref ShipmentLogsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ShipmentLogsTable'
+
+  LambdaFunctionArn:
+    Description: ARN of the shipment processor Lambda function
+    Value: !GetAtt ShipmentProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  SNSTopicArn:
+    Description: ARN of the SNS topic for alerts
+    Value: !Ref ShipmentAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+
+  EventBridgeRuleName:
+    Description: Name of the EventBridge rule
+    Value: !Ref ShipmentUpdateRule
+    Export:
+      Name: !Sub '${AWS::StackName}-EventBridgeRule'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=logistics-automation-${EnvironmentSuffix}'
+
+  DeadLetterQueueURL:
+    Description: URL of the Dead Letter Queue
+    Value: !Ref DeadLetterQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-DLQUrl'
 ```
 
-### Monitoring Metrics
-- `ShipmentProcessed`: Count of successfully processed shipments
-- `ShipmentProcessingError`: Count of processing failures
-- `ProcessingDuration`: Lambda execution time in milliseconds
+This template creates:
+- DynamoDB table with Global Secondary Index and point-in-time recovery
+- Lambda function with comprehensive error handling and AWS SDK v3
+- EventBridge rule with retry policy and dead letter queue
+- SNS topic with email subscription for alerts
+- CloudWatch dashboard with performance metrics and alarms
+- IAM role with least-privilege permissions
+- SQS dead letter queue for failed events
+- Complete monitoring and alerting system
 
-### Alert Conditions
-- Critical status updates: DELAYED, FAILED, LOST
-- Lambda function errors (threshold: >5 in 5 minutes)
-- Lambda throttles (threshold: >1 in 5 minutes) 
-- Dead letter queue messages (threshold: >=1)
-
-## Operational Excellence
-
-### Scalability
-- Serverless architecture auto-scales based on demand
-- DynamoDB on-demand billing handles traffic spikes
-- Lambda concurrency manages processing load
-
-### Reliability
-- Multi-layer error handling
-- Dead letter queue prevents event loss
-- Point-in-time recovery for data protection
-- Comprehensive monitoring and alerting
-
-### Cost Optimization
-- Pay-per-request pricing for DynamoDB
-- Lambda charges only for execution time
-- CloudWatch logs with 30-day retention
-
-### Security
-- Least-privilege IAM roles
-- No hardcoded credentials
-- Environment-specific resource isolation
-
-## Configuration Parameters
-
-- **EnvironmentSuffix**: Environment identifier for resource naming
-- **NotificationEmail**: Email address for SNS alerts (validated format)
-
-## Outputs
-
-The stack exports the following values for integration:
-- DynamoDB table name and ARN
-- Lambda function ARN
-- SNS topic ARN
-- EventBridge rule name
-- CloudWatch dashboard URL
-- Dead letter queue URL
-
-This architecture ensures reliable processing of 2,000+ daily shipment updates while providing comprehensive monitoring, alerting, and operational visibility for the logistics team.
+The system provides production-ready logistics automation with proper error handling, monitoring, security, and scalability for processing 2,000+ daily shipment updates.
