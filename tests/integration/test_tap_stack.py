@@ -19,7 +19,8 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with environment configuration."""
-        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        # cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        cls.environment_suffix = "dev"
         cls.region = os.getenv('AWS_REGION', 'us-east-1')
 
         # Initialize AWS clients
