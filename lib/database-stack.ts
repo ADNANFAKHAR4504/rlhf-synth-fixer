@@ -70,7 +70,7 @@ export class DatabaseStack extends Construct {
       storageEncrypted: true,
       dbName: 'portfoliodb',
       username: 'dbadmin',
-      manageMasterUserPassword: true,
+      password: 'TempPassword123!ChangeMe',
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       backupRetentionPeriod: 7,
