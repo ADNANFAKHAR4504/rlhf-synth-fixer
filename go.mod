@@ -1,6 +1,6 @@
 module github.com/TuringGpt/iac-test-automations
 
-go 1.23
+go 1.23.12
 
 require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
