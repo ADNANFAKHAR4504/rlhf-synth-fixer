@@ -1,31 +1,32 @@
 // lib/modules.ts
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
 import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
+import * as crypto from 'crypto';
 
 // VPC Module
 export interface VpcModuleConfig {
@@ -656,9 +657,18 @@ export class StorageModule extends Construct {
   constructor(scope: Construct, id: string, config: StorageModuleConfig) {
     super(scope, id);
 
+    // Generate a unique bucket name with a hash suffix
+    const uniqueSuffix = crypto
+      .createHash('md5')
+      .update(`${config.projectName}-app-logs`)
+      .digest('hex')
+      .substring(0, 8);
+
+    const bucketName = `${config.projectName}-app-logs-${uniqueSuffix}`;
+
     // S3 Bucket for application logs
     const bucket = new S3Bucket(this, 'app-logs-bucket', {
-      bucket: `${config.projectName}-app-logs`,
+      bucket: bucketName, // Use the unique name
       lifecycle: {
         preventDestroy: true,
       },
@@ -668,7 +678,7 @@ export class StorageModule extends Construct {
       },
     });
 
-    // ✅ ASSIGN THE VALUES HERE
+    // ASSIGN THE VALUES HERE
     this.bucketName = bucket.bucket;
     this.bucketArn = bucket.arn;
 
