@@ -38,7 +38,7 @@ def main():
 
     # Force unique stack name for CI/CD to avoid stale state
     timestamp = int(time.time())
-    ci_cd_suffix = os.getenv('CI', 'false') == 'true' and f"-ci-{timestamp}" or ""
+    ci_cd_suffix = f"-ci-{timestamp}" if os.getenv('CI', 'false') == 'true' else ""
     unique_hash = hashlib.md5(f"serverless-app-{environment_suffix}-{timestamp}{ci_cd_suffix}".encode()).hexdigest()[:8]
     unique_stack_name = f"{environment_suffix}-{unique_hash}"
     

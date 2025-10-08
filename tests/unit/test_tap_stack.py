@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 import pulumi
 from pulumi import ResourceOptions
 from pulumi_aws import Provider
-# Import the classes we're testing
 from tap_stack import TapStack, TapStackArgs
 
 
@@ -76,10 +75,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_tap_stack_initialization_default(self, mock_provider_class, mock_iam_class, 
-                                            mock_dynamodb_class, mock_lambda_class,
-                                            mock_api_gateway_class, mock_s3_class,
-                                            mock_cloudwatch_class, mock_config_class):
+    def test_tap_stack_initialization_default(self, mock_provider_class,
+                                              mock_iam_class,
+                                              mock_dynamodb_class,
+                                              mock_lambda_class,
+                                              mock_api_gateway_class,
+                                              mock_s3_class,
+                                              mock_cloudwatch_class,
+                                              mock_config_class):
         """Test TapStack initialization with default values."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -92,12 +95,24 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_class.return_value = self.mock_cloudwatch_stack
 
         # Mock outputs
-        self.mock_iam_stack.get_outputs.return_value = {'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'}
-        self.mock_lambda_stack.get_outputs.return_value = {'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'}
-        self.mock_api_gateway_stack.get_outputs.return_value = {'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'}
-        self.mock_dynamodb_stack.get_outputs.return_value = {'dynamodb_table_name': 'test-table'}
-        self.mock_s3_stack.get_outputs.return_value = {'s3_bucket_name': 'test-bucket'}
-        self.mock_cloudwatch_stack.get_outputs.return_value = {'log_group_name': 'test-log-group'}
+        self.mock_iam_stack.get_outputs.return_value = {
+            'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'
+        }
+        self.mock_lambda_stack.get_outputs.return_value = {
+            'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+        }
+        self.mock_api_gateway_stack.get_outputs.return_value = {
+            'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'
+        }
+        self.mock_dynamodb_stack.get_outputs.return_value = {
+            'dynamodb_table_name': 'test-table'
+        }
+        self.mock_s3_stack.get_outputs.return_value = {
+            's3_bucket_name': 'test-bucket'
+        }
+        self.mock_cloudwatch_stack.get_outputs.return_value = {
+            'log_group_name': 'test-log-group'
+        }
 
         # Create TapStack
         args = TapStackArgs()
@@ -130,10 +145,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_tap_stack_initialization_custom(self, mock_provider_class, mock_iam_class,
-                                            mock_dynamodb_class, mock_lambda_class,
-                                            mock_api_gateway_class, mock_s3_class,
-                                            mock_cloudwatch_class, mock_config_class):
+    def test_tap_stack_initialization_custom(self, mock_provider_class,
+                                             mock_iam_class,
+                                             mock_dynamodb_class,
+                                             mock_lambda_class,
+                                             mock_api_gateway_class,
+                                             mock_s3_class,
+                                             mock_cloudwatch_class,
+                                             mock_config_class):
         """Test TapStack initialization with custom values."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -146,12 +165,24 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_class.return_value = self.mock_cloudwatch_stack
 
         # Mock outputs
-        self.mock_iam_stack.get_outputs.return_value = {'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'}
-        self.mock_lambda_stack.get_outputs.return_value = {'lambda_function_arn': 'arn:aws:lambda:us-west-2:123456789012:function:test-function'}
-        self.mock_api_gateway_stack.get_outputs.return_value = {'api_gateway_url': 'https://test-api.execute-api.us-west-2.amazonaws.com/prod'}
-        self.mock_dynamodb_stack.get_outputs.return_value = {'dynamodb_table_name': 'test-table'}
-        self.mock_s3_stack.get_outputs.return_value = {'s3_bucket_name': 'test-bucket'}
-        self.mock_cloudwatch_stack.get_outputs.return_value = {'log_group_name': 'test-log-group'}
+        self.mock_iam_stack.get_outputs.return_value = {
+            'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'
+        }
+        self.mock_lambda_stack.get_outputs.return_value = {
+            'lambda_function_arn': 'arn:aws:lambda:us-west-2:123456789012:function:test-function'
+        }
+        self.mock_api_gateway_stack.get_outputs.return_value = {
+            'api_gateway_url': 'https://test-api.execute-api.us-west-2.amazonaws.com/prod'
+        }
+        self.mock_dynamodb_stack.get_outputs.return_value = {
+            'dynamodb_table_name': 'test-table'
+        }
+        self.mock_s3_stack.get_outputs.return_value = {
+            's3_bucket_name': 'test-bucket'
+        }
+        self.mock_cloudwatch_stack.get_outputs.return_value = {
+            'log_group_name': 'test-log-group'
+        }
 
         # Create TapStack with custom values
         custom_tags = {'Environment': 'production', 'Owner': 'team'}
@@ -182,10 +213,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_create_infrastructure_components(self, mock_provider_class, mock_iam_class,
-                                            mock_dynamodb_class, mock_lambda_class,
-                                            mock_api_gateway_class, mock_s3_class,
-                                            mock_cloudwatch_class, mock_config_class):
+    def test_create_infrastructure_components(self, mock_provider_class,
+                                              mock_iam_class,
+                                              mock_dynamodb_class,
+                                              mock_lambda_class,
+                                              mock_api_gateway_class,
+                                              mock_s3_class,
+                                              mock_cloudwatch_class,
+                                              mock_config_class):
         """Test infrastructure component creation and dependencies."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -198,12 +233,24 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_class.return_value = self.mock_cloudwatch_stack
 
         # Mock outputs
-        self.mock_iam_stack.get_outputs.return_value = {'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'}
-        self.mock_lambda_stack.get_outputs.return_value = {'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'}
-        self.mock_api_gateway_stack.get_outputs.return_value = {'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'}
-        self.mock_dynamodb_stack.get_outputs.return_value = {'dynamodb_table_name': 'test-table'}
-        self.mock_s3_stack.get_outputs.return_value = {'s3_bucket_name': 'test-bucket'}
-        self.mock_cloudwatch_stack.get_outputs.return_value = {'log_group_name': 'test-log-group'}
+        self.mock_iam_stack.get_outputs.return_value = {
+            'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'
+        }
+        self.mock_lambda_stack.get_outputs.return_value = {
+            'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+        }
+        self.mock_api_gateway_stack.get_outputs.return_value = {
+            'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'
+        }
+        self.mock_dynamodb_stack.get_outputs.return_value = {
+            'dynamodb_table_name': 'test-table'
+        }
+        self.mock_s3_stack.get_outputs.return_value = {
+            's3_bucket_name': 'test-bucket'
+        }
+        self.mock_cloudwatch_stack.get_outputs.return_value = {
+            'log_group_name': 'test-log-group'
+        }
 
         # Create TapStack
         args = TapStackArgs()
@@ -260,9 +307,9 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
     def test_register_outputs(self, mock_provider_class, mock_iam_class,
-                            mock_dynamodb_class, mock_lambda_class,
-                            mock_api_gateway_class, mock_s3_class,
-                            mock_cloudwatch_class, mock_config_class):
+                             mock_dynamodb_class, mock_lambda_class,
+                             mock_api_gateway_class, mock_s3_class,
+                             mock_cloudwatch_class, mock_config_class):
         """Test output registration from all components."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -276,8 +323,12 @@ class TestTapStack(unittest.TestCase):
 
         # Mock outputs from each component
         iam_outputs = {'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'}
-        lambda_outputs = {'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'}
-        api_outputs = {'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'}
+        lambda_outputs = {
+            'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+        }
+        api_outputs = {
+            'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'
+        }
         dynamodb_outputs = {'dynamodb_table_name': 'test-table'}
         s3_outputs = {'s3_bucket_name': 'test-bucket'}
         cloudwatch_outputs = {'log_group_name': 'test-log-group'}
@@ -312,10 +363,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_provider_creation_with_region(self, mock_provider_class, mock_iam_class,
-                                          mock_dynamodb_class, mock_lambda_class,
-                                          mock_api_gateway_class, mock_s3_class,
-                                          mock_cloudwatch_class, mock_config_class):
+    def test_provider_creation_with_region(self, mock_provider_class,
+                                            mock_iam_class,
+                                            mock_dynamodb_class,
+                                            mock_lambda_class,
+                                            mock_api_gateway_class,
+                                            mock_s3_class,
+                                            mock_cloudwatch_class,
+                                            mock_config_class):
         """Test AWS provider creation with correct region."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -354,10 +409,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_component_dependency_order(self, mock_provider_class, mock_iam_class,
-                                       mock_dynamodb_class, mock_lambda_class,
-                                       mock_api_gateway_class, mock_s3_class,
-                                       mock_cloudwatch_class, mock_config_class):
+    def test_component_dependency_order(self, mock_provider_class,
+                                        mock_iam_class,
+                                        mock_dynamodb_class,
+                                        mock_lambda_class,
+                                        mock_api_gateway_class,
+                                        mock_s3_class,
+                                        mock_cloudwatch_class,
+                                        mock_config_class):
         """Test that components are created in the correct dependency order."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -370,12 +429,24 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_class.return_value = self.mock_cloudwatch_stack
 
         # Mock outputs
-        self.mock_iam_stack.get_outputs.return_value = {'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'}
-        self.mock_lambda_stack.get_outputs.return_value = {'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'}
-        self.mock_api_gateway_stack.get_outputs.return_value = {'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'}
-        self.mock_dynamodb_stack.get_outputs.return_value = {'dynamodb_table_name': 'test-table'}
-        self.mock_s3_stack.get_outputs.return_value = {'s3_bucket_name': 'test-bucket'}
-        self.mock_cloudwatch_stack.get_outputs.return_value = {'log_group_name': 'test-log-group'}
+        self.mock_iam_stack.get_outputs.return_value = {
+            'iam_role_arn': 'arn:aws:iam::123456789012:role/test-role'
+        }
+        self.mock_lambda_stack.get_outputs.return_value = {
+            'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+        }
+        self.mock_api_gateway_stack.get_outputs.return_value = {
+            'api_gateway_url': 'https://test-api.execute-api.us-east-1.amazonaws.com/dev'
+        }
+        self.mock_dynamodb_stack.get_outputs.return_value = {
+            'dynamodb_table_name': 'test-table'
+        }
+        self.mock_s3_stack.get_outputs.return_value = {
+            's3_bucket_name': 'test-bucket'
+        }
+        self.mock_cloudwatch_stack.get_outputs.return_value = {
+            'log_group_name': 'test-log-group'
+        }
 
         # Create TapStack
         args = TapStackArgs()
@@ -396,7 +467,8 @@ class TestTapStack(unittest.TestCase):
         # Check that components were called in the correct order
         for i, mock_class in enumerate(call_order):
             with self.subTest(component=mock_class._mock_name):
-                self.assertTrue(mock_class.called, f"{mock_class._mock_name} should have been called")
+                self.assertTrue(mock_class.called, 
+                               f"{mock_class._mock_name} should have been called")
 
     @patch('tap_stack.InfrastructureConfig')
     @patch('tap_stack.CloudWatchStack')
@@ -406,10 +478,14 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_error_handling_in_component_creation(self, mock_provider_class, mock_iam_class,
-                                                 mock_dynamodb_class, mock_lambda_class,
-                                                 mock_api_gateway_class, mock_s3_class,
-                                                 mock_cloudwatch_class, mock_config_class):
+    def test_error_handling_in_component_creation(self, mock_provider_class,
+                                                   mock_iam_class,
+                                                   mock_dynamodb_class,
+                                                   mock_lambda_class,
+                                                   mock_api_gateway_class,
+                                                   mock_s3_class,
+                                                   mock_cloudwatch_class,
+                                                   mock_config_class):
         """Test error handling during component creation."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -435,9 +511,9 @@ class TestTapStack(unittest.TestCase):
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
     def test_output_aggregation(self, mock_provider_class, mock_iam_class,
-                               mock_dynamodb_class, mock_lambda_class,
-                               mock_api_gateway_class, mock_s3_class,
-                               mock_cloudwatch_class, mock_config_class):
+                                mock_dynamodb_class, mock_lambda_class,
+                                mock_api_gateway_class, mock_s3_class,
+                                mock_cloudwatch_class, mock_config_class):
         """Test that outputs are properly aggregated from all components."""
         # Setup mocks
         mock_provider_class.return_value = self.mock_provider
@@ -534,10 +610,14 @@ class TestTapStackIntegration(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_full_stack_creation_flow(self, mock_provider_class, mock_iam_class,
-                                     mock_dynamodb_class, mock_lambda_class,
-                                     mock_api_gateway_class, mock_s3_class,
-                                     mock_cloudwatch_class, mock_config_class):
+    def test_full_stack_creation_flow(self, mock_provider_class,
+                                      mock_iam_class,
+                                      mock_dynamodb_class,
+                                      mock_lambda_class,
+                                      mock_api_gateway_class,
+                                      mock_s3_class,
+                                      mock_cloudwatch_class,
+                                      mock_config_class):
         """Test the complete stack creation flow with all components."""
         # Setup comprehensive mocks
         mock_provider_class.return_value = self.mock_provider
@@ -761,7 +841,9 @@ class TestInfrastructureComponents(unittest.TestCase):
         
         # Mock provider and Lambda outputs
         mock_provider = MagicMock()
-        mock_lambda_outputs = {'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'}
+        mock_lambda_outputs = {
+            'lambda_function_arn': 'arn:aws:lambda:us-east-1:123456789012:function:test-function'
+        }
         
         # Create S3 stack
         s3_stack = S3Stack(
@@ -841,10 +923,14 @@ class TestTapStackEdgeCases(unittest.TestCase):
     @patch('tap_stack.DynamoDBStack')
     @patch('tap_stack.IAMStack')
     @patch('tap_stack.Provider')
-    def test_tap_stack_with_minimal_config(self, mock_provider_class, mock_iam_class,
-                                          mock_dynamodb_class, mock_lambda_class,
-                                          mock_api_gateway_class, mock_s3_class,
-                                          mock_cloudwatch_class, mock_config_class):
+    def test_tap_stack_with_minimal_config(self, mock_provider_class,
+                                            mock_iam_class,
+                                            mock_dynamodb_class,
+                                            mock_lambda_class,
+                                            mock_api_gateway_class,
+                                            mock_s3_class,
+                                            mock_cloudwatch_class,
+                                            mock_config_class):
         """Test TapStack with minimal configuration."""
         # Setup mocks
         mock_provider_class.return_value = MagicMock()
