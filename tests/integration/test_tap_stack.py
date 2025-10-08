@@ -280,7 +280,13 @@ class TestEndToEnd:
         # CloudFront domain should end with .cloudfront.net
         assert cloudfront_domain.endswith(".cloudfront.net")
 
-        # Domain should have distribution ID prefix
-        distribution_id = outputs.get("cloudfront_distribution_id")
-        if distribution_id:
-            assert distribution_id.lower() in cloudfront_domain.lower()
+        # Domain should be a valid CloudFront distribution domain
+        # Format: <random>.cloudfront.net
+        parts = cloudfront_domain.split(".")
+        assert len(parts) == 3
+        assert parts[1] == "cloudfront"
+        assert parts[2] == "net"
+
+        # First part should be alphanumeric (CloudFront generates random prefix)
+        assert len(parts[0]) > 0
+        assert parts[0].replace("-", "").isalnum()
