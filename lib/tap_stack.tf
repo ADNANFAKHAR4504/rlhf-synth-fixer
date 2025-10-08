@@ -83,11 +83,6 @@ resource "aws_kms_key" "audit_logs" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
-          }
-        }
       },
       {
         Sid    = "Allow Config to use the key"
@@ -451,7 +446,7 @@ resource "aws_cloudtrail" "organization_trail" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/"]
+      values = ["arn:aws:s3:::"]
     }
 
     data_resource {
@@ -590,6 +585,8 @@ resource "aws_iam_role_policy" "config_s3" {
 }
 
 # AWS Config Recorder
+# Note: AWS accounts have a limit of 1 configuration recorder
+# This will fail if one already exists - delete existing recorder first or import it
 resource "aws_config_configuration_recorder" "main" {
   name     = "${var.project_name}-config-recorder"
   role_arn = aws_iam_role.config.arn
@@ -600,6 +597,10 @@ resource "aws_config_configuration_recorder" "main" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.config_policy]
+
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # AWS Config Delivery Channel
