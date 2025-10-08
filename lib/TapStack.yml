@@ -7,12 +7,6 @@ Parameters:
     Type: String
     Default: Production
   
-  KeyPairName:
-    Description: Name for the new EC2 KeyPair that will be created
-    Type: String
-    Default: !Sub '${AWS::StackName}-KeyPair'
-    ConstraintDescription: Must be a valid key pair name
-  
   InstanceType:
     Description: EC2 instance type
     Type: String
@@ -80,7 +74,7 @@ Resources:
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Ref KeyPairName
+      KeyName: !Sub '${AWS::StackName}-keypair'
       KeyType: rsa
       KeyFormat: pem
       Tags:
@@ -313,7 +307,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${EnvironmentName}-data-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub 'tapstack-data-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
