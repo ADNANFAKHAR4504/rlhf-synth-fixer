@@ -1,6 +1,6 @@
 I need to build infrastructure for a marketplace platform that handles 8,400 daily users connecting buyers and sellers. The platform needs to support secure transactions and inventory management.
 
-Please create AWS CDK Python infrastructure code for us-west-1 region with the following components:
+Please create AWS CDK Python infrastructure code for us-east-2 region with the following components:
 
 Network Setup:
 - VPC with CIDR 172.31.0.0/16
