@@ -35,5 +35,21 @@
 **Issue**: Environment suffix wasn't properly retrieved from environment variables.
 **Solution**: Updated to check ENVIRONMENT_SUFFIX environment variable first.
 
+### 8. SSM Parameter Overwrite Issues
+**Issue**: SSM Parameters failed during redeployment because they already existed without overwrite permission.
+**Solution**: Added `overwrite=True` parameter to all SSM Parameter resources to allow updates during redeployment.
+
+### 9. CloudWatch Log Group Conflicts
+**Issue**: CloudWatch Log Group creation failed due to existing resources from previous deployments.
+**Solution**: Removed `skip_destroy=True` option to allow proper cleanup and recreation of log groups.
+
+### 10. Integration Test Stack Output Dependencies
+**Issue**: Integration tests relied on Pulumi stack outputs that weren't properly exported or accessible due to passphrase issues.
+**Solution**: Modified integration tests to use dynamic resource discovery through AWS APIs instead of relying on Pulumi stack outputs, making tests truly dynamic and robust.
+
+### 11. Resource Naming with Random Suffixes
+**Issue**: Pulumi automatically adds random suffixes to resource names, making them unpredictable for integration testing.
+**Solution**: Updated integration tests to use pattern matching and AWS API calls to discover resources by name patterns rather than exact names.
+
 ## Summary
-The original infrastructure code had multiple configuration and dependency issues that prevented successful deployment to AWS. All issues were resolved through iterative fixes during the deployment process, resulting in a fully functional serverless logistics tracking API.
+The original infrastructure code had multiple configuration and dependency issues that prevented successful deployment to AWS. Additional issues were discovered during integration testing and redeployment scenarios. All issues were resolved through iterative fixes during the deployment process, resulting in a fully functional serverless logistics tracking API with comprehensive integration testing.

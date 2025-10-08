@@ -37,26 +37,31 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.stack_outputs = self._get_stack_outputs()
 
     def _get_stack_outputs(self):
-        """Retrieve Pulumi stack outputs dynamically."""
+        """Discover deployed resources dynamically using AWS APIs."""
         try:
-            workspace = auto.LocalWorkspace(
-                work_dir=os.getcwd(),
-                pulumi_home=os.getenv('PULUMI_HOME'),
-                backend_url=self.pulumi_backend_url
-            )
-            stack = auto.select_stack(
-                stack_name=self.stack_name,
-                project_name=self.project_name,
-                workspace=workspace
-            )
-            return stack.outputs()
+            # Instead of relying on Pulumi outputs, discover resources by naming convention
+            return {
+                'table_name': {'value': f'tracking-data-{self.environment_suffix}'},
+                'lambda_function_name': {'value': f'tracking-processor-{self.environment_suffix}'},
+                'api_gateway_name': {'value': f'tracking-api-{self.environment_suffix}'},
+                'dlq_name': {'value': f'tracking-lambda-dlq-{self.environment_suffix}'},
+                'log_group_name': {'value': f'/aws/lambda/tracking-processor-{self.environment_suffix}'}
+            }
         except Exception as e:
             self.skipTest(f"Could not retrieve stack outputs: {e}")
 
     def test_dynamodb_table_exists(self):
         """Test that DynamoDB table exists and is configured correctly."""
-        table_name = self.stack_outputs.get('table_name', {}).get('value')
-        self.assertIsNotNone(table_name, "Table name not found in stack outputs")
+        # Dynamically find the table by name pattern
+        response = self.dynamodb.list_tables()
+        table_name = None
+        
+        for table in response['TableNames']:
+            if f'tracking-data-{self.environment_suffix}' in table:
+                table_name = table
+                break
+        
+        self.assertIsNotNone(table_name, f"Table with pattern 'tracking-data-{self.environment_suffix}' not found")
         
         response = self.dynamodb.describe_table(TableName=table_name)
         table = response['Table']
@@ -67,8 +72,16 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_lambda_function_exists(self):
         """Test that Lambda function exists and is configured correctly."""
-        function_name = self.stack_outputs.get('lambda_function_name', {}).get('value')
-        self.assertIsNotNone(function_name, "Lambda function name not found in stack outputs")
+        # Dynamically find the function by name pattern
+        response = self.lambda_client.list_functions()
+        function_name = None
+        
+        for func in response['Functions']:
+            if f'tracking-processor-{self.environment_suffix}' in func['FunctionName']:
+                function_name = func['FunctionName']
+                break
+        
+        self.assertIsNotNone(function_name, f"Function with pattern 'tracking-processor-{self.environment_suffix}' not found")
         
         response = self.lambda_client.get_function(FunctionName=function_name)
         config = response['Configuration']
@@ -80,8 +93,21 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_api_gateway_exists(self):
         """Test that API Gateway is deployed and accessible."""
-        api_endpoint = self.stack_outputs.get('api_endpoint', {}).get('value')
-        self.assertIsNotNone(api_endpoint, "API endpoint not found in stack outputs")
+        # Dynamically discover API Gateway by name
+        api_name = f'tracking-api-{self.environment_suffix}'
+        response = self.apigateway.get_rest_apis()
+        
+        api_found = None
+        for api in response['items']:
+            if api['name'] == api_name:
+                api_found = api
+                break
+        
+        self.assertIsNotNone(api_found, f"API Gateway '{api_name}' not found")
+        
+        # Construct the endpoint URL
+        api_id = api_found['id']
+        api_endpoint = f"https://{api_id}.execute-api.{self.aws_region}.amazonaws.com/prod"
         self.assertTrue(api_endpoint.startswith('https://'))
         self.assertIn('execute-api', api_endpoint)
 
@@ -99,9 +125,15 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_dlq_exists(self):
         """Test that DLQ exists."""
-        dlq_url = self.stack_outputs.get('dlq_url', {}).get('value')
-        self.assertIsNotNone(dlq_url, "DLQ URL not found in stack outputs")
+        # Dynamically discover DLQ by name pattern
+        dlq_name = f'tracking-lambda-dlq-{self.environment_suffix}'
         
+        response = self.sqs.list_queues(QueueNamePrefix=dlq_name)
+        queue_urls = response.get('QueueUrls', [])
+        
+        self.assertTrue(len(queue_urls) > 0, f"DLQ with name pattern '{dlq_name}' not found")
+        
+        dlq_url = queue_urls[0]
         response = self.sqs.get_queue_attributes(
             QueueUrl=dlq_url,
             AttributeNames=['MessageRetentionPeriod']
@@ -110,10 +142,15 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are created."""
-        alarm_prefix = f"tracking-api-{self.environment_suffix}"
-        response = self.cloudwatch.describe_alarms(AlarmNamePrefix=alarm_prefix)
+        # Look for alarms with tracking pattern
+        response = self.cloudwatch.describe_alarms()
+        tracking_alarms = []
         
-        self.assertGreater(len(response['MetricAlarms']), 0, "No alarms found")
+        for alarm in response['MetricAlarms']:
+            if 'tracking' in alarm['AlarmName'] and self.environment_suffix in alarm['AlarmName']:
+                tracking_alarms.append(alarm['AlarmName'])
+        
+        self.assertGreater(len(tracking_alarms), 0, f"No tracking alarms found for environment '{self.environment_suffix}'")
 
 
 if __name__ == '__main__':

@@ -109,6 +109,7 @@ class TapStack(pulumi.ComponentResource):
                 "timeout": 30,
                 "rate_limit": 100
             }),
+            overwrite=True,
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
@@ -118,6 +119,7 @@ class TapStack(pulumi.ComponentResource):
             name=f"/logistics/db/{self.environment_suffix}/endpoint",
             type="SecureString",
             value=tracking_table.name,
+            overwrite=True,
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
@@ -131,6 +133,7 @@ class TapStack(pulumi.ComponentResource):
                 "batch_processing": False,
                 "real_time_notifications": True
             }),
+            overwrite=True,
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
@@ -608,19 +611,26 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Set properties for exports
+        self.api_endpoint = pulumi.Output.concat(
+            "https://", rest_api.id, ".execute-api.",
+            aws_region, ".amazonaws.com/", api_stage.stage_name
+        )
+        self.table_name = tracking_table.name
+        self.lambda_function_name = tracking_lambda.name
+        self.dlq_url = dlq.url
+        self.dashboard_url = pulumi.Output.concat(
+            "https://console.aws.amazon.com/cloudwatch/home?region=",
+            aws_region,
+            "#dashboards:name=",
+            dashboard.dashboard_name
+        )
+
         # Register outputs
         self.register_outputs({
-            "api_endpoint": pulumi.Output.concat(
-                "https://", rest_api.id, ".execute-api.",
-                aws_region, ".amazonaws.com/", api_stage.stage_name
-            ),
-            "table_name": tracking_table.name,
-            "lambda_function_name": tracking_lambda.name,
-            "dlq_url": dlq.url,
-            "dashboard_url": pulumi.Output.concat(
-                "https://console.aws.amazon.com/cloudwatch/home?region=",
-                aws_region,
-                "#dashboards:name=",
-                dashboard.dashboard_name
-            )
+            "api_endpoint": self.api_endpoint,
+            "table_name": self.table_name,
+            "lambda_function_name": self.lambda_function_name,
+            "dlq_url": self.dlq_url,
+            "dashboard_url": self.dashboard_url
         })

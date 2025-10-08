@@ -39,3 +39,10 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export stack outputs at the top level
+pulumi.export("api_endpoint", stack.api_endpoint)
+pulumi.export("table_name", stack.table_name)
+pulumi.export("lambda_function_name", stack.lambda_function_name)
+pulumi.export("dlq_url", stack.dlq_url)
+pulumi.export("dashboard_url", stack.dashboard_url)
