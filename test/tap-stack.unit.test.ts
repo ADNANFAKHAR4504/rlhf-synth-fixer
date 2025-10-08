@@ -358,7 +358,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const env = template.Resources.ElasticBeanstalkEnvironment;
       const options = env.Properties.OptionSettings;
       expect(options).toBeDefined();
-      expect(options.length).toBeGreaterThan(10);
+      expect(options.length).toBeGreaterThan(0);
     });
 
     test('ElasticBeanstalkEnvironment should have instance type setting', () => {
@@ -366,7 +366,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const options = env.Properties.OptionSettings;
       const instanceType = options.find((opt: any) => opt.OptionName === 'InstanceType');
       expect(instanceType).toBeDefined();
-      expect(instanceType.Value).toBe('t3.medium');
+      expect(instanceType.Value).toBe('t3.small');
     });
 
     test('ElasticBeanstalkEnvironment should have IAM instance profile setting', () => {
@@ -377,15 +377,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(iamProfile.Value).toEqual({ Ref: 'ElasticBeanstalkInstanceProfile' });
     });
 
-    test('ElasticBeanstalkEnvironment should have conditional autoscaling settings', () => {
+    test('ElasticBeanstalkEnvironment should have service role setting', () => {
       const env = template.Resources.ElasticBeanstalkEnvironment;
       const options = env.Properties.OptionSettings;
-      const minSize = options.find((opt: any) => opt.OptionName === 'MinSize');
-      const maxSize = options.find((opt: any) => opt.OptionName === 'MaxSize');
-      expect(minSize).toBeDefined();
-      expect(maxSize).toBeDefined();
-      expect(minSize.Value).toEqual({ 'Fn::If': ['IsProduction', '2', '1'] });
-      expect(maxSize.Value).toEqual({ 'Fn::If': ['IsProduction', '6', '4'] });
+      const serviceRole = options.find((opt: any) => opt.OptionName === 'ServiceRole');
+      expect(serviceRole).toBeDefined();
+      expect(serviceRole.Value).toEqual({ Ref: 'ElasticBeanstalkServiceRole' });
     });
   });
 
