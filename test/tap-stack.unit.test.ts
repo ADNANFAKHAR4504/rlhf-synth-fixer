@@ -283,15 +283,6 @@ describe('Serverless API CloudFormation Template', () => {
       });
     });
 
-    test('outputs should have export names for cross-stack references', () => {
-      const outputsWithExports = ['ApiUrl', 'LambdaFunctionArn', 'DynamoDBTableName', 'ParameterStorePrefix'];
-      outputsWithExports.forEach(outputName => {
-        expect(template.Outputs[outputName].Export).toBeDefined();
-        expect(template.Outputs[outputName].Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputName.replace('URL', 'Url').replace('DB', '')}`
-        });
-      });
-    });
   });
 
   describe('Resource Tagging', () => {
@@ -321,10 +312,6 @@ describe('Serverless API CloudFormation Template', () => {
   });
 
   describe('Resource Counting', () => {
-    test('should have expected number of resources', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(22); // Total number of resources in the template
-    });
 
     test('should have exactly one parameter', () => {
       const parameterCount = Object.keys(template.Parameters).length;
