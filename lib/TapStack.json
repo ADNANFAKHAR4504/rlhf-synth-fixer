@@ -1,0 +1,1317 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Coupon Aggregation and Recommendation Platform - Complete Infrastructure",
+    "Parameters": {
+        "DomainName": {
+            "Type": "String",
+            "Description": "Domain name for the marketing website (e.g., coupons.example.com)",
+            "Default": ""
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment name"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix to append to resource names for environment isolation",
+            "Default": ""
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Description": "Email address for CloudWatch alerts",
+            "Default": "alerts@example.com"
+        }
+    },
+    "Conditions": {
+        "HasDomainName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DomainName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "MarketingWebsiteBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-marketing-site-${AWS::AccountId}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontOriginAccessIdentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": {
+                        "Fn::Sub": "OAI for tapstack${EnvironmentSuffix}"
+                    }
+                }
+            }
+        },
+        "MarketingWebsiteBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "MarketingWebsiteBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}"
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${MarketingWebsiteBucket.Arn}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DistributionConfig": {
+                    "Enabled": true,
+                    "Comment": {
+                        "Fn::Sub": "Coupon Platform Marketing Site - ${Environment}"
+                    },
+                    "PriceClass": "PriceClass_100",
+                    "HttpVersion": "http2",
+                    "DefaultRootObject": "index.html",
+                    "Origins": [
+                        {
+                            "Id": "S3Origin",
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "MarketingWebsiteBucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                                }
+                            }
+                        },
+                        {
+                            "Id": "APIGatewayOrigin",
+                            "DomainName": {
+                                "Fn::Sub": "${CouponAPI}.execute-api.${AWS::Region}.amazonaws.com"
+                            },
+                            "CustomOriginConfig": {
+                                "HTTPPort": 80,
+                                "HTTPSPort": 443,
+                                "OriginProtocolPolicy": "https-only"
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "Compress": true,
+                        "ForwardedValues": {
+                            "QueryString": false,
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        }
+                    },
+                    "CacheBehaviors": [
+                        {
+                            "PathPattern": "/api/*",
+                            "TargetOriginId": "APIGatewayOrigin",
+                            "ViewerProtocolPolicy": "https-only",
+                            "AllowedMethods": [
+                                "GET",
+                                "HEAD",
+                                "OPTIONS",
+                                "PUT",
+                                "POST",
+                                "PATCH",
+                                "DELETE"
+                            ],
+                            "ForwardedValues": {
+                                "QueryString": true,
+                                "Headers": [
+                                    "Authorization",
+                                    "Content-Type"
+                                ],
+                                "Cookies": {
+                                    "Forward": "all"
+                                }
+                            },
+                            "MinTTL": 0,
+                            "DefaultTTL": 0,
+                            "MaxTTL": 0
+                        }
+                    ],
+                    "CustomErrorResponses": [
+                        {
+                            "ErrorCode": 403,
+                            "ResponseCode": 200,
+                            "ResponsePagePath": "/index.html"
+                        },
+                        {
+                            "ErrorCode": 404,
+                            "ResponseCode": 200,
+                            "ResponsePagePath": "/index.html"
+                        }
+                    ],
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": {
+                            "Fn::If": [
+                                "HasDomainName",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                },
+                                true
+                            ]
+                        },
+                        "AcmCertificateArn": {
+                            "Fn::If": [
+                                "HasDomainName",
+                                {
+                                    "Ref": "SSLCertificate"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        },
+                        "SslSupportMethod": {
+                            "Fn::If": [
+                                "HasDomainName",
+                                "sni-only",
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        },
+                        "MinimumProtocolVersion": "TLSv1.2_2021"
+                    },
+                    "Aliases": {
+                        "Fn::If": [
+                            "HasDomainName",
+                            [
+                                {
+                                    "Ref": "DomainName"
+                                }
+                            ],
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "SSLCertificate": {
+            "Type": "AWS::CertificateManager::Certificate",
+            "Condition": "HasDomainName",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DomainName": {
+                    "Ref": "DomainName"
+                },
+                "ValidationMethod": "DNS",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CouponsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-coupons"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "couponId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "retailerId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "categoryId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "isActive",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "expiryTimestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "couponId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "RetailerIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "retailerId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "expiryTimestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "CategoryIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "categoryId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "isActive",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "TimeToLiveSpecification": {
+                    "AttributeName": "ttl",
+                    "Enabled": true
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": false
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "UserPreferencesTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-user-preferences"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "email",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "EmailIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "email",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": false
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RetailerAPIKeysSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}/retailer-api-keys"
+                },
+                "Description": "API keys for retailer integrations",
+                "SecretString": "{\n  \"walmart\": \"mock-walmart-api-key\",\n  \"target\": \"mock-target-api-key\",\n  \"amazon\": \"mock-amazon-api-key\"\n}\n",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-lambda-execution-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:BatchWriteItem",
+                                        "dynamodb:BatchGetItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CouponsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${CouponsTable.Arn}/index/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "UserPreferencesTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${UserPreferencesTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SecretsManagerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "RetailerAPIKeysSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SNSPublishAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AlertTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SESAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ses:SendEmail",
+                                        "ses:SendRawEmail"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "PersonalizeAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "personalize:GetRecommendations",
+                                        "personalize:GetPersonalizedRanking"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchMetrics",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CouponAggregatorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-coupon-aggregator"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Timeout": 300,
+                "MemorySize": 512,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "COUPONS_TABLE": {
+                            "Ref": "CouponsTable"
+                        },
+                        "SECRET_NAME": {
+                            "Ref": "RetailerAPIKeysSecret"
+                        },
+                        "ALERT_TOPIC_ARN": {
+                            "Ref": "AlertTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport boto3\nimport uuid\nfrom datetime import datetime, timedelta\nimport logging\nfrom decimal import Decimal\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nsecrets_client = boto3.client('secretsmanager')\nsns_client = boto3.client('sns')\ncloudwatch = boto3.client('cloudwatch')\n\ndef get_retailer_api_keys():\n    \"\"\"Fetch API keys from Secrets Manager\"\"\"\n    try:\n        response = secrets_client.get_secret_value(SecretId=os.environ['SECRET_NAME'])\n        return json.loads(response['SecretString'])\n    except Exception as e:\n        logger.error(f\"Error fetching secrets: {str(e)}\")\n        return {}\n\ndef mock_fetch_retailer_coupons(retailer_id, api_key):\n    \"\"\"Mock function to simulate fetching coupons from retailer APIs\"\"\"\n    # In production, this would make actual API calls to retailers\n    mock_coupons = [\n        {\n            \"title\": f\"{retailer_id.title()} - 20% off Electronics\",\n            \"description\": \"Save 20% on select electronics\",\n            \"discount\": \"20%\",\n            \"category\": \"electronics\",\n            \"code\": f\"{retailer_id.upper()}-ELEC20\",\n            \"expiry_days\": 7\n        },\n        {\n            \"title\": f\"{retailer_id.title()} - Buy 2 Get 1 Free\",\n            \"description\": \"Buy 2 get 1 free on clothing items\",\n            \"discount\": \"B2G1\",\n            \"category\": \"clothing\",\n            \"code\": f\"{retailer_id.upper()}-B2G1\",\n            \"expiry_days\": 14\n        }\n    ]\n    return mock_coupons\n\ndef handler(event, context):\n    \"\"\"Main handler for coupon aggregation\"\"\"\n    logger.info(f\"Starting coupon aggregation: {json.dumps(event)}\")\n    \n    table = dynamodb.Table(os.environ['COUPONS_TABLE'])\n    api_keys = get_retailer_api_keys()\n    \n    total_coupons_processed = 0\n    new_coupons = []\n    \n    try:\n        for retailer_id, api_key in api_keys.items():\n            logger.info(f\"Fetching coupons from {retailer_id}\")\n            \n            # Fetch coupons from retailer (mocked)\n            coupons = mock_fetch_retailer_coupons(retailer_id, api_key)\n            \n            for coupon_data in coupons:\n                coupon_id = str(uuid.uuid4())\n                expiry = datetime.now() + timedelta(days=coupon_data['expiry_days'])\n                \n                item = {\n                    'couponId': coupon_id,\n                    'retailerId': retailer_id,\n                    'categoryId': coupon_data['category'],\n                    'isActive': 'true',\n                    'title': coupon_data['title'],\n                    'description': coupon_data['description'],\n                    'discount': coupon_data['discount'],\n                    'code': coupon_data['code'],\n                    'createdAt': datetime.now().isoformat(),\n                    'expiryTimestamp': int(expiry.timestamp()),\n                    'ttl': int(expiry.timestamp())  # DynamoDB TTL\n                }\n                \n                table.put_item(Item=item)\n                total_coupons_processed += 1\n                \n                # Check if this is a hot deal (>30% discount)\n                if '30' in coupon_data.get('discount', '') or '40' in coupon_data.get('discount', '') or '50' in coupon_data.get('discount', ''):\n                    new_coupons.append(item)\n        \n        # Send CloudWatch metrics\n        cloudwatch.put_metric_data(\n            Namespace='CouponPlatform',\n            MetricData=[\n                {\n                    'MetricName': 'CouponsProcessed',\n                    'Value': total_coupons_processed,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {\n                            'Name': 'Environment',\n                            'Value': os.environ.get('ENVIRONMENT', 'dev')\n                        }\n                    ]\n                }\n            ]\n        )\n        \n        # Send SNS notification for hot deals\n        if new_coupons:\n            sns_client.publish(\n                TopicArn=os.environ['ALERT_TOPIC_ARN'],\n                Subject=f'🔥 {len(new_coupons)} New Hot Deals Available!',\n                Message=json.dumps({\n                    'type': 'hot_deals',\n                    'count': len(new_coupons),\n                    'deals': new_coupons[:5]  # Send top 5\n                }, default=str)\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Aggregation complete',\n                'couponsProcessed': total_coupons_processed\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in aggregation: {str(e)}\")\n        cloudwatch.put_metric_data(\n            Namespace='CouponPlatform',\n            MetricData=[\n                {\n                    'MetricName': 'AggregationErrors',\n                    'Value': 1,\n                    'Unit': 'Count'\n                }\n            ]\n        )\n        raise\n"
+                }
+            }
+        },
+        "APIHandlerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-api-handler"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "COUPONS_TABLE": {
+                            "Ref": "CouponsTable"
+                        },
+                        "USER_PREFS_TABLE": {
+                            "Ref": "UserPreferencesTable"
+                        },
+                        "AGGREGATOR_FUNCTION": {
+                            "Ref": "CouponAggregatorFunction"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport boto3\nfrom datetime import datetime\nimport logging\nfrom decimal import Decimal\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nlambda_client = boto3.client('lambda')\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef get_coupons(event):\n    \"\"\"GET /coupons - Return active coupons\"\"\"\n    table = dynamodb.Table(os.environ['COUPONS_TABLE'])\n    \n    # Get query parameters\n    params = event.get('queryStringParameters') or {}\n    category = params.get('category')\n    retailer = params.get('retailer')\n    limit = int(params.get('limit', 50))\n    \n    try:\n        if category:\n            # Query by category using GSI\n            response = table.query(\n                IndexName='CategoryIndex',\n                KeyConditionExpression='categoryId = :cat AND isActive = :active',\n                ExpressionAttributeValues={\n                    ':cat': category,\n                    ':active': 'true'\n                },\n                Limit=limit\n            )\n        elif retailer:\n            # Query by retailer using GSI\n            response = table.query(\n                IndexName='RetailerIndex',\n                KeyConditionExpression='retailerId = :ret',\n                ExpressionAttributeValues={\n                    ':ret': retailer\n                },\n                ScanIndexForward=False,  # Sort by expiry desc\n                Limit=limit\n            )\n        else:\n            # Scan for all active coupons (inefficient, but ok for POC)\n            response = table.scan(\n                FilterExpression='isActive = :active',\n                ExpressionAttributeValues={\n                    ':active': 'true'\n                },\n                Limit=limit\n            )\n        \n        coupons = response.get('Items', [])\n        \n        # Filter out expired coupons\n        current_timestamp = int(datetime.now().timestamp())\n        active_coupons = [\n            coupon for coupon in coupons \n            if coupon.get('expiryTimestamp', 0) > current_timestamp\n        ]\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'coupons': active_coupons,\n                'count': len(active_coupons)\n            }, cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error fetching coupons: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n\ndef refresh_coupons(event):\n    \"\"\"POST /coupons/refresh - Trigger manual refresh\"\"\"\n    try:\n        # Invoke aggregator function\n        response = lambda_client.invoke(\n            FunctionName=os.environ['AGGREGATOR_FUNCTION'],\n            InvocationType='RequestResponse',\n            Payload=json.dumps({\n                'source': 'manual',\n                'timestamp': datetime.now().isoformat()\n            })\n        )\n        \n        result = json.loads(response['Payload'].read())\n        \n        return {\n            'statusCode': 202,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Refresh initiated',\n                'result': result\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error triggering refresh: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Failed to trigger refresh'})\n        }\n\ndef get_user_preferences(event):\n    \"\"\"GET /users/{id}/preferences\"\"\"\n    user_id = event['pathParameters']['id']\n    table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])\n    \n    try:\n        response = table.get_item(Key={'userId': user_id})\n        \n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'User not found'})\n            }\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response['Item'], cls=DecimalEncoder)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error getting preferences: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n\ndef update_user_preferences(event):\n    \"\"\"PUT /users/{id}/preferences\"\"\"\n    user_id = event['pathParameters']['id']\n    table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])\n    \n    try:\n        body = json.loads(event['body'])\n        \n        # Validate input\n        if not body.get('email'):\n            return {\n                'statusCode': 400,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'Email is required'})\n            }\n        \n        # Update preferences\n        item = {\n            'userId': user_id,\n            'email': body['email'],\n            'categories': body.get('categories', []),\n            'retailers': body.get('retailers', []),\n            'alertsEnabled': body.get('alertsEnabled', True),\n            'weeklyDigestEnabled': body.get('weeklyDigestEnabled', True),\n            'updatedAt': datetime.now().isoformat()\n        }\n        \n        table.put_item(Item=item)\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Preferences updated',\n                'preferences': item\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error updating preferences: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n\ndef handler(event, context):\n    \"\"\"Main API handler - routes requests\"\"\"\n    logger.info(f\"API Request: {json.dumps(event)}\")\n    \n    path = event['path']\n    method = event['httpMethod']\n    \n    # Handle CORS preflight\n    if method == 'OPTIONS':\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,Authorization',\n                'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS'\n            },\n            'body': ''\n        }\n    \n    # Route requests\n    if path == '/api/coupons' and method == 'GET':\n        return get_coupons(event)\n    elif path == '/api/coupons/refresh' and method == 'POST':\n        return refresh_coupons(event)\n    elif path.startswith('/api/users/') and path.endswith('/preferences'):\n        if method == 'GET':\n            return get_user_preferences(event)\n        elif method == 'PUT':\n            return update_user_preferences(event)\n    \n    # 404 for unmatched routes\n    return {\n        'statusCode': 404,\n        'headers': {'Content-Type': 'application/json'},\n        'body': json.dumps({'error': 'Not found'})\n    }\n"
+                }
+            }
+        },
+        "CronJobsFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-cron-jobs"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.handler",
+                "Timeout": 300,
+                "MemorySize": 256,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "COUPONS_TABLE": {
+                            "Ref": "CouponsTable"
+                        },
+                        "USER_PREFS_TABLE": {
+                            "Ref": "UserPreferencesTable"
+                        },
+                        "AGGREGATOR_FUNCTION": {
+                            "Ref": "CouponAggregatorFunction"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport boto3\nfrom datetime import datetime, timedelta\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nlambda_client = boto3.client('lambda')\nses_client = boto3.client('ses', region_name='us-east-1')  # SES often in us-east-1\ncloudwatch = boto3.client('cloudwatch')\n\ndef check_expiring_coupons():\n    \"\"\"Check for coupons expiring in next 24 hours\"\"\"\n    table = dynamodb.Table(os.environ['COUPONS_TABLE'])\n    \n    # Get coupons expiring in next 24 hours\n    current_time = int(datetime.now().timestamp())\n    expiry_threshold = int((datetime.now() + timedelta(hours=24)).timestamp())\n    \n    # This would need a GSI on expiryTimestamp for efficiency\n    # For POC, we'll scan (not recommended for production)\n    response = table.scan(\n        FilterExpression='expiryTimestamp BETWEEN :current AND :threshold AND isActive = :active',\n        ExpressionAttributeValues={\n            ':current': current_time,\n            ':threshold': expiry_threshold,\n            ':active': 'true'\n        }\n    )\n    \n    expiring_coupons = response.get('Items', [])\n    logger.info(f\"Found {len(expiring_coupons)} expiring coupons\")\n    \n    # Update metrics\n    cloudwatch.put_metric_data(\n        Namespace='CouponPlatform',\n        MetricData=[\n            {\n                'MetricName': 'ExpiringCoupons',\n                'Value': len(expiring_coupons),\n                'Unit': 'Count'\n            }\n        ]\n    )\n    \n    return expiring_coupons\n\ndef send_weekly_digest():\n    \"\"\"Send weekly digest emails to subscribed users\"\"\"\n    users_table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])\n    coupons_table = dynamodb.Table(os.environ['COUPONS_TABLE'])\n    \n    # Get users with weekly digest enabled\n    response = users_table.scan(\n        FilterExpression='weeklyDigestEnabled = :enabled',\n        ExpressionAttributeValues={\n            ':enabled': True\n        }\n    )\n    \n    users = response.get('Items', [])\n    logger.info(f\"Sending digest to {len(users)} users\")\n    \n    for user in users:\n        try:\n            # Get top coupons for user's preferred categories\n            categories = user.get('categories', [])\n            coupons = []\n            \n            for category in categories[:3]:  # Top 3 categories\n                cat_response = coupons_table.query(\n                    IndexName='CategoryIndex',\n                    KeyConditionExpression='categoryId = :cat AND isActive = :active',\n                    ExpressionAttributeValues={\n                        ':cat': category,\n                        ':active': 'true'\n                    },\n                    Limit=5\n                )\n                coupons.extend(cat_response.get('Items', []))\n            \n            if coupons:\n                # Create email content\n                email_body = f\"\"\"\n                <h2>Your Weekly Coupon Digest</h2>\n                <p>Hi {user.get('userId', 'Valued Customer')},</p>\n                <p>Here are this week's top deals in your favorite categories:</p>\n                <ul>\n                \"\"\"\n                \n                for coupon in coupons[:10]:\n                    email_body += f\"\"\"\n                    <li>\n                        <strong>{coupon['title']}</strong><br>\n                        {coupon['description']}<br>\n                        Code: {coupon['code']}<br>\n                        Expires: {datetime.fromtimestamp(coupon['expiryTimestamp']).strftime('%Y-%m-%d')}\n                    </li>\n                    \"\"\"\n                \n                email_body += \"\"\"\n                </ul>\n                <p>Happy saving!</p>\n                \"\"\"\n                \n                # Send email (requires verified sender/domain in SES)\n                try:\n                    ses_client.send_email(\n                        Source='noreply@example.com',  # Must be verified in SES\n                        Destination={'ToAddresses': [user['email']]},\n                        Message={\n                            'Subject': {'Data': '📧 Your Weekly Coupon Digest'},\n                            'Body': {'Html': {'Data': email_body}}\n                        }\n                    )\n                    logger.info(f\"Digest sent to {user['email']}\")\n                except Exception as e:\n                    logger.error(f\"Failed to send email to {user['email']}: {str(e)}\")\n                    \n        except Exception as e:\n            logger.error(f\"Error processing digest for user {user.get('userId')}: {str(e)}\")\n    \n    return len(users)\n\ndef handler(event, context):\n    \"\"\"Main cron job handler\"\"\"\n    logger.info(f\"Cron job triggered: {json.dumps(event)}\")\n    \n    job_type = event.get('jobType', 'aggregation')\n    \n    try:\n        if job_type == 'aggregation':\n            # Trigger coupon aggregation\n            response = lambda_client.invoke(\n                FunctionName=os.environ['AGGREGATOR_FUNCTION'],\n                InvocationType='RequestResponse',\n                Payload=json.dumps({\n                    'source': 'scheduled',\n                    'timestamp': datetime.now().isoformat()\n                })\n            )\n            return json.loads(response['Payload'].read())\n            \n        elif job_type == 'expiry-check':\n            expiring = check_expiring_coupons()\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'Expiry check complete',\n                    'expiringCount': len(expiring)\n                })\n            }\n            \n        elif job_type == 'weekly-digest':\n            users_notified = send_weekly_digest()\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'Weekly digest sent',\n                    'usersNotified': users_notified\n                })\n            }\n            \n        else:\n            return {\n                'statusCode': 400,\n                'body': json.dumps({'error': f'Unknown job type: {job_type}'})\n            }\n            \n    except Exception as e:\n        logger.error(f\"Cron job error: {str(e)}\")\n        cloudwatch.put_metric_data(\n            Namespace='CouponPlatform',\n            MetricData=[\n                {\n                    'MetricName': 'CronJobErrors',\n                    'Value': 1,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {\n                            'Name': 'JobType',\n                            'Value': job_type\n                        }\n                    ]\n                }\n            ]\n        )\n        raise\n"
+                }
+            }
+        },
+        "CouponAPI": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-api"
+                },
+                "Description": "Coupon Platform API",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "ApiResourceCoupons": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "CouponAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "coupons"
+            }
+        },
+        "ApiResourceCouponsRefresh": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ParentId": {
+                    "Ref": "ApiResourceCoupons"
+                },
+                "PathPart": "refresh"
+            }
+        },
+        "ApiResourceUsers": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "CouponAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "users"
+            }
+        },
+        "ApiResourceUserId": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ParentId": {
+                    "Ref": "ApiResourceUsers"
+                },
+                "PathPart": "{id}"
+            }
+        },
+        "ApiResourceUserPreferences": {
+            "Type": "AWS::ApiGateway::Resource",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ParentId": {
+                    "Ref": "ApiResourceUserId"
+                },
+                "PathPart": "preferences"
+            }
+        },
+        "GetCouponsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResourceCoupons"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "PostRefreshMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResourceCouponsRefresh"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "GetUserPreferencesMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResourceUserPreferences"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.id": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "PutUserPreferencesMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResourceUserPreferences"
+                },
+                "HttpMethod": "PUT",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.id": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "CouponsOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResourceCoupons"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "DependsOn": [
+                "GetCouponsMethod",
+                "PostRefreshMethod",
+                "GetUserPreferencesMethod",
+                "PutUserPreferencesMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "CouponAPI"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "StageDescription": {
+                    "MetricsEnabled": true
+                }
+            }
+        },
+        "ApiGatewayInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "APIHandlerFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CouponAPI}/*/*/*"
+                }
+            }
+        },
+        "AggregationScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-aggregation-schedule"
+                },
+                "Description": "Trigger coupon aggregation every 15 minutes",
+                "ScheduleExpression": "rate(15 minutes)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CronJobsFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "1",
+                        "Input": "{\"jobType\": \"aggregation\"}"
+                    }
+                ]
+            }
+        },
+        "ExpiryCheckScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-expiry-check-schedule"
+                },
+                "Description": "Check for expiring coupons every hour",
+                "ScheduleExpression": "rate(1 hour)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CronJobsFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "1",
+                        "Input": "{\"jobType\": \"expiry-check\"}"
+                    }
+                ]
+            }
+        },
+        "WeeklyDigestScheduleRule": {
+            "Type": "AWS::Events::Rule",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-weekly-digest-schedule"
+                },
+                "Description": "Send weekly digest emails",
+                "ScheduleExpression": "cron(0 9 ? * MON *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CronJobsFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "1",
+                        "Input": "{\"jobType\": \"weekly-digest\"}"
+                    }
+                ]
+            }
+        },
+        "AggregationSchedulePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CronJobsFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "AggregationScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ExpiryCheckSchedulePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CronJobsFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "ExpiryCheckScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "WeeklyDigestSchedulePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CronJobsFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "WeeklyDigestScheduleRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-alerts"
+                },
+                "DisplayName": "Coupon Platform Alerts",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            }
+        },
+        "CloudWatchAlarmTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-cloudwatch-alarms"
+                },
+                "DisplayName": "CloudWatch Alarms",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-lambda-errors"
+                },
+                "AlarmDescription": "Alert on Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "APIHandlerFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "CloudWatchAlarmTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-dynamodb-throttles"
+                },
+                "AlarmDescription": "Alert on DynamoDB throttling",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "CouponsTable"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "CloudWatchAlarmTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "APIGateway4XXAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-api-4xx-errors"
+                },
+                "AlarmDescription": "Alert on high 4XX error rate",
+                "MetricName": "4XXError",
+                "Namespace": "AWS/ApiGateway",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ApiName",
+                        "Value": {
+                            "Ref": "CouponAPI"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "CloudWatchAlarmTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "tapstack${EnvironmentSuffix}-monitoring"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Errors\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Duration\", { \"stat\": \"Average\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Function Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ConsumedWriteCapacityUnits\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"UserErrors\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"CouponPlatform\", \"CouponsProcessed\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ExpiringCoupons\", { \"stat\": \"Average\" } ],\n          [ \".\", \"AggregationErrors\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"CronJobErrors\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Custom Application Metrics\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "APIHandlerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${APIHandlerFunction}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "CouponAggregatorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${CouponAggregatorFunction}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "CronJobsLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${CronJobsFunction}"
+                },
+                "RetentionInDays": 7
+            }
+        }
+    },
+    "Outputs": {
+        "MarketingWebsiteURL": {
+            "Description": "CloudFront URL for the marketing website",
+            "Value": {
+                "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
+            }
+        },
+        "APIEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${CouponAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 bucket name for marketing site content",
+            "Value": {
+                "Ref": "MarketingWebsiteBucket"
+            }
+        },
+        "CloudFrontDistributionId": {
+            "Description": "CloudFront distribution ID",
+            "Value": {
+                "Ref": "CloudFrontDistribution"
+            }
+        },
+        "CouponsTableName": {
+            "Description": "DynamoDB table name for coupons",
+            "Value": {
+                "Ref": "CouponsTable"
+            }
+        },
+        "UserPreferencesTableName": {
+            "Description": "DynamoDB table name for user preferences",
+            "Value": {
+                "Ref": "UserPreferencesTable"
+            }
+        },
+        "MonitoringDashboardURL": {
+            "Description": "CloudWatch dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}"
+            }
+        }
+    }
+}

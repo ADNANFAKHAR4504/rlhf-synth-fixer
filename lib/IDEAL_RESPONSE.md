@@ -1,0 +1,1501 @@
+# IDEAL_RESPONSE
+
+## Reasoning Trace
+
+The task requires creating a complete CloudFormation Infrastructure as Code (IaC) solution for a Coupon Aggregation and Recommendation Platform with the following key requirements:
+
+1. **Environment Isolation**: Use EnvironmentSuffix parameter throughout all resource names for proper environment isolation
+2. **Resource Naming**: Use lowercase naming convention (tapstack) to comply with AWS S3 bucket naming rules
+3. **Deletion Policies**: All resources must have DeletionPolicy and UpdateReplacePolicy set to Delete to ensure proper cleanup
+4. **DynamoDB Configuration**: Disable PointInTimeRecoveryEnabled to allow easy deletion
+5. **API Gateway**: Avoid CloudWatch logging configuration to prevent role requirement issues
+6. **Complete Infrastructure**: S3, CloudFront, DynamoDB, Lambda, API Gateway, EventBridge, SNS, CloudWatch, IAM, Secrets Manager
+
+### Architecture Decisions
+
+**Storage Layer**:
+
+- S3 bucket for marketing website with versioning and encryption
+- CloudFront distribution with Origin Access Identity (OAI) for secure S3 access
+- Two DynamoDB tables (Coupons and UserPreferences) with Global Secondary Indexes
+- Secrets Manager for retailer API keys
+
+**Compute Layer**:
+
+- Three Lambda functions:
+  1. CouponAggregatorFunction: Fetches coupons from retailer APIs
+  2. APIHandlerFunction: Handles API requests (GET/POST/PUT)
+  3. CronJobsFunction: Runs scheduled tasks (aggregation, expiry checks, weekly digest)
+
+**API Layer**:
+
+- API Gateway REST API with multiple resources and methods
+- CORS enabled for cross-origin requests
+- Lambda proxy integration for all endpoints
+
+**Automation Layer**:
+
+- Three EventBridge rules:
+  1. Aggregation every 15 minutes
+  2. Expiry check every hour
+  3. Weekly digest every Monday at 9 AM UTC
+
+**Monitoring Layer**:
+
+- CloudWatch alarms for Lambda errors, DynamoDB throttles, and API 4XX errors
+- CloudWatch dashboard with custom metrics
+- CloudWatch log groups for all Lambda functions
+- SNS topics for alerts
+
+**Security**:
+
+- IAM roles with least privilege policies
+- Secrets Manager for sensitive data
+- S3 bucket encryption and public access blocking
+- CloudFront HTTPS enforcement with TLS 1.2
+
+### Resource Naming Strategy
+
+All resources use the pattern: `tapstack${EnvironmentSuffix}-<resource-type>`
+
+This ensures:
+
+- Lowercase compliance for S3 bucket names
+- Environment isolation when EnvironmentSuffix is set (e.g., "dev", "staging", "prod")
+- Consistent naming across all resources
+- Easy identification of resources in AWS console
+
+### Deletion Strategy
+
+Every resource has:
+
+- `DeletionPolicy: Delete` - Delete resource when stack is deleted
+- `UpdateReplacePolicy: Delete` - Delete old resource when replacement occurs
+- DynamoDB tables have `PointInTimeRecoveryEnabled: false` to avoid recovery delays
+
+This ensures complete cleanup of all resources during stack deletion or failure scenarios.
+
+## Answer
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Coupon Aggregation and Recommendation Platform - Complete Infrastructure'
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for the marketing website (e.g., coupons.example.com)
+    Default: ''
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  EnvironmentSuffix:
+    Type: String
+    Description: Suffix to append to resource names for environment isolation
+    Default: ''
+  AlertEmail:
+    Type: String
+    Description: Email address for CloudWatch alerts
+    Default: 'alerts@example.com'
+
+Conditions:
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
+
+Resources:
+  # ===== S3 BUCKETS =====
+  MarketingWebsiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'tapstack${EnvironmentSuffix}-marketing-site-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudFront Origin Access Identity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for tapstack${EnvironmentSuffix}'
+
+  # S3 Bucket Policy for CloudFront
+  MarketingWebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Bucket: !Ref MarketingWebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}'
+            Action: 's3:GetObject'
+            Resource: !Sub '${MarketingWebsiteBucket.Arn}/*'
+
+  # ===== CLOUDFRONT DISTRIBUTION =====
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'Coupon Platform Marketing Site - ${Environment}'
+        PriceClass: PriceClass_100
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt MarketingWebsiteBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+          - Id: APIGatewayOrigin
+            DomainName: !Sub '${CouponAPI}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CacheBehaviors:
+          - PathPattern: '/api/*'
+            TargetOriginId: APIGatewayOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            ForwardedValues:
+              QueryString: true
+              Headers:
+                - Authorization
+                - Content-Type
+              Cookies:
+                Forward: all
+            MinTTL: 0
+            DefaultTTL: 0
+            MaxTTL: 0
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        ViewerCertificate:
+          CloudFrontDefaultCertificate:
+            !If [HasDomainName, !Ref 'AWS::NoValue', true]
+          AcmCertificateArn:
+            !If [HasDomainName, !Ref SSLCertificate, !Ref 'AWS::NoValue']
+          SslSupportMethod: !If [HasDomainName, 'sni-only', !Ref 'AWS::NoValue']
+          MinimumProtocolVersion: TLSv1.2_2021
+        Aliases: !If [HasDomainName, [!Ref DomainName], !Ref 'AWS::NoValue']
+
+  # ===== SSL CERTIFICATE (Conditional) =====
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasDomainName
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===== DYNAMODB TABLES =====
+  CouponsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'tapstack${EnvironmentSuffix}-coupons'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: couponId
+          AttributeType: S
+        - AttributeName: retailerId
+          AttributeType: S
+        - AttributeName: categoryId
+          AttributeType: S
+        - AttributeName: isActive
+          AttributeType: S
+        - AttributeName: expiryTimestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: couponId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RetailerIndex
+          KeySchema:
+            - AttributeName: retailerId
+              KeyType: HASH
+            - AttributeName: expiryTimestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: CategoryIndex
+          KeySchema:
+            - AttributeName: categoryId
+              KeyType: HASH
+            - AttributeName: isActive
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  UserPreferencesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'tapstack${EnvironmentSuffix}-user-preferences'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===== SECRETS MANAGER =====
+  RetailerAPIKeysSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'tapstack${EnvironmentSuffix}/retailer-api-keys'
+      Description: 'API keys for retailer integrations'
+      SecretString: |
+        {
+          "walmart": "mock-walmart-api-key",
+          "target": "mock-target-api-key",
+          "amazon": "mock-amazon-api-key"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ===== IAM ROLES =====
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'tapstack${EnvironmentSuffix}-lambda-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:BatchGetItem
+                Resource:
+                  - !GetAtt CouponsTable.Arn
+                  - !Sub '${CouponsTable.Arn}/index/*'
+                  - !GetAtt UserPreferencesTable.Arn
+                  - !Sub '${UserPreferencesTable.Arn}/index/*'
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref RetailerAPIKeysSecret
+        - PolicyName: SNSPublishAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlertTopic
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+        - PolicyName: PersonalizeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - personalize:GetRecommendations
+                  - personalize:GetPersonalizedRanking
+                Resource: '*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  # ===== LAMBDA FUNCTIONS =====
+  CouponAggregatorFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'tapstack${EnvironmentSuffix}-coupon-aggregator'
+      Runtime: python3.10
+      Handler: index.handler
+      Timeout: 300
+      MemorySize: 512
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          COUPONS_TABLE: !Ref CouponsTable
+          SECRET_NAME: !Ref RetailerAPIKeysSecret
+          ALERT_TOPIC_ARN: !Ref AlertTopic
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          import uuid
+          from datetime import datetime, timedelta
+          import logging
+          from decimal import Decimal
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb')
+          secrets_client = boto3.client('secretsmanager')
+          sns_client = boto3.client('sns')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def get_retailer_api_keys():
+              """Fetch API keys from Secrets Manager"""
+              try:
+                  response = secrets_client.get_secret_value(SecretId=os.environ['SECRET_NAME'])
+                  return json.loads(response['SecretString'])
+              except Exception as e:
+                  logger.error(f"Error fetching secrets: {str(e)}")
+                  return {}
+
+          def mock_fetch_retailer_coupons(retailer_id, api_key):
+              """Mock function to simulate fetching coupons from retailer APIs"""
+              # In production, this would make actual API calls to retailers
+              mock_coupons = [
+                  {
+                      "title": f"{retailer_id.title()} - 20% off Electronics",
+                      "description": "Save 20% on select electronics",
+                      "discount": "20%",
+                      "category": "electronics",
+                      "code": f"{retailer_id.upper()}-ELEC20",
+                      "expiry_days": 7
+                  },
+                  {
+                      "title": f"{retailer_id.title()} - Buy 2 Get 1 Free",
+                      "description": "Buy 2 get 1 free on clothing items",
+                      "discount": "B2G1",
+                      "category": "clothing",
+                      "code": f"{retailer_id.upper()}-B2G1",
+                      "expiry_days": 14
+                  }
+              ]
+              return mock_coupons
+
+          def handler(event, context):
+              """Main handler for coupon aggregation"""
+              logger.info(f"Starting coupon aggregation: {json.dumps(event)}")
+
+              table = dynamodb.Table(os.environ['COUPONS_TABLE'])
+              api_keys = get_retailer_api_keys()
+
+              total_coupons_processed = 0
+              new_coupons = []
+
+              try:
+                  for retailer_id, api_key in api_keys.items():
+                      logger.info(f"Fetching coupons from {retailer_id}")
+
+                      # Fetch coupons from retailer (mocked)
+                      coupons = mock_fetch_retailer_coupons(retailer_id, api_key)
+
+                      for coupon_data in coupons:
+                          coupon_id = str(uuid.uuid4())
+                          expiry = datetime.now() + timedelta(days=coupon_data['expiry_days'])
+
+                          item = {
+                              'couponId': coupon_id,
+                              'retailerId': retailer_id,
+                              'categoryId': coupon_data['category'],
+                              'isActive': 'true',
+                              'title': coupon_data['title'],
+                              'description': coupon_data['description'],
+                              'discount': coupon_data['discount'],
+                              'code': coupon_data['code'],
+                              'createdAt': datetime.now().isoformat(),
+                              'expiryTimestamp': int(expiry.timestamp()),
+                              'ttl': int(expiry.timestamp())  # DynamoDB TTL
+                          }
+
+                          table.put_item(Item=item)
+                          total_coupons_processed += 1
+
+                          # Check if this is a hot deal (>30% discount)
+                          if '30' in coupon_data.get('discount', '') or '40' in coupon_data.get('discount', '') or '50' in coupon_data.get('discount', ''):
+                              new_coupons.append(item)
+
+                  # Send CloudWatch metrics
+                  cloudwatch.put_metric_data(
+                      Namespace='CouponPlatform',
+                      MetricData=[
+                          {
+                              'MetricName': 'CouponsProcessed',
+                              'Value': total_coupons_processed,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {
+                                      'Name': 'Environment',
+                                      'Value': os.environ.get('ENVIRONMENT', 'dev')
+                                  }
+                              ]
+                          }
+                      ]
+                  )
+
+                  # Send SNS notification for hot deals
+                  if new_coupons:
+                      sns_client.publish(
+                          TopicArn=os.environ['ALERT_TOPIC_ARN'],
+                          Subject=f'🔥 {len(new_coupons)} New Hot Deals Available!',
+                          Message=json.dumps({
+                              'type': 'hot_deals',
+                              'count': len(new_coupons),
+                              'deals': new_coupons[:5]  # Send top 5
+                          }, default=str)
+                      )
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Aggregation complete',
+                          'couponsProcessed': total_coupons_processed
+                      })
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error in aggregation: {str(e)}")
+                  cloudwatch.put_metric_data(
+                      Namespace='CouponPlatform',
+                      MetricData=[
+                          {
+                              'MetricName': 'AggregationErrors',
+                              'Value': 1,
+                              'Unit': 'Count'
+                          }
+                      ]
+                  )
+                  raise
+
+  APIHandlerFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'tapstack${EnvironmentSuffix}-api-handler'
+      Runtime: python3.10
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          COUPONS_TABLE: !Ref CouponsTable
+          USER_PREFS_TABLE: !Ref UserPreferencesTable
+          AGGREGATOR_FUNCTION: !Ref CouponAggregatorFunction
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          from datetime import datetime
+          import logging
+          from decimal import Decimal
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb')
+          lambda_client = boto3.client('lambda')
+
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
+
+          def get_coupons(event):
+              """GET /coupons - Return active coupons"""
+              table = dynamodb.Table(os.environ['COUPONS_TABLE'])
+
+              # Get query parameters
+              params = event.get('queryStringParameters') or {}
+              category = params.get('category')
+              retailer = params.get('retailer')
+              limit = int(params.get('limit', 50))
+
+              try:
+                  if category:
+                      # Query by category using GSI
+                      response = table.query(
+                          IndexName='CategoryIndex',
+                          KeyConditionExpression='categoryId = :cat AND isActive = :active',
+                          ExpressionAttributeValues={
+                              ':cat': category,
+                              ':active': 'true'
+                          },
+                          Limit=limit
+                      )
+                  elif retailer:
+                      # Query by retailer using GSI
+                      response = table.query(
+                          IndexName='RetailerIndex',
+                          KeyConditionExpression='retailerId = :ret',
+                          ExpressionAttributeValues={
+                              ':ret': retailer
+                          },
+                          ScanIndexForward=False,  # Sort by expiry desc
+                          Limit=limit
+                      )
+                  else:
+                      # Scan for all active coupons (inefficient, but ok for POC)
+                      response = table.scan(
+                          FilterExpression='isActive = :active',
+                          ExpressionAttributeValues={
+                              ':active': 'true'
+                          },
+                          Limit=limit
+                      )
+
+                  coupons = response.get('Items', [])
+
+                  # Filter out expired coupons
+                  current_timestamp = int(datetime.now().timestamp())
+                  active_coupons = [
+                      coupon for coupon in coupons
+                      if coupon.get('expiryTimestamp', 0) > current_timestamp
+                  ]
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'coupons': active_coupons,
+                          'count': len(active_coupons)
+                      }, cls=DecimalEncoder)
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error fetching coupons: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+
+          def refresh_coupons(event):
+              """POST /coupons/refresh - Trigger manual refresh"""
+              try:
+                  # Invoke aggregator function
+                  response = lambda_client.invoke(
+                      FunctionName=os.environ['AGGREGATOR_FUNCTION'],
+                      InvocationType='RequestResponse',
+                      Payload=json.dumps({
+                          'source': 'manual',
+                          'timestamp': datetime.now().isoformat()
+                      })
+                  )
+
+                  result = json.loads(response['Payload'].read())
+
+                  return {
+                      'statusCode': 202,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'message': 'Refresh initiated',
+                          'result': result
+                      })
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error triggering refresh: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Failed to trigger refresh'})
+                  }
+
+          def get_user_preferences(event):
+              """GET /users/{id}/preferences"""
+              user_id = event['pathParameters']['id']
+              table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])
+
+              try:
+                  response = table.get_item(Key={'userId': user_id})
+
+                  if 'Item' not in response:
+                      return {
+                          'statusCode': 404,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'User not found'})
+                      }
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps(response['Item'], cls=DecimalEncoder)
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error getting preferences: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+
+          def update_user_preferences(event):
+              """PUT /users/{id}/preferences"""
+              user_id = event['pathParameters']['id']
+              table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])
+
+              try:
+                  body = json.loads(event['body'])
+
+                  # Validate input
+                  if not body.get('email'):
+                      return {
+                          'statusCode': 400,
+                          'headers': {'Content-Type': 'application/json'},
+                          'body': json.dumps({'error': 'Email is required'})
+                      }
+
+                  # Update preferences
+                  item = {
+                      'userId': user_id,
+                      'email': body['email'],
+                      'categories': body.get('categories', []),
+                      'retailers': body.get('retailers', []),
+                      'alertsEnabled': body.get('alertsEnabled', True),
+                      'weeklyDigestEnabled': body.get('weeklyDigestEnabled', True),
+                      'updatedAt': datetime.now().isoformat()
+                  }
+
+                  table.put_item(Item=item)
+
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'message': 'Preferences updated',
+                          'preferences': item
+                      })
+                  }
+
+              except Exception as e:
+                  logger.error(f"Error updating preferences: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Internal server error'})
+                  }
+
+          def handler(event, context):
+              """Main API handler - routes requests"""
+              logger.info(f"API Request: {json.dumps(event)}")
+
+              path = event['path']
+              method = event['httpMethod']
+
+              # Handle CORS preflight
+              if method == 'OPTIONS':
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                          'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS'
+                      },
+                      'body': ''
+                  }
+
+              # Route requests
+              if path == '/api/coupons' and method == 'GET':
+                  return get_coupons(event)
+              elif path == '/api/coupons/refresh' and method == 'POST':
+                  return refresh_coupons(event)
+              elif path.startswith('/api/users/') and path.endswith('/preferences'):
+                  if method == 'GET':
+                      return get_user_preferences(event)
+                  elif method == 'PUT':
+                      return update_user_preferences(event)
+
+              # 404 for unmatched routes
+              return {
+                  'statusCode': 404,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': json.dumps({'error': 'Not found'})
+              }
+
+  CronJobsFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'tapstack${EnvironmentSuffix}-cron-jobs'
+      Runtime: python3.10
+      Handler: index.handler
+      Timeout: 300
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          COUPONS_TABLE: !Ref CouponsTable
+          USER_PREFS_TABLE: !Ref UserPreferencesTable
+          AGGREGATOR_FUNCTION: !Ref CouponAggregatorFunction
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          from datetime import datetime, timedelta
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb')
+          lambda_client = boto3.client('lambda')
+          ses_client = boto3.client('ses', region_name='us-east-1')  # SES often in us-east-1
+          cloudwatch = boto3.client('cloudwatch')
+
+          def check_expiring_coupons():
+              """Check for coupons expiring in next 24 hours"""
+              table = dynamodb.Table(os.environ['COUPONS_TABLE'])
+
+              # Get coupons expiring in next 24 hours
+              current_time = int(datetime.now().timestamp())
+              expiry_threshold = int((datetime.now() + timedelta(hours=24)).timestamp())
+
+              # This would need a GSI on expiryTimestamp for efficiency
+              # For POC, we'll scan (not recommended for production)
+              response = table.scan(
+                  FilterExpression='expiryTimestamp BETWEEN :current AND :threshold AND isActive = :active',
+                  ExpressionAttributeValues={
+                      ':current': current_time,
+                      ':threshold': expiry_threshold,
+                      ':active': 'true'
+                  }
+              )
+
+              expiring_coupons = response.get('Items', [])
+              logger.info(f"Found {len(expiring_coupons)} expiring coupons")
+
+              # Update metrics
+              cloudwatch.put_metric_data(
+                  Namespace='CouponPlatform',
+                  MetricData=[
+                      {
+                          'MetricName': 'ExpiringCoupons',
+                          'Value': len(expiring_coupons),
+                          'Unit': 'Count'
+                      }
+                  ]
+              )
+
+              return expiring_coupons
+
+          def send_weekly_digest():
+              """Send weekly digest emails to subscribed users"""
+              users_table = dynamodb.Table(os.environ['USER_PREFS_TABLE'])
+              coupons_table = dynamodb.Table(os.environ['COUPONS_TABLE'])
+
+              # Get users with weekly digest enabled
+              response = users_table.scan(
+                  FilterExpression='weeklyDigestEnabled = :enabled',
+                  ExpressionAttributeValues={
+                      ':enabled': True
+                  }
+              )
+
+              users = response.get('Items', [])
+              logger.info(f"Sending digest to {len(users)} users")
+
+              for user in users:
+                  try:
+                      # Get top coupons for user's preferred categories
+                      categories = user.get('categories', [])
+                      coupons = []
+
+                      for category in categories[:3]:  # Top 3 categories
+                          cat_response = coupons_table.query(
+                              IndexName='CategoryIndex',
+                              KeyConditionExpression='categoryId = :cat AND isActive = :active',
+                              ExpressionAttributeValues={
+                                  ':cat': category,
+                                  ':active': 'true'
+                              },
+                              Limit=5
+                          )
+                          coupons.extend(cat_response.get('Items', []))
+
+                      if coupons:
+                          # Create email content
+                          email_body = f"""
+                          <h2>Your Weekly Coupon Digest</h2>
+                          <p>Hi {user.get('userId', 'Valued Customer')},</p>
+                          <p>Here are this week's top deals in your favorite categories:</p>
+                          <ul>
+                          """
+
+                          for coupon in coupons[:10]:
+                              email_body += f"""
+                              <li>
+                                  <strong>{coupon['title']}</strong><br>
+                                  {coupon['description']}<br>
+                                  Code: {coupon['code']}<br>
+                                  Expires: {datetime.fromtimestamp(coupon['expiryTimestamp']).strftime('%Y-%m-%d')}
+                              </li>
+                              """
+
+                          email_body += """
+                          </ul>
+                          <p>Happy saving!</p>
+                          """
+
+                          # Send email (requires verified sender/domain in SES)
+                          try:
+                              ses_client.send_email(
+                                  Source='noreply@example.com',  # Must be verified in SES
+                                  Destination={'ToAddresses': [user['email']]},
+                                  Message={
+                                      'Subject': {'Data': '📧 Your Weekly Coupon Digest'},
+                                      'Body': {'Html': {'Data': email_body}}
+                                  }
+                              )
+                              logger.info(f"Digest sent to {user['email']}")
+                          except Exception as e:
+                              logger.error(f"Failed to send email to {user['email']}: {str(e)}")
+
+                  except Exception as e:
+                      logger.error(f"Error processing digest for user {user.get('userId')}: {str(e)}")
+
+              return len(users)
+
+          def handler(event, context):
+              """Main cron job handler"""
+              logger.info(f"Cron job triggered: {json.dumps(event)}")
+
+              job_type = event.get('jobType', 'aggregation')
+
+              try:
+                  if job_type == 'aggregation':
+                      # Trigger coupon aggregation
+                      response = lambda_client.invoke(
+                          FunctionName=os.environ['AGGREGATOR_FUNCTION'],
+                          InvocationType='RequestResponse',
+                          Payload=json.dumps({
+                              'source': 'scheduled',
+                              'timestamp': datetime.now().isoformat()
+                          })
+                      )
+                      return json.loads(response['Payload'].read())
+
+                  elif job_type == 'expiry-check':
+                      expiring = check_expiring_coupons()
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'message': 'Expiry check complete',
+                              'expiringCount': len(expiring)
+                          })
+                      }
+
+                  elif job_type == 'weekly-digest':
+                      users_notified = send_weekly_digest()
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'message': 'Weekly digest sent',
+                              'usersNotified': users_notified
+                          })
+                      }
+
+                  else:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': f'Unknown job type: {job_type}'})
+                      }
+
+              except Exception as e:
+                  logger.error(f"Cron job error: {str(e)}")
+                  cloudwatch.put_metric_data(
+                      Namespace='CouponPlatform',
+                      MetricData=[
+                          {
+                              'MetricName': 'CronJobErrors',
+                              'Value': 1,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {
+                                      'Name': 'JobType',
+                                      'Value': job_type
+                                  }
+                              ]
+                          }
+                      ]
+                  )
+                  raise
+
+  # ===== API GATEWAY =====
+  CouponAPI:
+    Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'tapstack${EnvironmentSuffix}-api'
+      Description: 'Coupon Platform API'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Resources
+  ApiResourceCoupons:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ParentId: !GetAtt CouponAPI.RootResourceId
+      PathPart: 'coupons'
+
+  ApiResourceCouponsRefresh:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ParentId: !Ref ApiResourceCoupons
+      PathPart: 'refresh'
+
+  ApiResourceUsers:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ParentId: !GetAtt CouponAPI.RootResourceId
+      PathPart: 'users'
+
+  ApiResourceUserId:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ParentId: !Ref ApiResourceUsers
+      PathPart: '{id}'
+
+  ApiResourceUserPreferences:
+    Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ParentId: !Ref ApiResourceUserId
+      PathPart: 'preferences'
+
+  # API Methods
+  GetCouponsMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ResourceId: !Ref ApiResourceCoupons
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations'
+
+  PostRefreshMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ResourceId: !Ref ApiResourceCouponsRefresh
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations'
+
+  GetUserPreferencesMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ResourceId: !Ref ApiResourceUserPreferences
+      HttpMethod: GET
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations'
+
+  PutUserPreferencesMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ResourceId: !Ref ApiResourceUserPreferences
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations'
+
+  # CORS Configuration
+  CouponsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RestApiId: !Ref CouponAPI
+      ResourceId: !Ref ApiResourceCoupons
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${APIHandlerFunction.Arn}/invocations'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    DependsOn:
+      - GetCouponsMethod
+      - PostRefreshMethod
+      - GetUserPreferencesMethod
+      - PutUserPreferencesMethod
+    Properties:
+      RestApiId: !Ref CouponAPI
+      StageName: !Ref Environment
+      StageDescription:
+        MetricsEnabled: true
+
+  # Lambda Permissions for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Ref APIHandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CouponAPI}/*/*/*'
+
+  # ===== EVENTBRIDGE SCHEDULES =====
+  AggregationScheduleRule:
+    Type: AWS::Events::Rule
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'tapstack${EnvironmentSuffix}-aggregation-schedule'
+      Description: 'Trigger coupon aggregation every 15 minutes'
+      ScheduleExpression: 'rate(15 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CronJobsFunction.Arn
+          Id: '1'
+          Input: '{"jobType": "aggregation"}'
+
+  ExpiryCheckScheduleRule:
+    Type: AWS::Events::Rule
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'tapstack${EnvironmentSuffix}-expiry-check-schedule'
+      Description: 'Check for expiring coupons every hour'
+      ScheduleExpression: 'rate(1 hour)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CronJobsFunction.Arn
+          Id: '1'
+          Input: '{"jobType": "expiry-check"}'
+
+  WeeklyDigestScheduleRule:
+    Type: AWS::Events::Rule
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'tapstack${EnvironmentSuffix}-weekly-digest-schedule'
+      Description: 'Send weekly digest emails'
+      ScheduleExpression: 'cron(0 9 ? * MON *)' # Every Monday at 9 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CronJobsFunction.Arn
+          Id: '1'
+          Input: '{"jobType": "weekly-digest"}'
+
+  # Permissions for EventBridge to invoke Lambda
+  AggregationSchedulePermission:
+    Type: AWS::Lambda::Permission
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Ref CronJobsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AggregationScheduleRule.Arn
+
+  ExpiryCheckSchedulePermission:
+    Type: AWS::Lambda::Permission
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Ref CronJobsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ExpiryCheckScheduleRule.Arn
+
+  WeeklyDigestSchedulePermission:
+    Type: AWS::Lambda::Permission
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Ref CronJobsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyDigestScheduleRule.Arn
+
+  # ===== SNS TOPICS =====
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TopicName: !Sub 'tapstack${EnvironmentSuffix}-alerts'
+      DisplayName: 'Coupon Platform Alerts'
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  CloudWatchAlarmTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TopicName: !Sub 'tapstack${EnvironmentSuffix}-cloudwatch-alarms'
+      DisplayName: 'CloudWatch Alarms'
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  # ===== CLOUDWATCH ALARMS =====
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AlarmName: !Sub 'tapstack${EnvironmentSuffix}-lambda-errors'
+      AlarmDescription: 'Alert on Lambda function errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref APIHandlerFunction
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  DynamoDBThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AlarmName: !Sub 'tapstack${EnvironmentSuffix}-dynamodb-throttles'
+      AlarmDescription: 'Alert on DynamoDB throttling'
+      MetricName: UserErrors
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref CouponsTable
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  APIGateway4XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AlarmName: !Sub 'tapstack${EnvironmentSuffix}-api-4xx-errors'
+      AlarmDescription: 'Alert on high 4XX error rate'
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref CouponAPI
+      AlarmActions:
+        - !Ref CloudWatchAlarmTopic
+      TreatMissingData: notBreaching
+
+  # ===== CLOUDWATCH DASHBOARD =====
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DashboardName: !Sub 'tapstack${EnvironmentSuffix}-monitoring'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", { "stat": "Sum" } ],
+                  [ ".", "Errors", { "stat": "Sum" } ],
+                  [ ".", "Duration", { "stat": "Average" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Function Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", { "stat": "Sum" } ],
+                  [ ".", "ConsumedWriteCapacityUnits", { "stat": "Sum" } ],
+                  [ ".", "UserErrors", { "stat": "Sum" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "CouponPlatform", "CouponsProcessed", { "stat": "Sum" } ],
+                  [ ".", "ExpiringCoupons", { "stat": "Average" } ],
+                  [ ".", "AggregationErrors", { "stat": "Sum" } ],
+                  [ ".", "CronJobErrors", { "stat": "Sum" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Custom Application Metrics"
+              }
+            }
+          ]
+        }
+
+  # ===== CLOUDWATCH LOG GROUPS =====
+  APIHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${APIHandlerFunction}'
+      RetentionInDays: 7
+
+  CouponAggregatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${CouponAggregatorFunction}'
+      RetentionInDays: 7
+
+  CronJobsLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${CronJobsFunction}'
+      RetentionInDays: 7
+
+Outputs:
+  MarketingWebsiteURL:
+    Description: 'CloudFront URL for the marketing website'
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+
+  APIEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${CouponAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+
+  S3BucketName:
+    Description: 'S3 bucket name for marketing site content'
+    Value: !Ref MarketingWebsiteBucket
+
+  CloudFrontDistributionId:
+    Description: 'CloudFront distribution ID'
+    Value: !Ref CloudFrontDistribution
+
+  CouponsTableName:
+    Description: 'DynamoDB table name for coupons'
+    Value: !Ref CouponsTable
+
+  UserPreferencesTableName:
+    Description: 'DynamoDB table name for user preferences'
+    Value: !Ref UserPreferencesTable
+
+  MonitoringDashboardURL:
+    Description: 'CloudWatch dashboard URL'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}'
+```
+
+This CloudFormation template represents the ideal IaC solution with all infrastructure requirements properly configured for a production-ready coupon aggregation platform.

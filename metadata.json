@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350037",
+  "team": "2",
+  "startedAt": "2025-10-08T12:37:25.218Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, Auto Scaling, Elastic Load Balancer, Route 53, RDS, CloudWatch, CloudWatch Logs, S3, KMS, IAM"
+}
