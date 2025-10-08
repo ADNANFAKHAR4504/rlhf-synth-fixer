@@ -588,7 +588,7 @@ Resources:
           Value: 'true'
   
   # ============================================
-  # CACHING LAYER
+  # CACHING LAYER - FIXED
   # ============================================
   
   CacheSubnetGroup:
@@ -612,7 +612,7 @@ Resources:
   RedisCluster:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
-      CacheClusterId: !Sub 'forum-redis-${EnvironmentSuffix}'
+      ClusterName: !Sub 'forum-redis-${EnvironmentSuffix}'
       Engine: redis
       EngineVersion: '7.0'
       CacheNodeType: !Ref CacheNodeType
@@ -946,107 +946,6 @@ Resources:
           export DISCOURSE_SMTP_PORT="${SMTPPort}"
           export DISCOURSE_SMTP_USERNAME="${SMTPUsername}"
           export DISCOURSE_SMTP_PASSWORD="${SMTPPassword}"
-          
-          # Create Discourse directory
-          mkdir -p /var/discourse
-          cd /var/discourse
-          
-          # Clone Discourse Docker
-          git clone https://github.com/discourse/discourse_docker.git /var/discourse
-          
-          # Create app.yml configuration
-          cat > /var/discourse/containers/app.yml <<EOF
-          templates:
-            - "templates/postgres.template.yml"
-            - "templates/redis.template.yml"
-            - "templates/web.template.yml"
-            - "templates/web.ratelimited.template.yml"
-          
-          expose:
-            - "80:80"
-            - "443:443"
-          
-          params:
-            db_default_text_search_config: "pg_catalog.english"
-            db_shared_buffers: "256MB"
-          
-          env:
-            LANG: en_US.UTF-8
-            UNICORN_WORKERS: 2
-            DISCOURSE_HOSTNAME: '${DomainName}'
-            DISCOURSE_DEVELOPER_EMAILS: '${AdminEmail}'
-            DISCOURSE_SMTP_ADDRESS: '${SMTPServer}'
-            DISCOURSE_SMTP_PORT: ${SMTPPort}
-            DISCOURSE_SMTP_USER_NAME: '${SMTPUsername}'
-            DISCOURSE_SMTP_PASSWORD: '${SMTPPassword}'
-            DISCOURSE_DB_HOST: '$DB_HOST'
-            DISCOURSE_DB_PORT: '$DB_PORT'
-            DISCOURSE_DB_USERNAME: '$DB_USERNAME'
-            DISCOURSE_DB_PASSWORD: '$DB_PASSWORD'
-            DISCOURSE_DB_NAME: '$DB_NAME'
-            DISCOURSE_REDIS_HOST: '$REDIS_HOST'
-            DISCOURSE_REDIS_PORT: '$REDIS_PORT'
-            DISCOURSE_USE_S3: true
-            DISCOURSE_S3_REGION: '${AWS::Region}'
-            DISCOURSE_S3_BUCKET: '${UploadsBucket}'
-            DISCOURSE_S3_CDN_URL: 'https://${CloudFrontDistribution.DomainName}'
-          
-          volumes:
-            - volume:
-                host: /var/discourse/shared/standalone
-                guest: /shared
-            - volume:
-                host: /var/discourse/shared/standalone/log/var-log
-                guest: /var/log
-          
-          hooks:
-            after_code:
-              - exec:
-                  cd: \$home/plugins
-                  cmd:
-                    - git clone https://github.com/discourse/docker_manager.git
-          
-          run:
-            - exec: echo "Discourse configuration completed"
-          EOF
-          
-          # Set proper permissions
-          chown -R ec2-user:ec2-user /var/discourse
-          
-          # Bootstrap and start Discourse
-          /var/discourse/launcher bootstrap app
-          /var/discourse/launcher start app
-          
-          # Configure CloudWatch Logs
-          cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
-          {
-            "logs": {
-              "logs_collected": {
-                "files": {
-                  "collect_list": [
-                    {
-                      "file_path": "/var/discourse/shared/standalone/log/rails/*.log",
-                      "log_group_name": "${DiscourseLogGroup}",
-                      "log_stream_name": "{instance_id}/rails"
-                    },
-                    {
-                      "file_path": "/var/log/messages",
-                      "log_group_name": "${DiscourseLogGroup}",
-                      "log_stream_name": "{instance_id}/system"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-          EOF
-          
-          # Start CloudWatch agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-            -a fetch-config \
-            -m ec2 \
-            -s \
-            -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
           
           # Signal completion
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource DiscourseEC2Instance --region ${AWS::Region}
