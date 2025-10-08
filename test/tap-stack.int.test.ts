@@ -1,23 +1,16 @@
 // Configuration - These are coming from cfn-outputs after deployment
 import AWS from 'aws-sdk';
 import axios from 'axios';
-
+import fs from 'fs';
 // Load deployment outputs
-// const outputs = JSON.parse(
-//   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-// );
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-const outputs: any = {
-  "ApiUrl": "https://9nh34yp6dh.execute-api.ap-south-1.amazonaws.com/pr99",
-  "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:149536495831:function:api-handler-pr99",
-  "ParameterStorePrefix": "/serverless-api/pr99",
-  "DynamoDBTableName": "user-data-pr99",
-  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=serverless-api-dashboard-pr99"
-}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+const awsRegion = process.env.AWS_REGION || 'us-east-2';
 
 // Initialize AWS clients
 AWS.config.update({ region: awsRegion });
