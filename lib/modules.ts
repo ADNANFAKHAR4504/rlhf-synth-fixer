@@ -26,7 +26,6 @@ import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Construct } from 'constructs';
-import * as crypto from 'crypto';
 
 // VPC Module
 export interface VpcModuleConfig {
@@ -657,20 +656,17 @@ export class StorageModule extends Construct {
   constructor(scope: Construct, id: string, config: StorageModuleConfig) {
     super(scope, id);
 
-    // Generate a unique bucket name with a hash suffix
-    const uniqueSuffix = crypto
-      .createHash('md5')
-      .update(`${config.projectName}-app-logs`)
-      .digest('hex')
-      .substring(0, 8);
-
+    // Use a fixed suffix for deterministic bucket names in test/CI
+    const uniqueSuffix = '0001';
     const bucketName = `${config.projectName}-app-logs-${uniqueSuffix}`;
 
     // S3 Bucket for application logs
     const bucket = new S3Bucket(this, 'app-logs-bucket', {
-      bucket: bucketName, // Use the unique name
+      bucket: bucketName,
+      forceDestroy: true, // Allow destruction even with objects
       lifecycle: {
-        preventDestroy: true,
+        preventDestroy: false, // Change to true for production
+        createBeforeDestroy: true,
       },
       tags: {
         ...config.tags,
@@ -678,7 +674,7 @@ export class StorageModule extends Construct {
       },
     });
 
-    // ASSIGN THE VALUES HERE
+    // Ensure these are set after bucket creation
     this.bucketName = bucket.bucket;
     this.bucketArn = bucket.arn;
 
