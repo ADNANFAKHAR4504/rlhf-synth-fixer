@@ -414,7 +414,7 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
 
     expect(response.Distribution).toBeDefined();
     expect(response.Distribution!.Status).toBe("Deployed");
-    expect(response.Distribution!.DistributionConfig.Enabled).toBe(true);
+    expect(response.Distribution!.DistributionConfig?.Enabled).toBe(true);
   }, 30000);
 
   test("CloudFront distribution has both S3 and ALB origins", async () => {
@@ -423,11 +423,14 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
     });
     const response = await cloudfrontClient.send(command);
 
-    const origins = response.Distribution!.DistributionConfig.Origins.Items;
+    expect(response.Distribution).toBeDefined();
+    expect(response.Distribution?.DistributionConfig?.Origins?.Items).toBeDefined();
+
+    const origins = response.Distribution!.DistributionConfig!.Origins!.Items!;
     expect(origins.length).toBeGreaterThanOrEqual(2);
 
-    const hasS3Origin = origins.some(o => o.DomainName.includes(outputs.s3_bucket_name));
-    const hasAlbOrigin = origins.some(o => o.DomainName.includes("elb.amazonaws.com"));
+    const hasS3Origin = origins.some(o => o.DomainName && o.DomainName.includes(outputs.s3_bucket_name));
+    const hasAlbOrigin = origins.some(o => o.DomainName && o.DomainName.includes("elb.amazonaws.com"));
 
     expect(hasS3Origin).toBe(true);
     expect(hasAlbOrigin).toBe(true);
