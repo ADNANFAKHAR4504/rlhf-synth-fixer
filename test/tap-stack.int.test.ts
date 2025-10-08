@@ -166,7 +166,7 @@ describe('Personalized News Platform Integration Tests', () => {
 
     const viewerRequestFunction = await lambdaClient.send(
       new GetFunctionCommand({
-        FunctionName: viewerRequestFunctionArn.split(':').slice(-1)[0],
+        FunctionName: viewerRequestFunctionArn,
       })
     );
 
@@ -176,7 +176,7 @@ describe('Personalized News Platform Integration Tests', () => {
 
     const viewerResponseFunction = await lambdaClient.send(
       new GetFunctionCommand({
-        FunctionName: viewerResponseFunctionArn.split(':').slice(-1)[0],
+        FunctionName: viewerResponseFunctionArn,
       })
     );
 
