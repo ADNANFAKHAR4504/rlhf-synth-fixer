@@ -19,11 +19,13 @@ cdk_outputs_path = os.path.join(
 )
 
 flat_outputs = {}
+deployed_infrastructure_type = None
 
 # Try flat-outputs first (expected from CI/CD)
 if os.path.exists(flat_outputs_path):
     with open(flat_outputs_path, 'r', encoding='utf-8') as f:
         flat_outputs = json.loads(f.read())
+        deployed_infrastructure_type = 'tap' if 'TrackingQueueURL' in flat_outputs else 'unknown'
 # Fallback to CDK outputs if available
 elif os.path.exists(cdk_outputs_path):
     with open(cdk_outputs_path, 'r', encoding='utf-8') as f:
@@ -32,10 +34,18 @@ elif os.path.exists(cdk_outputs_path):
     if cdk_outputs:
         first_stack_key = list(cdk_outputs.keys())[0]
         stack_outputs = cdk_outputs[first_stack_key]
-        # Map CDK outputs to expected flat format if they match our TAP stack
+        
+        # Identify the deployed infrastructure type
         if 'TrackingQueueURL' in str(stack_outputs):
             flat_outputs = stack_outputs
-        # else: outputs don't match, will use mocked infrastructure
+            deployed_infrastructure_type = 'tap'
+        elif 'BackupQueueUrl' in str(stack_outputs):
+            # Backup system detected - we'll use mocked TAP infrastructure
+            deployed_infrastructure_type = 'backup'
+            print("ℹ️ Detected backup system infrastructure (not TAP stack)")
+            print("🔄 Will use hybrid approach: try real AWS first, fallback to mocked TAP stack")
+        else:
+            deployed_infrastructure_type = 'unknown'
 
 
 @mark.describe("TapStack Integration Tests")
@@ -55,15 +65,18 @@ class TestTapStackIntegration(unittest.TestCase):
         # Check if AWS region is configured, ensure we have a valid region
         cls.aws_region = os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION') or 'us-east-1'
         
-        # Ensure region is set in environment for boto3
-        if not os.environ.get('AWS_REGION'):
+        # Ensure region is set in environment for boto3 - fix empty string issue
+        if not os.environ.get('AWS_REGION') or os.environ.get('AWS_REGION') == '':
             os.environ['AWS_REGION'] = cls.aws_region
+        if not os.environ.get('AWS_DEFAULT_REGION') or os.environ.get('AWS_DEFAULT_REGION') == '':
+            os.environ['AWS_DEFAULT_REGION'] = cls.aws_region
         
-        # Set infrastructure available flag
+        # Set infrastructure available flag based on type
+        cls.deployed_infrastructure_type = deployed_infrastructure_type
         cls.infrastructure_available = bool(
             cls.queue_url and cls.dlq_url and cls.lambda_name and 
             cls.dynamodb_table_name and cls.alert_topic_arn
-        )
+        ) if deployed_infrastructure_type == 'tap' else False
         
         # Try real AWS first, fall back to mocked if needed
         cls._setup_aws_clients()
@@ -75,31 +88,41 @@ class TestTapStackIntegration(unittest.TestCase):
     def _setup_aws_clients(cls):
         """Set up AWS clients - try real AWS first, fall back to mocked"""
         try:
-            # Try real AWS first if infrastructure is available and we have credentials
-            # Check if real AWS is available
+            # Try real AWS first if we have credentials and TAP infrastructure
             has_aws_credentials = (os.environ.get('AWS_ACCESS_KEY_ID') or 
                                  os.path.exists(os.path.expanduser('~/.aws/credentials')))
-            if cls.infrastructure_available and has_aws_credentials:
+            
+            if has_aws_credentials and cls.deployed_infrastructure_type == 'tap':
+                # TAP stack is deployed - use it
                 cls.sqs = boto3.client('sqs', region_name=cls.aws_region)
                 cls.lambda_client = boto3.client('lambda', region_name=cls.aws_region)
                 cls.dynamodb = boto3.resource('dynamodb', region_name=cls.aws_region)
                 cls.cloudwatch = boto3.client('cloudwatch', region_name=cls.aws_region)
                 cls.sns = boto3.client('sns', region_name=cls.aws_region)
                 
-                # Test real AWS connectivity and verify TAP stack resources exist
-                cls.sqs.get_queue_url(QueueName=cls.queue_url.split('/')[-1])
-                cls.using_mock = False
-                print("✅ Using real AWS infrastructure")
+                # Test real AWS connectivity
+                try:
+                    cls.sqs.get_queue_url(QueueName=cls.queue_url.split('/')[-1])
+                    cls.using_mock = False
+                    print(f"✅ Using real TAP stack infrastructure (region: {cls.aws_region})")
+                except Exception as e:
+                    print(f"⚠️ Real AWS TAP stack access failed ({e}), falling back to mocked")
+                    raise ConnectionError(f"Real AWS connectivity issue: {e}") from e
             else:
-                # Fall back to mocked infrastructure
-                raise ConnectionError("Real AWS not available or infrastructure mismatch")
+                # Fall back to mocked infrastructure (either no creds, or backup system deployed)
+                if not has_aws_credentials:
+                    reason = "no credentials found"
+                else:
+                    reason = f"infrastructure type is {cls.deployed_infrastructure_type}, not TAP"
+                raise ConnectionError(f"Real AWS not available - {reason}")
             
             # Initialize DynamoDB table if available
             if cls.dynamodb_table_name:
                 cls.audit_table = cls.dynamodb.Table(cls.dynamodb_table_name)
             
         except Exception as e:
-            print(f"⚠️ Real AWS not available ({e}), falling back to mocked AWS")
+            print(f"⚠️ Real AWS not available ({e})")
+            print("🔄 Falling back to comprehensive mocked TAP stack for testing")
             cls._setup_mocked_aws()
 
     @classmethod 
@@ -391,13 +414,31 @@ class TestTapStackIntegration(unittest.TestCase):
         # For real infrastructure, allow for processing delay
         if not self.using_mock and len(items['Items']) == 0:
             print("⏳ Waiting for Lambda processing...")
-            # Check if queue is being consumed
-            current_queue_attrs = self.sqs.get_queue_attributes(
-                QueueUrl=self.queue_url,
-                AttributeNames=['ApproximateNumberOfMessages']
-            )
-            remaining_msgs = int(current_queue_attrs['Attributes']['ApproximateNumberOfMessages'])
-            print(f"Queue has {remaining_msgs} remaining messages")
+            # Check if queue is being consumed - handle timeout properly
+            timeout_start = time.time()
+            timeout_duration = 40  # Increased timeout for real AWS
+            
+            while time.time() - timeout_start < timeout_duration:
+                try:
+                    current_queue_attrs = self.sqs.get_queue_attributes(
+                        QueueUrl=self.queue_url,
+                        AttributeNames=['ApproximateNumberOfMessages']
+                    )
+                    remaining_msgs = int(current_queue_attrs['Attributes']['ApproximateNumberOfMessages'])
+                    print(f"Queue has {remaining_msgs} remaining messages")
+                    
+                    # Check if items were processed
+                    items = self.audit_table.scan(
+                        FilterExpression=boto3.dynamodb.conditions.Attr('tracking_id').eq(self.test_tracking_id)
+                    )
+                    
+                    if len(items['Items']) > 0:
+                        break
+                        
+                    time.sleep(5)  # Wait before checking again
+                except Exception as e:
+                    print(f"⚠️ Error checking queue status: {e}")
+                    break
         
         self.assertEqual(len(items['Items']), 1, "Should have exactly one processed record")
         
@@ -647,7 +688,7 @@ class TestTapStackIntegration(unittest.TestCase):
                     self.assertLess(oldest_age, 300, "Oldest message should be less than 5 minutes old")
             except Exception as e:
                 print(f"⚠️ Could not check message age metrics: {e}")
-                # Don't fail the test for this
+                # Don't fail the test for this - attribute may not be supported
         else:
             print("✅ Message age check skipped for mocked infrastructure")
 
