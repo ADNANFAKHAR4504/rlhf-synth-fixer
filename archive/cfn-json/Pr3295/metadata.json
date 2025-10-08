@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "56382107",
+  "team": "synth",
+  "startedAt": "2025-10-02T03:26:33+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High training value (8/10) due to: (1) Complex multi-service RDS infrastructure requiring 8 critical production fixes (environment suffix, deletion policies, resource naming), (2) Real-world deployment challenges with S3 naming conventions and KMS integration, (3) Comprehensive security implementation (network isolation, encryption, IAM roles), (4) Production-ready monitoring with 5 CloudWatch alarms and SNS notifications, (5) Advanced features like Performance Insights, enhanced monitoring, lifecycle policies. The MODEL_FAILURES document provides valuable learning on deployment blockers and AWS service constraints. Strong candidate for training on production-ready database infrastructure patterns.",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "SecretsManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
