@@ -66,6 +66,12 @@
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -184,6 +190,12 @@
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -200,6 +212,12 @@
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -327,6 +345,12 @@
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -407,6 +431,12 @@
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "EnvironmentSuffix",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
