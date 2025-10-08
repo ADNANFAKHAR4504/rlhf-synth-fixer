@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350050",
+  "team": "2",
+  "startedAt": "2025-10-07T11:06:35.390Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "ElasticLoadBalancingV2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "SecretsManager",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

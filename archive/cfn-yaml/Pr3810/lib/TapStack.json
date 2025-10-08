@@ -1,0 +1,632 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Image Processing System with S3, Lambda, DynamoDB, and CloudWatch",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+      "Default": "dev"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for SNS notifications",
+      "Default": "admin@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    }
+  },
+  "Resources": {
+    "ImageStorageBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "ImageStorage"
+          }
+        ]
+      }
+    },
+    "ImageStorageBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ImageStorageBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ImageStorageBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${ImageStorageBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ImageMetadataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "ImageMetadata-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "ImageId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "UploadTimestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "ImageId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UploadTimestampIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "UploadTimestamp",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "ImageMetadata"
+          }
+        ]
+      }
+    },
+    "ProcessingNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "ImageProcessingNotifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Image Processing Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "ImageProcessorPolicy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:GetItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ImageMetadataTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ProcessingNotificationTopic"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ImageProcessorLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "ImageProcessor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "METADATA_TABLE": {
+              "Ref": "ImageMetadataTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ProcessingNotificationTopic"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom urllib.parse import unquote_plus\nimport hashlib\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\nsns_client = boto3.client('sns')\n\ntable_name = os.environ['METADATA_TABLE']\nsns_topic = os.environ['SNS_TOPIC_ARN']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    print(f\"Received event: {json.dumps(event)}\")\n    \n    processed_count = 0\n    failed_count = 0\n    \n    for record in event['Records']:\n        try:\n            bucket = record['s3']['bucket']['name']\n            key = unquote_plus(record['s3']['object']['key'])\n            size = record['s3']['object']['size']\n            \n            # Get object metadata\n            response = s3_client.head_object(Bucket=bucket, Key=key)\n            content_type = response.get('ContentType', 'unknown')\n            last_modified = response.get('LastModified')\n            \n            # Generate unique image ID\n            image_id = hashlib.md5(f\"{bucket}/{key}\".encode()).hexdigest()\n            \n            # Store metadata in DynamoDB\n            timestamp = int(datetime.now().timestamp())\n            \n            item = {\n                'ImageId': image_id,\n                'BucketName': bucket,\n                'ObjectKey': key,\n                'FileSize': size,\n                'ContentType': content_type,\n                'UploadTimestamp': timestamp,\n                'UploadDate': datetime.now().isoformat(),\n                'ProcessedAt': datetime.now().isoformat(),\n                'Status': 'processed'\n            }\n            \n            table.put_item(Item=item)\n            \n            print(f\"Successfully processed image: {key}\")\n            processed_count += 1\n            \n        except Exception as e:\n            print(f\"Error processing {key}: {str(e)}\")\n            failed_count += 1\n            continue\n    \n    # Send SNS notification\n    message = f\"\"\"\n    Image Processing Summary:\n    - Successfully processed: {processed_count}\n    - Failed: {failed_count}\n    - Environment: {os.environ['ENVIRONMENT']}\n    \"\"\"\n    \n    try:\n        sns_client.publish(\n            TopicArn=sns_topic,\n            Subject='Image Processing Report',\n            Message=message\n        )\n    except Exception as e:\n        print(f\"Error sending SNS notification: {str(e)}\")\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'processed': processed_count,\n            'failed': failed_count\n        })\n    }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ImageProcessorLambda"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        }
+      }
+    },
+    "S3BucketNotification": {
+      "Type": "Custom::S3BucketNotification",
+      "DependsOn": [
+        "LambdaInvokePermission"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "S3NotificationLambda",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "ImageStorageBucket"
+        },
+        "LambdaFunctionArn": {
+          "Fn::GetAtt": [
+            "ImageProcessorLambda",
+            "Arn"
+          ]
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Events": [
+                "s3:ObjectCreated:*"
+              ],
+              "LambdaFunctionArn": {
+                "Fn::GetAtt": [
+                  "ImageProcessorLambda",
+                  "Arn"
+                ]
+              },
+              "Filter": {
+                "Key": {
+                  "FilterRules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Events": [
+                "s3:ObjectCreated:*"
+              ],
+              "LambdaFunctionArn": {
+                "Fn::GetAtt": [
+                  "ImageProcessorLambda",
+                  "Arn"
+                ]
+              },
+              "Filter": {
+                "Key": {
+                  "FilterRules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".jpeg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Events": [
+                "s3:ObjectCreated:*"
+              ],
+              "LambdaFunctionArn": {
+                "Fn::GetAtt": [
+                  "ImageProcessorLambda",
+                  "Arn"
+                ]
+              },
+              "Filter": {
+                "Key": {
+                  "FilterRules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".png"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3NotificationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "S3NotificationPolicy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutBucketNotification",
+                    "s3:GetBucketNotification"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "S3NotificationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "S3NotificationManager-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "S3NotificationLambdaRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport cfnresponse\n\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    try:\n        bucket = event['ResourceProperties']['BucketName']\n        lambda_configs = event['ResourceProperties']['NotificationConfiguration']['LambdaConfigurations']\n        \n        if event['RequestType'] == 'Delete':\n            s3.put_bucket_notification_configuration(\n                Bucket=bucket,\n                NotificationConfiguration={}\n            )\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n            return\n        \n        notification_config = {\n            'LambdaFunctionConfigurations': [\n                {\n                    'LambdaFunctionArn': config['LambdaFunctionArn'],\n                    'Events': config['Events'],\n                    'Filter': {\n                        'Key': {\n                            'FilterRules': config['Filter']['Key']['FilterRules']\n                        }\n                    }\n                }\n                for config in lambda_configs\n            ]\n        }\n        \n        s3.put_bucket_notification_configuration(\n            Bucket=bucket,\n            NotificationConfiguration=notification_config\n        )\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})\n"
+        }
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/ImageProcessor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "ImageProcessor-Errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda function errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ImageProcessorLambda"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ProcessingNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "ImageProcessor-Throttles-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda function is throttled",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ImageProcessorLambda"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ProcessingNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "DynamoDB-WriteThrottle-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when DynamoDB write requests are throttled",
+        "MetricName": "WriteThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "ImageMetadataTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ProcessingNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "ImageProcessing-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${ImageProcessorLambda}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}],\n          [\"...\", {\"stat\": \"Maximum\", \"label\": \"Max Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration\",\n        \"period\": 300,\n        \"yAxis\": {\n          \"left\": {\n            \"label\": \"Milliseconds\"\n          }\n        },\n        \"dimensions\": {\n          \"FunctionName\": \"${ImageProcessorLambda}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${ImageMetadataTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"NumberOfObjects\", {\"stat\": \"Average\", \"label\": \"Object Count\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Objects\",\n        \"period\": 86400,\n        \"dimensions\": {\n          \"BucketName\": \"${ImageStorageBucket}\",\n          \"StorageType\": \"AllStorageTypes\"\n        }\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket for image storage",
+      "Value": {
+        "Ref": "ImageStorageBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3Bucket"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table for metadata",
+      "Value": {
+        "Ref": "ImageMetadataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DynamoDBTable"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "ImageProcessorLambda",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for notifications",
+      "Value": {
+        "Ref": "ProcessingNotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopic"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "URL to CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=ImageProcessing-${EnvironmentSuffix}"
+      }
+    }
+  }
+}
