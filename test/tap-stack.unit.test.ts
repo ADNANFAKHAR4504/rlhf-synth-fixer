@@ -20,7 +20,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Multi-region deployable CloudFormation template with comprehensive AWS services'
+        'Multi-region deployable CloudFormation template with comprehensive AWS services including AWS Config for compliance monitoring'
       );
     });
 
@@ -107,6 +107,33 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.NatGateway2).toBeDefined();
     });
 
+    // AWS Config Resources
+    test('should have AWS Config resources', () => {
+      expect(template.Resources.ConfigS3Bucket).toBeDefined();
+      expect(template.Resources.ConfigS3Bucket.Type).toBe('AWS::S3::Bucket');
+
+      expect(template.Resources.ConfigS3BucketPolicy).toBeDefined();
+      expect(template.Resources.ConfigS3BucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+
+      expect(template.Resources.ConfigServiceRole).toBeDefined();
+      expect(template.Resources.ConfigServiceRole.Type).toBe('AWS::IAM::Role');
+
+      expect(template.Resources.ConfigRecorder).toBeDefined();
+      expect(template.Resources.ConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+
+      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
+      expect(template.Resources.ConfigDeliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
+    });
+
+    // AWS Config Rules
+    test('should have AWS Config Rules', () => {
+      expect(template.Resources.S3BucketPublicReadRule).toBeDefined();
+      expect(template.Resources.S3BucketPublicReadRule.Type).toBe('AWS::Config::ConfigRule');
+
+      expect(template.Resources.S3BucketPublicWriteRule).toBeDefined();
+      expect(template.Resources.S3BucketPublicWriteRule.Type).toBe('AWS::Config::ConfigRule');
+    });
+
     // S3 Resources
     test('should have S3 resources', () => {
       expect(template.Resources.S3Bucket).toBeDefined();
@@ -184,6 +211,11 @@ describe('TapStack CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have key infrastructure outputs', () => {
       const expectedOutputs = [
+        'ConfigS3BucketName',
+        'ConfigS3BucketArn',
+        'ConfigServiceRoleArn',
+        'ConfigRecorderName',
+        'ConfigDeliveryChannelName',
         'S3BucketName',
         'S3BucketArn',
         'VpcId',
@@ -197,6 +229,17 @@ describe('TapStack CloudFormation Template', () => {
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
+    });
+
+    test('should have AWS Config related outputs', () => {
+      expect(template.Outputs.ConfigS3BucketName).toBeDefined();
+      expect(template.Outputs.ConfigS3BucketArn).toBeDefined();
+      expect(template.Outputs.ConfigServiceRoleArn).toBeDefined();
+      expect(template.Outputs.ConfigRecorderName).toBeDefined();
+      expect(template.Outputs.ConfigDeliveryChannelName).toBeDefined();
+      expect(template.Outputs.ConfigRulesCount).toBeDefined();
+      expect(template.Outputs.S3BucketPublicReadRuleName).toBeDefined();
+      expect(template.Outputs.S3BucketPublicWriteRuleName).toBeDefined();
     });
 
     test('should have S3 related outputs', () => {
@@ -249,7 +292,8 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have substantial number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(30); // We have many resources
+      expect(resourceCount).toBeGreaterThan(60); // We have many resources including Config
+      console.log(`Total resources in template: ${resourceCount}`);
     });
 
     test('should have multiple parameters', () => {
@@ -259,7 +303,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have multiple outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThan(10);
+      expect(outputCount).toBeGreaterThan(40); // We have many outputs including Config
     });
   });
 
@@ -269,9 +313,29 @@ describe('TapStack CloudFormation Template', () => {
       expect(dbInstance.Properties.DeletionProtection).toBe(false);
     });
 
-    test('S3 buckets should have versioning enabled', () => {
+    test('S3 buckets should have versioning suspended for easy deletion', () => {
       const s3Bucket = template.Resources.S3Bucket;
-      expect(s3Bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      const configBucket = template.Resources.ConfigS3Bucket;
+      const cloudTrailBucket = template.Resources.CloudTrailS3Bucket;
+
+      expect(s3Bucket.Properties.VersioningConfiguration.Status).toBe('Suspended');
+      expect(configBucket.Properties.VersioningConfiguration.Status).toBe('Suspended');
+      expect(cloudTrailBucket.Properties.VersioningConfiguration.Status).toBe('Suspended');
+    });
+
+    test('S3 buckets should have lifecycle rules for automatic deletion', () => {
+      const s3Bucket = template.Resources.S3Bucket;
+      const configBucket = template.Resources.ConfigS3Bucket;
+      const cloudTrailBucket = template.Resources.CloudTrailS3Bucket;
+
+      expect(s3Bucket.Properties.LifecycleConfiguration).toBeDefined();
+      expect(configBucket.Properties.LifecycleConfiguration).toBeDefined();
+      expect(cloudTrailBucket.Properties.LifecycleConfiguration).toBeDefined();
+
+      // Check that lifecycle rules delete objects after 1 day
+      expect(s3Bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(1);
+      expect(configBucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(1);
+      expect(cloudTrailBucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(1);
     });
 
     test('S3 buckets should have encryption configured', () => {
@@ -327,6 +391,56 @@ describe('TapStack CloudFormation Template', () => {
 
       expect(replicationConfig['Fn::If']).toBeDefined();
       expect(replicationConfig['Fn::If'][0]).toBe('HasReplicationBuckets');
+    });
+  });
+
+  describe('AWS Config Configuration', () => {
+    test('Config Recorder should have proper dependencies', () => {
+      const configRecorder = template.Resources.ConfigRecorder;
+      expect(configRecorder.DependsOn).toContain('ConfigServiceRole');
+      expect(configRecorder.DependsOn).toContain('ConfigS3BucketPolicy');
+    });
+
+    test('Config Service Role should use correct managed policy', () => {
+      const configRole = template.Resources.ConfigServiceRole;
+      expect(configRole.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      );
+    });
+
+    test('Config Delivery Channel should have correct delivery frequency', () => {
+      const deliveryChannel = template.Resources.ConfigDeliveryChannel;
+      expect(deliveryChannel.Properties.ConfigSnapshotDeliveryProperties.DeliveryFrequency).toBe('TwentyFour_Hours');
+    });
+
+    test('Config Rules should have proper source identifiers', () => {
+      const publicReadRule = template.Resources.S3BucketPublicReadRule;
+      const publicWriteRule = template.Resources.S3BucketPublicWriteRule;
+
+      expect(publicReadRule.Properties.Source.SourceIdentifier).toBe('S3_BUCKET_PUBLIC_READ_PROHIBITED');
+      expect(publicWriteRule.Properties.Source.SourceIdentifier).toBe('S3_BUCKET_PUBLIC_WRITE_PROHIBITED');
+    });
+
+    test('Config S3 Bucket should have proper permissions policy', () => {
+      const bucketPolicy = template.Resources.ConfigS3BucketPolicy;
+      expect(bucketPolicy.Properties.PolicyDocument.Statement).toBeDefined();
+
+      const statements = bucketPolicy.Properties.PolicyDocument.Statement;
+      const configStatements = statements.filter((stmt: any) =>
+        stmt.Principal && stmt.Principal.Service === 'config.amazonaws.com'
+      );
+
+      expect(configStatements.length).toBeGreaterThan(0);
+    });
+
+    test('Config resources should have proper naming conventions', () => {
+      const configBucket = template.Resources.ConfigS3Bucket;
+      const configRecorder = template.Resources.ConfigRecorder;
+      const configRole = template.Resources.ConfigServiceRole;
+
+      expect(configBucket.Properties.BucketName['Fn::Sub']).toContain('config-bucket');
+      expect(configRecorder.Properties.Name['Fn::Sub']).toContain('config-recorder');
+      expect(configRole.Properties.RoleName['Fn::Sub']).toContain('config-service-role');
     });
   });
 });

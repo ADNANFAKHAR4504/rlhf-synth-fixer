@@ -1,6 +1,5 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Multi-region deployable CloudFormation template with comprehensive AWS services'
+Description: 'Multi-region deployable CloudFormation template with comprehensive AWS services including AWS Config for compliance monitoring'
 
 Parameters:
   # Environment parameters
@@ -41,7 +40,6 @@ Parameters:
     Default: 7
     MinValue: 7
   
-  
   # WAF parameters
   WAFScope:
     Description: The scope of the WAF (REGIONAL or CLOUDFRONT)
@@ -65,6 +63,162 @@ Conditions:
   HasReplicationBuckets: !Not [!Equals [!Join ['', !Ref CrossRegionReplicationBuckets], '']]
 
 Resources:
+  # S3 Bucket for AWS Config data storage
+  ConfigS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-bucket-${RandomSuffix}'
+      VersioningConfiguration:
+        Status: Suspended
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteEverythingRule
+            Status: Enabled
+            ExpirationInDays: 1
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-config-bucket'
+        - Key: Purpose
+          Value: AWS Config Data Storage
+
+  # S3 Bucket Policy for AWS Config
+  ConfigS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigS3Bucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:ListBucket'
+            Resource: !GetAtt ConfigS3Bucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigS3Bucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+
+  # IAM Role for AWS Config
+  ConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentSuffix}-config-service-role-${RandomSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      Path: '/service-role/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-config-service-role'
+        - Key: Purpose
+          Value: AWS Config Service Role
+
+  # AWS Config Configuration Recorder
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - ConfigS3BucketPolicy
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-config-recorder'
+      RoleARN: !GetAtt ConfigServiceRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+        RecordingStrategy:
+          UseOnly: ALL_SUPPORTED_RESOURCE_TYPES
+
+  # AWS Config Delivery Channel
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigS3BucketPolicy
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-config-delivery-channel'
+      S3BucketName: !Ref ConfigS3Bucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # Config Rule: S3 Bucket Public Read Prohibited
+  S3BucketPublicReadRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentSuffix}-s3-bucket-public-read-prohibited'
+      Description: 'Checks that S3 buckets do not allow public read access'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::S3::Bucket'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+
+  # Config Rule: S3 Bucket Public Write Prohibited
+  S3BucketPublicWriteRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentSuffix}-s3-bucket-public-write-prohibited'
+      Description: 'Checks that S3 buckets do not allow public write access'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::S3::Bucket'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+
   # S3 Bucket with versioning and encryption
   S3Bucket:
     Type: AWS::S3::Bucket
@@ -72,12 +226,20 @@ Resources:
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}'
       VersioningConfiguration:
-        Status: Enabled
+        Status: Suspended
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !GetAtt S3BucketKMSKey.Arn
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteEverythingRule
+            Status: Enabled
+            ExpirationInDays: 1
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
       ReplicationConfiguration: !If
         - HasReplicationBuckets
         - Role: !GetAtt S3ReplicationRole.Arn
@@ -729,7 +891,7 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt WebAppLambdaRole.Arn
       Timeout: 30
-      MemorySize: 128
+      MemorySize: 256
       VpcConfig:
         SecurityGroupIds:
           - !Ref AppSecurityGroup
@@ -740,6 +902,7 @@ Resources:
         Variables:
           DB_SECRET_ARN: !Ref DbSecret
           S3_BUCKET: !Ref S3Bucket
+          DB_ENDPOINT: !GetAtt DbInstance.Endpoint.Address
       Code:
         ZipFile: |
           import json
@@ -747,14 +910,211 @@ Resources:
           import os
           import logging
           from datetime import datetime
+          import socket
           
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
           
+          def test_database_connectivity():
+              """Test database connectivity and return results"""
+              db_test_result = {
+                  'connection_attempted': False,
+                  'connection_successful': False,
+                  'error': None,
+                  'endpoint': None,
+                  'port_accessible': False,
+                  'credentials_retrieved': False,
+                  'mysql_handshake_received': False,
+                  'mysql_version': None,
+                  'protocol_version': None,
+                  'network_info': {}
+              }
+              
+              try:
+                  # Collect network information for debugging
+                  try:
+                      import subprocess
+                      import urllib.request
+                      
+                      # Get Lambda's network interface info
+                      network_info = {}
+                      
+                      # Get Lambda's IP address by checking what IP it uses for outbound connections
+                      try:
+                          # Try to get our outbound IP (this will show what IP Lambda uses)
+                          req = urllib.request.Request('https://api.ipify.org', headers={'User-Agent': 'Lambda-Test'})
+                          with urllib.request.urlopen(req, timeout=5) as response:
+                              network_info['lambda_outbound_ip'] = response.read().decode('utf-8')
+                      except:
+                          network_info['lambda_outbound_ip'] = 'Unable to determine'
+                      
+                      # Get VPC endpoint information if available
+                      try:
+                          # Check if we can resolve internal AWS services (indicates VPC setup)
+                          vpc_dns_test = socket.gethostbyname('s3.amazonaws.com')
+                          network_info['vpc_dns_working'] = True
+                          network_info['s3_resolved_ip'] = vpc_dns_test
+                      except:
+                          network_info['vpc_dns_working'] = False
+                      
+                      # Check Lambda's environment network details
+                      network_info['aws_region'] = os.environ.get('AWS_REGION', 'unknown')
+                      network_info['lambda_function_name'] = os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown')
+                      
+                      db_test_result['network_info'] = network_info
+                      
+                  except Exception as net_error:
+                      db_test_result['network_info'] = {'error': str(net_error)}
+                  
+                  # Check if we have database configuration
+                  db_secret_arn = os.environ.get('DB_SECRET_ARN')
+                  if not db_secret_arn:
+                      db_test_result['error'] = 'DB_SECRET_ARN not configured'
+                      return db_test_result
+                  
+                  # Try to get database credentials
+                  secrets_client = boto3.client('secretsmanager')
+                  secret_response = secrets_client.get_secret_value(SecretId=db_secret_arn)
+                  credentials = json.loads(secret_response['SecretString'])
+                  db_test_result['credentials_retrieved'] = True
+                  
+                  # Get RDS endpoint from environment variable
+                  db_endpoint = os.environ.get('DB_ENDPOINT')
+                  if not db_endpoint:
+                      db_test_result['error'] = 'DB_ENDPOINT not configured'
+                      return db_test_result
+                  
+                  db_test_result['endpoint'] = db_endpoint
+                  db_test_result['connection_attempted'] = True
+                  
+                  # Test TCP connectivity to database port
+                  try:
+                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      sock.settimeout(5)
+                      result = sock.connect_ex((db_endpoint, 3306))
+                      sock.close()
+                      
+                      if result == 0:
+                          db_test_result['port_accessible'] = True
+                          logger.info(f"TCP connection to {db_endpoint}:3306 successful")
+                      else:
+                          logger.warning(f"TCP connection to {db_endpoint}:3306 failed with code {result}")
+                  
+                  except Exception as tcp_error:
+                      logger.warning(f"TCP test failed: {str(tcp_error)}")
+                  
+                  # Test MySQL protocol handshake (simpler approach)
+                  try:
+                      # Create socket connection to MySQL port
+                      import struct
+                      import time
+                      
+                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      sock.settimeout(10)
+                      sock.connect((db_endpoint, 3306))
+                      
+                      # Read MySQL initial handshake packet
+                      # This will tell us if MySQL is actually responding
+                      try:
+                          # MySQL sends an initial handshake packet when you connect
+                          data = sock.recv(1024)
+                          
+                          if len(data) > 5:
+                              # Parse basic MySQL handshake packet
+                              # First 4 bytes are packet length + sequence
+                              packet_length = struct.unpack('<I', data[0:4] + b'\x00')[0] & 0xffffff
+                              protocol_version = data[4]
+                              
+                              # Find the server version string (null-terminated)
+                              version_start = 5
+                              version_end = data.find(b'\x00', version_start)
+                              
+                              if version_end > version_start:
+                                  mysql_version = data[version_start:version_end].decode('utf-8', errors='ignore')
+                                  
+                                  db_test_result['connection_successful'] = True
+                                  db_test_result['mysql_handshake_received'] = True
+                                  db_test_result['mysql_version'] = mysql_version
+                                  db_test_result['protocol_version'] = protocol_version
+                                  
+                                  logger.info(f"MySQL handshake successful - Version: {mysql_version}")
+                              else:
+                                  db_test_result['connection_successful'] = True
+                                  db_test_result['mysql_handshake_received'] = True
+                                  db_test_result['mysql_version'] = 'Unknown'
+                                  logger.info("MySQL handshake received but version parsing failed")
+                          else:
+                              db_test_result['error'] = 'Received data too short for MySQL handshake'
+                              logger.warning("Received data too short for MySQL handshake")
+                      
+                      except Exception as handshake_error:
+                          db_test_result['error'] = f'Handshake parsing failed: {str(handshake_error)}'
+                          logger.warning(f"MySQL handshake parsing failed: {str(handshake_error)}")
+                      
+                      finally:
+                          sock.close()
+                          
+                  except Exception as socket_error:
+                      db_test_result['connection_successful'] = False
+                      db_test_result['error'] = f'Socket connection failed: {str(socket_error)}'
+                      logger.error(f"Socket connection to MySQL failed: {str(socket_error)}")
+                  
+                  # Test DNS resolution
+                  try:
+                      import socket as socket_module
+                      resolved_ip = socket_module.gethostbyname(db_endpoint)
+                      db_test_result['dns_resolution'] = {
+                          'successful': True,
+                          'resolved_ip': resolved_ip
+                      }
+                      logger.info(f"DNS resolution successful: {db_endpoint} -> {resolved_ip}")
+                  except Exception as dns_error:
+                      db_test_result['dns_resolution'] = {
+                          'successful': False,
+                          'error': str(dns_error)
+                      }
+                      logger.error(f"DNS resolution failed: {str(dns_error)}")
+                  
+                  # Test different connection approaches
+                  connection_tests = []
+                  
+                  # Test 1: Quick connection test
+                  try:
+                      test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      test_sock.settimeout(3)
+                      start_time = time.time()
+                      result = test_sock.connect_ex((db_endpoint, 3306))
+                      end_time = time.time()
+                      test_sock.close()
+                      
+                      connection_tests.append({
+                          'test': 'quick_connect',
+                          'successful': result == 0,
+                          'response_time_ms': round((end_time - start_time) * 1000, 2),
+                          'error_code': result if result != 0 else None
+                      })
+                  except Exception as test_error:
+                      connection_tests.append({
+                          'test': 'quick_connect',
+                          'successful': False,
+                          'error': str(test_error)
+                      })
+                  
+                  db_test_result['connection_tests'] = connection_tests
+              
+              except Exception as e:
+                  db_test_result['error'] = str(e)
+                  logger.error(f"Database test failed: {str(e)}")
+              
+              return db_test_result
+          
           def lambda_handler(event, context):
               logger.info(f"Received event: {event}")
               
-              # Create dummy response data
+              # Test database connectivity
+              db_test = test_database_connectivity()
+              
+              # Create response data
               response_data = {
                   'message': 'Hello from TapStack WebApp Lambda!',
                   'timestamp': datetime.utcnow().isoformat() + 'Z',
@@ -776,7 +1136,8 @@ Resources:
                       's3_bucket': os.environ.get('S3_BUCKET', 'not-configured'),
                       'db_secret_configured': bool(os.environ.get('DB_SECRET_ARN')),
                       'vpc_enabled': True
-                  }
+                  },
+                  'database_test': db_test
               }
               
               return {
@@ -839,8 +1200,6 @@ Resources:
           HttpMethod: '*'
           MetricsEnabled: true
 
-
-
   # CloudTrail
   CloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -863,7 +1222,7 @@ Resources:
     Properties:
       BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-cloudtrail-logs-${RandomSuffix}'
       VersioningConfiguration:
-        Status: Enabled
+        Status: Suspended
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -873,6 +1232,14 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteEverythingRule
+            Status: Enabled
+            ExpirationInDays: 1
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -981,7 +1348,56 @@ Resources:
       ResourceArn: !Ref ALB
       WebACLArn: !GetAtt WebACL.Arn
 
+
 Outputs:
+  ConfigS3BucketName:
+    Description: Name of the S3 bucket used for AWS Config
+    Value: !Ref ConfigS3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigS3BucketName'
+
+  ConfigS3BucketArn:
+    Description: ARN of the S3 bucket used for AWS Config
+    Value: !GetAtt ConfigS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigS3BucketArn'
+
+  ConfigServiceRoleArn:
+    Description: ARN of the IAM role used by AWS Config
+    Value: !GetAtt ConfigServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigServiceRoleArn'
+
+  ConfigRecorderName:
+    Description: Name of the AWS Config Configuration Recorder
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRecorderName'
+
+  ConfigDeliveryChannelName:
+    Description: Name of the AWS Config Delivery Channel
+    Value: !Ref ConfigDeliveryChannel
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigDeliveryChannelName'
+
+  ConfigRulesCount:
+    Description: Number of Config Rules deployed
+    Value: '2'
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRulesCount'
+
+  S3BucketPublicReadRuleName:
+    Description: Name of the S3 Bucket Public Read Config Rule
+    Value: !Ref S3BucketPublicReadRule
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketPublicReadRuleName'
+
+  S3BucketPublicWriteRuleName:
+    Description: Name of the S3 Bucket Public Write Config Rule
+    Value: !Ref S3BucketPublicWriteRule
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketPublicWriteRuleName'
+
   S3BucketName:
     Description: Name of the S3 bucket
     Value: !Ref S3Bucket

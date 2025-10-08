@@ -4,3 +4,4 @@
 4. DB security group has incorrect egress rule to localhost (127.0.0.1/32) - FIXED: Removed egress rules entirely, security groups deny by default
 5. Lambda functions use deprecated Python 3.8 runtime instead of supported versions - FIXED: Updated both Lambda functions to use Python 3.11
 6. RDS uses outdated MySQL 8.0.25 engine version - FIXED: Updated to latest supported MySQL 8.0.43
+7. AWS Config - Failed to correctly add AWS Config configuration and incorrect dependency order

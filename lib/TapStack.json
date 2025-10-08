@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Multi-region deployable CloudFormation template with comprehensive AWS services",
+    "Description": "Multi-region deployable CloudFormation template with comprehensive AWS services including AWS Config for compliance monitoring",
     "Parameters": {
         "EnvironmentSuffix": {
             "Description": "The deployment environment suffix",
@@ -73,6 +73,280 @@
         }
     },
     "Resources": {
+        "ConfigS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-config-bucket-${RandomSuffix}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Suspended"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteEverythingRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 1,
+                            "NoncurrentVersionExpirationInDays": 1,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-config-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "AWS Config Data Storage"
+                    }
+                ]
+            }
+        },
+        "ConfigS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigS3Bucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigS3Bucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDeliveryCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigS3Bucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-config-service-role-${RandomSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Path": "/service-role/",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-config-service-role"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "AWS Config Service Role"
+                    }
+                ]
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": [
+                "ConfigServiceRole",
+                "ConfigS3BucketPolicy"
+            ],
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-config-recorder"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigServiceRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true,
+                    "RecordingStrategy": {
+                        "UseOnly": "ALL_SUPPORTED_RESOURCE_TYPES"
+                    }
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "DependsOn": [
+                "ConfigS3BucketPolicy"
+            ],
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-config-delivery-channel"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigS3Bucket"
+                },
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "TwentyFour_Hours"
+                }
+            }
+        },
+        "S3BucketPublicReadRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigRecorder"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-bucket-public-read-prohibited"
+                },
+                "Description": "Checks that S3 buckets do not allow public read access",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
+                    ]
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+                }
+            }
+        },
+        "S3BucketPublicWriteRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigRecorder"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-bucket-public-write-prohibited"
+                },
+                "Description": "Checks that S3 buckets do not allow public write access",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
+                    ]
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+                }
+            }
+        },
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
@@ -81,7 +355,7 @@
                     "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-data-bucket-${RandomSuffix}"
                 },
                 "VersioningConfiguration": {
-                    "Status": "Enabled"
+                    "Status": "Suspended"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -94,6 +368,19 @@
                                         "Arn"
                                     ]
                                 }
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteEverythingRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 1,
+                            "NoncurrentVersionExpirationInDays": 1,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
                             }
                         }
                     ]
@@ -1283,7 +1570,7 @@
                     ]
                 },
                 "Timeout": 30,
-                "MemorySize": 128,
+                "MemorySize": 256,
                 "VpcConfig": {
                     "SecurityGroupIds": [
                         {
@@ -1306,11 +1593,17 @@
                         },
                         "S3_BUCKET": {
                             "Ref": "S3Bucket"
+                        },
+                        "DB_ENDPOINT": {
+                            "Fn::GetAtt": [
+                                "DbInstance",
+                                "Endpoint.Address"
+                            ]
                         }
                     }
                 },
                 "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    \n    # Create dummy response data\n    response_data = {\n        'message': 'Hello from TapStack WebApp Lambda!',\n        'timestamp': datetime.utcnow().isoformat() + 'Z',\n        'environment': os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),\n        'region': os.environ.get('AWS_REGION', 'unknown'),\n        'data': {\n            'users': [\n                {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},\n                {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},\n                {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'}\n            ],\n            'stats': {\n                'total_users': 3,\n                'active_sessions': 12,\n                'last_updated': '2024-01-15T10:30:00Z'\n            }\n        },\n        'config': {\n            's3_bucket': os.environ.get('S3_BUCKET', 'not-configured'),\n            'db_secret_configured': bool(os.environ.get('DB_SECRET_ARN')),\n            'vpc_enabled': True\n        }\n    }\n    \n    return {\n        'statusCode': 200,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type',\n            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'\n        },\n        'body': json.dumps(response_data, indent=2)\n    }\n"
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime\nimport socket\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef test_database_connectivity():\n    \"\"\"Test database connectivity and return results\"\"\"\n    db_test_result = {\n        'connection_attempted': False,\n        'connection_successful': False,\n        'error': None,\n        'endpoint': None,\n        'port_accessible': False,\n        'credentials_retrieved': False,\n        'mysql_handshake_received': False,\n        'mysql_version': None,\n        'protocol_version': None,\n        'network_info': {}\n    }\n    \n    try:\n        # Collect network information for debugging\n        try:\n            import subprocess\n            import urllib.request\n            \n            # Get Lambda's network interface info\n            network_info = {}\n            \n            # Get Lambda's IP address by checking what IP it uses for outbound connections\n            try:\n                # Try to get our outbound IP (this will show what IP Lambda uses)\n                req = urllib.request.Request('https://api.ipify.org', headers={'User-Agent': 'Lambda-Test'})\n                with urllib.request.urlopen(req, timeout=5) as response:\n                    network_info['lambda_outbound_ip'] = response.read().decode('utf-8')\n            except:\n                network_info['lambda_outbound_ip'] = 'Unable to determine'\n            \n            # Get VPC endpoint information if available\n            try:\n                # Check if we can resolve internal AWS services (indicates VPC setup)\n                vpc_dns_test = socket.gethostbyname('s3.amazonaws.com')\n                network_info['vpc_dns_working'] = True\n                network_info['s3_resolved_ip'] = vpc_dns_test\n            except:\n                network_info['vpc_dns_working'] = False\n            \n            # Check Lambda's environment network details\n            network_info['aws_region'] = os.environ.get('AWS_REGION', 'unknown')\n            network_info['lambda_function_name'] = os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown')\n            \n            db_test_result['network_info'] = network_info\n            \n        except Exception as net_error:\n            db_test_result['network_info'] = {'error': str(net_error)}\n        \n        # Check if we have database configuration\n        db_secret_arn = os.environ.get('DB_SECRET_ARN')\n        if not db_secret_arn:\n            db_test_result['error'] = 'DB_SECRET_ARN not configured'\n            return db_test_result\n        \n        # Try to get database credentials\n        secrets_client = boto3.client('secretsmanager')\n        secret_response = secrets_client.get_secret_value(SecretId=db_secret_arn)\n        credentials = json.loads(secret_response['SecretString'])\n        db_test_result['credentials_retrieved'] = True\n        \n        # Get RDS endpoint from environment variable\n        db_endpoint = os.environ.get('DB_ENDPOINT')\n        if not db_endpoint:\n            db_test_result['error'] = 'DB_ENDPOINT not configured'\n            return db_test_result\n        \n        db_test_result['endpoint'] = db_endpoint\n        db_test_result['connection_attempted'] = True\n        \n        # Test TCP connectivity to database port\n        try:\n            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            sock.settimeout(5)\n            result = sock.connect_ex((db_endpoint, 3306))\n            sock.close()\n            \n            if result == 0:\n                db_test_result['port_accessible'] = True\n                logger.info(f\"TCP connection to {db_endpoint}:3306 successful\")\n            else:\n                logger.warning(f\"TCP connection to {db_endpoint}:3306 failed with code {result}\")\n        \n        except Exception as tcp_error:\n            logger.warning(f\"TCP test failed: {str(tcp_error)}\")\n        \n        # Test MySQL protocol handshake (simpler approach)\n        try:\n            # Create socket connection to MySQL port\n            import struct\n            import time\n            \n            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            sock.settimeout(10)\n            sock.connect((db_endpoint, 3306))\n            \n            # Read MySQL initial handshake packet\n            # This will tell us if MySQL is actually responding\n            try:\n                # MySQL sends an initial handshake packet when you connect\n                data = sock.recv(1024)\n                \n                if len(data) > 5:\n                    # Parse basic MySQL handshake packet\n                    # First 4 bytes are packet length + sequence\n                    packet_length = struct.unpack('<I', data[0:4] + b'\\x00')[0] & 0xffffff\n                    protocol_version = data[4]\n                    \n                    # Find the server version string (null-terminated)\n                    version_start = 5\n                    version_end = data.find(b'\\x00', version_start)\n                    \n                    if version_end > version_start:\n                        mysql_version = data[version_start:version_end].decode('utf-8', errors='ignore')\n                        \n                        db_test_result['connection_successful'] = True\n                        db_test_result['mysql_handshake_received'] = True\n                        db_test_result['mysql_version'] = mysql_version\n                        db_test_result['protocol_version'] = protocol_version\n                        \n                        logger.info(f\"MySQL handshake successful - Version: {mysql_version}\")\n                    else:\n                        db_test_result['connection_successful'] = True\n                        db_test_result['mysql_handshake_received'] = True\n                        db_test_result['mysql_version'] = 'Unknown'\n                        logger.info(\"MySQL handshake received but version parsing failed\")\n                else:\n                    db_test_result['error'] = 'Received data too short for MySQL handshake'\n                    logger.warning(\"Received data too short for MySQL handshake\")\n            \n            except Exception as handshake_error:\n                db_test_result['error'] = f'Handshake parsing failed: {str(handshake_error)}'\n                logger.warning(f\"MySQL handshake parsing failed: {str(handshake_error)}\")\n            \n            finally:\n                sock.close()\n                \n        except Exception as socket_error:\n            db_test_result['connection_successful'] = False\n            db_test_result['error'] = f'Socket connection failed: {str(socket_error)}'\n            logger.error(f\"Socket connection to MySQL failed: {str(socket_error)}\")\n        \n        # Test DNS resolution\n        try:\n            import socket as socket_module\n            resolved_ip = socket_module.gethostbyname(db_endpoint)\n            db_test_result['dns_resolution'] = {\n                'successful': True,\n                'resolved_ip': resolved_ip\n            }\n            logger.info(f\"DNS resolution successful: {db_endpoint} -> {resolved_ip}\")\n        except Exception as dns_error:\n            db_test_result['dns_resolution'] = {\n                'successful': False,\n                'error': str(dns_error)\n            }\n            logger.error(f\"DNS resolution failed: {str(dns_error)}\")\n        \n        # Test different connection approaches\n        connection_tests = []\n        \n        # Test 1: Quick connection test\n        try:\n            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            test_sock.settimeout(3)\n            start_time = time.time()\n            result = test_sock.connect_ex((db_endpoint, 3306))\n            end_time = time.time()\n            test_sock.close()\n            \n            connection_tests.append({\n                'test': 'quick_connect',\n                'successful': result == 0,\n                'response_time_ms': round((end_time - start_time) * 1000, 2),\n                'error_code': result if result != 0 else None\n            })\n        except Exception as test_error:\n            connection_tests.append({\n                'test': 'quick_connect',\n                'successful': False,\n                'error': str(test_error)\n            })\n        \n        db_test_result['connection_tests'] = connection_tests\n    \n    except Exception as e:\n        db_test_result['error'] = str(e)\n        logger.error(f\"Database test failed: {str(e)}\")\n    \n    return db_test_result\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    \n    # Test database connectivity\n    db_test = test_database_connectivity()\n    \n    # Create response data\n    response_data = {\n        'message': 'Hello from TapStack WebApp Lambda!',\n        'timestamp': datetime.utcnow().isoformat() + 'Z',\n        'environment': os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),\n        'region': os.environ.get('AWS_REGION', 'unknown'),\n        'data': {\n            'users': [\n                {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},\n                {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},\n                {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'}\n            ],\n            'stats': {\n                'total_users': 3,\n                'active_sessions': 12,\n                'last_updated': '2024-01-15T10:30:00Z'\n            }\n        },\n        'config': {\n            's3_bucket': os.environ.get('S3_BUCKET', 'not-configured'),\n            'db_secret_configured': bool(os.environ.get('DB_SECRET_ARN')),\n            'vpc_enabled': True\n        },\n        'database_test': db_test\n    }\n    \n    return {\n        'statusCode': 200,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type',\n            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'\n        },\n        'body': json.dumps(response_data, indent=2)\n    }\n"
                 }
             }
         },
@@ -1443,7 +1736,7 @@
                     "Fn::Sub": "${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}-cloudtrail-logs-${RandomSuffix}"
                 },
                 "VersioningConfiguration": {
-                    "Status": "Enabled"
+                    "Status": "Suspended"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1459,6 +1752,19 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteEverythingRule",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 1,
+                            "NoncurrentVersionExpirationInDays": 1,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -1651,6 +1957,98 @@
         }
     },
     "Outputs": {
+        "ConfigS3BucketName": {
+            "Description": "Name of the S3 bucket used for AWS Config",
+            "Value": {
+                "Ref": "ConfigS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigS3BucketName"
+                }
+            }
+        },
+        "ConfigS3BucketArn": {
+            "Description": "ARN of the S3 bucket used for AWS Config",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ConfigS3Bucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigS3BucketArn"
+                }
+            }
+        },
+        "ConfigServiceRoleArn": {
+            "Description": "ARN of the IAM role used by AWS Config",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ConfigServiceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigServiceRoleArn"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "Name of the AWS Config Configuration Recorder",
+            "Value": {
+                "Ref": "ConfigRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRecorderName"
+                }
+            }
+        },
+        "ConfigDeliveryChannelName": {
+            "Description": "Name of the AWS Config Delivery Channel",
+            "Value": {
+                "Ref": "ConfigDeliveryChannel"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigDeliveryChannelName"
+                }
+            }
+        },
+        "ConfigRulesCount": {
+            "Description": "Number of Config Rules deployed",
+            "Value": "2",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRulesCount"
+                }
+            }
+        },
+        "S3BucketPublicReadRuleName": {
+            "Description": "Name of the S3 Bucket Public Read Config Rule",
+            "Value": {
+                "Ref": "S3BucketPublicReadRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketPublicReadRuleName"
+                }
+            }
+        },
+        "S3BucketPublicWriteRuleName": {
+            "Description": "Name of the S3 Bucket Public Write Config Rule",
+            "Value": {
+                "Ref": "S3BucketPublicWriteRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketPublicWriteRuleName"
+                }
+            }
+        },
         "S3BucketName": {
             "Description": "Name of the S3 bucket",
             "Value": {
@@ -1947,6 +2345,111 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-WebACLArn"
+                }
+            }
+        },
+        "NatGateway1Id": {
+            "Description": "ID of the first NAT Gateway",
+            "Value": {
+                "Ref": "NatGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NatGateway1Id"
+                }
+            }
+        },
+        "NatGateway2Id": {
+            "Description": "ID of the second NAT Gateway",
+            "Value": {
+                "Ref": "NatGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NatGateway2Id"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "ID of the Internet Gateway",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InternetGatewayId"
+                }
+            }
+        },
+        "SecretRotationLambdaArn": {
+            "Description": "ARN of the secret rotation Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecretRotationLambda",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecretRotationLambdaArn"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "ARN of the CloudTrail trail",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailArn"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "ID of the KMS key used for S3 encryption",
+            "Value": {
+                "Ref": "S3BucketKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        },
+        "PublicRouteTableId": {
+            "Description": "ID of the public route table",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicRouteTableId"
+                }
+            }
+        },
+        "PrivateRouteTable1Id": {
+            "Description": "ID of the first private route table",
+            "Value": {
+                "Ref": "PrivateRouteTable1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateRouteTable1Id"
+                }
+            }
+        },
+        "PrivateRouteTable2Id": {
+            "Description": "ID of the second private route table",
+            "Value": {
+                "Ref": "PrivateRouteTable2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateRouteTable2Id"
                 }
             }
         }
