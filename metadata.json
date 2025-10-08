@@ -6,6 +6,10 @@
   "po_id": "46170923",
   "team": "synth",
   "startedAt": "2025-10-02T02:35:30+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
   "training_quality": 8,
   "aws_services": [
     "VPC",
@@ -20,10 +24,6 @@
     "Launch Template",
     "Target Group",
     "ELB"
-  ],
-  "subtask": "Application Deployment",
-  "subject_labels": [
-    "Provisioning of Infrastructure Environments"
   ],
   "coverage": {
     "lines": 100,
