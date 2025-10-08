@@ -3,12 +3,22 @@
   "language": "yaml",
   "complexity": "medium",
   "turn_type": "single",
+<<<<<<< HEAD
   "po_id": "CLO_YML_MED_S3_LAMBDA_7i8j9k_1f2g3h4iCD",
   "team": "5",
   "startedAt": "2025-10-08T06:43:20.742Z",
+=======
+  "po_id": "CLO_YML_MED_EVENTBRIDGE_1l2m3n_4i5j6k7lIJ",
+  "team": "5",
+  "startedAt": "2025-10-08T04:57:23.810Z",
+>>>>>>> e90f38e7969f60834eb1c38f0f858ba1b2b4108b
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+<<<<<<< HEAD
   "aws_services": "S3, Lambda, Dynamo, Cloudwatch"
+=======
+  "aws_services": "EventBridge, SNS, Cloudwatch, IAM, Lambda"
+>>>>>>> e90f38e7969f60834eb1c38f0f858ba1b2b4108b
 }
