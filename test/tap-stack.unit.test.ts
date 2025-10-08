@@ -11,9 +11,9 @@ describe('TapStack CloudFormation Template - Serverless Infrastructure', () => {
   });
 
   describe('Lambda Function Configuration', () => {
-    test('RequestProcessorLambda should use Python 3.8 runtime', () => {
+    test('RequestProcessorLambda should use Python 3.13 runtime', () => {
       const lambda = template.Resources.RequestProcessorLambda;
-      expect(lambda.Properties.Runtime).toBe('python3.8');
+      expect(lambda.Properties.Runtime).toBe('python3.13');
     });
 
     test('RequestProcessorLambda should have 30 second timeout', () => {
@@ -161,11 +161,9 @@ describe('TapStack CloudFormation Template - Serverless Infrastructure', () => {
       expect(envTag.Value).toBe('Production');
     });
 
-    test('ApiLoggingBucket should have dynamic bucket name with stack name and account ID', () => {
+    test('ApiLoggingBucket should be created without explicit bucket name', () => {
       const bucket = template.Resources.ApiLoggingBucket;
-      expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${AWS::StackName}-api-logs-${AWS::AccountId}'
-      });
+      expect(bucket.Properties.BucketName).toBeUndefined();
     });
   });
 

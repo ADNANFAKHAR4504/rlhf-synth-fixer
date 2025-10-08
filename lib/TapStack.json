@@ -88,7 +88,7 @@
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-request-processor"
         },
-        "Runtime": "python3.8",
+        "Runtime": "python3.13",
         "Handler": "index.lambda_handler",
         "Role": {
           "Fn::GetAtt": ["RequestProcessorLambdaRole", "Arn"]
@@ -296,9 +296,6 @@
     "ApiLoggingBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-api-logs-${AWS::AccountId}"
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {

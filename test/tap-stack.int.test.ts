@@ -204,7 +204,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       const functionResponse = await lambdaClient.send(getFunctionCommand);
       expect(functionResponse.Configuration).toBeDefined();
-      expect(functionResponse.Configuration!.Runtime).toBe('python3.8');
+      expect(functionResponse.Configuration!.Runtime).toBe('python3.13');
       expect(functionResponse.Configuration!.Timeout).toBe(30);
       expect(functionResponse.Configuration!.MemorySize).toBe(256);
       expect(functionResponse.Configuration!.Environment).toBeDefined();
