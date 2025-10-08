@@ -384,19 +384,6 @@ export class SecretsManagerModule extends Construct {
       }
     );
 
-    // Generate random password
-    const randomPassword =
-      new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
-        this,
-        'db-password',
-        {
-          passwordLength: 32, // Use the correct property name according to the type
-          includeSpace: false,
-          excludePunctuation: true,
-          excludeCharacters: '"@/\\\'',
-        }
-      );
-
     this.dbSecretVersion =
       new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
         this,
@@ -405,7 +392,7 @@ export class SecretsManagerModule extends Construct {
           secretId: this.dbSecret.id,
           secretString: JSON.stringify({
             username: 'admin',
-            password: randomPassword.randomPassword,
+            password: process.env.DB_PASSWORD || 'ChangeMe123!', // Use env variable or default
           }),
         }
       );
@@ -587,7 +574,7 @@ export class Ec2Module extends Construct {
       'launch-template',
       {
         name: `${id}-launch-template`,
-        imageId: 'ami-0c02fb55731490381', // Amazon Linux 2 AMI
+        imageId: 'ami-0989fb15ce71ba39e', // Amazon Linux 2 AMI
         instanceType: 't3.micro',
         iamInstanceProfile: { arn: props.instanceProfileArn },
         vpcSecurityGroupIds: [props.securityGroupId],
