@@ -229,8 +229,6 @@ class TestServerlessServiceIntegration(BaseIntegrationTest):
                                 'uri': integration.get('uri', '')
                             })
         
-        # Note: Lambda integrations may not be visible in API Gateway resources
-        # if they're configured at the method level or through serverless framework
         # This test validates that the API Gateway is accessible and has resources
         self.assertGreater(len(resources['items']), 0,
                           "No resources found in API Gateway")
@@ -271,8 +269,6 @@ class TestServerlessServiceIntegration(BaseIntegrationTest):
                     dynamodb_permissions = True
                     break
         
-        # Note: DynamoDB permissions may be attached as managed policies
-        # or may not be explicitly configured in this deployment
         # This test validates that the Lambda function can access its role
         self.assertIsNotNone(role_arn, "Lambda function role ARN not found")
         self.assertIn('lambda', role_arn.lower(), "Role ARN should contain 'lambda'")
@@ -341,7 +337,6 @@ class TestServerlessServiceIntegration(BaseIntegrationTest):
             if 'lambda' in alarm['AlarmName'].lower() or function_name in alarm['AlarmName']
         ]
         
-        # Note: CloudWatch alarms may not be configured in this deployment
         # This test validates that CloudWatch service is accessible
         self.assertIsNotNone(alarms_response, "CloudWatch alarms response is None")
         self.assertIn('MetricAlarms', alarms_response, "MetricAlarms not found in response")
