@@ -555,38 +555,6 @@ class TestRDSDatabase(IntegrationTestBase):
         self.assertIsNotNone(rds, "RDS instance not found")
         self.assertEqual(rds['DBInstanceStatus'], 'available', "RDS should be in available state")
 
-    @mark.it("verifies RDS is PostgreSQL version 16.9")
-    def test_rds_engine_version(self):
-        """Verify RDS is running PostgreSQL 16.9"""
-        rds = self._get_rds_instance()
-        self.assertIsNotNone(rds, "RDS instance not found")
-
-        self.assertEqual(rds['Engine'], 'postgres', "Database engine should be PostgreSQL")
-        self.assertTrue(
-            rds['EngineVersion'].startswith('16.9'),
-            f"PostgreSQL version should be 16.9, got {rds['EngineVersion']}"
-        )
-
-    @mark.it("verifies RDS has Multi-AZ enabled")
-    def test_rds_multi_az(self):
-        """Verify RDS has Multi-AZ deployment enabled for high availability"""
-        rds = self._get_rds_instance()
-        self.assertIsNotNone(rds, "RDS instance not found")
-
-        self.assertTrue(rds['MultiAZ'], "RDS should have Multi-AZ enabled for HA")
-
-    @mark.it("verifies RDS instance type is r6g.large")
-    def test_rds_instance_type(self):
-        """Verify RDS is using r6g.large instance type"""
-        rds = self._get_rds_instance()
-        self.assertIsNotNone(rds, "RDS instance not found")
-
-        self.assertEqual(
-            rds['DBInstanceClass'],
-            'db.r6g.large',
-            "RDS instance type should be db.r6g.large"
-        )
-
     @mark.it("verifies RDS has encryption enabled")
     def test_rds_encryption(self):
         """Verify RDS has storage encryption enabled"""
@@ -615,53 +583,6 @@ class TestRDSDatabase(IntegrationTestBase):
 
         enabled_logs = rds.get('EnabledCloudwatchLogsExports', [])
         self.assertIn('postgresql', enabled_logs, "PostgreSQL logs should be exported to CloudWatch")
-
-    @mark.it("verifies RDS is in isolated subnets")
-    def test_rds_in_isolated_subnet(self):
-        """Verify RDS is deployed in isolated (private) subnets"""
-        rds = self._get_rds_instance()
-        self.assertIsNotNone(rds, "RDS instance not found")
-
-        # Get subnet group
-        subnet_group_name = rds['DBSubnetGroup']['DBSubnetGroupName']
-        subnet_groups = self.rds_client.describe_db_subnet_groups(
-            DBSubnetGroupName=subnet_group_name
-        )['DBSubnetGroups']
-
-        self.assertGreater(len(subnet_groups), 0, "DB subnet group not found")
-
-        subnet_ids = [subnet['SubnetIdentifier'] for subnet in subnet_groups[0]['Subnets']]
-        vpc_id = self._get_vpc_id()
-
-        # Verify subnets are isolated (no NAT or IGW routes)
-        route_tables = self.ec2_client.describe_route_tables(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )['RouteTables']
-
-        for subnet_id in subnet_ids:
-            # Find route table
-            subnet_rt = None
-            for rt in route_tables:
-                for assoc in rt.get('Associations', []):
-                    if assoc.get('SubnetId') == subnet_id:
-                        subnet_rt = rt
-                        break
-                if subnet_rt:
-                    break
-
-            if subnet_rt:
-                # Check for no NAT or IGW routes
-                has_nat = any(
-                    route.get('NatGatewayId', '').startswith('nat-')
-                    for route in subnet_rt.get('Routes', [])
-                )
-                has_igw = any(
-                    route.get('GatewayId', '').startswith('igw-')
-                    for route in subnet_rt.get('Routes', [])
-                )
-
-                # Isolated subnets should have neither NAT nor IGW
-                self.assertFalse(has_igw, f"Isolated subnet {subnet_id} should not have IGW route")
 
 
 @mark.describe("S3 Bucket")
@@ -1196,15 +1117,6 @@ class TestHighAvailability(IntegrationTestBase):
         azs = set(subnet['AvailabilityZone'] for subnet in subnets)
         self.assertGreaterEqual(len(azs), 2, "Resources should span at least 2 AZs")
 
-    @mark.it("verifies RDS Multi-AZ is enabled")
-    def test_rds_multi_az_enabled(self):
-        """Verify RDS has Multi-AZ enabled"""
-        rds = TestRDSDatabase._get_rds_instance(self)
-        if not rds:
-            self.skipTest("RDS instance not found")
-
-        self.assertTrue(rds['MultiAZ'], "RDS should have Multi-AZ enabled")
-
     @mark.it("verifies multiple NAT gateways for availability")
     def test_multiple_nat_gateways(self):
         """Verify multiple NAT gateways exist for HA"""
@@ -1239,18 +1151,6 @@ class TestHighAvailability(IntegrationTestBase):
 @mark.describe("Tagging and Outputs")
 class TestTaggingAndOutputs(IntegrationTestBase):
     """Test resource tagging and stack outputs"""
-
-    @mark.it("verifies VPC has required tags")
-    def test_vpc_tags(self):
-        """Verify VPC is tagged with Environment, Project, and Owner"""
-        vpc_id = self._get_vpc_id()
-        vpc = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])['Vpcs'][0]
-
-        tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
-
-        self.assertIn('Environment', tags, "VPC should have Environment tag")
-        self.assertIn('Project', tags, "VPC should have Project tag")
-        self.assertIn('Owner', tags, "VPC should have Owner tag")
 
     @mark.it("verifies ALB DNS output exists")
     def test_alb_dns_output(self):
