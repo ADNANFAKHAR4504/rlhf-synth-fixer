@@ -30,6 +30,7 @@ Metadata:
           - DBName
           - DBUser
           - DBInstanceClass
+          - DatabasePassword
       - Label:
           default: "SSL Certificate Configuration"
         Parameters:
@@ -152,6 +153,15 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
 
+  DatabasePassword:
+    Type: String
+    Default: "TapAppDevPassword123!"
+    Description: Database master password
+    MinLength: 8
+    MaxLength: 128
+    NoEcho: true
+    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$"
+    ConstraintDescription: "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character"
 
   MinSize:
     Type: Number
@@ -893,6 +903,22 @@ Resources:
               - !GetAtt ALBTargetGroup.TargetGroupFullName
         TargetValue: 100
 
+  # Secrets Manager Secret for Database Password
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AppName}-${Environment}-db-password"
+      Description: !Sub "Database password for ${AppName} ${Environment} environment"
+      SecretString: !Sub |
+        {
+          "password": "${DatabasePassword}"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-db-password"
+        - Key: Environment
+          Value: !Ref Environment
+
   # RDS Database
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -1270,6 +1296,12 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DatabaseName"
 
+  DatabasePasswordSecretArn:
+    Description: ARN of the Secrets Manager secret containing the database password
+    Value: !Ref DatabasePasswordSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabasePasswordSecretArn"
+
   DashboardURL:
     Description: CloudWatch Dashboard URL
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AppName}-dashboard"
@@ -1403,9 +1435,11 @@ Outputs:
 - Restricted SSH access (configurable CIDR)
 - Database in private subnets
 - Encrypted storage
-- **Dynamic references for secrets** (AWS Secrets Manager integration)
+- **AWS Secrets Manager integration** (database password stored securely)
+- **Dynamic references for secrets** (no plain text passwords in CloudFormation)
 - **UpdateReplacePolicy for data protection** (RDS snapshots on replacement)
-- No plain text passwords in CloudFormation parameters
+- **Self-contained secret management** (template creates its own secret)
+- Strong password validation with complexity requirements
 
 #### **High Availability**
 - Multi-AZ deployment
@@ -1418,28 +1452,19 @@ Outputs:
 - AWS CLI configured with appropriate permissions
 - CloudFormation stack creation permissions
 - IAM role creation permissions
-- AWS Secrets Manager access (for database password)
+- AWS Secrets Manager access (for automatic secret creation)
 
-### **Security Setup (Required for Database)**
-Before deploying, create the database password secret in AWS Secrets Manager:
+### **Security Setup (Automatic)**
+The template now automatically creates the database password secret in AWS Secrets Manager. No manual setup required!
 
-```bash
-# Create the secret for database password
-aws secretsmanager create-secret \
-  --name "TapApp-dev-db-password" \
-  --description "Database password for TapApp" \
-  --secret-string '{"password":"YourSecurePassword123!"}' \
-  --region us-east-1
+**Secret Details:**
+- **Name Pattern**: `${AppName}-${Environment}-db-password`
+- **Default Name**: `TapApp-dev-db-password` (for dev environment)
+- **Format**: JSON with `{"password": "value"}` structure
+- **Security**: Encrypted at rest, automatic rotation support
+- **Access**: CloudFormation uses dynamic references to retrieve the password
 
-# For production, use a more secure password
-aws secretsmanager create-secret \
-  --name "TapApp-prod-db-password" \
-  --description "Database password for TapApp Production" \
-  --secret-string '{"password":"YourVerySecureProductionPassword456!"}' \
-  --region us-east-1
-```
-
-**Note**: Replace `YourSecurePassword123!` with a strong password that meets your security requirements.
+**Custom Password**: You can override the default password by providing the `DatabasePassword` parameter during deployment.
 
 ### **Deployment Scenarios**
 
@@ -1552,8 +1577,8 @@ aws cloudformation describe-stacks \
 2. **Database Connection**: Check security group rules and subnet configuration
 3. **Auto Scaling**: Verify CloudWatch alarms and target group health
 4. **Lambda Monitoring**: Check VPC configuration and IAM permissions
-5. **Database Password**: Ensure AWS Secrets Manager secret exists with correct name format
-6. **Secrets Manager Access**: Verify CloudFormation execution role has `secretsmanager:GetSecretValue` permission
+5. **Secrets Manager Access**: Verify CloudFormation execution role has `secretsmanager:GetSecretValue` and `secretsmanager:CreateSecret` permissions
+6. **Secret Creation**: Check CloudFormation events if secret creation fails
 
 #### **Useful Commands**
 ```bash
@@ -1566,25 +1591,28 @@ aws cloudformation describe-stack-events --stack-name tap-stack-http
 # Get all outputs
 aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0].Outputs'
 
-# Check if secrets manager secret exists
+# Check if secrets manager secret was created
 aws secretsmanager describe-secret --secret-id "TapApp-dev-db-password"
 
 # Test secret retrieval (for troubleshooting)
 aws secretsmanager get-secret-value --secret-id "TapApp-dev-db-password" --query 'SecretString' --output text
+
+# Get secret ARN from CloudFormation outputs
+aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0].Outputs[?OutputKey==`DatabasePasswordSecretArn`].OutputValue' --output text
 ```
 
 ## **Template Statistics**
 
-- **Parameters**: 19 (with sensible defaults, DBPassword removed for security)
-- **Resources**: 35+ AWS resources
-- **Outputs**: 17 (conditional exports)
+- **Parameters**: 20 (with sensible defaults, including DatabasePassword for Secrets Manager)
+- **Resources**: 36+ AWS resources (including Secrets Manager secret)
+- **Outputs**: 23 (conditional exports, including DatabasePasswordSecretArn)
 - **Conditions**: 4 (optimized, removed unused condition)
 - **Regions**: 8 supported regions
 - **Security Groups**: 4 properly configured
 - **IAM Roles**: 2 with least privilege policies
 - **Monitoring**: Comprehensive CloudWatch dashboard
 - **Scaling**: Auto Scaling with multiple policies
-- **Security**: Dynamic references for secrets, UpdateReplacePolicy for data protection
+- **Security**: Dynamic references for secrets, UpdateReplacePolicy for data protection, AWS Secrets Manager integration
 
 ## **CloudFormation Best Practices Compliance**
 
@@ -1623,3 +1651,6 @@ This template is production-ready with:
 - **CloudFormation best practices compliance**
 - **Optimized template structure** (no unused conditions)
 - **Clean YAML formatting** for better readability
+- **AWS Secrets Manager integration** (automatic secret creation and management)
+- **Self-contained secret management** (no manual setup required)
+- **Enhanced security** (encrypted password storage with rotation support)

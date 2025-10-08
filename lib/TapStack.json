@@ -32,7 +32,8 @@
           "Parameters": [
             "DBName",
             "DBUser",
-            "DBInstanceClass"
+            "DBInstanceClass",
+            "DatabasePassword"
           ]
         },
         {
@@ -166,6 +167,16 @@
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+    },
+    "DatabasePassword": {
+      "Type": "String",
+      "Default": "TapAppDevPassword123!",
+      "Description": "Database master password",
+      "MinLength": 8,
+      "MaxLength": 128,
+      "NoEcho": true,
+      "AllowedPattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+      "ConstraintDescription": "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character"
     },
     "MinSize": {
       "Type": "Number",
@@ -1480,6 +1491,34 @@
         }
       }
     },
+    "DatabasePasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AppName}-${Environment}-db-password"
+        },
+        "Description": {
+          "Fn::Sub": "Database password for ${AppName} ${Environment} environment"
+        },
+        "SecretString": {
+          "Fn::Sub": "{\n  \"password\": \"${DatabasePassword}\"\n}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AppName}-db-password"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
@@ -1799,6 +1838,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-DatabaseName"
+        }
+      }
+    },
+    "DatabasePasswordSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing the database password",
+      "Value": {
+        "Ref": "DatabasePasswordSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabasePasswordSecretArn"
         }
       }
     },

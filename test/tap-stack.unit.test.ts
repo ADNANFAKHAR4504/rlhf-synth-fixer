@@ -558,12 +558,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have reasonable number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(19);
+      expect(parameterCount).toBe(20);
     });
 
     test('should have reasonable number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(22);
+      expect(outputCount).toBe(23);
     });
   });
 
