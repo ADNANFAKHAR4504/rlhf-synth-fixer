@@ -32,19 +32,19 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: dev
+    Default: Production
     Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     AllowedPattern: ^[a-zA-Z0-9]+$
     ConstraintDescription: Must contain only alphanumeric characters
   Environment:
     Type: String
-    Default: dev
-    Description: Environment name (dev, staging, prod)
+    Default: Production
+    Description: Environment name (dev, staging, Production)
     AllowedValues:
       - dev
       - staging
-      - prod
-    ConstraintDescription: "Must be one of: dev, staging, prod"
+      - Production
+    ConstraintDescription: "Must be one of: dev, staging, Production"
   AppName:
     Type: String
     Default: TapApp
@@ -170,6 +170,13 @@ Parameters:
     Description: CIDR block allowed to SSH to EC2 instances
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: Must be a valid CIDR block (e.g., 10.0.0.0/8)
+
+Rules:
+  RegionCheck:
+    Assertions:
+      - Assert: !Equals [!Ref "AWS::Region", "us-west-2"]
+        AssertDescription: "This template can only be deployed in us-west-2 region"
+
 Mappings:
   RegionMap:
     us-east-1:

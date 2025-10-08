@@ -1,57 +1,65 @@
-### Reasoning Trace
+# TapStack Infrastructure Template
+
+This CloudFormation template provisions a complete production infrastructure stack for web applications on AWS.
+
 ---
 
-The user is requesting a comprehensive CloudFormation template for a production-ready web application infrastructure. Let me break down what needs to be included:
+## Configuration Requirements
 
-1. **ALB (Application Load Balancer)**
-   - Internet-facing
-   - HTTPS with ACM certificate
-   - HTTP to HTTPS redirect
-   - Security groups
+**Deployment Region**
 
-2. **Auto Scaling Group (ASG)**
-   - Behind ALB
-   - Auto-scaling based on traffic
-   - Rollback enabled
-   - Launch Template with basic web app (Nginx)
+This stack must be deployed in the `us-west-2` region. A CloudFormation rule enforces this constraint and will reject deployments attempted in other regions.
 
-3. **RDS Database**
-   - Automatic backups
-   - BackupRetentionPeriod
-   - PreferredBackupWindow
+**Certificate Configuration**
 
-4. **CloudWatch Integration**
-   - CloudWatch Logs
-   - CloudWatch Dashboard with metrics (ALB 5xx errors, ASG CPU, RDS free storage)
+Three approaches are supported for SSL/TLS certificates:
 
-5. **IAM Roles**
-   - For Lambda functions
-   - At least one Lambda that interacts with the stack
+1. **HTTP-Only Mode**
+   - Configuration: Leave the `DomainName` parameter blank
+   - Behavior: ALB serves traffic on port 80 only
+   - Use case: Development and testing environments
 
-6. **Tags**
-   - All resources tagged with `Environment: Production`
+2. **Use Existing Certificate**
+   - Requirements: 
+     - Valid ACM certificate in us-west-2
+     - Certificate status must be "Issued"
+   - Configuration:
+     - Provide domain name in `DomainName` parameter
+     - Set `CreateCertificate` to "false"
+     - Supply certificate ARN in `CertificateArn` parameter
+   - Behavior: ALB serves HTTPS on port 443, redirects HTTP traffic
 
-7. **Parameters**
-   - AppName, VpcId, SubnetIds, DBName, DBUser, DBPassword (NoEcho), CertificateArn, etc.
+3. **Create New Certificate**
+   - Requirements: DNS management access for domain validation
+   - Configuration:
+     - Provide domain name in `DomainName` parameter
+     - Set `CreateCertificate` to "true"
+     - Leave `CertificateArn` empty
+   - Note: Certificate will be created in "Pending Validation" state. Manual DNS record addition required for activation. HTTPS will not function until validation completes.
 
-8. **Region**
-   - us-west-2
+**Important Certificate Notes**
 
-9. **Rollback**
-   - Enabled by default (this is CloudFormation's default behavior)
+ACM certificates are region-bound resources. For ALB use in us-west-2, the certificate must exist in the same region. Cross-region certificate use is not supported by AWS.
 
-10. **Outputs**
-    - ALB DNS Name
-    - RDS Endpoint
-    - CloudWatch Dashboard Name/URL
+Verify certificate region:
+```bash
+aws acm list-certificates --region us-west-2
+```
 
-Let me create a comprehensive CloudFormation template that includes all these components.
-### Answer 
+**Database Credentials**
+
+The template creates a Secrets Manager secret for the RDS password. While a default value is provided, production deployments should update this credential:
+
+```bash
+aws secretsmanager update-secret \
+  --secret-id TapApp-Production-db-password \
+  --secret-string '{"username":"admin","password":"<new-password>"}' \
+  --region us-west-2
+```
+
 ---
 
-# TapStack.yaml
-
-Here's a comprehensive CloudFormation template that provisions a complete web application infrastructure with all the requested components:
+## CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -944,70 +952,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LogGroupName'
 ```
-
-## Key Features of this Template
-
-### 1. **Complete Infrastructure Components**
-- **ALB with HTTPS**: Configured with SSL certificate and HTTP-to-HTTPS redirect
-- **Auto Scaling Group**: With target tracking and CPU-based scaling policies
-- **RDS MySQL Database**: With automated backups and encryption
-- **Lambda Function**: For monitoring and custom metrics
-- **CloudWatch Dashboard**: Comprehensive monitoring of all components
-
-### 2. **Security Best Practices**
-- Separate security groups for each tier
-- Database in private subnets only
-- Encrypted RDS storage
-- IAM roles with least privilege
-- NoEcho for sensitive parameters
-
-### 3. **High Availability and Scalability**
-- Multi-AZ deployment support
-- Auto-scaling based on traffic (ALB request count) and CPU
-- Health checks at multiple levels
-- Rolling update policy for ASG
-
-### 4. **Monitoring and Observability**
-- CloudWatch Logs integration
-- Custom metrics from Lambda
-- Comprehensive dashboard with key metrics
-- Automated health monitoring
-
-### 5. **Production-Ready Features**
-- All resources tagged with `Environment: Production`
-- Parameterized for flexibility
-- Rollback support (CloudFormation default)
-- Deletion protection for database (snapshot on delete)
-- Performance Insights enabled on RDS
-
-## Deployment Instructions
-
-1. **Prerequisites**:
-   - Valid ACM certificate in us-west-2
-   - VPC with public and private subnets
-   - EC2 Key Pair for SSH access
-
-2. **Deploy the stack**:
-```bash
-aws cloudformation create-stack \
-  --stack-name tap-production \
-  --template-body file://TapStack.yaml \
-  --parameters \
-    ParameterKey=VpcId,ParameterValue=vpc-xxxxx \
-    ParameterKey=PublicSubnetIds,ParameterValue="subnet-xxx,subnet-yyy" \
-    ParameterKey=PrivateSubnetIds,ParameterValue="subnet-aaa,subnet-bbb" \
-    ParameterKey=CertificateArn,ParameterValue=arn:aws:acm:us-west-2:xxx:certificate/xxx \
-    ParameterKey=KeyPairName,ParameterValue=my-keypair \
-    ParameterKey=DBPassword,ParameterValue=SecurePassword123 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
-```
-
-3. **Monitor deployment**:
-```bash
-aws cloudformation wait stack-create-complete \
-  --stack-name tap-production \
-  --region us-west-2
-```
-
-The template includes automatic rollback on failure and provides comprehensive outputs for easy access to created resources.

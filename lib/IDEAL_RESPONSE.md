@@ -1,8 +1,72 @@
-## Overview
+# TapStack CloudFormation Template
 
-This document provides the complete, production-ready CloudFormation template for the TapStack infrastructure, along with detailed explanations and deployment instructions.
+Production-ready infrastructure-as-code template for deploying a scalable web application on AWS.
 
-## Complete TapStack.yml Template
+## Deployment Prerequisites
+
+### Region Requirement
+- **Required Region**: us-west-2 (Oregon)
+- The template includes a validation rule that prevents deployment in any other region
+- Attempting to deploy in a different region will fail with: "This template can only be deployed in us-west-2 region"
+
+### SSL/TLS Certificate Options
+
+The template supports three certificate configurations:
+
+#### Option 1: HTTP Only (No Certificate)
+- Leave `DomainName` parameter empty (default)
+- ALB will serve traffic over HTTP on port 80
+- No HTTPS listener is created
+- Use ALB DNS name directly: `http://<alb-dns-name>.us-west-2.elb.amazonaws.com`
+
+#### Option 2: Existing Certificate (Recommended for Production)
+- **Prerequisites**:
+  - ACM certificate must already exist in us-west-2 region
+  - Certificate must be validated and in "Issued" status
+  - Note the certificate ARN: `arn:aws:acm:us-west-2:<account-id>:certificate/<cert-id>`
+- **Parameters**:
+  - Set `DomainName` to your domain (e.g., "example.com")
+  - Set `CreateCertificate` to "false"
+  - Set `CertificateArn` to your existing certificate ARN
+- **Result**: ALB will serve HTTPS traffic on port 443 and redirect HTTP to HTTPS
+
+#### Option 3: Create New Certificate
+- **Prerequisites**:
+  - You must have access to update DNS records for your domain
+  - Domain must be registered and DNS hosted in Route 53 or external DNS provider
+- **Parameters**:
+  - Set `DomainName` to your domain (e.g., "example.com")
+  - Set `CreateCertificate` to "true"
+  - Leave `CertificateArn` empty
+- **Important**: 
+  - Template will create the certificate but it will remain in "Pending Validation" status
+  - You must manually add the DNS validation CNAME records to your DNS zone
+  - Stack creation will complete, but HTTPS won't work until certificate is validated
+  - Check ACM console for validation records after stack creation
+- **Result**: ALB will serve HTTPS traffic on port 443 and redirect HTTP to HTTPS (after validation)
+
+### Certificate Region Constraint
+- **Critical**: ACM certificates are region-specific
+- The certificate must exist in us-west-2 (same region as the ALB)
+- Certificates from other regions (e.g., us-east-1) cannot be used
+- If using an existing certificate, verify it's in us-west-2:
+  ```bash
+  aws acm list-certificates --region us-west-2
+  ```
+
+### Database Password
+- Default password is provided but should be changed for production
+- Password is stored in AWS Secrets Manager
+- The secret is created automatically: `TapApp-Production-db-password`
+- To update password after deployment:
+  ```bash
+  aws secretsmanager update-secret \
+    --secret-id TapApp-Production-db-password \
+    --secret-string '{"username":"admin","password":"<new-password>"}' \
+    --region us-west-2
+  ```
+
+## TapStack.yml
 
 ```yaml
 AWSTemplateFormatVersion: "2010-09-09"
@@ -41,20 +105,20 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: "dev"
+    Default: "production"
     Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
     AllowedPattern: "^[a-zA-Z0-9]+$"
     ConstraintDescription: "Must contain only alphanumeric characters"
 
   Environment:
     Type: String
-    Default: "dev"
-    Description: "Environment name (dev, staging, prod)"
+    Default: "Production"
+    Description: "Environment name (dev, staging, Production)"
     AllowedValues:
       - dev
       - staging
-      - prod
-    ConstraintDescription: "Must be one of: dev, staging, prod"
+      - Production
+    ConstraintDescription: "Must be one of: dev, staging, Production"
 
   AppName:
     Type: String
@@ -98,52 +162,14 @@ Parameters:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
     ConstraintDescription: "Must be a valid CIDR block (e.g., 10.0.20.0/24)"
 
-  DomainName:
-    Type: String
-    Default: ""
-    Description: Domain name for the application (e.g., example.com). Leave empty to use ALB DNS name only.
-    MaxLength: 255
-
-  CertificateArn:
-    Type: String
-    Default: ""
-    Description: ARN of the ACM certificate for HTTPS. Leave empty to create a new certificate.
-    AllowedPattern: "^$|^arn:aws:acm:.*"
-
-  CreateCertificate:
-    Type: String
-    Default: "false"
-    Description: Whether to create a new ACM certificate (requires DomainName to be set)
-    AllowedValues:
-      - "true"
-      - "false"
-
-  InstanceType:
-    Type: String
-    Default: t3.micro
-    Description: EC2 instance type for the web servers
-    AllowedValues:
-      - t3.micro
-      - t3.small
-      - t3.medium
-      - t3.large
-
-  DBInstanceClass:
-    Type: String
-    Default: db.t3.micro
-    Description: RDS instance class
-    AllowedValues:
-      - db.t3.micro
-      - db.t3.small
-      - db.t3.medium
-
   DBName:
     Type: String
     Default: tapdb
     Description: Database name
     MinLength: 1
     MaxLength: 64
-    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+    ConstraintDescription: "Must begin with a letter and contain only alphanumeric characters"
 
   DBUser:
     Type: String
@@ -151,101 +177,85 @@ Parameters:
     Description: Database master username
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+    ConstraintDescription: "Must begin with a letter and contain only alphanumeric characters"
 
   DatabasePassword:
     Type: String
-    Default: "TapAppDevPassword123!"
-    Description: Database master password
-    MinLength: 8
-    MaxLength: 128
+    Default: "TapApp2024!SecurePass"
+    Description: "Database master password (min 8 characters, must include uppercase, lowercase, number, and special character)"
     NoEcho: true
-    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$"
-    ConstraintDescription: "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character"
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
+    ConstraintDescription: "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
 
-  MinSize:
-    Type: Number
-    Default: 2
-    MinValue: 1
-    MaxValue: 10
-    Description: Minimum number of EC2 instances in Auto Scaling Group
-
-  MaxSize:
-    Type: Number
-    Default: 6
-    MinValue: 1
-    MaxValue: 20
-    Description: Maximum number of EC2 instances in Auto Scaling Group
-
-  DesiredCapacity:
-    Type: Number
-    Default: 2
-    MinValue: 1
-    MaxValue: 20
-    Description: Desired number of EC2 instances in Auto Scaling Group
-
-  AllowedSSHCidr:
+  DBInstanceClass:
     Type: String
-    Default: "10.0.0.0/8"
-    Description: "CIDR block allowed to SSH to EC2 instances"
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-    ConstraintDescription: "Must be a valid CIDR block (e.g., 10.0.0.0/8)"
+    Default: db.t3.micro
+    Description: Database instance class
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+    ConstraintDescription: "Must select a valid DB instance type"
+
+  DomainName:
+    Type: String
+    Default: ""
+    Description: "Domain name for SSL certificate (leave empty to skip HTTPS)"
+    AllowedPattern: "^$|^(\\*\\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\\.)+(?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9]$"
+    ConstraintDescription: "Must be a valid domain name or empty"
+
+  CreateCertificate:
+    Type: String
+    Default: "false"
+    Description: "Create a new ACM certificate for the domain"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: "ARN of existing ACM certificate (leave empty if creating new)"
+    AllowedPattern: "^$|^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[a-zA-Z0-9-]+$"
+    ConstraintDescription: "Must be a valid ACM certificate ARN or empty"
+
+Rules:
+  RegionCheck:
+    Assertions:
+      - Assert: !Equals [!Ref "AWS::Region", "us-west-2"]
+        AssertDescription: "This template can only be deployed in us-west-2 region"
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  ShouldCreateCertificate: !And
+    - !Condition HasDomain
+    - !Equals [!Ref CreateCertificate, "true"]
+  ShouldUseCertificate: !Or
+    - !Condition ShouldCreateCertificate
+    - !Not [!Equals [!Ref CertificateArn, ""]]
+  HasCertificateArn: !Not [!Equals [!Ref CertificateArn, ""]]
+  HasHTTPS: !Or
+    - !Condition ShouldCreateCertificate
+    - !Condition HasCertificateArn
+  HasHTTP: !Not [!Condition HasHTTPS]
 
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0c02fb55956c7d316 # Amazon Linux 2023 AMI
-    us-east-2:
-      AMI: ami-0c7c4e3c6b4941f0f # Amazon Linux 2023 AMI
-    us-west-1:
-      AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
+      AMI: ami-0c55b159cbfafe1f0
     us-west-2:
-      AMI: ami-0cf2b4e024cdb6960 # Amazon Linux 2023 AMI
+      AMI: ami-0d1cd67c26f5fca19
     eu-west-1:
-      AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
-    eu-west-2:
-      AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
+      AMI: ami-0bbc25e23a7640b9b
     ap-southeast-1:
-      AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
-    ap-southeast-2:
-      AMI: ami-0c55b4c4b4b4b4b4b # Amazon Linux 2023 AMI
-
-Conditions:
-  HasDomainName: !Not [!Equals [!Ref DomainName, ""]]
-  HasProvidedCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
-  CreateCertificateWithDomainCondition: !And
-    - !Equals [!Ref CreateCertificate, "true"]
-    - !Not [!Equals [!Ref DomainName, ""]]
-    - !Not [!Equals [!Ref DomainName, "null"]]
-  NoCertificateCondition: !And
-    - !Equals [!Ref CertificateArn, ""]
-    - !Equals [!Ref CreateCertificate, "false"]
+      AMI: ami-0c802847a7dd848c0
 
 Resources:
-  # DynamoDB Table
-  TurnAroundPromptTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      TableName: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
-      AttributeDefinitions:
-        - AttributeName: "id"
-          AttributeType: "S"
-      KeySchema:
-        - AttributeName: "id"
-          KeyType: "HASH"
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${AppName}-turnaround-prompt-table"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Purpose
-          Value: "Store turnaround prompt data"
-
-  # VPC and Networking Resources
+  # VPC and Networking
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -267,11 +277,11 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  InternetGatewayAttachment:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -285,8 +295,6 @@ Resources:
           Value: !Sub "${AppName}-public-subnet-1"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Type
-          Value: "Public"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -300,8 +308,6 @@ Resources:
           Value: !Sub "${AppName}-public-subnet-2"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Type
-          Value: "Public"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -314,8 +320,6 @@ Resources:
           Value: !Sub "${AppName}-private-subnet-1"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Type
-          Value: "Private"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -328,8 +332,6 @@ Resources:
           Value: !Sub "${AppName}-private-subnet-2"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Type
-          Value: "Private"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -341,9 +343,9 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  DefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -352,67 +354,41 @@ Resources:
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
 
-  PrivateRouteTable1:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${AppName}-private-rt-1"
+          Value: !Sub "${AppName}-private-rt"
         - Key: Environment
           Value: !Ref Environment
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub "${AppName}-private-rt-2"
-        - Key: Environment
-          Value: !Ref Environment
+      RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
-
-  # ACM Certificate
-  SSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: CreateCertificateWithDomainCondition
-    Properties:
-      DomainName: !Ref DomainName
-      ValidationMethod: DNS
-      SubjectAlternativeNames:
-        - !Sub "*.${DomainName}"
-      Tags:
-        - Key: Name
-          Value: !Sub "${AppName}-ssl-certificate"
-        - Key: Environment
-          Value: !Ref Environment
+      RouteTableId: !Ref PrivateRouteTable
 
   # Security Groups
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${AppName}-alb-sg"
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -420,10 +396,16 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from anywhere
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-alb-sg"
@@ -433,7 +415,6 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${AppName}-ec2-sg"
       GroupDescription: Security group for EC2 instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -441,10 +422,11 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSSHCidr
+          Description: Allow HTTP from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-ec2-sg"
@@ -454,7 +436,6 @@ Resources:
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${AppName}-rds-sg"
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -462,10 +443,16 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: Allow MySQL from EC2
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow MySQL from Lambda
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-rds-sg"
@@ -475,13 +462,19 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${AppName}-lambda-sg"
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref VPC
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: All outbound traffic
+          Description: Allow HTTPS for AWS API calls
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !Ref RDSSecurityGroup
+          Description: Allow MySQL to RDS
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-lambda-sg"
@@ -492,18 +485,17 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AppName}-ec2-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: "sts:AssumeRole"
+            Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: CloudWatchLogsPolicy
+        - PolicyName: !Sub "${AppName}-ec2-policy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -513,8 +505,17 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/webapp/${AppName}:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt TurnAroundPromptTable.Arn
       Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-ec2-role"
         - Key: Environment
           Value: !Ref Environment
 
@@ -527,59 +528,43 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AppName}-lambda-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: "sts:AssumeRole"
+            Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
-        - PolicyName: CloudWatchMetricsPolicy
+        - PolicyName: !Sub "${AppName}-lambda-policy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - cloudwatch:PutMetricData
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AppName}-*"
-                  - !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:*"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AppName}-monitor:*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt TurnAroundPromptTable.Arn
               - Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
-                  - elasticloadbalancing:DescribeTargetHealth
-                  - autoscaling:DescribeAutoScalingGroups
-                Resource:
-                  - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${AppName}-*"
-                  - !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*"
-                  - !Sub "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AppName}-*"
+                Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*"
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # CloudWatch Log Groups
-  WebAppLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/webapp/${AppName}"
-      RetentionInDays: 7
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${AppName}-monitor"
-      RetentionInDays: 7
-      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-lambda-role"
         - Key: Environment
           Value: !Ref Environment
 
@@ -588,165 +573,169 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${AppName}-alb"
-      Type: application
-      Scheme: internet-facing
-      IpAddressType: ipv4
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets: 
+      Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-alb"
         - Key: Environment
           Value: !Ref Environment
 
-  ALBTargetGroup:
+  TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub "${AppName}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
-      TargetType: instance
       HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /
       HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
-      Matcher:
-        HttpCode: 200
+      TargetType: instance
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-tg"
         - Key: Environment
           Value: !Ref Environment
 
-  # HTTP Listeners (Conditional)
-  HTTPListenerWithRedirect:
+  HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasProvidedCertificate
+    Condition: HasHTTP
     Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: "443"
-            Host: "#{host}"
-            Path: "/#{path}"
-            Query: "#{query}"
-            StatusCode: HTTP_301
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-
-  HTTPListenerWithRedirectNewCert:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: CreateCertificateWithDomainCondition
-    Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: "443"
-            Host: "#{host}"
-            Path: "/#{path}"
-            Query: "#{query}"
-            StatusCode: HTTP_301
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  HTTPListenerDirect:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: NoCertificateCondition
-    Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
+          TargetGroupArn: !Ref TargetGroup
 
-  # HTTPS Listeners (Conditional)
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasProvidedCertificate
+    Condition: HasHTTPS
     Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref CertificateArn
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+        - CertificateArn: !If
+            - ShouldCreateCertificate
+            - !Ref SSLCertificate
+            - !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
 
-  HTTPSListenerWithNewCert:
+  HTTPRedirectListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: CreateCertificateWithDomainCondition
+    Condition: HasHTTPS
     Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref SSLCertificate
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
 
-  # Launch Template
+  # SSL Certificate
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateCertificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      SubjectAlternativeNames:
+        - !Ref DomainName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-cert"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Launch Template and Auto Scaling Group
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: !Sub "${AppName}-lt"
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-        InstanceType: !Ref InstanceType
+        InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub "${AppName}-instance"
-              - Key: Environment
-                Value: !Ref Environment
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y nginx amazon-cloudwatch-agent
+            yum install -y amazon-cloudwatch-agent nginx
+            
+            # Configure Nginx
+            cat > /etc/nginx/nginx.conf <<'EOF'
+            user nginx;
+            worker_processes auto;
+            error_log /var/log/nginx/error.log;
+            pid /run/nginx.pid;
 
-            # Configure nginx
-            cat > /etc/nginx/conf.d/app.conf <<EOF
-            server {
-                listen 80;
-                server_name _;
-                location / {
-                    return 200 '<h1>Welcome to ${AppName}</h1><p>Environment: ${Environment}</p><p>Instance: $HOSTNAME</p>';
-                    add_header Content-Type text/html;
-                }
-                location /health {
-                    return 200 'healthy';
-                    add_header Content-Type text/plain;
+            events {
+                worker_connections 1024;
+            }
+
+            http {
+                log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                                '$status $body_bytes_sent "$http_referer" '
+                                '"$http_user_agent" "$http_x_forwarded_for"';
+
+                access_log /var/log/nginx/access.log main;
+
+                sendfile on;
+                tcp_nopush on;
+                tcp_nodelay on;
+                keepalive_timeout 65;
+                types_hash_max_size 2048;
+
+                include /etc/nginx/mime.types;
+                default_type application/octet-stream;
+
+                server {
+                    listen 80;
+                    server_name _;
+
+                    location /health {
+                        access_log off;
+                        return 200 "healthy\n";
+                        add_header Content-Type text/plain;
+                    }
+
+                    location / {
+                        root /usr/share/nginx/html;
+                        index index.html;
+                    }
                 }
             }
             EOF
 
-            # Start nginx
+            # Create health check endpoint
+            echo "healthy" > /usr/share/nginx/html/health
+
+            # Start Nginx
             systemctl start nginx
             systemctl enable nginx
 
-            # Configure CloudWatch agent
-            cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
+            # Configure CloudWatch Agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<'EOF'
             {
               "logs": {
                 "logs_collected": {
@@ -754,55 +743,35 @@ Resources:
                     "collect_list": [
                       {
                         "file_path": "/var/log/nginx/access.log",
-                        "log_group_name": "${WebAppLogGroup}",
+                        "log_group_name": "/aws/webapp/${AppName}",
                         "log_stream_name": "{instance_id}/nginx-access"
                       },
                       {
                         "file_path": "/var/log/nginx/error.log",
-                        "log_group_name": "${WebAppLogGroup}",
+                        "log_group_name": "/aws/webapp/${AppName}",
                         "log_stream_name": "{instance_id}/nginx-error"
                       }
                     ]
-                  }
-                }
-              },
-              "metrics": {
-                "metrics_collected": {
-                  "cpu": {
-                    "measurement": [
-                      "cpu_usage_idle",
-                      "cpu_usage_iowait"
-                    ],
-                    "metrics_collection_interval": 60
-                  },
-                  "disk": {
-                    "measurement": [
-                      "used_percent"
-                    ],
-                    "metrics_collection_interval": 60,
-                    "resources": [
-                      "*"
-                    ]
-                  },
-                  "mem": {
-                    "measurement": [
-                      "mem_used_percent"
-                    ],
-                    "metrics_collection_interval": 60
                   }
                 }
               }
             }
             EOF
 
-            # Start CloudWatch agent
+            # Start CloudWatch Agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config \
               -m ec2 \
               -s \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub "${AppName}-instance"
+              - Key: Environment
+                Value: !Ref Environment
 
-  # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -810,18 +779,16 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !Ref MinSize
-      MaxSize: !Ref MaxSize
-      DesiredCapacity: !Ref DesiredCapacity
-      VPCZoneIdentifier: 
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      MetricsCollection:
-        - Granularity: 1Minute
+        - !Ref TargetGroup
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-asg-instance"
@@ -829,20 +796,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
           PropagateAtLaunch: true
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MinInstancesInService: 1
-        MaxBatchSize: 2
-        PauseTime: PT5M
-        WaitOnResourceSignals: false
 
-  # Auto Scaling Policies
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
+      Cooldown: 60
       ScalingAdjustment: 1
 
   ScaleDownPolicy:
@@ -850,87 +810,70 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
+      Cooldown: 60
       ScalingAdjustment: -1
 
-  HighCPUAlarm:
+  CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AppName}-high-cpu"
-      AlarmDescription: Alarm when CPU exceeds 70%
+      AlarmDescription: Scale up if CPU > 70%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
       Threshold: 70
-      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref ScaleUpPolicy
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleUpPolicy
+      ComparisonOperator: GreaterThanThreshold
 
-  LowCPUAlarm:
+  CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AppName}-low-cpu"
-      AlarmDescription: Alarm when CPU is below 30%
+      AlarmDescription: Scale down if CPU < 30%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
       Threshold: 30
-      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref ScaleDownPolicy
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleDownPolicy
-
-  TargetTrackingScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ALBRequestCountPerTarget
-          ResourceLabel: !Join
-            - "/"
-            - - !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
-              - !GetAtt ALBTargetGroup.TargetGroupFullName
-        TargetValue: 100
-
-  # Secrets Manager Secret for Database Password
-  DatabasePasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "${AppName}-${Environment}-db-password"
-      Description: !Sub "Database password for ${AppName} ${Environment} environment"
-      SecretString: !Sub |
-        {
-          "password": "${DatabasePassword}"
-        }
-      Tags:
-        - Key: Name
-          Value: !Sub "${AppName}-db-password"
-        - Key: Environment
-          Value: !Ref Environment
+      ComparisonOperator: LessThanThreshold
 
   # RDS Database
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${AppName}-db-subnet-group"
       DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds: 
+      SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-db-subnet-group"
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AppName}-${Environment}-db-password"
+      Description: "Database password for TapApp RDS instance"
+      SecretString: !Sub |
+        {
+          "username": "${DBUser}",
+          "password": "${DatabasePassword}"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-db-password"
         - Key: Environment
           Value: !Ref Environment
 
@@ -940,161 +883,152 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub "${AppName}-db"
-      DBName: !Ref DBName
       Engine: mysql
-      EngineVersion: "8.0.42"
+      EngineVersion: "8.0.35"
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${AppName}-${Environment}-db-password:SecretString:password}}"
+      DBName: !Ref DBName
+      DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
       BackupRetentionPeriod: 7
       PreferredBackupWindow: "03:00-04:00"
-      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
-      EnablePerformanceInsights: false
+      PreferredMaintenanceWindow: "mon:04:00-mon:05:00"
       MultiAZ: false
-      PubliclyAccessible: false
+      EnablePerformanceInsights: false
       Tags:
         - Key: Name
           Value: !Sub "${AppName}-db"
         - Key: Environment
           Value: !Ref Environment
 
-  # Lambda Function for Monitoring
+  # DynamoDB Table
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Name
+          Value: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Function
   MonitoringLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${AppName}-monitor"
       Runtime: python3.11
-      Handler: index.handler
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 60
-      MemorySize: 256
-      Environment:
-        Variables:
-          APP_NAME: !Ref AppName
-          ALB_NAME: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
-          ASG_NAME: !Ref AutoScalingGroup
-          DB_INSTANCE_ID: !Ref RDSDatabase
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
-        SubnetIds: 
+        SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TurnAroundPromptTable
+          DB_HOST: !GetAtt RDSDatabase.Endpoint.Address
+          DB_NAME: !Ref DBName
       Code:
         ZipFile: |
           import json
           import boto3
           import os
-          from datetime import datetime, timedelta
+          from datetime import datetime
 
-          def handler(event, context):
-              cloudwatch = boto3.client('cloudwatch')
-              elb = boto3.client('elbv2')
-              asg = boto3.client('autoscaling')
-              rds = boto3.client('rds')
+          cloudwatch = boto3.client('cloudwatch')
+          dynamodb = boto3.resource('dynamodb')
+
+          def lambda_handler(event, context):
+              table_name = os.environ['TABLE_NAME']
+              table = dynamodb.Table(table_name)
               
-              app_name = os.environ['APP_NAME']
-              
-              # Collect metrics
-              metrics = {
-                  'timestamp': datetime.utcnow().isoformat(),
-                  'app_name': app_name,
-                  'status': 'healthy'
-              }
-              
-              # Get ALB metrics
               try:
-                  response = cloudwatch.get_metric_statistics(
-                      Namespace='AWS/ApplicationELB',
-                      MetricName='TargetResponseTime',
-                      Dimensions=[
-                          {'Name': 'LoadBalancer', 'Value': os.environ['ALB_NAME']}
-                      ],
-                      StartTime=datetime.utcnow() - timedelta(minutes=5),
-                      EndTime=datetime.utcnow(),
-                      Period=300,
-                      Statistics=['Average']
-                  )
-                  if response['Datapoints']:
-                      metrics['alb_response_time'] = response['Datapoints'][0]['Average']
-              except Exception as e:
-                  print(f"Error getting ALB metrics: {e}")
-              
-              # Get ASG metrics
-              try:
-                  response = asg.describe_auto_scaling_groups(
-                      AutoScalingGroupNames=[os.environ['ASG_NAME']]
-                  )
-                  if response['AutoScalingGroups']:
-                      asg_info = response['AutoScalingGroups'][0]
-                      metrics['asg_desired_capacity'] = asg_info['DesiredCapacity']
-                      metrics['asg_instances'] = len(asg_info['Instances'])
-              except Exception as e:
-                  print(f"Error getting ASG metrics: {e}")
-              
-              # Get RDS metrics
-              try:
-                  response = rds.describe_db_instances(
-                      DBInstanceIdentifier=os.environ['DB_INSTANCE_ID']
-                  )
-                  if response['DBInstances']:
-                      db_info = response['DBInstances'][0]
-                      metrics['db_status'] = db_info['DBInstanceStatus']
-              except Exception as e:
-                  print(f"Error getting RDS metrics: {e}")
-              
-              # Log metrics
-              print(json.dumps(metrics))
-              
-              # Put custom metric
-              try:
+                  response = table.scan(Select='COUNT')
+                  item_count = response['Count']
+                  
                   cloudwatch.put_metric_data(
-                      Namespace=f'{app_name}/Monitoring',
+                      Namespace='TapApp/Monitoring',
                       MetricData=[
                           {
-                              'MetricName': 'HealthCheck',
-                              'Value': 1,
+                              'MetricName': 'DynamoDBItemCount',
+                              'Value': item_count,
                               'Unit': 'Count',
                               'Timestamp': datetime.utcnow()
                           }
                       ]
                   )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Monitoring complete',
+                          'itemCount': item_count
+                      })
+                  }
               except Exception as e:
-                  print(f"Error putting metric: {e}")
-              
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps(metrics)
-              }
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Timeout: 60
       Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-monitor"
         - Key: Environment
           Value: !Ref Environment
 
-  # Schedule Lambda execution
   LambdaScheduleRule:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${AppName}-monitor-schedule"
       Description: Trigger monitoring Lambda every 5 minutes
-      ScheduleExpression: "rate(5 minutes)"
+      ScheduleExpression: rate(5 minutes)
       State: ENABLED
       Targets:
         - Arn: !GetAtt MonitoringLambda.Arn
-          Id: MonitoringLambdaTarget
+          Id: !Sub "${AppName}-monitor-target"
 
-  LambdaInvokePermission:
+  LambdaSchedulePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref MonitoringLambda
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt LambdaScheduleRule.Arn
+
+  # CloudWatch Log Groups
+  WebAppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/webapp/${AppName}"
+      RetentionInDays: 7
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AppName}-monitor"
+      RetentionInDays: 7
 
   # CloudWatch Dashboard
   MonitoringDashboard:
@@ -1108,34 +1042,18 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", {"stat": "Sum", "label": "ALB 5xx Errors"}],
-                  [".", "HTTPCode_Target_4XX_Count", {"stat": "Sum", "label": "ALB 4xx Errors"}],
-                  [".", "HTTPCode_Target_2XX_Count", {"stat": "Sum", "label": "ALB 2xx Success"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "ALB Response Codes",
-                "period": 300,
-                "dimensions": {
-                  "LoadBalancer": "${ApplicationLoadBalancer.LoadBalancerFullName}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
                   ["AWS/ApplicationELB", "TargetResponseTime", {"stat": "Average"}],
-                  ["...", {"stat": "p99", "label": "p99 Response Time"}]
+                  [".", "RequestCount", {"stat": "Sum"}],
+                  [".", "HTTPCode_Target_5XX_Count", {"stat": "Sum"}]
                 ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "ALB Response Times",
                 "period": 300,
-                "dimensions": {
-                  "LoadBalancer": "${ApplicationLoadBalancer.LoadBalancerFullName}"
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "ALB Metrics",
+                "yAxis": {
+                  "left": {
+                    "label": "Count"
+                  }
                 }
               }
             },
@@ -1143,52 +1061,18 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/EC2", "CPUUtilization", {"stat": "Average", "label": "Average CPU"}],
-                  ["...", {"stat": "Maximum", "label": "Max CPU"}]
+                  ["AWS/EC2", "CPUUtilization", {"stat": "Average"}]
                 ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "ASG CPU Utilization",
                 "period": 300,
-                "dimensions": {
-                  "AutoScalingGroupName": "${AutoScalingGroup}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/AutoScaling", "GroupDesiredCapacity", {"stat": "Average"}],
-                  [".", "GroupInServiceInstances", {"stat": "Average"}],
-                  [".", "GroupMinSize", {"stat": "Average"}],
-                  [".", "GroupMaxSize", {"stat": "Average"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
+                "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "Auto Scaling Group Size",
-                "period": 300,
-                "dimensions": {
-                  "AutoScalingGroupName": "${AutoScalingGroup}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/RDS", "FreeStorageSpace", {"stat": "Average"}],
-                  [".", "FreeableMemory", {"stat": "Average"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "RDS Storage and Memory",
-                "period": 300,
-                "dimensions": {
-                  "DBInstanceIdentifier": "${RDSDatabase}"
+                "title": "EC2 CPU Utilization",
+                "yAxis": {
+                  "left": {
+                    "label": "Percent",
+                    "min": 0,
+                    "max": 100
+                  }
                 }
               }
             },
@@ -1197,39 +1081,25 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/RDS", "CPUUtilization", {"stat": "Average"}],
-                  [".", "DatabaseConnections", {"stat": "Average"}]
+                  [".", "DatabaseConnections", {"stat": "Average"}],
+                  [".", "FreeStorageSpace", {"stat": "Average"}]
                 ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "RDS CPU and Connections",
                 "period": 300,
-                "dimensions": {
-                  "DBInstanceIdentifier": "${RDSDatabase}"
-                }
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "RDS Metrics"
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["${AppName}/Monitoring", "HealthCheck", {"stat": "Sum", "label": "Health Checks"}]
+                  ["TapApp/Monitoring", "DynamoDBItemCount", {"stat": "Average"}]
                 ],
-                "view": "timeSeries",
-                "stacked": false,
+                "period": 300,
+                "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "Lambda Health Checks",
-                "period": 300
-              }
-            },
-            {
-              "type": "log",
-              "properties": {
-                "query": "SOURCE '${WebAppLogGroup}' | fields @timestamp, @message | sort @timestamp desc | limit 20",
-                "region": "${AWS::Region}",
-                "stacked": false,
-                "title": "Recent Application Logs",
-                "view": "table"
+                "title": "DynamoDB Item Count"
               }
             }
           ]
@@ -1237,46 +1107,46 @@ Resources:
 
 Outputs:
   TurnAroundPromptTableName:
-    Description: "Name of the DynamoDB table"
+    Description: Name of the DynamoDB table
     Value: !Ref TurnAroundPromptTable
     Export:
       Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
 
   TurnAroundPromptTableArn:
-    Description: "ARN of the DynamoDB table"
+    Description: ARN of the DynamoDB table
     Value: !GetAtt TurnAroundPromptTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
 
   StackName:
-    Description: "Name of this CloudFormation stack"
+    Description: Name of this CloudFormation stack
     Value: !Ref AWS::StackName
     Export:
       Name: !Sub "${AWS::StackName}-StackName"
 
   EnvironmentSuffix:
-    Description: "Environment suffix used for this deployment"
+    Description: Environment suffix used for this deployment
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
 
   Environment:
-    Description: "Environment name used for this deployment"
+    Description: Environment name used for this deployment
     Value: !Ref Environment
     Export:
       Name: !Sub "${AWS::StackName}-Environment"
-
-  WebAppURL:
-    Description: URL of the Application Load Balancer
-    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
-    Export:
-      Name: !Sub "${AWS::StackName}-WebAppURL"
 
   ApplicationLoadBalancerDNS:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub "${AWS::StackName}-ApplicationLoadBalancerDNS"
+
+  WebAppURL:
+    Description: URL of the Application Load Balancer
+    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebAppURL"
 
   DatabaseEndpoint:
     Description: RDS Database Endpoint
@@ -1302,17 +1172,34 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DatabasePasswordSecretArn"
 
-  DashboardURL:
-    Description: CloudWatch Dashboard URL
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AppName}-dashboard"
+  VPCId:
+    Description: VPC ID where resources are deployed
+    Value: !Ref VPC
     Export:
-      Name: !Sub "${AWS::StackName}-DashboardURL"
+      Name: !Sub "${AWS::StackName}-VPCId"
 
-  MonitoringLambdaArn:
-    Description: ARN of the monitoring Lambda function
-    Value: !GetAtt MonitoringLambda.Arn
+  PublicSubnetIds:
+    Description: Public subnet IDs for ALB
+    Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
-      Name: !Sub "${AWS::StackName}-MonitoringLambdaArn"
+      Name: !Sub "${AWS::StackName}-PublicSubnetIds"
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs for EC2 instances and RDS
+    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetIds"
+
+  SecurityGroupIds:
+    Description: Security Group IDs for reference
+    Value: !Join
+      - ","
+      - - !Ref ALBSecurityGroup
+        - !Ref EC2SecurityGroup
+        - !Ref RDSSecurityGroup
+        - !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityGroupIds"
 
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
@@ -1332,325 +1219,36 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-LambdaLogGroupName"
 
-  VPCId:
-    Description: VPC ID where resources are deployed
-    Value: !Ref VPC
+  MonitoringLambdaArn:
+    Description: ARN of the monitoring Lambda function
+    Value: !GetAtt MonitoringLambda.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-VPCId"
+      Name: !Sub "${AWS::StackName}-MonitoringLambdaArn"
 
-  PublicSubnetIds:
-    Description: Public subnet IDs for ALB
-    Value: !Sub "${PublicSubnet1},${PublicSubnet2}"
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AppName}-dashboard"
     Export:
-      Name: !Sub "${AWS::StackName}-PublicSubnetIds"
-
-  PrivateSubnetIds:
-    Description: Private subnet IDs for EC2 instances and RDS
-    Value: !Sub "${PrivateSubnet1},${PrivateSubnet2}"
-    Export:
-      Name: !Sub "${AWS::StackName}-PrivateSubnetIds"
-
-  SecurityGroupIds:
-    Description: Security Group IDs for reference
-    Value: !Sub "${ALBSecurityGroup},${EC2SecurityGroup},${RDSSecurityGroup},${LambdaSecurityGroup}"
-    Export:
-      Name: !Sub "${AWS::StackName}-SecurityGroupIds"
-
-  SSLCertificateArnProvided:
-    Condition: HasProvidedCertificate
-    Description: ARN of the provided SSL certificate
-    Value: !Ref CertificateArn
-    Export:
-      Name: !Sub "${AWS::StackName}-SSLCertificateArn"
+      Name: !Sub "${AWS::StackName}-DashboardURL"
 
   SSLCertificateArnCreated:
-    Condition: CreateCertificateWithDomainCondition
-    Description: ARN of the created SSL certificate
+    Description: ARN of the created SSL certificate (if applicable)
+    Condition: ShouldCreateCertificate
     Value: !Ref SSLCertificate
     Export:
-      Name: !Sub "${AWS::StackName}-SSLCertificateArn"
+      Name: !Sub "${AWS::StackName}-SSLCertificateArnCreated"
+
+  SSLCertificateArnProvided:
+    Description: ARN of the provided SSL certificate (if applicable)
+    Condition: HasCertificateArn
+    Value: !Ref CertificateArn
+    Export:
+      Name: !Sub "${AWS::StackName}-SSLCertificateArnProvided"
 
   DomainName:
-    Condition: HasDomainName
-    Description: Domain name for the application
+    Description: Domain name for the application (if provided)
+    Condition: HasDomain
     Value: !Ref DomainName
     Export:
       Name: !Sub "${AWS::StackName}-DomainName"
 ```
-
-## Template Architecture Explanation
-
-### **Infrastructure Components**
-
-#### **1. Networking Layer**
-- **VPC**: Custom VPC with DNS support
-- **Subnets**: 2 public subnets (ALB) + 2 private subnets (EC2/RDS)
-- **Internet Gateway**: For public internet access
-- **Route Tables**: Proper routing for public/private subnets
-
-#### **2. Compute Layer**
-- **Auto Scaling Group**: Manages EC2 instances (2-6 instances)
-- **Launch Template**: Defines instance configuration
-- **Application Load Balancer**: Distributes traffic across instances
-- **Target Groups**: Health checks and load balancing
-
-#### **3. Database Layer**
-- **RDS MySQL**: Managed database with encryption
-- **DB Subnet Group**: Database in private subnets
-- **Security Groups**: Database access control
-
-#### **4. Storage Layer**
-- **DynamoDB**: NoSQL database for application data
-- **CloudWatch Logs**: Application and system logging
-
-#### **5. Security Layer**
-- **Security Groups**: Network-level access control
-- **IAM Roles**: Service-specific permissions
-- **SSL/TLS**: Optional HTTPS with ACM certificates
-
-#### **6. Monitoring Layer**
-- **CloudWatch Dashboard**: Comprehensive monitoring
-- **Lambda Monitoring**: Custom health checks
-- **Auto Scaling Alarms**: CPU-based scaling
-
-### **Key Features**
-
-#### **Self-Contained Infrastructure**
-- Creates VPC, subnets, and all networking
-- No external dependencies required
-- Works in any AWS region
-
-#### **Flexible Certificate Management**
-- **HTTP Only**: Simple deployment without certificates
-- **Create Certificate**: Automatic ACM certificate creation
-- **Use Existing**: Deploy with pre-existing certificate
-
-#### **Multi-Environment Support**
-- Environment-specific resource naming
-- Configurable parameters for dev/staging/prod
-- Consistent tagging strategy
-
-#### **Security Best Practices**
-- Least privilege IAM policies
-- Restricted SSH access (configurable CIDR)
-- Database in private subnets
-- Encrypted storage
-- **AWS Secrets Manager integration** (database password stored securely)
-- **Dynamic references for secrets** (no plain text passwords in CloudFormation)
-- **UpdateReplacePolicy for data protection** (RDS snapshots on replacement)
-- **Self-contained secret management** (template creates its own secret)
-- Strong password validation with complexity requirements
-
-#### **High Availability**
-- Multi-AZ deployment
-- Auto Scaling with health checks
-- Load balancer with health monitoring
-
-## **Deployment Instructions**
-
-### **Prerequisites**
-- AWS CLI configured with appropriate permissions
-- CloudFormation stack creation permissions
-- IAM role creation permissions
-- AWS Secrets Manager access (for automatic secret creation)
-
-### **Security Setup (Automatic)**
-The template now automatically creates the database password secret in AWS Secrets Manager. No manual setup required!
-
-**Secret Details:**
-- **Name Pattern**: `${AppName}-${Environment}-db-password`
-- **Default Name**: `TapApp-dev-db-password` (for dev environment)
-- **Format**: JSON with `{"password": "value"}` structure
-- **Security**: Encrypted at rest, automatic rotation support
-- **Access**: CloudFormation uses dynamic references to retrieve the password
-
-**Custom Password**: You can override the default password by providing the `DatabasePassword` parameter during deployment.
-
-### **Deployment Scenarios**
-
-#### **Scenario 1: HTTP Only (Simplest)**
-```bash
-# Deploy with HTTP only - no certificate needed
-aws cloudformation create-stack \
-  --stack-name tap-stack-http \
-  --template-body file://lib/TapStack.yml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-#### **Scenario 2: Create New Certificate**
-```bash
-# Deploy with automatic certificate creation
-aws cloudformation create-stack \
-  --stack-name tap-stack-https \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=DomainName,ParameterValue=yourdomain.com \
-    ParameterKey=CreateCertificate,ParameterValue=true \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-
-# After deployment, validate the certificate in AWS Certificate Manager
-# Add DNS validation records to your domain
-```
-
-#### **Scenario 3: Use Existing Certificate**
-```bash
-# Deploy with existing certificate
-aws cloudformation create-stack \
-  --stack-name tap-stack-existing-cert \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=CertificateArn,ParameterValue=arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-#### **Scenario 4: Custom Configuration**
-```bash
-# Deploy with custom parameters
-aws cloudformation create-stack \
-  --stack-name tap-stack-custom \
-  --template-body file://lib/TapStack.yml \
-  --parameters \
-    ParameterKey=AppName,ParameterValue=MyApp \
-    ParameterKey=Environment,ParameterValue=prod \
-    ParameterKey=InstanceType,ParameterValue=t3.small \
-    ParameterKey=DBInstanceClass,ParameterValue=db.t3.small \
-    ParameterKey=MinSize,ParameterValue=3 \
-    ParameterKey=MaxSize,ParameterValue=10 \
-    ParameterKey=AllowedSSHCidr,ParameterValue=203.0.113.0/24 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-### **Post-Deployment Steps**
-
-#### **1. Get Application URL**
-```bash
-# Get the ALB DNS name
-aws cloudformation describe-stacks \
-  --stack-name tap-stack-http \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApplicationLoadBalancerDNS`].OutputValue' \
-  --output text
-```
-
-#### **2. Access CloudWatch Dashboard**
-```bash
-# Get the dashboard URL
-aws cloudformation describe-stacks \
-  --stack-name tap-stack-http \
-  --query 'Stacks[0].Outputs[?OutputKey==`DashboardURL`].OutputValue' \
-  --output text
-```
-
-#### **3. Connect to Database**
-```bash
-# Get database endpoint
-aws cloudformation describe-stacks \
-  --stack-name tap-stack-http \
-  --query 'Stacks[0].Outputs[?OutputKey==`DatabaseEndpoint`].OutputValue' \
-  --output text
-```
-
-### **Monitoring and Maintenance**
-
-#### **CloudWatch Dashboard**
-- Access via AWS Console or dashboard URL
-- Monitor ALB metrics, EC2 CPU, RDS performance
-- View application logs and Lambda health checks
-
-#### **Auto Scaling**
-- CPU-based scaling (70% scale up, 30% scale down)
-- Target tracking based on ALB request count
-- Configurable min/max/desired capacity
-
-#### **Log Management**
-- Application logs: `/aws/webapp/{AppName}`
-- Lambda logs: `/aws/lambda/{AppName}-monitor`
-- 7-day retention by default
-
-### **Troubleshooting**
-
-#### **Common Issues**
-1. **Certificate Validation**: Ensure DNS records are added for ACM validation
-2. **Database Connection**: Check security group rules and subnet configuration
-3. **Auto Scaling**: Verify CloudWatch alarms and target group health
-4. **Lambda Monitoring**: Check VPC configuration and IAM permissions
-5. **Secrets Manager Access**: Verify CloudFormation execution role has `secretsmanager:GetSecretValue` and `secretsmanager:CreateSecret` permissions
-6. **Secret Creation**: Check CloudFormation events if secret creation fails
-
-#### **Useful Commands**
-```bash
-# Check stack status
-aws cloudformation describe-stacks --stack-name tap-stack-http
-
-# View stack events
-aws cloudformation describe-stack-events --stack-name tap-stack-http
-
-# Get all outputs
-aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0].Outputs'
-
-# Check if secrets manager secret was created
-aws secretsmanager describe-secret --secret-id "TapApp-dev-db-password"
-
-# Test secret retrieval (for troubleshooting)
-aws secretsmanager get-secret-value --secret-id "TapApp-dev-db-password" --query 'SecretString' --output text
-
-# Get secret ARN from CloudFormation outputs
-aws cloudformation describe-stacks --stack-name tap-stack-http --query 'Stacks[0].Outputs[?OutputKey==`DatabasePasswordSecretArn`].OutputValue' --output text
-```
-
-## **Template Statistics**
-
-- **Parameters**: 20 (with sensible defaults, including DatabasePassword for Secrets Manager)
-- **Resources**: 36+ AWS resources (including Secrets Manager secret)
-- **Outputs**: 23 (conditional exports, including DatabasePasswordSecretArn)
-- **Conditions**: 4 (optimized, removed unused condition)
-- **Regions**: 8 supported regions
-- **Security Groups**: 4 properly configured
-- **IAM Roles**: 2 with least privilege policies
-- **Monitoring**: Comprehensive CloudWatch dashboard
-- **Scaling**: Auto Scaling with multiple policies
-- **Security**: Dynamic references for secrets, UpdateReplacePolicy for data protection, AWS Secrets Manager integration
-
-## **CloudFormation Best Practices Compliance**
-
-This template follows AWS CloudFormation best practices and addresses common warnings:
-
-### **W3011 - UpdateReplacePolicy and DeletionPolicy**
-- **Issue**: Both policies needed for resource protection
-- **Solution**: Added `UpdateReplacePolicy: Snapshot` to RDS database
-- **Benefit**: Ensures data snapshots are created during both deletion and replacement operations
-
-### **W1011 - Dynamic References for Secrets**
-- **Issue**: Plain text parameters for sensitive data
-- **Solution**: Replaced `DBPassword` parameter with AWS Secrets Manager dynamic reference
-- **Benefit**: Enhanced security with encrypted secret storage and automatic rotation support
-
-### **W8001 - Unused Conditions**
-- **Issue**: Condition `CreateCertificateCondition` was defined but never used
-- **Solution**: Removed unused condition, functionality covered by `CreateCertificateWithDomainCondition`
-- **Benefit**: Cleaner template with no redundant conditions, improved maintainability
-
-### **Template Validation**
-- All CloudFormation warnings resolved
-- Follows AWS Well-Architected Framework principles
-- Compliant with security and operational excellence pillars
-
-## **Production Readiness**
-
-This template is production-ready with:
-- Security best practices
-- High availability design
-- Comprehensive monitoring
-- Flexible deployment options
-- Self-contained infrastructure
-- Multi-environment support
-- Cost optimization features
-- **CloudFormation best practices compliance**
-- **Optimized template structure** (no unused conditions)
-- **Clean YAML formatting** for better readability
-- **AWS Secrets Manager integration** (automatic secret creation and management)
-- **Self-contained secret management** (no manual setup required)
-- **Enhanced security** (encrypted password storage with rotation support)
