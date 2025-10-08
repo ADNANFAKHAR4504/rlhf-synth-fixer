@@ -59,8 +59,8 @@ describe("Terraform Configuration Files", () => {
       expect(providerContent).toMatch(/tags\s*=\s*local\.common_tags/);
     });
 
-    test("has S3 backend configuration (commented)", () => {
-      expect(providerContent).toMatch(/\/\/backend\s+"s3"\s*{}/);
+    test("has S3 backend configuration", () => {
+      expect(providerContent).toMatch(/backend\s+"s3"\s*{}/);
     });
   });
 
