@@ -1,0 +1,11 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "51682039",
+  "team": "synth",
+  "startedAt": "2025-10-08T12:47:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["Serverless Infrastructure"]
+}
