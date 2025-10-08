@@ -60,7 +60,32 @@ const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 let outputs: any;
 
 try {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+  beforeAll(async () => {
+    // Load outputs from Terraform
+    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const outputsData = fs.readFileSync(outputsPath, 'utf8');
+    outputs = JSON.parse(outputsData);
+
+    console.log('Loaded outputs:', outputs);
+
+    // Parse JSON strings into arrays if they're in JSON format
+    if (typeof outputs.public_subnet_ids === 'string') {
+      try {
+        outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
+      } catch (e) {
+        // Fallback to comma-separated parsing
+        outputs.public_subnet_ids = outputs.public_subnet_ids.split(',').map((id: string) => id.trim());
+      }
+    }
+    if (typeof outputs.private_subnet_ids === 'string') {
+      try {
+        outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
+      } catch (e) {
+        // Fallback to comma-separated parsing
+        outputs.private_subnet_ids = outputs.private_subnet_ids.split(',').map((id: string) => id.trim());
+      }
+    }
+  });
 } catch (error) {
   console.error("Failed to load outputs:", error);
   outputs = {};
@@ -251,7 +276,12 @@ describe("Infrastructure Integration Tests - Auto Scaling", () => {
     expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
     expect(asg.DefaultCooldown).toBe(180);
     expect(asg.HealthCheckType).toBe("ELB");
-    expect(asg.VPCZoneIdentifier).toContain(outputs.private_subnet_ids[0]);
+
+    // VPCZoneIdentifier is a comma-separated string, check if it contains our subnet IDs
+    const vpcZoneIds = asg.VPCZoneIdentifier?.split(',').map(id => id.trim()) || [];
+    outputs.private_subnet_ids.forEach((subnetId: string) => {
+      expect(vpcZoneIds).toContain(subnetId);
+    });
   }, 30000);
 
   test("Scaling policies are configured with 180s cooldown", async () => {
