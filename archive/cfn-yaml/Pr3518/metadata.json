@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410112",
+  "team": "4",
+  "startedAt": "2025-10-03T16:20:06.839Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "training_quality": 8.5,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "CloudFormation",
+    "ACM",
+    "WAF",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}
