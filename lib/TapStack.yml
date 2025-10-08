@@ -33,7 +33,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: Production
-    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    Description: Environment suffix for resource naming (e.g., dev, staging, Production)
     AllowedPattern: ^[a-zA-Z0-9]+$
     ConstraintDescription: Must contain only alphanumeric characters
   Environment:
