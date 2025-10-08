@@ -78,7 +78,7 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix =
       props?.environmentSuffix ??
       this.node.tryGetContext('environmentSuffix') ??
-      'dev';
+      'dev`';
 
     const contextStackId = this.node.tryGetContext('stackId') as
       | string
