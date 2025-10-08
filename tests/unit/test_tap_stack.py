@@ -33,39 +33,86 @@ try:
     class MyMocks(pulumi.runtime.Mocks):
         def call(self, args):
             # Return mock response for AWS calls
+            if args.token == "aws:getCallerIdentity/getCallerIdentity:getCallerIdentity":
+                return {"accountId": "123456789012", "arn": "arn:aws:iam::123456789012:user/test", "userId": "AIDACKCEVSQ6C2EXAMPLE"}
+            elif args.token == "aws:config/region:region":
+                return "us-east-1"
             return {}
         
         def new_resource(self, args):
             def convert_mock_to_string(obj):
-                """Recursively convert MagicMocks to strings in nested structures"""
-                if isinstance(obj, MagicMock):
-                    return f"mock-{str(obj)}"
+                """Recursively convert MagicMocks and Outputs to strings"""
+                if hasattr(obj, '__class__') and 'pulumi.output.Output' in str(obj.__class__):
+                    return f"mock-output-{hash(obj) % 10000}"
+                elif isinstance(obj, (MagicMock, Mock)):
+                    return f"mock-{hash(obj) % 10000}"
                 elif isinstance(obj, dict):
                     return {k: convert_mock_to_string(v) for k, v in obj.items()}
                 elif isinstance(obj, list):
                     return [convert_mock_to_string(item) for item in obj]
+                elif obj is None:
+                    return "mock-none"
                 else:
-                    return obj
+                    return str(obj) if obj is not None else "mock-default"
             
             # Convert all inputs to string-safe versions
-            outputs = convert_mock_to_string(args.inputs)
+            clean_inputs = convert_mock_to_string(args.inputs)
+            
+            # Create base outputs that work for all resource types
+            outputs = {
+                "urn": f"urn:pulumi:test::test::{args.typ}::{args.name}",
+                "id": f"{args.name}-id"
+            }
             
             # Return specific mocked outputs based on resource type
             if args.typ == "aws:lambda/function:Function":
                 outputs.update({
                     "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}",
                     "name": args.name,
-                    "role": "arn:aws:iam::123456789012:role/lambda-role"
+                    "role": "arn:aws:iam::123456789012:role/lambda-role",
+                    "invokeArn": f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:{args.name}/invocations"
                 })
             elif args.typ == "aws:dynamodb/table:Table":
                 outputs.update({
                     "arn": f"arn:aws:dynamodb:us-east-1:123456789012:table/{args.name}",
-                    "name": args.name
+                    "name": args.name,
+                    "streamArn": f"arn:aws:dynamodb:us-east-1:123456789012:table/{args.name}/stream/2024-01-01T00:00:00.000"
                 })
             elif args.typ == "aws:apigateway/restApi:RestApi":
                 outputs.update({
-                    "id": f"api-{args.name}",
-                    "executionArn": f"arn:aws:execute-api:us-east-1:123456789012:api-{args.name}"
+                    "id": f"api{hash(args.name) % 10000}",
+                    "name": args.name,
+                    "rootResourceId": f"root{hash(args.name) % 10000}",
+                    "executionArn": f"arn:aws:execute-api:us-east-1:123456789012:api{hash(args.name) % 10000}"
+                })
+            elif args.typ == "aws:apigateway/resource:Resource":
+                outputs.update({
+                    "id": f"resource{hash(args.name) % 10000}",
+                    "pathPart": clean_inputs.get("pathPart", "default")
+                })
+            elif args.typ == "aws:apigateway/deployment:Deployment":
+                outputs.update({
+                    "id": f"deploy{hash(args.name) % 10000}"
+                })
+            elif args.typ == "aws:apigateway/stage:Stage":
+                outputs.update({
+                    "id": f"stage{hash(args.name) % 10000}",
+                    "stageName": clean_inputs.get("stageName", "test")
+                })
+            elif args.typ == "aws:iam/role:Role":
+                outputs.update({
+                    "arn": f"arn:aws:iam::123456789012:role/{args.name}",
+                    "name": args.name
+                })
+            elif args.typ == "aws:ssm/parameter:Parameter":
+                outputs.update({
+                    "name": clean_inputs.get("name", f"/test/{args.name}"),
+                    "arn": f"arn:aws:ssm:us-east-1:123456789012:parameter{clean_inputs.get('name', f'/test/{args.name}')}"
+                })
+            elif args.typ == "aws:sqs/queue:Queue":
+                outputs.update({
+                    "arn": f"arn:aws:sqs:us-east-1:123456789012:{args.name}",
+                    "url": f"https://sqs.us-east-1.amazonaws.com/123456789012/{args.name}"
                 })
             elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
                 outputs.update({
@@ -73,7 +120,7 @@ try:
                     "name": args.name
                 })
             
-            return (args.name + "_id", outputs)
+            return (f"{args.name}-id", outputs)
     
     pulumi.runtime.set_mocks(MyMocks())
 except ImportError:
