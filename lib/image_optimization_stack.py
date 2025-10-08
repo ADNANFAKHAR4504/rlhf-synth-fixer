@@ -263,7 +263,7 @@ class ImageOptimizationStack(pulumi.ComponentResource):
                     "REGION": "us-west-1"
                 }
             ),
-            code=pulumi.FileArchive("./lambda_code.zip"),
+            code=pulumi.FileArchive("./lib/lambda_code.zip"),
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
