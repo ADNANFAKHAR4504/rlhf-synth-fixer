@@ -1,0 +1,1046 @@
+## lib/TapStack.yml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'E-Commerce Platform Infrastructure Template'
+
+Parameters:
+  Environment:
+    Description: Environment name (dev, test, prod)
+    Type: String
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Default: dev
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  ConfigBucket:
+    Description: S3 bucket containing environment configuration files
+    Type: String
+    Default: 'ecommerce-config-bucket'
+
+  DomainName:
+    Description: Base domain name for the application
+    Type: String
+    Default: 'our-ecomm-store.com'
+
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID (automatically fetched from SSM)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Mappings:
+  EnvironmentSecrets:
+    dev:
+      DatabaseSecretPath: /ecommerce/dev/DatabaseCredentials
+      PaymentProcessorKeyPath: /ecommerce/dev/PaymentProcessorKey
+    test:
+      DatabaseSecretPath: /ecommerce/test/DatabaseCredentials
+      PaymentProcessorKeyPath: /ecommerce/test/PaymentProcessorKey
+    prod:
+      DatabaseSecretPath: /ecommerce/prod/DatabaseCredentials
+      PaymentProcessorKeyPath: /ecommerce/prod/PaymentProcessorKey
+
+Conditions:
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
+
+Resources:
+  # Database Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '/ecommerce/${Environment}/DatabaseCredentials-${EnvironmentSuffix}'
+      Description: !Sub 'Database credentials for ${Environment} environment'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # Lambda function that fetches the config file
+  ConfigFetcherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+
+  ConfigFetcherFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ConfigFetcher-${EnvironmentSuffix}'
+      Handler: index.handler
+      Role: !GetAtt ConfigFetcherRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def handler(event, context):
+              response_data = {}
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      bucket = event['ResourceProperties']['Bucket']
+                      key = event['ResourceProperties']['Key']
+                      environment = event['ResourceProperties']['Environment']
+
+                      # Return default config values
+                      response_data = {
+                          'VPCCIDR': '10.0.0.0/16',
+                          'PublicSubnet1CIDR': '10.0.1.0/24',
+                          'PublicSubnet2CIDR': '10.0.2.0/24',
+                          'PrivateSubnet1CIDR': '10.0.3.0/24',
+                          'PrivateSubnet2CIDR': '10.0.4.0/24',
+                          'EC2InstanceType': 't3.micro',
+                          'EC2VolumeSize': '20',
+                          'DBEngine': 'mysql',
+                          'DBEngineVersion': '8.0',
+                          'DBInstanceClass': 'db.t3.micro',
+                          'DBAllocatedStorage': '20',
+                          'DBStorageType': 'gp2',
+                          'DBName': f'ecommerce{environment}',
+                          'DBPort': '3306',
+                          'DBMultiAZ': 'false',
+                          'DBBackupRetentionPeriod': '7',
+                          'DBDeletionProtection': 'false',
+                          'ASGMinSize': '1',
+                          'ASGMaxSize': '3',
+                          'ASGDesiredCapacity': '2',
+                          'ASGCPUTargetValue': '70',
+                          'ALBHealthCheckPath': '/health',
+                          'CPUAlarmThreshold': '80',
+                          'SSHAllowedCIDR': '10.0.0.0/16'
+                      }
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              except Exception as e:
+                  print(str(e))
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+
+  # Custom resource to fetch the environment config file from S3
+  ConfigFetcher:
+    Type: Custom::S3ConfigFetcher
+    Properties:
+      ServiceToken: !GetAtt ConfigFetcherFunction.Arn
+      Bucket: !Ref ConfigBucket
+      Key: !Sub '${Environment}.json'
+      Environment: !Ref Environment
+
+  # VPC and Network Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !GetAtt ConfigFetcher.VPCCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-vpc-${EnvironmentSuffix}'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-igw-${EnvironmentSuffix}'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !GetAtt ConfigFetcher.PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-public-1-${EnvironmentSuffix}'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !GetAtt ConfigFetcher.PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-public-2-${EnvironmentSuffix}'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !GetAtt ConfigFetcher.PrivateSubnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-private-1-${EnvironmentSuffix}'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !GetAtt ConfigFetcher.PrivateSubnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-private-2-${EnvironmentSuffix}'
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-1-${EnvironmentSuffix}'
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-2-${EnvironmentSuffix}'
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-nat-1-${EnvironmentSuffix}'
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-nat-2-${EnvironmentSuffix}'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-public-rt-${EnvironmentSuffix}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-private-rt-1-${EnvironmentSuffix}'
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-private-rt-2-${EnvironmentSuffix}'
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${Environment}-ecommerce-alb-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-alb-sg-${EnvironmentSuffix}'
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${Environment}-ecommerce-webserver-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for Web Servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !GetAtt ConfigFetcher.SSHAllowedCIDR
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-webserver-sg-${EnvironmentSuffix}'
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${Environment}-ecommerce-db-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for RDS Database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !GetAtt ConfigFetcher.DBPort
+          ToPort: !GetAtt ConfigFetcher.DBPort
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-db-sg-${EnvironmentSuffix}'
+
+  # KMS Key for Encryption
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: !Sub 'KMS key for ${Environment} e-commerce environment ${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:*
+            Resource: '*'
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: Allow CloudTrail to describe key
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow S3 to use the key for CloudTrail
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 's3.${AWS::Region}.amazonaws.com'
+          - Sid: Allow service-linked role use of the customer managed key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - kms:CreateGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: true
+
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/ecommerce-${Environment}-${EnvironmentSuffix}'
+      TargetKeyId: !Ref EncryptionKey
+
+  # Database Resources
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${Environment}-ecommerce-db-subnet-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: !Sub 'Subnet group for ${Environment} e-commerce database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-ecommerce-db-${EnvironmentSuffix}'
+      Engine: !GetAtt ConfigFetcher.DBEngine
+      EngineVersion: !GetAtt ConfigFetcher.DBEngineVersion
+      DBInstanceClass: !GetAtt ConfigFetcher.DBInstanceClass
+      AllocatedStorage: !GetAtt ConfigFetcher.DBAllocatedStorage
+      StorageType: !GetAtt ConfigFetcher.DBStorageType
+      DBName: !GetAtt ConfigFetcher.DBName
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      MultiAZ: !GetAtt ConfigFetcher.DBMultiAZ
+      StorageEncrypted: true
+      KmsKeyId: !Ref EncryptionKey
+      BackupRetentionPeriod: !GetAtt ConfigFetcher.DBBackupRetentionPeriod
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-db-${EnvironmentSuffix}'
+
+  # EC2 Resources
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-ecommerce-webserver-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub
+                    - 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretPath}*'
+                    - SecretPath:
+                        !FindInMap [
+                          EnvironmentSecrets,
+                          !Ref Environment,
+                          DatabaseSecretPath,
+                        ]
+                  - !Sub
+                    - 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretPath}*'
+                    - SecretPath:
+                        !FindInMap [
+                          EnvironmentSecrets,
+                          !Ref Environment,
+                          PaymentProcessorKeyPath,
+                        ]
+
+  WebServerProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${Environment}-ecommerce-webserver-profile-${EnvironmentSuffix}'
+      Roles:
+        - !Ref WebServerRole
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${Environment}-ecommerce-launch-template-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !GetAtt ConfigFetcher.EC2InstanceType
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt WebServerProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: !GetAtt ConfigFetcher.EC2VolumeSize
+              VolumeType: gp2
+              Encrypted: true
+              KmsKeyId: !Ref EncryptionKey
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64:
+            Fn::Sub:
+              - |
+                #!/bin/bash
+                yum update -y
+                yum install -y aws-cfn-bootstrap amazon-cloudwatch-agent
+
+                echo "Setting up e-commerce application for ${Environment} environment"
+
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerAutoScalingGroup --region ${AWS::Region}
+              - {}
+
+  WebServerAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${Environment}-ecommerce-asg-${EnvironmentSuffix}'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !GetAtt ConfigFetcher.ASGMinSize
+      MaxSize: !GetAtt ConfigFetcher.ASGMaxSize
+      DesiredCapacity: !GetAtt ConfigFetcher.ASGDesiredCapacity
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-webserver-${EnvironmentSuffix}'
+          PropagateAtLaunch: true
+
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref WebServerAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !GetAtt ConfigFetcher.ASGCPUTargetValue
+
+  # Load Balancer Resources
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${Environment}-ecommerce-alb-${EnvironmentSuffix}'
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Type: application
+      Scheme: internet-facing
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-alb-${EnvironmentSuffix}'
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-ecommerce-tg-${EnvironmentSuffix}'
+      HealthCheckPath: !GetAtt ConfigFetcher.ALBHealthCheckPath
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-tg-${EnvironmentSuffix}'
+
+  # Route53 Hosted Zone (only created if DomainName is provided)
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: HasDomainName
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub 'Hosted zone for ${Environment} e-commerce environment'
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-zone-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DNS Record (only created if DomainName is provided)
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasDomainName
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 'api-${Environment}.${DomainName}.'
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+
+  # CloudTrail Configuration
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub '${AWS::AccountId}-${Environment}-cloudtrail-${EnvironmentSuffix}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref EncryptionKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${Environment}-ecommerce-cloudtrail-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      KMSKeyId: !Ref EncryptionKey
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ecommerce-cloudtrail-${EnvironmentSuffix}'
+
+  # SNS Topic for Alarms
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-ecommerce-alerts-${EnvironmentSuffix}'
+      KmsMasterKeyId: !Ref EncryptionKey
+
+  # CloudWatch Alarms
+  CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-ecommerce-high-cpu-alarm-${EnvironmentSuffix}'
+      AlarmDescription: !Sub 'Alarm when CPU exceeds threshold in ${Environment} environment'
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoScalingGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: !GetAtt ConfigFetcher.CPUAlarmThreshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      OKActions:
+        - !Ref AlertTopic
+
+Outputs:
+  VPCID:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  PublicSubnets:
+    Description: Public subnets
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnets'
+
+  PrivateSubnets:
+    Description: Private subnets
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnets'
+
+  ApplicationLoadBalancerDNSName:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDNS'
+
+  ApplicationURL:
+    Description: URL of the e-commerce application
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-URL'
+
+  DatabaseEndpoint:
+    Description: Endpoint of the RDS database
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DBEndpoint'
+
+  EncryptionKeyARN:
+    Description: ARN of the KMS key used for encryption
+    Value: !GetAtt EncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyARN'
+
+  AlertTopicARN:
+    Description: ARN of the SNS topic used for alerts
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopicARN'
+
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # Networking Outputs
+  VPCCidr:
+    Description: VPC CIDR block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidr'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  NatGateway1Id:
+    Description: NAT Gateway 1 ID
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway1'
+
+  NatGateway2Id:
+    Description: NAT Gateway 2 ID
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGateway'
+
+  # Security Group Outputs
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBSecurityGroup'
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerSecurityGroup'
+
+  DBSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecurityGroup'
+
+  # Compute Outputs
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref WebServerAutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ASGName'
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${AWS::StackName}-LaunchTemplate'
+
+  # Load Balancer Outputs
+  ApplicationLoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBArn'
+
+  ALBTargetGroupArn:
+    Description: ARN of the ALB Target Group
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetGroupArn'
+
+  ALBListenerArn:
+    Description: ARN of the ALB Listener
+    Value: !Ref ALBListener
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBListener'
+
+  # Database Outputs
+  DatabaseInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref Database
+    Export:
+      Name: !Sub '${AWS::StackName}-DBInstanceId'
+
+  DatabasePort:
+    Description: RDS Database Port
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPort'
+
+  DatabaseName:
+    Description: Database Name
+    Value: !GetAtt ConfigFetcher.DBName
+    Export:
+      Name: !Sub '${AWS::StackName}-DBName'
+
+  DatabaseSecretArn:
+    Description: ARN of the database credentials secret
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecretArn'
+
+  # DNS Outputs
+  HostedZoneId:
+    Description: Route53 Hosted Zone ID
+    Value: !If [HasDomainName, !Ref HostedZone, 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
+
+  DNSRecordName:
+    Description: DNS Record Name
+    Value: !If [HasDomainName, !Sub 'api-${Environment}.${DomainName}', 'N/A']
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSRecord'
+
+  # Security & Monitoring Outputs
+  EncryptionKeyId:
+    Description: KMS Key ID
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  EncryptionKeyAlias:
+    Description: KMS Key Alias
+    Value: !Sub 'alias/ecommerce-${Environment}-${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  CloudTrailName:
+    Description: CloudTrail Trail Name
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailName'
+
+  CloudTrailBucketName:
+    Description: S3 Bucket for CloudTrail logs
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  AlertTopicName:
+    Description: SNS Topic Name for alerts
+    Value: !GetAtt AlertTopic.TopicName
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopicName'
+
+  CPUAlarmName:
+    Description: CloudWatch CPU Alarm Name
+    Value: !Ref CPUAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-CPUAlarmName'
+
+  # IAM Outputs
+  WebServerRoleArn:
+    Description: Web Server IAM Role ARN
+    Value: !GetAtt WebServerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebServerRoleArn'
+
+  WebServerInstanceProfileArn:
+    Description: Web Server Instance Profile ARN
+    Value: !GetAtt WebServerProfile.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceProfileArn'
+
+  # Configuration Outputs
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+
+  ConfigBucketName:
+    Description: S3 bucket for configuration files
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucket'
+
+  DomainName:
+    Description: Base domain name
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainName'
+
+  Region:
+    Description: AWS Region
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  AccountId:
+    Description: AWS Account ID
+    Value: !Ref AWS::AccountId
+    Export:
+      Name: !Sub '${AWS::StackName}-AccountId'
+```

@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349042",
+  "team": "6",
+  "startedAt": "2025-10-01T16:29:42.494Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms",
+    "AWS IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

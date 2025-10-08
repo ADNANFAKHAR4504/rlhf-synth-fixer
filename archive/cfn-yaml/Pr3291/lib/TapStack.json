@@ -1,0 +1,455 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Logistics Processing System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "test@test.com",
+            "Description": "Email address to receive alerts and notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address"
+        }
+    },
+    "Resources": {
+        "ShipmentLogsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "shipment-logs-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "shipmentId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "shipmentId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "LogisticsProcessing"
+                    }
+                ]
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "logistics-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Logistics Processing Alerts",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AlertTopicSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "AlertTopic"
+                },
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "lambda-execution-policy-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ShipmentLogsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AlertTopic"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ShipmentProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "shipment-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.10",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE": {
+                            "Ref": "ShipmentLogsTable"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "AlertTopic"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\nsns = boto3.client('sns')\ncloudwatch = boto3.client('cloudwatch')\n\ntable_name = os.environ['DYNAMODB_TABLE']\nsns_topic_arn = os.environ['SNS_TOPIC_ARN']\nenvironment = os.environ['ENVIRONMENT']\n\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    try:\n        print(f\"Received event: {json.dumps(event)}\")\n        \n        # Extract shipment data from event\n        detail = event.get('detail', {})\n        shipment_id = detail.get('shipmentId')\n        status = detail.get('status')\n        location = detail.get('location', 'Unknown')\n        carrier = detail.get('carrier', 'Unknown')\n        \n        if not shipment_id or not status:\n            raise ValueError(\"Missing required fields: shipmentId or status\")\n        \n        # Prepare item for DynamoDB\n        timestamp = int(datetime.utcnow().timestamp() * 1000)\n        item = {\n            'shipmentId': shipment_id,\n            'timestamp': timestamp,\n            'status': status,\n            'location': location,\n            'carrier': carrier,\n            'eventTime': datetime.utcnow().isoformat(),\n            'rawEvent': json.dumps(detail)\n        }\n        \n        # Store in DynamoDB\n        table.put_item(Item=item)\n        \n        # Send custom metrics to CloudWatch\n        cloudwatch.put_metric_data(\n            Namespace='LogisticsProcessing',\n            MetricData=[\n                {\n                    'MetricName': 'ShipmentUpdatesProcessed',\n                    'Value': 1,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {\n                            'Name': 'Environment',\n                            'Value': environment\n                        },\n                        {\n                            'Name': 'Status',\n                            'Value': status\n                        }\n                    ]\n                }\n            ]\n        )\n        \n        # Check for critical statuses and send alerts\n        critical_statuses = ['DELAYED', 'LOST', 'DAMAGED', 'EXCEPTION']\n        if status in critical_statuses:\n            message = f\"\"\"\n            ALERT: Critical Shipment Status Detected\n            \n            Shipment ID: {shipment_id}\n            Status: {status}\n            Location: {location}\n            Carrier: {carrier}\n            Time: {datetime.utcnow().isoformat()}\n            Environment: {environment}\n            \"\"\"\n            \n            sns.publish(\n                TopicArn=sns_topic_arn,\n                Subject=f'Logistics Alert: {status} - {shipment_id}',\n                Message=message\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Shipment update processed successfully',\n                'shipmentId': shipment_id,\n                'status': status\n            })\n        }\n        \n    except Exception as e:\n        error_message = f\"Error processing shipment update: {str(e)}\"\n        print(error_message)\n        \n        # Send error alert\n        try:\n            sns.publish(\n                TopicArn=sns_topic_arn,\n                Subject=f'Logistics Processing Error - {environment}',\n                Message=f\"\"\"\n                Error processing shipment update\n                \n                Error: {str(e)}\n                Event: {json.dumps(event)}\n                Environment: {environment}\n                \"\"\"\n            )\n        except Exception as sns_error:\n            print(f\"Failed to send SNS alert: {str(sns_error)}\")\n        \n        # Record error metric\n        cloudwatch.put_metric_data(\n            Namespace='LogisticsProcessing',\n            MetricData=[\n                {\n                    'MetricName': 'ProcessingErrors',\n                    'Value': 1,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {\n                            'Name': 'Environment',\n                            'Value': environment\n                        }\n                    ]\n                }\n            ]\n        )\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'message': error_message\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/shipment-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "ShipmentUpdateRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "shipment-update-rule-${EnvironmentSuffix}"
+                },
+                "Description": "Routes shipment update events to Lambda processor",
+                "State": "ENABLED",
+                "EventPattern": {
+                    "source": [
+                        "logistics.shipments"
+                    ],
+                    "detail-type": [
+                        "Shipment Update"
+                    ]
+                },
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "ShipmentProcessorFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "ShipmentProcessorTarget"
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ShipmentProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "ShipmentUpdateRule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "shipment-processor-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function encounters errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ShipmentProcessorFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "shipment-processor-throttles-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function is throttled",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ShipmentProcessorFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaDurationAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "shipment-processor-duration-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda execution duration is high",
+                "MetricName": "Duration",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 20000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ShipmentProcessorFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "shipment-logs-throttles-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when DynamoDB table is throttled",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "ShipmentLogsTable"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LogisticsDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "logistics-processing-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Total Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${ShipmentProcessorFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}],\n          [\"...\", {\"stat\": \"Maximum\", \"label\": \"Max Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration (ms)\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${ShipmentProcessorFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"LogisticsProcessing\", \"ShipmentUpdatesProcessed\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Shipments Processed\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity Usage\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${ShipmentLogsTable}\"\n        }\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "EventBridgeRuleName": {
+            "Description": "Name of the EventBridge rule",
+            "Value": {
+                "Ref": "ShipmentUpdateRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EventBridgeRule"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "ARN of the Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ShipmentProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaArn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "ShipmentLogsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableName"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS alert topic",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "URL to the CloudWatch Dashboard",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=logistics-processing-${EnvironmentSuffix}"
+            }
+        },
+        "EventBridgeTestCommand": {
+            "Description": "AWS CLI command to test the system",
+            "Value": "aws events put-events --entries '[{\"Source\":\"logistics.shipments\",\"DetailType\":\"Shipment Update\",\"Detail\":\"{\\\"shipmentId\\\":\\\"SHIP-12345\\\",\\\"status\\\":\\\"IN_TRANSIT\\\",\\\"location\\\":\\\"Memphis, TN\\\",\\\"carrier\\\":\\\"FedEx\\\"}\"}]'"
+        }
+    }
+}

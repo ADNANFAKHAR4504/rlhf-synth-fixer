@@ -27,7 +27,7 @@ if [ "$LANGUAGE" = "java" ]; then
   chmod +x ./gradlew
   ./gradlew integrationTest jacocoIntegrationTestReport --build-cache --no-daemon
 
-elif [ "$LANGUAGE" = "py" ]; then
+elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
 
@@ -61,6 +61,8 @@ elif [ "$LANGUAGE" = "go" ]; then
       cp tests/integration/*_test.go lib/ || true
     fi
     cd lib
+    echo "🔧 Updating go.sum for integration test dependencies..."
+    go mod tidy
     go test ./... -v -tags "integration"
     cd ..
   else
@@ -69,6 +71,10 @@ elif [ "$LANGUAGE" = "go" ]; then
 
 elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running integration tests..."
+  npm run test:integration-js
+
+elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
+  echo "✅ CloudFormation JSON project detected, running JS integration tests..."
   npm run test:integration-js
 
 else
