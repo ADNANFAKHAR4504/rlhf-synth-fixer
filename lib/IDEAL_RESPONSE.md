@@ -536,39 +536,85 @@ output "s3_bid_bucket_arn" {
 ### variables.tf
 
 ```hcl
-# Source region for migration (us-west-1)
-variable "source_region" {
-  description = "Source AWS region for migration"
-  default     = "us-west-1"
-}
+# variables.tf
+# Variable definitions for advertising exchange infrastructure
 
-# Target region for migration (us-west-2)
-variable "target_region" {
-  description = "Target AWS region for migration"
-  default     = "us-west-2"
+variable "region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
 }
 
 variable "environment" {
-  description = "Environment name (prod/staging/dev)"
+  description = "Environment name"
+  type        = string
   default     = "prod"
 }
 
-# VPC CIDR for the new region
-variable "vpc_cidr" {
-  description = "VPC CIDR block for us-west-2"
-  default     = "10.0.0.0/16"
+variable "owner" {
+  description = "Resource owner"
+  type        = string
+  default     = "test-owner"
 }
 
-# Common tags for all resources
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
-  default = {
-    Environment = "prod"
-    Service     = "ServerlessApp"
-    Owner       = "DevOps"
-    MigratedFrom = "us-west-1"
-  }
+variable "cost_center" {
+  description = "Cost center for billing"
+  type        = string
+  default     = "TEST-COST-CENTER"
+}
+
+variable "api_auth_jwks_url" {
+  description = "JWKS URL for API Gateway custom authorizer"
+  type        = string
+  default     = "https://example.com/.well-known/jwks.json"
+}
+
+variable "dynamodb_table_name" {
+  description = "DynamoDB table name for budgets/campaigns"
+  type        = string
+  default     = "adexchange-campaigns"
+}
+
+variable "redis_node_type" {
+  description = "ElastiCache Redis node type"
+  type        = string
+  default     = "cache.r6g.large"
+}
+
+variable "kinesis_shard_count" {
+  description = "Number of Kinesis shards"
+  type        = number
+  default     = 10
+}
+
+variable "s3_bid_bucket_name" {
+  description = "S3 bucket for historical bid data"
+  type        = string
+  default     = "adexchange-bid-data"
+}
+
+variable "s3_log_bucket_name" {
+  description = "S3 bucket for structured logs"
+  type        = string
+  default     = "adexchange-logs"
+}
+
+variable "alert_email" {
+  description = "Email address for CloudWatch alarms"
+  type        = string
+  default     = "alerts@example.com"
+}
+
+variable "lambda_timeout" {
+  description = "Lambda function timeout in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "lambda_memory" {
+  description = "Lambda function memory in MB"
+  type        = number
+  default     = 1024
 }
 
 # Migration-specific variables
