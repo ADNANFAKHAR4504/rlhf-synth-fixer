@@ -69,18 +69,53 @@ export class FinancialProcessorStack extends TerraformStack {
       alias: 'secondary',
     });
 
+    // Generate unique suffix to avoid resource naming conflicts
+    // Use timestamp and random string for uniqueness across deployments
+    const timestamp = Date.now().toString().slice(-6);
+    const randomStr = Math.random().toString(36).substring(2, 6);
+    const uniqueSuffix = `${timestamp}-${randomStr}`;
+
     // KMS Keys for encryption (per region)
     const primaryKmsKey = new KmsKey(this, 'primary-kms-key', {
       provider: primaryProvider,
       description:
         'KMS key for financial processor encryption in primary region',
       enableKeyRotation: true,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::*:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${config.primaryRegion}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: commonTags,
     });
 
     new KmsAlias(this, 'primary-kms-alias', {
       provider: primaryProvider,
-      name: `alias/${config.appName}-primary`,
+      name: `alias/${config.appName}-primary-${uniqueSuffix}`,
       targetKeyId: primaryKmsKey.keyId,
     });
 
@@ -89,12 +124,41 @@ export class FinancialProcessorStack extends TerraformStack {
       description:
         'KMS key for financial processor encryption in secondary region',
       enableKeyRotation: true,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::*:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${config.secondaryRegion}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: commonTags,
     });
 
     new KmsAlias(this, 'secondary-kms-alias', {
       provider: secondaryProvider,
-      name: `alias/${config.appName}-secondary`,
+      name: `alias/${config.appName}-secondary-${uniqueSuffix}`,
       targetKeyId: secondaryKmsKey.keyId,
     });
 
@@ -283,19 +347,19 @@ export class FinancialProcessorStack extends TerraformStack {
       tags: { ...commonTags, Name: `${config.appName}-secondary-igw` },
     });
 
-    // NAT Gateway - Secondary
-    const secondaryNatEip = new Eip(this, 'secondary-nat-eip', {
-      provider: secondaryProvider,
-      domain: 'vpc',
-      tags: { ...commonTags, Name: `${config.appName}-secondary-nat-eip` },
-    });
+    // NAT Gateway - Secondary (Commented out to avoid EIP limit)
+    // const secondaryNatEip = new Eip(this, 'secondary-nat-eip', {
+    //   provider: secondaryProvider,
+    //   domain: 'vpc',
+    //   tags: { ...commonTags, Name: `${config.appName}-secondary-nat-eip` },
+    // });
 
-    const secondaryNatGateway = new NatGateway(this, 'secondary-nat-gateway', {
-      provider: secondaryProvider,
-      allocationId: secondaryNatEip.id,
-      subnetId: secondaryPublicSubnet1.id,
-      tags: { ...commonTags, Name: `${config.appName}-secondary-nat` },
-    });
+    // const secondaryNatGateway = new NatGateway(this, 'secondary-nat-gateway', {
+    //   provider: secondaryProvider,
+    //   allocationId: secondaryNatEip.id,
+    //   subnetId: secondaryPublicSubnet1.id,
+    //   tags: { ...commonTags, Name: `${config.appName}-secondary-nat` },
+    // });
 
     // Route Tables - Secondary
     const secondaryPublicRt = new RouteTable(this, 'secondary-public-rt', {
@@ -329,12 +393,13 @@ export class FinancialProcessorStack extends TerraformStack {
       tags: { ...commonTags, Name: `${config.appName}-secondary-private-rt` },
     });
 
-    new Route(this, 'secondary-private-route', {
-      provider: secondaryProvider,
-      routeTableId: secondaryPrivateRt.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      natGatewayId: secondaryNatGateway.id,
-    });
+    // Secondary private route commented out due to NAT gateway removal
+    // new Route(this, 'secondary-private-route', {
+    //   provider: secondaryProvider,
+    //   routeTableId: secondaryPrivateRt.id,
+    //   destinationCidrBlock: '0.0.0.0/0',
+    //   natGatewayId: secondaryNatGateway.id,
+    // });
 
     new RouteTableAssociation(this, 'secondary-private-rta-1', {
       provider: secondaryProvider,
@@ -422,7 +487,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // DynamoDB Global Tables
     const transactionTable = new DynamodbTable(this, 'transaction-table', {
       provider: primaryProvider,
-      name: `${config.appName}-transactions`,
+      name: `${config.appName}-transactions-v2`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'transactionId',
       rangeKey: 'timestamp',
@@ -552,7 +617,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // IAM Role for S3 Replication
     const replicationRole = new IamRole(this, 's3-replication-role', {
       provider: primaryProvider,
-      name: `${config.appName}-s3-replication-role`,
+      name: `${config.appName}-s3-replication-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -570,7 +635,7 @@ export class FinancialProcessorStack extends TerraformStack {
 
     const replicationPolicy = new IamPolicy(this, 's3-replication-policy', {
       provider: primaryProvider,
-      name: `${config.appName}-s3-replication-policy`,
+      name: `${config.appName}-s3-replication-policy-${uniqueSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -827,7 +892,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Lambda Execution Role
     const lambdaExecutionRole = new IamRole(this, 'lambda-execution-role', {
       provider: primaryProvider,
-      name: `${config.appName}-lambda-execution-role`,
+      name: `${config.appName}-lambda-execution-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -852,7 +917,7 @@ export class FinancialProcessorStack extends TerraformStack {
 
     const lambdaRoute53Policy = new IamPolicy(this, 'lambda-route53-policy', {
       provider: primaryProvider,
-      name: `${config.appName}-lambda-route53-policy`,
+      name: `${config.appName}-lambda-route53-policy-${uniqueSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -937,27 +1002,25 @@ export class FinancialProcessorStack extends TerraformStack {
     });
 
     // CloudWatch Log Groups
+    // CloudWatch Log Groups (without KMS encryption to avoid permission issues)
     new CloudwatchLogGroup(this, 'primary-app-logs', {
       provider: primaryProvider,
-      name: `/aws/application/${config.appName}/primary`,
+      name: `/aws/application/${config.appName}/primary-${uniqueSuffix}`,
       retentionInDays: 30,
-      kmsKeyId: primaryKmsKey.arn,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'secondary-app-logs', {
       provider: secondaryProvider,
-      name: `/aws/application/${config.appName}/secondary`,
+      name: `/aws/application/${config.appName}/secondary-${uniqueSuffix}`,
       retentionInDays: 30,
-      kmsKeyId: secondaryKmsKey.arn,
       tags: commonTags,
     });
 
     new CloudwatchLogGroup(this, 'lambda-logs', {
       provider: primaryProvider,
-      name: `/aws/lambda/${config.appName}-health-check`,
+      name: `/aws/lambda/${config.appName}-health-check-${uniqueSuffix}`,
       retentionInDays: 14,
-      kmsKeyId: primaryKmsKey.arn,
       tags: commonTags,
     });
 
