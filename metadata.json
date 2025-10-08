@@ -13,6 +13,8 @@
     "Network Security Configuration"
   ],
   "aws_services": "S3 Bucket, VPC, EC2, IAM, CloudWatch, RDS, SNS, KMS, NAT Gateway, Internet Gateway",
+  "training_quality": 8,
+  "training_quality_justification": "High training value: MODEL_RESPONSE showed fundamental comprehension failure by providing migration code (us-west-1 to us-west-2) instead of creating new infrastructure as requested. IDEAL_RESPONSE correctly demonstrates: (1) Creating fresh infrastructure not migration, (2) Single-file Terraform structure with hardcoded values, (3) Proper multi-tier AWS architecture with VPC/EC2/RDS/S3/KMS, (4) Security best practices with least privilege IAM and private subnets, (5) Hardcoded availability zones us-west-2a and us-west-2b, (6) Deterministic CIDR blocks. This teaches the model to distinguish 'create new infrastructure' vs 'migrate existing infrastructure' and demonstrates proper patterns for infrastructure provisioning from scratch.",
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.883.0",
     "@aws-sdk/client-rds": "^3.883.0",
