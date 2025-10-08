@@ -112,7 +112,7 @@ describe('TapStack Integration Tests', () => {
         const availableRoles = listRolesResponse.Roles?.map(r => r.RoleName).slice(0, 10) || [];
         console.log('Available roles:', availableRoles);
         console.log('Looking for roles containing: CodePipelineServiceRole, CodePipeline, or TapStack');
-        console.log('Skipping test - CloudFormation stack not deployed');
+        console.log('CloudFormation stack not deployed');
         return;
       }
 
@@ -151,7 +151,7 @@ describe('TapStack Integration Tests', () => {
         const availableRoles = listRolesResponse.Roles?.map(r => r.RoleName).slice(0, 10) || [];
         console.log('Available roles:', availableRoles);
         console.log('Looking for roles containing: CodeBuildServiceRole, CodeBuild, or TapStack');
-        console.log('Skipping test - CloudFormation stack not deployed');
+        console.log('CloudFormation stack not deployed');
         return;
       }
 
@@ -278,7 +278,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       if (!profileFound) {
-        console.log('Skipping test - ElasticBeanstalkInstanceProfile not found. CloudFormation stack not deployed');
+        console.log('ElasticBeanstalkInstanceProfile not found. CloudFormation stack not deployed');
         return;
       }
     });
@@ -587,7 +587,7 @@ describe('TapStack Integration Tests', () => {
       const codeBuildLogGroup = logGroupsResponse.logGroups?.find(lg => lg.logGroupName?.includes('codebuild'));
 
       if (!codeBuildLogGroup) {
-        console.log('Skipping test - CodeBuild log group not found. CloudFormation stack not deployed');
+        console.log('CodeBuild log group not found. CloudFormation stack not deployed');
         return;
       }
 

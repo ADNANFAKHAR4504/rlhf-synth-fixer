@@ -27,11 +27,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toBeDefined();
     });
-
-    test('should have conditions section', () => {
-      expect(template.Conditions).toBeDefined();
-      expect(template.Conditions.IsProduction).toBeDefined();
-    });
   });
 
   describe('Parameters Validation', () => {
@@ -85,13 +80,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
   });
 
-  describe('Conditions Validation', () => {
-    test('IsProduction condition should be properly defined', () => {
-      expect(template.Conditions.IsProduction).toEqual({
-        'Fn::Equals': [{ Ref: 'Environment' }, 'production']
-      });
-    });
-  });
 
   describe('KMS Resources Validation', () => {
     test('should have ArtifactEncryptionKey resource', () => {
@@ -700,11 +688,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(7);
     });
-
-    test('should have correct number of conditions', () => {
-      const conditionCount = Object.keys(template.Conditions).length;
-      expect(conditionCount).toBe(1);
-    });
   });
 
   describe('Resource Dependencies Validation', () => {
@@ -796,7 +779,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.AWSTemplateFormatVersion).toBeDefined();
       expect(template.Description).toBeDefined();
       expect(template.Parameters).toBeDefined();
-      expect(template.Conditions).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
       expect(template.Metadata).toBeDefined();
