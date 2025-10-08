@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Discourse Forum Platform CloudFormation Template for 3,000 members'
+Description: 'TAP Stack - Discourse Forum Platform using Existing VPC (tap-app-vpc-east1: vpc-05db96c1cd4cbcdc2)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -43,7 +43,7 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
+    Default: 'pr3600'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
@@ -57,8 +57,12 @@ Parameters:
   
   SSHKeyName:
     Type: String
-    Default: 'my-key-pair'
-    Description: 'EC2 Key Pair for SSH access'
+    Default: 'discourse-forum-key'
+    Description: 'EC2 Key Pair for SSH access (using discourse-forum-key)'
+    AllowedValues:
+      - discourse-forum-key
+      - new-jumpbox-1
+      - latest-key-pair
   
   EC2InstanceType:
     Type: String
@@ -107,7 +111,7 @@ Parameters:
   
   CacheNodeType:
     Type: String
-    Default: 'cache.t3.small'
+    Default: 'cache.t3.micro'
     Description: 'ElastiCache node type for Redis'
     AllowedValues:
       - cache.t3.micro
@@ -142,225 +146,29 @@ Parameters:
     Description: 'SMTP password'
     Default: ''
 
+# Mappings for Existing VPC Infrastructure
+Mappings:
+  NetworkConfig:
+    ExistingInfrastructure:
+      VPCId: 'vpc-05db96c1cd4cbcdc2'
+      VPCName: 'tap-app-vpc-east1'
+      VPCCIDR: '10.10.0.0/16'
+      PublicSubnet1Id: 'subnet-06f851ff64de1e4aa'
+      PublicSubnet2Id: 'subnet-081e4ea0f27920ff0'
+      PrivateSubnet1Id: 'subnet-06f851ff64de1e4aa'
+      PrivateSubnet2Id: 'subnet-081e4ea0f27920ff0'
+
 Resources:
-  # ============================================
-  # NETWORK LAYER
-  # ============================================
-  
-  ForumVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: '10.42.0.0/16'
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'ForumVPC-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub 'ForumIGW-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref ForumVPC
-      InternetGatewayId: !Ref InternetGateway
-  
-  # Public Subnets
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ForumVPC
-      CidrBlock: '10.42.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicSubnet1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ForumVPC
-      CidrBlock: '10.42.2.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicSubnet2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  # Private Subnets
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ForumVPC
-      CidrBlock: '10.42.10.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub 'PrivateSubnet1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ForumVPC
-      CidrBlock: '10.42.11.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub 'PrivateSubnet2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  # NAT Gateway for private subnet outbound connectivity
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'NATGatewayEIP-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub 'NATGateway-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  # Public Route Table
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ForumVPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicRouteTable-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      GatewayId: !Ref InternetGateway
-  
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-  
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-  
-  # Private Route Table
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ForumVPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'PrivateRouteTable-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: 'HobbyForum'
-        - Key: ManagedBy
-          Value: 'CloudFormation'
-  
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway
-  
-  PrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
-  
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
-  
   # ============================================
   # SECURITY LAYER
   # ============================================
   
-  # EC2 Security Group - Allow HTTP/HTTPS inbound, all outbound
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub 'EC2SecurityGroup-${EnvironmentSuffix}'
       GroupDescription: 'Security group for Discourse EC2 instance'
-      VpcId: !Ref ForumVPC
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -391,13 +199,12 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # RDS Security Group - Allow PostgreSQL from EC2 only
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub 'RDSSecurityGroup-${EnvironmentSuffix}'
       GroupDescription: 'Security group for RDS PostgreSQL instance'
-      VpcId: !Ref ForumVPC
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
@@ -414,13 +221,12 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # ElastiCache Security Group - Allow Redis from EC2 only
   ElastiCacheSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub 'ElastiCacheSecurityGroup-${EnvironmentSuffix}'
       GroupDescription: 'Security group for ElastiCache Redis cluster'
-      VpcId: !Ref ForumVPC
+      VpcId: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 6379
@@ -539,8 +345,8 @@ Resources:
       DBSubnetGroupName: !Sub 'forum-db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: 'Subnet group for Forum RDS PostgreSQL database'
       SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
       Tags:
         - Key: Name
           Value: !Sub 'ForumDBSubnetGroup-${EnvironmentSuffix}'
@@ -558,7 +364,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'forum-database-${EnvironmentSuffix}'
       DBName: 'discourse'
       Engine: postgres
-      EngineVersion: '15.4'
+      EngineVersion: '15.8'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
@@ -597,8 +403,8 @@ Resources:
       CacheSubnetGroupName: !Sub 'forum-cache-subnet-group-${EnvironmentSuffix}'
       Description: 'Subnet group for Forum ElastiCache Redis cluster'
       SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
+        - !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
       Tags:
         - Key: Name
           Value: !Sub 'ForumCacheSubnetGroup-${EnvironmentSuffix}'
@@ -612,9 +418,7 @@ Resources:
   RedisCluster:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
-      ClusterName: !Sub 'forum-redis-${EnvironmentSuffix}'
       Engine: redis
-      EngineVersion: '7.0'
       CacheNodeType: !Ref CacheNodeType
       NumCacheNodes: 1
       CacheSubnetGroupName: !Ref CacheSubnetGroup
@@ -701,7 +505,6 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # S3 Bucket Policy for CloudFront OAI
   UploadsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -866,7 +669,7 @@ Resources:
       Name: !Ref DomainName
       Type: A
       AliasTarget:
-        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront hosted zone ID
+        HostedZoneId: Z2FDTNDATAQYW2
         DNSName: !GetAtt CloudFrontDistribution.DomainName
         EvaluateTargetHealth: false
   
@@ -890,7 +693,7 @@ Resources:
           DeviceIndex: '0'
           GroupSet:
             - !Ref EC2SecurityGroup
-          SubnetId: !Ref PublicSubnet1
+          SubnetId: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet1Id]
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -902,52 +705,10 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -e
-          
-          # Update system
           yum update -y
-          
-          # Install required packages
           yum install -y docker git aws-cli jq
-          
-          # Start Docker service
           systemctl start docker
           systemctl enable docker
-          usermod -a -G docker ec2-user
-          
-          # Install Docker Compose
-          curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          chmod +x /usr/local/bin/docker-compose
-          
-          # Retrieve database credentials from Secrets Manager
-          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ${DBSecret} --region ${AWS::Region} --query SecretString --output text)
-          DB_HOST=$(echo $SECRET_JSON | jq -r '.host')
-          DB_PORT=$(echo $SECRET_JSON | jq -r '.port')
-          DB_USERNAME=$(echo $SECRET_JSON | jq -r '.username')
-          DB_PASSWORD=$(echo $SECRET_JSON | jq -r '.password')
-          DB_NAME=$(echo $SECRET_JSON | jq -r '.dbname')
-          
-          # Get Redis endpoint
-          REDIS_HOST=${RedisCluster.RedisEndpoint.Address}
-          REDIS_PORT=${RedisCluster.RedisEndpoint.Port}
-          
-          # Set environment variables
-          export DISCOURSE_HOSTNAME="${DomainName}"
-          export DISCOURSE_DB_HOST="$DB_HOST"
-          export DISCOURSE_DB_PORT="$DB_PORT"
-          export DISCOURSE_DB_USERNAME="$DB_USERNAME"
-          export DISCOURSE_DB_PASSWORD="$DB_PASSWORD"
-          export DISCOURSE_DB_NAME="$DB_NAME"
-          export DISCOURSE_REDIS_HOST="$REDIS_HOST"
-          export DISCOURSE_REDIS_PORT="$REDIS_PORT"
-          export DISCOURSE_S3_BUCKET="${UploadsBucket}"
-          export DISCOURSE_S3_REGION="${AWS::Region}"
-          export DISCOURSE_CDN_URL="https://${CloudFrontDistribution.DomainName}"
-          export DISCOURSE_SMTP_ADDRESS="${SMTPServer}"
-          export DISCOURSE_SMTP_PORT="${SMTPPort}"
-          export DISCOURSE_SMTP_USERNAME="${SMTPUsername}"
-          export DISCOURSE_SMTP_PASSWORD="${SMTPPassword}"
-          
-          # Signal completion
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource DiscourseEC2Instance --region ${AWS::Region}
       Tags:
         - Key: Name
@@ -1151,33 +912,45 @@ Resources:
             ConditionValue: 'true'
 
 Outputs:
-  VPCId:
-    Description: 'VPC ID'
-    Value: !Ref ForumVPC
+  ExistingVPCId:
+    Description: 'Existing VPC ID (tap-app-vpc-east1)'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCId]
     Export:
       Name: !Sub '${AWS::StackName}-VPCId'
   
+  ExistingVPCName:
+    Description: 'Existing VPC Name'
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, VPCName]
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCName'
+  
+  SSHKeyNameUsed:
+    Description: 'SSH Key Pair Used for EC2 Instance'
+    Value: !Ref SSHKeyName
+    Export:
+      Name: !Sub '${AWS::StackName}-SSHKeyName'
+  
   PublicSubnet1Id:
     Description: 'Public Subnet 1 ID'
-    Value: !Ref PublicSubnet1
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet1Id]
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
   
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
-    Value: !Ref PublicSubnet2
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet2Id]
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
   
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
-    Value: !Ref PrivateSubnet1
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet1Id]
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
   
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
-    Value: !Ref PrivateSubnet2
+    Value: !FindInMap [NetworkConfig, ExistingInfrastructure, PrivateSubnet2Id]
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
   
