@@ -121,8 +121,9 @@ function extractArn(output: string | OutputValue): string {
 
 describe("Terraform Compliance Framework - Integration Tests", () => {
   beforeAll(() => {
-    // Detect CI/CD environment
+    // Detect CI/CD environment or explicit test mode
     const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true" || process.env.GITLAB_CI === "true";
+    const useMockData = process.env.USE_MOCK_DATA === "true";
 
     // Load outputs from deployment
     if (fs.existsSync(OUTPUTS_FILE)) {
@@ -131,15 +132,19 @@ describe("Terraform Compliance Framework - Integration Tests", () => {
       console.log("\n✅ Loaded deployment outputs from:", OUTPUTS_FILE);
       console.log("Available outputs:", Object.keys(outputs).join(", "));
     } else if (isCI) {
-      // In CI/CD, outputs file MUST exist
+      // In CI/CD, outputs file MUST exist - deployment failed
       throw new Error(
-        `❌ CI/CD detected but outputs file not found at ${OUTPUTS_FILE}. Deployment may have failed.`
+        `❌ INTEGRATION TEST FAILURE: Outputs file not found at ${OUTPUTS_FILE}.\n` +
+        `This indicates the deployment failed. Integration tests cannot proceed without deployed infrastructure.\n` +
+        `Check deployment logs for errors.`
       );
-    } else {
+    } else if (useMockData) {
+      // Explicit opt-in to mock data for development only
       console.warn(
-        `⚠️  Outputs file not found at ${OUTPUTS_FILE}. Using mock data for local testing.`
+        `\n⚠️  USE_MOCK_DATA=true - Using mock data for local development.\n` +
+        `⚠️  WARNING: These tests will NOT validate actual infrastructure!\n` +
+        `⚠️  To test real deployment, run: terraform apply && npm run test:integration\n`
       );
-      // Mock outputs for local testing only
       outputs = {
         cloudtrail_s3_bucket: "compliance-framework-cloudtrail-logs-123456789012",
         config_s3_bucket: "compliance-framework-config-logs-123456789012",
@@ -154,6 +159,16 @@ describe("Terraform Compliance Framework - Integration Tests", () => {
         kms_audit_logs_key_arn:
           "arn:aws:kms:us-east-1:123456789012:key/test-key-id",
       };
+    } else {
+      // No outputs file and not in CI - FAIL BY DEFAULT
+      throw new Error(
+        `❌ INTEGRATION TEST FAILURE: Outputs file not found at ${OUTPUTS_FILE}.\n\n` +
+        `Integration tests require deployed infrastructure to validate.\n\n` +
+        `Options:\n` +
+        `1. Deploy infrastructure first: cd lib && terraform apply && cd ..\n` +
+        `2. Run with mock data (dev only): USE_MOCK_DATA=true npm run test:integration\n\n` +
+        `Note: Mock data tests do NOT validate real infrastructure!`
+      );
     }
   });
 

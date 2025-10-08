@@ -71,6 +71,25 @@ resource "aws_kms_key" "audit_logs" {
         }
       },
       {
+        Sid    = "Allow CloudWatch Logs to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      },
+      {
         Sid    = "Allow Config to use the key"
         Effect = "Allow"
         Principal = {
@@ -87,6 +106,18 @@ resource "aws_kms_key" "audit_logs" {
         Effect = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow SNS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "sns.amazonaws.com"
         }
         Action = [
           "kms:Decrypt",
@@ -410,7 +441,7 @@ resource "aws_cloudtrail" "organization_trail" {
   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
   include_global_service_events = true
   is_multi_region_trail         = true
-  is_organization_trail         = true
+  is_organization_trail         = var.organization_id != "" ? true : false
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.audit_logs.arn
 
@@ -525,7 +556,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config_policy" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
@@ -821,8 +852,10 @@ resource "aws_iam_role_policy" "config_aggregator" {
 }
 
 # Config Aggregator for Organization
+# Only create if organization_id is provided
 resource "aws_config_configuration_aggregator" "organization" {
-  name = "${var.project_name}-org-aggregator"
+  count = var.organization_id != "" ? 1 : 0
+  name  = "${var.project_name}-org-aggregator"
 
   organization_aggregation_source {
     all_regions = true
@@ -836,6 +869,25 @@ resource "aws_config_configuration_aggregator" "organization" {
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-org-aggregator"
+  })
+}
+
+# Config Aggregator for single account (when no organization)
+resource "aws_config_configuration_aggregator" "account" {
+  count = var.organization_id == "" ? 1 : 0
+  name  = "${var.project_name}-account-aggregator"
+
+  account_aggregation_source {
+    account_ids = [data.aws_caller_identity.current.account_id]
+    all_regions = true
+  }
+
+  depends_on = [
+    aws_config_configuration_recorder_status.main
+  ]
+
+  tags = merge(local.tags, {
+    Name = "${var.project_name}-account-aggregator"
   })
 }
 
@@ -907,7 +959,9 @@ resource "aws_guardduty_detector" "main" {
 }
 
 # GuardDuty organization configuration (for delegated admin)
+# Only create if organization_id is provided
 resource "aws_guardduty_organization_configuration" "main" {
+  count                            = var.organization_id != "" ? 1 : 0
   detector_id                      = aws_guardduty_detector.main.id
   auto_enable_organization_members = "ALL"
 }
@@ -2198,33 +2252,35 @@ resource "aws_iam_role_policy" "cross_account_remediation" {
 # ========== QUICKSIGHT RESOURCES ==========
 
 # QuickSight data source for DynamoDB violations table
-resource "aws_quicksight_data_source" "violations" {
-  data_source_id = "${var.project_name}-violations-datasource"
-  name           = "${var.project_name}-violations"
-  type           = "ATHENA"
-
-  parameters {
-    athena {
-      work_group = "primary"
-    }
-  }
-
-  permission {
-    principal = "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_user_email}"
-    actions = [
-      "quicksight:DescribeDataSource",
-      "quicksight:DescribeDataSourcePermissions",
-      "quicksight:PassDataSource",
-      "quicksight:UpdateDataSource",
-      "quicksight:DeleteDataSource",
-      "quicksight:UpdateDataSourcePermissions"
-    ]
-  }
-
-  tags = merge(local.tags, {
-    Name = "${var.project_name}-violations-datasource"
-  })
-}
+# Note: QuickSight must be manually initialized in the account first
+# This resource will fail if QuickSight is not set up - comment out if not using QuickSight
+# resource "aws_quicksight_data_source" "violations" {
+#   data_source_id = "${var.project_name}-violations-datasource"
+#   name           = "${var.project_name}-violations"
+#   type           = "ATHENA"
+#
+#   parameters {
+#     athena {
+#       work_group = "primary"
+#     }
+#   }
+#
+#   permission {
+#     principal = "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_user_email}"
+#     actions = [
+#       "quicksight:DescribeDataSource",
+#       "quicksight:DescribeDataSourcePermissions",
+#       "quicksight:PassDataSource",
+#       "quicksight:UpdateDataSource",
+#       "quicksight:DeleteDataSource",
+#       "quicksight:UpdateDataSourcePermissions"
+#     ]
+#   }
+#
+#   tags = merge(local.tags, {
+#     Name = "${var.project_name}-violations-datasource"
+#   })
+# }
 
 # ========== OUTPUTS ==========
 
@@ -2250,7 +2306,7 @@ output "config_recorder_name" {
 
 output "config_aggregator_arn" {
   description = "ARN of the Config aggregator"
-  value       = aws_config_configuration_aggregator.organization.arn
+  value       = var.organization_id != "" ? aws_config_configuration_aggregator.organization[0].arn : aws_config_configuration_aggregator.account[0].arn
 }
 
 output "security_hub_arn" {

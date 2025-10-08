@@ -187,8 +187,8 @@ describe("Terraform Compliance Framework - CloudTrail", () => {
     expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
   });
 
-  test("CloudTrail is organization-wide", () => {
-    expect(stackContent).toMatch(/is_organization_trail\s*=\s*true/);
+  test("CloudTrail is organization-wide (conditional on organization_id)", () => {
+    expect(stackContent).toMatch(/is_organization_trail\s*=\s*var\.organization_id\s*!=\s*""\s*\?\s*true\s*:\s*false/);
   });
 
   test("CloudTrail has log file validation enabled", () => {
@@ -244,6 +244,8 @@ describe("Terraform Compliance Framework - AWS Config", () => {
   test("Config aggregator for organization is defined", () => {
     expect(stackContent).toMatch(/resource\s+"aws_config_configuration_aggregator"\s+"organization"/);
     expect(stackContent).toMatch(/organization_aggregation_source/);
+    // Also check for account aggregator fallback
+    expect(stackContent).toMatch(/resource\s+"aws_config_configuration_aggregator"\s+"account"/);
   });
 });
 
@@ -834,7 +836,7 @@ describe("Terraform Compliance Framework - PROMPT.md Requirements Coverage", () 
   });
 
   test("AWS Organizations multi-account management is addressed", () => {
-    expect(stackContent).toMatch(/is_organization_trail\s*=\s*true/);
+    expect(stackContent).toMatch(/is_organization_trail\s*=\s*var\.organization_id\s*!=\s*""/);
     expect(stackContent).toMatch(/organization_aggregation_source/);
   });
 
