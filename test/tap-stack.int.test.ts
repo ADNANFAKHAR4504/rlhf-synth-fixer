@@ -29,11 +29,11 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS Clients
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-south-1' });
-const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'ap-south-1' });
-const eventBridgeClient = new EventBridgeClient({ region: process.env.AWS_REGION || 'ap-south-1' });
-const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'ap-south-1' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'ap-south-1' });
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const eventBridgeClient = new EventBridgeClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 // Helper function to get the latest shipment record using Query
 async function getLatestShipmentRecord(shipmentId: string) {
