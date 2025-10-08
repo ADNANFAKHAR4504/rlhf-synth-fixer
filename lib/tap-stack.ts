@@ -109,12 +109,12 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: networkStack.publicSubnets.map((s) => s.id),
+      value: networkStack.publicSubnets.map(s => s.id),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private-subnet-ids', {
-      value: networkStack.privateSubnets.map((s) => s.id),
+      value: networkStack.privateSubnets.map(s => s.id),
       description: 'Private subnet IDs',
     });
 
