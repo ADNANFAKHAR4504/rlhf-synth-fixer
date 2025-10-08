@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { Construct } from 'constructs';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -21,7 +21,9 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
