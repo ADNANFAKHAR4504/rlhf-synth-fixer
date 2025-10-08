@@ -20,14 +20,8 @@ import {
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
-import {
-  DescribeKeyCommand,
-  KMSClient,
-} from '@aws-sdk/client-kms';
-import {
-  DescribeDBInstancesCommand,
-  RDSClient,
-} from '@aws-sdk/client-rds';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
@@ -70,8 +64,9 @@ const flatOutputs = fs.existsSync(outputsPath)
 const expectedTableName = `TurnAroundPromptTable${environmentSuffix}`;
 const expectedVpcName = `${projectPrefix}-vpc-${environmentSuffix}`;
 const expectedTrailName = `${projectPrefix}-trail-${environment}-${environmentSuffix}`;
-const expectedAppInstanceName = `${projectPrefix}-app-instance-${environmentSuffix}`;
-const expectedSnsDisplayName = `${projectPrefix} Operations Alerts`;
+const expectedAppInstanceName = `${projectPrefix}-app-instance-${environmentSuffix}`; // best-effort
+const expectedAppInstanceProfileName = `${projectPrefix}-app-profile-${environment}-${environmentSuffix}`;
+const expectedDbIdentifier = `${projectPrefix}-db-${environment}-${environmentSuffix}`;
 
 describe('TAP Stack – Live Integration', () => {
   const timeout = 60_000;
@@ -81,7 +76,6 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'table exists, is active, pay-per-request, SSE on, and supports CRUD',
       async () => {
-        // Describe
         const describe = await clients.dynamo.send(
           new DescribeTableCommand({ TableName: expectedTableName })
         );
@@ -90,7 +84,6 @@ describe('TAP Stack – Live Integration', () => {
         expect(describe.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
         expect(describe.Table!.SSEDescription?.Status).toBe('ENABLED');
 
-        // CRUD
         const id = `it-${Date.now()}`;
         const item = {
           id: { S: id },
@@ -130,11 +123,12 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'public and private subnets exist and are in different AZs',
       async () => {
-        const subnetsResp = await clients.ec2.send(new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] }));
+        const subnetsResp = await clients.ec2.send(
+          new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
+        );
         const subnets = subnetsResp.Subnets || [];
         expect(subnets.length).toBeGreaterThanOrEqual(4);
 
-        // Classify by MapPublicIpOnLaunch (true => public)
         const publicOnes = subnets.filter(s => s.MapPublicIpOnLaunch);
         const privateOnes = subnets.filter(s => !s.MapPublicIpOnLaunch);
         expect(publicOnes.length).toBeGreaterThanOrEqual(2);
@@ -152,13 +146,35 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'app instance is in a private subnet and has monitoring enabled',
       async () => {
-        const inst = await clients.ec2.send(new DescribeInstancesCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [expectedAppInstanceName] },
-            { Name: 'instance-state-name', Values: ['pending', 'running', 'stopped', 'stopping'] },
-          ],
-        }));
-        const instances = (inst.Reservations || []).flatMap(r => r.Instances || []);
+        // First try: by Name tag (if template added tags later)
+        const tryByTag = await clients.ec2.send(
+          new DescribeInstancesCommand({
+            Filters: [
+              { Name: 'tag:Name', Values: [expectedAppInstanceName] },
+              { Name: 'instance-state-name', Values: ['pending', 'running', 'stopped', 'stopping'] },
+            ],
+          })
+        );
+        let instances = (tryByTag.Reservations || []).flatMap(r => r.Instances || []);
+
+        // Fallback: discover by instance profile name in private subnets (matches your template)
+        if (instances.length === 0) {
+          const inPrivate = await clients.ec2.send(
+            new DescribeInstancesCommand({
+              Filters: [
+                { Name: 'subnet-id', Values: privateSubnets },
+                { Name: 'instance-state-name', Values: ['pending', 'running', 'stopped', 'stopping'] },
+              ],
+            })
+          );
+          const candidates = (inPrivate.Reservations || []).flatMap(r => r.Instances || []);
+          instances = candidates.filter(i => {
+            const arn = i.IamInstanceProfile?.Arn || '';
+            // Arn endsWith /instance-profile/<name>
+            return arn.endsWith(`/${expectedAppInstanceProfileName}`) || arn.includes(`:instance-profile/${expectedAppInstanceProfileName}`);
+          });
+        }
+
         expect(instances.length).toBeGreaterThan(0);
 
         const app = instances[0];
@@ -171,27 +187,39 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'RDS SG allows 5432 from App SG; Bastion SG (if present) only allows SSH',
       async () => {
-        // RDS instance to discover SG
+        // RDS instance to discover RG SG
         const rds = await clients.rds.send(new DescribeDBInstancesCommand({}));
         const ourDb = (rds.DBInstances || []).find(db =>
-          db.DBInstanceIdentifier?.includes(`${projectPrefix}-db-${environment}-${environmentSuffix}`)
+          db.DBInstanceIdentifier?.includes(expectedDbIdentifier)
         );
         expect(ourDb).toBeTruthy();
         const rdsSgIds = (ourDb!.VpcSecurityGroups || []).map(g => g.VpcSecurityGroupId!);
         expect(rdsSgIds.length).toBeGreaterThan(0);
 
-        // App instance SGs (from previous test)
-        const appInst = await clients.ec2.send(new DescribeInstancesCommand({
-          Filters: [{ Name: 'tag:Name', Values: [expectedAppInstanceName] }],
-        }));
-        const app = (appInst.Reservations || []).flatMap(r => r.Instances || [])[0];
-        const appSgIds = (app.SecurityGroups || []).map(g => g.GroupId!);
+        // Discover app instance again (same logic as previous test)
+        const inPrivate = await clients.ec2.send(
+          new DescribeInstancesCommand({
+            Filters: [
+              { Name: 'subnet-id', Values: privateSubnets },
+              { Name: 'instance-state-name', Values: ['pending', 'running', 'stopped', 'stopping'] },
+            ],
+          })
+        );
+        const candidates = (inPrivate.Reservations || []).flatMap(r => r.Instances || []);
+        const app = candidates.find(i => {
+          const arn = i.IamInstanceProfile?.Arn || '';
+          return arn.endsWith(`/${expectedAppInstanceProfileName}`) || arn.includes(`:instance-profile/${expectedAppInstanceProfileName}`);
+        });
+        expect(app).toBeTruthy();
 
-        const sgs = await clients.ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [...new Set([...rdsSgIds, ...appSgIds])] }));
+        const appSgIds = (app!.SecurityGroups || []).map(g => g.GroupId!);
+
+        const sgs = await clients.ec2.send(
+          new DescribeSecurityGroupsCommand({ GroupIds: [...new Set([...rdsSgIds, ...appSgIds])] })
+        );
         const rdsSg = sgs.SecurityGroups!.find(sg => rdsSgIds.includes(sg.GroupId!));
         expect(rdsSg).toBeTruthy();
 
-        // Check 5432 ingress from the app SG on the RDS SG
         const has5432FromApp = (rdsSg!.IpPermissions || []).some(p =>
           p.FromPort === 5432 &&
           p.ToPort === 5432 &&
@@ -199,14 +227,12 @@ describe('TAP Stack – Live Integration', () => {
         );
         expect(has5432FromApp).toBe(true);
 
-        // Optional: Bastion SG (only exists if KeyPair was provided). If present, only SSH.
-        const allSgs = sgs.SecurityGroups || [];
-        const maybeBastion = allSgs.find(sg =>
+        // Optional: Bastion SG—only if present in this account/stack
+        const maybeBastion = (sgs.SecurityGroups || []).find(sg =>
           (sg.GroupName?.includes('bastion') || (sg.Tags || []).some(t => t.Key === 'Name' && /bastion/i.test(t.Value!)))
         );
         if (maybeBastion) {
           const ingress = maybeBastion.IpPermissions || [];
-          // Only one ingress rule and it's SSH
           expect(ingress.length).toBe(1);
           expect(ingress[0].FromPort).toBe(22);
           expect(ingress[0].ToPort).toBe(22);
@@ -223,7 +249,7 @@ describe('TAP Stack – Live Integration', () => {
       async () => {
         const resp = await clients.rds.send(new DescribeDBInstancesCommand({}));
         const db = (resp.DBInstances || []).find(d =>
-          d.DBInstanceIdentifier?.includes(`${projectPrefix}-db-${environment}-${environmentSuffix}`)
+          d.DBInstanceIdentifier?.includes(expectedDbIdentifier)
         );
         expect(db).toBeTruthy();
         expect(db!.DBInstanceStatus).toBe('available');
@@ -238,10 +264,13 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'Secrets Manager holds the credentials actually used',
       async () => {
-        const secretArn = flatOutputs.RdsSecretUsed || flatOutputs['RdsSecretUsed'];
+        const secretArn =
+          flatOutputs.RdsSecretUsed || flatOutputs['RdsSecretUsed'];
         expect(secretArn).toBeTruthy();
 
-        const ds = await clients.secrets.send(new DescribeSecretCommand({ SecretId: secretArn }));
+        const ds = await clients.secrets.send(
+          new DescribeSecretCommand({ SecretId: secretArn })
+        );
         expect(ds.ARN).toBe(secretArn);
         expect(ds.Name).toBeDefined();
       },
@@ -257,21 +286,24 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'trail exists and is healthy',
       async () => {
-        const trails = await clients.cloudtrail.send(new DescribeTrailsCommand({}));
-        const trail = (trails.trailList || []).find(t => t.Name === expectedTrailName);
+        const trails = await clients.cloudtrail.send(
+          new DescribeTrailsCommand({})
+        );
+        const trail = (trails.trailList || []).find(
+          t => t.Name === expectedTrailName
+        );
         expect(trail).toBeTruthy();
 
-        // Core properties
         expect(trail!.IsMultiRegionTrail).toBe(true);
         expect(trail!.IncludeGlobalServiceEvents).toBe(true);
         expect(trail!.LogFileValidationEnabled).toBe(true);
 
-        // capture for next tests
         trailBucket = trail!.S3BucketName;
-        trailKmsKeyId = trail!.KmsKeyId; // may be full ARN or key-id
+        trailKmsKeyId = trail!.KmsKeyId;
 
-        // Status
-        const status = await clients.cloudtrail.send(new GetTrailStatusCommand({ Name: expectedTrailName }));
+        const status = await clients.cloudtrail.send(
+          new GetTrailStatusCommand({ Name: expectedTrailName })
+        );
         expect(status.IsLogging).toBe(true);
       },
       timeout
@@ -284,11 +316,17 @@ describe('TAP Stack – Live Integration', () => {
 
         await clients.s3.send(new HeadBucketCommand({ Bucket: trailBucket }));
 
-        const enc = await clients.s3.send(new GetBucketEncryptionCommand({ Bucket: trailBucket }));
-        const algo = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+        const enc = await clients.s3.send(
+          new GetBucketEncryptionCommand({ Bucket: trailBucket })
+        );
+        const algo =
+          enc.ServerSideEncryptionConfiguration?.Rules?.[0]
+            ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
         expect(algo).toBe('aws:kms');
 
-        const ver = await clients.s3.send(new GetBucketVersioningCommand({ Bucket: trailBucket }));
+        const ver = await clients.s3.send(
+          new GetBucketVersioningCommand({ Bucket: trailBucket })
+        );
         expect(ver.Status).toBe('Enabled');
       },
       timeout
@@ -297,9 +335,7 @@ describe('TAP Stack – Live Integration', () => {
     test(
       'trail KMS key (if managed by stack) is enabled',
       async () => {
-        if (!trailKmsKeyId) return; // may be using an external key
-
-        // Accept ARN or key-id
+        if (!trailKmsKeyId) return;
         const keyId = trailKmsKeyId.split('/').pop() || trailKmsKeyId;
         const k = await clients.kms.send(new DescribeKeyCommand({ KeyId: keyId }));
         expect(k.KeyMetadata?.KeyState).toBe('Enabled');
@@ -312,24 +348,51 @@ describe('TAP Stack – Live Integration', () => {
   // -------- SNS --------
   describe('SNS', () => {
     test(
-      'operations topic exists (by DisplayName) and is accessible',
+      'operations topic exists and allows CloudWatch to publish',
       async () => {
-        // We don’t have an output — scan topics and find the one with our DisplayName
         const topics = await clients.sns.send(new ListTopicsCommand({}));
-        const topicArns = (topics.Topics || []).map(t => t.TopicArn!).filter(Boolean);
+        const topicArns = (topics.Topics || [])
+          .map(t => t.TopicArn!)
+          .filter(Boolean);
 
         let foundArn: string | undefined;
         for (const arn of topicArns) {
-          const attrs = await clients.sns.send(new GetTopicAttributesCommand({ TopicArn: arn }));
-          if (attrs.Attributes?.DisplayName === expectedSnsDisplayName) {
-            foundArn = arn;
-            break;
+          const attrs = await clients.sns.send(
+            new GetTopicAttributesCommand({ TopicArn: arn })
+          );
+          const policyJson = attrs.Attributes?.Policy;
+          if (!policyJson) continue;
+          try {
+            const policy = JSON.parse(policyJson);
+            const stmts = Array.isArray(policy.Statement)
+              ? policy.Statement
+              : [policy.Statement];
+            const hasCwPublish = stmts.some(
+              (s: any) =>
+                (s.Sid === 'AllowCloudWatchToPublish' ||
+                  /CloudWatchToPublish/i.test(s.Sid || '')) &&
+                (s.Principal?.Service === 'cloudwatch.amazonaws.com' ||
+                  (Array.isArray(s.Principal?.Service) &&
+                    s.Principal.Service.includes('cloudwatch.amazonaws.com'))) &&
+                (Array.isArray(s.Action)
+                  ? s.Action.includes('SNS:Publish')
+                  : s.Action === 'SNS:Publish')
+            );
+            if (hasCwPublish) {
+              foundArn = arn;
+              break;
+            }
+          } catch {
+            // ignore JSON parse issues and move on
           }
         }
 
         expect(foundArn).toBeTruthy();
-        // Once found, fetch again to assert stable attributes
-        const attrs = await clients.sns.send(new GetTopicAttributesCommand({ TopicArn: foundArn! }));
+
+        // sanity: attributes resolvable
+        const attrs = await clients.sns.send(
+          new GetTopicAttributesCommand({ TopicArn: foundArn! })
+        );
         expect(attrs.Attributes?.TopicArn).toBe(foundArn);
       },
       timeout
