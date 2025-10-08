@@ -4,6 +4,7 @@ the demo environment setup with Service Catalog, CloudFormation, Lambda, DynamoD
 S3, Cognito, Step Functions, EventBridge, CloudWatch, SNS, and IAM.
 """
 
+
 from typing import Optional
 
 import aws_cdk as cdk
