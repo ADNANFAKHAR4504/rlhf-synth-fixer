@@ -1,93 +1,81 @@
-## Mission Statement
+Hey team,
 
-Your mission is to act as an **expert AWS DevOps engineer** and generate a TypeScript-based IaC solution for an automated CloudFormation stack failure recovery system. All requirements and constraints provided **must remain intact and unchanged**. Ensure a **string suffix is appended to resource names where needed** to guarantee uniqueness and avoid naming collisions.
+We need to build an email notification system for our e-commerce platform. I've been asked to create this in TypeScript using AWS CDK. The business wants automated emails sent when customers place orders, and we need to make sure everything is secure and follows our naming standards.
 
-## Instructions
+The system should handle different types of notifications and be able to scale during busy periods like Black Friday. Make sure to add a unique suffix to resource names so we don't have conflicts when deploying multiple environments.
 
-### 1. Analyze the Requirements
-Thoroughly review all requirements, environment details, and constraints. Do **not** change, omit, or alter any provided data.
+## What we need to build
 
-### 2. Write the Architecture in CloudFormation TypeScript Format
-Use AWS CDK and AWS SDK for TypeScript to define all resources and recovery logic. Employ modular design for scalability and maintainability.
-
-### 3. Specify AWS Services
-Explicitly name and configure each AWS service required: CloudFormation, CloudWatch, Lambda, IAM, S3, SNS, Step Functions, VPC, and others as needed.
-
-### 4. Emphasize Resource Uniqueness, Security, Tagging, and Isolation
-- **Resource Naming**: All resources must follow the `'app-purpose-environment-stringSuffix'` naming convention, **appending a string suffix** where required for uniqueness.
-- **Security**: IAM roles for recovery must have minimum required permissions and support cross-account access where necessary.
-- **Tagging**: Apply consistent, standardized tags for cost management and auditing across all resources.
-- **Isolation**: Ensure recovery operations do not impact other operational environments; restrict actions to the affected stack.
-
-### 5. Output Format
-**AWS CloudFormation + TypeScript (AWS CDK & AWS SDK)**
-
-## Task Requirements
-
-Design an automated failure recovery system using **AWS CDK and TypeScript** for the **"IaC - AWS Nova Model Breaking"** project.
+Create an email notification service using **AWS CDK and TypeScript** for our e-commerce order system.
 
 ### Core Requirements
 
-1. **Rollback & Recovery**
-   - Support rollback of failed resources in CloudFormation stacks.
-   - Handle resource dependencies during recovery.
+1. **Order Email Notifications**
+   - Send confirmation emails when customers place orders
+   - Include order details, shipping info, and estimated delivery
+   - Support different email templates for different product categories
 
-2. **Cross-Region Redundancy**
-   - Implement redundancy for critical resources in multiple regions for high availability.
+2. **Email Templates**
+   - Professional HTML email templates with our branding
+   - Mobile-responsive design
+   - Support for both plain text and HTML versions
 
-3. **Monitoring & Automation**
-   - Monitor stack status via CloudWatch.
-   - Trigger automatic recovery using Lambda functions and CloudWatch alarms.
-   - Orchestrate recovery workflow using AWS Step Functions.
+3. **Reliability & Scalability**
+   - Handle peak traffic during sales events
+   - Retry failed email sends with exponential backoff
+   - Dead letter queue for failed notifications
 
-4. **Security & Permissions**
-   - Use IAM roles with minimum required permissions for recovery.
-   - Support cross-account access for multi-account environments.
+4. **Security**
+   - Use IAM roles with minimal required permissions
+   - Encrypt sensitive customer data in transit and at rest
+   - Email content should not contain sensitive payment information
 
-5. **Logging & Backups**
-   - Store CloudFormation template backups and logs in S3.
-   - Provide consistent logging and monitoring throughout the recovery process.
+5. **Monitoring**
+   - Track email delivery success rates
+   - Monitor bounce and complaint rates
+   - CloudWatch dashboards for operational visibility
 
-6. **Notifications**
-   - Use AWS SNS to notify administrators of ongoing recovery operations.
+6. **Customer Management**
+   - Handle email bounces and complaints appropriately
+   - Maintain suppression lists for unsubscribed customers
+   - Support for customer preference management
 
-7. **Tagging**
-   - Apply standardized tagging for cost management and auditing.
+### Technical Requirements
 
-8. **Cost Optimization**
-   - Confirm the system operates within predefined AWS cost limits.
-
-9. **Code Quality & Testing**
-   - Write all code in TypeScript, adhering to clean coding practices.
-   - Implement modular design for scalability.
-   - Include unit tests for Lambda functions using a suitable testing framework.
-   - Document the recovery process, including architecture diagrams and runbook procedures.
+- All infrastructure defined using **AWS CDK with TypeScript**
+- Use **Amazon SES** for email sending
+- **Lambda functions** for processing order events
+- **SQS** for reliable message processing
+- **DynamoDB** for storing email templates and customer preferences
+- Resource names must include a **string suffix** for uniqueness
+- Follow naming convention: `ecommerce-purpose-environment-suffix`
 
 ### Constraints
 
-- All resources and interactions must be defined and managed via **AWS CDK and AWS SDK for TypeScript**.
-- Resource names must include a **string suffix** to ensure uniqueness and avoid naming collisions.
-- All code must use modular patterns and be well-documented.
-- Recovery logic must be isolated to the affected stack only.
-- Provide outputs and documentation confirming the recovery system configuration and operation.
+- No hardcoded email addresses or credentials
+- All resources must be properly tagged for cost tracking
+- Email sending must comply with CAN-SPAM requirements
+- System must be deployable across multiple AWS regions
+- Include proper error handling and logging throughout
 
 ## Success Criteria
 
-- **Reliability**: Effective automated rollback and recovery, minimal downtime
-- **Security**: Least-privilege IAM roles, cross-account support, isolated recovery actions
-- **Operational Excellence**: Complete logging, monitoring, and notifications
-- **Uniqueness**: All resource names include a string suffix
-- **Compliance**: All requirements and constraints are implemented exactly as specified
-- **Code Quality**: TypeScript, modular, maintainable, and well-tested
-- **Documentation**: Architecture diagrams, runbook, deployment and operation instructions
+- **Functionality**: Emails sent successfully for all order types
+- **Performance**: Handle at least 1000 emails per minute during peak periods
+- **Reliability**: 99.9% email delivery success rate
+- **Security**: No exposure of sensitive customer data, proper IAM permissions
+- **Scalability**: Auto-scale to handle traffic spikes
+- **Compliance**: CAN-SPAM compliant with proper unsubscribe handling
+- **Resource Naming**: All resources include string suffix for uniqueness
+- **Code Quality**: TypeScript, well-tested, and properly documented
 
-## Expected Deliverables
+## What to deliver
 
-- Complete AWS CDK TypeScript stack implementation (recovery Lambda, Step Functions, CloudWatch, IAM, S3, SNS, etc.)
-- Modular, well-tested code with unit tests for Lambda functions
-- Resource naming with a string suffix for uniqueness
-- Consistent tagging for all resources
-- Documentation and architecture diagrams
-- Outputs confirming system setup and readiness
-
----
+- Complete AWS CDK TypeScript implementation
+- Email processing Lambda functions
+- SES configuration and templates
+- DynamoDB tables for preferences and templates
+- SQS queues for reliable processing
+- CloudWatch monitoring and alarms
+- Unit tests for all Lambda functions
+- Documentation and deployment instructions
