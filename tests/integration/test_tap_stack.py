@@ -7,26 +7,31 @@ import boto3
 from datetime import datetime, timezone
 from pytest import mark
 
-# Load deployment outputs
+# Load deployment outputs - try multiple locations
 base_dir = os.path.dirname(os.path.abspath(__file__))
+flat_outputs_path = os.path.join(base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json')
 cdk_outputs_path = os.path.join(base_dir, '..', '..', 'cdk-outputs.json')
 
-if os.path.exists(cdk_outputs_path):
+# Load outputs from flattened file first, then CDK outputs
+if os.path.exists(flat_outputs_path):
+    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+        outputs = json.loads(f.read())
+elif os.path.exists(cdk_outputs_path):
     with open(cdk_outputs_path, 'r', encoding='utf-8') as f:
         cdk_outputs = json.loads(f.read())
     # Extract from the first stack
     first_stack_key = list(cdk_outputs.keys())[0]
     outputs = cdk_outputs[first_stack_key]
-    
-    # Determine infrastructure type
-    if 'TrackingQueueURL' in outputs:
-        infrastructure_type = 'tap'
-    elif 'BackupQueueUrl' in outputs:
-        infrastructure_type = 'backup'
-    else:
-        infrastructure_type = 'unknown'
 else:
-    raise unittest.SkipTest("No CDK outputs found - infrastructure not deployed")
+    outputs = {}
+
+# Determine infrastructure type
+if 'TrackingQueueURL' in outputs or 'ProcessorLambdaName' in outputs:
+    infrastructure_type = 'tap'
+elif 'BackupQueueUrl' in outputs or 'DeduplicationTableName' in outputs:
+    infrastructure_type = 'backup'
+else:
+    infrastructure_type = 'unknown'
 
 @mark.describe("Infrastructure Integration Tests - Live Deployment Only")
 class TestTapStackIntegration(unittest.TestCase):
@@ -56,7 +61,20 @@ class TestTapStackIntegration(unittest.TestCase):
             cls.metadata_table_name = outputs.get('MetadataTableName', '')
             cls.encryption_key_id = outputs.get('EncryptionKeyId', '')
         else:
-            raise unittest.SkipTest(f"Unknown infrastructure type: {infrastructure_type}")
+            # If unknown, still proceed with available resources
+            cls.queue_url = (outputs.get('TrackingQueueURL') or 
+                           outputs.get('BackupQueueUrl') or '')
+            cls.dlq_url = outputs.get('DeadLetterQueueURL', '')
+            cls.lambda_name = outputs.get('ProcessorLambdaName', '')
+            cls.dynamodb_table_name = (outputs.get('AuditTableName') or 
+                                     outputs.get('DeduplicationTableName') or 
+                                     outputs.get('MetadataTableName') or '')
+            cls.alert_topic_arn = (outputs.get('AlertTopicARN') or 
+                                 outputs.get('NotificationTopicArn') or '')
+            cls.backup_bucket = outputs.get('BackupBucketName', '')
+            cls.replication_bucket = outputs.get('ReplicationBucketName', '')
+            cls.metadata_table_name = outputs.get('MetadataTableName', '')
+            cls.encryption_key_id = outputs.get('EncryptionKeyId', '')
         
         # Set AWS region
         cls.aws_region = os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION') or 'us-east-1'
@@ -76,12 +94,15 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def _setup_aws_clients(cls):
         """Set up AWS clients for live testing ONLY - no mocking allowed"""
-        # Check AWS credentials
+        # Check AWS credentials availability
         has_aws_credentials = (os.environ.get('AWS_ACCESS_KEY_ID') or 
                              os.path.exists(os.path.expanduser('~/.aws/credentials')))
         
+        cls.aws_credentials_available = has_aws_credentials
+        
         if not has_aws_credentials:
-            raise unittest.SkipTest("AWS credentials not available - cannot run live deployment tests")
+            print(f"⚠️ AWS credentials not available - tests will fail as expected in CI environment")
+            print(f"   Tests designed for live deployment will fail appropriately")
         
         try:
             cls.sqs = boto3.client('sqs', region_name=cls.aws_region)
@@ -92,14 +113,19 @@ class TestTapStackIntegration(unittest.TestCase):
             cls.s3 = boto3.client('s3', region_name=cls.aws_region)
             cls.kms = boto3.client('kms', region_name=cls.aws_region)
             
-            # Test connectivity to verify live deployment
-            if cls.queue_url:
-                cls.sqs.get_queue_attributes(QueueUrl=cls.queue_url)
-            
-            print(f"✅ Connected to {cls.infrastructure_type} infrastructure (region: {cls.aws_region})")
+            # Test connectivity only if credentials available
+            if cls.aws_credentials_available and cls.queue_url:
+                try:
+                    cls.sqs.get_queue_attributes(QueueUrl=cls.queue_url)
+                    print(f"✅ Connected to {cls.infrastructure_type} infrastructure (region: {cls.aws_region})")
+                except Exception as e:
+                    print(f"⚠️ Queue connectivity test failed: {e}")
+            else:
+                print(f"ℹ️ Infrastructure type: {cls.infrastructure_type}, Queue URL configured: {'Yes' if cls.queue_url else 'No'}")
             
         except Exception as e:
-            raise unittest.SkipTest(f"Cannot connect to live AWS infrastructure: {e}")
+            print(f"⚠️ AWS client setup completed with warnings: {e}")
+            # Don't skip - let individual tests fail if they can't connect
         
         # Initialize DynamoDB tables for live deployment
         if cls.dynamodb_table_name:
@@ -113,6 +139,13 @@ class TestTapStackIntegration(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up test data"""
         print(f"🧹 Test cleanup completed for {cls.infrastructure_type} infrastructure")
+        
+    def _require_aws_credentials(self, test_name):
+        """Helper method to check if AWS credentials are available for a test"""
+        if not self.aws_credentials_available:
+            self.fail(f"{test_name}: AWS credentials required for live deployment testing. "
+                     f"This test is designed to run against real AWS infrastructure. "
+                     f"In CI/CD environment without credentials, this failure is expected.")
 
     def setUp(self):
         """Set up for each test"""
@@ -123,6 +156,9 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_scenario_a_preflight_checks(self):
         """Comprehensive preflight checks for deployed infrastructure"""
         print(f"🔍 Running preflight checks on {self.infrastructure_type} infrastructure")
+        
+        # Check AWS credentials for live deployment testing
+        self._require_aws_credentials("Preflight Checks")
         
         # 1. Verify SQS queue exists and is properly configured
         self.assertTrue(self.queue_url, "Queue URL must be provided")
@@ -198,6 +234,9 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_scenario_b_happy_path(self):
         """Send message and verify complete processing workflow"""
         print(f"🔄 Testing happy path message processing ({self.infrastructure_type} infrastructure)")
+        
+        # Check AWS credentials for live deployment testing
+        self._require_aws_credentials("Happy Path Test")
         
         # Create test message appropriate for infrastructure type
         if self.infrastructure_type == 'tap':
@@ -284,6 +323,9 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_scenario_c_idempotency(self):
         """Test system properly handles duplicate messages with idempotency"""
         print(f"🔄 Testing idempotency ({self.infrastructure_type} infrastructure)")
+        
+        # Check AWS credentials for live deployment testing
+        self._require_aws_credentials("Idempotency Test")
         
         # Create test message with consistent ID for idempotency testing
         if self.infrastructure_type == 'tap':
