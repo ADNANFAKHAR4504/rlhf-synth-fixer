@@ -521,7 +521,7 @@ export class IaCNovaStack extends NestedStack {
         ),
         cloudwatchLogsExports: ['error', 'slowquery'],
         removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
-        deletionProtection: true,
+        deletionProtection: false,
         subnetGroup: dbSubnetGroup,
         instanceIdentifier: formatResourceName('rds'),
         storageEncrypted: true,
