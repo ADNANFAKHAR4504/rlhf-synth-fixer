@@ -1,5 +1,10 @@
 # outputs.tf
 
+# Local values for referencing the correct CloudFront distribution
+locals {
+  cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
+}
+
 output "website_bucket_name" {
   description = "Name of the S3 bucket hosting the website"
   value       = aws_s3_bucket.website.id
@@ -17,22 +22,22 @@ output "logs_bucket_name" {
 
 output "cloudfront_distribution_id" {
   description = "ID of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.id
+  value       = local.cloudfront_distribution.id
 }
 
 output "cloudfront_distribution_domain" {
   description = "Domain name of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.domain_name
+  value       = local.cloudfront_distribution.domain_name
 }
 
 output "cloudfront_distribution_arn" {
   description = "ARN of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.arn
+  value       = local.cloudfront_distribution.arn
 }
 
 output "website_url" {
   description = "URL of the website"
-  value       = var.domain_name != "" && var.create_dns_records ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.website.domain_name}"
+  value       = var.domain_name != "" && var.create_dns_records ? "https://${var.domain_name}" : "https://${local.cloudfront_distribution.domain_name}"
 }
 
 output "acm_certificate_arn" {

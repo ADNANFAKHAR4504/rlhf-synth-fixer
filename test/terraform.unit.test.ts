@@ -196,10 +196,13 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(oacMatch).toBeTruthy();
     });
 
-    test('creates CloudFront distribution with environment suffix', () => {
-      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website"/);
-      const distMatch = mainContent.match(/resource\s+"aws_cloudfront_distribution"\s+"website"[^}]*comment\s*=\s*"[^"]*\$\{var\.environment_suffix/);
-      expect(distMatch).toBeTruthy();
+    test('creates CloudFront distributions with environment suffix', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website_with_domain"/);
+      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website_default"/);
+      const distWithDomainMatch = mainContent.match(/resource\s+"aws_cloudfront_distribution"\s+"website_with_domain"[^}]*comment\s*=\s*"[^"]*\$\{var\.environment_suffix/);
+      const distDefaultMatch = mainContent.match(/resource\s+"aws_cloudfront_distribution"\s+"website_default"[^}]*comment\s*=\s*"[^"]*\$\{var\.environment_suffix/);
+      expect(distWithDomainMatch).toBeTruthy();
+      expect(distDefaultMatch).toBeTruthy();
     });
 
     test('configures CloudFront with OAC', () => {
@@ -222,7 +225,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('configures conditional viewer certificate', () => {
       expect(mainContent).toMatch(/viewer_certificate\s*{/);
-      expect(mainContent).toContain('cloudfront_default_certificate = var.domain_name == "" || !var.create_dns_records');
+      expect(mainContent).toContain('cloudfront_default_certificate = true');
+      expect(mainContent).toContain('acm_certificate_arn      = aws_acm_certificate.website[0].arn');
     });
 
     test('uses managed cache policies instead of forwarded_values', () => {
@@ -239,9 +243,14 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(mainContent).toContain('name = "Managed-CORS-S3Origin"');
     });
 
-    test('CloudFront distribution has conditional dependency', () => {
-      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website"/);
-      expect(mainContent).toContain('depends_on = var.domain_name != "" && var.create_dns_records ? [aws_acm_certificate_validation.website[0]] : []');
+    test('CloudFront distribution with domain has certificate dependency', () => {
+      expect(mainContent).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"website_with_domain"/);
+      expect(mainContent).toContain('depends_on = [aws_acm_certificate_validation.website[0]]');
+    });
+
+    test('creates local value for CloudFront distribution reference', () => {
+      expect(mainContent).toMatch(/locals\s*{[\s\S]*cloudfront_distribution\s*=/);
+      expect(mainContent).toContain('var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]');
     });
   });
 
@@ -384,7 +393,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('bucket policy uses proper conditions', () => {
-      expect(mainContent).toContain('"AWS:SourceArn" = aws_cloudfront_distribution.website.arn');
+      expect(mainContent).toContain('"AWS:SourceArn" = local.cloudfront_distribution.arn');
     });
   });
 
@@ -447,7 +456,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('website URL uses conditional logic', () => {
-      expect(outputsContent).toContain('var.domain_name != "" && var.create_dns_records ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.website.domain_name}"');
+      expect(outputsContent).toContain('var.domain_name != "" && var.create_dns_records ? "https://${var.domain_name}" : "https://${local.cloudfront_distribution.domain_name}"');
     });
 
     test('ACM certificate ARN is conditional', () => {
@@ -493,7 +502,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('minimum TLS version configured conditionally', () => {
       expect(mainContent).toMatch(/minimum_protocol_version\s*=/);
-      expect(mainContent).toContain('minimum_protocol_version = var.domain_name != "" && var.create_dns_records ? "TLSv1.2_2021" : null');
+      expect(mainContent).toContain('minimum_protocol_version = "TLSv1.2_2021"');
+      // Check that the domain distribution has TLS version and default doesn't
+      const domainDistMatch = mainContent.match(/resource\s+"aws_cloudfront_distribution"\s+"website_with_domain"[\s\S]*?minimum_protocol_version\s*=\s*"TLSv1\.2_2021"/);
+      expect(domainDistMatch).toBeTruthy();
     });
   });
 

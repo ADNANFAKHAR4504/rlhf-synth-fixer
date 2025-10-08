@@ -13,6 +13,11 @@ data "aws_cloudfront_origin_request_policy" "cors_s3_origin" {
   name = "Managed-CORS-S3Origin"
 }
 
+# Local values for referencing the correct CloudFront distribution
+locals {
+  cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
+}
+
 # Random suffix for unique bucket names
 resource "random_string" "bucket_suffix" {
   length  = 8
@@ -141,18 +146,20 @@ resource "aws_acm_certificate" "website" {
   })
 }
 
-# CloudFront Distribution
-resource "aws_cloudfront_distribution" "website" {
+# CloudFront Distribution with custom domain
+resource "aws_cloudfront_distribution" "website_with_domain" {
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""} CloudFront Distribution"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
-  aliases = var.domain_name != "" && var.create_dns_records ? [var.domain_name, "www.${var.domain_name}"] : []
+  aliases = [var.domain_name, "www.${var.domain_name}"]
 
   # Ensure certificate validation is complete before creating distribution
-  depends_on = var.domain_name != "" && var.create_dns_records ? [aws_acm_certificate_validation.website[0]] : []
+  depends_on = [aws_acm_certificate_validation.website[0]]
 
   origin {
     domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
@@ -180,15 +187,9 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   viewer_certificate {
-    # Use ACM certificate if custom domain is configured
-    acm_certificate_arn = var.domain_name != "" && var.create_dns_records ? aws_acm_certificate.website[0].arn : null
-    ssl_support_method  = var.domain_name != "" && var.create_dns_records ? "sni-only" : null
-
-    # Use CloudFront default certificate when no custom domain
-    cloudfront_default_certificate = var.domain_name == "" || !var.create_dns_records
-
-    # Set minimum TLS version only when using custom certificate
-    minimum_protocol_version = var.domain_name != "" && var.create_dns_records ? "TLSv1.2_2021" : null
+    acm_certificate_arn      = aws_acm_certificate.website[0].arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   logging_config {
@@ -212,7 +213,68 @@ resource "aws_cloudfront_distribution" "website" {
   tags = merge(var.tags, {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-distribution"
   })
+}
 
+# CloudFront Distribution without custom domain
+resource "aws_cloudfront_distribution" "website_default" {
+  count = var.domain_name == "" || !var.create_dns_records ? 1 : 0
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""} CloudFront Distribution"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
+
+  origin {
+    domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.website.id
+    origin_id                = "S3-${aws_s3_bucket.website.id}"
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "S3-${aws_s3_bucket.website.id}"
+
+    # Use managed cache policy for optimized static website caching
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_optimized.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.cors_s3_origin.id
+
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cloudfront/"
+  }
+
+  custom_error_response {
+    error_code         = 404
+    response_code      = 404
+    response_page_path = "/404.html"
+  }
+
+  custom_error_response {
+    error_code         = 403
+    response_code      = 403
+    response_page_path = "/403.html"
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-distribution"
+  })
 }
 
 # S3 Bucket Policy for CloudFront OAC access
@@ -232,7 +294,7 @@ resource "aws_s3_bucket_policy" "website" {
         Resource = "${aws_s3_bucket.website.arn}/*"
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.website.arn
+            "AWS:SourceArn" = local.cloudfront_distribution.arn
           }
         }
       }
@@ -295,8 +357,8 @@ resource "aws_route53_record" "website" {
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.website.domain_name
-    zone_id                = aws_cloudfront_distribution.website.hosted_zone_id
+    name                   = local.cloudfront_distribution.domain_name
+    zone_id                = local.cloudfront_distribution.hosted_zone_id
     evaluate_target_health = false
   }
 }
@@ -310,8 +372,8 @@ resource "aws_route53_record" "www" {
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.website.domain_name
-    zone_id                = aws_cloudfront_distribution.website.hosted_zone_id
+    name                   = local.cloudfront_distribution.domain_name
+    zone_id                = local.cloudfront_distribution.hosted_zone_id
     evaluate_target_health = false
   }
 }
@@ -471,7 +533,7 @@ resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    DistributionId = aws_cloudfront_distribution.website.id
+    DistributionId = local.cloudfront_distribution.id
   }
 
   tags = var.tags
@@ -544,7 +606,7 @@ resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    DistributionId = aws_cloudfront_distribution.website.id
+    DistributionId = local.cloudfront_distribution.id
   }
 
   tags = var.tags
