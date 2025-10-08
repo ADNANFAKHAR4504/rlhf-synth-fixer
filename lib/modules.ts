@@ -501,7 +501,6 @@ export class RdsModule extends Construct {
       securityGroupId: string;
       dbName: string;
       username: string;
-      password: string;
       tags: { [key: string]: string };
     }
   ) {
@@ -529,7 +528,7 @@ export class RdsModule extends Construct {
       storageEncrypted: true,
       dbName: props.dbName,
       username: props.username,
-      password: props.password,
+      manageMasterUserPassword: true,
       multiAz: true,
       dbSubnetGroupName: this.dbSubnetGroup.name,
       vpcSecurityGroupIds: [props.securityGroupId],

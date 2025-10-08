@@ -4,10 +4,8 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-import { Fn } from 'cdktf';
 
 // ? Import your stacks here
-import * as aws from '@cdktf/provider-aws';
 import {
   VpcModule,
   IamModule,
@@ -106,15 +104,6 @@ export class TapStack extends TerraformStack {
     });
 
     // 5. RDS Module
-    const dbSecretData =
-      new aws.dataAwsSecretsmanagerSecretVersion.DataAwsSecretsmanagerSecretVersion(
-        this,
-        'db-secret-data',
-        {
-          secretId: secrets.dbSecret.id,
-          dependsOn: [secrets.dbSecretVersion],
-        }
-      );
 
     const rds = new RdsModule(this, 'rds-module', {
       vpcId: vpc.vpc.id,
@@ -122,7 +111,6 @@ export class TapStack extends TerraformStack {
       securityGroupId: vpc.securityGroupDatabase.id,
       dbName: 'tapwebapp',
       username: process.env.DB_USERNAME || 'admin',
-      password: Fn.jsondecode(Fn.tostring(dbSecretData.secretString)).password,
       tags: commonTags,
     });
 
@@ -274,9 +262,9 @@ EOF
       description: 'CloudWatch Log Group Name',
     });
 
-    new TerraformOutput(this, 'secret-arn', {
-      value: secrets.dbSecret.arn,
-      description: 'Database Secret ARN',
+    new TerraformOutput(this, 'rds-secret-arn', {
+      value: rds.dbInstance.masterUserSecret.get(0).secretArn,
+      description: 'RDS Master User Secret ARN (managed by RDS)',
       sensitive: true,
     });
     // ! Do NOT create resources directly in this stack.
