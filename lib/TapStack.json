@@ -124,6 +124,9 @@
             },
             "us-west-2": {
                 "APIGatewayHostedZoneId": "Z2OJLYMUO9EFXC"
+            },
+            "ap-south-2": {
+                "APIGatewayHostedZoneId": "Z0853509Q1135NJ66RUH"
             }
         }
     },

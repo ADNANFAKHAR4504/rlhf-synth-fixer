@@ -95,6 +95,8 @@ Mappings:
       APIGatewayHostedZoneId: Z2MUQ32089INYE  # N. California - VERIFIED ✅
     us-west-2:
       APIGatewayHostedZoneId: Z2OJLYMUO9EFXC  # Oregon - FROM AWS DOCS ✅
+    ap-south-2:
+      APIGatewayHostedZoneId: Z0853509Q1135NJ66RUH  # Hyderabad - PROVIDED ✅
     
   # Note: These IDs are for Regional API Gateway endpoints only
   # For Edge-Optimized APIs, use Z2FDTNDATAQYW2 (global CloudFront hosted zone)
