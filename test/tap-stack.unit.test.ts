@@ -78,8 +78,8 @@ describe('TapStack CloudFormation Template', () => {
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const param = template.Parameters.EnvironmentSuffix;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.Description).toBe('Environment suffix for resource naming (e.g., dev, staging, prod)');
+      expect(param.Default).toBe('Production');
+      expect(param.Description).toBe('Environment suffix for resource naming (e.g., dev, staging, Production)');
       expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
       expect(param.ConstraintDescription).toBe('Must contain only alphanumeric characters');
     });
@@ -87,9 +87,9 @@ describe('TapStack CloudFormation Template', () => {
     test('Environment parameter should have correct properties', () => {
       const param = template.Parameters.Environment;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
-      expect(param.ConstraintDescription).toBe('Must be one of: dev, staging, prod');
+      expect(param.Default).toBe('Production');
+      expect(param.AllowedValues).toEqual(['dev', 'staging', 'Production']);
+      expect(param.ConstraintDescription).toBe('Must be one of: dev, staging, Production');
     });
 
     test('VpcCidr parameter should have correct validation', () => {
