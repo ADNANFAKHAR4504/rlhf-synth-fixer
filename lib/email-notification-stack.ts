@@ -671,7 +671,7 @@ def publish_metrics(metric_name, value):
       });
 
       // Subscribe email addresses to alerts
-      notificationEmails.forEach((email, index) => {
+      notificationEmails.forEach(email => {
         alertTopic.addSubscription(
           new snsSubscriptions.EmailSubscription(email)
         );
@@ -705,6 +705,23 @@ def publish_metrics(metric_name, value):
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription: 'Email system costs are exceeding budget',
     });
+
+    // Add alarm actions if alerting is enabled
+    if (notificationEmails.length > 0) {
+      // Re-create alertTopic for cost alarm use
+      const costAlertTopic = new sns.Topic(this, 'CostAlertTopic', {
+        topicName: `email-cost-alerts-${environmentSuffix}`,
+        displayName: 'Email System Cost Alerts',
+      });
+
+      notificationEmails.forEach(email => {
+        costAlertTopic.addSubscription(
+          new snsSubscriptions.EmailSubscription(email)
+        );
+      });
+
+      costAlarm.addAlarmAction(new cloudwatchActions.SnsAction(costAlertTopic));
+    }
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({

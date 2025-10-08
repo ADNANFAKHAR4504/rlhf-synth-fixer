@@ -39,7 +39,7 @@ export class CostMonitoringStack extends cdk.Stack {
     });
 
     // Subscribe notification emails
-    notificationEmails.forEach((email, index) => {
+    notificationEmails.forEach(email => {
       this.costAlertTopic.addSubscription(
         new snsSubscriptions.EmailSubscription(email)
       );
