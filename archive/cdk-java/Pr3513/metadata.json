@@ -25,7 +25,7 @@
     "Serverless Infrastructure (Functions as Code)"
   ],
   "coverage": {
-    "lines": 99.1,
+    "lines": 100,
     "branches": 100
   },
   "author": "mayanksethi-turing",
