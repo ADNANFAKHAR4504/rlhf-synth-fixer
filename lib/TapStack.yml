@@ -1,382 +1,447 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Serverless Logistics Shipment Automation System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS'
+Description: 'Serverless Image Processing System with S3, Lambda, DynamoDB, and CloudWatch'
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: Environment suffix to append to resource names (e.g., dev, staging, prod)
-    Default: prod
+    Description: 'Environment suffix to append to resource names (e.g., dev, staging, prod)'
+    Default: 'dev'
 
   NotificationEmail:
     Type: String
-    Description: Email address for SNS failure notifications
-    Default: logistics-team@example.com
+    Description: 'Email address for SNS notifications'
+    Default: 'admin@example.com'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: Must be a valid email address
+    ConstraintDescription: 'Must be a valid email address'
 
 Resources:
-  # DynamoDB Table for Shipment Logs
-  ShipmentLogsTable:
-    Type: AWS::DynamoDB::Table
+  # S3 Bucket for Image Storage
+  ImageStorageBucket:
+    Type: 'AWS::S3::Bucket'
     Properties:
-      TableName: !Sub 'shipment-logs-${EnvironmentSuffix}'
-      BillingMode: PAY_PER_REQUEST
+      BucketName: !Sub 'image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      VersioningConfiguration:
+        Status: 'Enabled'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'DeleteOldVersions'
+            Status: 'Enabled'
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref EnvironmentSuffix
+        - Key: 'Purpose'
+          Value: 'ImageStorage'
+
+  # S3 Bucket Policy
+  ImageStorageBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref ImageStorageBucket
+      PolicyDocument:
+        Statement:
+          - Sid: 'DenyInsecureTransport'
+            Effect: 'Deny'
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ImageStorageBucket.Arn
+              - !Sub '${ImageStorageBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  # DynamoDB Table for Metadata
+  ImageMetadataTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub 'ImageMetadata-${EnvironmentSuffix}'
+      BillingMode: 'PAY_PER_REQUEST'
       AttributeDefinitions:
-        - AttributeName: shipmentId
-          AttributeType: S
-        - AttributeName: timestamp
-          AttributeType: N
-        - AttributeName: status
-          AttributeType: S
+        - AttributeName: 'ImageId'
+          AttributeType: 'S'
+        - AttributeName: 'UploadTimestamp'
+          AttributeType: 'N'
       KeySchema:
-        - AttributeName: shipmentId
-          KeyType: HASH
-        - AttributeName: timestamp
-          KeyType: RANGE
+        - AttributeName: 'ImageId'
+          KeyType: 'HASH'
       GlobalSecondaryIndexes:
-        - IndexName: StatusIndex
+        - IndexName: 'UploadTimestampIndex'
           KeySchema:
-            - AttributeName: status
-              KeyType: HASH
-            - AttributeName: timestamp
-              KeyType: RANGE
+            - AttributeName: 'UploadTimestamp'
+              KeyType: 'HASH'
           Projection:
-            ProjectionType: ALL
-      StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
+            ProjectionType: 'ALL'
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
       Tags:
-        - Key: Environment
+        - Key: 'Environment'
           Value: !Ref EnvironmentSuffix
-        - Key: Application
-          Value: LogisticsAutomation
+        - Key: 'Purpose'
+          Value: 'ImageMetadata'
 
-  # SNS Topic for Failure Notifications
-  ShipmentAlertTopic:
-    Type: AWS::SNS::Topic
+  # SNS Topic for Notifications (moved before Lambda role)
+  ProcessingNotificationTopic:
+    Type: 'AWS::SNS::Topic'
     Properties:
-      TopicName: !Sub 'shipment-alerts-${EnvironmentSuffix}'
-      DisplayName: Shipment Processing Alerts
+      TopicName: !Sub 'ImageProcessingNotifications-${EnvironmentSuffix}'
+      DisplayName: 'Image Processing Notifications'
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: 'email'
       Tags:
-        - Key: Environment
+        - Key: 'Environment'
           Value: !Ref EnvironmentSuffix
 
-  # SNS Subscription
-  AlertEmailSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: email
-      TopicArn: !Ref ShipmentAlertTopic
-      Endpoint: !Ref NotificationEmail
-
-  # IAM Role for Lambda Function
-  ShipmentProcessorRole:
-    Type: AWS::IAM::Role
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Effect: 'Allow'
             Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
-        - PolicyName: ShipmentProcessorPolicy
+        - PolicyName: !Sub 'ImageProcessorPolicy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Effect: 'Allow'
                 Action:
-                  - dynamodb:PutItem
-                  - dynamodb:GetItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:Query
-                Resource:
-                  - !GetAtt ShipmentLogsTable.Arn
-                  - !Sub '${ShipmentLogsTable.Arn}/index/*'
-              - Effect: Allow
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: 'Allow'
                 Action:
-                  - sns:Publish
-                Resource: !Ref ShipmentAlertTopic
-              - Effect: Allow
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:GetItem'
+                Resource: !GetAtt ImageMetadataTable.Arn
+              - Effect: 'Allow'
                 Action:
-                  - cloudwatch:PutMetricData
-                Resource: '*'
+                  - 'sns:Publish'
+                Resource: !Ref ProcessingNotificationTopic
       Tags:
-        - Key: Environment
+        - Key: 'Environment'
           Value: !Ref EnvironmentSuffix
 
-  # Lambda Function for Shipment Processing
-  ShipmentProcessorFunction:
-    Type: AWS::Lambda::Function
+  # Lambda Function for Image Processing
+  ImageProcessorLambda:
+    Type: 'AWS::Lambda::Function'
     Properties:
-      FunctionName: !Sub 'shipment-processor-${EnvironmentSuffix}'
-      Runtime: nodejs20.x
-      Handler: index.handler
-      Role: !GetAtt ShipmentProcessorRole.Arn
+      FunctionName: !Sub 'ImageProcessor-${EnvironmentSuffix}'
+      Runtime: 'python3.9'
+      Handler: 'index.lambda_handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 60
       MemorySize: 512
       Environment:
         Variables:
-          SHIPMENT_TABLE: !Ref ShipmentLogsTable
-          SNS_TOPIC_ARN: !Ref ShipmentAlertTopic
+          METADATA_TABLE: !Ref ImageMetadataTable
+          SNS_TOPIC_ARN: !Ref ProcessingNotificationTopic
           ENVIRONMENT: !Ref EnvironmentSuffix
       Code:
         ZipFile: |
-          const { DynamoDBClient, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-          const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from urllib.parse import unquote_plus
+          import hashlib
 
-          const dynamodb = new DynamoDBClient();
-          const sns = new SNSClient();
-          const cloudwatch = new CloudWatchClient();
+          s3_client = boto3.client('s3')
+          dynamodb = boto3.resource('dynamodb')
+          sns_client = boto3.client('sns')
 
-          exports.handler = async (event) => {
-            console.log('Processing shipment event:', JSON.stringify(event, null, 2));
-            
-            const startTime = Date.now();
-            let processedCount = 0;
-            let failedCount = 0;
-            const errors = [];
-            
-            try {
-              // Handle EventBridge events
-              const shipmentData = event.detail || event;
+          table_name = os.environ['METADATA_TABLE']
+          sns_topic = os.environ['SNS_TOPIC_ARN']
+          table = dynamodb.Table(table_name)
+
+          def lambda_handler(event, context):
+              print(f"Received event: {json.dumps(event)}")
               
-              // Validate shipment data
-              if (!shipmentData.shipmentId) {
-                throw new Error('Missing required field: shipmentId');
-              }
+              processed_count = 0
+              failed_count = 0
               
-              const timestamp = Date.now();
-              const shipmentId = shipmentData.shipmentId;
-              const status = shipmentData.status || 'RECEIVED';
-              const location = shipmentData.location || 'UNKNOWN';
-              const carrier = shipmentData.carrier || 'UNKNOWN';
+              for record in event['Records']:
+                  try:
+                      bucket = record['s3']['bucket']['name']
+                      key = unquote_plus(record['s3']['object']['key'])
+                      size = record['s3']['object']['size']
+                      
+                      # Get object metadata
+                      response = s3_client.head_object(Bucket=bucket, Key=key)
+                      content_type = response.get('ContentType', 'unknown')
+                      last_modified = response.get('LastModified')
+                      
+                      # Generate unique image ID
+                      image_id = hashlib.md5(f"{bucket}/{key}".encode()).hexdigest()
+                      
+                      # Store metadata in DynamoDB
+                      timestamp = int(datetime.now().timestamp())
+                      
+                      item = {
+                          'ImageId': image_id,
+                          'BucketName': bucket,
+                          'ObjectKey': key,
+                          'FileSize': size,
+                          'ContentType': content_type,
+                          'UploadTimestamp': timestamp,
+                          'UploadDate': datetime.now().isoformat(),
+                          'ProcessedAt': datetime.now().isoformat(),
+                          'Status': 'processed'
+                      }
+                      
+                      table.put_item(Item=item)
+                      
+                      print(f"Successfully processed image: {key}")
+                      processed_count += 1
+                      
+                  except Exception as e:
+                      print(f"Error processing {key}: {str(e)}")
+                      failed_count += 1
+                      continue
               
-              // Store shipment log in DynamoDB
-              const putParams = {
-                TableName: process.env.SHIPMENT_TABLE,
-                Item: {
-                  shipmentId: { S: shipmentId },
-                  timestamp: { N: timestamp.toString() },
-                  status: { S: status },
-                  location: { S: location },
-                  carrier: { S: carrier },
-                  eventData: { S: JSON.stringify(shipmentData) },
-                  processedAt: { S: new Date().toISOString() }
-                }
-              };
+              # Send SNS notification
+              message = f"""
+              Image Processing Summary:
+              - Successfully processed: {processed_count}
+              - Failed: {failed_count}
+              - Environment: {os.environ['ENVIRONMENT']}
+              """
               
-              await dynamodb.send(new PutItemCommand(putParams));
-              processedCount++;
-              
-              console.log(`Successfully processed shipment: ${shipmentId}`);
-              
-              // Publish CloudWatch metrics
-              await publishMetrics('ShipmentProcessed', 1, 'Count');
-              await publishMetrics('ProcessingDuration', Date.now() - startTime, 'Milliseconds');
-              
-              // Send SNS notification for critical status updates
-              if (['DELAYED', 'FAILED', 'LOST'].includes(status)) {
-                await sendAlert(shipmentId, status, shipmentData);
-              }
+              try:
+                  sns_client.publish(
+                      TopicArn=sns_topic,
+                      Subject='Image Processing Report',
+                      Message=message
+                  )
+              except Exception as e:
+                  print(f"Error sending SNS notification: {str(e)}")
               
               return {
-                statusCode: 200,
-                body: JSON.stringify({
-                  message: 'Shipment processed successfully',
-                  shipmentId: shipmentId,
-                  status: status,
-                  timestamp: timestamp
-                })
-              };
-              
-            } catch (error) {
-              console.error('Error processing shipment:', error);
-              failedCount++;
-              errors.push(error.message);
-              
-              // Publish failure metrics
-              await publishMetrics('ShipmentProcessingError', 1, 'Count');
-              
-              // Send failure alert
-              await sendAlert('SYSTEM', 'PROCESSING_ERROR', { error: error.message });
-              
-              return {
-                statusCode: 500,
-                body: JSON.stringify({
-                  message: 'Error processing shipment',
-                  error: error.message
-                })
-              };
-            }
-          };
-
-          async function publishMetrics(metricName, value, unit) {
-            try {
-              const params = {
-                Namespace: 'LogisticsAutomation',
-                MetricData: [{
-                  MetricName: metricName,
-                  Value: value,
-                  Unit: unit,
-                  Timestamp: new Date(),
-                  Dimensions: [
-                    {
-                      Name: 'Environment',
-                      Value: process.env.ENVIRONMENT
-                    }
-                  ]
-                }]
-              };
-              
-              await cloudwatch.send(new PutMetricDataCommand(params));
-            } catch (error) {
-              console.error('Error publishing metrics:', error);
-            }
-          }
-
-          async function sendAlert(shipmentId, status, data) {
-            try {
-              const message = {
-                shipmentId: shipmentId,
-                status: status,
-                timestamp: new Date().toISOString(),
-                data: data,
-                environment: process.env.ENVIRONMENT
-              };
-              
-              const params = {
-                TopicArn: process.env.SNS_TOPIC_ARN,
-                Subject: `Shipment Alert: ${status} - ${shipmentId}`,
-                Message: JSON.stringify(message, null, 2)
-              };
-              
-              await sns.send(new PublishCommand(params));
-              console.log('Alert sent successfully');
-            } catch (error) {
-              console.error('Error sending alert:', error);
-            }
-          }
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'processed': processed_count,
+                      'failed': failed_count
+                  })
+              }
       Tags:
-        - Key: Environment
+        - Key: 'Environment'
           Value: !Ref EnvironmentSuffix
 
-  # Lambda Log Group
-  ShipmentProcessorLogGroup:
-    Type: AWS::Logs::LogGroup
+  # Lambda Permission for S3 to Invoke
+  LambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
     Properties:
-      LogGroupName: !Sub '/aws/lambda/shipment-processor-${EnvironmentSuffix}'
+      FunctionName: !Ref ImageProcessorLambda
+      Action: 'lambda:InvokeFunction'
+      Principal: 's3.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  # S3 Bucket Notification Configuration (separate custom resource)
+  S3BucketNotification:
+    Type: 'Custom::S3BucketNotification'
+    DependsOn:
+      - LambdaInvokePermission
+    Properties:
+      ServiceToken: !GetAtt S3NotificationLambda.Arn
+      BucketName: !Ref ImageStorageBucket
+      LambdaFunctionArn: !GetAtt ImageProcessorLambda.Arn
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Events:
+              - 's3:ObjectCreated:*'
+            LambdaFunctionArn: !GetAtt ImageProcessorLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: 'suffix'
+                    Value: '.jpg'
+          - Events:
+              - 's3:ObjectCreated:*'
+            LambdaFunctionArn: !GetAtt ImageProcessorLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: 'suffix'
+                    Value: '.jpeg'
+          - Events:
+              - 's3:ObjectCreated:*'
+            LambdaFunctionArn: !GetAtt ImageProcessorLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: 'suffix'
+                    Value: '.png'
+
+  # Custom Resource Lambda Role for S3 Notification
+  S3NotificationLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: !Sub 'S3NotificationPolicy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:PutBucketNotification'
+                  - 's3:GetBucketNotification'
+                Resource: !Sub 'arn:aws:s3:::image-storage-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  # Custom Resource Lambda for S3 Notification
+  S3NotificationLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub 'S3NotificationManager-${EnvironmentSuffix}'
+      Runtime: 'python3.9'
+      Handler: 'index.lambda_handler'
+      Role: !GetAtt S3NotificationLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              try:
+                  bucket = event['ResourceProperties']['BucketName']
+                  lambda_configs = event['ResourceProperties']['NotificationConfiguration']['LambdaConfigurations']
+                  
+                  if event['RequestType'] == 'Delete':
+                      s3.put_bucket_notification_configuration(
+                          Bucket=bucket,
+                          NotificationConfiguration={}
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  notification_config = {
+                      'LambdaFunctionConfigurations': [
+                          {
+                              'LambdaFunctionArn': config['LambdaFunctionArn'],
+                              'Events': config['Events'],
+                              'Filter': {
+                                  'Key': {
+                                      'FilterRules': config['Filter']['Key']['FilterRules']
+                                  }
+                              }
+                          }
+                          for config in lambda_configs
+                      ]
+                  }
+                  
+                  s3.put_bucket_notification_configuration(
+                      Bucket=bucket,
+                      NotificationConfiguration=notification_config
+                  )
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/ImageProcessor-${EnvironmentSuffix}'
       RetentionInDays: 30
 
-  # EventBridge Rule for Shipment Updates
-  ShipmentUpdateRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub 'shipment-update-rule-${EnvironmentSuffix}'
-      Description: Route shipment update events to Lambda processor
-      State: ENABLED
-      EventPattern:
-        source:
-          - logistics.shipments
-        detail-type:
-          - Shipment Update
-          - Shipment Status Change
-      Targets:
-        - Arn: !GetAtt ShipmentProcessorFunction.Arn
-          Id: ShipmentProcessorTarget
-          RetryPolicy:
-            MaximumRetryAttempts: 2
-          DeadLetterConfig:
-            Arn: !GetAtt DeadLetterQueue.Arn
-
-  # Permission for EventBridge to invoke Lambda
-  EventBridgeLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref ShipmentProcessorFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt ShipmentUpdateRule.Arn
-
-  # Dead Letter Queue for Failed Events
-  DeadLetterQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub 'shipment-dlq-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # CloudWatch Alarm for Lambda Errors
+  # CloudWatch Alarms
   LambdaErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
+    Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmName: !Sub 'shipment-processor-errors-${EnvironmentSuffix}'
-      AlarmDescription: Alert when Lambda function has errors
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Statistic: Sum
+      AlarmName: !Sub 'ImageProcessor-Errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when Lambda function errors exceed threshold'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: 'Sum'
       Period: 300
       EvaluationPeriods: 1
       Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
+      ComparisonOperator: 'GreaterThanThreshold'
       Dimensions:
-        - Name: FunctionName
-          Value: !Ref ShipmentProcessorFunction
+        - Name: 'FunctionName'
+          Value: !Ref ImageProcessorLambda
       AlarmActions:
-        - !Ref ShipmentAlertTopic
-      TreatMissingData: notBreaching
+        - !Ref ProcessingNotificationTopic
+      TreatMissingData: 'notBreaching'
 
-  # CloudWatch Alarm for Lambda Throttles
   LambdaThrottleAlarm:
-    Type: AWS::CloudWatch::Alarm
+    Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmName: !Sub 'shipment-processor-throttles-${EnvironmentSuffix}'
-      AlarmDescription: Alert when Lambda function is throttled
-      MetricName: Throttles
-      Namespace: AWS/Lambda
-      Statistic: Sum
+      AlarmName: !Sub 'ImageProcessor-Throttles-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when Lambda function is throttled'
+      MetricName: 'Throttles'
+      Namespace: 'AWS/Lambda'
+      Statistic: 'Sum'
       Period: 300
       EvaluationPeriods: 1
       Threshold: 1
-      ComparisonOperator: GreaterThanThreshold
+      ComparisonOperator: 'GreaterThanThreshold'
       Dimensions:
-        - Name: FunctionName
-          Value: !Ref ShipmentProcessorFunction
+        - Name: 'FunctionName'
+          Value: !Ref ImageProcessorLambda
       AlarmActions:
-        - !Ref ShipmentAlertTopic
-      TreatMissingData: notBreaching
+        - !Ref ProcessingNotificationTopic
+      TreatMissingData: 'notBreaching'
 
-  # CloudWatch Alarm for DLQ Messages
-  DLQAlarm:
-    Type: AWS::CloudWatch::Alarm
+  DynamoDBThrottleAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmName: !Sub 'shipment-dlq-messages-${EnvironmentSuffix}'
-      AlarmDescription: Alert when messages are in DLQ
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Statistic: Average
+      AlarmName: !Sub 'DynamoDB-WriteThrottle-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when DynamoDB write requests are throttled'
+      MetricName: 'WriteThrottleEvents'
+      Namespace: 'AWS/DynamoDB'
+      Statistic: 'Sum'
       Period: 300
       EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: 5
+      ComparisonOperator: 'GreaterThanThreshold'
       Dimensions:
-        - Name: QueueName
-          Value: !GetAtt DeadLetterQueue.QueueName
+        - Name: 'TableName'
+          Value: !Ref ImageMetadataTable
       AlarmActions:
-        - !Ref ShipmentAlertTopic
+        - !Ref ProcessingNotificationTopic
+      TreatMissingData: 'notBreaching'
 
   # CloudWatch Dashboard
-  LogisticsDashboard:
-    Type: AWS::CloudWatch::Dashboard
+  MonitoringDashboard:
+    Type: 'AWS::CloudWatch::Dashboard'
     Properties:
-      DashboardName: !Sub 'logistics-automation-${EnvironmentSuffix}'
+      DashboardName: !Sub 'ImageProcessing-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -384,17 +449,17 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}],
-                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}],
-                  [".", "Throttles", {"stat": "Sum", "label": "Lambda Throttles"}]
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Throttles", {"stat": "Sum", "label": "Throttles"}]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
                 "region": "${AWS::Region}",
-                "title": "Lambda Performance",
+                "title": "Lambda Metrics",
                 "period": 300,
                 "dimensions": {
-                  "FunctionName": "${ShipmentProcessorFunction}"
+                  "FunctionName": "${ImageProcessorLambda}"
                 }
               }
             },
@@ -402,29 +467,21 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["LogisticsAutomation", "ShipmentProcessed", {"stat": "Sum"}],
-                  [".", "ShipmentProcessingError", {"stat": "Sum"}]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Shipment Processing Metrics",
-                "period": 300
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/Lambda", "Duration", {"stat": "Average"}]
+                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "Avg Duration"}],
+                  ["...", {"stat": "Maximum", "label": "Max Duration"}]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
                 "region": "${AWS::Region}",
                 "title": "Lambda Duration",
                 "period": 300,
+                "yAxis": {
+                  "left": {
+                    "label": "Milliseconds"
+                  }
+                },
                 "dimensions": {
-                  "FunctionName": "${ShipmentProcessorFunction}"
+                  "FunctionName": "${ImageProcessorLambda}"
                 }
               }
             },
@@ -432,15 +489,33 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"label": "DLQ Messages"}]
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", {"stat": "Sum"}],
+                  [".", "ConsumedReadCapacityUnits", {"stat": "Sum"}]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
                 "region": "${AWS::Region}",
-                "title": "Dead Letter Queue",
+                "title": "DynamoDB Capacity",
                 "period": 300,
                 "dimensions": {
-                  "QueueName": "${DeadLetterQueue.QueueName}"
+                  "TableName": "${ImageMetadataTable}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/S3", "NumberOfObjects", {"stat": "Average", "label": "Object Count"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "S3 Objects",
+                "period": 86400,
+                "dimensions": {
+                  "BucketName": "${ImageStorageBucket}",
+                  "StorageType": "AllStorageTypes"
                 }
               }
             }
@@ -448,36 +523,30 @@ Resources:
         }
 
 Outputs:
-  DynamoDBTableName:
-    Description: DynamoDB table for shipment logs
-    Value: !Ref ShipmentLogsTable
+  S3BucketName:
+    Description: 'Name of the S3 bucket for image storage'
+    Value: !Ref ImageStorageBucket
     Export:
-      Name: !Sub '${AWS::StackName}-ShipmentLogsTable'
+      Name: !Sub '${AWS::StackName}-S3Bucket'
+
+  DynamoDBTableName:
+    Description: 'Name of the DynamoDB table for metadata'
+    Value: !Ref ImageMetadataTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTable'
 
   LambdaFunctionArn:
-    Description: ARN of the shipment processor Lambda function
-    Value: !GetAtt ShipmentProcessorFunction.Arn
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt ImageProcessorLambda.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LambdaArn'
 
   SNSTopicArn:
-    Description: ARN of the SNS topic for alerts
-    Value: !Ref ShipmentAlertTopic
+    Description: 'ARN of the SNS topic for notifications'
+    Value: !Ref ProcessingNotificationTopic
     Export:
-      Name: !Sub '${AWS::StackName}-SNSTopicArn'
-
-  EventBridgeRuleName:
-    Description: Name of the EventBridge rule
-    Value: !Ref ShipmentUpdateRule
-    Export:
-      Name: !Sub '${AWS::StackName}-EventBridgeRule'
+      Name: !Sub '${AWS::StackName}-SNSTopic'
 
   DashboardURL:
-    Description: CloudWatch Dashboard URL
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=logistics-automation-${EnvironmentSuffix}'
-
-  DeadLetterQueueURL:
-    Description: URL of the Dead Letter Queue
-    Value: !Ref DeadLetterQueue
-    Export:
-      Name: !Sub '${AWS::StackName}-DLQUrl'
+    Description: 'URL to CloudWatch Dashboard'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=ImageProcessing-${EnvironmentSuffix}'
