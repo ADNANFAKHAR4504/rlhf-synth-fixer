@@ -205,7 +205,7 @@
         "FunctionName": {
           "Fn::Sub": "AppointmentProcessor-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -234,7 +234,7 @@
         "FunctionName": {
           "Fn::Sub": "EmailSender-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -262,7 +262,7 @@
         "FunctionName": {
           "Fn::Sub": "SmsSender-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -290,7 +290,7 @@
         "FunctionName": {
           "Fn::Sub": "StatusUpdater-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [

@@ -132,7 +132,7 @@ describe('Appointment Booking Notification System - Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('EmailSender function should exist and be invocable', async () => {
@@ -142,7 +142,7 @@ describe('Appointment Booking Notification System - Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('SmsSender function should exist and be invocable', async () => {
@@ -152,7 +152,7 @@ describe('Appointment Booking Notification System - Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda functions should have correct timeout and memory', async () => {

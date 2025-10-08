@@ -139,7 +139,7 @@ describe('TapStack CloudFormation Template - Appointment Booking Notification Sy
       expect(template.Resources.StatusUpdaterFunction).toBeDefined();
     });
 
-    test('Lambda functions should use Node.js 18 runtime', () => {
+    test('Lambda functions should use Node.js 22 runtime', () => {
       const lambdaFunctions = [
         'AppointmentProcessorFunction',
         'EmailSenderFunction',
@@ -150,7 +150,7 @@ describe('TapStack CloudFormation Template - Appointment Booking Notification Sy
       lambdaFunctions.forEach(functionName => {
         const func = template.Resources[functionName];
         expect(func.Type).toBe('AWS::Lambda::Function');
-        expect(func.Properties.Runtime).toBe('nodejs18.x');
+        expect(func.Properties.Runtime).toBe('nodejs22.x');
       });
     });
 
