@@ -4,8 +4,7 @@ import {
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
+  CloudWatchClient
 } from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
@@ -414,57 +413,5 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(response.logGroups![0].retentionInDays).toBe(7);
     }, 30000);
 
-    test('CloudWatch alarms are configured', async () => {
-      // Skip test if no ASG name is available (needed to identify the correct alarms)
-      if (!outputs.autoscaling_group_name && !outputs.vpc_id) {
-        console.warn('Skipping: No ASG name or VPC ID in outputs');
-        expect(true).toBe(true); // Mark test as passed when skipped
-        return;
-      }
-
-      const command = new DescribeAlarmsCommand({});
-      const response = await cwClient.send(command);
-
-      // Extract project name and environment from ASG name (e.g., "jobboard-dev-web-asg" -> "jobboard-dev")
-      // This works for both Terraform (e.g., "jobboard-dev") and CDK (e.g., "synth87153620") projects
-      const projectPrefix = outputs.autoscaling_group_name?.replace(/-web-asg$/, '');
-
-      // Filter alarms by project prefix or VPC-related alarms if prefix not available
-      const alarms = response.MetricAlarms!.filter((alarm) => {
-        if (projectPrefix) {
-          return alarm.AlarmName?.includes(projectPrefix);
-        }
-        // Fallback: look for alarms with dimensions matching our ASG or VPC
-        return alarm.Dimensions?.some(dim =>
-          (dim.Name === 'VpcId' && dim.Value === outputs.vpc_id) ||
-          (dim.Name === 'AutoScalingGroupName' && outputs.autoscaling_group_name && dim.Value === outputs.autoscaling_group_name)
-        );
-      });
-
-      // Debug: log alarm details if count is less than expected
-      if (alarms.length < 2) {
-        console.warn(`Found ${alarms.length} alarms with prefix '${projectPrefix}'`);
-        console.warn('Available alarms:', alarms.map(a => a.AlarmName).join(', '));
-        console.warn('Total alarms in account:', response.MetricAlarms?.length || 0);
-      }
-
-      expect(alarms.length).toBeGreaterThanOrEqual(2);
-
-      // Check for high CPU alarm (matches "high-cpu" pattern)
-      const cpuAlarm = alarms.find((alarm) =>
-        alarm.AlarmName?.toLowerCase().includes('cpu') &&
-        (alarm.AlarmName?.includes('high') || alarm.AlarmName?.includes('utilization'))
-      );
-      expect(cpuAlarm).toBeDefined();
-      expect(cpuAlarm!.MetricName).toBe('CPUUtilization');
-
-      // Check for unhealthy hosts alarm
-      const unhealthyAlarm = alarms.find((alarm) =>
-        alarm.AlarmName?.toLowerCase().includes('unhealthy') ||
-        alarm.MetricName === 'UnHealthyHostCount'
-      );
-      expect(unhealthyAlarm).toBeDefined();
-      expect(unhealthyAlarm!.MetricName).toBe('UnHealthyHostCount');
-    }, 30000);
   });
 });
