@@ -314,6 +314,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(app.Type).toBe('AWS::ElasticBeanstalk::Application');
     });
 
+    test('ElasticBeanstalkApplication should have correct application name', () => {
+      const app = template.Resources.ElasticBeanstalkApplication;
+      expect(app.Properties.ApplicationName).toBe('MyWebApp');
+    });
+
     test('ElasticBeanstalkApplication should have resource lifecycle config', () => {
       const app = template.Resources.ElasticBeanstalkApplication;
       const lifecycle = app.Properties.ResourceLifecycleConfig;
@@ -354,7 +359,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const options = env.Properties.OptionSettings;
       const instanceType = options.find((opt: any) => opt.OptionName === 'InstanceType');
       expect(instanceType).toBeDefined();
-      expect(instanceType.Value).toBe('t3.small');
+      expect(instanceType.Value).toBe('t3.medium');
     });
 
     test('ElasticBeanstalkEnvironment should have IAM instance profile setting', () => {

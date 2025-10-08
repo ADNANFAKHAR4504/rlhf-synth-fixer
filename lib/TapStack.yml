@@ -377,6 +377,7 @@ Resources:
   ElasticBeanstalkApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
+      ApplicationName: 'MyWebApp'
       Description: !Sub 'Web application deployed via CI/CD pipeline in ${Environment} environment'
       ResourceLifecycleConfig:
         ServiceRole: !GetAtt ElasticBeanstalkServiceRole.Arn
@@ -402,7 +403,7 @@ Resources:
           Value: !Ref ElasticBeanstalkInstanceProfile
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: InstanceType
-          Value: t3.small
+          Value: t3.medium
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: ServiceRole
           Value: !Ref ElasticBeanstalkServiceRole

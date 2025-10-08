@@ -10,5 +10,16 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "aws_services": "CloudFormation, KMS, S3 Bucket, SNS, IAM, ElasticBeanstalk, CodeBuild, CodePipeline, CloudWatchEvents"
+  "training_quality": 8,
+  "aws_services": [
+    "CloudFormation",
+    "KMS",
+    "S3",
+    "SNS",
+    "IAM",
+    "Elastic Beanstalk",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch Events"
+  ]
 }
