@@ -298,28 +298,41 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('CloudWatch Insights Queries Tests', () => {
-    test('should have 5 CloudWatch Insights query definitions', () => {
-      const queryNames = Object.values(outputs).filter((value) =>
-        typeof value === 'string' && value.startsWith('centralized-logging-synth94218765') &&
-        (value.includes('error') || value.includes('stats') || value.includes('volume') || value.includes('recent'))
-      );
+    let insightsQueries: any;
 
+    beforeAll(() => {
+      // Parse the CloudWatch Insights queries from the JSON string
+      insightsQueries = JSON.parse(outputs.cloudwatch_insights_queries);
+    });
+
+    test('should have 5 CloudWatch Insights query definitions', () => {
+      const queryNames = Object.values(insightsQueries);
       expect(queryNames.length).toBeGreaterThanOrEqual(5);
     });
 
     test('error logs query should exist', () => {
-      expect(outputs.cloudwatch_insights_queries_error_logs).toBeDefined();
-      expect(outputs.cloudwatch_insights_queries_error_logs).toContain('centralized-logging-synth94218765');
+      expect(insightsQueries.error_logs).toBeDefined();
+      expect(insightsQueries.error_logs).toContain('centralized-logging-synth94218765');
     });
 
     test('application stats query should exist', () => {
-      expect(outputs.cloudwatch_insights_queries_application_stats).toBeDefined();
-      expect(outputs.cloudwatch_insights_queries_application_stats).toContain('centralized-logging-synth94218765');
+      expect(insightsQueries.application_stats).toBeDefined();
+      expect(insightsQueries.application_stats).toContain('centralized-logging-synth94218765');
     });
 
     test('hourly log volume query should exist', () => {
-      expect(outputs.cloudwatch_insights_queries_hourly_log_volume).toBeDefined();
-      expect(outputs.cloudwatch_insights_queries_hourly_log_volume).toContain('centralized-logging-synth94218765');
+      expect(insightsQueries.hourly_log_volume).toBeDefined();
+      expect(insightsQueries.hourly_log_volume).toContain('centralized-logging-synth94218765');
+    });
+
+    test('errors by application query should exist', () => {
+      expect(insightsQueries.errors_by_application).toBeDefined();
+      expect(insightsQueries.errors_by_application).toContain('centralized-logging-synth94218765');
+    });
+
+    test('recent logs all apps query should exist', () => {
+      expect(insightsQueries.recent_logs_all_apps).toBeDefined();
+      expect(insightsQueries.recent_logs_all_apps).toContain('centralized-logging-synth94218765');
     });
   });
 
