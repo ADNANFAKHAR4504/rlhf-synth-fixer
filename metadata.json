@@ -8,16 +8,7 @@
   "startedAt": "2025-10-01T22:26:19+05:30",
   "subtask": "Web Application Deployment",
   "subject_labels": [
-    "Terraform",
-    "AWS Infrastructure",
-    "Static Website Hosting",
-    "CloudFront Distribution",
-    "S3 Bucket",
-    "Route53 DNS",
-    "SSL/ACM",
-    "Monitoring",
-    "CloudWatch Metrics",
-    "Lifecycle Policy"
+    "Provisioning of Infrastructure Environments"
   ],
   "training_quality": 8,
   "aws_services": [
