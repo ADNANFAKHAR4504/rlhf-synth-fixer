@@ -2,7 +2,7 @@
 name: iac-infra-qa-trainer
 description: Executes comprehensive QA pipeline on AWS IaC. Validates, builds, deploys, tests, and cleans up infrastructure code. Works with CloudFormation, CDK, CDKTF, Terraform, and Pulumi.
 color: red
-model: sonnet
+model: opus
 ---
 
 # Infrastructure QA Trainer
@@ -37,7 +37,7 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 - Ensure that all resources names have the ENVIRONMENT_SUFFIX to avoid conflicts with other deployments.
 - You can never change the ci-cd .yml files that are deploying this project. Your mission is to create code
 that can be deployed with the current configuration of the ci-cd pipelines.
-- Deploy to AWS (max 5 attempts, track consecutive errors for early failure detection)
+- Deploy to AWS (max 10 attempts)
   - e.g. If there are refereces to SSM parameters, include those params as part of the deployed resources.
   - If ENVIRONMENT_SUFFIX env variable is not present, set it as `synth{TaskId}`:
     - If running in a github action, use `pr{github_pr_number}` as ENVIRONMENT_SUFFIX
@@ -47,9 +47,8 @@ that can be deployed with the current configuration of the ci-cd pipelines.
     same envs.
   - Check `lib/AWS_REGION` to check if there is a specific region to deploy on. if not, deploy to   us-east-1
   - If deployment fails, fix the code until it deploys succesfully.
-  - If the same error occurs 3 consecutive times, mark as BLOCKED and stop execution.
   - If you are not able to deploy, report this error and finish your execution with an error message.
-  - If there are AWS Quota Limit issues while deploying. Report this to the user as BLOCKED status, and await for user
+  - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
   input to continue.
 - Important: Verify that the deployed resources are consistent with the PROMPT files requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
@@ -93,8 +92,7 @@ The result should be similar to this (an object based on plain key, value).
     - You can create new files, but use the existing ones.
   - Don't test hardcoded environmentSuffix
   - Convert YAML to JSON before testing if platform is cfn and language is yml
-  - Run until 80% Coverage is reached (max 3 improvement attempts). Track coverage improvements.
-  - If coverage improves by less than 5% in the last 2 consecutive attempts, proceed with current coverage and document the final coverage achieved.
+  - Run until 90% Coverage is reached. You cannot bypass this. Is mandatory to pass unit test coverage.
 - **Integration Tests**: End-to-end testing with real AWS outputs
   - Use the commands in `package.json` and `pipfile` to run the integration tests
   - Use the files and folder structure existent inside test or tests folder.
@@ -127,8 +125,7 @@ the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 
 - For commands, use the existing scripts in `package.json` and `Pipfile`. based on the platform and language.
   - Dont use custom commands unless you cannot find them in those files.
-- Max 5 deployment attempts
-- Early failure: if same error occurs 3 consecutive times, report BLOCKED status and stop
+- Max 10 deployment attempts
 - No Retain policies allowed. Every resource created should be destroyable.
 - Use real AWS outputs generated on deployment in integration tests (no mocking). These should come from cfn-outputs/flat-outputs.json
 - DO NOT create or update fildes outside of the lib/ and tests/ folder.
@@ -140,15 +137,6 @@ Use your best judgement to decide.
 - Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
 the lib/ folder
 
-## Early Exit Conditions
-
-The agent must immediately report BLOCKED status and stop execution when:
-- AWS quota limits are hit (do not retry)
-- Same CloudFormation/deployment error occurs 3 consecutive times
-- Synthesis fails 3 times with the same error
-- Integration tests fail due to deployment issues (not code logic issues)
-- Coverage improvement is <5% after 2 consecutive attempts
-
 ### Agent-Specific Reporting
 - Report start of each QA pipeline stage with current infrastructure being tested
 - Report deployment attempt results (success/failure with attempt number)
@@ -157,4 +145,3 @@ The agent must immediately report BLOCKED status and stop execution when:
 - Report cleanup completion status and any cleanup failures
 - Report blocking conditions if infrastructure deployment fails repeatedly
 - Report unit-test coverage.
-
