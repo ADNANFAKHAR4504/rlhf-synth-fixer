@@ -159,10 +159,10 @@ class TestTapStackIntegration(unittest.TestCase):
             # Verify event was stored in DynamoDB
             table = self.dynamodb_resource.Table(self.table_name)
             
-            # Query for our event
+            # Query for our event using the correct partition key name
             items = table.query(
-                KeyConditionExpression='eventId = :eventid',
-                ExpressionAttributeValues={':eventid': event_id}
+                KeyConditionExpression='event_id = :event_id',
+                ExpressionAttributeValues={':event_id': event_id}
             )['Items']
             
             self.assertTrue(len(items) > 0, "Event not found in DynamoDB")
@@ -378,8 +378,8 @@ class TestTapStackIntegration(unittest.TestCase):
             
             for event_id in event_ids:
                 items = table.query(
-                    KeyConditionExpression='eventId = :eventid',
-                    ExpressionAttributeValues={':eventid': event_id}
+                    KeyConditionExpression='event_id = :event_id',
+                    ExpressionAttributeValues={':event_id': event_id}
                 )['Items']
                 
                 if len(items) > 0:
