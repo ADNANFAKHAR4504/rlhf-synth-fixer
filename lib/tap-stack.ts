@@ -38,9 +38,6 @@ export class TapStack extends cdk.Stack {
     const projectName = 'freelancer-platform';
     const resourcePrefix = `${env}-${projectName}`;
 
-    // =================================================================
-    // 1. NETWORKING LAYER
-    // =================================================================
     const natGateways = env === 'dev' ? 1 : 2;
 
     const vpc = new ec2.Vpc(this, 'FreelancerVPC', {
@@ -81,9 +78,6 @@ export class TapStack extends cdk.Stack {
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
-    // =================================================================
-    // 2. SECURITY GROUPS
-    // =================================================================
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
@@ -150,9 +144,6 @@ export class TapStack extends cdk.Stack {
       'Allow MySQL from Lambda'
     );
 
-    // =================================================================
-    // 3. AURORA MYSQL
-    // =================================================================
     const dbSecret = new secretsmanager.Secret(this, 'AuroraSecret', {
       secretName: `${resourcePrefix}-aurora-credentials`,
       generateSecretString: {
@@ -199,9 +190,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
     });
 
-    // =================================================================
-    // 4. DYNAMODB
-    // =================================================================
+    // 3. DYNAMODB
     const messagesTable = new dynamodb.Table(this, 'MessagesTable', {
       tableName: `${resourcePrefix}-messages`,
       partitionKey: {
@@ -229,9 +218,7 @@ export class TapStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // =================================================================
-    // 5. S3 + CLOUDFRONT
-    // =================================================================
+    // 4. S3 + CLOUDFRONT
     const portfolioBucket = new s3.Bucket(this, 'PortfolioBucket', {
       bucketName: `${resourcePrefix}-portfolios-${this.account}`,
       versioned: true,
@@ -298,9 +285,7 @@ export class TapStack extends cdk.Stack {
       logFilePrefix: 'cdn-access-logs/',
     });
 
-    // =================================================================
-    // 6. COGNITO USER POOLS
-    // =================================================================
+    // 5. COGNITO USER POOLS
     const freelancerPool = new cognito.UserPool(this, 'FreelancerUserPool', {
       userPoolName: `${resourcePrefix}-freelancers`,
       selfSignUpEnabled: true,
@@ -386,9 +371,7 @@ export class TapStack extends cdk.Stack {
       preventUserExistenceErrors: true,
     });
 
-    // =================================================================
-    // 7. ECS FARGATE - FIXED: Changed to use simple nginx setup
-    // =================================================================
+    // 6. ECS FARGATE - FIXED: Changed to use simple nginx setup
     const cluster = new ecs.Cluster(this, 'ECSCluster', {
       clusterName: `${resourcePrefix}-cluster`,
       vpc,
@@ -421,7 +404,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // FIXED: Simple nginx container that will always start successfully
+    // Simple nginx container that will always start successfully
     const container = taskDefinition.addContainer('AppContainer', {
       containerName: 'freelancer-app',
       image: ecs.ContainerImage.fromRegistry('nginx:alpine'), // FIXED: Using lightweight nginx
@@ -446,7 +429,7 @@ export class TapStack extends cdk.Stack {
     });
 
     container.addPortMappings({
-      containerPort: 80, // FIXED: Changed from 3000 to 80 (nginx default)
+      containerPort: 80, // Changed from 3000 to 80 (nginx default)
       protocol: ecs.Protocol.TCP,
     });
 
@@ -454,22 +437,22 @@ export class TapStack extends cdk.Stack {
       serviceName: `${resourcePrefix}-service`,
       cluster,
       taskDefinition,
-      desiredCount: 1, // FIXED: Reduced from 2 to 1
-      minHealthyPercent: 0, // FIXED: Allow service to replace tasks
+      desiredCount: 1, // Reduced from 2 to 1
+      minHealthyPercent: 0, // Allow service to replace tasks
       maxHealthyPercent: 200,
       securityGroups: [ecsSecurityGroup],
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,
       enableExecuteCommand: true,
-      // FIXED: Disable circuit breaker to prevent automatic rollback
+      // Disable circuit breaker to prevent automatic rollback
       circuitBreaker: {
         rollback: false, // CRITICAL: Disable automatic rollback
       },
     });
 
     const scaling = fargateService.autoScaleTaskCount({
-      minCapacity: 1, // FIXED: Reduced from 2
-      maxCapacity: 4, // FIXED: Reduced from 10
+      minCapacity: 1, // Reduced from 2
+      maxCapacity: 4, // Reduced from 10
     });
 
     scaling.scaleOnCpuUtilization('CPUScaling', {
@@ -484,9 +467,7 @@ export class TapStack extends cdk.Stack {
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
 
-    // =================================================================
-    // 8. APPLICATION LOAD BALANCER
-    // =================================================================
+    // 7. APPLICATION LOAD BALANCER
     const alb = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
       loadBalancerName: `${resourcePrefix}-alb`,
       vpc,
@@ -498,11 +479,11 @@ export class TapStack extends cdk.Stack {
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
       targetGroupName: `${resourcePrefix}-tg`,
       vpc,
-      port: 80, // FIXED: Changed from 3000 to 80
+      port: 80, // Changed from 3000 to 80
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: '/', // FIXED: Changed from /health to / (nginx default)
+        path: '/', // Changed from /health to / (nginx default)
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -520,9 +501,7 @@ export class TapStack extends cdk.Stack {
       defaultAction: elbv2.ListenerAction.forward([targetGroup]),
     });
 
-    // =================================================================
-    // 9. SNS TOPICS
-    // =================================================================
+    // 8. SNS TOPICS
     const bidNotificationTopic = new sns.Topic(this, 'BidNotificationTopic', {
       topicName: `${resourcePrefix}-bid-notifications`,
       displayName: 'New Bid Notifications',
@@ -546,9 +525,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // =================================================================
-    // 10. SES CONFIGURATION
-    // =================================================================
+    // 9. SES CONFIGURATION
     new ses.EmailIdentity(this, 'EmailIdentity', {
       identity: ses.Identity.email('noreply@example.com'),
     });
@@ -557,9 +534,7 @@ export class TapStack extends cdk.Stack {
       configurationSetName: `${resourcePrefix}-ses-config`,
     });
 
-    // =================================================================
-    // 11. LAMBDA - Payment webhook processing
-    // =================================================================
+    // 10. LAMBDA - Payment webhook processing
     const paymentWebhookDLQ = new sqs.Queue(this, 'PaymentWebhookDLQ', {
       queueName: `${resourcePrefix}-payment-webhook-dlq`,
       retentionPeriod: cdk.Duration.days(14),
@@ -632,9 +607,7 @@ exports.handler = async (event) => {
     dbSecret.grantRead(paymentWebhookFunction);
     paymentConfirmationTopic.grantPublish(paymentWebhookFunction);
 
-    // =================================================================
-    // 12. STEP FUNCTIONS
-    // =================================================================
+    // 11. STEP FUNCTIONS
     const projectCreatedTask = new tasks.SnsPublish(
       this,
       'ProjectCreatedNotification',
@@ -714,9 +687,7 @@ exports.handler = async (event) => {
       }
     );
 
-    // =================================================================
-    // 13. CLOUDWATCH MONITORING
-    // =================================================================
+    // 12. CLOUDWATCH MONITORING
     const dashboard = new cloudwatch.Dashboard(this, 'PlatformDashboard', {
       dashboardName: `${resourcePrefix}-dashboard`,
     });
@@ -787,17 +758,13 @@ exports.handler = async (event) => {
         cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    // =================================================================
-    // 14. RESOURCE TAGGING
-    // =================================================================
+    // 13. RESOURCE TAGGING
     cdk.Tags.of(this).add('Environment', env);
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('CostCenter', 'engineering');
-
-    // =================================================================
-    // 15. CLOUDFORMATION OUTPUTS
-    // =================================================================
+    
+    // 14. CLOUDFORMATION OUTPUTS
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',

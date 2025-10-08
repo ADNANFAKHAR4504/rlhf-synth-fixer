@@ -56,9 +56,9 @@ export class TapStack extends cdk.Stack {
     const projectName = 'freelancer-platform';
     const resourcePrefix = `${env}-${projectName}`;
 
-    // =================================================================
+    
     // 1. NETWORKING LAYER
-    // =================================================================
+    
     const natGateways = env === 'dev' ? 1 : 2;
 
     const vpc = new ec2.Vpc(this, 'FreelancerVPC', {
