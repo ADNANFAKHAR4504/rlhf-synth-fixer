@@ -930,8 +930,3 @@ output "random_suffix" {
   description = "Random suffix used for resource naming"
   value       = local.random_suffix
 }
-
-output "region" {
-  description = "AWS region used for deployment"
-  value       = var.region
-}
