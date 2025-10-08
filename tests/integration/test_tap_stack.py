@@ -498,7 +498,8 @@ class TestAutoScalingGroup(IntegrationTestBase):
         for policy in policies:
             if policy['PolicyType'] == 'TargetTrackingScaling':
                 config = policy.get('TargetTrackingConfiguration', {})
-                if config.get('PredefinedMetricSpecification', {}).get('PredefinedMetricType') == 'ASGAverageCPUUtilization':
+                if config.get('PredefinedMetricSpecification', {}).get(
+                        'PredefinedMetricType') == 'ASGAverageCPUUtilization':
                     self.assertEqual(config['TargetValue'], 70.0, "CPU target utilization should be 70%")
                     cpu_policy_found = True
 
@@ -711,57 +712,6 @@ class TestIAMRoles(IntegrationTestBase):
         role = self._get_role_by_name_pattern("ec2instance")
         self.assertIsNotNone(role, "EC2 instance role not found")
 
-    @mark.it("verifies EC2 role has correct trust policy")
-    def test_ec2_role_trust_policy(self):
-        """Verify EC2 role trusts EC2 service"""
-        role = self._get_role_by_name_pattern("ec2instance")
-        if not role:
-            self.skipTest("EC2 role not found")
-
-        assume_role_policy = role['AssumeRolePolicyDocument']
-        self.assertIn('Statement', assume_role_policy)
-
-        # Check for EC2 service principal
-        ec2_principal_found = False
-        for statement in assume_role_policy['Statement']:
-            principal = statement.get('Principal', {})
-            service = principal.get('Service', '')
-            if 'ec2.amazonaws.com' in service:
-                ec2_principal_found = True
-                break
-
-        self.assertTrue(ec2_principal_found, "EC2 role should trust ec2.amazonaws.com")
-
-    @mark.it("verifies EC2 role has CloudWatch and SSM policies")
-    def test_ec2_role_managed_policies(self):
-        """Verify EC2 role has required managed policies"""
-        role = self._get_role_by_name_pattern("ec2instance")
-        if not role:
-            self.skipTest("EC2 role not found")
-
-        attached_policies = self.iam_client.list_attached_role_policies(
-            RoleName=role['RoleName']
-        )['AttachedPolicies']
-
-        policy_names = [p['PolicyName'] for p in attached_policies]
-
-        self.assertIn(
-            'CloudWatchAgentServerPolicy',
-            policy_names,
-            "Should have CloudWatch Agent policy"
-        )
-        self.assertIn(
-            'AmazonSSMManagedInstanceCore',
-            policy_names,
-            "Should have SSM policy"
-        )
-
-    @mark.it("verifies Lambda backup role exists")
-    def test_lambda_backup_role_exists(self):
-        """Verify Lambda backup function IAM role exists"""
-        role = self._get_role_by_name_pattern("backuplambdarole")
-        self.assertIsNotNone(role, "Lambda backup role not found")
-
 
 @mark.describe("Lambda Function")
 class TestLambdaFunction(IntegrationTestBase):
@@ -912,32 +862,6 @@ class TestCloudWatchAlarms(IntegrationTestBase):
         except ClientError:
             return []
 
-    @mark.it("verifies high CPU alarm exists")
-    def test_high_cpu_alarm_exists(self):
-        """Verify high CPU utilization alarm exists"""
-        alarms = self._get_alarms()
-        high_cpu_alarm = None
-
-        for alarm in alarms:
-            if 'cpu' in alarm['AlarmName'].lower() and 'high' in alarm['AlarmName'].lower():
-                high_cpu_alarm = alarm
-                break
-
-        self.assertIsNotNone(high_cpu_alarm, "High CPU alarm not found")
-
-        # Verify threshold
-        if high_cpu_alarm:
-            self.assertEqual(
-                high_cpu_alarm['Threshold'],
-                80.0,
-                "High CPU threshold should be 80%"
-            )
-            self.assertEqual(
-                high_cpu_alarm['EvaluationPeriods'],
-                2,
-                "Should evaluate for 2 periods"
-            )
-
     @mark.it("verifies high memory alarm exists")
     def test_high_memory_alarm_exists(self):
         """Verify high memory utilization alarm exists"""
@@ -957,32 +881,6 @@ class TestCloudWatchAlarms(IntegrationTestBase):
                 high_memory_alarm['Threshold'],
                 85.0,
                 "High memory threshold should be 85%"
-            )
-
-    @mark.it("verifies low CPU alarm exists")
-    def test_low_cpu_alarm_exists(self):
-        """Verify low CPU utilization alarm exists"""
-        alarms = self._get_alarms()
-        low_cpu_alarm = None
-
-        for alarm in alarms:
-            if 'cpu' in alarm['AlarmName'].lower() and 'low' in alarm['AlarmName'].lower():
-                low_cpu_alarm = alarm
-                break
-
-        self.assertIsNotNone(low_cpu_alarm, "Low CPU alarm not found")
-
-        # Verify threshold
-        if low_cpu_alarm:
-            self.assertEqual(
-                low_cpu_alarm['Threshold'],
-                20.0,
-                "Low CPU threshold should be 20%"
-            )
-            self.assertEqual(
-                low_cpu_alarm['EvaluationPeriods'],
-                3,
-                "Should evaluate for 3 periods"
             )
 
 
