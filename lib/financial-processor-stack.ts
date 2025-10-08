@@ -88,7 +88,7 @@ export class FinancialProcessorStack extends TerraformStack {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::*:root`,
+              AWS: '*',
             },
             Action: 'kms:*',
             Resource: '*',
@@ -131,7 +131,7 @@ export class FinancialProcessorStack extends TerraformStack {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::*:root`,
+              AWS: '*',
             },
             Action: 'kms:*',
             Resource: '*',
@@ -721,7 +721,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Application Load Balancers
     const primaryAlb = new Lb(this, 'primary-alb', {
       provider: primaryProvider,
-      name: 'fin-proc-primary-alb',
+      name: `fin-proc-primary-alb-${uniqueSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [appSecurityGroup.id],
@@ -732,7 +732,7 @@ export class FinancialProcessorStack extends TerraformStack {
 
     const secondaryAlb = new Lb(this, 'secondary-alb', {
       provider: secondaryProvider,
-      name: 'fin-proc-secondary-alb',
+      name: `fin-proc-secondary-alb-${uniqueSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [secondaryAppSecurityGroup.id],
@@ -744,7 +744,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Target Groups
     const primaryTargetGroup = new LbTargetGroup(this, 'primary-target-group', {
       provider: primaryProvider,
-      name: `${config.appName}-primary-tg`,
+      name: `${config.appName}-primary-tg-${uniqueSuffix}`,
       port: 80,
       protocol: 'HTTP',
       vpcId: primaryVpc.id,
@@ -767,7 +767,7 @@ export class FinancialProcessorStack extends TerraformStack {
       'secondary-target-group',
       {
         provider: secondaryProvider,
-        name: `${config.appName}-secondary-tg`,
+        name: `${config.appName}-secondary-tg-${uniqueSuffix}`,
         port: 80,
         protocol: 'HTTP',
         vpcId: secondaryVpc.id,
