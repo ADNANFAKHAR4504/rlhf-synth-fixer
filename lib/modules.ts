@@ -583,7 +583,7 @@ export interface DatabaseModuleConfig {
   allocatedStorage: number;
   backupRetentionPeriod: number;
   deletionProtection: boolean;
-  kmsKeyId: string;
+  kmsKeyId?: string;
   tags: { [key: string]: string };
 }
 
@@ -612,7 +612,7 @@ export class DatabaseModule extends Construct {
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
       storageEncrypted: true,
-      kmsKeyId: config.kmsKeyId,
+      ...(config.kmsKeyId && { kmsKeyId: config.kmsKeyId }), // Only set if provided
       username: 'admin',
       manageMasterUserPassword: true, // AWS-managed credentials
       dbSubnetGroupName: dbSubnetGroup.name,

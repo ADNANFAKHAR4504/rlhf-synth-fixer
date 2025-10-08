@@ -116,7 +116,6 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       backupRetentionPeriod: 7,
       deletionProtection: false, // Set to true for production
-      kmsKeyId: 'alias/aws/rds', // Using default RDS KMS key
       tags,
     });
 
