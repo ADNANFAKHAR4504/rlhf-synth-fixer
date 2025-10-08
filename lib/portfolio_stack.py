@@ -54,7 +54,13 @@ class PortfolioStack(Stack):
             "LogsBucket",
             bucket_name=f"portfolio-logs-{env_suffix}-{self.account}",
             encryption=s3.BucketEncryption.S3_MANAGED,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            block_public_access=s3.BlockPublicAccess(
+                block_public_acls=False,
+                ignore_public_acls=False,
+                block_public_policy=True,
+                restrict_public_buckets=True
+            ),
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             lifecycle_rules=[
