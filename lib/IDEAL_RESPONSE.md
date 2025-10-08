@@ -2,6 +2,41 @@
 
 This document contains the complete, production-ready implementation of a GDPR and HIPAA compliance monitoring framework for AWS Organizations.
 
+## File: provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+
+provider "aws" {
+  alias  = "use1"
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "usw2"
+  region = "us-west-2"
+}
+```
+
 ## File: variables.tf
 
 ```hcl
@@ -111,7 +146,7 @@ variable "log_retention_days" {
 variable "audit_log_retention_days" {
   description = "S3 audit log retention in days (for lifecycle policies)"
   type        = number
-  default     = 2555 # 7 years for HIPAA compliance
+  default     = 2555
 }
 
 variable "kms_key_deletion_window_days" {
@@ -123,7 +158,7 @@ variable "kms_key_deletion_window_days" {
 variable "enable_s3_mfa_delete" {
   description = "Enable MFA delete protection for S3 buckets"
   type        = bool
-  default     = false # Set to true in production, but requires manual configuration
+  default     = false
 }
 
 # ========== NOTIFICATION VARIABLES ==========
@@ -201,7 +236,6 @@ variable "budget_monthly_limit" {
   type        = number
   default     = 10000
 }
-
 ```
 
 ## File: tap_stack.tf
@@ -2607,4 +2641,3 @@ output "cross_account_remediation_role_arn" {
   value       = aws_iam_role.cross_account_remediation.arn
 }
 ```
-
