@@ -23,12 +23,8 @@ public class MainStack extends TerraformStack {
      * @param scope The construct scope
      * @param id The construct ID
      */
-
-    private final String stackId;
-
     public MainStack(final Construct scope, final String id) {
         super(scope, id);
-        this.stackId = id;
 
         // Configure AWS Provider
         AwsProvider.Builder.create(this, "aws")
@@ -63,9 +59,5 @@ public class MainStack extends TerraformStack {
      */
     public String getBucketName() {
         return bucket.getBucket();
-    }
-
-    public String getStackId() {
-        return stackId;
     }
 }
