@@ -101,7 +101,7 @@
     "@aws-sdk/client-elastic-beanstalk": "^3.848.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-eventbridge": "^3.901.0",
-    "@aws-sdk/client-glue": "^3.901.0",
+    "@aws-sdk/client-glue": "^3.904.0",
     "@aws-sdk/client-guardduty": "^3.902.0",
     "@aws-sdk/client-iam": "^3.901.0",
     "@aws-sdk/client-iot": "^3.901.0",
