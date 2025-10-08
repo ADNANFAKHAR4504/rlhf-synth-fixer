@@ -19,13 +19,10 @@ import {
   S3Client
 } from '@aws-sdk/client-s3';
 
-const outputs: any = {
-  "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:149536495831:function:ImageProcessor-pr546",
-  "SNSTopicArn": "arn:aws:sns:ap-south-1:149536495831:ImageProcessingNotifications-pr546",
-  "DynamoDBTableName": "ImageMetadata-pr546",
-  "S3BucketName": "image-storage-bucket-pr546-149536495831",
-  "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=ImageProcessing-pr546"
-};
+import fs from 'fs';
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
