@@ -10,5 +10,12 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "SNS, SQS, DynamboDB, Lambda, DLQ, CloudWatch"
+  "aws_services": [
+    "SNS",
+    "SQS", 
+    "DynamoDB",
+    "Lambda",
+    "CloudWatch"
+  ],
+  "training_quality": 8
 }
