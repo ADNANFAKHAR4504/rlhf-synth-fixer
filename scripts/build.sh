@@ -33,10 +33,6 @@ case "$LANGUAGE" in
     echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
     ;;
 
-  hcl)
-    echo "⏭️ Skipping build for Terraform HCL project (language=$LANGUAGE)"
-    ;;
-
   *)
     echo "📦 Running generic build (npm)..."
     npm run build
