@@ -6,10 +6,20 @@ export class VpcModule extends Construct {
   public readonly vpc: aws.vpc.Vpc;
   public readonly privateSubnets: aws.subnet.Subnet[];
   public readonly publicSubnets: aws.subnet.Subnet[];
-  public readonly flowLogBucket: aws.s3Bucket.S3Bucket;
+  public readonly flowLogGroup: aws.cloudwatchLogGroup.CloudwatchLogGroup;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
+
+    // Get current region data
+    new aws.dataAwsRegion.DataAwsRegion(this, 'current');
+    const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
+      this,
+      'azs',
+      {
+        state: 'available',
+      }
+    );
 
     // Create VPC
     this.vpc = new aws.vpc.Vpc(this, 'main-vpc', {
@@ -23,34 +33,63 @@ export class VpcModule extends Construct {
       },
     });
 
-    // Create S3 bucket for VPC Flow Logs
-    this.flowLogBucket = new aws.s3Bucket.S3Bucket(this, 'flow-log-bucket', {
-      bucket: `vpc-flow-logs-${Date.now()}`,
-      acl: 'private',
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-          },
+    // Create CloudWatch Log Group for VPC Flow Logs
+    this.flowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'flow-log-group',
+      {
+        name: `/aws/vpc/flowlogs/${this.vpc.id}`,
+        retentionInDays: 30,
+        tags: {
+          Name: 'vpc-flow-logs',
+          Security: 'True',
         },
-      },
-      lifecycleRule: [
-        {
-          enabled: true,
-          expiration: {
-            days: 90,
+      }
+    );
+
+    // Create IAM role for VPC Flow Logs
+    const flowLogRole = new aws.iamRole.IamRole(this, 'flow-log-role', {
+      name: 'vpc-flow-log-role-654',
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
           },
-        },
-      ],
+        ],
+      }),
+    });
+
+    // Attach policy to the flow log role
+    new aws.iamRolePolicy.IamRolePolicy(this, 'flow-log-policy', {
+      role: flowLogRole.name,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
     });
 
     // Enable VPC Flow Logs
     new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
-      logDestinationType: 's3',
-      logDestination: this.flowLogBucket.arn,
+      logDestinationType: 'cloud-watch-logs',
+      logDestination: this.flowLogGroup.arn,
+      iamRoleArn: flowLogRole.arn,
       trafficType: 'ALL',
       vpcId: this.vpc.id,
       tags: {
@@ -75,12 +114,14 @@ export class VpcModule extends Construct {
       },
     });
 
-    // Create subnets
+    // Create subnets using dynamic AZs
     this.privateSubnets = [];
     this.publicSubnets = [];
-    const azs = ['us-east-1a', 'us-east-1b'];
 
-    azs.forEach((az, index) => {
+    // Use the first 2 available AZs
+    const availableAzs = azs.names.slice(0, 2);
+
+    availableAzs.forEach((az, index) => {
       // Public subnet
       const publicSubnet = new aws.subnet.Subnet(
         this,
@@ -193,7 +234,7 @@ export class IamModule extends Construct {
       this,
       'permissions-boundary',
       {
-        name: 'security-permissions-boundary',
+        name: 'security-permissions-boundary-654',
         description: 'Permissions boundary for all IAM roles',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -234,7 +275,7 @@ export class IamModule extends Construct {
 
     // Create EC2 instance role
     this.instanceRole = new aws.iamRole.IamRole(this, 'ec2-instance-role', {
-      name: 'secure-ec2-instance-role',
+      name: 'secure-ec2-instance-role-654',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -274,7 +315,7 @@ export class IamModule extends Construct {
 
     // Create Lambda execution role
     this.lambdaRole = new aws.iamRole.IamRole(this, 'lambda-execution-role', {
-      name: 'secure-lambda-execution-role',
+      name: 'secure-lambda-execution-role-654',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -306,7 +347,7 @@ export class IamModule extends Construct {
 
     // Create MFA enforcement policy for users
     new aws.iamPolicy.IamPolicy(this, 'mfa-enforcement-policy', {
-      name: 'enforce-mfa-policy',
+      name: 'enforce-mfa-policy-654',
       description: 'Enforces MFA for all IAM users',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -327,7 +368,7 @@ export class IamModule extends Construct {
               'iam:CreateVirtualMFADevice',
               'iam:DeleteVirtualMFADevice',
             ],
-            Resource: 'arn:aws:iam::*:mfa/$${aws:username}', // Escaped $
+            Resource: 'arn:aws:iam::*:mfa/$${aws:username}',
           },
           {
             Sid: 'AllowManageOwnUserMFA',
@@ -339,7 +380,7 @@ export class IamModule extends Construct {
               'iam:ListMFADevices',
               'iam:ResyncMFADevice',
             ],
-            Resource: 'arn:aws:iam::*:user/$${aws:username}', // Escaped $
+            Resource: 'arn:aws:iam::*:user/$${aws:username}',
           },
           {
             Sid: 'DenyAllExceptListedIfNoMFA',
@@ -380,9 +421,12 @@ export class S3Module extends Construct {
       'current'
     );
 
+    // Get current region
+    const currentRegion = new aws.dataAwsRegion.DataAwsRegion(this, 'current');
+
     // Create KMS key for S3 encryption
     this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
-      description: 'KMS key for S3 bucket encryption',
+      description: 'KMS key for S3 bucket encryption and CloudWatch Logs',
       enableKeyRotation: true,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -391,10 +435,31 @@ export class S3Module extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${currentRegion.name}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:CreateGrant',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${currentRegion.name}:${callerIdentity.accountId}:*`,
+              },
+            },
           },
         ],
       }),
@@ -404,22 +469,6 @@ export class S3Module extends Construct {
       },
     });
 
-    // Update KMS key policy using setPolicyDocument
-    this.kmsKey.policy = JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'Enable IAM User Permissions',
-          Effect: 'Allow',
-          Principal: {
-            AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
-          },
-          Action: 'kms:*',
-          Resource: '*',
-        },
-      ],
-    });
-
     new aws.kmsAlias.KmsAlias(this, 's3-kms-alias', {
       name: 'alias/s3-encryption',
       targetKeyId: this.kmsKey.keyId,
@@ -427,40 +476,76 @@ export class S3Module extends Construct {
 
     // Create secure S3 bucket for logs
     this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
-      bucket: `secure-logs-${Date.now()}`,
-      acl: 'log-delivery-write',
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: this.kmsKey.arn,
-          },
-        },
-      },
-      lifecycleRule: [
-        {
-          enabled: true,
-          id: 'expire-old-logs',
-          expiration: {
-            days: 365,
-          },
-          transition: [
-            {
-              days: 30,
-              storageClass: 'STANDARD_IA',
-            },
-          ],
-        },
-      ],
+      bucket: 'secure-logs-654',
       tags: {
         Name: 'secure-log-bucket',
         Environment: 'Production',
         Security: 'Enforced',
       },
     });
+
+    // Set bucket ownership controls
+    new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'log-bucket-ownership',
+      {
+        bucket: this.logBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced',
+        },
+      }
+    );
+
+    // Configure versioning
+    new aws.s3BucketVersioning.S3BucketVersioningA(
+      this,
+      'log-bucket-versioning',
+      {
+        bucket: this.logBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
+
+    // Configure server-side encryption
+    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'log-bucket-encryption',
+      {
+        bucket: this.logBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: this.kmsKey.arn,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      }
+    );
+
+    // Configure lifecycle rules
+    new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
+      this,
+      'log-bucket-lifecycle',
+      {
+        bucket: this.logBucket.id,
+        rule: [
+          {
+            id: 'expire-old-logs',
+            status: 'Enabled',
+            transition: [
+              {
+                days: 30,
+                storageClass: 'STANDARD_IA',
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     // S3 bucket public access block
     new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
@@ -486,10 +571,7 @@ export class S3Module extends Construct {
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:*',
-            Resource: [
-              `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}`,
-              `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}/*`,
-            ],
+            Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
             Condition: {
               Bool: {
                 'aws:SecureTransport': 'false',
@@ -501,7 +583,7 @@ export class S3Module extends Construct {
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:PutObject',
-            Resource: `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}/*`,
+            Resource: `${this.logBucket.arn}/*`,
             Condition: {
               StringNotEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
@@ -530,7 +612,7 @@ export class Ec2Module extends Construct {
 
     // Create security group with restrictive rules
     this.securityGroup = new aws.securityGroup.SecurityGroup(this, 'ec2-sg', {
-      name: 'secure-ec2-sg',
+      name: 'secure-ec2-sg-654',
       description: 'Security group for EC2 instances',
       vpcId: vpc.id,
       egress: [
@@ -564,14 +646,30 @@ export class Ec2Module extends Construct {
       this,
       'instance-profile',
       {
-        name: 'secure-ec2-profile',
+        name: 'secure-ec2-profile-654',
         role: instanceRole.name,
       }
     );
 
+    // Get the most recent Amazon Linux 2 AMI
+    const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'amazon-linux-2', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-kernel-5.10-hvm-*-x86_64-gp2'],
+        },
+        {
+          name: 'virtualization-type',
+          values: ['hvm'],
+        },
+      ],
+    });
+
     // Launch EC2 instance with encrypted EBS
     this.instance = new aws.instance.Instance(this, 'secure-instance', {
-      ami: 'ami-0989fb15ce71ba39e', // Amazon Linux 2
+      ami: ami.id,
       instanceType: 't3.micro',
       subnetId: subnetId,
       vpcSecurityGroupIds: [this.securityGroup.id],
@@ -624,7 +722,7 @@ export class RdsModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: 'secure-db-subnet-group',
+        name: 'secure-db-subnet-group-654',
         subnetIds: subnetIds,
         description: 'Subnet group for RDS instances',
         tags: {
@@ -638,7 +736,7 @@ export class RdsModule extends Construct {
       this,
       'db-param-group',
       {
-        name: 'secure-mysql-params',
+        name: 'secure-mysql-params-654',
         family: 'mysql8.0',
         description: 'Secure parameter group for MySQL',
         parameter: [
@@ -658,7 +756,7 @@ export class RdsModule extends Construct {
       this,
       'rds-sg',
       {
-        name: 'secure-rds-sg',
+        name: 'secure-rds-sg-654',
         description: 'Security group for RDS instances',
         vpcId: vpc.id,
         ingress: [
@@ -686,15 +784,15 @@ export class RdsModule extends Construct {
 
     // RDS instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
-      identifier: 'secure-mysql-db',
+      identifier: 'secure-mysql-db-654',
       engine: 'mysql',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp3',
       storageEncrypted: true,
       dbName: 'securedb',
-      username: 'admin',
-      password: 'ChangeMe123!', // In production, use Secrets Manager
+      username: process.env.DB_USERNAME || 'admin',
+      manageMasterUserPassword: true,
       dbSubnetGroupName: this.dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       parameterGroupName: this.dbParameterGroup.name,
@@ -703,7 +801,7 @@ export class RdsModule extends Construct {
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      enabledCloudwatchLogsExports: ['error'],
+      enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       deletionProtection: true,
       copyTagsToSnapshot: true,
       tags: {
@@ -735,7 +833,7 @@ export class LambdaModule extends Construct {
       this,
       'lambda-logs',
       {
-        name: '/aws/lambda/secure-function',
+        name: '/aws/lambda/secure-function-654',
         retentionInDays: 30,
         kmsKeyId: kmsKey.arn,
         tags: {
@@ -749,7 +847,7 @@ export class LambdaModule extends Construct {
       this,
       'lambda-sg',
       {
-        name: 'secure-lambda-sg',
+        name: 'secure-lambda-sg-654',
         description: 'Security group for Lambda functions',
         vpcId: vpc.id,
         egress: [
@@ -767,16 +865,22 @@ export class LambdaModule extends Construct {
       }
     );
 
+    // Create a simple Lambda deployment package
+    new aws.dataAwsS3Object.DataAwsS3Object(this, 'lambda-code', {
+      bucket: 'placeholder',
+      key: 'lambda.zip',
+    });
+
     // Lambda function
     this.function = new aws.lambdaFunction.LambdaFunction(
       this,
       'secure-function',
       {
-        functionName: 'secure-lambda-function',
+        functionName: 'secure-lambda-function-654',
         role: lambdaRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
-        filename: 'lambda.zip', // Placeholder
+        filename: 'lambda.zip',
         sourceCodeHash: 'placeholder',
         timeout: 30,
         memorySize: 256,
@@ -813,38 +917,86 @@ export class CloudTrailModule extends Construct {
   constructor(scope: Construct, id: string, kmsKey: aws.kmsKey.KmsKey) {
     super(scope, id);
 
+    // Get current caller identity
+    const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current'
+    );
+
+    // Get current region
+    const currentRegion = new aws.dataAwsRegion.DataAwsRegion(this, 'current');
+
     // Create S3 bucket for CloudTrail logs
     this.trailBucket = new aws.s3Bucket.S3Bucket(this, 'trail-bucket', {
-      bucket: `cloudtrail-logs-${Date.now()}`,
-      acl: 'private',
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: kmsKey.arn,
-          },
-        },
-      },
-      lifecycleRule: [
-        {
-          enabled: true,
-          id: 'archive-old-logs',
-          transition: [
-            {
-              days: 90,
-              storageClass: 'GLACIER',
-            },
-          ],
-        },
-      ],
+      bucket: 'cloudtrail-logs-654',
       tags: {
         Name: 'cloudtrail-bucket',
         Security: 'Enforced',
       },
     });
+
+    // Set bucket ownership controls
+    new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'trail-bucket-ownership',
+      {
+        bucket: this.trailBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced',
+        },
+      }
+    );
+
+    // Configure versioning
+    new aws.s3BucketVersioning.S3BucketVersioningA(
+      this,
+      'trail-bucket-versioning',
+      {
+        bucket: this.trailBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
+
+    // Configure server-side encryption
+    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'trail-bucket-encryption',
+      {
+        bucket: this.trailBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.arn,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      }
+    );
+
+    // Configure lifecycle rules
+    new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
+      this,
+      'trail-bucket-lifecycle',
+      {
+        bucket: this.trailBucket.id,
+        rule: [
+          {
+            id: 'archive-old-logs',
+            status: 'Enabled',
+            transition: [
+              {
+                days: 90,
+                storageClass: 'GLACIER',
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     // S3 bucket policy for CloudTrail
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'trail-bucket-policy', {
@@ -859,7 +1011,7 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:GetBucketAcl',
-            Resource: `\${aws_s3_bucket.${this.trailBucket.friendlyUniqueId}.arn}`,
+            Resource: this.trailBucket.arn,
           },
           {
             Sid: 'AWSCloudTrailWrite',
@@ -868,10 +1020,11 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `\${aws_s3_bucket.${this.trailBucket.friendlyUniqueId}.arn}/*`,
+            Resource: `${this.trailBucket.arn}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
+                's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.arn,
               },
             },
           },
@@ -892,9 +1045,67 @@ export class CloudTrailModule extends Construct {
       }
     );
 
+    // Update KMS key policy to allow CloudTrail
+    const keyPolicy = new aws.kmsKeyPolicy.KmsKeyPolicy(
+      this,
+      'kms-key-policy',
+      {
+        keyId: kmsKey.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'Enable IAM User Permissions',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
+              },
+              Action: 'kms:*',
+              Resource: '*',
+            },
+            {
+              Sid: 'Allow CloudWatch Logs',
+              Effect: 'Allow',
+              Principal: {
+                Service: `logs.${currentRegion.name}.amazonaws.com`,
+              },
+              Action: [
+                'kms:Encrypt*',
+                'kms:Decrypt*',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:CreateGrant',
+                'kms:DescribeKey',
+              ],
+              Resource: '*',
+              Condition: {
+                ArnEquals: {
+                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${currentRegion.name}:${callerIdentity.accountId}:*`,
+                },
+              },
+            },
+            {
+              Sid: 'Allow CloudTrail',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+              Resource: '*',
+              Condition: {
+                StringLike: {
+                  'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:*:${callerIdentity.accountId}:trail/*`,
+                },
+              },
+            },
+          ],
+        }),
+      }
+    );
+
     // CloudTrail
     this.trail = new aws.cloudtrail.Cloudtrail(this, 'main-trail', {
-      name: 'security-trail',
+      name: 'security-trail-654',
       s3BucketName: this.trailBucket.id,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
@@ -918,6 +1129,7 @@ export class CloudTrailModule extends Construct {
         Name: 'main-cloudtrail',
         Security: 'Enforced',
       },
+      dependsOn: [keyPolicy],
     });
 
     // CloudWatch Alarms for security events
