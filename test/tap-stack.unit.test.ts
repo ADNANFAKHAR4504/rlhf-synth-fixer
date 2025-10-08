@@ -1,7 +1,27 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { CloudFormationClient, ValidateTemplateCommand } from '@aws-sdk/client-cloudformation';
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
+import * as path from 'path';
+
+// Define CloudFormation intrinsic function tags
+const cfnSchema = yaml.CORE_SCHEMA.extend([
+  new yaml.Type('!Ref', { kind: 'scalar' }),
+  new yaml.Type('!GetAtt', { kind: 'scalar' }),
+  new yaml.Type('!Sub', { kind: 'scalar' }),
+  new yaml.Type('!Join', { kind: 'sequence' }),
+  new yaml.Type('!Select', { kind: 'sequence' }),
+  new yaml.Type('!Split', { kind: 'sequence' }),
+  new yaml.Type('!GetAZs', { kind: 'scalar' }),
+  new yaml.Type('!ImportValue', { kind: 'scalar' }),
+  new yaml.Type('!If', { kind: 'sequence' }),
+  new yaml.Type('!Not', { kind: 'sequence' }),
+  new yaml.Type('!Equals', { kind: 'sequence' }),
+  new yaml.Type('!And', { kind: 'sequence' }),
+  new yaml.Type('!Or', { kind: 'sequence' }),
+  new yaml.Type('!Condition', { kind: 'scalar' }),
+  new yaml.Type('!FindInMap', { kind: 'sequence' }),
+  new yaml.Type('!Base64', { kind: 'scalar' })
+]);
 
 describe('CloudFormation Template Unit Tests', () => {
   let template: any;
@@ -11,7 +31,7 @@ describe('CloudFormation Template Unit Tests', () => {
     // Load the CloudFormation template
     const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+    template = yaml.load(templateContent, { schema: cfnSchema });
 
     // Initialize CloudFormation client
     cfnClient = new CloudFormationClient({ region: 'us-east-1' });
