@@ -6,9 +6,9 @@
   "po_id": "41930682",
   "team": "synth",
   "startedAt": "2025-10-02T03:24:22+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Provisioning of notification system"
+    "Serverless Infrastructure"
   ],
   "training_quality": 8.5,
   "aws_services": [
