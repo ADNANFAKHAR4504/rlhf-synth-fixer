@@ -36,6 +36,7 @@ this.rdsInstance = new db.DbInstance(this, "db-instance", {
   // ...
   storageEncrypted: true,
   // No KMS key configuration, relying on default
+
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
