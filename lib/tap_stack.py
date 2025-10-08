@@ -11,11 +11,24 @@ from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sns_subscriptions as subscriptions
 from aws_cdk import aws_sqs as sqs
 from constructs import Construct
+from dataclasses import dataclass
+from typing import Optional
+import aws_cdk as cdk
+
+
+@dataclass
+class TapStackProps:
+    """Properties for TapStack"""
+    environment_suffix: str = "dev"
+    env: Optional[cdk.Environment] = None
 
 
 class TrackingAsyncProcessingStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str = "dev", **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Store environment suffix for resource naming
+        self.environment_suffix = environment_suffix
 
         # Environment tags
         Tags.of(self).add("Environment", "Production")
@@ -366,3 +379,18 @@ def handler(event, context):
             value=alert_topic.topic_arn,
             description="ARN of the SNS topic for operational alerts"
         )
+
+
+class TapStack(TrackingAsyncProcessingStack):
+    """TapStack is an alias for TrackingAsyncProcessingStack for compatibility"""
+    
+    def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs) -> None:
+        # Handle props parameter
+        if props:
+            environment_suffix = props.environment_suffix
+            if props.env:
+                kwargs['env'] = props.env
+        else:
+            environment_suffix = "dev"
+            
+        super().__init__(scope, construct_id, environment_suffix=environment_suffix, **kwargs)
