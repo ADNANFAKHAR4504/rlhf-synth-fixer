@@ -293,7 +293,7 @@ resource "aws_security_group" "web" {
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name_prefix = "sg-rds-"
+  name_prefix = "rds-sg-"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
   
@@ -315,7 +315,7 @@ resource "aws_security_group" "rds" {
   }
   
   tags = merge(local.common_tags, {
-    Name = "sg-rds-${local.random_suffix}"
+    Name = "rds-sg-${local.random_suffix}"
   })
 }
 
