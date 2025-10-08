@@ -19,7 +19,7 @@ interface TapStackProps extends cdk.StackProps {
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
-    const environmentSuffix = props?.environmentSuffix
+    const environmentSuffix = props?.environmentSuffix;
 
     // DynamoDB table for job tracking
     const jobTable = new dynamodb.Table(this, 'JobTable', {
