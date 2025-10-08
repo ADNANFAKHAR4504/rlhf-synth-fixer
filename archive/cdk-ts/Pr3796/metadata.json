@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T05:11:01+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Serverless Infrastructure"],
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
   "training_quality": 8,
   "aws_services": [
     "Amazon DynamoDB",
@@ -21,5 +23,11 @@
     "Amazon EventBridge",
     "AWS CloudWatch",
     "AWS IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
