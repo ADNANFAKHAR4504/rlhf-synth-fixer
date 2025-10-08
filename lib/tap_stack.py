@@ -97,9 +97,12 @@ def handler(event, context):
             else:
                 delivery_event = message_body
                 
-            # Generate a unique event ID if not present
-            if 'event_id' not in delivery_event:
+            # Generate a unique event ID if not present - check both eventId and event_id
+            if 'event_id' not in delivery_event and 'eventId' not in delivery_event:
                 delivery_event['event_id'] = str(uuid.uuid4())
+            elif 'eventId' in delivery_event and 'event_id' not in delivery_event:
+                # Convert eventId to event_id for consistency
+                delivery_event['event_id'] = delivery_event['eventId']
             
             # Add processing timestamp
             current_time = datetime.now().isoformat()

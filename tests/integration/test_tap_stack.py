@@ -29,15 +29,18 @@ class TestTapStackIntegration(unittest.TestCase):
         """Set up AWS clients and validate outputs exist"""
         if not flat_outputs:
             cls.skipTest(cls, "No deployment outputs found. Deploy the stack first.")
-            
+        
+        # Get region from outputs or use default
+        region = flat_outputs.get('Region', 'us-west-1')
+        
         try:
-            cls.sns_client = boto3.client('sns')
-            cls.sqs_client = boto3.client('sqs')
-            cls.lambda_client = boto3.client('lambda')
-            cls.dynamodb_client = boto3.client('dynamodb')
-            cls.dynamodb_resource = boto3.resource('dynamodb')
-            cls.cloudwatch_client = boto3.client('cloudwatch')
-            cls.logs_client = boto3.client('logs')
+            cls.sns_client = boto3.client('sns', region_name=region)
+            cls.sqs_client = boto3.client('sqs', region_name=region)
+            cls.lambda_client = boto3.client('lambda', region_name=region)
+            cls.dynamodb_client = boto3.client('dynamodb', region_name=region)
+            cls.dynamodb_resource = boto3.resource('dynamodb', region_name=region)
+            cls.cloudwatch_client = boto3.client('cloudwatch', region_name=region)
+            cls.logs_client = boto3.client('logs', region_name=region)
         except NoCredentialsError:
             cls.skipTest(cls, "AWS credentials not available")
 
