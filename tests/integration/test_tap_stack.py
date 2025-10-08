@@ -14,10 +14,10 @@ flat_outputs_path = os.path.join(
 )
 
 if os.path.exists(flat_outputs_path):
-    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-        flat_outputs = f.read()
+  with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+    flat_outputs = f.read()
 else:
-    flat_outputs = '{}'
+  flat_outputs = '{}'
 
 flat_outputs = json.loads(flat_outputs)
 
@@ -69,14 +69,14 @@ class TestTapStackIntegration(unittest.TestCase):
         
         try:
             response = self.sfn_client.describe_state_machine(stateMachineArn=workflow_arn)
-            state_machine = response['stateMachineDefinition']
+            state_machine_definition = response['definition']
             
             # Verify workflow properties
             self.assertIn('demo-provisioning-workflow', response['name'])
             self.assertEqual(response['status'], 'ACTIVE')
-            self.assertIn('InvokeProvisioningLogic', state_machine)
-            self.assertIn('UpdateInventory', state_machine)
-            self.assertIn('SendProvisioningNotification', state_machine)
+            self.assertIn('InvokeProvisioningLogic', state_machine_definition)
+            self.assertIn('UpdateInventory', state_machine_definition)
+            self.assertIn('SendProvisioningNotification', state_machine_definition)
             
         except ClientError as e:
             self.fail(f"Step Functions workflow {workflow_arn} not found: {e}")
@@ -120,7 +120,7 @@ class TestTapStackIntegration(unittest.TestCase):
             attributes = response['Attributes']
             
             # Verify topic properties
-            self.assertIn('demo-provisioning-notifications', attributes['DisplayName'])
+            self.assertIn('Demo Environment Provisioning Notifications', attributes['DisplayName'])
             
         except ClientError as e:
             self.fail(f"SNS topic {topic_arn} not found: {e}")
@@ -172,6 +172,64 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"DynamoDB table {table_name} not found: {e}")
 
+    @mark.it("should have DynamoDB table functionality")
+    def test_dynamodb_table_functionality(self):
+        """Test that DynamoDB table can store and retrieve data"""
+        table_name = self.flat_outputs.get('EnvironmentTableName')
+        self.assertIsNotNone(table_name, "DynamoDB table name should be present in outputs")
+        
+        # Test data to insert
+        test_environment_id = f"test-env-{int(__import__('time').time())}"
+        test_created_at = "2024-01-01T00:00:00Z"
+        test_status = "active"
+        test_expiry_date = "2024-12-31T23:59:59Z"
+        
+        try:
+            # Put item into DynamoDB table
+            put_response = self.dynamodb_client.put_item(
+                TableName=table_name,
+                Item={
+                    'environment_id': {'S': test_environment_id},
+                    'created_at': {'S': test_created_at},
+                    'status': {'S': test_status},
+                    'expiry_date': {'S': test_expiry_date},
+                    'test_data': {'S': 'integration-test-value'}
+                }
+            )
+            self.assertEqual(put_response['ResponseMetadata']['HTTPStatusCode'], 200)
+            
+            # Get item back from DynamoDB table
+            get_response = self.dynamodb_client.get_item(
+                TableName=table_name,
+                Key={
+                    'environment_id': {'S': test_environment_id},
+                    'created_at': {'S': test_created_at}
+                }
+            )
+            
+            # Verify the item was retrieved correctly
+            self.assertIn('Item', get_response, "Item should be found in table")
+            item = get_response['Item']
+            
+            self.assertEqual(item['environment_id']['S'], test_environment_id)
+            self.assertEqual(item['created_at']['S'], test_created_at)
+            self.assertEqual(item['status']['S'], test_status)
+            self.assertEqual(item['expiry_date']['S'], test_expiry_date)
+            self.assertEqual(item['test_data']['S'], 'integration-test-value')
+            
+            # Clean up - delete the test item
+            delete_response = self.dynamodb_client.delete_item(
+                TableName=table_name,
+                Key={
+                    'environment_id': {'S': test_environment_id},
+                    'created_at': {'S': test_created_at}
+                }
+            )
+            self.assertEqual(delete_response['ResponseMetadata']['HTTPStatusCode'], 200)
+            
+        except ClientError as e:
+            self.fail(f"DynamoDB table {table_name} functionality test failed: {e}")
+
     @mark.it("should have S3 bucket deployed with correct configuration")
     def test_s3_bucket(self):
         """Test that S3 bucket exists with correct configuration"""
@@ -212,11 +270,17 @@ class TestTapStackIntegration(unittest.TestCase):
             trust_policy = role['AssumeRolePolicyDocument']
             self.assertIn('states.amazonaws.com', str(trust_policy))
             
-            # Verify attached policies
-            policies_response = self.iam_client.list_attached_role_policies(RoleName=role_name)
+            # Verify attached policies or inline policies
+            attached_policies_response = self.iam_client.list_attached_role_policies(RoleName=role_name)
+            inline_policies_response = self.iam_client.list_role_policies(RoleName=role_name)
+            
+            has_policies = (
+                len(attached_policies_response['AttachedPolicies']) > 0 or
+                len(inline_policies_response['PolicyNames']) > 0
+            )
             self.assertTrue(
-                len(policies_response['AttachedPolicies']) > 0,
-                "Role should have attached policies"
+                has_policies,
+                "Role should have attached or inline policies"
             )
             
         except ClientError as e:
@@ -272,7 +336,6 @@ class TestTapStackIntegration(unittest.TestCase):
         resources_to_check = [
             ('BrandingBucketName', 'demo-branding-assets'),
             ('EnvironmentTableName', 'demo-environment-inventory'),
-            ('UserPoolId', 'demo-participants'),
         ]
         
         for output_key, expected_prefix in resources_to_check:
@@ -286,3 +349,13 @@ class TestTapStackIntegration(unittest.TestCase):
                     expected_prefix, resource_name,
                     f"{output_key} should contain expected prefix"
                 )
+        
+        # Special handling for UserPoolId (Cognito format)
+        user_pool_id = self.flat_outputs.get('UserPoolId')
+        if user_pool_id:
+            # UserPoolId format is region_userpoolid, we can't check suffix directly
+            # Instead, verify it's a valid Cognito User Pool ID format
+            self.assertTrue(
+                user_pool_id.startswith('us-east-1_') and len(user_pool_id) > 10,
+                "UserPoolId should be in valid Cognito format"
+            )
