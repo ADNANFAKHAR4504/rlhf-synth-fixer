@@ -16,7 +16,7 @@ Build an appointment scheduling system that handles 3,500 daily calendar appoint
 4. **EventBridge**: Schedule rules for appointment reminders (24-hour and 1-hour before appointments)
 5. **SNS Topic**: Send notification messages to users
 6. **CloudWatch**: Monitor booking metrics and system performance
-7. **IAM Roles**: Service permissions for Lambda functions to access DynamoDB, EventBridge, and SNS
+7. **IAM Roles**: Service permissions for Lambda functions to access DynamoDB, EventBridge, and SNS.
 
 ## Technical Specifications
 
