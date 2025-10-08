@@ -10,5 +10,20 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "satyapal-lab",
+  "dockerS3Location": ""
 }
