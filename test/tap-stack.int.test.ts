@@ -46,36 +46,46 @@ import {
   GetPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
+import * as path from 'path';
 
 const region = process.env.AWS_REGION || 'us-west-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr3522';
 
-// Read deployment outputs if available
-let stackOutputs: any = {};
-try {
-  if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-    const outputsFile = JSON.parse(
-      fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-    );
-    const stackKey =
-      Object.keys(outputsFile).find((key) => key.startsWith('TapStack')) || '';
-    stackOutputs = outputsFile[stackKey] || outputsFile;
-  }
-} catch (error) {
-  console.warn('No deployment outputs found - tests will use resource names');
-}
-
-const ec2Client = new EC2Client({ region });
-const rdsClient = new RDSClient({ region });
-const elasticacheClient = new ElastiCacheClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const asgClient = new AutoScalingClient({ region });
-const apiGatewayClient = new ApiGatewayV2Client({ region });
-const lambdaClient = new LambdaClient({ region });
-const cloudwatchClient = new CloudWatchClient({ region });
-const s3Client = new S3Client({ region });
+let outputs: any = {};
+let ec2Client: EC2Client;
+let rdsClient: RDSClient;
+let elasticacheClient: ElastiCacheClient;
+let elbClient: ElasticLoadBalancingV2Client;
+let asgClient: AutoScalingClient;
+let apiGatewayClient: ApiGatewayV2Client;
+let lambdaClient: LambdaClient;
+let cloudwatchClient: CloudWatchClient;
+let s3Client: S3Client;
 
 describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
+  beforeAll(() => {
+    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    try {
+      if (fs.existsSync(outputsPath)) {
+        const outputsFile = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+        const stackKey = Object.keys(outputsFile).find((key) => key.startsWith('TapStack')) || '';
+        outputs = outputsFile[stackKey] || {};
+      }
+    } catch (error) {
+      console.warn('No deployment outputs found - tests will use resource names');
+    }
+
+    ec2Client = new EC2Client({ region });
+    rdsClient = new RDSClient({ region });
+    elasticacheClient = new ElastiCacheClient({ region });
+    elbClient = new ElasticLoadBalancingV2Client({ region });
+    asgClient = new AutoScalingClient({ region });
+    apiGatewayClient = new ApiGatewayV2Client({ region });
+    lambdaClient = new LambdaClient({ region });
+    cloudwatchClient = new CloudWatchClient({ region });
+    s3Client = new S3Client({ region });
+  });
+
   describe('Network Infrastructure', () => {
     test('VPC should exist with correct CIDR block', async () => {
       const response = await ec2Client.send(
@@ -83,7 +93,7 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
           Filters: [
             {
               Name: 'tag:Name',
-              Values: ['portfolio-vpc'],
+              Values: [`portfolio-tracking-vpc-${environmentSuffix}`],
             },
           ],
         })
@@ -95,12 +105,26 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
     }, 30000);
 
     test('Should have 4 subnets (2 public, 2 private)', async () => {
+      // First get the VPC ID to filter subnets
+      const vpcResponse = await ec2Client.send(
+        new DescribeVpcsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`portfolio-tracking-vpc-${environmentSuffix}`],
+            },
+          ],
+        })
+      );
+
+      const vpcId = vpcResponse.Vpcs![0].VpcId;
+
       const response = await ec2Client.send(
         new DescribeSubnetsCommand({
           Filters: [
             {
-              Name: 'tag:Name',
-              Values: ['portfolio-*-subnet'],
+              Name: 'vpc-id',
+              Values: [vpcId!],
             },
           ],
         })
@@ -108,6 +132,16 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
 
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(4);
+
+      // Verify we have 2 public and 2 private subnets
+      const publicSubnets = response.Subnets!.filter((subnet) =>
+        subnet.Tags?.some((tag) => tag.Key === 'Type' && tag.Value === 'public')
+      );
+      const privateSubnets = response.Subnets!.filter((subnet) =>
+        subnet.Tags?.some((tag) => tag.Key === 'Type' && tag.Value === 'private')
+      );
+      expect(publicSubnets.length).toBe(2);
+      expect(privateSubnets.length).toBe(2);
     }, 30000);
 
     test('NAT Gateways should be running', async () => {
@@ -191,7 +225,7 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
           Filters: [
             {
               Name: 'tag:Name',
-              Values: ['portfolio-*-sg'],
+              Values: ['portfolio-alb-sg', 'portfolio-ec2-sg'],
             },
           ],
         })
@@ -202,7 +236,7 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
 
       // Check ALB security group allows HTTP/HTTPS
       const albSg = response.SecurityGroups!.find((sg) =>
-        sg.GroupName?.includes('alb')
+        sg.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === 'portfolio-alb-sg')
       );
       expect(albSg).toBeDefined();
       const httpRule = albSg?.IpPermissions?.find((rule) => rule.FromPort === 80);
@@ -358,14 +392,17 @@ describe('Portfolio Tracking Platform - AWS Resource Integration Tests', () => {
       );
 
       const dashboardBody = JSON.parse(response.DashboardBody!);
-      const metrics = dashboardBody.widgets.map((w: any) =>
-        w.properties?.metrics?.flat()
-      );
 
-      // Check for EC2, ALB, RDS, and AutoScaling metrics
-      const metricNamespaces = new Set(
-        metrics.flat().filter((m: any) => Array.isArray(m)).map((m: any) => m[0])
-      );
+      // Extract all metric namespaces from all widgets
+      const metricNamespaces = new Set<string>();
+      dashboardBody.widgets.forEach((widget: any) => {
+        const metrics = widget.properties?.metrics || [];
+        metrics.forEach((metricArray: any) => {
+          if (Array.isArray(metricArray) && metricArray.length > 0) {
+            metricNamespaces.add(metricArray[0]);
+          }
+        });
+      });
 
       expect(metricNamespaces.has('AWS/EC2')).toBe(true);
       expect(metricNamespaces.has('AWS/ApplicationELB')).toBe(true);
