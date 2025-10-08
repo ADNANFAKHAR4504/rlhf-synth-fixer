@@ -1,13 +1,8 @@
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { CostExplorer, SNS } from 'aws-sdk';
 
 const ce = new CostExplorer();
 const sns = new SNS();
-
-interface CostData {
-  date: string;
-  amount: number;
-  unit: string;
-}
 
 export const handler = async (): Promise<void> => {
   const snsTopicArn = process.env.SNS_TOPIC_ARN!;

@@ -1,4 +1,5 @@
 import { S3Event } from 'aws-lambda';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { S3, SNS } from 'aws-sdk';
 import * as zlib from 'zlib';
 
