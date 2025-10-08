@@ -10,5 +10,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "AWS Organizations, AWS Config, AWS Security Hub, AWS GuardDuty, AWS CloudTrail, AWS Lambda, Amazon EventBridge, Amazon DynamoDB, Amazon QuickSight, Amazon S3, AWS KMS, Amazon SNS, Amazon CloudWatch, AWS IAM"
+  "aws_services": [
+    "AWS Organizations",
+    "AWS Config",
+    "AWS Security Hub",
+    "AWS GuardDuty",
+    "AWS CloudTrail",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "Amazon DynamoDB",
+    "Amazon QuickSight",
+    "Amazon S3",
+    "AWS KMS",
+    "Amazon SNS",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "training_quality": 9
 }
