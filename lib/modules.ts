@@ -658,7 +658,7 @@ export class StorageModule extends Construct {
 
     // S3 Bucket for application logs
     const bucket = new S3Bucket(this, 'app-logs-bucket', {
-      bucket: `${config.projectName}-app-logs-${Date.now()}`,
+      bucket: `${config.projectName}-app-logs`, // Remove Date.now()
       lifecycle: {
         preventDestroy: true,
       },
@@ -667,8 +667,6 @@ export class StorageModule extends Construct {
         Name: `${config.projectName}-app-logs`,
       },
     });
-    this.bucketName = bucket.id;
-    this.bucketArn = bucket.arn;
 
     // Enable versioning
     new S3BucketVersioningA(this, 'bucket-versioning', {
