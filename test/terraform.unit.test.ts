@@ -64,8 +64,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(providerTfContent).toContain('provider "aws"');
     });
 
-    test('should configure local backend', () => {
-      expect(providerTfContent).toContain('backend "local"');
+    test('should configure S3 backend', () => {
+      expect(providerTfContent).toContain('backend "s3"');
     });
 
     test('should specify Terraform version requirements', () => {
