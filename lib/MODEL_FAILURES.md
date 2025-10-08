@@ -1,4 +1,4 @@
-# Model Failures (IAC-349955)
+# Model Failures 
 
 - **Hard-coded database configuration** – The stack pins the RDS instance class, storage size, username, and password, violating the requirement to parameterize and supply these securely at deploy time.
 - **Lambda packaging not parameterized** – The Lambda handler is inlined in the stack, ignoring the `lambdaCodePath` input that should let teams package their own artifact.
