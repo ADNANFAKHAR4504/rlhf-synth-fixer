@@ -69,7 +69,11 @@ export class ApiStack extends Construct {
     const lambdaAsset = new DataArchiveFile(this, 'websocket-lambda-archive', {
       type: 'zip',
       sourceDir: path.join(__dirname, 'lambda', 'websocket-handler'),
-      outputPath: path.join(__dirname, '../.terraform', `websocket-handler-${props.environmentSuffix}.zip`),
+      outputPath: path.join(
+        __dirname,
+        '../.terraform',
+        `websocket-handler-${props.environmentSuffix}.zip`
+      ),
     });
 
     const websocketLambda = new LambdaFunction(this, 'websocket-handler', {
