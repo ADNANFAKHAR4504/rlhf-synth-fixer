@@ -125,8 +125,98 @@
             "us-west-2": {
                 "APIGatewayHostedZoneId": "Z2OJLYMUO9EFXC"
             },
+            "af-south-1": {
+                "APIGatewayHostedZoneId": "Z2DHW2332DAMTN"
+            },
+            "ap-east-1": {
+                "APIGatewayHostedZoneId": "Z3FD1VL90ND7K5"
+            },
+            "ap-east-2": {
+                "APIGatewayHostedZoneId": "Z02909591O7FG9Q56HWB1"
+            },
+            "ap-northeast-1": {
+                "APIGatewayHostedZoneId": "Z1YSHQZHG15GKL"
+            },
+            "ap-northeast-2": {
+                "APIGatewayHostedZoneId": "Z20JF4UZKIW1U8"
+            },
+            "ap-northeast-3": {
+                "APIGatewayHostedZoneId": "Z22ILHG95FLSZ2"
+            },
+            "ap-south-1": {
+                "APIGatewayHostedZoneId": "Z3VO1THU9YC4UR"
+            },
             "ap-south-2": {
                 "APIGatewayHostedZoneId": "Z0853509Q1135NJ66RUH"
+            },
+            "ap-southeast-1": {
+                "APIGatewayHostedZoneId": "ZL327KTPIQFUL"
+            },
+            "ap-southeast-2": {
+                "APIGatewayHostedZoneId": "Z2RPCDW04V8134"
+            },
+            "ap-southeast-3": {
+                "APIGatewayHostedZoneId": "Z10132843TYUYSLUG4HA3"
+            },
+            "ap-southeast-4": {
+                "APIGatewayHostedZoneId": "Z092189423Y7RJK61311D"
+            },
+            "ap-southeast-5": {
+                "APIGatewayHostedZoneId": "Z0314042F0KBUTZ3X5HF"
+            },
+            "ap-southeast-7": {
+                "APIGatewayHostedZoneId": "Z048508712PZLK5NKG8R0"
+            },
+            "ca-central-1": {
+                "APIGatewayHostedZoneId": "Z19DQILCV0OWEC"
+            },
+            "ca-west-1": {
+                "APIGatewayHostedZoneId": "Z04745493436AWVTG1OQY"
+            },
+            "eu-central-1": {
+                "APIGatewayHostedZoneId": "Z1U9ULNL0V5AJ3"
+            },
+            "eu-central-2": {
+                "APIGatewayHostedZoneId": "Z09222482MK253X48U76H"
+            },
+            "eu-north-1": {
+                "APIGatewayHostedZoneId": "Z3UWIKFBOOGXPP"
+            },
+            "eu-south-1": {
+                "APIGatewayHostedZoneId": "Z3BT4WSQ9TDYZV"
+            },
+            "eu-south-2": {
+                "APIGatewayHostedZoneId": "Z02499852UI5HEQ5JVWX3"
+            },
+            "eu-west-1": {
+                "APIGatewayHostedZoneId": "ZLY8HYME6SFDD"
+            },
+            "eu-west-2": {
+                "APIGatewayHostedZoneId": "ZJ5UAJN8Y3Z2Q"
+            },
+            "eu-west-3": {
+                "APIGatewayHostedZoneId": "Z3KY65QIEKYHQQ"
+            },
+            "il-central-1": {
+                "APIGatewayHostedZoneId": "Z07264553HBI44N5X2CKP"
+            },
+            "me-central-1": {
+                "APIGatewayHostedZoneId": "Z08780021BKYYY8U0YHTV"
+            },
+            "me-south-1": {
+                "APIGatewayHostedZoneId": "Z20ZBPC0SS8806"
+            },
+            "mx-central-1": {
+                "APIGatewayHostedZoneId": "Z00020171WIGL5M88SHRM"
+            },
+            "sa-east-1": {
+                "APIGatewayHostedZoneId": "ZCMLWB8V5SYIT"
+            },
+            "us-gov-east-1": {
+                "APIGatewayHostedZoneId": "Z3SE9ATJYCRCZJ"
+            },
+            "us-gov-west-1": {
+                "APIGatewayHostedZoneId": "Z1K6XKP9SAGWDV"
             }
         }
     },

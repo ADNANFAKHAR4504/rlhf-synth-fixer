@@ -88,15 +88,75 @@ Mappings:
   # These are AWS-managed hosted zone IDs for Regional API Gateway endpoints
   RegionMap:
     us-east-1:
-      APIGatewayHostedZoneId: Z1UJRXOUMOOFQ8  # N. Virginia - VERIFIED ✅
+      APIGatewayHostedZoneId: Z1UJRXOUMOOFQ8  # US East (N. Virginia)
     us-east-2:
-      APIGatewayHostedZoneId: ZOJJZC49E0EPZ   # Ohio - FROM AWS DOCS ✅
+      APIGatewayHostedZoneId: ZOJJZC49E0EPZ   # US East (Ohio)
     us-west-1:
-      APIGatewayHostedZoneId: Z2MUQ32089INYE  # N. California - VERIFIED ✅
+      APIGatewayHostedZoneId: Z2MUQ32089INYE  # US West (N. California)
     us-west-2:
-      APIGatewayHostedZoneId: Z2OJLYMUO9EFXC  # Oregon - FROM AWS DOCS ✅
+      APIGatewayHostedZoneId: Z2OJLYMUO9EFXC  # US West (Oregon)
+    af-south-1:
+      APIGatewayHostedZoneId: Z2DHW2332DAMTN  # Africa (Cape Town)
+    ap-east-1:
+      APIGatewayHostedZoneId: Z3FD1VL90ND7K5  # Asia Pacific (Hong Kong)
+    ap-east-2:
+      APIGatewayHostedZoneId: Z02909591O7FG9Q56HWB1  # Asia Pacific (Taipei)
+    ap-northeast-1:
+      APIGatewayHostedZoneId: Z1YSHQZHG15GKL  # Asia Pacific (Tokyo)
     ap-northeast-2:
-      APIGatewayHostedZoneId: Z20JF4UZKIW1U8  # Seoul - PROVIDED ✅
+      APIGatewayHostedZoneId: Z20JF4UZKIW1U8  # Asia Pacific (Seoul)
+    ap-northeast-3:
+      APIGatewayHostedZoneId: Z22ILHG95FLSZ2  # Asia Pacific (Osaka)
+    ap-south-1:
+      APIGatewayHostedZoneId: Z3VO1THU9YC4UR  # Asia Pacific (Mumbai)
+    ap-south-2:
+      APIGatewayHostedZoneId: Z0853509Q1135NJ66RUH  # Asia Pacific (Hyderabad)
+    ap-southeast-1:
+      APIGatewayHostedZoneId: ZL327KTPIQFUL   # Asia Pacific (Singapore)
+    ap-southeast-2:
+      APIGatewayHostedZoneId: Z2RPCDW04V8134  # Asia Pacific (Sydney)
+    ap-southeast-3:
+      APIGatewayHostedZoneId: Z10132843TYUYSLUG4HA3  # Asia Pacific (Jakarta)
+    ap-southeast-4:
+      APIGatewayHostedZoneId: Z092189423Y7RJK61311D  # Asia Pacific (Melbourne)
+    ap-southeast-5:
+      APIGatewayHostedZoneId: Z0314042F0KBUTZ3X5HF  # Asia Pacific (Malaysia)
+    ap-southeast-7:
+      APIGatewayHostedZoneId: Z048508712PZLK5NKG8R0  # Asia Pacific (Thailand)
+    ca-central-1:
+      APIGatewayHostedZoneId: Z19DQILCV0OWEC  # Canada (Central)
+    ca-west-1:
+      APIGatewayHostedZoneId: Z04745493436AWVTG1OQY  # Canada West (Calgary)
+    eu-central-1:
+      APIGatewayHostedZoneId: Z1U9ULNL0V5AJ3  # Europe (Frankfurt)
+    eu-central-2:
+      APIGatewayHostedZoneId: Z09222482MK253X48U76H  # Europe (Zurich)
+    eu-north-1:
+      APIGatewayHostedZoneId: Z3UWIKFBOOGXPP  # Europe (Stockholm)
+    eu-south-1:
+      APIGatewayHostedZoneId: Z3BT4WSQ9TDYZV  # Europe (Milan)
+    eu-south-2:
+      APIGatewayHostedZoneId: Z02499852UI5HEQ5JVWX3  # Europe (Spain)
+    eu-west-1:
+      APIGatewayHostedZoneId: ZLY8HYME6SFDD   # Europe (Ireland)
+    eu-west-2:
+      APIGatewayHostedZoneId: ZJ5UAJN8Y3Z2Q   # Europe (London)
+    eu-west-3:
+      APIGatewayHostedZoneId: Z3KY65QIEKYHQQ  # Europe (Paris)
+    il-central-1:
+      APIGatewayHostedZoneId: Z07264553HBI44N5X2CKP  # Israel (Tel Aviv)
+    me-central-1:
+      APIGatewayHostedZoneId: Z08780021BKYYY8U0YHTV  # Middle East (UAE)
+    me-south-1:
+      APIGatewayHostedZoneId: Z20ZBPC0SS8806  # Middle East (Bahrain)
+    mx-central-1:
+      APIGatewayHostedZoneId: Z00020171WIGL5M88SHRM  # Mexico (Central)
+    sa-east-1:
+      APIGatewayHostedZoneId: ZCMLWB8V5SYIT   # South America (São Paulo)
+    us-gov-east-1:
+      APIGatewayHostedZoneId: Z3SE9ATJYCRCZJ  # AWS GovCloud (US-East)
+    us-gov-west-1:
+      APIGatewayHostedZoneId: Z1K6XKP9SAGWDV  # AWS GovCloud (US-West)
     
   # Note: These IDs are for Regional API Gateway endpoints only
   # For Edge-Optimized APIs, use Z2FDTNDATAQYW2 (global CloudFront hosted zone)
