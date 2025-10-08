@@ -6,8 +6,10 @@
   "po_id": "59370182",
   "team": "synth",
   "startedAt": "2025-10-08T13:55:08+05:30",
-  "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Web Application Deployment"],
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
   "training_quality": 7,
   "aws_services": [
     "VPC",
@@ -24,5 +26,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
