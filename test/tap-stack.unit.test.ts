@@ -114,7 +114,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings).toBeDefined();
       expect(template.Mappings.RegionMap).toBeDefined();
 
-      // Test the three supported regions
+      // Test the four supported regions
       expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
       expect(template.Mappings.RegionMap['us-east-1'].APIGatewayHostedZoneId).toBe('Z1UJRXOUMOOFQ8');
 
@@ -123,14 +123,18 @@ describe('TapStack CloudFormation Template', () => {
 
       expect(template.Mappings.RegionMap['us-west-1']).toBeDefined();
       expect(template.Mappings.RegionMap['us-west-1'].APIGatewayHostedZoneId).toBe('Z2MUQ32089INYE');
+
+      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-west-2'].APIGatewayHostedZoneId).toBe('Z2OJLYMUO9EFXC');
     });
 
     test('should only have supported regions in RegionMap', () => {
       const regions = Object.keys(template.Mappings.RegionMap);
-      expect(regions).toHaveLength(3);
+      expect(regions).toHaveLength(4);
       expect(regions).toContain('us-east-1');
       expect(regions).toContain('us-east-2');
       expect(regions).toContain('us-west-1');
+      expect(regions).toContain('us-west-2');
     });
   });
 
