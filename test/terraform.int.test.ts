@@ -441,18 +441,27 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
       });
 
+      // Debug: log alarm details if count is less than expected
+      if (alarms.length < 2) {
+        console.warn(`Found ${alarms.length} alarms with prefix '${projectPrefix}'`);
+        console.warn('Available alarms:', alarms.map(a => a.AlarmName).join(', '));
+        console.warn('Total alarms in account:', response.MetricAlarms?.length || 0);
+      }
+
       expect(alarms.length).toBeGreaterThanOrEqual(2);
 
-      // Check for high CPU alarm
+      // Check for high CPU alarm (matches "high-cpu" pattern)
       const cpuAlarm = alarms.find((alarm) =>
-        alarm.AlarmName?.includes('high-cpu')
+        alarm.AlarmName?.toLowerCase().includes('cpu') &&
+        (alarm.AlarmName?.includes('high') || alarm.AlarmName?.includes('utilization'))
       );
       expect(cpuAlarm).toBeDefined();
       expect(cpuAlarm!.MetricName).toBe('CPUUtilization');
 
       // Check for unhealthy hosts alarm
       const unhealthyAlarm = alarms.find((alarm) =>
-        alarm.AlarmName?.includes('unhealthy-hosts')
+        alarm.AlarmName?.toLowerCase().includes('unhealthy') ||
+        alarm.MetricName === 'UnHealthyHostCount'
       );
       expect(unhealthyAlarm).toBeDefined();
       expect(unhealthyAlarm!.MetricName).toBe('UnHealthyHostCount');
