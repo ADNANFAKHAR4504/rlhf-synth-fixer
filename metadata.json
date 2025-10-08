@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "16253849",
+  "team": "3",
+  "startedAt": "2025-10-07T04:26:40.646Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "ALB, ECS Fargate, Aurora MySQL, DynamoDB, S3, Cloudfront, Elasticache, Lambda, SES, EventBridge, Cloudwatch"
+}
