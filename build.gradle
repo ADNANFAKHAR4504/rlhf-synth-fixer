@@ -178,6 +178,9 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
+
+    integrationTestImplementation 'software.amazon.awssdk:cognitoidentityprovider'
+    integrationTestImplementation 'software.amazon.awssdk:ecs'
     
     // Additional AWS SDK dependencies for comprehensive integration tests
     integrationTestImplementation 'software.amazon.awssdk:kendra'
