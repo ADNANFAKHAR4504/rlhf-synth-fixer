@@ -303,14 +303,22 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const cloudTrailArn = getOutput('CloudTrailArn');
       expect(cloudTrailArn).toBeTruthy();
 
-      const response = await cloudtrail.describeTrails({
+      // First get trail details
+      const describeResponse = await cloudtrail.describeTrails({
         trailNameList: [cloudTrailArn]
       }).promise();
 
-      expect(response.trailList).toHaveLength(1);
-      expect(response.trailList![0].IsLogging).toBe(true);
-      expect(response.trailList![0].IncludeGlobalServiceEvents).toBe(true);
-      expect(response.trailList![0].IsMultiRegionTrail).toBe(true);
+      expect(describeResponse.trailList).toHaveLength(1);
+      expect(describeResponse.trailList![0].IncludeGlobalServiceEvents).toBe(true);
+      expect(describeResponse.trailList![0].IsMultiRegionTrail).toBe(true);
+
+      // Check if trail is actually logging
+      const trailName = describeResponse.trailList![0].Name!;
+      const statusResponse = await cloudtrail.getTrailStatus({
+        Name: trailName
+      }).promise();
+
+      expect(statusResponse.IsLogging).toBe(true);
     });
 
     test('WAF Web ACL should be active', async () => {
