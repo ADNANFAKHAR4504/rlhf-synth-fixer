@@ -721,7 +721,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Application Load Balancers
     const primaryAlb = new Lb(this, 'primary-alb', {
       provider: primaryProvider,
-      name: `fin-proc-primary-alb-${uniqueSuffix}`,
+      name: `finp-pri-${uniqueSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [appSecurityGroup.id],
@@ -732,7 +732,7 @@ export class FinancialProcessorStack extends TerraformStack {
 
     const secondaryAlb = new Lb(this, 'secondary-alb', {
       provider: secondaryProvider,
-      name: `fin-proc-secondary-alb-${uniqueSuffix}`,
+      name: `finp-sec-${uniqueSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [secondaryAppSecurityGroup.id],
@@ -744,7 +744,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Target Groups
     const primaryTargetGroup = new LbTargetGroup(this, 'primary-target-group', {
       provider: primaryProvider,
-      name: `${config.appName}-primary-tg-${uniqueSuffix}`,
+      name: `finp-pri-tg-${uniqueSuffix}`,
       port: 80,
       protocol: 'HTTP',
       vpcId: primaryVpc.id,
@@ -767,7 +767,7 @@ export class FinancialProcessorStack extends TerraformStack {
       'secondary-target-group',
       {
         provider: secondaryProvider,
-        name: `${config.appName}-secondary-tg-${uniqueSuffix}`,
+        name: `finp-sec-tg-${uniqueSuffix}`,
         port: 80,
         protocol: 'HTTP',
         vpcId: secondaryVpc.id,
