@@ -1,10 +1,5 @@
 # outputs.tf
 
-# Local values for referencing the correct CloudFront distribution
-locals {
-  cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
-}
-
 output "website_bucket_name" {
   description = "Name of the S3 bucket hosting the website"
   value       = aws_s3_bucket.website.id
