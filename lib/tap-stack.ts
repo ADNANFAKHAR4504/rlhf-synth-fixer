@@ -4,9 +4,8 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-// import * as aws from '@cdktf/provider-aws';
 
-// ? Import your stacks here
+// Import modules
 import {
   VpcModule,
   IamModule,
@@ -16,7 +15,6 @@ import {
   LambdaModule,
   CloudTrailModule,
 } from './modules';
-// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -25,9 +23,6 @@ interface TapStackProps {
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 }
-
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
 
 const AWS_REGION_OVERRIDE = '';
 
@@ -42,7 +37,7 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: [
@@ -64,25 +59,19 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
-    // Data sources
-    // const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
-    //   this,
-    //   'current'
-    // );
+    // Dynamic availability zones based on region
+    const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`];
 
-    // Deploy VPC Module
-    const vpcModule = new VpcModule(this, 'vpc-module');
+    // Deploy VPC Module with availability zones
+    const vpcModule = new VpcModule(this, 'vpc-module', availabilityZones);
 
     // Deploy IAM Module
     const iamModule = new IamModule(this, 'iam-module');
 
-    // Deploy S3 Module
-    const s3Module = new S3Module(this, 's3-module');
+    // Deploy S3 Module with region for KMS
+    const s3Module = new S3Module(this, 's3-module', awsRegion);
 
     // Deploy CloudTrail Module
     const cloudTrailModule = new CloudTrailModule(
@@ -164,7 +153,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'vpc-flow-logs-status', {
-      value: 'VPC Flow Logs enabled and stored in encrypted S3',
+      value: 'VPC Flow Logs enabled and stored in CloudWatch Logs',
       description: 'VPC Flow Logs status',
     });
 
@@ -180,11 +169,9 @@ export class TapStack extends TerraformStack {
         lambdaVpcDeployment: 'Enforced',
         rdsEncryption: 'Enabled',
         rdsPublicAccess: 'Disabled',
-        vpcFlowLogs: 'Enabled',
+        vpcFlowLogs: 'CloudWatch',
       },
       description: 'Security compliance summary',
     });
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
   }
 }
