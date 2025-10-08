@@ -380,6 +380,7 @@ Resources:
   ElasticBeanstalkApplication:
     Type: AWS::ElasticBeanstalk::Application
     Properties:
+      ApplicationName: 'MyWebApp'
       Description: !Sub 'Web application deployed via CI/CD pipeline in ${Environment} environment'
       ResourceLifecycleConfig:
         ServiceRole: !GetAtt ElasticBeanstalkServiceRole.Arn
@@ -405,7 +406,7 @@ Resources:
           Value: !Ref ElasticBeanstalkInstanceProfile
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: InstanceType
-          Value: t3.small
+          Value: t3.medium
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: ServiceRole
           Value: !Ref ElasticBeanstalkServiceRole
@@ -759,32 +760,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyArn'
 ```
-
-## Key Features
-
-### Security & Compliance
-
-- **KMS Encryption**: All artifacts encrypted with customer-managed KMS keys
-- **IAM Least Privilege**: Service roles with minimal required permissions
-- **S3 Security**: Public access blocked, versioning enabled, lifecycle policies
-- **Resource Tagging**: Comprehensive tagging for cost allocation and governance
-
-### CI/CD Pipeline Components
-
-- **Source Stage**: GitHub integration with OAuth token authentication
-- **Build Stage**: CodeBuild with Python 3.12 and Node.js 18 support
-- **Approval Stage**: Manual approval with detailed build information
-- **Deploy Stage**: Elastic Beanstalk deployment with rolling updates
-
-### Monitoring & Notifications
-
-- **SNS Notifications**: Email alerts for pipeline events
-- **CloudWatch Events**: Automated monitoring of pipeline and build failures
-- **Comprehensive Logging**: CloudWatch Logs integration for all services
-
-### Elastic Beanstalk Configuration
-
-- **Environment Types**: Load-balanced web server environments
-- **Auto Scaling**: Production-optimized scaling (2-6 instances)
-- **Health Monitoring**: Enhanced health reporting and monitoring
-- **Platform Support**: Amazon Linux 2023 with Python 3.12
