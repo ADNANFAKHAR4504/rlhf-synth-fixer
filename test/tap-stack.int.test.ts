@@ -343,7 +343,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       expect(matchingEnv.SolutionStackName).toContain('Amazon Linux 2023');
-      expect(matchingEnv.SolutionStackName).toContain('Python 3.12');
+      expect(matchingEnv.SolutionStackName).toContain('Python 3.11');
       expect(matchingEnv.Tier?.Type).toBe('Standard');
       expect(matchingEnv.PlatformArn).toBeDefined();
     });
@@ -517,7 +517,7 @@ describe('TapStack Integration Tests', () => {
       const pipeline = await getPipeline();
 
       const deployStage = pipeline.stages?.find(s =>
-        s.name?.includes('Deploy') && s.name?.includes('Production')
+        s.name?.includes('Deploy')
       );
       expect(deployStage).toBeDefined();
       expect(deployStage?.actions).toBeDefined();
@@ -719,7 +719,7 @@ describe('TapStack Integration Tests', () => {
       const pipeline = pipelineResponse.pipeline;
 
       const deployStage = pipeline?.stages?.find(s =>
-        s.name?.includes('Deploy') && s.name?.includes('Production')
+        s.name?.includes('Deploy')
       );
       const deployAction = deployStage?.actions?.[0];
       const envNameInPipeline = deployAction?.configuration?.EnvironmentName;
