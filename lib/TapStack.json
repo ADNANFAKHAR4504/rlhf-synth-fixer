@@ -266,7 +266,6 @@
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
             "DependsOn": [
-                "ConfigServiceRole",
                 "ConfigS3BucketPolicy"
             ],
             "Properties": {

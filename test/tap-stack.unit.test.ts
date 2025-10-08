@@ -397,7 +397,9 @@ describe('TapStack CloudFormation Template', () => {
   describe('AWS Config Configuration', () => {
     test('Config Recorder should have proper dependencies', () => {
       const configRecorder = template.Resources.ConfigRecorder;
-      expect(configRecorder.DependsOn).toContain('ConfigServiceRole');
+      // ConfigServiceRole dependency is implicit through GetAtt reference
+      expect(configRecorder.Properties.RoleARN).toEqual({ 'Fn::GetAtt': ['ConfigServiceRole', 'Arn'] });
+      // ConfigS3BucketPolicy dependency should be explicit
       expect(configRecorder.DependsOn).toContain('ConfigS3BucketPolicy');
     });
 

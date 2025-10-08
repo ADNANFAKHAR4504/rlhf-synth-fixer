@@ -1094,6 +1094,319 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(asg.MaxSize).toBe(4);
       expect(asg.DesiredCapacity).toBe(2);
     });
+
+    test('Auto Scaling policies should be properly configured', async () => {
+      const asgName = getOutput('AutoScalingGroupName');
+      expect(asgName).toBeTruthy();
+
+      const autoscaling = new AWS.AutoScaling();
+
+      // Get scaling policies
+      const policiesResponse = await autoscaling.describePolicies({
+        AutoScalingGroupName: asgName
+      }).promise();
+
+      console.log(`📊 Found ${policiesResponse.ScalingPolicies!.length} scaling policies`);
+
+      expect(policiesResponse.ScalingPolicies).toBeTruthy();
+      expect(policiesResponse.ScalingPolicies!.length).toBeGreaterThan(0);
+
+      // Validate each policy
+      for (const policy of policiesResponse.ScalingPolicies!) {
+        console.log(`🔍 Policy: ${policy.PolicyName} (Type: ${policy.PolicyType})`);
+
+        expect(policy.AutoScalingGroupName).toBe(asgName);
+        expect(policy.PolicyType).toBeTruthy();
+
+        if (policy.PolicyType === 'TargetTrackingScaling') {
+          expect(policy.TargetTrackingConfiguration).toBeTruthy();
+          const config = policy.TargetTrackingConfiguration!;
+
+          console.log(`   Target Value: ${config.TargetValue}`);
+          console.log(`   Metric: ${config.PredefinedMetricSpecification?.PredefinedMetricType || 'Custom'}`);
+
+          expect(config.TargetValue).toBeGreaterThan(0);
+
+          if (config.PredefinedMetricSpecification) {
+            expect(config.PredefinedMetricSpecification.PredefinedMetricType).toBe('ASGAverageCPUUtilization');
+          }
+        }
+      }
+    });
+
+    test('Auto Scaling Group instances should be healthy and distributed', async () => {
+      const asgName = getOutput('AutoScalingGroupName');
+      const autoscaling = new AWS.AutoScaling();
+      const ec2 = new AWS.EC2();
+
+      const asgResponse = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: [asgName]
+      }).promise();
+
+      const asg = asgResponse.AutoScalingGroups![0];
+      const instances = asg.Instances || [];
+
+      console.log(`🖥️  ASG has ${instances.length} instances`);
+
+      expect(instances.length).toBeGreaterThanOrEqual(asg.MinSize!);
+      expect(instances.length).toBeLessThanOrEqual(asg.MaxSize!);
+
+      // Check instance health and distribution
+      const healthyInstances = instances.filter(i => i.HealthStatus === 'Healthy');
+      const inServiceInstances = instances.filter(i => i.LifecycleState === 'InService');
+
+      console.log(`✅ Healthy instances: ${healthyInstances.length}/${instances.length}`);
+      console.log(`🟢 InService instances: ${inServiceInstances.length}/${instances.length}`);
+
+      expect(healthyInstances.length).toBeGreaterThan(0);
+      expect(inServiceInstances.length).toBeGreaterThan(0);
+
+      // Check AZ distribution
+      const azs = [...new Set(instances.map(i => i.AvailabilityZone))];
+      console.log(`🌐 Instances distributed across ${azs.length} AZs: ${azs.join(', ')}`);
+      expect(azs.length).toBeGreaterThan(1); // Should be in multiple AZs
+
+      // Get detailed instance information
+      if (instances.length > 0) {
+        const instanceIds = instances.map(i => i.InstanceId!);
+        const ec2Response = await ec2.describeInstances({
+          InstanceIds: instanceIds
+        }).promise();
+
+        let runningCount = 0;
+        for (const reservation of ec2Response.Reservations || []) {
+          for (const instance of reservation.Instances || []) {
+            if (instance.State?.Name === 'running') {
+              runningCount++;
+            }
+            console.log(`   Instance ${instance.InstanceId}: ${instance.State?.Name} in ${instance.Placement?.AvailabilityZone}`);
+          }
+        }
+
+        expect(runningCount).toBe(instances.length);
+      }
+    });
+
+    test('Auto Scaling Group stress test - simulate high load and monitor scaling', async () => {
+      const asgName = getOutput('AutoScalingGroupName');
+      const albDnsName = getOutput('LoadBalancerDNS');
+
+      const autoscaling = new AWS.AutoScaling();
+      const cloudwatch = new AWS.CloudWatch();
+
+      // Get initial state
+      const initialResponse = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: [asgName]
+      }).promise();
+
+      const initialAsg = initialResponse.AutoScalingGroups![0];
+      const initialCapacity = initialAsg.DesiredCapacity!;
+      const initialInstances = initialAsg.Instances?.length || 0;
+
+      console.log(`🚀 Starting stress test - Initial capacity: ${initialCapacity}, Instances: ${initialInstances}`);
+      console.log(`📊 Target: CPU > 70% should trigger scaling`);
+
+      // Simulate load by making concurrent requests to ALB
+      const stressTestPromises = [];
+      const numberOfConcurrentRequests = 50;
+      const requestDuration = 30000; // 30 seconds of load
+
+      console.log(`⚡ Generating load: ${numberOfConcurrentRequests} concurrent requests for ${requestDuration / 1000}s`);
+
+      const stressStart = Date.now();
+
+      for (let i = 0; i < numberOfConcurrentRequests; i++) {
+        const stressPromise = (async () => {
+          const endTime = Date.now() + requestDuration;
+          let requestCount = 0;
+
+          while (Date.now() < endTime) {
+            try {
+              await axios.get(`http://${albDnsName}`, {
+                timeout: 5000,
+                validateStatus: () => true
+              });
+              requestCount++;
+            } catch (error) {
+              // Continue on error to maintain load
+            }
+
+            // Small delay to prevent overwhelming
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          return requestCount;
+        })();
+
+        stressTestPromises.push(stressPromise);
+      }
+
+      // Wait for stress test to complete
+      const requestCounts = await Promise.all(stressTestPromises);
+      const totalRequests = requestCounts.reduce((sum, count) => sum + count, 0);
+      const stressEnd = Date.now();
+
+      console.log(`🏁 Stress test completed: ${totalRequests} total requests in ${(stressEnd - stressStart) / 1000}s`);
+      console.log(`📈 Request rate: ${(totalRequests / ((stressEnd - stressStart) / 1000)).toFixed(2)} req/s`);
+
+      // Wait a bit for metrics to propagate
+      console.log(`⏳ Waiting 2 minutes for CloudWatch metrics and scaling decisions...`);
+      await new Promise(resolve => setTimeout(resolve, 120000)); // 2 minutes
+
+      // Check if scaling occurred
+      const postStressResponse = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: [asgName]
+      }).promise();
+
+      const postStressAsg = postStressResponse.AutoScalingGroups![0];
+      const finalCapacity = postStressAsg.DesiredCapacity!;
+      const finalInstances = postStressAsg.Instances?.length || 0;
+
+      console.log(`📊 Post-stress capacity: ${finalCapacity}, Instances: ${finalInstances}`);
+
+      // Get recent CloudWatch metrics
+      const metricsEndTime = new Date();
+      const metricsStartTime = new Date(metricsEndTime.getTime() - 10 * 60 * 1000); // Last 10 minutes
+
+      try {
+        const metricsResponse = await cloudwatch.getMetricStatistics({
+          Namespace: 'AWS/AutoScaling',
+          MetricName: 'GroupDesiredCapacity',
+          Dimensions: [
+            {
+              Name: 'AutoScalingGroupName',
+              Value: asgName
+            }
+          ],
+          StartTime: metricsStartTime,
+          EndTime: metricsEndTime,
+          Period: 300, // 5 minutes
+          Statistics: ['Average', 'Maximum']
+        }).promise();
+
+        console.log(`📈 Capacity metrics over last 10 minutes:`);
+        for (const datapoint of metricsResponse.Datapoints || []) {
+          console.log(`   ${datapoint.Timestamp?.toISOString()}: Avg=${datapoint.Average}, Max=${datapoint.Maximum}`);
+        }
+      } catch (error) {
+        console.log(`⚠️  Could not retrieve CloudWatch metrics: ${(error as any).message}`);
+      }
+
+      // Get scaling activities
+      const activitiesResponse = await autoscaling.describeScalingActivities({
+        AutoScalingGroupName: asgName,
+        MaxRecords: 10
+      }).promise();
+
+      console.log(`🔄 Recent scaling activities:`);
+      for (const activity of activitiesResponse.Activities || []) {
+        const activityTime = activity.StartTime?.toISOString() || 'Unknown';
+        const cause = activity.Cause?.substring(0, 100) || 'No cause specified';
+        console.log(`   ${activityTime}: ${activity.StatusCode} - ${cause}`);
+      }
+
+      // Validate scaling behavior (this might not always trigger depending on actual load)
+      console.log(`🎯 Scaling Analysis:`);
+      if (finalCapacity > initialCapacity) {
+        console.log(`✅ Scale-out occurred: ${initialCapacity} → ${finalCapacity} instances`);
+        expect(finalCapacity).toBeLessThanOrEqual(postStressAsg.MaxSize!);
+      } else {
+        console.log(`ℹ️  No scaling occurred (load may not have exceeded threshold)`);
+        console.log(`   This is normal if CPU didn't exceed 70% or scaling cooldown is active`);
+      }
+
+      // Ensure ASG is still within limits
+      expect(finalCapacity).toBeGreaterThanOrEqual(postStressAsg.MinSize!);
+      expect(finalCapacity).toBeLessThanOrEqual(postStressAsg.MaxSize!);
+      expect(finalInstances).toBeGreaterThanOrEqual(postStressAsg.MinSize!);
+
+      console.log(`✅ Stress test completed - ASG maintained healthy state`);
+    }, 600000); // 10 minute timeout for stress test
+
+    test('Auto Scaling cooldown and scaling behavior validation', async () => {
+      const asgName = getOutput('AutoScalingGroupName');
+      const autoscaling = new AWS.AutoScaling();
+
+      // Get ASG configuration
+      const asgResponse = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: [asgName]
+      }).promise();
+
+      const asg = asgResponse.AutoScalingGroups![0];
+
+      console.log(`⚙️  Auto Scaling Group Configuration:`);
+      console.log(`   Min Size: ${asg.MinSize}`);
+      console.log(`   Max Size: ${asg.MaxSize}`);
+      console.log(`   Desired Capacity: ${asg.DesiredCapacity}`);
+      console.log(`   Default Cooldown: ${asg.DefaultCooldown} seconds`);
+      console.log(`   Health Check Grace Period: ${asg.HealthCheckGracePeriod} seconds`);
+      console.log(`   Health Check Type: ${asg.HealthCheckType}`);
+
+      // Validate configuration
+      expect(asg.MinSize).toBe(2);
+      expect(asg.MaxSize).toBe(4);
+      expect(asg.DefaultCooldown).toBeGreaterThan(0);
+      expect(asg.HealthCheckType).toBe('ELB');
+
+      // Get scaling policies details
+      const policiesResponse = await autoscaling.describePolicies({
+        AutoScalingGroupName: asgName
+      }).promise();
+
+      console.log(`📋 Scaling Policies Configuration:`);
+      for (const policy of policiesResponse.ScalingPolicies || []) {
+        console.log(`   Policy: ${policy.PolicyName}`);
+        console.log(`   Type: ${policy.PolicyType}`);
+
+        if (policy.TargetTrackingConfiguration) {
+          const config = policy.TargetTrackingConfiguration;
+          console.log(`   Target Value: ${config.TargetValue}%`);
+          console.log(`   Scale Out Cooldown: ${(config as any).ScaleOutCooldown || 'Default'} seconds`);
+          console.log(`   Scale In Cooldown: ${(config as any).ScaleInCooldown || 'Default'} seconds`);
+          console.log(`   Disable Scale In: ${config.DisableScaleIn || false}`);
+
+          if (config.PredefinedMetricSpecification) {
+            console.log(`   Metric: ${config.PredefinedMetricSpecification.PredefinedMetricType}`);
+          }
+        }
+      }
+
+      // Check recent scaling activities for patterns
+      const activitiesResponse = await autoscaling.describeScalingActivities({
+        AutoScalingGroupName: asgName,
+        MaxRecords: 20
+      }).promise();
+
+      const recentActivities = activitiesResponse.Activities || [];
+      console.log(`📊 Scaling Activity History (${recentActivities.length} recent activities):`);
+
+      let successfulScaleOuts = 0;
+      let successfulScaleIns = 0;
+
+      for (const activity of recentActivities) {
+        const activityTime = activity.StartTime?.toISOString() || 'Unknown';
+        const description = activity.Description || 'No description';
+        const status = activity.StatusCode || 'Unknown';
+
+        console.log(`   ${activityTime}: ${status} - ${description}`);
+
+        if (status === 'Successful') {
+          if (description.includes('increase') || description.includes('scale out')) {
+            successfulScaleOuts++;
+          } else if (description.includes('decrease') || description.includes('scale in')) {
+            successfulScaleIns++;
+          }
+        }
+      }
+
+      console.log(`📈 Scaling Summary:`);
+      console.log(`   Successful Scale-Outs: ${successfulScaleOuts}`);
+      console.log(`   Successful Scale-Ins: ${successfulScaleIns}`);
+      console.log(`   Total Activities: ${recentActivities.length}`);
+
+      // Validate that we have some scaling history (even if no recent scaling)
+      expect(recentActivities.length).toBeGreaterThan(0);
+    });
   });
 
   describe('End-to-End Connectivity Tests', () => {
