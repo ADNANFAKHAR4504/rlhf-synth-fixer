@@ -10,5 +10,22 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "ec2, loadbalancer, s3, cloudwatch"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
