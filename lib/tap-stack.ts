@@ -177,6 +177,7 @@ exports.handler = async (event) => {
           blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
           enforceSSL: true,
           bucketName: `cf-logs-${this.account}-${environmentSuffix}`,
+          objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
         }),
       }
     );

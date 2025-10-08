@@ -89,3 +89,9 @@
 **Model Response Issue**: Used loggingConfig object within CloudFrontWebDistribution with inline log bucket creation.
 
 **Required Change**: Used separate logBucket parameter with Distribution construct for cleaner separation of concerns.
+
+## 16. S3 Log Bucket ACL Configuration
+
+**Model Response Issue**: Log bucket created without ACL support, causing CloudFront logging to fail with error "The S3 bucket that you specified for CloudFront logs does not enable ACL access".
+
+**Required Change**: Added `objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED` to the log bucket configuration to enable ACL access required by CloudFront for writing logs.
