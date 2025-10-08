@@ -51,11 +51,31 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.1"
+    }
   }
 }
 
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
+
+# Local values for conditional resource references
+locals {
+  # Use the appropriate CloudFront distribution based on domain and DNS configuration
+  cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
+}
+
+# CloudFront managed cache policy for static website optimization
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+# CloudFront managed origin request policy for CORS-S3Origin
+data "aws_cloudfront_origin_request_policy" "cors_s3_origin" {
+  name = "Managed-CORS-S3Origin"
+}
 
 # Random suffix for unique bucket names
 resource "random_string" "bucket_suffix" {
@@ -66,10 +86,10 @@ resource "random_string" "bucket_suffix" {
 
 # S3 Bucket for website content
 resource "aws_s3_bucket" "website" {
-  bucket = "${var.project_name}-website-${random_string.bucket_suffix.result}"
+  bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-website-${random_string.bucket_suffix.result}"
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-website"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-website"
     Type = "website-content"
   })
 }
@@ -85,10 +105,10 @@ resource "aws_s3_bucket_versioning" "website" {
 
 # S3 Bucket for CloudFront logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.project_name}-logs-${random_string.bucket_suffix.result}"
+  bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs-${random_string.bucket_suffix.result}"
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-logs"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs"
     Type = "access-logs"
   })
 }
@@ -138,10 +158,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 resource "aws_s3_bucket_public_access_block" "website" {
   bucket = aws_s3_bucket.website.id
 
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 bucket ownership controls for website bucket
+resource "aws_s3_bucket_ownership_controls" "website" {
+  bucket = aws_s3_bucket.website.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
 }
 
 # Block public access for logs bucket
@@ -154,6 +183,15 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+# S3 bucket ownership controls for logs bucket
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "website" {
   name                              = "${var.project_name}-oac"
@@ -163,8 +201,10 @@ resource "aws_cloudfront_origin_access_control" "website" {
   signing_protocol                  = "sigv4"
 }
 
-# ACM Certificate for CloudFront (must be in us-east-1)
+# ACM Certificate for CloudFront (must be in us-east-1) - only when domain is provided and DNS records are created
 resource "aws_acm_certificate" "website" {
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
   domain_name       = var.domain_name
   validation_method = "DNS"
 
@@ -181,11 +221,13 @@ resource "aws_acm_certificate" "website" {
   })
 }
 
-# CloudFront Distribution
-resource "aws_cloudfront_distribution" "website" {
+# CloudFront Distribution with domain (conditional)
+resource "aws_cloudfront_distribution" "website_with_domain" {
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "${var.project_name} CloudFront Distribution"
+  comment             = "${var.project_name} CloudFront Distribution with Domain"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
@@ -198,23 +240,11 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.website.id}"
-
-    forwarded_values {
-      query_string = false
-      headers      = ["Origin"]
-
-      cookies {
-        forward = "none"
-      }
-    }
-
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.website.id}"
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # CachingOptimized
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
     compress               = true
   }
 
@@ -225,7 +255,7 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate.website.arn
+    acm_certificate_arn      = aws_acm_certificate.website[0].arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
@@ -249,10 +279,68 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-distribution"
+    Name = "${var.project_name}-distribution-with-domain"
   })
 
   depends_on = [aws_acm_certificate_validation.website]
+}
+
+# CloudFront Distribution without domain (default)
+resource "aws_cloudfront_distribution" "website_default" {
+  count = var.domain_name == "" || !var.create_dns_records ? 1 : 0
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "${var.project_name} CloudFront Distribution (Default)"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
+
+  origin {
+    domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.website.id
+    origin_id                = "S3-${aws_s3_bucket.website.id}"
+  }
+
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.website.id}"
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # CachingOptimized
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cloudfront/"
+  }
+
+  custom_error_response {
+    error_code         = 404
+    response_code      = 404
+    response_page_path = "/404.html"
+  }
+
+  custom_error_response {
+    error_code         = 403
+    response_code      = 403
+    response_page_path = "/403.html"
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-distribution-default"
+  })
 }
 
 # S3 Bucket Policy for CloudFront OAC access
@@ -272,7 +360,7 @@ resource "aws_s3_bucket_policy" "website" {
         Resource = "${aws_s3_bucket.website.arn}/*"
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.website.arn
+            "AWS:SourceArn" = local.cloudfront_distribution.arn
           }
         }
       }
@@ -313,60 +401,68 @@ resource "aws_s3_bucket_policy" "logs" {
   })
 }
 
-# Route 53 Hosted Zone (assuming it exists)
+# Route 53 Hosted Zone (only when domain is provided and DNS records are created)
 data "aws_route53_zone" "main" {
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
   name         = replace(var.domain_name, "/^[^.]+\\./", "")
   private_zone = false
 }
 
 # Route 53 A Record for root domain
 resource "aws_route53_record" "website" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = var.domain_name
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.website.domain_name
-    zone_id                = aws_cloudfront_distribution.website.hosted_zone_id
+    name                   = local.cloudfront_distribution.domain_name
+    zone_id                = local.cloudfront_distribution.hosted_zone_id
     evaluate_target_health = false
   }
 }
 
 # Route 53 A Record for www subdomain
 resource "aws_route53_record" "www" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = "www.${var.domain_name}"
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.website.domain_name
-    zone_id                = aws_cloudfront_distribution.website.hosted_zone_id
+    name                   = local.cloudfront_distribution.domain_name
+    zone_id                = local.cloudfront_distribution.hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-# ACM Certificate Validation
+# ACM Certificate Validation (only when domain is provided and DNS records are created)
 resource "aws_acm_certificate_validation" "website" {
-  certificate_arn         = aws_acm_certificate.website.arn
+  count = var.domain_name != "" && var.create_dns_records ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.website[0].arn
   validation_record_fqdns = [for record in aws_route53_record.certificate_validation : record.fqdn]
 }
 
 # Route 53 records for ACM certificate validation
 resource "aws_route53_record" "certificate_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.website.domain_validation_options : dvo.domain_name => {
+  for_each = var.domain_name != "" && var.create_dns_records ? {
+    for dvo in aws_acm_certificate.website[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
     }
-  }
+  } : {}
 
   allow_overwrite = true
   name            = each.value.name
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = data.aws_route53_zone.main.zone_id
+  zone_id         = data.aws_route53_zone.main[0].zone_id
 }
 
 # CloudWatch Dashboard
@@ -488,10 +584,10 @@ resource "aws_cloudwatch_metric_alarm" "high_4xx_errors" {
   statistic           = "Average"
   threshold           = "5"
   alarm_description   = "This metric monitors 4xx error rate"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    DistributionId = aws_cloudfront_distribution.website.id
+    DistributionId = local.cloudfront_distribution.id
   }
 
   tags = var.tags
@@ -507,10 +603,51 @@ resource "aws_cloudwatch_metric_alarm" "high_5xx_errors" {
   statistic           = "Average"
   threshold           = "1"
   alarm_description   = "This metric monitors 5xx error rate"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    DistributionId = aws_cloudfront_distribution.website.id
+    DistributionId = local.cloudfront_distribution.id
+  }
+
+  tags = var.tags
+}
+
+# SNS Topic for alerts
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts"
+
+  tags = var.tags
+}
+
+# Application Signals Service Map (Preview)
+resource "aws_applicationinsights_application" "website" {
+  resource_group_name = aws_resourcegroups_group.website.name
+  auto_config_enabled = true
+  auto_create         = true
+
+  log_patterns {
+    pattern_name = "cloudfront-access-logs"
+    pattern      = "[timestamp, request_id, client_ip = /\\S+/, edge_location, method, host, uri, status, referrer, user_agent, query_string, cookie, x_edge_result_type, x_edge_request_id, x_host_header, protocol, bytes, time_taken, x_forwarded_for, ssl_protocol, ssl_cipher, x_edge_response_result_type, http_version, fle_status, fle_encrypted_fields, c_port, time_to_first_byte, x_edge_detailed_result_type, sc_content_type, sc_content_len, sc_range_start, sc_range_end]"
+    rank         = 1
+  }
+
+  tags = var.tags
+}
+
+# Resource Group for Application Insights
+resource "aws_resourcegroups_group" "website" {
+  name = "${var.project_name}-resources"
+
+  resource_query {
+    query = jsonencode({
+      ResourceTypeFilters = ["AWS::AllSupported"]
+      TagFilters = [
+        {
+          Key    = "Project"
+          Values = [var.project_name]
+        }
+      ]
+    })
   }
 
   tags = var.tags
@@ -537,17 +674,17 @@ output "logs_bucket_name" {
 
 output "cloudfront_distribution_id" {
   description = "ID of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.id
+  value       = local.cloudfront_distribution.id
 }
 
 output "cloudfront_distribution_domain" {
   description = "Domain name of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.domain_name
+  value       = local.cloudfront_distribution.domain_name
 }
 
 output "cloudfront_distribution_arn" {
   description = "ARN of the CloudFront distribution"
-  value       = aws_cloudfront_distribution.website.arn
+  value       = local.cloudfront_distribution.arn
 }
 
 output "website_url" {
@@ -561,8 +698,13 @@ output "acm_certificate_arn" {
 }
 
 output "route53_zone_id" {
-  description = "Route 53 Hosted Zone ID"
-  value       = data.aws_route53_zone.main.zone_id
+  description = "Route 53 Hosted Zone ID (only when domain is configured and DNS records are created)"
+  value       = var.domain_name != "" && var.create_dns_records ? data.aws_route53_zone.main[0].zone_id : null
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alerts"
+  value       = aws_sns_topic.alerts.arn
 }
 
 output "cloudwatch_dashboard_url" {

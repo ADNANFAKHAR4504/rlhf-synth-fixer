@@ -107,6 +107,15 @@ resource "aws_s3_bucket_public_access_block" "website" {
   restrict_public_buckets = true
 }
 
+# S3 Bucket Ownership Controls for website bucket
+resource "aws_s3_bucket_ownership_controls" "website" {
+  bucket = aws_s3_bucket.website.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
 # Block public access for logs bucket
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket = aws_s3_bucket.logs.id
@@ -115,6 +124,15 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# S3 Bucket Ownership Controls for logs bucket
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
 }
 
 # CloudFront Origin Access Control
