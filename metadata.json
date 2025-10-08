@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350162",
+  "team": "4",
+  "startedAt": "2025-10-08T17:10:42.660Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, VPC,IAM, CloudWatch, RDS, DynamoDB, NAT",
+  "testDependencies": [
+    "@aws-sdk/client-ec2@^3.883.0",
+    "@aws-sdk/client-rds@^3.883.0", 
+    "@aws-sdk/client-s3@^3.883.0",
+    "@aws-sdk/client-cloudwatch@^3.883.0",
+    "@aws-sdk/client-cloudtrail@^3.901.0",
+    "@aws-sdk/client-config-service@^3.883.0",
+    "@aws-sdk/client-elbv2@^3.856.0",
+    "jest@^29.0.0",
+    "hcl2-parser@^1.0.3",
+    "typescript@^5.0.0"
+  ]
+}
