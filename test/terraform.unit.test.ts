@@ -372,7 +372,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('creates CloudWatch log group for Application Insights', () => {
       expect(mainContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"application_insights"/);
       expect(mainContent).toContain('/aws/applicationinsights/');
-      expect(mainContent).toContain('retention_in_days = 30');
+      expect(mainContent).toContain('retention_in_days = var.log_retention_days');
     });
   });
 

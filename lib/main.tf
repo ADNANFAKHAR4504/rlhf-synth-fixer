@@ -13,9 +13,16 @@ data "aws_cloudfront_origin_request_policy" "cors_s3_origin" {
   name = "Managed-CORS-S3Origin"
 }
 
-# Local values for referencing the correct CloudFront distribution
+# Local values for referencing the correct CloudFront distribution and enhanced tags
 locals {
   cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
+  
+  # Enhanced tags with cost allocation
+  common_tags = merge(var.tags, {
+    Environment = var.environment
+    CostCenter  = var.cost_center
+    Owner       = var.owner
+  })
 }
 
 # Random suffix for unique bucket names
@@ -29,7 +36,7 @@ resource "random_string" "bucket_suffix" {
 resource "aws_s3_bucket" "website" {
   bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-website-${random_string.bucket_suffix.result}"
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-website"
     Type = "website-content"
   })
@@ -48,7 +55,7 @@ resource "aws_s3_bucket_versioning" "website" {
 resource "aws_s3_bucket" "logs" {
   bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs-${random_string.bucket_suffix.result}"
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs"
     Type = "access-logs"
   })
@@ -441,7 +448,7 @@ resource "aws_cloudwatch_dashboard" "website" {
           ]
           view    = "timeSeries"
           stacked = false
-          region  = "us-east-1"
+          region  = var.aws_region
           title   = "CloudFront Traffic"
           period  = 300
         }
@@ -459,7 +466,7 @@ resource "aws_cloudwatch_dashboard" "website" {
           ]
           view    = "timeSeries"
           stacked = false
-          region  = "us-east-1"
+          region  = var.aws_region
           title   = "Error Rates"
           period  = 300
           yAxis = {
@@ -515,7 +522,7 @@ resource "aws_cloudwatch_dashboard" "website" {
           ]
           view    = "timeSeries"
           stacked = false
-          region  = "us-east-1"
+          region  = var.aws_region
           title   = "Cache Performance"
           period  = 300
           yAxis = {
@@ -534,7 +541,16 @@ resource "aws_cloudwatch_dashboard" "website" {
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alerts"
 
-  tags = var.tags
+  tags = local.common_tags
+}
+
+# SNS Topic Email Subscription (optional)
+resource "aws_sns_topic_subscription" "email_alerts" {
+  count = var.alert_email != "" ? 1 : 0
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
 }
 
 # CloudWatch Alarms
@@ -606,7 +622,7 @@ resource "aws_cloudwatch_composite_alarm" "website_health" {
 # CloudWatch Logs for Application Insights
 resource "aws_cloudwatch_log_group" "application_insights" {
   name              = "/aws/applicationinsights/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
-  retention_in_days = 30
+  retention_in_days = var.log_retention_days
 
   tags = var.tags
 }
