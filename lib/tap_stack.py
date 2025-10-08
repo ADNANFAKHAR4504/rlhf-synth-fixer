@@ -88,7 +88,6 @@ class TapStack(cdk.Stack):
         storage_bucket = s3.Bucket(
             self,
             "StorageBucket",
-            bucket_name=f"tap-storage-{environment_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -108,7 +107,6 @@ class TapStack(cdk.Stack):
         dynamodb_table = dynamodb.Table(
             self,
             "DynamoDBTable",
-            table_name=f"tap-table-{environment_suffix}",
             partition_key=dynamodb.Attribute(
                 name="id",
                 type=dynamodb.AttributeType.STRING
@@ -168,6 +166,17 @@ class TapStack(cdk.Stack):
                         iam.PolicyStatement(
                             actions=["secretsmanager:GetSecretValue"],
                             resources=[app_secret.secret_arn]
+                        )
+                    ]
+                ),
+                "KMSPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            resources=[kms_key.key_arn]
                         )
                     ]
                 )
@@ -255,7 +264,6 @@ def handler(event, context):
             description=f"API Gateway for {environment_suffix} environment",
             deploy_options=apigateway.StageOptions(
                 stage_name=environment_suffix,
-                logging_level=apigateway.MethodLoggingLevel.INFO,
                 data_trace_enabled=True,
                 metrics_enabled=True
             )
@@ -286,5 +294,12 @@ def handler(event, context):
         # ===========================================
         CfnOutput(self, "ApiEndpoint", value=api.url, description="API Gateway endpoint URL")
         CfnOutput(self, "S3BucketName", value=storage_bucket.bucket_name, description="S3 Bucket Name")
+        CfnOutput(self, "S3BucketArn", value=storage_bucket.bucket_arn, description="S3 Bucket ARN")
         CfnOutput(self, "DynamoDBTableName", value=dynamodb_table.table_name, description="DynamoDB Table Name")
+        CfnOutput(self, "DynamoDBTableArn", value=dynamodb_table.table_arn, description="DynamoDB Table ARN")
         CfnOutput(self, "LambdaFunctionName", value=lambda_function.function_name, description="Lambda Function Name")
+        CfnOutput(self, "LambdaFunctionArn", value=lambda_function.function_arn, description="Lambda Function ARN")
+        CfnOutput(self, "KMSKeyArn", value=kms_key.key_arn, description="KMS Key ARN")
+        CfnOutput(self, "SecretsManagerSecretArn", value=app_secret.secret_arn, description="Secrets Manager Secret ARN")
+        CfnOutput(self, "CloudWatchAlarmName", value=error_alarm.alarm_name, description="CloudWatch Alarm Name")
+        CfnOutput(self, "CloudWatchAlarmArn", value=error_alarm.alarm_arn, description="CloudWatch Alarm ARN")
