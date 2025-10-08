@@ -1,16 +1,15 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
   DynamoDBClient,
-  ScanCommand,
-  DeleteItemCommand,
+  ScanCommand
 } from '@aws-sdk/client-dynamodb';
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import {
-  SQSClient,
-  ReceiveMessageCommand,
   DeleteMessageCommand,
+  ReceiveMessageCommand,
+  SQSClient,
 } from '@aws-sdk/client-sqs';
+import fs from 'fs';
 import WebSocket from 'ws';
 
 const outputs = JSON.parse(
@@ -20,13 +19,11 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-const restApiUrl = outputs[`RestApiUrl-${environmentSuffix}`];
-const webSocketApiUrl = outputs[`WebSocketApiUrl-${environmentSuffix}`];
-const shipmentsTableName = outputs[`ShipmentsTableName-${environmentSuffix}`];
-const notificationTopicArn =
-  outputs[`NotificationTopicArn-${environmentSuffix}`];
-const notificationQueueUrl =
-  outputs[`NotificationQueueUrl-${environmentSuffix}`];
+const restApiUrl = outputs['RestApiUrl'];
+const webSocketApiUrl = outputs['WebSocketApiUrl'];
+const shipmentsTableName = outputs['ShipmentsTableName'];
+const notificationTopicArn = outputs['NotificationTopicArn'];
+const notificationQueueUrl = outputs['NotificationQueueUrl'];
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const dynamoClient = new DynamoDBClient({ region });
