@@ -327,7 +327,7 @@ export class IamModule extends Construct {
               'iam:CreateVirtualMFADevice',
               'iam:DeleteVirtualMFADevice',
             ],
-            Resource: 'arn:aws:iam::*:mfa/${aws:username}',
+            Resource: 'arn:aws:iam::*:mfa/$${aws:username}', // Escaped $
           },
           {
             Sid: 'AllowManageOwnUserMFA',
@@ -339,7 +339,7 @@ export class IamModule extends Construct {
               'iam:ListMFADevices',
               'iam:ResyncMFADevice',
             ],
-            Resource: 'arn:aws:iam::*:user/${aws:username}',
+            Resource: 'arn:aws:iam::*:user/$${aws:username}', // Escaped $
           },
           {
             Sid: 'DenyAllExceptListedIfNoMFA',
@@ -374,6 +374,12 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    // Get current caller identity
+    const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current'
+    );
+
     // Create KMS key for S3 encryption
     this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
       description: 'KMS key for S3 bucket encryption',
@@ -398,6 +404,22 @@ export class S3Module extends Construct {
       },
     });
 
+    // Update KMS key policy using setPolicyDocument
+    this.kmsKey.policy = JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'Enable IAM User Permissions',
+          Effect: 'Allow',
+          Principal: {
+            AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
+          },
+          Action: 'kms:*',
+          Resource: '*',
+        },
+      ],
+    });
+
     new aws.kmsAlias.KmsAlias(this, 's3-kms-alias', {
       name: 'alias/s3-encryption',
       targetKeyId: this.kmsKey.keyId,
@@ -417,10 +439,6 @@ export class S3Module extends Construct {
             kmsMasterKeyId: this.kmsKey.arn,
           },
         },
-      },
-      logging: {
-        targetBucket: `access-logs-${Date.now()}`,
-        targetPrefix: 'log-bucket/',
       },
       lifecycleRule: [
         {
@@ -468,7 +486,10 @@ export class S3Module extends Construct {
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:*',
-            Resource: [this.logBucket.arn, `${this.logBucket.arn}/*`],
+            Resource: [
+              `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}`,
+              `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}/*`,
+            ],
             Condition: {
               Bool: {
                 'aws:SecureTransport': 'false',
@@ -480,7 +501,7 @@ export class S3Module extends Construct {
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/*`,
+            Resource: `\${aws_s3_bucket.${this.logBucket.friendlyUniqueId}.arn}/*`,
             Condition: {
               StringNotEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
@@ -672,8 +693,8 @@ export class RdsModule extends Construct {
       storageType: 'gp3',
       storageEncrypted: true,
       dbName: 'securedb',
-      username: process.env.DB_USERNAME || 'admin', // Use Secrets Manager in production
-      password: process.env.DB_PASSWORD || 'ChangeMe123!', // Use Secrets Manager in production
+      username: 'admin',
+      password: 'ChangeMe123!', // In production, use Secrets Manager
       dbSubnetGroupName: this.dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       parameterGroupName: this.dbParameterGroup.name,
@@ -838,7 +859,7 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:GetBucketAcl',
-            Resource: this.trailBucket.arn,
+            Resource: `\${aws_s3_bucket.${this.trailBucket.friendlyUniqueId}.arn}`,
           },
           {
             Sid: 'AWSCloudTrailWrite',
@@ -847,7 +868,7 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${this.trailBucket.arn}/*`,
+            Resource: `\${aws_s3_bucket.${this.trailBucket.friendlyUniqueId}.arn}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
