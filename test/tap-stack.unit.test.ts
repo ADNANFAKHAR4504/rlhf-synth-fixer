@@ -127,8 +127,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
       expect(template.Mappings.RegionMap['us-west-2'].APIGatewayHostedZoneId).toBe('Z2OJLYMUO9EFXC');
 
-      expect(template.Mappings.RegionMap['ap-south-2']).toBeDefined();
-      expect(template.Mappings.RegionMap['ap-south-2'].APIGatewayHostedZoneId).toBe('Z0853509Q1135NJ66RUH');
+      expect(template.Mappings.RegionMap['ap-northeast-2']).toBeDefined();
+      expect(template.Mappings.RegionMap['ap-northeast-2'].APIGatewayHostedZoneId).toBe('Z20JF4UZKIW1U8');
     });
 
     test('should only have supported regions in RegionMap', () => {
@@ -138,7 +138,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(regions).toContain('us-east-2');
       expect(regions).toContain('us-west-1');
       expect(regions).toContain('us-west-2');
-      expect(regions).toContain('ap-south-2');
+      expect(regions).toContain('ap-northeast-2');
     });
   });
 
