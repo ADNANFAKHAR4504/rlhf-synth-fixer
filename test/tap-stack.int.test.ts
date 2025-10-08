@@ -1,4 +1,6 @@
 // __tests__/tap-stack.int.test.ts
+import * as fs from 'fs';
+import * as path from 'path';
 import { 
   EC2Client, 
   DescribeVpcsCommand, 
@@ -62,30 +64,35 @@ describe("TapStack Integration Tests - Service Interactions", () => {
   let environmentSuffix: string;
 
   beforeAll(() => {
-    // Read deployment outputs - UPDATE THIS WITH YOUR ACTUAL VALUES
-    const deploymentOutputs = {
-      "TapStackpr3595": {
-        "alb-dns-name": "tap-infrastructure-pr3595-ALB-1084789690.us-east-1.elb.amazonaws.com",
-        "monitoring-sns-topic-arn": "arn:aws:sns:us-east-1:***:tap-infrastructure-pr3595-Alerts",
-        "private-s3-bucket-name": "tap-infrastructure-pr3595-private-data",
-        "private-subnet-ids": ["subnet-0f2e932fe38bc9fb0", "subnet-09e12dd56d87d9773"],
-        "public-s3-bucket-name": "tap-infrastructure-pr3595-public-assets",
-        "public-subnet-ids": ["subnet-05b08f14fa5a8d940", "subnet-0adb31c8b6deb9868"],
-        "rds-endpoint": "tap-infrastructure-pr3595-new-db.covy6ema0nuv.us-east-1.rds.amazonaws.com:3306",
-        "rds-secret-arn": "arn:aws:secretsmanager:us-east-1:***:secret:rds!db-b4b8772e-9b51-49b1-930c-da46f86eccc2-MW5P8j",
-        "route53-zone-id": "Z028115836HO273LBHBLR",
-        "ssm-parameters": [
-          "/tap-infrastructure/pr3595/api/endpoint",
-          "/tap-infrastructure/pr3595/app/version",
-          "/tap-infrastructure/pr3595/features/enabled"
-        ],
-        "vpc-id": "vpc-0cb5d9081ea2d2978"
-      }
-    };
+    // Read deployment outputs from file
+    const outputFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
 
-    const stackKey = "TapStackpr3595";
-    const stackOutputs = deploymentOutputs[stackKey];
-    environmentSuffix = "pr3595";
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, 'utf-8'));
+    console.log('Available outputs:', Object.keys(outputs));
+
+    // Get environment suffix from environment variable or use default
+    const suffix = process.env.ENVIRONMENT_SUFFIX || process.env.PR_NUMBER || 'dev';
+    
+    // Find the stack key that matches our environment
+    const stackKey = Object.keys(outputs).find(k => 
+      k.toLowerCase().includes(suffix.toLowerCase()) || 
+      k.includes(`TapStack${suffix}`)
+    );
+    
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}. Available keys: ${Object.keys(outputs).join(', ')}`);
+    }
+
+    const stackOutputs = outputs[stackKey];
+    console.log('Stack outputs:', stackOutputs);
+
+    // Extract environment suffix from stack key
+    // Pattern: TapStack<suffix> or tap-infrastructure-<suffix>
+    const suffixMatch = stackKey.match(/TapStack(.+)|tap-infrastructure-(.+)/);
+    environmentSuffix = suffixMatch ? (suffixMatch[1] || suffixMatch[2]) : suffix;
 
     // Parse outputs
     vpcId = stackOutputs["vpc-id"];
