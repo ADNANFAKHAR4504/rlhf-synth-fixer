@@ -39,14 +39,14 @@ class TrackingAsyncProcessingStack(Stack):
             enable_key_rotation=True,
             description="KMS Key for SQS Queue encryption",
             alias="logistics-sqs-key",
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         dynamodb_kms_key = kms.Key(self, "DynamoDBEncryptionKey",
             enable_key_rotation=True,
             description="KMS Key for DynamoDB encryption",
             alias="logistics-dynamodb-key",
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Dead Letter Queue (DLQ)
@@ -85,7 +85,7 @@ class TrackingAsyncProcessingStack(Stack):
             point_in_time_recovery=True,
             encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
             encryption_key=dynamodb_kms_key,
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY
         )
         
         # GSI for status-based queries
@@ -109,7 +109,7 @@ import os
 import time
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logger = logging.getLogger()
@@ -144,7 +144,7 @@ def handler(event, context):
             idempotency_key = f"{message_id}:{tracking_id}"
             
             # Current timestamp for recording
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
             
             # Store in DynamoDB with conditional write for idempotency
             try:
@@ -285,7 +285,7 @@ import boto3
 import time
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -297,7 +297,7 @@ def handler(event, context):
     logger.info("Starting daily cleanup job")
     
     # Current time for reporting
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     # Generate a report for yesterday's tracking updates
     yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
