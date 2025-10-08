@@ -423,7 +423,7 @@ export class IaCNovaStack extends NestedStack {
       databaseName: 'emaildb',
       credentials: rds.Credentials.fromSecret(databaseCredentialsSecret),
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false,
       instanceIdentifier: formatResourceName('rds'),
       subnetGroup: dbSubnetGroup,
     });
@@ -636,7 +636,6 @@ export class IaCNovaStack extends NestedStack {
 - **High Availability**: Multi-AZ RDS deployment
 - **Monitoring**: CloudWatch integration
 - **Backup**: 7-day RDS backup retention
-- **Deletion Protection**: RDS instance protected from accidental deletion
 - **Versioning**: S3 bucket versioning enabled
 - **Configurable**: Extensive parameterization for different environments
 
