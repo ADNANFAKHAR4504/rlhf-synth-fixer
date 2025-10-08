@@ -10,5 +10,14 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "IAM"
+  "aws_services": [
+    "SNS",
+    "SES",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "Budgets",
+    "IAM"
+  ],
+  "training_quality": 8
 }
