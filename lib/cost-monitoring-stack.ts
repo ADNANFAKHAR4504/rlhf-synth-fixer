@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
@@ -48,7 +48,7 @@ export class CostMonitoringStack extends cdk.Stack {
     // CloudWatch Log Group
     const logGroup = new logs.LogGroup(this, 'CostMonitoringLogGroup', {
       logGroupName: `/aws/lambda/cost-monitoring-${environmentSuffix}`,
-      retention: logs.RetentionDays.THIRTY_DAYS,
+      retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -57,46 +57,55 @@ export class CostMonitoringStack extends cdk.Stack {
       roleName: `cost-monitoring-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
     // Grant permissions for cost monitoring
-    costMonitoringRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ce:GetCostAndUsage',
-        'ce:GetUsageReport',
-        'ce:GetReservationCoverage',
-        'ce:GetReservationPurchaseRecommendation',
-        'ce:GetReservationUtilization',
-        'budgets:ViewBudget',
-        'budgets:DescribeBudgets',
-      ],
-      resources: ['*'],
-    }));
+    costMonitoringRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ce:GetCostAndUsage',
+          'ce:GetUsageReport',
+          'ce:GetReservationCoverage',
+          'ce:GetReservationPurchaseRecommendation',
+          'ce:GetReservationUtilization',
+          'budgets:ViewBudget',
+          'budgets:DescribeBudgets',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Grant CloudWatch permissions
-    costMonitoringRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'cloudwatch:PutMetricData',
-        'cloudwatch:GetMetricStatistics',
-        'cloudwatch:ListMetrics',
-      ],
-      resources: ['*'],
-    }));
+    costMonitoringRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudwatch:PutMetricData',
+          'cloudwatch:GetMetricStatistics',
+          'cloudwatch:ListMetrics',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Grant SNS permissions
     this.costAlertTopic.grantPublish(costMonitoringRole);
 
     // Cost Monitoring Lambda Function
-    this.costMonitoringFunction = new lambda.Function(this, 'CostMonitoringFunction', {
-      functionName: `cost-monitoring-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.lambda_handler',
-      role: costMonitoringRole,
-      code: lambda.Code.fromInline(`
+    this.costMonitoringFunction = new lambda.Function(
+      this,
+      'CostMonitoringFunction',
+      {
+        functionName: `cost-monitoring-${environmentSuffix}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.lambda_handler',
+        role: costMonitoringRole,
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 from datetime import datetime, timedelta
@@ -292,7 +301,7 @@ def calculate_cost_per_email(costs):
         else:
             cost_per_email = 0
         
-        logger.info(f"Total emails: {total_emails}, Cost per email: ${cost_per_email:.4f}")
+        logger.info(f"Total emails: {total_emails}, Cost per email: USD {cost_per_email:.4f}")
         
         return {
             'totalEmails': total_emails,
@@ -365,9 +374,9 @@ def check_cost_alerts(current_costs, previous_costs):
         send_alert(
             "Monthly Cost Threshold Exceeded",
             f"Email system costs for {ENVIRONMENT} environment have exceeded the threshold.\\n"
-            f"Current month cost: ${total_current:.2f}\\n"
-            f"Threshold: ${COST_THRESHOLD:.2f}\\n"
-            f"Previous month cost: ${total_previous:.2f}"
+            f"Current month cost: USD {total_current:.2f}\\n"
+            f"Threshold: USD {COST_THRESHOLD:.2f}\\n"
+            f"Previous month cost: USD {total_previous:.2f}"
         )
     
     # Check for significant cost increase (>50% increase)
@@ -376,8 +385,8 @@ def check_cost_alerts(current_costs, previous_costs):
         send_alert(
             "Significant Cost Increase Detected",
             f"Email system costs have increased significantly.\\n"
-            f"Current month: ${total_current:.2f}\\n"
-            f"Previous month: ${total_previous:.2f}\\n"
+            f"Current month: USD {total_current:.2f}\\n"
+            f"Previous month: USD {total_previous:.2f}\\n"
             f"Increase: {increase_percent:.1f}%"
         )
 
@@ -419,14 +428,15 @@ def generate_cost_report(current_costs, previous_costs, cost_per_email):
     
     return report
 `),
-      timeout: cdk.Duration.minutes(10),
-      memorySize: 512,
-      environment: {
-        COST_THRESHOLD: costBudgetThreshold.toString(),
-        ENVIRONMENT: environmentSuffix,
-      },
-      logGroup: logGroup,
-    });
+        timeout: cdk.Duration.minutes(10),
+        memorySize: 512,
+        environment: {
+          COST_THRESHOLD: costBudgetThreshold.toString(),
+          ENVIRONMENT: environmentSuffix,
+        },
+        logGroup: logGroup,
+      }
+    );
 
     // Schedule the cost monitoring to run daily
     const costMonitoringRule = new events.Rule(this, 'CostMonitoringSchedule', {
@@ -441,7 +451,9 @@ def generate_cost_report(current_costs, previous_costs, cost_per_email):
       }),
     });
 
-    costMonitoringRule.addTarget(new eventsTargets.LambdaFunction(this.costMonitoringFunction));
+    costMonitoringRule.addTarget(
+      new eventsTargets.LambdaFunction(this.costMonitoringFunction)
+    );
 
     // Create CloudWatch Dashboard for costs
     const costDashboard = new cloudwatch.Dashboard(this, 'CostDashboard', {
@@ -480,20 +492,26 @@ def generate_cost_report(current_costs, previous_costs, cost_per_email):
         left: [costPerEmailMetric],
         period: cdk.Duration.days(1),
         width: 12,
-      }),
+      })
     );
 
     // Cost threshold alarm
-    const costThresholdAlarm = new cloudwatch.Alarm(this, 'CostThresholdAlarm', {
-      alarmName: `email-cost-threshold-${environmentSuffix}`,
-      metric: totalCostMetric,
-      threshold: costBudgetThreshold,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: `Email system costs exceed $${costBudgetThreshold} threshold`,
-    });
+    const costThresholdAlarm = new cloudwatch.Alarm(
+      this,
+      'CostThresholdAlarm',
+      {
+        alarmName: `email-cost-threshold-${environmentSuffix}`,
+        metric: totalCostMetric,
+        threshold: costBudgetThreshold,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: `Email system costs exceed $${costBudgetThreshold} threshold`,
+      }
+    );
 
-    costThresholdAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.costAlertTopic));
+    costThresholdAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.costAlertTopic)
+    );
 
     // Outputs
     new cdk.CfnOutput(this, 'CostMonitoringFunctionArn', {

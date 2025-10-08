@@ -26,9 +26,13 @@ export class SESConfigurationStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', environmentSuffix);
 
     // SES Configuration Set for tracking
-    this.configurationSet = new ses.ConfigurationSet(this, 'EmailConfigurationSet', {
-      configurationSetName: `email-config-set-${environmentSuffix}`,
-    });
+    this.configurationSet = new ses.ConfigurationSet(
+      this,
+      'EmailConfigurationSet',
+      {
+        configurationSetName: `email-config-set-${environmentSuffix}`,
+      }
+    );
 
     // Event destinations for SES feedback
     if (props.bounceTopicArn) {
@@ -44,7 +48,11 @@ export class SESConfigurationStack extends cdk.Stack {
     if (props.complaintTopicArn) {
       this.configurationSet.addEventDestination('ComplaintEventDestination', {
         destination: ses.EventDestination.snsTopic(
-          sns.Topic.fromTopicArn(this, 'ComplaintTopic', props.complaintTopicArn)
+          sns.Topic.fromTopicArn(
+            this,
+            'ComplaintTopic',
+            props.complaintTopicArn
+          )
         ),
         events: [ses.EmailSendingEvent.COMPLAINT],
         enabled: true,
@@ -81,18 +89,22 @@ export class SESConfigurationStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'SetupInstructions', {
-      value: JSON.stringify({
-        message: 'SES Configuration Setup Instructions',
-        steps: [
-          '1. Verify your domain in the SES console if not already verified',
-          '2. Request production access (move out of sandbox) in SES console',
-          '3. Configure DKIM authentication for your domain',
-          '4. Set up SPF and DMARC records in your DNS',
-          '5. Monitor reputation metrics in the SES console',
-        ],
-        domain: verifiedDomain.split('@')[1],
-        configurationSet: this.configurationSet.configurationSetName,
-      }, null, 2),
+      value: JSON.stringify(
+        {
+          message: 'SES Configuration Setup Instructions',
+          steps: [
+            '1. Verify your domain in the SES console if not already verified',
+            '2. Request production access (move out of sandbox) in SES console',
+            '3. Configure DKIM authentication for your domain',
+            '4. Set up SPF and DMARC records in your DNS',
+            '5. Monitor reputation metrics in the SES console',
+          ],
+          domain: verifiedDomain.split('@')[1],
+          configurationSet: this.configurationSet.configurationSetName,
+        },
+        null,
+        2
+      ),
       description: 'Instructions for completing SES setup',
     });
   }

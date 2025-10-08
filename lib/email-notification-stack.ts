@@ -1,13 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as ses from 'aws-cdk-lib/aws-ses';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
 export interface EmailNotificationStackProps extends cdk.StackProps {
@@ -20,8 +19,12 @@ export class EmailNotificationStack extends cdk.Stack {
   public readonly orderEventsTopic: sns.Topic;
   public readonly deliveryTrackingTable: dynamodb.Table;
   public readonly emailProcessorFunction: lambda.Function;
-  
-  constructor(scope: Construct, id: string, props: EmailNotificationStackProps) {
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: EmailNotificationStackProps
+  ) {
     super(scope, id, props);
 
     const { environmentSuffix } = props;
@@ -40,15 +43,19 @@ export class EmailNotificationStack extends cdk.Stack {
     });
 
     // DynamoDB Table for Email Delivery Tracking
-    this.deliveryTrackingTable = new dynamodb.Table(this, 'DeliveryTrackingTable', {
-      tableName: `email-delivery-tracking-${environmentSuffix}`,
-      partitionKey: { name: 'emailId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      timeToLiveAttribute: 'ttl', // Auto-cleanup after 90 days
-    });
+    this.deliveryTrackingTable = new dynamodb.Table(
+      this,
+      'DeliveryTrackingTable',
+      {
+        tableName: `email-delivery-tracking-${environmentSuffix}`,
+        partitionKey: { name: 'emailId', type: dynamodb.AttributeType.STRING },
+        sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecovery: true,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        timeToLiveAttribute: 'ttl', // Auto-cleanup after 90 days
+      }
+    );
 
     // GSI for querying by order ID
     this.deliveryTrackingTable.addGlobalSecondaryIndex({
@@ -60,7 +67,7 @@ export class EmailNotificationStack extends cdk.Stack {
     // CloudWatch Log Group for Lambda
     const logGroup = new logs.LogGroup(this, 'EmailProcessorLogGroup', {
       logGroupName: `/aws/lambda/email-processor-${environmentSuffix}`,
-      retention: logs.RetentionDays.THIRTY_DAYS,
+      retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -69,32 +76,39 @@ export class EmailNotificationStack extends cdk.Stack {
       roleName: `email-processor-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
     // Grant SES permissions
-    emailProcessorRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ses:SendEmail',
-        'ses:SendRawEmail',
-        'ses:GetSendQuota',
-        'ses:GetSendStatistics',
-      ],
-      resources: ['*'],
-    }));
+    emailProcessorRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ses:SendEmail',
+          'ses:SendRawEmail',
+          'ses:GetSendQuota',
+          'ses:GetSendStatistics',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Grant DynamoDB permissions
     this.deliveryTrackingTable.grantReadWriteData(emailProcessorRole);
 
     // Email Processor Lambda Function
-    this.emailProcessorFunction = new lambda.Function(this, 'EmailProcessorFunction', {
-      functionName: `email-processor-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.lambda_handler',
-      role: emailProcessorRole,
-      code: lambda.Code.fromInline(`
+    this.emailProcessorFunction = new lambda.Function(
+      this,
+      'EmailProcessorFunction',
+      {
+        functionName: `email-processor-${environmentSuffix}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.lambda_handler',
+        role: emailProcessorRole,
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 import uuid
@@ -195,7 +209,7 @@ def send_order_confirmation(order_data):
         Thank you for your order! Your order confirmation details:
         
         Order ID: {order_data['orderId']}
-        Total: ${order_data['orderTotal']}
+        Total: USD {order_data['orderTotal']}
         Order Date: {order_data.get('orderTimestamp', datetime.utcnow().isoformat())}
         
         Items:
@@ -220,7 +234,7 @@ def send_order_confirmation(order_data):
             
             <table style="border-collapse: collapse; width: 100%;">
                 <tr><td><strong>Order ID:</strong></td><td>{order_data['orderId']}</td></tr>
-                <tr><td><strong>Total:</strong></td><td>${order_data['orderTotal']}</td></tr>
+                <tr><td><strong>Total:</strong></td><td>USD {order_data['orderTotal']}</td></tr>
                 <tr><td><strong>Order Date:</strong></td><td>{order_data.get('orderTimestamp', datetime.utcnow().isoformat())}</td></tr>
             </table>
             
@@ -270,7 +284,7 @@ def format_order_items(items):
     
     formatted = []
     for item in items:
-        formatted.append(f"- {item.get('name', 'Unknown Item')} x{item.get('quantity', 1)} - ${item.get('price', '0.00')}")
+        formatted.append(f"- {item.get('name', 'Unknown Item')} x{item.get('quantity', 1)} - USD {item.get('price', '0.00')}")
     
     return "\\n".join(formatted)
 
@@ -281,7 +295,7 @@ def format_order_items_html(items):
     
     html = "<ul>"
     for item in items:
-        html += f"<li>{item.get('name', 'Unknown Item')} x{item.get('quantity', 1)} - ${item.get('price', '0.00')}</li>"
+        html += f"<li>{item.get('name', 'Unknown Item')} x{item.get('quantity', 1)} - USD {item.get('price', '0.00')}</li>"
     html += "</ul>"
     
     return html
@@ -328,14 +342,15 @@ def publish_metrics(metric_name, value):
     except Exception as e:
         logger.error(f"Error publishing metrics: {str(e)}")
 `),
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 256,
-      environment: {
-        TABLE_NAME: this.deliveryTrackingTable.tableName,
-        VERIFIED_DOMAIN: verifiedDomain,
-      },
-      logGroup: logGroup,
-    });
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 256,
+        environment: {
+          TABLE_NAME: this.deliveryTrackingTable.tableName,
+          VERIFIED_DOMAIN: verifiedDomain,
+        },
+        logGroup: logGroup,
+      }
+    );
 
     // Subscribe Lambda to SNS Topic
     this.orderEventsTopic.addSubscription(
@@ -347,18 +362,23 @@ def publish_metrics(metric_name, value):
       roleName: `ses-feedback-processor-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
     this.deliveryTrackingTable.grantReadWriteData(feedbackProcessorRole);
 
-    const feedbackProcessorFunction = new lambda.Function(this, 'FeedbackProcessorFunction', {
-      functionName: `ses-feedback-processor-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.lambda_handler',
-      role: feedbackProcessorRole,
-      code: lambda.Code.fromInline(`
+    const feedbackProcessorFunction = new lambda.Function(
+      this,
+      'FeedbackProcessorFunction',
+      {
+        functionName: `ses-feedback-processor-${environmentSuffix}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.lambda_handler',
+        role: feedbackProcessorRole,
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 from datetime import datetime
@@ -491,12 +511,13 @@ def publish_metrics(metric_name, value):
     except Exception as e:
         logger.error(f"Error publishing metrics: {str(e)}")
 `),
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 256,
-      environment: {
-        TABLE_NAME: this.deliveryTrackingTable.tableName,
-      },
-    });
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 256,
+        environment: {
+          TABLE_NAME: this.deliveryTrackingTable.tableName,
+        },
+      }
+    );
 
     // SNS Topics for SES feedback
     const sesBouncesTopic = new sns.Topic(this, 'SESBouncesTopic', {
@@ -512,9 +533,15 @@ def publish_metrics(metric_name, value):
     });
 
     // Subscribe feedback processor to SES feedback topics
-    sesBouncesTopic.addSubscription(new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction));
-    sesComplaintsTopic.addSubscription(new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction));
-    sesDeliveryTopic.addSubscription(new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction));
+    sesBouncesTopic.addSubscription(
+      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+    );
+    sesComplaintsTopic.addSubscription(
+      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+    );
+    sesDeliveryTopic.addSubscription(
+      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+    );
 
     // CloudWatch Monitoring and Alerting
     this.createMonitoring(environmentSuffix, notificationEmails);
@@ -539,11 +566,18 @@ def publish_metrics(metric_name, value):
     });
   }
 
-  private createMonitoring(environmentSuffix: string, notificationEmails: string[]): void {
+  private createMonitoring(
+    environmentSuffix: string,
+    notificationEmails: string[]
+  ): void {
     // CloudWatch Dashboard
-    const dashboard = new cloudwatch.Dashboard(this, 'EmailNotificationDashboard', {
-      dashboardName: `email-notifications-${environmentSuffix}`,
-    });
+    const dashboard = new cloudwatch.Dashboard(
+      this,
+      'EmailNotificationDashboard',
+      {
+        dashboardName: `email-notifications-${environmentSuffix}`,
+      }
+    );
 
     // Metrics
     const emailsSentMetric = new cloudwatch.Metric({
@@ -603,18 +637,22 @@ def publish_metrics(metric_name, value):
         right: [lambdaErrorsMetric],
         period: cdk.Duration.minutes(5),
         width: 12,
-      }),
+      })
     );
 
     // Alarms
-    const highBounceRateAlarm = new cloudwatch.Alarm(this, 'HighBounceRateAlarm', {
-      alarmName: `email-high-bounce-rate-${environmentSuffix}`,
-      metric: bounceRateMetric,
-      threshold: 5, // 5% bounce rate threshold
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Email bounce rate is above 5%',
-    });
+    const highBounceRateAlarm = new cloudwatch.Alarm(
+      this,
+      'HighBounceRateAlarm',
+      {
+        alarmName: `email-high-bounce-rate-${environmentSuffix}`,
+        metric: bounceRateMetric,
+        threshold: 5, // 5% bounce rate threshold
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Email bounce rate is above 5%',
+      }
+    );
 
     const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
       alarmName: `email-processor-errors-${environmentSuffix}`,
@@ -640,8 +678,12 @@ def publish_metrics(metric_name, value):
       });
 
       // Add alert actions to alarms
-      highBounceRateAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
-      lambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+      highBounceRateAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alertTopic)
+      );
+      lambdaErrorAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alertTopic)
+      );
     }
 
     // Cost monitoring
@@ -670,7 +712,7 @@ def publish_metrics(metric_name, value):
         left: [costMetric],
         period: cdk.Duration.days(1),
         width: 24,
-      }),
+      })
     );
   }
 }
