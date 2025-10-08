@@ -39,7 +39,7 @@ export class VpcModule extends Construct {
 
     // IAM Role for VPC Flow Logs
     const flowLogRole = new aws.iamRole.IamRole(this, 'flow-log-role', {
-      name: `vpc-flow-logs-role-654`,
+      name: 'vpc-flow-logs-role-654',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -56,7 +56,7 @@ export class VpcModule extends Construct {
 
     // IAM Policy for VPC Flow Logs
     const flowLogPolicy = new aws.iamPolicy.IamPolicy(this, 'flow-log-policy', {
-      name: `vpc-flow-logs-policy-654`,
+      name: 'vpc-flow-logs-policy-654',
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -230,7 +230,7 @@ export class IamModule extends Construct {
       this,
       'permissions-boundary',
       {
-        name: `security-permissions-boundary-654`,
+        name: 'security-permissions-boundary-654',
         description: 'Permissions boundary for all IAM roles',
         policy: JSON.stringify({
           Version: '2012-10-17',
@@ -271,7 +271,7 @@ export class IamModule extends Construct {
 
     // Create EC2 instance role
     this.instanceRole = new aws.iamRole.IamRole(this, 'ec2-instance-role', {
-      name: `secure-ec2-instance-role-654`,
+      name: 'secure-ec2-instance-role-654',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -311,7 +311,7 @@ export class IamModule extends Construct {
 
     // Create Lambda execution role
     this.lambdaRole = new aws.iamRole.IamRole(this, 'lambda-execution-role', {
-      name: `secure-lambda-execution-role-654`,
+      name: 'secure-lambda-execution-role-654',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -343,7 +343,7 @@ export class IamModule extends Construct {
 
     // Create MFA enforcement policy for users
     new aws.iamPolicy.IamPolicy(this, 'mfa-enforcement-policy', {
-      name: `enforce-mfa-policy-654`,
+      name: 'enforce-mfa-policy-654',
       description: 'Enforces MFA for all IAM users',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -463,13 +463,13 @@ export class S3Module extends Construct {
     });
 
     new aws.kmsAlias.KmsAlias(this, 's3-kms-alias', {
-      name: `alias/s3-encryption-654`,
+      name: 'alias/s3-encryption-654',
       targetKeyId: this.kmsKey.keyId,
     });
 
     // Create secure S3 bucket for logs (without ACL)
     this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
-      bucket: `secure-logs-654`,
+      bucket: 'secure-logs-654',
       versioning: {
         enabled: true,
       },
@@ -583,7 +583,7 @@ export class Ec2Module extends Construct {
 
     // Create security group with restrictive rules
     this.securityGroup = new aws.securityGroup.SecurityGroup(this, 'ec2-sg', {
-      name: `secure-ec2-sg-654`,
+      name: 'secure-ec2-sg-654',
       description: 'Security group for EC2 instances',
       vpcId: vpc.id,
       egress: [
@@ -617,7 +617,7 @@ export class Ec2Module extends Construct {
       this,
       'instance-profile',
       {
-        name: `secure-ec2-profile-654`,
+        name: 'secure-ec2-profile-654',
         role: instanceRole.name,
       }
     );
@@ -677,7 +677,7 @@ export class RdsModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: `secure-db-subnet-group-654`,
+        name: 'secure-db-subnet-group-654',
         subnetIds: subnetIds,
         description: 'Subnet group for RDS instances',
         tags: {
@@ -691,7 +691,7 @@ export class RdsModule extends Construct {
       this,
       'db-param-group',
       {
-        name: `secure-mysql-params-654`,
+        name: 'secure-mysql-params-654',
         family: 'mysql8.0',
         description: 'Secure parameter group for MySQL',
         parameter: [
@@ -711,7 +711,7 @@ export class RdsModule extends Construct {
       this,
       'rds-sg',
       {
-        name: `secure-rds-sg-654`,
+        name: 'secure-rds-sg-654',
         description: 'Security group for RDS instances',
         vpcId: vpc.id,
         ingress: [
@@ -739,7 +739,7 @@ export class RdsModule extends Construct {
 
     // RDS instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
-      identifier: `secure-mysql-db-654`,
+      identifier: 'secure-mysql-db-654',
       engine: 'mysql',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
@@ -788,7 +788,7 @@ export class LambdaModule extends Construct {
       this,
       'lambda-logs',
       {
-        name: `/aws/lambda/secure-function-654`,
+        name: '/aws/lambda/secure-function-654',
         retentionInDays: 30,
         kmsKeyId: kmsKey.arn,
         tags: {
@@ -802,7 +802,7 @@ export class LambdaModule extends Construct {
       this,
       'lambda-sg',
       {
-        name: `secure-lambda-sg-654`,
+        name: 'secure-lambda-sg-654',
         description: 'Security group for Lambda functions',
         vpcId: vpc.id,
         egress: [
@@ -825,11 +825,12 @@ export class LambdaModule extends Construct {
       this,
       'secure-function',
       {
-        functionName: `secure-lambda-function-654`,
+        functionName: 'secure-lambda-function-654',
         role: lambdaRole.arn,
         handler: 'index.handler',
-        runtime: 'nodejs18.x',
-        filename: 'lambda.zip', // Placeholder
+        runtime: 'nodejs20.x',
+        s3Bucket: 'test12345-ts', // Use the app bucket you already created
+        s3Key: 'lambda/lambda-function.zip', // Simple S3 key
         sourceCodeHash: 'placeholder',
         timeout: 30,
         memorySize: 256,
@@ -868,7 +869,7 @@ export class CloudTrailModule extends Construct {
 
     // Create S3 bucket for CloudTrail logs (without ACL)
     this.trailBucket = new aws.s3Bucket.S3Bucket(this, 'trail-bucket', {
-      bucket: `cloudtrail-logs-654`,
+      bucket: 'cloudtrail-logs-654',
       versioning: {
         enabled: true,
       },
@@ -958,7 +959,7 @@ export class CloudTrailModule extends Construct {
 
     // CloudTrail
     this.trail = new aws.cloudtrail.Cloudtrail(this, 'main-trail', {
-      name: `security-trail-654`,
+      name: 'security-trail-654',
       s3BucketName: this.trailBucket.id,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
