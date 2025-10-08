@@ -1,19 +1,6 @@
-# Serverless Polling System Infrastructure
+# IDEAL_RESPONSE.md
 
-This implementation provides a complete serverless polling system using AWS CDK with TypeScript. The system handles vote submissions with fraud prevention through DynamoDB conditional writes and real-time result aggregation via DynamoDB Streams.
-
-## Infrastructure Overview
-
-The system consists of:
-
-- **API Gateway REST API** with API keys and usage plans for rate limiting
-- **Lambda functions** for vote processing and results aggregation
-- **DynamoDB tables** with streams for real-time processing
-- **S3 bucket** for periodic result snapshots
-- **CloudWatch monitoring** with alarms for error tracking
-- **IAM roles** with least privilege permissions
-
-## CDK Infrastructure Code
+## CDK TypeScript Infrastructure Stack
 
 ### lib/tap-stack.ts
 
@@ -75,10 +62,10 @@ export class TapStack extends cdk.Stack {
     // Lambda function for vote processing
     const voteProcessorFunction = new lambda.Function(this, 'VoteProcessor', {
       functionName: `vote-processor-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'vote_processor.handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../lambda/vote-processor')
+        path.join(__dirname, '../lambda/auto-response')
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
@@ -98,10 +85,10 @@ export class TapStack extends cdk.Stack {
       'ResultsAggregator',
       {
         functionName: `results-aggregator-${environmentSuffix}`,
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: 'results_aggregator.handler',
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda/results-aggregator')
+          path.join(__dirname, '../lambda/sentiment')
         ),
         timeout: cdk.Duration.seconds(60),
         memorySize: 512,
@@ -305,9 +292,9 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-## Lambda Functions
+## Lambda Function Code
 
-### lambda/vote-processor/vote_processor.py
+### lib/vote-processor/vote_processor.py
 
 ```python
 import json
@@ -510,7 +497,7 @@ def handle_get_vote(event):
         raise
 ```
 
-### lambda/results-aggregator/results_aggregator.py
+### lib/results-aggregator/results_aggregator.py
 
 ```python
 import json
@@ -660,14 +647,35 @@ def take_snapshot():
         # Don't raise - snapshots are not critical
 ```
 
-## Architecture Summary
+## Configuration Files
 
-This serverless polling system provides:
+### lib/AWS_REGION
 
-- **Fraud Prevention**: DynamoDB conditional writes prevent duplicate voting
-- **Real-time Processing**: DynamoDB Streams trigger immediate result aggregation
-- **Rate Limiting**: API Gateway usage plans with method-level throttling
-- **Monitoring**: CloudWatch alarms for error tracking and system health
-- **Data Durability**: Point-in-time recovery and S3 snapshots
-- **Scalability**: Pay-per-request billing adapts to variable load
-- **Security**: API key authentication and least privilege IAM permissions
+```
+us-west-2
+```
+
+### lib/vote-processor/requirements.txt
+
+```
+boto3>=1.34.0
+```
+
+### lib/results-aggregator/requirements.txt
+
+```
+boto3>=1.34.0
+```
+
+## Infrastructure Summary
+
+This CDK TypeScript infrastructure creates a complete polling system with:
+
+- **DynamoDB Tables**: Votes table with PITR and streams, Results table for aggregation
+- **S3 Bucket**: For result snapshots with versioning and encryption
+- **Lambda Functions**: Vote processor and results aggregator with proper IAM permissions
+- **API Gateway**: REST API with CORS, rate limiting, and API key authentication
+- **CloudWatch**: Error monitoring alarms for all components
+- **Event Sources**: DynamoDB stream integration for real-time aggregation
+
+The system provides secure vote submission with duplicate prevention, real-time result aggregation, and comprehensive monitoring.

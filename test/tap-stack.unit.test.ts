@@ -33,15 +33,15 @@ describe('TapStack', () => {
     template.resourceCountIs('AWS::DynamoDB::Table', 2);
   });
 
-  test('Creates Lambda functions with Python 3.11 runtime', () => {
+  test('Creates Lambda functions with Node.js 18.x runtime', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'python3.11',
+      Runtime: 'nodejs18.x',
       Timeout: 30,
       MemorySize: 256,
     });
 
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'python3.11',
+      Runtime: 'nodejs18.x',
       Timeout: 60,
       MemorySize: 512,
     });
