@@ -1,5 +1,3 @@
-Insert here the model's failures# MODEL FAILURES
-
 #### 1\. Availability Zone Interpolation (Fatal Syntactic Error)
 
 **Model Response:**

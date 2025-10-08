@@ -1,7 +1,7 @@
 ## lib/modules.ts
 
 ```typescript
-    import { Construct } from 'constructs';
+import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
 import { Fn } from 'cdktf';
@@ -214,7 +214,7 @@ export class VpcModule extends Construct {
         });
       });
     }
-
+}
    
 // EC2 Module with Auto Scaling
 export class Ec2Module extends Construct {

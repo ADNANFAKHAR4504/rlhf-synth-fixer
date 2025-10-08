@@ -1,4 +1,4 @@
-Insert here the Model Response that failed## lib/modules.ts
+lib/modules.ts
 
 ```typescript
 import { Construct } from 'constructs';
