@@ -10,8 +10,10 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # Local backend for cleanup
+  backend "local" {
+    path = "terraform.tfstate"
+  }
 }
 
 # Primary AWS provider for general resources
