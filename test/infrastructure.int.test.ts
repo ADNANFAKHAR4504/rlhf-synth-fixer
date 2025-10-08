@@ -178,15 +178,15 @@ describe('Infrastructure Integration Tests', () => {
       expect(response.Configuration?.MemorySize).toBe(512);
     });
 
-    test('should have reserved concurrent executions', async () => {
+    test('should not have reserved concurrent executions (uses unreserved concurrency)', async () => {
       const functionArn = outputs.LambdaFunctionArn;
       const functionName = functionArn.split(':function:')[1];
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
-      // ReservedConcurrentExecutions is part of the Configuration object
+      // ReservedConcurrentExecutions should be undefined (not set) to use unreserved concurrency
       expect(response.Configuration).toBeDefined();
-      // Check if reserved concurrency is configured (may be undefined if not set)
+      expect(response.Configuration?.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('should handle invalid input gracefully', async () => {

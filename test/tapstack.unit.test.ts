@@ -136,10 +136,6 @@ describe('TapStack CloudFormation Template Tests', () => {
       expect(template.Resources.NotificationProcessorFunction.Properties.Timeout).toBe(300);
     });
 
-    test('Lambda function should have reserved concurrent executions', () => {
-      expect(template.Resources.NotificationProcessorFunction.Properties.ReservedConcurrentExecutions).toBe(10);
-    });
-
     test('Lambda function should use EnvironmentSuffix in name', () => {
       const functionName = template.Resources.NotificationProcessorFunction.Properties.FunctionName;
       expect(functionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
@@ -331,7 +327,7 @@ describe('TapStack CloudFormation Template Tests', () => {
 
     test('All resources should have tags', () => {
       const taggedResources = ['NotificationTopic', 'NotificationLogTable',
-                               'NotificationProcessorRole', 'NotificationProcessorFunction'];
+        'NotificationProcessorRole', 'NotificationProcessorFunction'];
 
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
@@ -355,13 +351,6 @@ describe('TapStack CloudFormation Template Tests', () => {
       expect(memory).toBe(512);
       expect(memory).toBeGreaterThanOrEqual(128);
       expect(memory).toBeLessThanOrEqual(10240);
-    });
-
-    test('Lambda should have reserved concurrent executions configured', () => {
-      const reserved = template.Resources.NotificationProcessorFunction.Properties.ReservedConcurrentExecutions;
-      expect(reserved).toBeDefined();
-      expect(reserved).toBeGreaterThan(0);
-      expect(reserved).toBeLessThanOrEqual(100); // Reasonable limit for notification processing
     });
 
     test('DynamoDB should use on-demand billing for cost optimization', () => {
