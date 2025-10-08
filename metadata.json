@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "training_quality": 9,
+  "po_id": "353856",
+  "team": "6",
+  "startedAt": "2025-10-08T13:28:14.499Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, Subnet, Internet Gateway, NAT Gateway, Route Table, Elastic IP, Security Group, VPC Flow Logs, EC2 Launch Template, Auto Scaling Group, S3 Bucket, KMS Key, IAM Role, IAM Policy, IAM Instance Profile, CloudTrail, AWS Config, CloudWatch Logs, CloudWatch Alarms, CloudWatch Log Metric Filter, SNS Topic, CloudFront Distribution, CloudFront Origin Access Identity, WAFv2 Web ACL, API Gateway, AWS Backup, AWS Organizations, IAM Account Password Policy"
+}
