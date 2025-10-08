@@ -832,7 +832,7 @@ export class LambdaModule extends Construct {
         role: lambdaRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs20.x',
-        s3Bucket: 'test12345-ts', // Use the app bucket you already created
+        s3Bucket: 'my-lambda-bucket777', // Use the app bucket you already created
         s3Key: 'lambda/lambda-function.zip', // Simple S3 key
         sourceCodeHash: 'placeholder',
         timeout: 30,
