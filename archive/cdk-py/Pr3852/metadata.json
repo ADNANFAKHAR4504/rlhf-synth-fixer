@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T15:34:53+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "training_quality": 8,
   "aws_services": [
     "VPC",
@@ -21,5 +23,11 @@
     "CloudWatch",
     "Secrets Manager",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
