@@ -52,7 +52,7 @@ const dbInstance = new DbInstance(this, 'mysql-instance', {
 Error: "kms_key_id" (alias/aws/rds) is an invalid ARN: arn: invalid prefix
 ```
 
-**Root Cause:** Model tried to use `"alias/aws/rds"` as KMS key which is not a valid ARN format. The fix conditionally applies KMS key only when provided.
+**Root Cause:** Model tried to use the `"alias/aws/rds"` as KMS key which is not a valid ARN format. The fix conditionally applies KMS key only when provided.
 
 ---
 
