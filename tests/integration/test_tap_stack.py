@@ -170,7 +170,7 @@ class TestServerlessInfrastructureResources(BaseIntegrationTest):
         # Validate log group configuration
         log_group = response['logGroups'][0]
         self.assertEqual(log_group['logGroupName'], log_group_name)
-        self.assertIn('RetentionInDays', log_group)
+        self.assertIn('retentionInDays', log_group)
     
     def test_iam_roles_and_policies_created_for_lambda_execution(self):
         """Test that IAM roles and policies are created for Lambda execution."""
