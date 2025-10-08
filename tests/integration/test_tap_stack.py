@@ -52,6 +52,7 @@ class BaseIntegrationTest(unittest.TestCase):
         cls.dynamodb_client = boto3.client('dynamodb', region_name=cls.region)
         cls.s3_client = boto3.client('s3', region_name=cls.region)
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.region)
+        cls.cloudwatch_logs_client = boto3.client('logs', region_name=cls.region)
         cls.iam_client = boto3.client('iam', region_name=cls.region)
         
         # Test AWS credentials
