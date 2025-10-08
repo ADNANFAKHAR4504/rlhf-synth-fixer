@@ -7,10 +7,11 @@ Parameters:
     Type: String
     Default: Production
   
-  KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+  KeyPairName:
+    Description: Name for the new EC2 KeyPair that will be created
+    Type: String
+    Default: !Sub '${AWS::StackName}-KeyPair'
+    ConstraintDescription: Must be a valid key pair name
   
   InstanceType:
     Description: EC2 instance type
@@ -75,6 +76,17 @@ Conditions:
   HasSSLCertificate: !Not [!Equals [!Ref CertificateArn, '']]
 
 Resources:
+  # EC2 Key Pair
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref KeyPairName
+      KeyType: rsa
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-KeyPair
+
   # VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
@@ -438,7 +450,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionAMI, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
+        KeyName: !Ref EC2KeyPair
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -579,3 +591,9 @@ Outputs:
     Value: !Ref PrivateSubnet2
     Export:
       Name: !Sub ${EnvironmentName}-PrivateSubnet2
+
+  EC2KeyPairId:
+    Description: EC2 Key Pair ID
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub ${EnvironmentName}-KeyPair
