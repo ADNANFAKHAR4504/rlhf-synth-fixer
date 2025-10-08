@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T12:02:44+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "S3",
     "CloudFront",
@@ -16,5 +18,11 @@
     "CloudWatch Logs",
     "SNS"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
