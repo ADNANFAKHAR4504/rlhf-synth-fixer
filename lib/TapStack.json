@@ -39,6 +39,13 @@
     }
   },
   "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming to avoid conflicts between deployments",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
     "VPCCidr": {
       "Type": "String",
       "Default": "10.0.0.0/16",
@@ -154,7 +161,7 @@
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/${AWS::StackName}-key"
+          "Fn::Sub": "alias/TapStack${EnvironmentSuffix}-key"
         },
         "TargetKeyId": {
           "Ref": "KMSKey"
@@ -173,7 +180,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-VPC"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-VPC"
             }
           }
         ]
@@ -186,7 +193,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-IGW"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-IGW"
             }
           }
         ]
@@ -225,7 +232,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PublicSubnet1"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PublicSubnet1"
             }
           }
         ]
@@ -253,7 +260,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PublicSubnet2"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PublicSubnet2"
             }
           }
         ]
@@ -280,7 +287,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PrivateSubnet1"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PrivateSubnet1"
             }
           }
         ]
@@ -307,7 +314,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PrivateSubnet2"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PrivateSubnet2"
             }
           }
         ]
@@ -336,7 +343,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-NATGateway"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-NATGateway"
             }
           }
         ]
@@ -352,7 +359,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PublicRouteTable"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PublicRouteTable"
             }
           }
         ]
@@ -403,7 +410,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-PrivateRouteTable"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-PrivateRouteTable"
             }
           }
         ]
@@ -463,7 +470,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-BastionSG"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-BastionSG"
             }
           }
         ]
@@ -496,7 +503,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-ALBSG"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-ALBSG"
             }
           }
         ]
@@ -533,7 +540,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-EC2SG"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-EC2SG"
             }
           }
         ]
@@ -561,7 +568,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-RDSSG"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-RDSSG"
             }
           }
         ]
@@ -696,7 +703,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-Bastion"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-Bastion"
             }
           }
         ]
@@ -793,7 +800,7 @@
           ],
           "UserData": {
             "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable --now httpd\necho '<h1>Hello from ${AWS::StackName}</h1>' > /var/www/html/index.html\n"
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable --now httpd\necho '<h1>Hello from TapStack${EnvironmentSuffix}</h1>' > /var/www/html/index.html\n"
             }
           }
         }
@@ -828,7 +835,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-Instance"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-Instance"
             },
             "PropagateAtLaunch": true
           }
@@ -913,7 +920,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-logs-${AWS::AccountId}"
+          "Fn::Sub": "tapstack${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -964,7 +971,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-data-${AWS::AccountId}"
+          "Fn::Sub": "tapstack${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -1035,7 +1042,7 @@
       "Properties": {
         "CloudFrontOriginAccessIdentityConfig": {
           "Comment": {
-            "Fn::Sub": "OAI for ${AWS::StackName}"
+            "Fn::Sub": "OAI for TapStack${EnvironmentSuffix}"
           }
         }
       }
@@ -1044,7 +1051,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-content-${AWS::AccountId}"
+          "Fn::Sub": "tapstack${EnvironmentSuffix}-content-${AWS::AccountId}-${AWS::Region}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -1191,7 +1198,7 @@
         "DistributionConfig": {
           "Enabled": true,
           "Comment": {
-            "Fn::Sub": "CloudFront distribution for ${AWS::StackName}"
+            "Fn::Sub": "CloudFront distribution for TapStack${EnvironmentSuffix}"
           },
           "Origins": [
             {
@@ -1255,7 +1262,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-DBSubnetGroup"
+              "Fn::Sub": "TapStack${EnvironmentSuffix}-DBSubnetGroup"
             }
           }
         ]
@@ -1265,7 +1272,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}/db/master"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}/db/master"
         },
         "Description": "Master credentials for the RDS instance",
         "KmsKeyId": {
@@ -1282,8 +1289,8 @@
     },
     "DBInstance": {
       "Type": "AWS::RDS::DBInstance",
-      "DeletionPolicy": "Snapshot",
-      "UpdateReplacePolicy": "Snapshot",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
       "Properties": {
         "DBInstanceClass": {
           "Ref": "DBInstanceClass"
@@ -1438,7 +1445,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-VPC-ID"
         }
       }
     },
@@ -1452,7 +1459,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-ALB-DNS"
         }
       }
     },
@@ -1463,7 +1470,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-CloudFront-URL"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-CloudFront-URL"
         }
       }
     },
@@ -1477,7 +1484,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Bastion-IP"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-Bastion-IP"
         }
       }
     },
@@ -1488,7 +1495,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-DataBucket"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-DataBucket"
         }
       }
     },
@@ -1502,7 +1509,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-RDS-Endpoint"
         }
       }
     },
@@ -1516,7 +1523,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-Lambda-ARN"
+          "Fn::Sub": "TapStack${EnvironmentSuffix}-Lambda-ARN"
         }
       }
     }
