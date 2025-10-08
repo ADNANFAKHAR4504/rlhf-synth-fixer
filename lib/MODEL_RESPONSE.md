@@ -1,10 +1,10 @@
-# CloudFormation Template for Logistics Automation System
+# CloudFormation Template for Image Processing System
 
-I'll create a serverless logistics automation system using CloudFormation with the requested AWS services.
+I'll create a serverless image processing system using CloudFormation with the requested AWS services for handling 1,000 daily image uploads.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Serverless Logistics Shipment Automation System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS'
+Description: 'Serverless Image Processing System with S3, Lambda, DynamoDB, and CloudWatch'
 
 Parameters:
   EnvironmentSuffix:
@@ -12,89 +12,78 @@ Parameters:
     Description: Environment suffix to append to resource names
     Default: prod
 
-  NotificationEmail:
-    Type: String
-    Description: Email address for SNS failure notifications
-    Default: logistics-team@example.com
-
 Resources:
-  # DynamoDB Table for Shipment Logs
-  ShipmentLogsTable:
+  # S3 Bucket for Image Storage
+  ImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'image-processing-bucket-${EnvironmentSuffix}'
+
+  # DynamoDB Table for Image Metadata
+  ImageMetadataTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'shipment-logs-${EnvironmentSuffix}'
+      TableName: !Sub 'image-metadata-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: shipmentId
+        - AttributeName: imageId
           AttributeType: S
-        - AttributeName: timestamp
+        - AttributeName: uploadTimestamp
           AttributeType: N
       KeySchema:
-        - AttributeName: shipmentId
+        - AttributeName: imageId
           KeyType: HASH
-        - AttributeName: timestamp
+        - AttributeName: uploadTimestamp
           KeyType: RANGE
 
-  # SNS Topic for Notifications
-  ShipmentAlertTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub 'shipment-alerts-${EnvironmentSuffix}'
-      DisplayName: Shipment Processing Alerts
-
-  # Lambda Function for Processing
-  ShipmentProcessorFunction:
+  # Lambda Function for Image Processing
+  ImageProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'shipment-processor-${EnvironmentSuffix}'
-      Runtime: nodejs20.x
+      FunctionName: !Sub 'image-processor-${EnvironmentSuffix}'
+      Runtime: python3.9
       Handler: index.handler
       Code:
         ZipFile: |
-          exports.handler = async (event) => {
-            console.log('Processing shipment event:', JSON.stringify(event));
-            
-            const shipmentData = event.detail || event;
-            
-            if (!shipmentData.shipmentId) {
-              throw new Error('Missing shipmentId');
-            }
-            
-            // Simple processing logic
-            return {
-              statusCode: 200,
-              body: JSON.stringify({
-                message: 'Shipment processed',
-                shipmentId: shipmentData.shipmentId
-              })
-            };
-          };
-
-  # EventBridge Rule
-  ShipmentUpdateRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub 'shipment-update-rule-${EnvironmentSuffix}'
-      Description: Route shipment events to Lambda
-      State: ENABLED
-      EventPattern:
-        source:
-          - logistics.shipments
-      Targets:
-        - Arn: !GetAtt ShipmentProcessorFunction.Arn
-          Id: ShipmentProcessorTarget
+          import json
+          import boto3
+          
+          def handler(event, context):
+              print('Processing image event:', json.dumps(event))
+              
+              for record in event.get('Records', []):
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  
+                  print(f"Processing image: {key} from bucket: {bucket}")
+                  
+                  # Simple processing logic
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Image processed successfully',
+                          'key': key
+                      })
+                  }
 
 Outputs:
-  DynamoDBTableName:
-    Description: DynamoDB table for shipment logs
-    Value: !Ref ShipmentLogsTable
+  ImageBucketName:
+    Description: S3 bucket for image storage
+    Value: !Ref ImageBucket
+    
+  ImageMetadataTableName:
+    Description: DynamoDB table for image metadata
+    Value: !Ref ImageMetadataTable
+    
+  ImageProcessorFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ImageProcessorFunction.Arn
 ```
 
 This template creates:
 
-- DynamoDB table for storing shipment logs
-- SNS topic for alerts
-- Lambda function for processing events
-- EventBridge rule for routing events
+- S3 bucket for storing uploaded images
+- DynamoDB table for image metadata
+- Lambda function with Python 3.9 for processing images
 
-The system will handle shipment updates automatically and provide monitoring through CloudWatch.
+The system will automatically process images uploaded to S3 and store metadata in DynamoDB with CloudWatch monitoring.

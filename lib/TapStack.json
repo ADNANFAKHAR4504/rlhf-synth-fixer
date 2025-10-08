@@ -1,35 +1,107 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Serverless Logistics Shipment Automation System with EventBridge, Lambda, DynamoDB, CloudWatch, and SNS",
+  "Description": "Serverless Image Processing System with S3, Lambda, DynamoDB, and CloudWatch",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+      "Description": "Environment suffix for resource naming",
       "Default": "prod"
-    },
-    "NotificationEmail": {
-      "Type": "String",
-      "Description": "Email address for SNS failure notifications",
-      "Default": "logistics-team@example.com",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
     }
   },
   "Resources": {
-    "ShipmentLogsTable": {
+    "ImageBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "image-processing-bucket-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {
+                "Fn::GetAtt": [
+                  "ImageProcessorFunction",
+                  "Arn"
+                ]
+              },
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "prefix",
+                      "Value": "uploads/"
+                    },
+                    {
+                      "Name": "suffix",
+                      "Value": ".jpg"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {
+                "Fn::GetAtt": [
+                  "ImageProcessorFunction",
+                  "Arn"
+                ]
+              },
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "prefix",
+                      "Value": "uploads/"
+                    },
+                    {
+                      "Name": "suffix",
+                      "Value": ".png"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ImageProcessing"
+          }
+        ]
+      }
+    },
+    "ImageMetadataTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "shipment-logs-${EnvironmentSuffix}"
+          "Fn::Sub": "image-metadata-${EnvironmentSuffix}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
           {
-            "AttributeName": "shipmentId",
+            "AttributeName": "imageId",
             "AttributeType": "S"
           },
           {
-            "AttributeName": "timestamp",
+            "AttributeName": "uploadTimestamp",
             "AttributeType": "N"
           },
           {
@@ -39,11 +111,11 @@
         ],
         "KeySchema": [
           {
-            "AttributeName": "shipmentId",
+            "AttributeName": "imageId",
             "KeyType": "HASH"
           },
           {
-            "AttributeName": "timestamp",
+            "AttributeName": "uploadTimestamp",
             "KeyType": "RANGE"
           }
         ],
@@ -56,7 +128,7 @@
                 "KeyType": "HASH"
               },
               {
-                "AttributeName": "timestamp",
+                "AttributeName": "uploadTimestamp",
                 "KeyType": "RANGE"
               }
             ],
@@ -80,41 +152,12 @@
           },
           {
             "Key": "Application",
-            "Value": "LogisticsAutomation"
+            "Value": "ImageProcessing"
           }
         ]
       }
     },
-    "ShipmentAlertTopic": {
-      "Type": "AWS::SNS::Topic",
-      "Properties": {
-        "TopicName": {
-          "Fn::Sub": "shipment-alerts-${EnvironmentSuffix}"
-        },
-        "DisplayName": "Shipment Processing Alerts",
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
-      }
-    },
-    "AlertEmailSubscription": {
-      "Type": "AWS::SNS::Subscription",
-      "Properties": {
-        "Protocol": "email",
-        "TopicArn": {
-          "Ref": "ShipmentAlertTopic"
-        },
-        "Endpoint": {
-          "Ref": "NotificationEmail"
-        }
-      }
-    },
-    "ShipmentProcessorRole": {
+    "ImageProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -134,38 +177,55 @@
         ],
         "Policies": [
           {
-            "PolicyName": "ShipmentProcessorPolicy",
+            "PolicyName": "ImageProcessorPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "dynamodb:PutItem",
-                    "dynamodb:GetItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:Query"
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": [
-                        "ShipmentLogsTable",
-                        "Arn"
-                      ]
-                    },
-                    {
-                      "Fn::Sub": "${ShipmentLogsTable.Arn}/index/*"
+                      "Fn::Sub": "${ImageBucket}/*"
                     }
                   ]
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "sns:Publish"
+                    "s3:ListBucket"
                   ],
                   "Resource": {
-                    "Ref": "ShipmentAlertTopic"
+                    "Fn::GetAtt": [
+                      "ImageBucket",
+                      "Arn"
+                    ]
                   }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ImageMetadataTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ImageMetadataTable.Arn}/index/*"
+                    }
+                  ]
                 },
                 {
                   "Effect": "Allow",
@@ -188,29 +248,29 @@
         ]
       }
     },
-    "ShipmentProcessorFunction": {
+    "ImageProcessorFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "shipment-processor-${EnvironmentSuffix}"
+          "Fn::Sub": "image-processor-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
+        "Runtime": "python3.9",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
-            "ShipmentProcessorRole",
+            "ImageProcessorRole",
             "Arn"
           ]
         },
-        "Timeout": 60,
-        "MemorySize": 512,
+        "Timeout": 300,
+        "MemorySize": 1024,
         "Environment": {
           "Variables": {
-            "SHIPMENT_TABLE": {
-              "Ref": "ShipmentLogsTable"
+            "METADATA_TABLE": {
+              "Ref": "ImageMetadataTable"
             },
-            "SNS_TOPIC_ARN": {
-              "Ref": "ShipmentAlertTopic"
+            "PROCESSED_BUCKET": {
+              "Ref": "ImageBucket"
             },
             "ENVIRONMENT": {
               "Ref": "EnvironmentSuffix"
@@ -218,7 +278,7 @@
           }
         },
         "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');\nconst { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');\n\nconst dynamodb = new DynamoDBClient();\nconst sns = new SNSClient();\nconst cloudwatch = new CloudWatchClient();\n\nexports.handler = async (event) => {\n  console.log('Processing shipment event:', JSON.stringify(event, null, 2));\n  \n  const startTime = Date.now();\n  let processedCount = 0;\n  let failedCount = 0;\n  const errors = [];\n  \n  try {\n    // Handle EventBridge events\n    const shipmentData = event.detail || event;\n    \n    // Validate shipment data\n    if (!shipmentData.shipmentId) {\n      throw new Error('Missing required field: shipmentId');\n    }\n    \n    const timestamp = Date.now();\n    const shipmentId = shipmentData.shipmentId;\n    const status = shipmentData.status || 'RECEIVED';\n    const location = shipmentData.location || 'UNKNOWN';\n    const carrier = shipmentData.carrier || 'UNKNOWN';\n    \n    // Store shipment log in DynamoDB\n    const putParams = {\n      TableName: process.env.SHIPMENT_TABLE,\n      Item: {\n        shipmentId: { S: shipmentId },\n        timestamp: { N: timestamp.toString() },\n        status: { S: status },\n        location: { S: location },\n        carrier: { S: carrier },\n        eventData: { S: JSON.stringify(shipmentData) },\n        processedAt: { S: new Date().toISOString() }\n      }\n    };\n    \n    await dynamodb.send(new PutItemCommand(putParams));\n    processedCount++;\n    \n    console.log(`Successfully processed shipment: ${shipmentId}`);\n    \n    // Publish CloudWatch metrics\n    await publishMetrics('ShipmentProcessed', 1, 'Count');\n    await publishMetrics('ProcessingDuration', Date.now() - startTime, 'Milliseconds');\n    \n    // Send SNS notification for critical status updates\n    if (['DELAYED', 'FAILED', 'LOST'].includes(status)) {\n      await sendAlert(shipmentId, status, shipmentData);\n    }\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Shipment processed successfully',\n        shipmentId: shipmentId,\n        status: status,\n        timestamp: timestamp\n      })\n    };\n    \n  } catch (error) {\n    console.error('Error processing shipment:', error);\n    failedCount++;\n    errors.push(error.message);\n    \n    // Publish failure metrics\n    await publishMetrics('ShipmentProcessingError', 1, 'Count');\n    \n    // Send failure alert\n    await sendAlert('SYSTEM', 'PROCESSING_ERROR', { error: error.message });\n    \n    return {\n      statusCode: 500,\n      body: JSON.stringify({\n        message: 'Error processing shipment',\n        error: error.message\n      })\n    };\n  }\n};\n\nasync function publishMetrics(metricName, value, unit) {\n  try {\n    const params = {\n      Namespace: 'LogisticsAutomation',\n      MetricData: [{\n        MetricName: metricName,\n        Value: value,\n        Unit: unit,\n        Timestamp: new Date(),\n        Dimensions: [\n          {\n            Name: 'Environment',\n            Value: process.env.ENVIRONMENT\n          }\n        ]\n      }]\n    };\n    \n    await cloudwatch.send(new PutMetricDataCommand(params));\n  } catch (error) {\n    console.error('Error publishing metrics:', error);\n  }\n}\n\nasync function sendAlert(shipmentId, status, data) {\n  try {\n    const message = {\n      shipmentId: shipmentId,\n      status: status,\n      timestamp: new Date().toISOString(),\n      data: data,\n      environment: process.env.ENVIRONMENT\n    };\n    \n    const params = {\n      TopicArn: process.env.SNS_TOPIC_ARN,\n      Subject: `Shipment Alert: ${status} - ${shipmentId}`,\n      Message: JSON.stringify(message, null, 2)\n    };\n    \n    await sns.send(new PublishCommand(params));\n    console.log('Alert sent successfully');\n  } catch (error) {\n    console.error('Error sending alert:', error);\n  }\n}\n"
+          "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\nfrom urllib.parse import unquote_plus\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ndef handler(event, context):\n    print(f\"Processing event: {json.dumps(event, default=str)}\")\n    \n    processed_count = 0\n    errors = []\n    \n    try:\n        for record in event.get('Records', []):\n            if record['eventSource'] != 'aws:s3':\n                continue\n                \n            bucket = record['s3']['bucket']['name']\n            key = unquote_plus(record['s3']['object']['key'])\n            size = record['s3']['object']['size']\n            \n            print(f\"Processing image: {key} from bucket: {bucket}\")\n            \n            try:\n                image_id = str(uuid.uuid4())\n                upload_timestamp = int(datetime.now().timestamp() * 1000)\n                \n                response = s3_client.get_object(Bucket=bucket, Key=key)\n                image_content = response['Body'].read()\n                \n                thumbnail_key = f\"thumbnails/{image_id}_thumb.jpg\"\n                \n                table = dynamodb.Table(os.environ['METADATA_TABLE'])\n                table.put_item(\n                    Item={\n                        'imageId': image_id,\n                        'uploadTimestamp': upload_timestamp,\n                        'originalKey': key,\n                        'thumbnailKey': thumbnail_key,\n                        'status': 'PROCESSED',\n                        'fileSize': size,\n                        'processedAt': datetime.now().isoformat(),\n                        'bucket': bucket\n                    }\n                )\n                \n                processed_count += 1\n                print(f\"Successfully processed image: {image_id}\")\n                \n            except Exception as e:\n                error_msg = f\"Error processing {key}: {str(e)}\"\n                print(error_msg)\n                errors.append(error_msg)\n        \n        publish_metrics('ImagesProcessed', processed_count, 'Count')\n        publish_metrics('ProcessingErrors', len(errors), 'Count')\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': f'Successfully processed {processed_count} images',\n                'errors': len(errors),\n                'processedCount': processed_count\n            })\n        }\n        \n    except Exception as e:\n        print(f\"Fatal error in handler: {str(e)}\")\n        publish_metrics('ProcessingErrors', 1, 'Count')\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'message': 'Error processing images',\n                'error': str(e)\n            })\n        }\n\ndef publish_metrics(metric_name, value, unit):\n    try:\n        cloudwatch.put_metric_data(\n            Namespace='ImageProcessing',\n            MetricData=[\n                {\n                    'MetricName': metric_name,\n                    'Value': value,\n                    'Unit': unit,\n                    'Timestamp': datetime.now(),\n                    'Dimensions': [\n                        {\n                            'Name': 'Environment',\n                            'Value': os.environ['ENVIRONMENT']\n                        }\n                    ]\n                }\n            ]\n        )\n    except Exception as e:\n        print(f\"Error publishing metrics: {e}\")\n"
         },
         "Tags": [
           {
@@ -230,210 +290,118 @@
         ]
       }
     },
-    "ShipmentProcessorLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/shipment-processor-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": 30
-      }
-    },
-    "ShipmentUpdateRule": {
-      "Type": "AWS::Events::Rule",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "shipment-update-rule-${EnvironmentSuffix}"
-        },
-        "Description": "Route shipment update events to Lambda processor",
-        "State": "ENABLED",
-        "EventPattern": {
-          "source": [
-            "logistics.shipments"
-          ],
-          "detail-type": [
-            "Shipment Update",
-            "Shipment Status Change"
-          ]
-        },
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::GetAtt": [
-                "ShipmentProcessorFunction",
-                "Arn"
-              ]
-            },
-            "Id": "ShipmentProcessorTarget",
-            "RetryPolicy": {
-              "MaximumRetryAttempts": 2
-            },
-            "DeadLetterConfig": {
-              "Arn": {
-                "Fn::GetAtt": [
-                  "DeadLetterQueue",
-                  "Arn"
-                ]
-              }
-            }
-          }
-        ]
-      }
-    },
-    "EventBridgeLambdaPermission": {
+    "S3InvokeLambdaPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "FunctionName": {
-          "Ref": "ShipmentProcessorFunction"
+          "Ref": "ImageProcessorFunction"
         },
         "Action": "lambda:InvokeFunction",
-        "Principal": "events.amazonaws.com",
+        "Principal": "s3.amazonaws.com",
         "SourceArn": {
-          "Fn::GetAtt": [
-            "ShipmentUpdateRule",
-            "Arn"
-          ]
+          "Fn::Sub": "${ImageBucket}"
         }
       }
     },
-    "DeadLetterQueue": {
-      "Type": "AWS::SQS::Queue",
+    "ImageProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "QueueName": {
-          "Fn::Sub": "shipment-dlq-${EnvironmentSuffix}"
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/image-processor-${EnvironmentSuffix}"
         },
-        "MessageRetentionPeriod": 1209600,
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
+        "RetentionInDays": 30
       }
     },
     "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "shipment-processor-errors-${EnvironmentSuffix}"
+          "Fn::Sub": "image-processor-errors-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when Lambda function has errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
         "Statistic": "Sum",
         "Period": 300,
-        "EvaluationPeriods": 1,
+        "EvaluationPeriods": 2,
         "Threshold": 5,
         "ComparisonOperator": "GreaterThanThreshold",
         "Dimensions": [
           {
             "Name": "FunctionName",
             "Value": {
-              "Ref": "ShipmentProcessorFunction"
+              "Ref": "ImageProcessorFunction"
             }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ShipmentAlertTopic"
           }
         ],
         "TreatMissingData": "notBreaching"
       }
     },
-    "LambdaThrottleAlarm": {
+    "LambdaDurationAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "shipment-processor-throttles-${EnvironmentSuffix}"
+          "Fn::Sub": "image-processor-duration-${EnvironmentSuffix}"
         },
-        "AlarmDescription": "Alert when Lambda function is throttled",
-        "MetricName": "Throttles",
+        "AlarmDescription": "Alert when Lambda function duration is too high",
+        "MetricName": "Duration",
         "Namespace": "AWS/Lambda",
-        "Statistic": "Sum",
+        "Statistic": "Average",
         "Period": 300,
-        "EvaluationPeriods": 1,
-        "Threshold": 1,
+        "EvaluationPeriods": 2,
+        "Threshold": 240000,
         "ComparisonOperator": "GreaterThanThreshold",
         "Dimensions": [
           {
             "Name": "FunctionName",
             "Value": {
-              "Ref": "ShipmentProcessorFunction"
+              "Ref": "ImageProcessorFunction"
             }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ShipmentAlertTopic"
           }
         ],
         "TreatMissingData": "notBreaching"
       }
     },
-    "DLQAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "shipment-dlq-messages-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Alert when messages are in DLQ",
-        "MetricName": "ApproximateNumberOfMessagesVisible",
-        "Namespace": "AWS/SQS",
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 1,
-        "Threshold": 1,
-        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-        "Dimensions": [
-          {
-            "Name": "QueueName",
-            "Value": {
-              "Fn::GetAtt": [
-                "DeadLetterQueue",
-                "QueueName"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ShipmentAlertTopic"
-          }
-        ]
-      }
-    },
-    "LogisticsDashboard": {
+    "ImageProcessingDashboard": {
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
         "DashboardName": {
-          "Fn::Sub": "logistics-automation-${EnvironmentSuffix}"
+          "Fn::Sub": "image-processing-${EnvironmentSuffix}"
         },
         "DashboardBody": {
-          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Lambda Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${ShipmentProcessorFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"LogisticsAutomation\", \"ShipmentProcessed\", {\"stat\": \"Sum\"}],\n          [\".\", \"ShipmentProcessingError\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Shipment Processing Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"FunctionName\": \"${ShipmentProcessorFunction}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\", {\"label\": \"DLQ Messages\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Dead Letter Queue\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"QueueName\": \"${DeadLetterQueue.QueueName}\"\n        }\n      }\n    }\n  ]\n}\n"
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${ImageProcessorFunction}\"],\n          [\".\", \"Errors\", \".\", \".\"],\n          [\".\", \"Duration\", \".\", \".\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"ImageProcessing\", \"ImagesProcessed\"],\n          [\".\", \"ProcessingErrors\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Image Processing Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/S3\", \"BucketSizeBytes\", \"BucketName\", \"${ImageBucket}\", \"StorageType\", \"StandardStorage\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Storage Usage\",\n        \"period\": 86400\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${ImageMetadataTable}\"],\n          [\".\", \"ConsumedWriteCapacityUnits\", \".\", \".\"]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Usage\",\n        \"period\": 300\n      }\n    }\n  ]\n}"
         }
       }
     }
   },
   "Outputs": {
-    "DynamoDBTableName": {
-      "Description": "DynamoDB table for shipment logs",
+    "ImageBucketName": {
+      "Description": "Name of the S3 bucket for image storage",
       "Value": {
-        "Ref": "ShipmentLogsTable"
+        "Ref": "ImageBucket"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-ShipmentLogsTable"
+          "Fn::Sub": "${AWS::StackName}-ImageBucket"
         }
       }
     },
-    "LambdaFunctionArn": {
-      "Description": "ARN of the shipment processor Lambda function",
+    "ImageMetadataTableName": {
+      "Description": "Name of the DynamoDB table for image metadata",
+      "Value": {
+        "Ref": "ImageMetadataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetadataTable"
+        }
+      }
+    },
+    "ImageProcessorFunctionArn": {
+      "Description": "ARN of the image processor Lambda function",
       "Value": {
         "Fn::GetAtt": [
-          "ShipmentProcessorFunction",
+          "ImageProcessorFunction",
           "Arn"
         ]
       },
@@ -443,42 +411,23 @@
         }
       }
     },
-    "SNSTopicArn": {
-      "Description": "ARN of the SNS topic for alerts",
-      "Value": {
-        "Ref": "ShipmentAlertTopic"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
-        }
-      }
-    },
-    "EventBridgeRuleName": {
-      "Description": "Name of the EventBridge rule",
-      "Value": {
-        "Ref": "ShipmentUpdateRule"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-EventBridgeRule"
-        }
-      }
-    },
     "DashboardURL": {
       "Description": "CloudWatch Dashboard URL",
       "Value": {
-        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=logistics-automation-${EnvironmentSuffix}"
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=image-processing-${EnvironmentSuffix}"
       }
     },
-    "DeadLetterQueueURL": {
-      "Description": "URL of the Dead Letter Queue",
+    "ImageBucketArn": {
+      "Description": "ARN of the S3 bucket",
       "Value": {
-        "Ref": "DeadLetterQueue"
+        "Fn::GetAtt": [
+          "ImageBucket",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-DLQUrl"
+          "Fn::Sub": "${AWS::StackName}-ImageBucketArn"
         }
       }
     }
