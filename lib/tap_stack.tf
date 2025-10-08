@@ -392,15 +392,20 @@ resource "aws_cloudtrail" "main" {
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
+    
     data_resource {
-      type   = "AWS::RDS::DBCluster"
-      values = ["arn:aws:rds:*:*:cluster:*"]
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::*/"]
     }
-
+    
     data_resource {
       type   = "AWS::DynamoDB::Table"
       values = ["arn:aws:dynamodb:*:*:table/*"]
+    }
+    
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:aws:lambda:*:*:function/*"]
     }
   }
 

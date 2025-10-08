@@ -45,7 +45,17 @@ describe('Terraform DR Stack Integration Tests', () => {
 
     try {
       const rawData = fs.readFileSync(outputsPath, 'utf8');
-      outputs = JSON.parse(rawData);
+      const parsedData = JSON.parse(rawData);
+
+      // Handle Terraform output format (objects with .value property)
+      outputs = {};
+      for (const [key, value] of Object.entries(parsedData)) {
+        if (typeof value === 'object' && value !== null && 'value' in value) {
+          outputs[key] = (value as any).value;
+        } else {
+          outputs[key] = value;
+        }
+      }
     } catch (error) {
       console.error(`Failed to parse outputs file: ${error}`);
       outputs = {};
