@@ -714,6 +714,11 @@ export class FinancialProcessorStack extends TerraformStack {
               replicaKmsKeyId: secondaryKmsKey.arn,
             },
           },
+          sourceSelectionCriteria: {
+            sseKmsEncryptedObjects: {
+              status: 'Enabled',
+            },
+          },
         },
       ],
     });
