@@ -133,3 +133,60 @@ class TapStack(cdk.Stack):
             alb=alb_stack.alb,
             target_group=alb_stack.target_group,
         )
+
+        # Export key outputs from the main stack
+        cdk.CfnOutput(
+            self,
+            "LoadBalancerDnsName",
+            value=alb_stack.alb.load_balancer_dns_name,
+            description="Application Load Balancer DNS Name",
+            export_name=f"LoadBalancerDnsName-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "VpcId",
+            value=vpc_stack.vpc.vpc_id,
+            description="VPC ID",
+            export_name=f"VpcId-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "DatabaseEndpoint",
+            value=rds_stack.cluster.cluster_endpoint.hostname,
+            description="RDS Aurora Cluster Endpoint",
+            export_name=f"DatabaseEndpoint-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "RedisEndpoint",
+            value=elasticache_stack.redis_cluster.attr_configuration_end_point_address,
+            description="ElastiCache Redis Endpoint",
+            export_name=f"RedisEndpoint-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CloudFrontDomain",
+            value=s3_cloudfront_stack.distribution.distribution_domain_name,
+            description="CloudFront Distribution Domain",
+            export_name=f"CloudFrontDomain-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "S3BucketName",
+            value=s3_cloudfront_stack.image_bucket.bucket_name,
+            description="S3 Bucket Name for Images",
+            export_name=f"S3BucketName-{environment_suffix}",
+        )
+
+        cdk.CfnOutput(
+            self,
+            "AutoScalingGroupName",
+            value=asg_stack.asg.auto_scaling_group_name,
+            description="Auto Scaling Group Name",
+            export_name=f"AutoScalingGroupName-{environment_suffix}",
+        )
