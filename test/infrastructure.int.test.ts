@@ -186,7 +186,8 @@ describe('Infrastructure Integration Tests', () => {
 
       // ReservedConcurrentExecutions should be undefined (not set) to use unreserved concurrency
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.ReservedConcurrentExecutions).toBeUndefined();
+      // Type assertion to access ReservedConcurrentExecutions property
+      expect((response.Configuration as any)?.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('should handle invalid input gracefully', async () => {
