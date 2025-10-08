@@ -16,7 +16,7 @@ lib/
 
 ### ✅ Multi-Region Architecture
 
-- **Primary Region:** us-east-1
+- **Primary Region:** us-east-2
 - **Secondary Region:** us-west-2
 - Complete VPC setup with public/private subnets, NAT gateways, and routing
 

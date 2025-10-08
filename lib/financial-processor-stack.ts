@@ -656,7 +656,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // Application Load Balancers
     const primaryAlb = new Lb(this, 'primary-alb', {
       provider: primaryProvider,
-      name: `fin-proc-primary-alb`,
+      name: 'fin-proc-primary-alb',
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [appSecurityGroup.id],
@@ -667,7 +667,7 @@ export class FinancialProcessorStack extends TerraformStack {
 
     const secondaryAlb = new Lb(this, 'secondary-alb', {
       provider: secondaryProvider,
-      name: `fin-proc-secondary-alb`,
+      name: 'fin-proc-secondary-alb',
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [secondaryAppSecurityGroup.id],

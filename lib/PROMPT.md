@@ -14,7 +14,7 @@ A self-contained CDKTF TypeScript project:
 
 - `main.ts` (or `index.ts`) with stack name(s) reflecting `financial-processor`
 - Uses AWS provider v5.0+
-- Configured with primary region `us-east-1` and secondary region `us-west-2`
+- Configured with primary region `us-east-2` and secondary region `us-west-2`
 - Output only code, no prose, with brief inline comments
 
 ## Requirements
@@ -69,7 +69,7 @@ All resources must be tagged with:
 
 ## Stack Config
 
-- **Primary region:** `us-east-1`
+- **Primary region:** `us-east-2`
 - **Secondary region:** `us-west-2`
 - **App name:** `financial-processor`
 - **Environment:** `production`

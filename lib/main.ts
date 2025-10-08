@@ -7,9 +7,9 @@ new FinancialProcessorStack(app, 'financial-processor', {
   environment: 'production',
   appName: 'financial-processor',
   costCenter: 'FinOps',
-  primaryRegion: 'us-east-1',
+  primaryRegion: 'us-east-2',
   secondaryRegion: 'us-west-2',
-  domainName: 'financial-processor.example.com',
+  domainName: 'finproc-demo.internal',
 });
 
 app.synth();
