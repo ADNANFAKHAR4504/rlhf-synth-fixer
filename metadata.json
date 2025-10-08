@@ -6,9 +6,9 @@
   "po_id": "72380619",
   "team": "synth",
   "startedAt": "2025-10-03T18:50:06+05:30",
-  "subtask": "General Infrastructure Tooling QA",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Serverless Infrastructure"
   ],
   "training_quality": 9,
   "aws_services": [
