@@ -10,5 +10,22 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "vpc, lambda, api-gateway, dynamodb, x-tray"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "X-Ray",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
