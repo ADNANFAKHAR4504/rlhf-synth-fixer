@@ -7,9 +7,7 @@ import {
 } from '@aws-sdk/client-lambda';
 import {
   DynamoDBClient,
-  PutItemCommand,
   GetItemCommand,
-  ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   ApiGatewayV2Client,
@@ -101,24 +99,24 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       const body = JSON.parse(responsePayload.body);
       const requestId = body.requestId;
+      const timestamp = body.timestamp;
 
-      // Verify scheduled event data in DynamoDB
-      const scanCommand = new ScanCommand({
+      // Verify scheduled event data in DynamoDB using GetItem (composite key)
+      const getItemCommand = new GetItemCommand({
         TableName: dynamoDbTableName,
-        FilterExpression: 'RequestId = :rid',
-        ExpressionAttributeValues: {
-          ':rid': { S: requestId },
+        Key: {
+          RequestId: { S: requestId },
+          Timestamp: { S: timestamp },
         },
-        Limit: 1,
       });
 
-      const scanResponse = await dynamoDbClient.send(scanCommand);
-      expect(scanResponse.Items).toBeDefined();
-      expect(scanResponse.Items!.length).toBeGreaterThan(0);
-      expect(scanResponse.Items![0].Source.S).toBe(
+      const getItemResponse = await dynamoDbClient.send(getItemCommand);
+      expect(getItemResponse.Item).toBeDefined();
+      expect(getItemResponse.Item!.RequestId.S).toBe(requestId);
+      expect(getItemResponse.Item!.Source.S).toBe(
         'CloudWatch Scheduled Event'
       );
-      expect(scanResponse.Items![0].Method.S).toBe('SCHEDULED');
+      expect(getItemResponse.Item!.Method.S).toBe('SCHEDULED');
     }, 30000);
   });
 
