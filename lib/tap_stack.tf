@@ -269,7 +269,7 @@ resource "aws_ssm_parameter" "db_password" {
   type     = "SecureString"
   value    = random_password.db_password.result
   key_id   = aws_kms_key.primary.key_id
-  
+
   tags = {
     Name        = "${var.app_name}-db-password-generic"
     Environment = var.environment
