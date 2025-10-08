@@ -1,11 +1,11 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Scalable Media Processing Pipeline with S3, MediaConvert, and Lambda'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Scalable Media Processing Pipeline with S3, MediaConvert, and Lambda"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
           - ProcessingConcurrency
@@ -15,31 +15,31 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-  
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
   ProcessingConcurrency:
     Type: Number
     Default: 10
     MinValue: 1
     MaxValue: 100
-    Description: 'Max concurrent Lambda executions for processing'
-  
+    Description: "Max concurrent Lambda executions for processing"
+
   MediaConvertEndpoint:
     Type: String
-    Default: ''
-    Description: 'MediaConvert endpoint URL (optional - will use default if empty)'
-  
+    Default: ""
+    Description: "MediaConvert endpoint URL (optional - will use default if empty)"
+
   NotificationEmail:
     Type: String
-    Default: ''
-    Description: 'Email for alarm notifications (optional)'
+    Default: ""
+    Description: "Email for alarm notifications (optional)"
 
 Conditions:
-  CreateNotificationTopic: !Not [!Equals [!Ref NotificationEmail, '']]
-  HasMediaConvertEndpoint: !Not [!Equals [!Ref MediaConvertEndpoint, '']]
+  CreateNotificationTopic: !Not [!Equals [!Ref NotificationEmail, ""]]
+  HasMediaConvertEndpoint: !Not [!Equals [!Ref MediaConvertEndpoint, ""]]
 
 Resources:
   # KMS Key for encryption
@@ -48,37 +48,37 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'KMS key for media pipeline encryption ${EnvironmentSuffix}'
+      Description: !Sub "KMS key for media pipeline encryption ${EnvironmentSuffix}"
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow use of the key for S3
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
             Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
           - Sid: Allow MediaConvert to use the key
             Effect: Allow
             Principal:
               Service: mediaconvert.amazonaws.com
             Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
 
   MediaKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/media-pipeline-${EnvironmentSuffix}'
+      AliasName: !Sub "alias/media-pipeline-${EnvironmentSuffix}"
       TargetKeyId: !Ref MediaKMSKey
 
   # S3 Buckets
@@ -87,13 +87,13 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'media-uploads-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub "media-uploads-${AWS::AccountId}-${EnvironmentSuffix}"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: "aws:kms"
               KMSMasterKeyID: !Ref MediaKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -115,11 +115,11 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'media-outputs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub "media-outputs-${AWS::AccountId}-${EnvironmentSuffix}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: "aws:kms"
               KMSMasterKeyID: !Ref MediaKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -142,7 +142,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Sub 'MediaAssets-${EnvironmentSuffix}'
+      TableName: !Sub "MediaAssets-${EnvironmentSuffix}"
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
       StreamSpecification:
@@ -185,8 +185,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      QueueName: !Sub 'media-processing-dlq-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days
+      QueueName: !Sub "media-processing-dlq-${EnvironmentSuffix}"
+      MessageRetentionPeriod: 1209600 # 14 days
       KmsMasterKeyId: !Ref MediaKMSKey
 
   ProcessingQueue:
@@ -194,9 +194,9 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      QueueName: !Sub 'media-processing-queue-${EnvironmentSuffix}'
-      VisibilityTimeout: 900  # 15 minutes
-      MessageRetentionPeriod: 86400  # 1 day
+      QueueName: !Sub "media-processing-queue-${EnvironmentSuffix}"
+      VisibilityTimeout: 900 # 15 minutes
+      MessageRetentionPeriod: 86400 # 1 day
       KmsMasterKeyId: !Ref MediaKMSKey
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ProcessingDLQ.Arn
@@ -206,8 +206,8 @@ Resources:
   S3UploadEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub 'media-upload-rule-${EnvironmentSuffix}'
-      Description: 'Route S3 upload events to processing queue'
+      Name: !Sub "media-upload-rule-${EnvironmentSuffix}"
+      Description: "Route S3 upload events to processing queue"
       EventPattern:
         source:
           - aws.s3
@@ -219,13 +219,11 @@ Resources:
               - !Ref UploadsBucket
           object:
             key:
-              - prefix: 'uploads/'
+              - prefix: "uploads/"
       State: ENABLED
       Targets:
         - Arn: !GetAtt ProcessingQueue.Arn
           Id: ProcessingQueueTarget
-          SqsParameters:
-            MessageGroupId: 'media-processing'
 
   # Allow EventBridge to send messages to SQS
   ProcessingQueuePolicy:
@@ -238,17 +236,17 @@ Resources:
           - Effect: Allow
             Principal:
               Service: events.amazonaws.com
-            Action: 'sqs:SendMessage'
+            Action: "sqs:SendMessage"
             Resource: !GetAtt ProcessingQueue.Arn
             Condition:
               ArnEquals:
-                'aws:SourceArn': !GetAtt S3UploadEventRule.Arn
+                "aws:SourceArn": !GetAtt S3UploadEventRule.Arn
 
   MediaConvertJobEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub 'mediaconvert-job-status-rule-${EnvironmentSuffix}'
-      Description: 'Route MediaConvert job status changes'
+      Name: !Sub "mediaconvert-job-status-rule-${EnvironmentSuffix}"
+      Description: "Route MediaConvert job status changes"
       EventPattern:
         source:
           - aws.mediaconvert
@@ -263,108 +261,108 @@ Resources:
   MediaConvertRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'MediaConvertRole-${EnvironmentSuffix}'
+      RoleName: !Sub "MediaConvertRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: mediaconvert.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
         - PolicyName: MediaConvertPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:GetObjectVersion'
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
                 Resource:
-                  - !Sub '${UploadsBucket.Arn}/*'
+                  - !Sub "${UploadsBucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - 's3:PutObject'
-                  - 's3:PutObjectAcl'
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
                 Resource:
-                  - !Sub '${OutputsBucket.Arn}/*'
+                  - !Sub "${OutputsBucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
+                  - "kms:Decrypt"
+                  - "kms:GenerateDataKey"
                 Resource:
                   - !GetAtt MediaKMSKey.Arn
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'MediaLambdaRole-${EnvironmentSuffix}'
+      RoleName: !Sub "MediaLambdaRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Policies:
         - PolicyName: MediaProcessingPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:UpdateItem'
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:Query'
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:Query"
                 Resource:
                   - !GetAtt MediaAssetsTable.Arn
-                  - !Sub '${MediaAssetsTable.Arn}/index/*'
+                  - !Sub "${MediaAssetsTable.Arn}/index/*"
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:HeadObject'
+                  - "s3:GetObject"
+                  - "s3:HeadObject"
                 Resource:
-                  - !Sub '${UploadsBucket.Arn}/*'
+                  - !Sub "${UploadsBucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - 'mediaconvert:CreateJob'
-                  - 'mediaconvert:GetJob'
-                  - 'mediaconvert:DescribeEndpoints'
-                Resource: '*'
+                  - "mediaconvert:CreateJob"
+                  - "mediaconvert:GetJob"
+                  - "mediaconvert:DescribeEndpoints"
+                Resource: "*"
               - Effect: Allow
                 Action:
-                  - 'iam:PassRole'
+                  - "iam:PassRole"
                 Resource: !GetAtt MediaConvertRole.Arn
               - Effect: Allow
                 Action:
-                  - 'sqs:ReceiveMessage'
-                  - 'sqs:DeleteMessage'
-                  - 'sqs:GetQueueAttributes'
+                  - "sqs:ReceiveMessage"
+                  - "sqs:DeleteMessage"
+                  - "sqs:GetQueueAttributes"
                 Resource: !GetAtt ProcessingQueue.Arn
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
+                  - "kms:Decrypt"
+                  - "kms:GenerateDataKey"
                 Resource:
                   - !GetAtt MediaKMSKey.Arn
               - Effect: Allow
                 Action:
-                  - 'ssm:GetParameter'
-                  - 'ssm:GetParameters'
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/media-pipeline/*'
+                  - "ssm:GetParameter"
+                  - "ssm:GetParameters"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/media-pipeline/*"
               - Effect: Allow
                 Action:
-                  - 'cloudwatch:PutMetricData'
-                Resource: '*'
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
 
   # Lambda Functions
   IngestOrchestratorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'ingest-orchestrator-${EnvironmentSuffix}'
+      FunctionName: !Sub "ingest-orchestrator-${EnvironmentSuffix}"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -375,7 +373,8 @@ Resources:
         Variables:
           DYNAMODB_TABLE: !Ref MediaAssetsTable
           MEDIACONVERT_ROLE: !GetAtt MediaConvertRole.Arn
-          MEDIACONVERT_ENDPOINT: !If [HasMediaConvertEndpoint, !Ref MediaConvertEndpoint, '']
+          MEDIACONVERT_ENDPOINT:
+            !If [HasMediaConvertEndpoint, !Ref MediaConvertEndpoint, ""]
           OUTPUT_BUCKET: !Ref OutputsBucket
           ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
       Code:
@@ -396,7 +395,7 @@ Resources:
   JobStatusProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'job-status-processor-${EnvironmentSuffix}'
+      FunctionName: !Sub "job-status-processor-${EnvironmentSuffix}"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -418,7 +417,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref JobStatusProcessorFunction
-      Action: 'lambda:InvokeFunction'
+      Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt MediaConvertJobEventRule.Arn
 
@@ -426,7 +425,7 @@ Resources:
   MediaProcessingDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'MediaProcessing-${EnvironmentSuffix}'
+      DashboardName: !Sub "MediaProcessing-${EnvironmentSuffix}"
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -477,8 +476,8 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateNotificationTopic
     Properties:
-      AlarmName: !Sub 'HighQueueDepth-${EnvironmentSuffix}'
-      AlarmDescription: 'Processing queue depth is too high'
+      AlarmName: !Sub "HighQueueDepth-${EnvironmentSuffix}"
+      AlarmDescription: "Processing queue depth is too high"
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
       Statistic: Average
@@ -496,8 +495,8 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateNotificationTopic
     Properties:
-      AlarmName: !Sub 'HighFailureRate-${EnvironmentSuffix}'
-      AlarmDescription: 'High media processing failure rate'
+      AlarmName: !Sub "HighFailureRate-${EnvironmentSuffix}"
+      AlarmDescription: "High media processing failure rate"
       MetricName: FailedAssets
       Namespace: MediaPipeline
       Statistic: Sum
@@ -513,7 +512,7 @@ Resources:
     Type: AWS::SNS::Topic
     Condition: CreateNotificationTopic
     Properties:
-      TopicName: !Sub 'media-pipeline-alerts-${EnvironmentSuffix}'
+      TopicName: !Sub "media-pipeline-alerts-${EnvironmentSuffix}"
       Subscription:
         - Endpoint: !Ref NotificationEmail
           Protocol: email
@@ -522,9 +521,9 @@ Resources:
   MediaConvertPresetsParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '/media-pipeline/${EnvironmentSuffix}/mediaconvert-presets'
+      Name: !Sub "/media-pipeline/${EnvironmentSuffix}/mediaconvert-presets"
       Type: String
-      Description: 'MediaConvert job presets configuration'
+      Description: "MediaConvert job presets configuration"
       Value: !Sub |
         {
           "presets": {
@@ -624,55 +623,55 @@ Resources:
 
 Outputs:
   UploadsBucketName:
-    Description: 'S3 bucket for uploads'
+    Description: "S3 bucket for uploads"
     Value: !Ref UploadsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-UploadsBucket'
+      Name: !Sub "${AWS::StackName}-UploadsBucket"
 
   OutputsBucketName:
-    Description: 'S3 bucket for processed outputs'
+    Description: "S3 bucket for processed outputs"
     Value: !Ref OutputsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-OutputsBucket'
+      Name: !Sub "${AWS::StackName}-OutputsBucket"
 
   ProcessingQueueUrl:
-    Description: 'SQS queue URL for processing'
+    Description: "SQS queue URL for processing"
     Value: !Ref ProcessingQueue
     Export:
-      Name: !Sub '${AWS::StackName}-ProcessingQueueUrl'
+      Name: !Sub "${AWS::StackName}-ProcessingQueueUrl"
 
   MediaAssetsTableName:
-    Description: 'DynamoDB table name'
+    Description: "DynamoDB table name"
     Value: !Ref MediaAssetsTable
     Export:
-      Name: !Sub '${AWS::StackName}-MediaAssetsTable'
+      Name: !Sub "${AWS::StackName}-MediaAssetsTable"
 
   IngestOrchestratorFunctionArn:
-    Description: 'Ingest orchestrator Lambda ARN'
+    Description: "Ingest orchestrator Lambda ARN"
     Value: !GetAtt IngestOrchestratorFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-IngestOrchestrator'
+      Name: !Sub "${AWS::StackName}-IngestOrchestrator"
 
   JobStatusProcessorFunctionArn:
-    Description: 'Job status processor Lambda ARN'
+    Description: "Job status processor Lambda ARN"
     Value: !GetAtt JobStatusProcessorFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-JobStatusProcessor'
+      Name: !Sub "${AWS::StackName}-JobStatusProcessor"
 
   MediaConvertRoleArn:
-    Description: 'MediaConvert IAM role ARN'
+    Description: "MediaConvert IAM role ARN"
     Value: !GetAtt MediaConvertRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-MediaConvertRole'
+      Name: !Sub "${AWS::StackName}-MediaConvertRole"
 
   KMSKeyId:
-    Description: 'KMS Key ID'
+    Description: "KMS Key ID"
     Value: !Ref MediaKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKey'
+      Name: !Sub "${AWS::StackName}-KMSKey"
 
   KMSKeyArn:
-    Description: 'KMS Key ARN'
+    Description: "KMS Key ARN"
     Value: !GetAtt MediaKMSKey.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+      Name: !Sub "${AWS::StackName}-KMSKeyArn"
