@@ -15,6 +15,7 @@
     "Auto Scaling & Load Balancing"
   ],
   "aws_services": "VPC, EC2, Auto Scaling, ALB, RDS, S3, CloudFront, CloudWatch, SNS, KMS, Secrets Manager, IAM, NAT Gateway, Internet Gateway",
+  "training_quality": 9,
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.883.0",
     "@aws-sdk/client-rds": "^3.883.0",
