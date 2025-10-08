@@ -773,11 +773,8 @@
             "Ref": "KeyName"
           },
           "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "EC2InstanceProfile",
-                "Arn"
-              ]
+            "Name": {
+              "Ref": "EC2InstanceProfile"
             }
           },
           "SecurityGroupIds": [
@@ -1211,7 +1208,16 @@
               },
               "S3OriginConfig": {
                 "OriginAccessIdentity": {
-                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                  "Fn::Join": [
+                    "/",
+                    [
+                      "origin-access-identity",
+                      "cloudfront",
+                      {
+                        "Ref": "CloudFrontOAI"
+                      }
+                    ]
+                  ]
                 }
               }
             }
@@ -1301,17 +1307,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": [
-            "{{resolve:secretsmanager:${SecretArn}:SecretString:password}}",
-            {
-              "SecretArn": {
-                "Fn::GetAtt": [
-                  "DBSecret",
-                  "Arn"
-                ]
-              }
-            }
-          ]
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
         },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
@@ -1354,47 +1350,6 @@
         },
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "LambdaS3KmsAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": [
-                        "LogBucket",
-                        "Arn"
-                      ]
-                    },
-                    {
-                      "Fn::Sub": "${LogBucket.Arn}/*"
-                    }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt",
-                    "kms:DescribeKey"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "KMSKey",
-                      "Arn"
-                    ]
-                  }
-                }
-              ]
-            }
-          }
         ]
       }
     },
@@ -1411,15 +1366,8 @@
         },
         "Timeout": 60,
         "MemorySize": 256,
-        "Environment": {
-          "Variables": {
-            "LOG_BUCKET": {
-              "Ref": "LogBucket"
-            }
-          }
-        },
         "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    s3 = boto3.client('s3')\n    _ = os.environ['LOG_BUCKET']\n    for record in event.get('Records', []):\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        print(f'Processing log file: {bucket}/{key}')\n    return {'statusCode': 200, 'body': json.dumps('Log processing complete')}\n"
+          "ZipFile": "import json\n\ndef lambda_handler(event, context):\n    for record in event.get('Records', []):\n        bucket = record['s3']['bucket']['name']\n        key = record['s3']['object']['key']\n        print(f'Processing log file: {bucket}/{key}')\n    return {'statusCode': 200, 'body': json.dumps('Log processing complete')}\n"
         }
       }
     },
