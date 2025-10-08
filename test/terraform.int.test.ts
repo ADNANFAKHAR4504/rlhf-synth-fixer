@@ -31,6 +31,7 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcAttributeCommand,
 } from "@aws-sdk/client-ec2";
 import {
   SNSClient,
@@ -133,13 +134,31 @@ describe("LIVE: VPC Infrastructure Verification", () => {
   }, 60000);
 
   test("VPC has DNS support enabled", async () => {
-    const response = await retry(async () => {
-      return await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId!] }));
+    // Check DNS support
+    const dnsSupportResponse = await retry(async () => {
+      return await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId!,
+          Attribute: "enableDnsSupport",
+        })
+      );
     });
 
-    const vpc = response.Vpcs![0];
-    expect(vpc.EnableDnsSupport).toBe(true);
-    expect(vpc.EnableDnsHostnames).toBe(true);
+    expect(dnsSupportResponse.EnableDnsSupport).toBeTruthy();
+    expect(dnsSupportResponse.EnableDnsSupport!.Value).toBe(true);
+
+    // Check DNS hostnames
+    const dnsHostnamesResponse = await retry(async () => {
+      return await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId!,
+          Attribute: "enableDnsHostnames",
+        })
+      );
+    });
+
+    expect(dnsHostnamesResponse.EnableDnsHostnames).toBeTruthy();
+    expect(dnsHostnamesResponse.EnableDnsHostnames!.Value).toBe(true);
   }, 60000);
 
   test("private subnets exist and are configured correctly", async () => {
