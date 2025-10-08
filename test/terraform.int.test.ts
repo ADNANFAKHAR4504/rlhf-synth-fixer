@@ -229,7 +229,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const s3Destination = response.DeliveryStreamDescription?.Destinations?.[0]?.ExtendedS3DestinationDescription;
       const processors = s3Destination?.ProcessingConfiguration?.Processors;
 
-      const lambdaProcessor = processors?.find((p) => p.Type === 'Lambda');
+      const lambdaProcessor = processors?.find((p: any) => p.Type === 'Lambda');
       expect(lambdaProcessor).toBeDefined();
     });
 
