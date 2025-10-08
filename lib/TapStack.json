@@ -85,8 +85,9 @@
     },
     "KeyName": {
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "Description": "EC2 Key Pair for SSH access",
-      "ConstraintDescription": "Must be an existing EC2 KeyPair"
+      "Default": "",
+      "Description": "EC2 Key Pair for SSH access (leave blank to skip setting KeyName)",
+      "ConstraintDescription": "Must be an existing EC2 KeyPair in the target region when provided"
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -110,6 +111,20 @@
         "db.t3.medium"
       ],
       "Description": "RDS instance class"
+    }
+  },
+  "Conditions": {
+    "HasKeyName": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyName"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -673,7 +688,15 @@
         },
         "InstanceType": "t3.micro",
         "KeyName": {
-          "Ref": "KeyName"
+          "Fn::If": [
+            "HasKeyName",
+            {
+              "Ref": "KeyName"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -770,7 +793,15 @@
             "Ref": "InstanceType"
           },
           "KeyName": {
-            "Ref": "KeyName"
+            "Fn::If": [
+              "HasKeyName",
+              {
+                "Ref": "KeyName"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
           },
           "IamInstanceProfile": {
             "Name": {

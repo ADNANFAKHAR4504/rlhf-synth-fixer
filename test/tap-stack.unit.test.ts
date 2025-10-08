@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
@@ -10,6 +10,7 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
+  // ---------------- Template Structure ----------------
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -17,7 +18,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('Secure, scalable AWS infrastructure for mid-sized company');
+      expect(template.Description).toContain(
+        'Secure, scalable AWS infrastructure for mid-sized company'
+      );
     });
 
     test('should have metadata section', () => {
@@ -26,6 +29,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  // ---------------- Parameters ----------------
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
@@ -60,6 +64,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  // ---------------- Resources ----------------
   describe('Resources', () => {
     test('should have KMS key and alias', () => {
       expect(template.Resources.KMSKey).toBeDefined();
@@ -130,6 +135,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  // ---------------- Security & Compliance ----------------
   describe('Security and Compliance', () => {
     test('KMS key should have rotation enabled', () => {
       const kmsKey = template.Resources.KMSKey;
@@ -137,15 +143,18 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('S3 buckets should have encryption enabled', () => {
-      ['LogBucket', 'DataBucket', 'ContentBucket'].forEach(bucketName => {
+      (['LogBucket', 'DataBucket', 'ContentBucket'] as const).forEach((bucketName) => {
         const bucket = template.Resources[bucketName];
         expect(bucket.Properties.BucketEncryption).toBeDefined();
-        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        expect(
+          bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+            .ServerSideEncryptionByDefault.SSEAlgorithm
+        ).toBe('aws:kms');
       });
     });
 
     test('S3 buckets should have public access blocked', () => {
-      ['LogBucket', 'DataBucket', 'ContentBucket'].forEach(bucketName => {
+      (['LogBucket', 'DataBucket', 'ContentBucket'] as const).forEach((bucketName) => {
         const bucket = template.Resources[bucketName];
         const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
         expect(publicAccessBlock.BlockPublicAcls).toBe(true);
@@ -174,12 +183,14 @@ describe('TapStack CloudFormation Template', () => {
 
     test('EC2 instances should have encrypted EBS volumes', () => {
       const launchTemplate = template.Resources.LaunchTemplate;
-      const blockDeviceMapping = launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      const blockDeviceMapping =
+        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
       expect(blockDeviceMapping.Ebs.Encrypted).toBe(true);
       expect(blockDeviceMapping.Ebs.KmsKeyId).toEqual({ Ref: 'KMSKey' });
     });
   });
 
+  // ---------------- Resource Naming ----------------
   describe('Resource Naming Convention', () => {
     test('KMS alias should use environment suffix', () => {
       const kmsAlias = template.Resources.KMSAlias;
@@ -220,6 +231,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  // ---------------- Outputs ----------------
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
@@ -230,14 +242,14 @@ describe('TapStack CloudFormation Template', () => {
         'DataBucketName',
         'RDSEndpoint',
         'LambdaFunctionArn',
-      ];
+      ] as const;
 
-      expectedOutputs.forEach(outputName => {
+      expectedOutputs.forEach((outputName) => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
-    test('output export names should use environment suffix', () => {
+    test('output export names should use environment suffix (typed to avoid TS7053)', () => {
       const expectedMappings = {
         VPCId: 'TapStack${EnvironmentSuffix}-VPC-ID',
         ALBDNSName: 'TapStack${EnvironmentSuffix}-ALB-DNS',
@@ -249,17 +261,19 @@ describe('TapStack CloudFormation Template', () => {
       } as const;
 
       type OutputKey = keyof typeof expectedMappings;
+      const entries = Object.entries(expectedMappings) as Array<
+        [OutputKey, (typeof expectedMappings)[OutputKey]]
+      >;
 
-      for (const outputKey of Object.keys(expectedMappings) as OutputKey[]) {
+      for (const [outputKey, subVal] of entries) {
         const output = template.Outputs[outputKey];
         expect(output).toBeDefined();
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': expectedMappings[outputKey],
-        });
+        expect(output.Export.Name).toEqual({ 'Fn::Sub': subVal });
       }
     });
   });
 
+  // ---------------- Template Validation ----------------
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
       expect(template).toBeDefined();
@@ -276,7 +290,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have reasonable number of resources for comprehensive infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(20); // Comprehensive infrastructure
+      expect(resourceCount).toBeGreaterThan(20);
     });
 
     test('should have required parameters including EnvironmentSuffix', () => {
