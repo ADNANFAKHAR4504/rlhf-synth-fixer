@@ -22,7 +22,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         self.project_name = os.getenv('PULUMI_PROJECT_NAME', 'TapStack')
         self.stack_name = os.getenv('PULUMI_STACK_NAME', f'TapStack{self.environment_suffix}')
-        self.aws_region = os.getenv('AWS_REGION', 'us-west-2')
+        self.aws_region = os.getenv('AWS_REGION', 'us-east-1')
         self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
         
         # Initialize AWS clients
@@ -37,17 +37,99 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.stack_outputs = self._get_stack_outputs()
 
     def _get_stack_outputs(self):
-        """Retrieve Pulumi stack outputs dynamically."""
+        """Retrieve stack outputs by directly detecting AWS resources."""
         try:
-            workspace = auto.LocalWorkspace(
-                work_dir=os.getcwd(),
-                pulumi_home=os.getenv('PULUMI_HOME'),
-                backend_url=self.pulumi_backend_url
-            )
+            # For integration tests, we'll discover resources directly by naming patterns
+            # This is more reliable than depending on Pulumi/CFN outputs in CI/CD
+            
+            # Discover API Gateway by name pattern (Pulumi adds random suffixes)
+            api_name_prefix = f"tracking-api-{self.environment_suffix}"
+            try:
+                apis = self.apigateway.get_rest_apis()['items']
+                tracking_api = next((api for api in apis if api['name'].startswith(api_name_prefix)), None)
+                api_endpoint = None
+                if tracking_api:
+                    api_id = tracking_api['id']
+                    api_endpoint = f"https://{api_id}.execute-api.{self.aws_region}.amazonaws.com/prod"
+            except Exception as e:
+                print(f"Could not discover API Gateway: {e}")
+                api_endpoint = None
+            
+            # Discover DynamoDB table by name pattern (Pulumi adds random suffixes)
+            table_name_prefix = f"tracking-data-{self.environment_suffix}"
+            try:
+                tables = self.dynamodb.list_tables()['TableNames']
+                tracking_table = next((table for table in tables if table.startswith(table_name_prefix)), None)
+                if tracking_table:
+                    self.dynamodb.describe_table(TableName=tracking_table)
+                    table_exists = True
+                    table_name = tracking_table
+                else:
+                    table_exists = False
+                    table_name = None
+            except Exception as e:
+                print(f"Could not discover DynamoDB table: {e}")
+                table_exists = False
+                table_name = None
+            
+            # Discover Lambda function by name pattern (Pulumi adds random suffixes)
+            function_name_prefix = f"tracking-processor-{self.environment_suffix}"
+            try:
+                functions = self.lambda_client.list_functions()['Functions']
+                tracking_function = next((func for func in functions if func['FunctionName'].startswith(function_name_prefix)), None)
+                if tracking_function:
+                    lambda_exists = True
+                    function_name = tracking_function['FunctionName']
+                else:
+                    lambda_exists = False
+                    function_name = None
+            except Exception as e:
+                print(f"Could not discover Lambda function: {e}")
+                lambda_exists = False
+                function_name = None
+            
+            # Discover SQS DLQ by name pattern (Pulumi adds random suffixes)
+            dlq_name_prefix = f"tracking-lambda-dlq-{self.environment_suffix}"
+            try:
+                queues = self.sqs.list_queues(QueueNamePrefix=dlq_name_prefix)
+                dlq_url = queues.get('QueueUrls', [None])[0] if queues.get('QueueUrls') else None
+            except Exception as e:
+                print(f"Could not discover SQS queue: {e}")
+                dlq_url = None
+            
+            # Return discovered resources
+            return {
+                'api_endpoint': {'value': api_endpoint} if api_endpoint else None,
+                'table_name': {'value': table_name} if table_exists else None,
+                'lambda_function_name': {'value': function_name} if lambda_exists else None,
+                'dlq_url': {'value': dlq_url} if dlq_url else None
+            }
+            
+        except Exception as e:
+            print(f"Could not discover resources: {e}")
+            return {}
+            
+        # Legacy fallback code (kept for reference but likely won't be reached)
+        try:
+            # Try to load outputs from cfn-outputs files first (more reliable in CI)
+            cfn_outputs_path = os.path.join(os.getcwd(), 'cfn-outputs', 'all-outputs.json')
+            if os.path.exists(cfn_outputs_path):
+                with open(cfn_outputs_path, 'r') as f:
+                    cfn_data = json.load(f)
+                    if self.stack_name in cfn_data and cfn_data[self.stack_name]:
+                        # Convert CFN outputs to Pulumi-style outputs
+                        outputs = {}
+                        for output in cfn_data[self.stack_name]:
+                            key = output['OutputKey']
+                            value = output['OutputValue']
+                            outputs[key] = {'value': value}
+                        return outputs
+            
+            # Fallback: try to get Pulumi outputs directly (requires auth)
             stack = auto.select_stack(
                 stack_name=self.stack_name,
                 project_name=self.project_name,
-                workspace=workspace
+                work_dir=os.getcwd()
             )
             return stack.outputs()
         except Exception as e:
@@ -110,11 +192,25 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are created."""
-        alarm_prefix = f"tracking-api-{self.environment_suffix}"
-        response = self.cloudwatch.describe_alarms(AlarmNamePrefix=alarm_prefix)
+        # Check for specific alarm names we know exist
+        expected_alarm_patterns = [
+            f"tracking-api-4xx-{self.environment_suffix}",
+            f"tracking-api-5xx-{self.environment_suffix}", 
+            f"tracking-api-latency-{self.environment_suffix}",
+            f"tracking-lambda-throttle-{self.environment_suffix}"
+        ]
         
-        self.assertGreater(len(response['MetricAlarms']), 0, "No alarms found")
+        # Get all alarms and filter for our patterns
+        all_alarms = self.cloudwatch.describe_alarms()['MetricAlarms']
+        tracking_alarms = []
+        
+        for alarm in all_alarms:
+            alarm_name = alarm['AlarmName']
+            for pattern in expected_alarm_patterns:
+                if pattern in alarm_name:
+                    tracking_alarms.append(alarm_name)
+                    break
 
-
+        self.assertGreater(len(tracking_alarms), 0, f"No tracking-related alarms found. Available alarms: {[a['AlarmName'] for a in all_alarms if 'tracking' in a['AlarmName'].lower()]}")
 if __name__ == '__main__':
     unittest.main()

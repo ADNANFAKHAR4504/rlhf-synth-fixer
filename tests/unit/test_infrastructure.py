@@ -13,6 +13,61 @@ import sys
 # Add lib to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
 
+# Import and set up Pulumi mocking
+try:
+    import pulumi
+    import pulumi.runtime
+    # Set up Pulumi mocking for tests
+    class MyMocks(pulumi.runtime.Mocks):
+        def call(self, args):
+            # Return mock response for AWS calls
+            return {}
+        
+        def new_resource(self, args):
+            def convert_mock_to_string(obj):
+                """Recursively convert MagicMocks to strings in nested structures"""
+                if isinstance(obj, MagicMock):
+                    return f"mock-{str(obj)}"
+                elif isinstance(obj, dict):
+                    return {k: convert_mock_to_string(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_mock_to_string(item) for item in obj]
+                else:
+                    return obj
+            
+            # Convert all inputs to string-safe versions
+            outputs = convert_mock_to_string(args.inputs)
+            
+            # Return specific mocked outputs based on resource type
+            if args.typ == "aws:lambda/function:Function":
+                outputs.update({
+                    "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{args.name}",
+                    "name": args.name,
+                    "role": "arn:aws:iam::123456789012:role/lambda-role"
+                })
+            elif args.typ == "aws:dynamodb/table:Table":
+                outputs.update({
+                    "arn": f"arn:aws:dynamodb:us-east-1:123456789012:table/{args.name}",
+                    "name": args.name
+                })
+            elif args.typ == "aws:apigateway/restApi:RestApi":
+                outputs.update({
+                    "id": f"api-{args.name}",
+                    "executionArn": f"arn:aws:execute-api:us-east-1:123456789012:api-{args.name}"
+                })
+            elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
+                outputs.update({
+                    "arn": f"arn:aws:cloudwatch:us-east-1:123456789012:alarm:{args.name}",
+                    "name": args.name
+                })
+            
+            return (args.name + "_id", outputs)
+    
+    pulumi.runtime.set_mocks(MyMocks())
+    PULUMI_AVAILABLE = True
+except ImportError:
+    PULUMI_AVAILABLE = False
+
 class TestTapStackInfrastructure(unittest.TestCase):
     """Unit tests for TapStack infrastructure components"""
 
@@ -21,7 +76,10 @@ class TestTapStackInfrastructure(unittest.TestCase):
         self.environment_suffix = 'test'
         self.tags = {'Test': 'Value'}
 
+    @pulumi.runtime.test
+    @pulumi.runtime.test
     @patch('pulumi_aws.sqs.Queue')
+    @pulumi.runtime.test
     def test_dlq_creation(self, mock_queue):
         """Test DLQ is created with correct configuration"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -37,7 +95,10 @@ class TestTapStackInfrastructure(unittest.TestCase):
         self.assertEqual(call_kwargs['visibility_timeout_seconds'], 300)
         self.assertIn('Project', call_kwargs['tags'])
 
+    @pulumi.runtime.test
+    @pulumi.runtime.test
     @patch('pulumi_aws.dynamodb.Table')
+    @pulumi.runtime.test
     def test_dynamodb_table_configuration(self, mock_table):
         """Test DynamoDB table has correct configuration"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -75,7 +136,10 @@ class TestTapStackInfrastructure(unittest.TestCase):
         self.assertEqual(call_kwargs['stream_view_type'], 'NEW_AND_OLD_IMAGES')
         self.assertTrue(call_kwargs['point_in_time_recovery']['enabled'])
 
+    @pulumi.runtime.test
+    @pulumi.runtime.test
     @patch('pulumi_aws.ssm.Parameter')
+    @pulumi.runtime.test
     def test_ssm_parameters_creation(self, mock_param):
         """Test SSM parameters are created correctly"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -98,6 +162,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
 
     @patch('pulumi_aws.lambda_.Function')
     @patch('pulumi_aws.iam.Role')
+    @pulumi.runtime.test
     def test_lambda_function_configuration(self, mock_role, mock_lambda):
         """Test Lambda function configuration"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -133,7 +198,9 @@ class TestTapStackInfrastructure(unittest.TestCase):
         # Check DLQ configuration
         self.assertIn('dead_letter_config', call_kwargs)
 
+    @pulumi.runtime.test
     @patch('pulumi_aws.apigateway.RestApi')
+    @pulumi.runtime.test
     def test_api_gateway_creation(self, mock_api):
         """Test API Gateway REST API creation"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -151,6 +218,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
 
     @patch('pulumi_aws.apigateway.Resource')
     @patch('pulumi_aws.apigateway.RestApi')
+    @pulumi.runtime.test
     def test_api_resources_creation(self, mock_api, mock_resource):
         """Test API resources are created correctly"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -173,7 +241,9 @@ class TestTapStackInfrastructure(unittest.TestCase):
 
     @patch('pulumi_aws.apigateway.Method')
     @patch('pulumi_aws.apigateway.Resource')
+    @pulumi.runtime.test
     @patch('pulumi_aws.apigateway.RestApi')
+    @pulumi.runtime.test
     def test_api_methods_creation(self, mock_api, mock_resource, mock_method):
         """Test API methods are configured correctly"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -192,7 +262,9 @@ class TestTapStackInfrastructure(unittest.TestCase):
         for call in mock_method.call_args_list:
             self.assertEqual(call[1]['authorization'], 'AWS_IAM')
 
+    @pulumi.runtime.test
     @patch('pulumi_aws.cloudwatch.MetricAlarm')
+    @pulumi.runtime.test
     def test_cloudwatch_alarms_creation(self, mock_alarm):
         """Test CloudWatch alarms are created"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -213,7 +285,9 @@ class TestTapStackInfrastructure(unittest.TestCase):
         self.assertTrue(any('latency' in name for name in alarm_names))
         self.assertTrue(any('throttle' in name for name in alarm_names))
 
+    @pulumi.runtime.test
     @patch('pulumi_aws.cloudwatch.Dashboard')
+    @pulumi.runtime.test
     def test_cloudwatch_dashboard_creation(self, mock_dashboard):
         """Test CloudWatch dashboard is created"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -228,6 +302,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
 
         self.assertEqual(call_kwargs['dashboard_name'], f'logistics-tracking-{self.environment_suffix}')
 
+    @pulumi.runtime.test
     def test_stack_tags_propagation(self):
         """Test tags are properly propagated to resources"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -249,7 +324,9 @@ class TestTapStackInfrastructure(unittest.TestCase):
 
     @patch('pulumi_aws.lambda_.Function')
     @patch('pulumi_aws.iam.RolePolicy')
+    @pulumi.runtime.test
     @patch('pulumi_aws.iam.Role')
+    @pulumi.runtime.test
     def test_iam_policies(self, mock_role, mock_policy, mock_lambda):
         """Test IAM policies are properly configured"""
         from lib.tap_stack import TapStack, TapStackArgs
@@ -270,6 +347,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
         # Note: Can't easily test the policy document content due to Pulumi Output.apply
         # In a real scenario, you'd use Pulumi's testing utilities
 
+    @pulumi.runtime.test
     def test_environment_suffix_usage(self):
         """Test environment suffix is used consistently"""
         from lib.tap_stack import TapStack, TapStackArgs

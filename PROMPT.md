@@ -1,86 +1,85 @@
-# Serverless Logistics Tracking API - Infrastructure Requirements
+# Email Notification System - Infrastructure Requirements
 
 ## Business Context
 
-Our logistics company needs a reliable tracking API system to handle package tracking updates and status queries. Currently, we're using legacy systems that don't scale well and lack real-time tracking capabilities. We need a modern, serverless solution that can handle high volumes of tracking updates and provide instant status lookups for our customers and partners.
+Our e-commerce platform needs a reliable email notification system to send order confirmations to customers. Currently, we're manually sending emails or using a basic email service that doesn't provide delivery tracking or cost visibility. We need a scalable, cost-effective solution that integrates with our existing order processing workflow.
 
 ## What We Need
 
 ### Core Functionality
 
-- **Accept tracking updates** from delivery partners and internal systems when packages change status
-- **Store tracking history** with timestamps and location data for each package
-- **Provide real-time status queries** for customers to check their package status
-- **Handle high volume** - we expect thousands of tracking updates per day with occasional spikes
-- **Cost monitoring** to understand and control our API infrastructure costs
+- **Send order confirmation emails** to customers when they complete a purchase
+- **Track email delivery status** (sent, delivered, bounced, complained) for each message
+- **Prevent duplicate emails** if the same order is processed multiple times
+- **Handle high volume** - we expect around 2,000 emails per day with occasional spikes
+- **Cost monitoring** to understand and control our email infrastructure costs
 
 ### Integration Requirements
 
-- **Connect to delivery partners** - we need to receive tracking updates from various shipping providers
-- **REST API endpoints** for internal systems and external partners to submit tracking updates
-- **Store tracking history** for customer service and analytics purposes
+- **Connect to our order system** - we need to receive order events containing customer details and order information
+- **Use our verified domain** for sending emails (e.g., orders@ourcompany.com)
+- **Store delivery records** for customer service and compliance purposes
 - **Provide visibility** into system health and performance
 
 ## Technical Requirements
 
-### Tracking Data Processing
+### Email Processing
 
-1. **Receive tracking updates** containing:
-   - Tracking ID (unique package identifier)
-   - Status (pending, in_transit, delivered, failed)
-   - Location data (latitude, longitude)
-   - Timestamp
-   - Optional metadata
+1. **Receive order events** containing:
+   - Order ID
+   - Customer email address
+   - Customer name
+   - Order items and total
+   - Order timestamp
 
-2. **Store tracking history** with:
-   - Complete audit trail of status changes
-   - Location tracking over time
-   - Searchable by tracking ID and status
-   - Timestamped entries
+2. **Send professional emails** with:
+   - Company branding
+   - Order details
+   - Tracking information
+   - Professional formatting
 
-3. **Provide status queries** for:
-   - Current package status
-   - Full tracking history
-   - Location tracking over time
-   - Status filtering and search
+3. **Track delivery status** for each email:
+   - When email was sent
+   - When it was delivered (or bounced)
+   - Any delivery issues or complaints
 
 ### System Architecture
 
-- **API Gateway**: Handle incoming REST API requests
-- **Lambda Functions**: Process tracking updates and queries
-- **DynamoDB**: Store tracking data with fast lookups
+- **Message Queue**: Handle incoming order events reliably
+- **Email Service**: Send emails using AWS SES
+- **Database**: Store delivery records and status updates
 - **Monitoring**: Track system health and costs
 - **Security**: Ensure only authorized systems can send emails
 
 ### Performance & Reliability
 
-- **Handle thousands of tracking updates per day** with room for growth
-- **Process tracking updates within seconds** of receiving API requests
-- **99.9% uptime** for tracking API
-- **Automatic retry** for failed updates
-- **No duplicate tracking entries** for the same event
+- **Handle 2,000+ emails per day** with room for growth
+- **Process emails within 30 seconds** of receiving order events
+- **99.9% uptime** for email processing
+- **Automatic retry** for failed email sends
+- **No duplicate emails** for the same order
 
 ### Cost Management
 
-- **Pay only for what we use** - serverless architecture with no fixed costs
+- **Pay only for what we use** - no fixed monthly costs for unused capacity
 - **Monitor costs** and get alerts if spending exceeds budget
-- **Optimize for high-frequency API calls** with efficient data storage
-- **Track cost per API request** for budgeting
+- **Optimize for transactional emails** (not marketing blasts)
+- **Track cost per email** for budgeting
 
 ### Security & Compliance
 
-- **Secure API access** - only authorized systems can submit tracking updates
-- **Encrypt tracking data** at rest and in transit
-- **Audit trail** of all tracking activities
-- **Comply with data protection regulations** (GDPR, CCPA)
+- **Secure email sending** - only our verified domains can send emails
+- **Encrypt customer data** at rest and in transit
+- **Audit trail** of all email activities
+- **Comply with email regulations** (CAN-SPAM, GDPR)
 
 ## Operational Requirements
 
 ### Monitoring & Alerts
 
-- **Real-time dashboard** showing API volume, success rates, and costs
-- **Alerts** when error rates are too high (>5%)
-- **Alerts** when API requests fail or timeout
+- **Real-time dashboard** showing email volume, success rates, and costs
+- **Alerts** when bounce rates are too high (>5%)
+- **Alerts** when email sending fails
 - **Cost alerts** when spending exceeds budget
 - **System health monitoring** for all components
 
@@ -95,22 +94,22 @@ Our logistics company needs a reliable tracking API system to handle package tra
 
 - **Auto-scaling** to handle traffic spikes
 - **No manual intervention** required for normal operations
-- **Easy to add new tracking event types** (delivery attempts, exceptions, etc.)
+- **Easy to add new email types** (shipping notifications, etc.)
 - **Support for multiple environments** and regions
 
 ## Success Criteria
 
 ### Functional Success
 
-- ✅ All tracking updates are processed within seconds
-- ✅ 99%+ API success rate
-- ✅ Zero duplicate tracking entries for the same event
-- ✅ Complete tracking history for all packages
+- ✅ All order confirmations are sent within 30 seconds
+- ✅ 99%+ email delivery rate
+- ✅ Zero duplicate emails for the same order
+- ✅ Complete delivery tracking for all emails
 - ✅ Cost visibility and control
 
 ### Technical Success
 
-- ✅ System deploys successfully via Pulumi
+- ✅ System deploys successfully via CloudFormation
 - ✅ All components integrate properly
 - ✅ Monitoring and alerting work correctly
 - ✅ Security requirements are met
@@ -118,28 +117,27 @@ Our logistics company needs a reliable tracking API system to handle package tra
 
 ### Business Success
 
-- ✅ Improved customer experience with real-time tracking
-- ✅ Reduced operational overhead for tracking management
+- ✅ Improved customer experience with reliable email delivery
+- ✅ Reduced operational overhead for email management
 - ✅ Clear cost visibility and control
-- ✅ Foundation for additional tracking features (delivery predictions, etc.)
+- ✅ Foundation for additional email types (shipping, returns, etc.)
 
 ## Implementation Approach
 
-### Phase 1: Core Tracking API
+### Phase 1: Core Email System
 
-- Set up API Gateway for REST endpoints
-- Create Lambda function to process tracking updates and queries
-- Configure DynamoDB for tracking data storage
-- Set up basic monitoring and logging
-- Implement input validation and error handling
+- Set up SNS topic for order events
+- Create Lambda function to process orders and send emails
+- Configure SES for email delivery
+- Set up DynamoDB for delivery tracking
+- Implement basic monitoring
 
 ### Phase 2: Advanced Features
 
-- Add CloudWatch monitoring and alerting
+- Add SES feedback processing for delivery status
 - Implement cost monitoring and alerting
 - Create operational dashboards
 - Add comprehensive logging and debugging
-- Set up dead letter queues for error handling
 
 ### Phase 3: Optimization
 
@@ -151,25 +149,25 @@ Our logistics company needs a reliable tracking API system to handle package tra
 ## Technical Constraints
 
 - **AWS Services Only**: Must use AWS services for consistency with existing infrastructure
-- **Pulumi**: All infrastructure must be defined as code using Pulumi
-- **Python**: Lambda functions should use Python for consistency
-- **US West Region**: Deploy in us-west-2 for cost optimization
-- **Serverless Architecture**: Use serverless services to minimize operational overhead
+- **CloudFormation**: All infrastructure must be defined as code
+- **Python/Node.js**: Lambda functions should use Python or Node.js for consistency
+- **US East Region**: Deploy in us-east-1 for cost optimization
+- **Existing Domain**: Must work with our already-verified SES domain
 
 ## Questions for Implementation
 
-1. **API Authentication**: What authentication method should we use for the tracking API? API keys, IAM, or OAuth?
-2. **Partner Integration**: How will delivery partners integrate with our API? Do they need webhooks or polling?
-3. **Data Retention**: How long should we keep tracking history? Are there compliance requirements for data retention?
+1. **SES Configuration**: Is our domain already verified in SES? What's our current sending limit?
+2. **Order System Integration**: How does our order system currently work? Can it publish to SNS or do we need an API?
+3. **Email Templates**: Do we have existing email templates or should we create new ones?
 4. **Monitoring Tools**: What monitoring tools are we already using? Should we integrate with existing dashboards?
-5. **Rate Limiting**: Do we need rate limiting for API calls? What are the expected usage patterns?
+5. **Compliance Requirements**: Are there specific compliance requirements for email storage or processing?
 
 ## Expected Deliverables
 
-1. **Pulumi Infrastructure**: Complete infrastructure definition using Pulumi Python
-2. **Lambda Functions**: Tracking update processing and query handling code
+1. **CloudFormation Template**: Complete infrastructure definition
+2. **Lambda Functions**: Email processing and feedback handling code
 3. **Documentation**: Setup, deployment, and operational guides
 4. **Monitoring Setup**: Dashboards, alarms, and logging configuration
-5. **API Documentation**: REST API specification and usage examples
+5. **Testing Scripts**: Tools to test the system end-to-end
 
-This system will provide a solid foundation for our tracking operations while being cost-effective, reliable, and easy to maintain.
+This system will provide a solid foundation for our email notifications while being cost-effective, reliable, and easy to maintain.
