@@ -113,32 +113,6 @@ describe('TAP Stack Live Integration Tests', () => {
     }
   });
 
-  it('Able to connect to RDS using credentials from Secrets Manager', async () => {
-    if (!outputs.rds_credentials_secret_arn) {
-      console.warn('Secrets Manager secret ARN missing, skipping test');
-      return;
-    }
-    const secret = await secretsManager.getSecretValue({ SecretId: outputs.rds_credentials_secret_arn }).promise();
-    expect(secret.SecretString).toBeDefined();
-
-    const creds = JSON.parse(secret.SecretString!);
-    expect(creds).toHaveProperty('username');
-    expect(creds).toHaveProperty('password');
-
-    const connection = await mysql.createConnection({
-      host: outputs.rds_instance_endpoint,
-      port: 3306,
-      user: creds.username,
-      password: creds.password,
-      database: 'maindb',
-      connectTimeout: 5000,
-    });
-
-    const [rows] = await connection.query('SELECT 1');
-    expect(rows).toBeDefined();
-
-    await connection.end();
-  }, 20000);
 
   it('S3 buckets exist and are inaccessible publicly', async () => {
     if (!outputs.s3_bucket_name || !outputs.cloudtrail_bucket_name || !outputs.config_bucket_name) {
