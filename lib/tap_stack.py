@@ -143,8 +143,8 @@ class HighAvailabilityWebAppStack(NestedStack):
             allow_all_outbound=False)
         rds_sg.add_ingress_rule(
             peer=ec2_sg,
-            connection=ec2.Port.tcp(3306),
-            description="Allow MySQL connections from EC2 instances")
+            connection=ec2.Port.tcp(5432),
+            description="Allow PostgreSQL connections from EC2 instances")
 
         return alb_sg, ec2_sg, rds_sg
 
