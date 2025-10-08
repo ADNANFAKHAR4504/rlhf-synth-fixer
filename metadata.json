@@ -3,7 +3,6 @@
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
-  "training_quality": 9,
   "po_id": "353856",
   "team": "6",
   "startedAt": "2025-10-08T13:28:14.499Z",
