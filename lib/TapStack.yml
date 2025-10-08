@@ -1131,3 +1131,58 @@ Outputs:
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebACLArn'
+
+  # Additional outputs for integration testing
+  NatGateway1Id:
+    Description: ID of the first NAT Gateway
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway1Id'
+
+  NatGateway2Id:
+    Description: ID of the second NAT Gateway
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NatGateway2Id'
+
+  InternetGatewayId:
+    Description: ID of the Internet Gateway
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
+  SecretRotationLambdaArn:
+    Description: ARN of the secret rotation Lambda function
+    Value: !GetAtt SecretRotationLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretRotationLambdaArn'
+
+  CloudTrailArn:
+    Description: ARN of the CloudTrail trail
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+
+  KMSKeyId:
+    Description: ID of the KMS key used for S3 encryption
+    Value: !Ref S3BucketKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  PublicRouteTableId:
+    Description: ID of the public route table
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicRouteTableId'
+
+  PrivateRouteTable1Id:
+    Description: ID of the first private route table
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTable1Id'
+
+  PrivateRouteTable2Id:
+    Description: ID of the second private route table
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTable2Id'
