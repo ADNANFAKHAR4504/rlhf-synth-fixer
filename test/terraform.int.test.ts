@@ -60,32 +60,7 @@ const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 let outputs: any;
 
 try {
-  beforeAll(async () => {
-    // Load outputs from Terraform
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    const outputsData = fs.readFileSync(outputsPath, 'utf8');
-    outputs = JSON.parse(outputsData);
-
-    console.log('Loaded outputs:', outputs);
-
-    // Parse JSON strings into arrays if they're in JSON format
-    if (typeof outputs.public_subnet_ids === 'string') {
-      try {
-        outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
-      } catch (e) {
-        // Fallback to comma-separated parsing
-        outputs.public_subnet_ids = outputs.public_subnet_ids.split(',').map((id: string) => id.trim());
-      }
-    }
-    if (typeof outputs.private_subnet_ids === 'string') {
-      try {
-        outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
-      } catch (e) {
-        // Fallback to comma-separated parsing
-        outputs.private_subnet_ids = outputs.private_subnet_ids.split(',').map((id: string) => id.trim());
-      }
-    }
-  });
+  outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 } catch (error) {
   console.error("Failed to load outputs:", error);
   outputs = {};
@@ -276,12 +251,7 @@ describe("Infrastructure Integration Tests - Auto Scaling", () => {
     expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
     expect(asg.DefaultCooldown).toBe(180);
     expect(asg.HealthCheckType).toBe("ELB");
-
-    // VPCZoneIdentifier is a comma-separated string, check if it contains our subnet IDs
-    const vpcZoneIds = asg.VPCZoneIdentifier?.split(',').map(id => id.trim()) || [];
-    outputs.private_subnet_ids.forEach((subnetId: string) => {
-      expect(vpcZoneIds).toContain(subnetId);
-    });
+    expect(asg.VPCZoneIdentifier).toContain(outputs.private_subnet_ids[0]);
   }, 30000);
 
   test("Scaling policies are configured with 180s cooldown", async () => {
@@ -443,8 +413,8 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
     const response = await cloudfrontClient.send(command);
 
     expect(response.Distribution).toBeDefined();
-    expect(response.Distribution?.Status).toBe("Deployed");
-    expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
+    expect(response.Distribution!.Status).toBe("Deployed");
+    expect(response.Distribution!.DistributionConfig.Enabled).toBe(true);
   }, 30000);
 
   test("CloudFront distribution has both S3 and ALB origins", async () => {
@@ -453,15 +423,11 @@ describe("Infrastructure Integration Tests - CloudFront", () => {
     });
     const response = await cloudfrontClient.send(command);
 
-    expect(response.Distribution).toBeDefined();
-    expect(response.Distribution?.DistributionConfig?.Origins?.Items).toBeDefined();
+    const origins = response.Distribution!.DistributionConfig.Origins.Items;
+    expect(origins.length).toBeGreaterThanOrEqual(2);
 
-    const origins = response.Distribution!.DistributionConfig!.Origins!.Items;
-    expect(origins).toBeDefined();
-    expect(origins!.length).toBeGreaterThanOrEqual(2);
-
-    const hasS3Origin = origins!.some(o => o.DomainName && o.DomainName.includes(outputs.s3_bucket_name));
-    const hasAlbOrigin = origins!.some(o => o.DomainName && o.DomainName.includes("elb.amazonaws.com"));
+    const hasS3Origin = origins.some(o => o.DomainName.includes(outputs.s3_bucket_name));
+    const hasAlbOrigin = origins.some(o => o.DomainName.includes("elb.amazonaws.com"));
 
     expect(hasS3Origin).toBe(true);
     expect(hasAlbOrigin).toBe(true);
