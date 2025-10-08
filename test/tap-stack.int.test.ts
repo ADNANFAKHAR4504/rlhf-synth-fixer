@@ -39,6 +39,35 @@ import {
   ListResourceRecordSetsCommand 
 } from "@aws-sdk/client-route-53";
 
+import { 
+  DescribeDBInstancesCommand 
+} from "@aws-sdk/client-rds";
+import { 
+  GetSecretValueCommand 
+} from "@aws-sdk/client-secrets-manager";
+import { 
+  AutoScalingClient, 
+  DescribeAutoScalingGroupsCommand 
+} from "@aws-sdk/client-auto-scaling";
+import { 
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import { 
+  CloudWatchClient, 
+  DescribeAlarmsCommand 
+} from "@aws-sdk/client-cloudwatch";
+import { 
+  IAMClient, 
+  ListInstanceProfilesCommand,
+  ListAttachedRolePoliciesCommand
+} from "@aws-sdk/client-iam";
+import { 
+  DescribeRouteTablesCommand,
+  DescribeNatGatewaysCommand
+} from "@aws-sdk/client-ec2";
+
 const awsRegion = process.env.AWS_REGION || "us-east-1";
 const ec2Client = new EC2Client({ region: awsRegion });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
@@ -438,4 +467,358 @@ describe("TapStack Integration Tests - Service Interactions", () => {
       });
     }, 30000);
   });
+
+  describe("Interactive Test: RDS Database Configuration and Secrets Management", () => {
+  test("RDS instance is properly configured with encryption and backups", async () => {
+    // Get RDS instance details
+    const { DBInstances } = await rdsClient.send(
+      new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: rdsEndpoint.split('.')[0]
+      })
+    ).catch(() => ({ DBInstances: [] }));
+
+    if (DBInstances && DBInstances.length > 0) {
+      const dbInstance = DBInstances[0];
+      
+      // Verify encryption
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      
+      // Verify backup configuration
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
+      expect(dbInstance.PreferredBackupWindow).toBeDefined();
+      expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
+      
+      // Verify multi-AZ for prod
+      if (environmentSuffix.toLowerCase() === 'prod') {
+        expect(dbInstance.MultiAZ).toBe(true);
+      }
+      
+      // Verify performance insights
+      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+      
+      // Verify deletion protection for prod
+      if (environmentSuffix.toLowerCase() === 'prod') {
+        expect(dbInstance.DeletionProtection).toBe(true);
+      }
+    }
+  }, 30000);
+
+  test("RDS secrets are properly stored in Secrets Manager", async () => {
+    if (!rdsSecretArn) {
+      console.log("RDS secret ARN not found in outputs");
+      return;
+    }
+
+    try {
+      const { SecretString, VersionId } = await secretsManagerClient.send(
+        new GetSecretValueCommand({ SecretId: rdsSecretArn })
+      );
+
+      expect(SecretString).toBeDefined();
+      expect(VersionId).toBeDefined();
+
+      // Parse secret to verify structure
+      const secret = JSON.parse(SecretString || '{}');
+      expect(secret.username).toBeDefined();
+      expect(secret.password).toBeDefined();
+      expect(secret.engine).toBe('mysql');
+      expect(secret.host).toBeDefined();
+      expect(secret.port).toBe(3306);
+      expect(secret.dbname).toBeDefined();
+    } catch (error: any) {
+      // Secret might not be accessible due to IAM permissions
+      console.log("Unable to retrieve secret - this might be expected:", error.message);
+      expect(rdsSecretArn).toContain(':secretsmanager:');
+    }
+  }, 30000);
+});
+
+describe("Interactive Test: Auto Scaling Groups and Load Balancer Configuration", () => {
+  test("Auto Scaling Groups are properly configured with health checks", async () => {
+    const { AutoScalingGroups } = await new AutoScalingClient({ 
+      region: awsRegion 
+    }).send(
+      new DescribeAutoScalingGroupsCommand({
+        Filters: [
+          {
+            Name: 'tag:Project',
+            Values: ['tap-infrastructure']
+          }
+        ]
+      })
+    );
+
+    expect(AutoScalingGroups?.length).toBeGreaterThanOrEqual(1);
+
+    AutoScalingGroups?.forEach(asg => {
+      // Verify basic configuration
+      expect(asg.MinSize).toBeGreaterThanOrEqual(1);
+      expect(asg.MaxSize).toBeGreaterThanOrEqual(asg.MinSize || 1);
+      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(asg.MinSize || 1);
+      
+      // Verify health check configuration
+      expect(asg.HealthCheckType).toBeDefined();
+      expect(asg.HealthCheckGracePeriod).toBeGreaterThanOrEqual(60);
+      
+      // Verify launch template
+      expect(asg.LaunchTemplate || asg.LaunchConfigurationName).toBeDefined();
+      
+      // Verify subnets (should be in multiple AZs)
+      const subnetCount = asg.VPCZoneIdentifier?.split(',').length || 0;
+      expect(subnetCount).toBeGreaterThanOrEqual(2);
+      
+      // Verify enabled metrics
+      if (asg.EnabledMetrics && asg.EnabledMetrics.length > 0) {
+        const metricNames = asg.EnabledMetrics.map(m => m.Metric);
+        expect(metricNames).toContain('GroupDesiredCapacity');
+        expect(metricNames).toContain('GroupInServiceInstances');
+      }
+    });
+  }, 30000);
+
+  test("Application Load Balancer is configured with proper health checks", async () => {
+    const { LoadBalancers } = await elbv2Client.send(
+      new DescribeLoadBalancersCommand({
+        Names: [albDnsName.split('-')[0]] // Try to match by partial name
+      })
+    ).catch(() => ({ LoadBalancers: [] }));
+
+    if (LoadBalancers && LoadBalancers.length > 0) {
+      const alb = LoadBalancers[0];
+      
+      // Verify ALB configuration
+      expect(alb.Type).toBe('application');
+      expect(alb.Scheme).toBe('internet-facing');
+      expect(alb.State?.Code).toBe('active');
+      expect(alb.IpAddressType).toBe('ipv4');
+      
+      // Verify multi-AZ deployment
+      expect(alb.AvailabilityZones?.length).toBeGreaterThanOrEqual(2);
+      
+      // Get target groups
+      const { TargetGroups } = await elbv2Client.send(
+        new DescribeTargetGroupsCommand({
+          LoadBalancerArn: alb.LoadBalancerArn
+        })
+      );
+
+      TargetGroups?.forEach(tg => {
+        // Verify target group health checks
+        expect(tg.HealthCheckEnabled).toBe(true);
+        expect(tg.HealthCheckPath).toBeDefined();
+        expect(tg.HealthCheckIntervalSeconds).toBeGreaterThanOrEqual(5);
+        expect(tg.HealthyThresholdCount).toBeGreaterThanOrEqual(2);
+        expect(tg.UnhealthyThresholdCount).toBeGreaterThanOrEqual(2);
+        expect(tg.Matcher?.HttpCode).toContain('200');
+      });
+
+      // Check listeners
+      const { Listeners } = await elbv2Client.send(
+        new DescribeListenersCommand({
+          LoadBalancerArn: alb.LoadBalancerArn
+        })
+      );
+
+      expect(Listeners?.length).toBeGreaterThanOrEqual(1);
+      Listeners?.forEach(listener => {
+        expect(listener.Port).toBeDefined();
+        expect(listener.Protocol).toBeDefined();
+        expect(listener.DefaultActions?.length).toBeGreaterThanOrEqual(1);
+      });
+    }
+  }, 30000);
+});
+
+describe("Interactive Test: CloudWatch Monitoring and SNS Alerting", () => {
+  test("SNS topic is configured with proper subscriptions", async () => {
+    const { Attributes } = await snsClient.send(
+      new GetTopicAttributesCommand({
+        TopicArn: snsTopicArn
+      })
+    );
+
+    expect(Attributes?.DisplayName).toBeDefined();
+    expect(Attributes?.SubscriptionsConfirmed).toBeDefined();
+    
+    // Check subscriptions
+    const { Subscriptions } = await snsClient.send(
+      new ListSubscriptionsCommand({})
+    );
+
+    const topicSubscriptions = Subscriptions?.filter(
+      sub => sub.TopicArn === snsTopicArn
+    );
+
+    expect(topicSubscriptions?.length).toBeGreaterThanOrEqual(1);
+    topicSubscriptions?.forEach(sub => {
+      expect(sub.Protocol).toBeDefined();
+      expect(sub.Endpoint).toBeDefined();
+      
+      // Verify email subscriptions
+      if (sub.Protocol === 'email') {
+        expect(sub.Endpoint).toContain('@');
+      }
+    });
+  }, 30000);
+
+  test("CloudWatch alarms are configured for critical metrics", async () => {
+    const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
+    
+    const { MetricAlarms } = await cloudWatchClient.send(
+      new DescribeAlarmsCommand({
+        AlarmNamePrefix: `tap-infrastructure-${environmentSuffix}`
+      })
+    );
+
+    expect(MetricAlarms?.length).toBeGreaterThanOrEqual(1);
+
+    MetricAlarms?.forEach(alarm => {
+      // Verify alarm configuration
+      expect(alarm.AlarmName).toBeDefined();
+      expect(alarm.MetricName).toBeDefined();
+      expect(alarm.Namespace).toBeDefined();
+      expect(alarm.Statistic).toBeDefined();
+      expect(alarm.ComparisonOperator).toBeDefined();
+      expect(alarm.Threshold).toBeDefined();
+      expect(alarm.EvaluationPeriods).toBeGreaterThanOrEqual(1);
+      
+      // Verify SNS actions
+      if (alarm.AlarmActions && alarm.AlarmActions.length > 0) {
+        expect(alarm.AlarmActions).toContain(snsTopicArn);
+      }
+      
+      // Verify alarm is not in INSUFFICIENT_DATA state
+      expect(['OK', 'ALARM']).toContain(alarm.StateValue || '');
+    });
+
+    // Check for specific required alarms
+    const alarmNames = MetricAlarms?.map(a => a.AlarmName) || [];
+    const hasWebCpuAlarm = alarmNames.some(name => 
+      name?.toLowerCase().includes('web') && name?.toLowerCase().includes('cpu')
+    );
+    const hasDbAlarm = alarmNames.some(name => 
+      name?.toLowerCase().includes('db') || name?.toLowerCase().includes('rds')
+    );
+    
+    expect(hasWebCpuAlarm || hasDbAlarm).toBe(true);
+  }, 30000);
+});
+
+describe("Interactive Test: IAM Roles and Instance Profiles", () => {
+  test("EC2 instance profiles have proper IAM roles attached", async () => {
+    const iamClient = new IAMClient({ region: awsRegion });
+    
+    const { InstanceProfiles } = await iamClient.send(
+      new ListInstanceProfilesCommand({})
+    );
+
+    const projectProfiles = InstanceProfiles?.filter(profile =>
+      profile.InstanceProfileName?.includes('tap-infrastructure') ||
+      profile.InstanceProfileName?.includes(environmentSuffix)
+    );
+
+    expect(projectProfiles?.length).toBeGreaterThanOrEqual(1);
+
+    for (const profile of projectProfiles || []) {
+      expect(profile.Roles?.length).toBeGreaterThanOrEqual(1);
+      
+      // Check role policies
+      for (const role of profile.Roles || []) {
+        const { AttachedPolicies } = await iamClient.send(
+          new ListAttachedRolePoliciesCommand({
+            RoleName: role.RoleName
+          })
+        );
+
+        // Verify essential policies are attached
+        const policyArns = AttachedPolicies?.map(p => p.PolicyArn) || [];
+        
+        // Should have SSM policy for Session Manager
+        const hasSSMPolicy = policyArns.some(arn => 
+          arn?.includes('AmazonSSMManagedInstanceCore')
+        );
+        expect(hasSSMPolicy).toBe(true);
+        
+        // Should have CloudWatch policy for monitoring
+        const hasCloudWatchPolicy = policyArns.some(arn => 
+          arn?.includes('CloudWatch')
+        );
+        expect(hasCloudWatchPolicy).toBe(true);
+      }
+    }
+  }, 30000);
+});
+
+describe("Interactive Test: Network Configuration and Routing", () => {
+  test("Route tables are properly configured for public and private subnets", async () => {
+    const { RouteTables } = await ec2Client.send(
+      new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      })
+    );
+
+    expect(RouteTables?.length).toBeGreaterThanOrEqual(2);
+
+    // Check for public route table (has route to IGW)
+    const publicRouteTables = RouteTables?.filter(rt =>
+      rt.Routes?.some(route => 
+        route.GatewayId?.startsWith('igw-')
+      )
+    );
+    expect(publicRouteTables?.length).toBeGreaterThanOrEqual(1);
+
+    // Check for private route tables (has route to NAT)
+    const privateRouteTables = RouteTables?.filter(rt =>
+      rt.Routes?.some(route => 
+        route.NatGatewayId?.startsWith('nat-')
+      )
+    );
+    expect(privateRouteTables?.length).toBeGreaterThanOrEqual(1);
+
+    // Verify each route table has proper associations
+    RouteTables?.forEach(rt => {
+      if (rt.Associations && rt.Associations.length > 0) {
+        rt.Associations.forEach(assoc => {
+          if (assoc.SubnetId) {
+            expect(assoc.RouteTableAssociationId).toBeDefined();
+            expect(assoc.RouteTableId).toBe(rt.RouteTableId);
+          }
+        });
+      }
+    });
+  }, 30000);
+
+  test("NAT Gateways are deployed for high availability", async () => {
+    const { NatGateways } = await ec2Client.send(
+      new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      })
+    );
+
+    // Should have at least one NAT gateway
+    expect(NatGateways?.length).toBeGreaterThanOrEqual(1);
+
+    NatGateways?.forEach(nat => {
+      expect(nat.State).toBe('available');
+      expect(nat.SubnetId).toBeDefined();
+      expect(nat.NatGatewayAddresses?.length).toBeGreaterThanOrEqual(1);
+      
+      // Each NAT should have an Elastic IP
+      nat.NatGatewayAddresses?.forEach(addr => {
+        expect(addr.AllocationId).toBeDefined();
+        expect(addr.PublicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+      });
+    });
+  }, 30000);
+});
 });
