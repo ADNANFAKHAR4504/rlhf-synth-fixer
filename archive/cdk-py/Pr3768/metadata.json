@@ -10,12 +10,11 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": [
-    "SNS",
-    "SQS", 
-    "DynamoDB",
-    "Lambda",
-    "CloudWatch"
-  ],
-  "training_quality": 8
+  "aws_services": "SNS, SQS, DynamboDB, Lambda, DLQ, CloudWatch",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
