@@ -29,6 +29,28 @@ describe('TapStack', () => {
     test('Should use provided environmentSuffix in stack name', () => {
       expect(stack.stackName).toContain('Test');
     });
+
+    test('Should use environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App({ context: { environmentSuffix: 'context-env' } });
+      const contextStack = new TapStack(testApp, 'ContextTestStack');
+      const contextTemplate = Template.fromStack(contextStack);
+      
+      // Verify that resources use the context environmentSuffix
+      contextTemplate.hasResourceProperties('AWS::Kinesis::Stream', {
+        Name: 'recommendation-context-env-user-events',
+      });
+    });
+
+    test('Should default to "dev" when no environmentSuffix provided', () => {
+      const testApp = new cdk.App();
+      const defaultStack = new TapStack(testApp, 'DefaultTestStack');
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      // Verify that resources use the default 'dev' environmentSuffix
+      defaultTemplate.hasResourceProperties('AWS::Kinesis::Stream', {
+        Name: 'recommendation-dev-user-events',
+      });
+    });
   });
 
   describe('Kinesis Stream', () => {
