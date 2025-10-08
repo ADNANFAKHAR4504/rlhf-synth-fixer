@@ -48,7 +48,7 @@ Parameters:
   SolutionStackName:
     Type: String
     Description: 'Elastic Beanstalk solution stack name'
-    Default: '64bit Amazon Linux 2023 v4.0.1 running Python 3.11'
+    Default: '64bit Amazon Linux 2023 v4.7.3 running Python 3.11'
     ConstraintDescription: 'Must be a valid Elastic Beanstalk solution stack'
 
   DeploymentTimestamp:
@@ -400,38 +400,20 @@ Resources:
         Type: Standard
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
-          OptionName: InstanceType
-          Value: t3.medium
-        - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
           Value: !Ref ElasticBeanstalkInstanceProfile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: t3.small
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: ServiceRole
           Value: !Ref ElasticBeanstalkServiceRole
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: ENVIRONMENT
-          Value: !Ref Environment
-        - Namespace: aws:elasticbeanstalk:application:environment
-          OptionName: APP_NAME
-          Value: 'MyWebApp'
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: SingleInstance
         - Namespace: aws:elasticbeanstalk:healthreporting:system
           OptionName: SystemType
           Value: enhanced
-        - Namespace: aws:autoscaling:asg
-          OptionName: MinSize
-          Value: !If [IsProduction, '2', '1']
-        - Namespace: aws:autoscaling:asg
-          OptionName: MaxSize
-          Value: !If [IsProduction, '6', '4']
-        - Namespace: aws:elasticbeanstalk:command
-          OptionName: DeploymentPolicy
-          Value: Rolling
-        - Namespace: aws:autoscaling:updatepolicy:rollingupdate
-          OptionName: RollingUpdateEnabled
-          Value: 'true'
-        - Namespace: aws:elasticbeanstalk:environment
-          OptionName: EnvironmentType
-          Value: LoadBalanced
       Tags:
         - Key: Environment
           Value: !Ref Environment
