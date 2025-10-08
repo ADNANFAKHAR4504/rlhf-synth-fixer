@@ -6,7 +6,7 @@
   "po_id": "87153620",
   "team": "synth",
   "startedAt": "2025-10-08T12:07:38+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
@@ -23,5 +23,11 @@
     "CloudWatch Logs",
     "Application Insights",
     "Resource Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
