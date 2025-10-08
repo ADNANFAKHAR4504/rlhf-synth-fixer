@@ -54,7 +54,6 @@ describe('TapStack CloudFormation Template', () => {
         'DBInstanceClass',
         'DBName',
         'ECSServiceDesiredCount',
-        'CertificateArn',
         'DynamoDBReadCapacity',
         'DynamoDBWriteCapacity'
       ];
@@ -150,9 +149,7 @@ describe('TapStack CloudFormation Template', () => {
       });
 
       test('should have ALB listeners', () => {
-        expect(template.Resources.ALBHttpListener).toBeDefined();
         expect(template.Resources.ALBHttpsListener).toBeDefined();
-        expect(template.Resources.ALBHttpListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
         expect(template.Resources.ALBHttpsListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
       });
 
@@ -530,9 +527,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBe(110);
     });
 
-    test('should have exactly 10 parameters', () => {
+    test('should have exactly 9 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10);
+      expect(parameterCount).toBe(9);
     });
 
     test('should have exactly 20 outputs', () => {

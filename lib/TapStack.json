@@ -140,7 +140,7 @@
         "DBInstanceClass": {
             "Description": "Database instance class",
             "Type": "String",
-            "Default": "db.t4g.micro"
+            "Default": "db.t3.medium"
         },
         "DBName": {
             "Description": "Aurora database name",
@@ -846,26 +846,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "ALBHttpListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "DefaultActions": [
-                    {
-                        "Type": "redirect",
-                        "RedirectConfig": {
-                            "Protocol": "HTTPS",
-                            "Port": 443,
-                            "StatusCode": "HTTP_301"
-                        }
-                    }
-                ],
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP"
             }
         },
         "ALBHttpsListener": {
@@ -1706,37 +1686,6 @@
                         }
                     ]
                 },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Filter": {
-                                "S3Key": {
-                                    "Rules": [
-                                        {
-                                            "Name": "suffix",
-                                            "Value": ".jpg"
-                                        },
-                                        {
-                                            "Name": "suffix",
-                                            "Value": ".jpeg"
-                                        },
-                                        {
-                                            "Name": "suffix",
-                                            "Value": ".png"
-                                        }
-                                    ]
-                                }
-                            },
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "ImageProcessingFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1896,6 +1845,47 @@
                 ]
             }
         },
+        "CloudFrontLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudFrontLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:PutObject",
+                                "s3:PutObjectAcl"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "${CloudFrontLogsBucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Ref": "CloudFrontLogsBucket"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "CloudFrontLogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
@@ -1903,10 +1893,17 @@
                     "Fn::Sub": "${EnvironmentName}-cf-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
+                    "BlockPublicAcls": false,
+                    "BlockPublicPolicy": false,
+                    "IgnorePublicAcls": false,
+                    "RestrictPublicBuckets": false
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
                 },
                 "LifecycleConfiguration": {
                     "Rules": [
@@ -1926,12 +1923,17 @@
                         }
                     ]
                 },
+                "NotificationConfiguration": {},
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${EnvironmentName}-cloudfront-logs"
                         }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "CloudFront Access Logs"
                     }
                 ]
             }
@@ -1946,7 +1948,7 @@
                     "Name": {
                         "Fn::Sub": "${EnvironmentName}-cf-public-key"
                     },
-                    "EncodedKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxPX+znJwPbNbJ3u/jjUx\nT3KT3HVqI1hv9pqIBkKEpv6iLfnEXvhl5jfJGxs5bRMm0QEgdXOJZWMbJdW0HhIL\n1oSvIwBHMZ/JcQJJUky8B0yI8xG1NRLtWKKwGvU3QpNGA5yZsIA7Ae5JlmP9oJDQ\nAQPnX1xzPcbGI6QCgvfMNR9PbTllZYRBIoHNqPkZQU21gI9aQBaHruMNZpXgYkMJ\nHd8kpUeW4lSXzx4HtCy8Gq/ZrDtWoUMxe6FcLxy0mVIFnnJbdRgHyXiKqb8WMcSk\nzsY+U/zeDUVx0H0D2+EJv0w8z7zJbtUQlJZ7M5dWxX2G/wn6JxiP3RgGXeaZEIxh\nswIDAQAB\n-----END PUBLIC KEY-----\n"
+                    "EncodedKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0hGx0SsaZRN6JI4eDvVE\nvnzrNuWZzv9nXMkpN6cPJ9h7TspT22r32+2LtEcIUbDnheBvEuunZqCgTF6gZoGP\n/gSP7LI2XGC0qaIkRhjNBGlez+s95HrC0KkpgxDrou09b+J7poVRI6KAom/NjsgA\nXhOomD6FP2fPJZxY0fyg+nyy2jQYkd7TI5EheVpIE9p+peiFJ0yDGCkOi0vP730f\nb9egLm8q4NtZU0LiRa3UTSY4YmiOXQu3bP1j08w4/M66HdSyI+i98Wy/7YkFzd16\nDaVhynDn3zgzcQ+CJjQMz7YB+5BaKxPj2ZerlkCDwbnI0qV6TVTRXvJeNQxN8kgH\nBQIDAQAB\n-----END PUBLIC KEY-----"
                 }
             }
         },
@@ -2176,10 +2178,7 @@
                     "Ref": "AWS::AccountId"
                 },
                 "SourceArn": {
-                    "Fn::GetAtt": [
-                        "PropertyImagesBucket",
-                        "Arn"
-                    ]
+                    "Fn::Sub": "arn:aws:s3:::${PropertyImagesBucket}"
                 }
             }
         },
@@ -2815,7 +2814,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
                 ],
                 "Policies": [
                     {

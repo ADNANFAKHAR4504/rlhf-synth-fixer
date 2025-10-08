@@ -1022,7 +1022,7 @@ Resources:
             Action:
               - s3:PutObject
               - s3:PutObjectAcl
-            Resource: !Sub '${CloudFrontLogsBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudFrontLogsBucket}/CloudFront/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -1030,7 +1030,7 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref CloudFrontLogsBucket
+            Resource: !Sub 'arn:aws:s3:::${CloudFrontLogsBucket}'
 
   # CloudFront Logs Bucket
   CloudFrontLogsBucket:
