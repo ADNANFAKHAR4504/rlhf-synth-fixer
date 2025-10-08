@@ -11,5 +11,11 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "aws_services": "S3, Random"
+  "aws_services": "S3, Random",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
