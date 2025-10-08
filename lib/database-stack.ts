@@ -19,7 +19,7 @@ interface DatabaseStackProps {
 
 export class DatabaseStack extends Construct {
   public readonly dbInstance: DbInstance;
-  public readonly readReplica: DbInstance;
+  // public readonly readReplica: DbInstance;
   public readonly elasticacheServerless: ElasticacheServerlessCache;
   public readonly historicalDataBucket: S3Bucket;
 
@@ -84,15 +84,16 @@ export class DatabaseStack extends Construct {
       },
     });
 
-    this.readReplica = new DbInstance(this, 'postgres-read-replica', {
-      identifier: `portfolio-read-replica-${props.environmentSuffix}`,
-      replicateSourceDb: this.dbInstance.identifier,
-      instanceClass: 'db.t3.medium',
-      skipFinalSnapshot: true,
-      tags: {
-        Name: 'portfolio-holdings-read-replica',
-      },
-    });
+    // Read replica is not supported with existing database that uses Secrets Manager
+    // this.readReplica = new DbInstance(this, 'postgres-read-replica', {
+    //   identifier: `portfolio-read-replica-${props.environmentSuffix}`,
+    //   replicateSourceDb: this.dbInstance.identifier,
+    //   instanceClass: 'db.t3.medium',
+    //   skipFinalSnapshot: true,
+    //   tags: {
+    //     Name: 'portfolio-holdings-read-replica',
+    //   },
+    // });
 
     const cacheSecurityGroup = new SecurityGroup(this, 'cache-sg', {
       vpcId: props.vpc.id,
