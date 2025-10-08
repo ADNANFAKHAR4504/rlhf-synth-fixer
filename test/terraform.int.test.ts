@@ -2,7 +2,7 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
-import { DescribeDeliveryStreamCommand, FirehoseClient } from '@aws-sdk/client-firehose';
+import { DescribeDeliveryStreamCommand, FirehoseClient, Processor } from '@aws-sdk/client-firehose';
 import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
@@ -228,7 +228,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const s3Destination = response.DeliveryStreamDescription?.Destinations?.[0]?.ExtendedS3DestinationDescription;
       const processors = s3Destination?.ProcessingConfiguration?.Processors;
 
-      const lambdaProcessor = processors?.find((p) => p.Type === 'Lambda');
+      const lambdaProcessor = processors?.find((p: Processor) => p.Type === 'Lambda');
       expect(lambdaProcessor).toBeDefined();
     });
 
