@@ -24,8 +24,8 @@ repositories {
 
 ext {
     //Dependency version management
-    pulumiVersion = '1.16.1'
-    pulumiAwsVersion = '7.5.0'
+    pulumiVersion = '0.12.0'
+    pulumiAwsVersion = '6.57.0'
     awsCdkVersion = '2.204.0'
     awsCdkConstructsVersion = '10.4.2'
     hashicorpCdktfVersion = '0.21.0'
