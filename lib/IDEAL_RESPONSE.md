@@ -1,6 +1,13 @@
 
-
 ```python
+
+"""tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for
+the TAP (Test Automation Platform) project.
+It orchestrates the instantiation of other resource-specific stacks and
+manages environment-specific configurations.
+"""
+
 from typing import Optional, Tuple
 
 import aws_cdk as cdk
@@ -139,8 +146,8 @@ class HighAvailabilityWebAppStack(NestedStack):
             allow_all_outbound=False)
         rds_sg.add_ingress_rule(
             peer=ec2_sg,
-            connection=ec2.Port.tcp(3306),
-            description="Allow MySQL connections from EC2 instances")
+            connection=ec2.Port.tcp(5432),
+            description="Allow PostgreSQL connections from EC2 instances")
 
         return alb_sg, ec2_sg, rds_sg
 
@@ -174,6 +181,7 @@ class HighAvailabilityWebAppStack(NestedStack):
         role = iam.Role(
             self,
             "Ec2InstanceRole",
+            role_name=f"{self.project_name}-{self.environment_name}-Ec2InstanceRole",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description="IAM role for EC2 instances in the web application",
             managed_policies=[
@@ -295,6 +303,7 @@ class HighAvailabilityWebAppStack(NestedStack):
         lambda_role = iam.Role(
             self,
             "BackupLambdaRole",
+            role_name=f"{self.project_name}-{self.environment_name}-BackupLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole")])
@@ -482,9 +491,29 @@ class TapStack(cdk.Stack):
         self.high_availability_web_app = HighAvailabilityWebAppStack(
             self,
             f"HighAvailabilityWebApp{environment_suffix.capitalize()}",
-            environment_name=self.environment_name,
+            environment_name=self.environment_name+"-"+self.environment_suffix,
             project_name=self.project_name,
             owner=self.owner_name)
 
         self.alb_dns_name = self.high_availability_web_app.alb_dns_name
+
+        # Export outputs from nested stack to parent stack
+        CfnOutput(
+            self,
+            "VpcId",
+            value=self.high_availability_web_app.vpc.vpc_id,
+            description="VPC ID")
+
+        CfnOutput(
+            self,
+            "AlbDnsName",
+            value=self.high_availability_web_app.alb_dns_name,
+            description="DNS name of the Application Load Balancer")
+
+        CfnOutput(
+            self,
+            "RdsEndpoint",
+            value=self.high_availability_web_app.database.db_instance_endpoint_address,
+            description="RDS database endpoint")
+
 ```
