@@ -1,9 +1,10 @@
 import json
 import os
-import unittest
 import time
-import boto3
+import unittest
 import uuid
+
+import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from pytest import mark
 
@@ -160,8 +161,8 @@ class TestTapStackIntegration(unittest.TestCase):
             
             # Query for our event
             items = table.query(
-                KeyConditionExpression='event_id = :event_id',
-                ExpressionAttributeValues={':event_id': event_id}
+                KeyConditionExpression='eventId = :eventid',
+                ExpressionAttributeValues={':eventid': event_id}
             )['Items']
             
             self.assertTrue(len(items) > 0, "Event not found in DynamoDB")
@@ -377,8 +378,8 @@ class TestTapStackIntegration(unittest.TestCase):
             
             for event_id in event_ids:
                 items = table.query(
-                    KeyConditionExpression='event_id = :event_id',
-                    ExpressionAttributeValues={':event_id': event_id}
+                    KeyConditionExpression='eventId = :eventid',
+                    ExpressionAttributeValues={':eventid': event_id}
                 )['Items']
                 
                 if len(items) > 0:
