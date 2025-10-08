@@ -52,6 +52,12 @@ variable "create_config_recorder" {
   default     = false
 }
 
+variable "create_security_hub" {
+  description = "Create Security Hub account (set to false if already subscribed)"
+  type        = bool
+  default     = false
+}
+
 variable "compliance_standards" {
   description = "Compliance standards to enable in Security Hub"
   type        = list(string)

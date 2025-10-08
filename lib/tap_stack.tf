@@ -885,7 +885,9 @@ resource "aws_config_configuration_aggregator" "account" {
 # ========== SECURITY HUB SETUP ==========
 
 # Enable Security Hub
+# Note: Set var.create_security_hub=true only for accounts not already subscribed
 resource "aws_securityhub_account" "main" {
+  count                    = var.create_security_hub ? 1 : 0
   enable_default_standards = false
 }
 
@@ -893,6 +895,7 @@ resource "aws_securityhub_account" "main" {
 # Note: Security Hub standards can take 15-20 minutes to fully initialize
 # Comment out if experiencing timeouts - standards can be enabled manually in console
 # resource "aws_securityhub_standards_subscription" "aws_foundational" {
+#   count         = var.create_security_hub ? 1 : 0
 #   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standards/aws-foundational-security-best-practices/v/1.0.0"
 #
 #   depends_on = [aws_securityhub_account.main]
@@ -901,6 +904,7 @@ resource "aws_securityhub_account" "main" {
 # Enable CIS AWS Foundations Benchmark
 # Note: May not be available in all regions or accounts
 # resource "aws_securityhub_standards_subscription" "cis" {
+#   count         = var.create_security_hub ? 1 : 0
 #   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standards/cis-aws-foundations-benchmark/v/1.2.0"
 #
 #   depends_on = [aws_securityhub_account.main]
@@ -909,16 +913,16 @@ resource "aws_securityhub_account" "main" {
 # Enable PCI-DSS
 # Note: Can take long time to initialize
 # resource "aws_securityhub_standards_subscription" "pci_dss" {
+#   count         = var.create_security_hub ? 1 : 0
 #   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standards/pci-dss/v/3.2.1"
 #
 #   depends_on = [aws_securityhub_account.main]
 # }
 
 # Security Hub finding aggregator
+# Note: Works with existing Security Hub subscription
 resource "aws_securityhub_finding_aggregator" "main" {
   linking_mode = "ALL_REGIONS"
-
-  depends_on = [aws_securityhub_account.main]
 }
 
 # ========== GUARDDUTY SETUP ==========
@@ -2301,7 +2305,7 @@ output "config_aggregator_arn" {
 
 output "security_hub_arn" {
   description = "ARN of the Security Hub account"
-  value       = aws_securityhub_account.main.arn
+  value       = var.create_security_hub ? aws_securityhub_account.main[0].arn : "existing-security-hub-not-managed"
 }
 
 output "guardduty_detector_id" {
