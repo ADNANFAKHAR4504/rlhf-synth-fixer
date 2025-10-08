@@ -404,27 +404,32 @@ resource "aws_kms_alias" "lambda_env" {
 
 # Lambda Function
 resource "aws_lambda_function" "main" {
-  filename         = "lambda_function.zip"
-  function_name    = "lambda-function-${local.random_suffix}"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "index.handler"
-  source_code_hash = filebase64sha256("lambda_function.zip")
-  runtime         = "python3.9"
+  function_name = "lambda-function-${local.random_suffix}"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
 
+  # Remove filename and source_code_hash
+  # filename         = "lambda_function.zip"
+  # source_code_hash = filebase64sha256("lambda_function.zip")
+
+  # Empty environment, VPC config, and KMS as needed
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
   environment {
     variables = {
       ENV_TYPE = "production"
     }
   }
-
   kms_key_arn = aws_kms_key.lambda_env.arn
 
   tags = local.common_tags
+
+  # Use a dummy S3 bucket/object if required, or remove deployment package
+  #s3_bucket = "dummy-bucket"
+  #s3_key    = "dummy-key"
 }
 
 # ==================== RDS ====================
