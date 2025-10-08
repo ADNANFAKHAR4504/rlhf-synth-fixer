@@ -24,10 +24,13 @@ class Route53Stack(pulumi.ComponentResource):
     ):
         super().__init__('tap:route53:Route53Stack', name, None, opts)
 
-        # Create hosted zone
+        # Create hosted zone with unique domain name
+        # Using a subdomain pattern that won't conflict with AWS reserved names
+        domain_name = f"tap-cdn-{environment_suffix}.local"
+
         self.zone = route53.Zone(
             f"dns-zone-{environment_suffix}",
-            name=f"tap-cdn-{environment_suffix}.example.com",
+            name=domain_name,
             comment=f"DNS zone for TAP CDN - {environment_suffix}",
             tags=tags,
             opts=ResourceOptions(parent=self)
@@ -37,7 +40,7 @@ class Route53Stack(pulumi.ComponentResource):
         route53.Record(
             f"cloudfront-a-record-{environment_suffix}",
             zone_id=self.zone.zone_id,
-            name=f"cdn.tap-cdn-{environment_suffix}.example.com",
+            name=f"cdn.{domain_name}",
             type="A",
             aliases=[route53.RecordAliasArgs(
                 name=cloudfront_domain_name,
@@ -51,7 +54,7 @@ class Route53Stack(pulumi.ComponentResource):
         route53.Record(
             f"cloudfront-aaaa-record-{environment_suffix}",
             zone_id=self.zone.zone_id,
-            name=f"cdn.tap-cdn-{environment_suffix}.example.com",
+            name=f"cdn.{domain_name}",
             type="AAAA",
             aliases=[route53.RecordAliasArgs(
                 name=cloudfront_domain_name,
