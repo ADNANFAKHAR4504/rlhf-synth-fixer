@@ -255,7 +255,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # ==================== SECURITY GROUPS ====================
 # Security Group for Web Traffic
 resource "aws_security_group" "web" {
-  name_prefix = "sg-web-"
+  name_prefix = "web-sg"
   description = "Security group for web traffic"
   vpc_id      = aws_vpc.main.id
   
@@ -287,7 +287,7 @@ resource "aws_security_group" "web" {
   }
   
   tags = merge(local.common_tags, {
-    Name = "sg-web-${local.random_suffix}"
+    Name = "web-sg-${local.random_suffix}"
   })
 }
 
