@@ -1,3 +1,4 @@
+```
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-region deployable CloudFormation template with comprehensive AWS services including AWS Config for compliance monitoring'
 
@@ -57,10 +58,45 @@ Parameters:
     AllowedPattern: '[0-9]{5}'
     ConstraintDescription: Must be exactly 5 digits
 
+  # Route 53 Domain Name
+  DomainName:
+    Description: Domain name for Route 53 hosted zone (can be any name like test.local, myapp.dev, etc. - doesn't need to be a real domain)
+    Type: String
+    Default: 'myapp.test'
+    ConstraintDescription: Can be any valid domain format (e.g., example.com, test.local, myapp.dev) - ownership not required
+
+  # Create Route 53 resources flag
+  CreateRoute53Records:
+    Description: Whether to create Route 53 hosted zone and DNS records
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
 
 Conditions:
   # Condition to check if cross-region replication buckets are provided
   HasReplicationBuckets: !Not [!Equals [!Join ['', !Ref CrossRegionReplicationBuckets], '']]
+  
+  # Condition to check if Route 53 records should be created
+  CreateRoute53: !And
+    - !Equals [!Ref CreateRoute53Records, 'true']
+    - !Not [!Equals [!Ref DomainName, '']]
+
+Mappings:
+  # API Gateway Regional Hosted Zone IDs (only for supported regions)
+  # These are AWS-managed hosted zone IDs for Regional API Gateway endpoints
+  RegionMap:
+    us-east-1:
+      APIGatewayHostedZoneId: Z1UJRXOUMOOFQ8  # N. Virginia - VERIFIED ✅
+    us-east-2:
+      APIGatewayHostedZoneId: ZOJJZC49E0EPZ   # Ohio - FROM AWS DOCS ✅
+    us-west-1:
+      APIGatewayHostedZoneId: Z2MUQ32089INYE  # N. California - VERIFIED ✅
+    
+  # Note: These IDs are for Regional API Gateway endpoints only
+  # For Edge-Optimized APIs, use Z2FDTNDATAQYW2 (global CloudFront hosted zone)
 
 Resources:
   # S3 Bucket for AWS Config data storage
@@ -168,7 +204,6 @@ Resources:
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
-      - ConfigServiceRole
       - ConfigS3BucketPolicy
     Properties:
       Name: !Sub '${EnvironmentSuffix}-config-recorder'
@@ -1349,6 +1384,80 @@ Resources:
       ResourceArn: !Ref ALB
       WebACLArn: !GetAtt WebACL.Arn
 
+  # Route 53 Hosted Zone
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: CreateRoute53
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub 'Hosted zone for ${EnvironmentSuffix} environment'
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-hosted-zone'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Route 53 A Record for ALB (HTTP)
+  ALBRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 'app.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ALB.DNSName
+        HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+      Comment: !Sub 'A record for ${EnvironmentSuffix} ALB (HTTP)'
+
+  # Route 53 A Record for API Gateway
+  # Note: Uses AWS's hosted zone ID for API Gateway regional endpoints
+  # These IDs are AWS-managed and don't require you to own any domain
+  APIRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 'api.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !Sub '${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com'
+        HostedZoneId: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - APIGatewayHostedZoneId
+        EvaluateTargetHealth: true
+      Comment: !Sub 'A record for ${EnvironmentSuffix} API Gateway (points to AWS-managed endpoint)'
+
+  # Route 53 CNAME Record for www subdomain (points to ALB)
+  WWWRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 'www.${DomainName}'
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !Sub 'app.${DomainName}'
+      Comment: !Sub 'CNAME record for www.${DomainName} pointing to ALB'
+
+  # Route 53 root domain A record (points to ALB)
+  RootRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateRoute53
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ALB.DNSName
+        HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+      Comment: !Sub 'Root A record for ${DomainName} pointing to ALB'
+
 
 Outputs:
   ConfigS3BucketName:
@@ -1603,3 +1712,54 @@ Outputs:
     Value: !Ref PrivateRouteTable2
     Export:
       Name: !Sub '${AWS::StackName}-PrivateRouteTable2Id'
+
+  # Route 53 Outputs (conditional)
+  HostedZoneId:
+    Condition: CreateRoute53
+    Description: ID of the Route 53 hosted zone
+    Value: !Ref HostedZone
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
+
+  HostedZoneName:
+    Condition: CreateRoute53
+    Description: Name of the Route 53 hosted zone
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneName'
+
+  DomainNameServers:
+    Condition: CreateRoute53
+    Description: Name servers for the hosted zone
+    Value: !Join [',', !GetAtt HostedZone.NameServers]
+    Export:
+      Name: !Sub '${AWS::StackName}-DomainNameServers'
+
+  AppDomainName:
+    Condition: CreateRoute53
+    Description: Domain name for the application (ALB)
+    Value: !Sub 'app.${DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-AppDomainName'
+
+  APIDomainName:
+    Condition: CreateRoute53
+    Description: Domain name for the API (API Gateway)
+    Value: !Sub 'api.${DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-APIDomainName'
+
+  RootDomainName:
+    Condition: CreateRoute53
+    Description: Root domain name
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-RootDomainName'
+
+  WWWDomainName:
+    Condition: CreateRoute53
+    Description: WWW subdomain name
+    Value: !Sub 'www.${DomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WWWDomainName'
+```
