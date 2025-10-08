@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "31750982",
+  "team": "synth",
+  "startedAt": "2025-10-01T22:26:19+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route 53",
+    "ACM",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

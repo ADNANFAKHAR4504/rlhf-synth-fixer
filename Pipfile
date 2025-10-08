@@ -17,6 +17,7 @@ pulumi-aws = "*"
 boto3 = "*"
 cfn-flip = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
+attrs = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -30,6 +31,7 @@ pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
+pillow = "*"
 
 [requires]
 python_version = "3.12.11"

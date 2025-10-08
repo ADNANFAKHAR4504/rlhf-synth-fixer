@@ -1,0 +1,407 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Healthcare appointment notification system with SMS and email fallback",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    },
+    "EmailDomain": {
+      "Type": "String",
+      "Default": "example.com",
+      "Description": "Domain for SES email verification"
+    },
+    "SNSSpendLimit": {
+      "Type": "Number",
+      "Default": 50,
+      "Description": "Monthly SMS spend limit in USD"
+    }
+  },
+  "Resources": {
+    "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "AppointmentNotifications",
+        "TopicName": {
+          "Fn::Sub": "healthcare-appointment-notifications-${EnvironmentSuffix}"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "HealthcareNotifications"
+          }
+        ]
+      }
+    },
+    "NotificationLogTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "notification-delivery-logs-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "notificationId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "patientId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "notificationId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "PatientIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "patientId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "HealthcareNotifications"
+          }
+        ]
+      }
+    },
+    "NotificationProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "notification-processor-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "NotificationProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Fn::Ref": "NotificationTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["NotificationLogTable", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${NotificationLogTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendEmail",
+                    "ses:SendRawEmail"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringLike": {
+                      "ses:FromAddress": {
+                        "Fn::Sub": "noreply@${EmailDomain}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "HealthcareNotifications"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "HealthcareNotifications"
+          }
+        ]
+      }
+    },
+    "NotificationProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "appointment-notification-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.10",
+        "Handler": "notification_processor.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["NotificationProcessorRole", "Arn"]
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "import json\nimport boto3\nimport uuid\nimport time\nfrom datetime import datetime\nfrom botocore.exceptions import ClientError\n\nsns_client = boto3.client('sns', region_name='${AWS::Region}')\ndynamodb = boto3.resource('dynamodb', region_name='${AWS::Region}')\nses_client = boto3.client('ses', region_name='${AWS::Region}')\ncloudwatch = boto3.client('cloudwatch', region_name='${AWS::Region}')\n\ntable = dynamodb.Table('${NotificationLogTable}')\n\ndef lambda_handler(event, context):\n    batch_id = str(uuid.uuid4())\n    results = {'success': 0, 'failed': 0, 'fallback': 0}\n\n    appointments = event.get('appointments', [])\n\n    for appointment in appointments:\n        notification_id = str(uuid.uuid4())\n        timestamp = int(time.time() * 1000)\n\n        try:\n            send_notification(appointment, notification_id, timestamp, results)\n        except Exception as e:\n            print(f\"Error processing appointment {appointment.get('patientId')}: {str(e)}\")\n            results['failed'] += 1\n            log_notification(notification_id, timestamp, appointment, 'FAILED', str(e))\n\n    publish_metrics(results)\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'batchId': batch_id,\n            'processed': len(appointments),\n            'results': results\n        })\n    }\n\ndef send_notification(appointment, notification_id, timestamp, results):\n    patient_id = appointment.get('patientId')\n    phone_number = appointment.get('phoneNumber')\n    email = appointment.get('email')\n    appointment_time = appointment.get('appointmentTime')\n    doctor_name = appointment.get('doctorName')\n\n    message = f\"Reminder: Your appointment with Dr. {doctor_name} is scheduled for {appointment_time}. Reply CONFIRM to confirm or CANCEL to cancel.\"\n\n    sms_sent = False\n\n    if phone_number:\n        try:\n            response = sns_client.publish(\n                PhoneNumber=phone_number,\n                Message=message,\n                MessageAttributes={\n                    'AWS.SNS.SMS.SMSType': {\n                        'DataType': 'String',\n                        'StringValue': 'Transactional'\n                    }\n                }\n            )\n\n            log_notification(notification_id, timestamp, appointment, 'SMS_SENT', response['MessageId'])\n            results['success'] += 1\n            sms_sent = True\n\n        except ClientError as e:\n            print(f\"SMS send failed for {patient_id}: {str(e)}\")\n\n    if not sms_sent and email:\n        try:\n            response = ses_client.send_email(\n                Source=f'noreply@${EmailDomain}',\n                Destination={'ToAddresses': [email]},\n                Message={\n                    'Subject': {'Data': 'Appointment Reminder'},\n                    'Body': {'Text': {'Data': message}}\n                }\n            )\n\n            log_notification(notification_id, timestamp, appointment, 'EMAIL_SENT', response['MessageId'])\n            results['fallback'] += 1\n\n        except ClientError as e:\n            print(f\"Email send failed for {patient_id}: {str(e)}\")\n            log_notification(notification_id, timestamp, appointment, 'ALL_FAILED', str(e))\n            results['failed'] += 1\n\ndef log_notification(notification_id, timestamp, appointment, status, message_id):\n    try:\n        table.put_item(\n            Item={\n                'notificationId': notification_id,\n                'timestamp': timestamp,\n                'patientId': appointment.get('patientId'),\n                'status': status,\n                'messageId': message_id,\n                'appointmentTime': appointment.get('appointmentTime'),\n                'phoneNumber': appointment.get('phoneNumber', ''),\n                'email': appointment.get('email', ''),\n                'createdAt': datetime.utcnow().isoformat()\n            }\n        )\n    except Exception as e:\n        print(f\"Failed to log notification: {str(e)}\")\n\ndef publish_metrics(results):\n    try:\n        cloudwatch.put_metric_data(\n            Namespace='HealthcareNotifications',\n            MetricData=[\n                {\n                    'MetricName': 'SuccessfulNotifications',\n                    'Value': results['success'],\n                    'Unit': 'Count'\n                },\n                {\n                    'MetricName': 'FailedNotifications',\n                    'Value': results['failed'],\n                    'Unit': 'Count'\n                },\n                {\n                    'MetricName': 'FallbackNotifications',\n                    'Value': results['fallback'],\n                    'Unit': 'Count'\n                }\n            ]\n        )\n    except Exception as e:\n        print(f\"Failed to publish metrics: {str(e)}\")"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "NOTIFICATION_TABLE": {
+              "Ref": "NotificationLogTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "NotificationTopic"
+            },
+            "EMAIL_DOMAIN": {
+              "Ref": "EmailDomain"
+            }
+          }
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "ReservedConcurrentExecutions": 10,
+        "Layers": [
+          {
+            "Fn::Sub": "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:38"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "HealthcareNotifications"
+          }
+        ]
+      }
+    },
+    "DeliveryFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "notification-delivery-failure-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when notification failure rate exceeds 5%",
+        "MetricName": "FailedNotifications",
+        "Namespace": "HealthcareNotifications",
+        "Statistic": "Sum",
+        "Period": 3600,
+        "EvaluationPeriods": 1,
+        "Threshold": 115,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-processor-error-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert on Lambda function errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "NotificationProcessorFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "NotificationLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${NotificationProcessorFunction}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "SNSDeliveryStatusRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "sns-delivery-status-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SNSDeliveryStatusPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:PutMetricFilter",
+                    "logs:PutRetentionPolicy"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "daily-notification-trigger-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger notification processor daily",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["NotificationProcessorFunction", "Arn"]
+            },
+            "Id": "NotificationTarget"
+          }
+        ]
+      }
+    },
+    "EventRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "NotificationProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["EventRule", "Arn"]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "NotificationTopicArn": {
+      "Description": "ARN of the SNS notification topic",
+      "Value": {
+        "Ref": "NotificationTopic"
+      },
+      "Export": {
+        "Name": "NotificationTopicArn"
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the notification processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["NotificationProcessorFunction", "Arn"]
+      },
+      "Export": {
+        "Name": "NotificationProcessorArn"
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the notification log DynamoDB table",
+      "Value": {
+        "Ref": "NotificationLogTable"
+      },
+      "Export": {
+        "Name": "NotificationLogTableName"
+      }
+    }
+  }
+}
