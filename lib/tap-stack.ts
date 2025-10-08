@@ -55,10 +55,10 @@ export class TapStack extends cdk.Stack {
     // Lambda function for vote processing
     const voteProcessorFunction = new lambda.Function(this, 'VoteProcessor', {
       functionName: `vote-processor-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'vote_processor.handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../lambda/vote-processor')
+        path.join(__dirname, '../lambda/auto-response')
       ),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
@@ -78,10 +78,10 @@ export class TapStack extends cdk.Stack {
       'ResultsAggregator',
       {
         functionName: `results-aggregator-${environmentSuffix}`,
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: 'results_aggregator.handler',
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda/results-aggregator')
+          path.join(__dirname, '../lambda/sentiment')
         ),
         timeout: cdk.Duration.seconds(60),
         memorySize: 512,
