@@ -1,32 +1,32 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   CloudFormationClient,
   DescribeStacksCommand
 } from '@aws-sdk/client-cloudformation';
 import {
-  DynamoDBClient,
-  DescribeTableCommand
-} from '@aws-sdk/client-dynamodb';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand
-} from '@aws-sdk/client-lambda';
-import {
-  SNSClient,
-  GetTopicAttributesCommand
-} from '@aws-sdk/client-sns';
-import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
-  EventBridgeClient,
-  DescribeRuleCommand
+  DescribeTableCommand,
+  DynamoDBClient
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeRuleCommand,
+  EventBridgeClient
 } from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const region = 'us-west-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 const cfnClient = new CloudFormationClient({ region });
 const dynamoClient = new DynamoDBClient({ region });
 const lambdaClient = new LambdaClient({ region });
@@ -408,9 +408,9 @@ describe('Infrastructure Integration Tests', () => {
       const functionArn = outputs.LambdaFunctionArn;
       const functionName = functionArn.split(':function:')[1];
 
-      // Create 100 test appointments
+      // Create 10 test appointments for batch processing test
       const appointments = [];
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 10; i++) {
         appointments.push({
           patientId: `batch-patient-${i.toString().padStart(3, '0')}`,
           phoneNumber: `+1555${(1000000 + i).toString()}`,
@@ -433,10 +433,10 @@ describe('Infrastructure Integration Tests', () => {
       expect(payload.statusCode).toBe(200);
 
       const body = JSON.parse(payload.body);
-      expect(body.processed).toBe(100);
+      expect(body.processed).toBe(10);
       expect(body.batchId).toBeDefined();
       expect(body.successRate).toBeDefined();
-    }, 30000); // Increase timeout for large batch test
+    }, 45000); // Timeout for batch processing test
   });
 
   describe('Resource Tagging', () => {

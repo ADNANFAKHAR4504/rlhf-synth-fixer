@@ -230,7 +230,6 @@
         },
         "Timeout": 300,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": 10,
         "Layers": [
           {
             "Fn::Sub": "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:38"
