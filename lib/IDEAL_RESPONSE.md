@@ -37,37 +37,7 @@ This document contains the corrected and production-ready version of the Pulumi 
 - **ElastiCache description** field fixed (v7 compatibility)
 - **Route53 private hosted zone** for testing without domain ownership
 
-## Architecture Overview
 
-┌─────────────────────────────────────────────────────────────────┐
-│ Multi-Tenant SaaS                                              │
-│ Production Infrastructure                                      │
-└─────────────────────────────────────────────────────────────────┘
-│
-┌───────────┴───────────┐
-│                       │
-┌───────▼────────┐   ┌──▼────────────┐
-│ Security       │   │ Multi-Tenant  │
-│ - KMS Keys     │   │ - Per-Tenant  │
-│ - Secrets Mgr  │   │   Log Groups  │
-│ - IAM Roles    │   │ - RLS/Redis   │
-└────────────────┘   └───────────────┘
-│
-┌───────────┼───────────┬───────────┬───────────┐
-│           │           │           │           │
-┌───▼───┐ ┌─▼────┐   ┌──▼───┐   ┌──▼───┐   ┌───▼───┐
-│ VPC  │ │Aurora│   │Redis │   │  S3  │   │  ALB  │
-│     │ │ RLS  │   │/Tiers│   │Tenant│   │Routing│
-│Multi│ │      │   │      │   │Policy│   │ Host  │
-│ AZ  │ │      │   │      │   │      │   │Based  │
-└─────┘ └──────┘   └──────┘   └──────┘   └───────┘
-│
-┌───────────▼───────────┐
-│ CloudWatch Alarms     │
-│ - CPU/Memory          │
-│ - Errors/Latency      │
-│ - SNS Notifications   │
-└───────────────────────┘
 
 ## Complete Corrected Infrastructure Code
 
@@ -430,9 +400,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # DATABASE LAYER - Aurora PostgreSQL with RLS for Tenant Isolation
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # Aurora DB Subnet Group
         self.aurora_subnet_group = aws.rds.SubnetGroup(
@@ -527,9 +497,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # CACHING LAYER - ElastiCache Redis with Tenant Class Separation
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # Redis Subnet Group
         self.redis_subnet_group = aws.elasticache.SubnetGroup(
@@ -605,9 +575,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # STORAGE LAYER - S3 with Tenant-Specific Bucket Policies
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # S3 Bucket - FIXED: lowercase stack name for valid bucket naming
         self.tenant_data_bucket = aws.s3.Bucket(
@@ -707,9 +677,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # CDN LAYER - CloudFront Distribution with Custom SSL
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # CloudFront Distribution for multi-tenant content delivery
         self.cloudfront_distribution = aws.cloudfront.Distribution(
@@ -757,9 +727,9 @@ class TapStack(pulumi.ComponentResource):
         )
 
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # DNS - Route 53 Private Hosted Zone (NO DOMAIN OWNERSHIP REQUIRED)
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # Route 53 Private Hosted Zone for internal DNS
         self.hosted_zone = aws.route53.Zone(
@@ -774,9 +744,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.vpc])
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # LOAD BALANCING - ALB with Host-Based Routing for Tenants
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # Application Load Balancer
         self.alb = aws.lb.LoadBalancer(
@@ -850,9 +820,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # COMPUTE LAYER - Auto Scaling Group with m5.large Instances
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # IAM Role for EC2 instances
         self.ec2_role = aws.iam.Role(
@@ -999,9 +969,9 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # AUTHENTICATION - Cognito User Pools Per Tenant (MFA Disabled)
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # Cognito User Pool for Tenant 1 - FIXED: removed MFA for simpler testing
         self.cognito_user_pool_tenant1 = aws.cognito.UserPool(
@@ -1050,9 +1020,9 @@ usermod -a -G docker ec2-user
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # SERVERLESS - DynamoDB for Tenant Registry & Lambda for Provisioning
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # DynamoDB Table for Tenant Metadata and Configuration
         self.tenant_registry_table = aws.dynamodb.Table(
@@ -1237,9 +1207,9 @@ def handler(event, context):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # MONITORING - CloudWatch Log Groups Per Tenant
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # CloudWatch Log Group for Tenant 1 Application Logs
         self.tenant1_log_group = aws.cloudwatch.LogGroup(
@@ -1277,9 +1247,9 @@ def handler(event, context):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # CONFIGURATION MANAGEMENT - Systems Manager Parameter Store
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # SSM Parameter for Aurora Endpoint
         self.ssm_aurora_endpoint = aws.ssm.Parameter(
@@ -1325,9 +1295,9 @@ def handler(event, context):
             opts=ResourceOptions(parent=self)
         )
         
-        # ═══════════════════════════════════════════════════════════════
+        # 
         # EVENT-DRIVEN ARCHITECTURE - EventBridge for Tenant Lifecycle
-        # ═══════════════════════════════════════════════════════════════
+        # 
         
         # EventBridge Event Bus for tenant events
         self.event_bus = aws.cloudwatch.EventBus(
