@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349002",
+  "team": "4",
+  "startedAt": "2025-10-08T08:06:49.355Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, Subnet, RDS, S3, MFA, IAM, Logging, IAM"
+}
