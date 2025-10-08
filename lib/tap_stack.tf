@@ -1127,9 +1127,9 @@ resource "aws_db_instance" "mysql" {
   storage_type      = "gp3"
   storage_encrypted = true
 
-  db_name  = "appdb"
-  username = "admin"
-  password = var.db_password # Use AWS Secrets Manager in production
+  db_name                     = "appdb"
+  username                    = "admin"
+  manage_master_user_password = true
 
   vpc_security_group_ids = [aws_security_group.rds_us_east_1.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name

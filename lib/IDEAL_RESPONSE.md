@@ -213,12 +213,7 @@ variable "ssh_allowed_ip" {
   default     = "203.0.113.0/32" # Example IP - replace with your actual IP
 }
 
-variable "db_password" {
-  description = "Master password for RDS database (use AWS Secrets Manager in production)"
-  type        = string
-  sensitive   = true
-  default     = "ChangeMePlease123!" # CHANGE THIS - use secrets manager in production
-}
+# Removed db_password variable - now using AWS Secrets Manager for RDS password
 ```
 
 ### Complete Infrastructure Configuration
@@ -1357,7 +1352,7 @@ resource "aws_db_instance" "mysql" {
 
   db_name  = "appdb"
   username = "admin"
-  password = var.db_password # Use AWS Secrets Manager in production
+  manage_master_user_password = true
 
   vpc_security_group_ids = [aws_security_group.rds_us_east_1.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
@@ -1815,7 +1810,7 @@ Before deployment, update the following variables in `variables.tf` or provide t
 ```hcl
 # Update these values for your environment
 ssh_allowed_ip = "YOUR_IP/32"
-db_password    = "your-secure-password"
+# No need to set db_password - AWS Secrets Manager handles RDS password automatically
 ```
 
 Update the domain name in `tap_stack.tf`:
