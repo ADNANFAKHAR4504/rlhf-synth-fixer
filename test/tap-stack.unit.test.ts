@@ -114,7 +114,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings).toBeDefined();
       expect(template.Mappings.RegionMap).toBeDefined();
 
-      // Test the four supported regions
+      // Test the five supported regions
       expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
       expect(template.Mappings.RegionMap['us-east-1'].APIGatewayHostedZoneId).toBe('Z1UJRXOUMOOFQ8');
 
