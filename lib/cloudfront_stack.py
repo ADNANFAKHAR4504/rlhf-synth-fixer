@@ -18,7 +18,7 @@ class CloudFrontStack(pulumi.ComponentResource):
         self,
         name: str,
         environment_suffix: str,
-        origin_bucket: s3.BucketV2,
+        origin_bucket: s3.Bucket,
         viewer_request_lambda_arn: Output[str],
         origin_response_lambda_arn: Output[str],
         web_acl_id: Output[str],
@@ -26,6 +26,32 @@ class CloudFrontStack(pulumi.ComponentResource):
         opts: Optional[ResourceOptions] = None
     ):
         super().__init__('tap:cloudfront:CloudFrontStack', name, None, opts)
+
+        # Create separate S3 bucket for CloudFront logs with ACL enabled
+        logs_bucket = s3.Bucket(
+            f"cloudfront-logs-bucket-{environment_suffix}",
+            bucket=f"tap-cdn-logs-{environment_suffix}",
+            tags=tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable ACL for logs bucket (required for CloudFront logging)
+        s3.BucketAclV2(
+            f"cloudfront-logs-bucket-acl-{environment_suffix}",
+            bucket=logs_bucket.id,
+            acl="log-delivery-write",
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Enable bucket ownership controls for logs bucket
+        s3.BucketOwnershipControls(
+            f"cloudfront-logs-bucket-ownership-{environment_suffix}",
+            bucket=logs_bucket.id,
+            rule=s3.BucketOwnershipControlsRuleArgs(
+                object_ownership="BucketOwnerPreferred"
+            ),
+            opts=ResourceOptions(parent=self)
+        )
 
         # Origin Access Control for S3
         oac = cloudfront.OriginAccessControl(
@@ -130,7 +156,7 @@ class CloudFrontStack(pulumi.ComponentResource):
                 cloudfront_default_certificate=True
             ),
             logging_config=cloudfront.DistributionLoggingConfigArgs(
-                bucket=origin_bucket.bucket_regional_domain_name,
+                bucket=logs_bucket.bucket_regional_domain_name,
                 include_cookies=False,
                 prefix="cloudfront-logs/"
             ),

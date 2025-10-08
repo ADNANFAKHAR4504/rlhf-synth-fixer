@@ -23,7 +23,7 @@ class S3Stack(pulumi.ComponentResource):
         super().__init__('tap:s3:S3Stack', name, None, opts)
 
         # Create S3 bucket for origin content
-        self.bucket = s3.BucketV2(
+        self.bucket = s3.Bucket(
             f"origin-bucket-{environment_suffix}",
             bucket=f"tap-cdn-origin-{environment_suffix}",
             tags=tags,
@@ -31,21 +31,21 @@ class S3Stack(pulumi.ComponentResource):
         )
 
         # Configure bucket versioning
-        s3.BucketVersioningV2(
+        s3.BucketVersioning(
             f"origin-bucket-versioning-{environment_suffix}",
             bucket=self.bucket.id,
-            versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=ResourceOptions(parent=self)
         )
 
         # Configure server-side encryption
-        s3.BucketServerSideEncryptionConfigurationV2(
+        s3.BucketServerSideEncryptionConfiguration(
             f"origin-bucket-encryption-{environment_suffix}",
             bucket=self.bucket.id,
-            rules=[s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="AES256"
                 )
             )],
