@@ -90,12 +90,18 @@ export class TapStack extends TerraformStack {
       bucketPrefix: 'tap-logs',
       versioning: true,
       encryption: true,
-      accessLogging: false, // Avoid circular dependency
+      accessLogging: false,
       tags: globalTags,
       lifecycleRules: [
         {
           id: 'expire-old-logs',
           status: 'Enabled',
+          expiration: {
+            days: 30,
+          },
+          noncurrentVersionExpiration: {
+            days: 7,
+          },
         },
       ],
     });
@@ -110,8 +116,28 @@ export class TapStack extends TerraformStack {
         {
           id: 'manage-old-assets',
           status: 'Enabled',
+          transition: [
+            {
+              days: 30,
+              storageClass: 'STANDARD_IA',
+            },
+            {
+              days: 90,
+              storageClass: 'GLACIER',
+            },
+          ],
+          expiration: {
+            days: 365,
+          },
         },
       ],
+    });
+
+    // Add ACL configuration for logs bucket (required for CloudFront and ALB)
+    new aws.s3BucketAcl.S3BucketAcl(this, 'logs-bucket-acl', {
+      bucket: logsBucket.bucket.id,
+      acl: 'log-delivery-write',
+      dependsOn: [logsBucket.bucket],
     });
 
     // ========== Networking ==========
@@ -150,7 +176,7 @@ export class TapStack extends TerraformStack {
       desiredCapacity: 3,
       tags: globalTags,
       ssmParameterPrefix: '/tap/app',
-      keyName: 'tap-keypair', // Create this keypair in AWS console or via CDKTF
+      keyName: 'latest-key-pair', // Create this keypair in AWS console or via CDKTF
     });
 
     // Attach ASG to Target Group

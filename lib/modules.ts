@@ -927,7 +927,13 @@ export class S3Module extends Construct {
         'lifecycle',
         {
           bucket: this.bucket.id,
-          rule: config.lifecycleRules,
+          rule: config.lifecycleRules.map(rule => ({
+            ...rule,
+            // Ensure each rule has at least one action
+            expiration: rule.expiration || {
+              days: 90, // Default expiration
+            },
+          })),
         }
       );
     }
