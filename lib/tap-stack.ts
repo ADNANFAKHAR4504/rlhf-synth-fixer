@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import { NetworkingStack } from './stacks/networking-stack';
+import { Construct } from 'constructs';
 import { DatabaseStack } from './stacks/database-stack';
-import { RegionalStack } from './stacks/regional-stack';
 import { GlobalStack } from './stacks/global-stack';
+import { NetworkingStack } from './stacks/networking-stack';
+import { RegionalStack } from './stacks/regional-stack';
 import { TgwPeeringStack } from './stacks/tgw-peering-stack';
 
 interface TapStackProps extends cdk.StackProps {
