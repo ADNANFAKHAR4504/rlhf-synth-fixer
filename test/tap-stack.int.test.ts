@@ -58,7 +58,7 @@ const parseAccountFromArn = (arn?: string): string | undefined => (arn ? arn.spl
 const parseRegionFromAlbDns = (dns?: string): string | undefined => {
   // e.g. ...eu-central-1.elb.amazonaws.com
   if (!dns) return undefined;
-  const m = dns.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/);
+  const m = dns.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/i);
   return m?.[1];
 };
 
@@ -71,7 +71,7 @@ const region: string =
 const accountId: string | undefined = parseAccountFromArn(outputs.LambdaFunctionArn);
 
 // Try to infer env suffix from the Data bucket or RDS endpoint (fallback to ENV var)
-const envFromBucket = outputs.DataBucketName?.match(/^tapstack([a-z0-9]+)-data-/)?.[1];
+const envFromBucket = outputs.DataBucketName?.match(/^tapstack([a-z0-9]+)-data-/i)?.[1];
 const envFromRds = outputs.RDSEndpoint?.match(/^tapstack([a-z0-9]+)-/i)?.[1];
 const environmentSuffix: string = process.env.ENVIRONMENT_SUFFIX || envFromBucket || envFromRds || 'dev';
 
@@ -122,14 +122,16 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
     });
 
     test('outputs should have valid formats', () => {
-      // ALB DNS format
-      expect(outputs.ALBDNSName).toMatch(/^[a-z0-9-]+\.[\w-]+\.elb\.amazonaws\.com$/);
+      // ALB DNS format (tolerate mixed-case from stack-generated prefix)
+      expect(outputs.ALBDNSName.toLowerCase())
+        .toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
 
       // S3 bucket name (allows dots and hyphens)
       expect(outputs.DataBucketName).toMatch(/^[a-z0-9.-]+$/);
 
       // RDS endpoint (can have multiple subdomains)
-      expect(outputs.RDSEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
+      expect(outputs.RDSEndpoint)
+        .toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
 
       // Bastion IP
       expect(outputs.BastionPublicIP).toMatch(/^(\d{1,3}\.){3}\d{1,3}$/);
@@ -250,7 +252,22 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         return;
       }
 
-      // 1) Put a small object to the log bucket
+      const logGroupName = `/aws/lambda/${functionName}`;
+      const pattern = `Processing log file: ${logBucketName}/${key}`;
+
+      // Warm up the Lambda to ensure the log group exists
+      try {
+        await lambdaClient.send(
+          new InvokeCommand({
+            FunctionName: functionArn,
+            Payload: new TextEncoder().encode(JSON.stringify({ warmup: true })),
+          })
+        );
+      } catch {
+        // ignore warmup errors
+      }
+
+      // Put a small object to the log bucket to trigger the Lambda
       await s3Client.send(
         new PutObjectCommand({
           Bucket: logBucketName,
@@ -259,24 +276,30 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         })
       );
 
-      // 2) Poll CloudWatch Logs for the expected line
-      const logGroupName = `/aws/lambda/${functionName}`;
-      const pattern = `Processing log file: ${logBucketName}/${key}`;
-
+      // Poll CloudWatch Logs for the expected line; tolerate log group creation lag
       let found = false;
       const start = Date.now();
       while (!found && Date.now() - start < 120_000) {
-        const events = await cwLogsClient.send(
-          new FilterLogEventsCommand({
-            logGroupName,
-            filterPattern: 'Processing log file',
-            startTime: start - 5_000,
-          })
-        );
-        const messages = (events.events || []).map(e => e.message || '');
-        if (messages.some(m => m.includes(pattern))) {
-          found = true;
-          break;
+        try {
+          const events = await cwLogsClient.send(
+            new FilterLogEventsCommand({
+              logGroupName,
+              filterPattern: 'Processing log file',
+              startTime: start - 5_000,
+            })
+          );
+          const messages = (events.events || []).map(e => e.message || '');
+          if (messages.some(m => m.includes(pattern))) {
+            found = true;
+            break;
+          }
+        } catch (err: unknown) {
+          // If the log group isn't created yet, wait and retry
+          const msg = (err as Error)?.name || (err as Error)?.message || '';
+          if (!/ResourceNotFoundException/.test(msg)) {
+            // other errors should break the loop
+            throw err;
+          }
         }
         await sleep(5_000);
       }
@@ -367,10 +390,10 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
     test('Outputs align with region', () => {
       // ALB DNS and RDS endpoint should include the detected region
       if (outputs.ALBDNSName) {
-        expect(outputs.ALBDNSName).toContain(`.${region}.elb.amazonaws.com`);
+        expect(outputs.ALBDNSName.toLowerCase()).toContain(`.${region}.elb.amazonaws.com`);
       }
       if (outputs.RDSEndpoint) {
-        expect(outputs.RDSEndpoint).toContain(`.${region}.rds.amazonaws.com`);
+        expect(outputs.RDSEndpoint.toLowerCase()).toContain(`.${region}.rds.amazonaws.com`);
       }
       if (outputs.DataBucketName) {
         expect(outputs.DataBucketName.endsWith(`-${region}`)).toBe(true);
