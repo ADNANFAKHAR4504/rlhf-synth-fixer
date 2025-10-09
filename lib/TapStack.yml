@@ -475,7 +475,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
@@ -587,7 +587,7 @@ Resources:
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: webapp
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/realestate-webapp:latest
+          Image: nginx:latest
           Essential: true
           PortMappings:
             - ContainerPort: 80
