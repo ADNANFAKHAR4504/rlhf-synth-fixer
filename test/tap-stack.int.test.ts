@@ -1,7 +1,8 @@
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { BatchGetProjectsCommand, CodeBuildClient, ListProjectsCommand } from '@aws-sdk/client-codebuild';
 import { CodePipelineClient, GetPipelineCommand, GetPipelineStateCommand, ListPipelinesCommand } from '@aws-sdk/client-codepipeline';
-import { DescribeApplicationsCommand, DescribeEnvironmentHealthCommand, DescribeEnvironmentsCommand, ElasticBeanstalkClient } from '@aws-sdk/client-elastic-beanstalk';
+import { DescribeApplicationsCommand, DescribeEnvironmentHealthCommand, DescribeEnvironmentsCommand, ElasticBeanstalkClient, DescribeEnvironmentResourcesCommand } from '@aws-sdk/client-elastic-beanstalk';
+import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 import { EventBridgeClient, ListRulesCommand, ListTargetsByRuleCommand } from '@aws-sdk/client-eventbridge';
 import { GetInstanceProfileCommand, GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand, ListRolesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient, ListAliasesCommand } from '@aws-sdk/client-kms';
@@ -22,6 +23,7 @@ const codeBuildClient = new CodeBuildClient({ region: process.env.AWS_REGION || 
 const codePipelineClient = new CodePipelineClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const eventBridgeClient = new EventBridgeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
 describe('TapStack Integration Tests', () => {
   describe('S3 Resources Validation', () => {
@@ -1140,15 +1142,39 @@ describe('TapStack Integration Tests', () => {
       console.log(`SolutionStackName: ${environment?.SolutionStackName}`);
       
       // Try multiple URL sources
-      let appUrl: string;
+      let appUrl: string | undefined;
       if (environment?.CNAME) {
         appUrl = `http://${environment.CNAME}`;
         console.log('Using CNAME for URL');
-      } else if (environment?.EndpointURL) {
-        appUrl = environment.EndpointURL;
-        console.log('Using EndpointURL for URL');
-      } else {
-        // For single instance environments, try the standard pattern
+      }
+
+      if (!appUrl) {
+        try {
+          // Try to resolve instance public endpoint (single instance envs)
+          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+          if (instanceId) {
+            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+            const reservation = ec2Res.Reservations?.[0];
+            const instance = reservation?.Instances?.[0];
+            const publicDns = instance?.PublicDnsName;
+            const publicIp = instance?.PublicIpAddress;
+            if (publicDns) {
+              appUrl = `http://${publicDns}`;
+              console.log('Using EC2 PublicDnsName for URL');
+            } else if (publicIp) {
+              appUrl = `http://${publicIp}`;
+              console.log('Using EC2 PublicIpAddress for URL');
+            }
+          }
+        } catch (e) {
+          const err = e as Error;
+          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
+        }
+      }
+
+      if (!appUrl) {
+        // Final fallback to constructed URL
         appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
         console.log('Using constructed URL');
       }
@@ -1256,10 +1282,34 @@ describe('TapStack Integration Tests', () => {
         EnvironmentNames: [matchingEnv.EnvironmentName!]
       }));
       
-      // Use the CNAME from the environment details, fallback to constructed URL
+      // Use the CNAME from the environment details, fallback to EC2 or constructed URL
       const environment = envDetailsResponse.Environments?.[0];
-      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
-                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      let appUrl: string | undefined = environment?.CNAME ? `http://${environment.CNAME}` : undefined;
+      
+      if (!appUrl) {
+        try {
+          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+          if (instanceId) {
+            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+            const instance = ec2Res.Reservations?.[0]?.Instances?.[0];
+            const publicDns = instance?.PublicDnsName;
+            const publicIp = instance?.PublicIpAddress;
+            if (publicDns) {
+              appUrl = `http://${publicDns}`;
+            } else if (publicIp) {
+              appUrl = `http://${publicIp}`;
+            }
+          }
+        } catch (e) {
+          const err = e as Error;
+          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
+        }
+      }
+      
+      if (!appUrl) {
+        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      }
       
       const startTime = Date.now();
       
@@ -1323,10 +1373,34 @@ describe('TapStack Integration Tests', () => {
         EnvironmentNames: [matchingEnv.EnvironmentName!]
       }));
       
-      // Use the CNAME from the environment details, fallback to constructed URL
+      // Use the CNAME from the environment details, fallback to EC2 or constructed URL
       const environment = envDetailsResponse.Environments?.[0];
-      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
-                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      let appUrl: string | undefined = environment?.CNAME ? `http://${environment.CNAME}` : undefined;
+      
+      if (!appUrl) {
+        try {
+          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+          if (instanceId) {
+            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+            const instance = ec2Res.Reservations?.[0]?.Instances?.[0];
+            const publicDns = instance?.PublicDnsName;
+            const publicIp = instance?.PublicIpAddress;
+            if (publicDns) {
+              appUrl = `http://${publicDns}`;
+            } else if (publicIp) {
+              appUrl = `http://${publicIp}`;
+            }
+          }
+        } catch (e) {
+          const err = e as Error;
+          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
+        }
+      }
+      
+      if (!appUrl) {
+        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      }
       
       try {
         // Test GET request (should work)
