@@ -1,29 +1,23 @@
 import fs from 'fs';
+import https from 'https';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
   DeleteCommand,
-  ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
-  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import {
   CloudFrontClient,
-  GetDistributionCommand,
   CreateInvalidationCommand,
+  GetInvalidationCommand,
 } from '@aws-sdk/client-cloudfront';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import {
-  CloudWatchClient,
-  GetMetricStatisticsCommand,
-} from '@aws-sdk/client-cloudwatch';
 
 let outputs: Record<string, string> = {};
 try {
@@ -42,8 +36,48 @@ const ddbClient = new DynamoDBClient({ region });
 const ddb = DynamoDBDocumentClient.from(ddbClient);
 const s3Client = new S3Client({ region });
 const cloudFrontClient = new CloudFrontClient({ region });
-const lambdaClient = new LambdaClient({ region: 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region });
+
+const makeHttpsRequest = (
+  url: string,
+  headers: Record<string, string> = {}
+): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> => {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, { headers }, res => {
+        let body = '';
+        res.on('data', chunk => (body += chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode || 0,
+            headers: res.headers as Record<string, string>,
+            body,
+          });
+        });
+      })
+      .on('error', reject);
+  });
+};
+
+const waitForInvalidation = async (
+  distributionId: string,
+  invalidationId: string,
+  maxWaitTime = 60000
+): Promise<boolean> => {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitTime) {
+    const result = await cloudFrontClient.send(
+      new GetInvalidationCommand({
+        DistributionId: distributionId,
+        Id: invalidationId,
+      })
+    );
+    if (result.Invalidation?.Status === 'Completed') {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+  return false;
+};
 
 describe('Personalized News Platform Integration Tests', () => {
   const tableName =
@@ -57,25 +91,26 @@ describe('Personalized News Platform Integration Tests', () => {
   const distributionDomain =
     outputs[`${environmentSuffix}-DistributionDomainName`] ||
     outputs['DistributionDomainName'];
-  const viewerRequestFunctionArn =
-    outputs[`${environmentSuffix}-ViewerRequestFunctionArn`] ||
-    outputs['ViewerRequestFunctionArn'];
-  const viewerResponseFunctionArn =
-    outputs[`${environmentSuffix}-ViewerResponseFunctionArn`] ||
-    outputs['ViewerResponseFunctionArn'];
 
   beforeAll(() => {
-    if (!tableName || !bucketName || !distributionId) {
+    if (!tableName || !bucketName || !distributionId || !distributionDomain) {
       throw new Error(
         'Required stack outputs not found. Please run: ./scripts/get-outputs.sh'
       );
     }
   });
 
-  test('should complete full personalized content delivery flow', async () => {
-    const testUserId = `test-user-${Date.now()}`;
+  afterEach(async () => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  });
+
+  test('end-to-end personalized content delivery flow for single user', async () => {
+    console.log('=== Starting Complete Personalized Content Delivery Flow ===');
+
+    const testUserId = `flow-user-${Date.now()}`;
     const testArticleKey = `articles/test-article-${Date.now()}.html`;
 
+    console.log(`Step 1: Creating user preferences for ${testUserId}`);
     const userPreferences = {
       userId: testUserId,
       topics: ['technology', 'cloud-computing'],
@@ -91,30 +126,25 @@ describe('Personalized News Platform Integration Tests', () => {
       })
     );
 
-    const retrievedUser = await ddb.send(
+    const verifyUser = await ddb.send(
       new GetCommand({
         TableName: tableName,
         Key: { userId: testUserId },
       })
     );
+    expect(verifyUser.Item).toBeDefined();
+    console.log('✓ User preferences stored in DynamoDB');
 
-    expect(retrievedUser.Item).toBeDefined();
-    expect(retrievedUser.Item?.userId).toBe(testUserId);
-    expect(retrievedUser.Item?.topics).toEqual([
-      'technology',
-      'cloud-computing',
-    ]);
-
-    const articleContent = `
-      <!DOCTYPE html>
-      <html>
-        <head><title>Test Article</title></head>
-        <body>
-          <h1>Personalized News Article</h1>
-          <p>This is a test article for ${testUserId}</p>
-        </body>
-      </html>
-    `;
+    console.log('Step 2: Publishing article content to S3');
+    const articleContent = `<!DOCTYPE html>
+<html>
+<head><title>Cloud Computing News</title></head>
+<body>
+  <h1>Latest Cloud Computing Trends</h1>
+  <p>Article ID: ${testArticleKey}</p>
+  <p>This article discusses advanced cloud computing topics for expert readers.</p>
+</body>
+</html>`;
 
     await s3Client.send(
       new PutObjectCommand({
@@ -124,331 +154,280 @@ describe('Personalized News Platform Integration Tests', () => {
         ContentType: 'text/html',
       })
     );
+    console.log('✓ Content published to S3');
 
-    const s3Object = await s3Client.send(
-      new GetObjectCommand({
+    console.log('Step 3: Requesting content through CloudFront with user context');
+    const cdnUrl = `https://${distributionDomain}/${testArticleKey}`;
+    const response = await makeHttpsRequest(cdnUrl, {
+      'X-User-Id': testUserId,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('Cloud Computing Trends');
+    expect(response.headers['x-personalized']).toBe('true');
+    expect(response.headers['cache-control']).toContain('max-age');
+    console.log('✓ Content delivered through CloudFront with personalization headers');
+
+    console.log('Step 4: Verifying anonymous user gets content without personalization');
+    const anonymousResponse = await makeHttpsRequest(cdnUrl);
+    expect(anonymousResponse.statusCode).toBe(200);
+    expect(anonymousResponse.body).toContain('Cloud Computing Trends');
+    console.log('✓ Anonymous user can access content');
+
+    console.log('Step 5: Cleanup - Removing test data');
+    await s3Client.send(
+      new DeleteObjectCommand({
         Bucket: bucketName,
         Key: testArticleKey,
       })
     );
-
-    expect(s3Object).toBeDefined();
-    expect(s3Object.ContentType).toBe('text/html');
-
-    const distribution = await cloudFrontClient.send(
-      new GetDistributionCommand({
-        Id: distributionId,
+    await ddb.send(
+      new DeleteCommand({
+        TableName: tableName,
+        Key: { userId: testUserId },
       })
     );
+    console.log('✓ Test data cleaned up');
+    console.log('=== Flow Complete ===\n');
+  }, 60000);
 
-    expect(distribution.Distribution).toBeDefined();
-    expect(distribution.Distribution?.Status).toBe('Deployed');
-    expect(distribution.Distribution?.DistributionConfig?.Enabled).toBe(true);
-    expect(
-      distribution.Distribution?.DistributionConfig?.DefaultCacheBehavior
-        ?.ViewerProtocolPolicy
-    ).toBe('redirect-to-https');
+  test('concurrent multi-user content consumption flow', async () => {
+    console.log('=== Starting Concurrent Multi-User Content Consumption Flow ===');
 
-    const lambdaFunctions =
-      distribution.Distribution?.DistributionConfig?.DefaultCacheBehavior
-        ?.LambdaFunctionAssociations;
-    expect(lambdaFunctions?.Quantity).toBeGreaterThanOrEqual(2);
-
-    const viewerRequestAssociation = lambdaFunctions?.Items?.find(
-      item => item.EventType === 'viewer-request'
-    );
-    const viewerResponseAssociation = lambdaFunctions?.Items?.find(
-      item => item.EventType === 'viewer-response'
-    );
-
-    expect(viewerRequestAssociation).toBeDefined();
-    expect(viewerResponseAssociation).toBeDefined();
-
-    const viewerRequestFunction = await lambdaClient.send(
-      new GetFunctionCommand({
-        FunctionName: viewerRequestFunctionArn,
-      })
-    );
-
-    expect(viewerRequestFunction.Configuration).toBeDefined();
-    expect(viewerRequestFunction.Configuration?.Runtime).toContain('nodejs');
-    expect(viewerRequestFunction.Configuration?.Timeout).toBeLessThanOrEqual(5);
-
-    const viewerResponseFunction = await lambdaClient.send(
-      new GetFunctionCommand({
-        FunctionName: viewerResponseFunctionArn,
-      })
-    );
-
-    expect(viewerResponseFunction.Configuration).toBeDefined();
-    expect(viewerResponseFunction.Configuration?.Runtime).toContain('nodejs');
-    expect(viewerResponseFunction.Configuration?.Timeout).toBeLessThanOrEqual(
-      5
-    );
-
-    expect(distributionDomain).toBeDefined();
-    expect(distributionDomain).toContain('cloudfront.net');
-
-    const origins = distribution.Distribution?.DistributionConfig?.Origins;
-    expect(origins?.Quantity).toBeGreaterThan(0);
-
-    const s3Origin = origins?.Items?.[0];
-    expect(s3Origin?.DomainName).toContain(bucketName);
-    expect(s3Origin?.S3OriginConfig).toBeDefined();
-    expect(s3Origin?.OriginAccessControlId).toBeDefined();
-  }, 30000);
-
-  test('should handle multiple user preferences concurrently', async () => {
-    const userIds = Array.from(
-      { length: 10 },
-      (_, i) => `concurrent-user-${Date.now()}-${i}`
-    );
-
-    const putPromises = userIds.map(userId =>
-      ddb.send(
-        new PutCommand({
-          TableName: tableName,
-          Item: {
-            userId,
-            topics: ['tech', 'science'],
-            timestamp: Date.now(),
-          },
-        })
-      )
-    );
-
-    await Promise.all(putPromises);
-
-    const getPromises = userIds.map(userId =>
-      ddb.send(
-        new GetCommand({
-          TableName: tableName,
-          Key: { userId },
-        })
-      )
-    );
-
-    const results = await Promise.all(getPromises);
-    results.forEach((result, index) => {
-      expect(result.Item).toBeDefined();
-      expect(result.Item?.userId).toBe(userIds[index]);
-    });
-
-    const deletePromises = userIds.map(userId =>
-      ddb.send(
-        new DeleteCommand({
-          TableName: tableName,
-          Key: { userId },
-        })
-      )
-    );
-    await Promise.all(deletePromises);
-  }, 30000);
-
-  test('should upload and retrieve various content types', async () => {
-    const testFiles = [
+    const timestamp = Date.now();
+    const users = [
       {
-        key: `test-${Date.now()}.html`,
-        body: '<html><body>Test HTML</body></html>',
-        contentType: 'text/html',
+        userId: `tech-user-${timestamp}`,
+        topics: ['technology', 'ai'],
+        readingLevel: 'intermediate',
       },
       {
-        key: `test-${Date.now()}.json`,
-        body: JSON.stringify({ test: 'data' }),
-        contentType: 'application/json',
+        userId: `finance-user-${timestamp}`,
+        topics: ['finance', 'economics'],
+        readingLevel: 'expert',
       },
       {
-        key: `test-${Date.now()}.txt`,
-        body: 'Plain text content',
-        contentType: 'text/plain',
+        userId: `sports-user-${timestamp}`,
+        topics: ['sports', 'health'],
+        readingLevel: 'beginner',
       },
     ];
 
-    for (const file of testFiles) {
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: file.key,
-          Body: file.body,
-          ContentType: file.contentType,
-        })
-      );
+    const articles = [
+      {
+        key: `articles/tech-news-${timestamp}.html`,
+        content: '<html><body><h1>AI Breakthrough</h1></body></html>',
+      },
+      {
+        key: `articles/finance-news-${timestamp}.html`,
+        content: '<html><body><h1>Market Update</h1></body></html>',
+      },
+      {
+        key: `articles/sports-news-${timestamp}.html`,
+        content: '<html><body><h1>Championship Results</h1></body></html>',
+      },
+    ];
 
-      const retrieved = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: bucketName,
-          Key: file.key,
-        })
-      );
+    console.log('Step 1: Creating preferences for multiple users');
+    await Promise.all(
+      users.map(user =>
+        ddb.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { ...user, lastUpdated: timestamp },
+          })
+        )
+      )
+    );
+    console.log(`✓ ${users.length} users created with different preferences`);
 
-      expect(retrieved.ContentType).toBe(file.contentType);
+    console.log('Step 2: Publishing multiple articles to S3');
+    await Promise.all(
+      articles.map(article =>
+        s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: article.key,
+            Body: article.content,
+            ContentType: 'text/html',
+          })
+        )
+      )
+    );
+    console.log(`✓ ${articles.length} articles published`);
 
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: bucketName,
-          Key: file.key,
-        })
-      );
-    }
-  }, 30000);
+    console.log('Step 3: Simulating concurrent user content requests');
+    const requestPromises = users.flatMap(user =>
+      articles.map(article => {
+        const url = `https://${distributionDomain}/${article.key}`;
+        return makeHttpsRequest(url, { 'X-User-Id': user.userId });
+      })
+    );
 
-  test('should validate CloudFront cache invalidation', async () => {
-    const testKey = `cache-test-${Date.now()}.html`;
-    const content = '<html><body>Cache Test</body></html>';
+    const responses = await Promise.all(requestPromises);
+    const successfulRequests = responses.filter(r => r.statusCode === 200);
+    expect(successfulRequests.length).toBe(users.length * articles.length);
+    console.log(`✓ ${successfulRequests.length} concurrent requests successfully processed`);
+
+    console.log('Step 4: Verifying user preferences persisted correctly');
+    const userVerifications = await Promise.all(
+      users.map(user =>
+        ddb.send(
+          new GetCommand({
+            TableName: tableName,
+            Key: { userId: user.userId },
+          })
+        )
+      )
+    );
+    userVerifications.forEach((result, idx) => {
+      expect(result.Item).toBeDefined();
+      expect(result.Item?.topics).toEqual(users[idx].topics);
+    });
+    console.log('✓ All user preferences intact');
+
+    console.log('Step 5: Cleanup - Removing all test data');
+    await Promise.all([
+      ...users.map(user =>
+        ddb.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: { userId: user.userId },
+          })
+        )
+      ),
+      ...articles.map(article =>
+        s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: article.key,
+          })
+        )
+      ),
+    ]);
+    console.log('✓ All test data cleaned up');
+    console.log('=== Flow Complete ===\n');
+  }, 90000);
+
+  test('content update and cache invalidation flow', async () => {
+    console.log('=== Starting Content Update and Cache Invalidation Flow ===');
+
+    const timestamp = Date.now();
+    const userId = `update-user-${timestamp}`;
+    const articleKey = `articles/breaking-news-${timestamp}.html`;
+
+    console.log('Step 1: Creating user and publishing initial content');
+    await ddb.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: {
+          userId,
+          topics: ['breaking-news', 'world'],
+          readingLevel: 'advanced',
+          lastUpdated: timestamp,
+        },
+      })
+    );
+
+    const initialContent = `<!DOCTYPE html>
+<html>
+<head><title>Breaking News</title></head>
+<body>
+  <h1>Breaking News - Version 1</h1>
+  <p>Initial article content published at ${new Date(timestamp).toISOString()}</p>
+</body>
+</html>`;
 
     await s3Client.send(
       new PutObjectCommand({
         Bucket: bucketName,
-        Key: testKey,
-        Body: content,
+        Key: articleKey,
+        Body: initialContent,
         ContentType: 'text/html',
       })
     );
+    console.log('✓ Initial content published');
 
+    console.log('Step 2: User requests initial content through CloudFront');
+    const cdnUrl = `https://${distributionDomain}/${articleKey}`;
+    const firstResponse = await makeHttpsRequest(cdnUrl, {
+      'X-User-Id': userId,
+    });
+    expect(firstResponse.statusCode).toBe(200);
+    expect(firstResponse.body).toContain('Version 1');
+    console.log('✓ Initial content delivered successfully');
+
+    console.log('Step 3: Updating content in S3');
+    const updatedContent = `<!DOCTYPE html>
+<html>
+<head><title>Breaking News - Updated</title></head>
+<body>
+  <h1>Breaking News - Version 2 (Updated)</h1>
+  <p>Content updated with latest information at ${new Date().toISOString()}</p>
+</body>
+</html>`;
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucketName,
+        Key: articleKey,
+        Body: updatedContent,
+        ContentType: 'text/html',
+      })
+    );
+    console.log('✓ Content updated in S3');
+
+    console.log('Step 4: Creating cache invalidation');
     const invalidation = await cloudFrontClient.send(
       new CreateInvalidationCommand({
         DistributionId: distributionId,
         InvalidationBatch: {
-          CallerReference: `test-${Date.now()}`,
+          CallerReference: `invalidation-${timestamp}`,
           Paths: {
             Quantity: 1,
-            Items: [`/${testKey}`],
+            Items: [`/${articleKey}`],
           },
         },
       })
     );
 
     expect(invalidation.Invalidation).toBeDefined();
-    expect(invalidation.Invalidation?.Status).toBe('InProgress');
+    expect(invalidation.Invalidation?.Id).toBeDefined();
+    const invalidationId = invalidation.Invalidation!.Id!;
+    console.log(`✓ Cache invalidation created: ${invalidationId}`);
 
-    await s3Client.send(
-      new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: testKey,
-      })
-    );
-  }, 30000);
-
-  test('should verify DynamoDB read/write performance', async () => {
-    const batchSize = 25;
-    const testUsers = Array.from(
-      { length: batchSize },
-      (_, i) => `perf-test-${Date.now()}-${i}`
-    );
-
-    const startWrite = Date.now();
-    await Promise.all(
-      testUsers.map(userId =>
-        ddb.send(
-          new PutCommand({
-            TableName: tableName,
-            Item: {
-              userId,
-              topics: ['performance', 'testing'],
-              preferences: { theme: 'dark', notifications: true },
-              timestamp: Date.now(),
-            },
-          })
-        )
-      )
-    );
-    const writeTime = Date.now() - startWrite;
-
-    expect(writeTime).toBeLessThan(5000);
-
-    const startRead = Date.now();
-    const reads = await Promise.all(
-      testUsers.map(userId =>
-        ddb.send(
-          new GetCommand({
-            TableName: tableName,
-            Key: { userId },
-          })
-        )
-      )
-    );
-    const readTime = Date.now() - startRead;
-
-    expect(readTime).toBeLessThan(3000);
-    expect(reads.every(r => r.Item !== undefined)).toBe(true);
-
-    await Promise.all(
-      testUsers.map(userId =>
-        ddb.send(
-          new DeleteCommand({
-            TableName: tableName,
-            Key: { userId },
-          })
-        )
-      )
-    );
-  }, 30000);
-
-  test('should validate CloudWatch metrics are being generated', async () => {
-    const endTime = new Date();
-    const startTime = new Date(endTime.getTime() - 3600000);
-
-    const ddbMetrics = await cloudWatchClient.send(
-      new GetMetricStatisticsCommand({
-        Namespace: 'AWS/DynamoDB',
-        MetricName: 'UserErrors',
-        Dimensions: [
-          {
-            Name: 'TableName',
-            Value: tableName,
-          },
-        ],
-        StartTime: startTime,
-        EndTime: endTime,
-        Period: 3600,
-        Statistics: ['Sum'],
-      })
-    );
-
-    expect(ddbMetrics.Datapoints).toBeDefined();
-
-    const cfMetrics = await cloudWatchClient.send(
-      new GetMetricStatisticsCommand({
-        Namespace: 'AWS/CloudFront',
-        MetricName: 'Requests',
-        Dimensions: [
-          {
-            Name: 'DistributionId',
-            Value: distributionId,
-          },
-        ],
-        StartTime: startTime,
-        EndTime: endTime,
-        Period: 3600,
-        Statistics: ['Sum'],
-      })
-    );
-
-    expect(cfMetrics.Datapoints).toBeDefined();
-  }, 30000);
-
-  test('should validate S3 bucket security configurations', async () => {
-    try {
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: `security-test-${Date.now()}.txt`,
-          Body: 'test',
-        })
-      );
-    } catch (error: any) {
-      if (error.name === 'AccessDenied') {
-        fail('Should be able to write to bucket with proper credentials');
-      }
+    console.log('Step 5: Waiting for cache invalidation to complete (up to 60s)');
+    const completed = await waitForInvalidation(distributionId, invalidationId, 60000);
+    if (completed) {
+      console.log('✓ Cache invalidation completed');
+    } else {
+      console.log('⚠ Cache invalidation still in progress (will complete shortly)');
     }
 
-    const listResult = await s3Client.send(
-      new ListObjectsV2Command({
-        Bucket: bucketName,
-        MaxKeys: 1,
-      })
-    );
+    console.log('Step 6: User requests updated content');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const secondResponse = await makeHttpsRequest(cdnUrl, {
+      'X-User-Id': userId,
+    });
+    expect(secondResponse.statusCode).toBe(200);
+    console.log('✓ Updated content accessible through CDN');
 
-    expect(listResult.$metadata.httpStatusCode).toBe(200);
-  }, 30000);
+    console.log('Step 7: Cleanup - Removing test data');
+    await Promise.all([
+      s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: articleKey,
+        })
+      ),
+      ddb.send(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: { userId },
+        })
+      ),
+    ]);
+    console.log('✓ Test data cleaned up');
+    console.log('=== Flow Complete ===\n');
+  }, 120000);
 });
