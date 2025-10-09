@@ -1,7 +1,7 @@
 # S3 Module - Storage Infrastructure
 
 resource "aws_s3_bucket" "primary_data" {
-  bucket = "${var.primary_bucket_name}_rlhf"
+  bucket = "${var.primary_bucket_name}rlhf"
 
   tags = merge(
     var.tags,
@@ -73,7 +73,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary_data" {
 }
 
 resource "aws_s3_bucket" "cloudformation_templates" {
-  bucket = "${var.cfn_bucket_name}_rlhf"
+  bucket = "${var.cfn_bucket_name}rlhf"
 
   tags = merge(
     var.tags,
