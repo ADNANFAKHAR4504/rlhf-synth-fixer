@@ -272,6 +272,12 @@ resource "aws_s3_bucket_replication_configuration" "replication" {
       prefix = ""
     }
 
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+
     destination {
       bucket        = aws_s3_bucket.secondary_bucket.arn
       storage_class = "STANDARD_IA" # Cost optimization for replicated data
@@ -312,6 +318,42 @@ resource "aws_kms_key" "primary_key" {
   deletion_window_in_days = 10
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.primary_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(var.common_tags, {
     Name       = "${var.app_name}-primary-kms"
     Compliance = "GDPR"
@@ -330,6 +372,42 @@ resource "aws_kms_key" "secondary_key" {
   description             = "KMS key for ${var.app_name} encryption in secondary region"
   deletion_window_in_days = 10
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.secondary_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = merge(var.common_tags, {
     Name       = "${var.app_name}-secondary-kms"
@@ -406,8 +484,8 @@ resource "aws_dynamodb_table" "global_table" {
 
   # Enable global table replication
   replica {
-    region_name = var.secondary_region
-    kms_key_arn = aws_kms_key.secondary_key.arn
+    region_name            = var.secondary_region
+    kms_key_arn            = aws_kms_key.secondary_key.arn
     point_in_time_recovery = true
   }
 
@@ -908,17 +986,17 @@ resource "aws_api_gateway_integration" "primary_post_integration" {
 resource "aws_api_gateway_deployment" "primary_deployment" {
   provider    = aws.primary
   rest_api_id = aws_api_gateway_rest_api.primary_api.id
-  
+
   depends_on = [
     aws_api_gateway_integration.primary_get_integration,
     aws_api_gateway_integration.primary_post_integration,
     aws_api_gateway_integration.primary_health_integration
   ]
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.primary_health.id,
@@ -1143,17 +1221,17 @@ resource "aws_api_gateway_integration" "secondary_post_integration" {
 resource "aws_api_gateway_deployment" "secondary_deployment" {
   provider    = aws.secondary
   rest_api_id = aws_api_gateway_rest_api.secondary_api.id
-  
+
   depends_on = [
     aws_api_gateway_integration.secondary_get_integration,
     aws_api_gateway_integration.secondary_post_integration,
     aws_api_gateway_integration.secondary_health_integration
   ]
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.secondary_health.id,
@@ -1937,7 +2015,7 @@ resource "aws_synthetics_canary" "primary_canary" {
   execution_role_arn   = aws_iam_role.synthetics_role_primary.arn
   handler              = "apiCanary.handler"
   zip_file             = data.archive_file.canary_script_primary.output_path
-  runtime_version      = "syn-nodejs-puppeteer-3.9"
+  runtime_version      = "syn-nodejs-puppeteer-7.0"
   start_canary         = true
 
   schedule {
@@ -2037,7 +2115,7 @@ resource "aws_synthetics_canary" "secondary_canary" {
   execution_role_arn   = aws_iam_role.synthetics_role_secondary.arn
   handler              = "apiCanary.handler"
   zip_file             = data.archive_file.canary_script_secondary.output_path
-  runtime_version      = "syn-nodejs-puppeteer-3.9"
+  runtime_version      = "syn-nodejs-puppeteer-7.0"
   start_canary         = true
 
   schedule {

@@ -28,7 +28,7 @@ variable "secondary_region" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-  default     = "tap-saas.example.com"
+  default     = "tap-saas-test.xyz"
 }
 
 variable "lambda_reserved_concurrency" {
