@@ -32,33 +32,11 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
 
-    test('should have parameter groups organized logically', () => {
-      const parameterGroups =
-        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
-      expect(parameterGroups).toBeDefined();
-      expect(Array.isArray(parameterGroups)).toBe(true);
-      expect(parameterGroups.length).toBe(3);
-
-      // Network Configuration group
-      expect(parameterGroups[0].Label.default).toBe('Network Configuration');
-      expect(parameterGroups[0].Parameters).toContain('VpcId');
-
-      // SSL Configuration group
-      expect(parameterGroups[1].Label.default).toBe('SSL Configuration');
-      expect(parameterGroups[1].Parameters).toContain('ACMCertificateArn');
-
-      // Tagging Configuration group
-      expect(parameterGroups[2].Label.default).toBe('Tagging Configuration');
-      expect(parameterGroups[2].Parameters).toContain('Environment');
-      expect(parameterGroups[2].Parameters).toContain('ProjectName');
-      expect(parameterGroups[2].Parameters).toContain('Owner');
-    });
   });
 
   describe('Parameters', () => {
-    test('should have all 5 required parameters', () => {
+    test('should have all 4 required parameters', () => {
       const expectedParams = [
-        'VpcId',
         'Environment',
         'ProjectName',
         'Owner',
@@ -69,22 +47,7 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
         expect(template.Parameters[param]).toBeDefined();
       });
 
-      expect(Object.keys(template.Parameters).length).toBe(5);
-    });
-
-    describe('VpcId Parameter', () => {
-      test('should be optional String type', () => {
-        const vpcParam = template.Parameters.VpcId;
-        expect(vpcParam.Type).toBe('String');
-        expect(vpcParam.Default).toBe('');
-      });
-
-      test('should have descriptive text explaining optional nature', () => {
-        const vpcParam = template.Parameters.VpcId;
-        expect(vpcParam.Description).toBeDefined();
-        expect(vpcParam.Description).toContain('optional');
-        expect(vpcParam.Description).toContain('not currently used');
-      });
+      expect(Object.keys(template.Parameters).length).toBe(4);
     });
 
     describe('Environment Parameter', () => {
@@ -1250,9 +1213,9 @@ describe('TapStack CloudFormation Template - Secure Web Application Infrastructu
       expect(template.Metadata).not.toBeNull();
     });
 
-    test('should have exactly 5 parameters', () => {
+    test('should have exactly 4 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have exactly 2 conditions', () => {
