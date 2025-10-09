@@ -45,8 +45,8 @@ Parameters:
     Type: String
     Default: 'pr3600'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    MinLength: 1
+    MaxLength: 20
   
   DomainName:
     Type: String
@@ -54,7 +54,6 @@ Parameters:
     Description: 'Domain name for the forum (e.g., forum.example.com)'
     MinLength: 3
     MaxLength: 253
-
   
   SSHKeyName:
     Type: String
@@ -90,8 +89,6 @@ Parameters:
     Description: 'Database administrator username'
     MinLength: 1
     MaxLength: 16
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
-    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
   
   DBPassword:
     Type: String
@@ -100,8 +97,6 @@ Parameters:
     Description: 'Database administrator password'
     MinLength: 8
     MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?]*$'
-    ConstraintDescription: 'Must be 8-41 characters with alphanumeric and special characters'
   
   DBAllocatedStorage:
     Type: Number
@@ -123,8 +118,8 @@ Parameters:
     Type: String
     Default: 'admin@example.com'
     Description: 'Email address for CloudWatch alarm notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
+    MinLength: 5
+    MaxLength: 100
   
   SMTPServer:
     Type: String
@@ -645,7 +640,7 @@ Resources:
           Value: 'HobbyForum'
         - Key: ManagedBy
           Value: 'CloudFormation'
-
+  
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
