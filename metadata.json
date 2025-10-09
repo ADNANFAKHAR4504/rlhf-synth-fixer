@@ -10,7 +10,25 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, VPC,IAM, CloudWatch, RDS, DynamoDB, NAT",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "Subnets", 
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "KMS",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "CloudTrail",
+    "AWS Config",
+    "VPC Flow Logs",
+    "ACM",
+    "Application Load Balancer"
+  ],
   "testDependencies": [
     "@aws-sdk/client-ec2@^3.883.0",
     "@aws-sdk/client-rds@^3.883.0", 
