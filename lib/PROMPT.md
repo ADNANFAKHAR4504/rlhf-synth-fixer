@@ -1,7 +1,7 @@
 I’m working on designing a secure, production-grade infrastructure setup using **AWS CloudFormation** in **YAML**, and I need your help putting everything together in a single validated template.  
 
 Here’s the scenario:  
-We’re deploying everything into the **us-west-2 region** inside a **custom VPC** that enforces strict network security — no use of the default VPC. The environment must follow organizational compliance standards with encryption, least privilege, and full observability in mind.  
+We’re deploying everything into the **ca-central-1 region** inside a **custom VPC** that enforces strict network security — no use of the default VPC. The environment must follow organizational compliance standards with encryption, least privilege, and full observability in mind.  
 
 The stack should define a few core services that make up a secure and compliant foundation:  
 

@@ -3,7 +3,7 @@
 
 This is a comprehensive request for a production-grade AWS CloudFormation template. Let me break down the requirements:
 
-1. **Region**: us-west-2
+1. **Region**: ca-central-1
 2. **VPC**: Custom VPC (not default)
 3. **Core Services Required**:
    - S3 buckets (encrypted, versioned)
@@ -133,7 +133,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [0, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
       MapPublicIpOnLaunch: true
       Tags:
@@ -148,7 +148,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [1, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
       MapPublicIpOnLaunch: true
       Tags:
@@ -164,7 +164,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [0, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
       Tags:
         - Key: Name
@@ -178,7 +178,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [1, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
       Tags:
         - Key: Name
@@ -193,7 +193,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [0, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
       Tags:
         - Key: Name
@@ -207,7 +207,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs 'us-west-2']
+      AvailabilityZone: !Select [1, !GetAZs 'ca-central-1']
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
       Tags:
         - Key: Name
@@ -506,7 +506,7 @@ Resources:
           - Sid: ALBAccessLogsPolicy
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::797873946194:root'  # AWS ELB service account for us-west-2
+              AWS: 'arn:aws:iam::797873946194:root'  # AWS ELB service account for ca-central-1
             Action:
               - 's3:PutObject'
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/*'
@@ -804,7 +804,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      ImageId: ami-0a0e5d9c7acc336f1  # Amazon Linux 2023 AMI for us-west-2
+      ImageId: ami-0a0e5d9c7acc336f1  # Amazon Linux 2023 AMI for ca-central-1
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
@@ -1031,7 +1031,7 @@ Outputs:
 ```bash
 aws cloudformation validate-template \
     --template-body file://secure-infrastructure.yaml \
-    --region us-west-2
+    --region ca-central-1
 ```
 
 3. **Deploy the stack**:
@@ -1045,14 +1045,14 @@ aws cloudformation create-stack \
         ParameterKey=DBMasterUsername,ParameterValue=dbadmin \
         ParameterKey=DBMasterPassword,ParameterValue=YourSecurePassword123! \
     --capabilities CAPABILITY_NAMED_IAM \
-    --region us-west-2
+    --region ca-central-1
 ```
 
 4. **Monitor the deployment**:
 ```bash
 aws cloudformation describe-stack-events \
     --stack-name prod-secure-infrastructure \
-    --region us-west-2
+    --region ca-central-1
 ```
 
 ## Post-Deployment Considerations
