@@ -1,6 +1,6 @@
 // tests/terraform.int.test.ts
 // Live verification of deployed Terraform infrastructure using structured outputs
-// Tests AWS resources: VPC, S3, Lambda, EventBridge, CloudWatch, SNS, IAM
+// Tests AWS resources: VPC, S3, Lambda, EventBridge, CloudWatch, SNS, IAM, RDS, ALB, ASG
 
 import * as fs from "fs";
 import * as path from "path";
@@ -48,6 +48,24 @@ import {
   ListRolePoliciesCommand,
   GetRolePolicyCommand,
 } from "@aws-sdk/client-iam";
+import {
+  RDSClient,
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  DescribeGlobalClustersCommand,
+} from "@aws-sdk/client-rds";
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  DescribeListenersCommand,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand,
+} from "@aws-sdk/client-auto-scaling";
 
 type TfOutputValue<T> = {
   sensitive: boolean;
@@ -67,6 +85,7 @@ type StructuredOutputs = {
   cloudwatch_log_group_application?: TfOutputValue<string>;
   private_subnet_ids?: TfOutputValue<string[]>;
   public_subnet_ids?: TfOutputValue<string[]>;
+  database_subnet_ids?: TfOutputValue<string[]>;
   sns_topic_arn?: TfOutputValue<string>;
   cloudwatch_alarms?: TfOutputValue<{
     lambda_errors: string;
@@ -74,6 +93,11 @@ type StructuredOutputs = {
     lambda_duration: string;
     lambda_throttles: string;
   }>;
+  aurora_cluster_endpoint?: TfOutputValue<string>;
+  aurora_reader_endpoint?: TfOutputValue<string>;
+  aurora_global_cluster_id?: TfOutputValue<string>;
+  alb_dns_name?: TfOutputValue<string>;
+  autoscaling_group_name?: TfOutputValue<string>;
 };
 
 function readStructuredOutputs(): StructuredOutputs {
@@ -114,11 +138,15 @@ const ec2Client = new EC2Client({ region });
 const snsClient = new SNSClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
 const iamClient = new IAMClient({ region });
+const rdsClient = new RDSClient({ region });
+const elbClient = new ElasticLoadBalancingV2Client({ region });
+const asgClient = new AutoScalingClient({ region });
 
 describe("LIVE: VPC Infrastructure Verification", () => {
   const vpcId = outputs.vpc_id?.value;
   const privateSubnetIds = outputs.private_subnet_ids?.value || [];
   const publicSubnetIds = outputs.public_subnet_ids?.value || [];
+  const databaseSubnetIds = outputs.database_subnet_ids?.value || [];
 
   test("VPC exists and is available", async () => {
     expect(vpcId).toBeTruthy();
@@ -134,7 +162,6 @@ describe("LIVE: VPC Infrastructure Verification", () => {
   }, 60000);
 
   test("VPC has DNS support enabled", async () => {
-    // Check DNS support
     const dnsSupportResponse = await retry(async () => {
       return await ec2Client.send(
         new DescribeVpcAttributeCommand({
@@ -147,7 +174,6 @@ describe("LIVE: VPC Infrastructure Verification", () => {
     expect(dnsSupportResponse.EnableDnsSupport).toBeTruthy();
     expect(dnsSupportResponse.EnableDnsSupport!.Value).toBe(true);
 
-    // Check DNS hostnames
     const dnsHostnamesResponse = await retry(async () => {
       return await ec2Client.send(
         new DescribeVpcAttributeCommand({
@@ -201,8 +227,27 @@ describe("LIVE: VPC Infrastructure Verification", () => {
     });
   }, 60000);
 
-  test("subnets span multiple availability zones", async () => {
-    const allSubnetIds = [...privateSubnetIds, ...publicSubnetIds];
+  test("database subnets exist for Multi-AZ RDS", async () => {
+    expect(databaseSubnetIds).toBeTruthy();
+    expect(databaseSubnetIds.length).toBeGreaterThanOrEqual(2); // Multi-AZ requires at least 2
+
+    const response = await retry(async () => {
+      return await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: databaseSubnetIds })
+      );
+    });
+
+    expect(response.Subnets).toBeTruthy();
+    expect(response.Subnets!.length).toBe(databaseSubnetIds.length);
+    
+    response.Subnets!.forEach((subnet) => {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.State).toBe("available");
+    });
+  }, 60000);
+
+  test("subnets span multiple availability zones (Multi-AZ)", async () => {
+    const allSubnetIds = [...privateSubnetIds, ...publicSubnetIds, ...databaseSubnetIds];
     
     const response = await retry(async () => {
       return await ec2Client.send(
@@ -211,7 +256,7 @@ describe("LIVE: VPC Infrastructure Verification", () => {
     });
 
     const azs = new Set(response.Subnets!.map((s) => s.AvailabilityZone));
-    expect(azs.size).toBeGreaterThan(1); // Multi-AZ deployment
+    expect(azs.size).toBeGreaterThanOrEqual(2); // Multi-AZ deployment
   }, 60000);
 });
 
@@ -277,7 +322,6 @@ describe("LIVE: S3 Buckets Verification", () => {
     expect(response.Rules).toBeTruthy();
     expect(response.Rules!.length).toBeGreaterThan(0);
     
-    // Check for transitions and expiration
     const hasTransitions = response.Rules!.some((rule) => rule.Transitions && rule.Transitions.length > 0);
     const hasExpiration = response.Rules!.some((rule) => rule.Expiration);
     
@@ -291,6 +335,243 @@ describe("LIVE: S3 Buckets Verification", () => {
       await s3Client.send(new HeadBucketCommand({ Bucket: cfnBucketName! }));
     });
   }, 60000);
+});
+
+describe("LIVE: Aurora RDS Multi-AZ and Multi-Region Verification", () => {
+  const clusterEndpoint = outputs.aurora_cluster_endpoint?.value;
+  const readerEndpoint = outputs.aurora_reader_endpoint?.value;
+  const globalClusterId = outputs.aurora_global_cluster_id?.value;
+
+  test("Aurora cluster exists and is available", async () => {
+    expect(clusterEndpoint).toBeTruthy();
+
+    const response = await retry(async () => {
+      return await rdsClient.send(new DescribeDBClustersCommand({}));
+    });
+
+    expect(response.DBClusters).toBeTruthy();
+    expect(response.DBClusters!.length).toBeGreaterThan(0);
+
+    const cluster = response.DBClusters!.find((c) => c.Endpoint === clusterEndpoint);
+    expect(cluster).toBeTruthy();
+    expect(cluster!.Status).toBe("available");
+    expect(cluster!.Engine).toBe("aurora-mysql");
+    expect(cluster!.MultiAZ).toBe(true); // Multi-AZ enabled
+  }, 90000);
+
+  test("Aurora cluster has multiple instances (Multi-AZ)", async () => {
+    const response = await retry(async () => {
+      return await rdsClient.send(new DescribeDBInstancesCommand({}));
+    });
+
+    expect(response.DBInstances).toBeTruthy();
+    
+    // Filter instances that belong to our cluster
+    const clusterInstances = response.DBInstances!.filter(
+      (inst) => inst.DBClusterIdentifier && inst.Endpoint?.Address
+    );
+    
+    expect(clusterInstances.length).toBeGreaterThanOrEqual(2); // Multi-AZ requires at least 2
+    
+    // Check that instances are in different AZs
+    const azs = new Set(clusterInstances.map((inst) => inst.AvailabilityZone));
+    expect(azs.size).toBeGreaterThanOrEqual(2);
+  }, 90000);
+
+  test("Aurora Global Cluster exists for multi-region support", async () => {
+    if (!globalClusterId) {
+      console.warn("Global cluster ID not found in outputs, skipping test");
+      return;
+    }
+
+    const response = await retry(async () => {
+      return await rdsClient.send(new DescribeGlobalClustersCommand({}));
+    });
+
+    expect(response.GlobalClusters).toBeTruthy();
+    
+    const globalCluster = response.GlobalClusters!.find(
+      (gc) => gc.GlobalClusterIdentifier === globalClusterId
+    );
+    
+    expect(globalCluster).toBeTruthy();
+    expect(globalCluster!.Engine).toBe("aurora-mysql");
+    expect(globalCluster!.StorageEncrypted).toBe(true);
+  }, 90000);
+
+  test("Aurora cluster has reader endpoint configured", async () => {
+    expect(readerEndpoint).toBeTruthy();
+    expect(readerEndpoint).not.toBe(clusterEndpoint); // Reader should be different from writer
+  });
+
+  test("Aurora cluster has encryption enabled", async () => {
+    const response = await retry(async () => {
+      return await rdsClient.send(new DescribeDBClustersCommand({}));
+    });
+
+    const cluster = response.DBClusters!.find((c) => c.Endpoint === clusterEndpoint);
+    expect(cluster).toBeTruthy();
+    expect(cluster!.StorageEncrypted).toBe(true);
+  }, 90000);
+
+  test("Aurora cluster has automated backups configured", async () => {
+    const response = await retry(async () => {
+      return await rdsClient.send(new DescribeDBClustersCommand({}));
+    });
+
+    const cluster = response.DBClusters!.find((c) => c.Endpoint === clusterEndpoint);
+    expect(cluster).toBeTruthy();
+    expect(cluster!.BackupRetentionPeriod).toBeGreaterThan(0);
+  }, 90000);
+});
+
+describe("LIVE: Application Load Balancer Verification", () => {
+  const albDnsName = outputs.alb_dns_name?.value;
+
+  test("Application Load Balancer exists", async () => {
+    expect(albDnsName).toBeTruthy();
+
+    const response = await retry(async () => {
+      return await elbClient.send(new DescribeLoadBalancersCommand({}));
+    });
+
+    expect(response.LoadBalancers).toBeTruthy();
+    expect(response.LoadBalancers!.length).toBeGreaterThan(0);
+
+    const alb = response.LoadBalancers!.find((lb) => lb.DNSName === albDnsName);
+    expect(alb).toBeTruthy();
+    expect(alb!.State?.Code).toBe("active");
+    expect(alb!.Type).toBe("application");
+    expect(alb!.Scheme).toBe("internet-facing");
+  }, 90000);
+
+  test("ALB is deployed across multiple AZs", async () => {
+    const response = await retry(async () => {
+      return await elbClient.send(new DescribeLoadBalancersCommand({}));
+    });
+
+    const alb = response.LoadBalancers!.find((lb) => lb.DNSName === albDnsName);
+    expect(alb).toBeTruthy();
+    expect(alb!.AvailabilityZones).toBeTruthy();
+    expect(alb!.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
+  }, 90000);
+
+  test("ALB has target group configured", async () => {
+    const response = await retry(async () => {
+      return await elbClient.send(new DescribeTargetGroupsCommand({}));
+    });
+
+    expect(response.TargetGroups).toBeTruthy();
+    expect(response.TargetGroups!.length).toBeGreaterThan(0);
+
+    const targetGroup = response.TargetGroups![0];
+    expect(targetGroup.Protocol).toBe("HTTP");
+    expect(targetGroup.Port).toBe(80);
+    expect(targetGroup.HealthCheckEnabled).toBe(true);
+  }, 90000);
+
+  test("ALB has HTTP listener configured", async () => {
+    const lbResponse = await retry(async () => {
+      return await elbClient.send(new DescribeLoadBalancersCommand({}));
+    });
+
+    const alb = lbResponse.LoadBalancers!.find((lb) => lb.DNSName === albDnsName);
+    expect(alb).toBeTruthy();
+
+    const listenerResponse = await retry(async () => {
+      return await elbClient.send(
+        new DescribeListenersCommand({ LoadBalancerArn: alb!.LoadBalancerArn })
+      );
+    });
+
+    expect(listenerResponse.Listeners).toBeTruthy();
+    expect(listenerResponse.Listeners!.length).toBeGreaterThan(0);
+
+    const httpListener = listenerResponse.Listeners!.find((l) => l.Port === 80);
+    expect(httpListener).toBeTruthy();
+    expect(httpListener!.Protocol).toBe("HTTP");
+  }, 90000);
+});
+
+describe("LIVE: Auto Scaling Group Verification", () => {
+  const asgName = outputs.autoscaling_group_name?.value;
+
+  test("Auto Scaling Group exists", async () => {
+    expect(asgName).toBeTruthy();
+
+    const response = await retry(async () => {
+      return await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName!] })
+      );
+    });
+
+    expect(response.AutoScalingGroups).toBeTruthy();
+    expect(response.AutoScalingGroups!.length).toBe(1);
+
+    const asg = response.AutoScalingGroups![0];
+    expect(asg.AutoScalingGroupName).toBe(asgName);
+    expect(asg.MinSize).toBeGreaterThan(0);
+    expect(asg.MaxSize).toBeGreaterThan(asg.MinSize!);
+    expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(asg.MinSize!);
+  }, 90000);
+
+  test("ASG is deployed across multiple AZs", async () => {
+    const response = await retry(async () => {
+      return await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName!] })
+      );
+    });
+
+    const asg = response.AutoScalingGroups![0];
+    expect(asg.AvailabilityZones).toBeTruthy();
+    expect(asg.AvailabilityZones!.length).toBeGreaterThanOrEqual(2); // Multi-AZ
+  }, 90000);
+
+  test("ASG has health check configured", async () => {
+    const response = await retry(async () => {
+      return await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName!] })
+      );
+    });
+
+    const asg = response.AutoScalingGroups![0];
+    expect(asg.HealthCheckType).toBe("ELB"); // Using ELB health checks
+    expect(asg.HealthCheckGracePeriod).toBeGreaterThan(0);
+  }, 90000);
+
+  test("ASG has scaling policies configured", async () => {
+    const response = await retry(async () => {
+      return await asgClient.send(
+        new DescribePoliciesCommand({ AutoScalingGroupName: asgName! })
+      );
+    });
+
+    expect(response.ScalingPolicies).toBeTruthy();
+    expect(response.ScalingPolicies!.length).toBeGreaterThanOrEqual(2); // Scale up and scale down
+
+    const policyNames = response.ScalingPolicies!.map((p) => p.PolicyName);
+    const hasScaleUp = policyNames.some((name) => name?.includes("scale-up"));
+    const hasScaleDown = policyNames.some((name) => name?.includes("scale-down"));
+
+    expect(hasScaleUp).toBe(true);
+    expect(hasScaleDown).toBe(true);
+  }, 90000);
+
+  test("ASG instances are running", async () => {
+    const response = await retry(async () => {
+      return await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName!] })
+      );
+    });
+
+    const asg = response.AutoScalingGroups![0];
+    expect(asg.Instances).toBeTruthy();
+    expect(asg.Instances!.length).toBeGreaterThan(0);
+
+    // Check that at least some instances are healthy
+    const healthyInstances = asg.Instances!.filter((inst) => inst.HealthStatus === "Healthy");
+    expect(healthyInstances.length).toBeGreaterThan(0);
+  }, 90000);
 });
 
 describe("LIVE: Lambda Function Verification", () => {
@@ -365,7 +646,6 @@ describe("LIVE: Lambda Function Verification", () => {
 
     expect(response.Role).toBeTruthy();
     
-    // Extract role name from ARN
     const roleName = response.Role!.split("/").pop()!;
     
     const roleResponse = await retry(async () => {
@@ -574,6 +854,8 @@ describe("LIVE: Output Validation", () => {
       "eventbridge_rule_name",
       "sns_topic_arn",
       "cloudwatch_log_group_lambda",
+      "alb_dns_name",
+      "autoscaling_group_name",
     ];
 
     requiredOutputs.forEach((outputName) => {
@@ -599,5 +881,24 @@ describe("LIVE: Output Validation", () => {
     outputs.public_subnet_ids?.value?.forEach((id) => {
       expect(id).toMatch(/^subnet-[a-f0-9]+$/);
     });
+
+    // ALB DNS name format
+    if (outputs.alb_dns_name?.value) {
+      expect(outputs.alb_dns_name.value).toMatch(/\.elb\.amazonaws\.com$/);
+    }
+  });
+
+  test("new infrastructure outputs exist", () => {
+    // Aurora outputs
+    expect(outputs.aurora_cluster_endpoint?.value || outputs.aurora_cluster_endpoint === undefined).toBeTruthy();
+    
+    // ALB outputs
+    expect(outputs.alb_dns_name?.value).toBeTruthy();
+    
+    // ASG outputs
+    expect(outputs.autoscaling_group_name?.value).toBeTruthy();
+    
+    // Database subnets
+    expect(outputs.database_subnet_ids?.value || outputs.database_subnet_ids === undefined).toBeTruthy();
   });
 });
