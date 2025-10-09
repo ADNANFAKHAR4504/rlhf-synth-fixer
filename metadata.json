@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, Auto Scaling, Elastic Load Balancer, Route 53, RDS, CloudWatch, CloudWatch Logs, S3, KMS, IAM"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "Route 53",
+    "RDS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "S3",
+    "KMS",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "training_quality": 8
 }
