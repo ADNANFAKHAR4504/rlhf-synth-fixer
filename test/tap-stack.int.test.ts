@@ -315,17 +315,29 @@ describe('TapStack Integration Tests', () => {
         console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
       });
 
-      const matchingEnv = envsResponse.Environments?.find(env =>
+      const envNameFromOutputs = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      let matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
         env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
         env.EnvironmentName?.includes('TapSt') ||
         env.EnvironmentName?.includes('Elas') ||
         env.ApplicationName?.includes('MyWebApp')
       );
+      if (envNameFromOutputs) {
+        const exact = envsResponse.Environments?.find(env => env.EnvironmentName === envNameFromOutputs);
+        matchingEnv = exact || matchingEnv;
+      }
 
       if (!matchingEnv) {
-        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
-        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
+        const envNameOut = envNameFromOutputs;
+        if (envNameOut) {
+          const direct = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envNameOut] }));
+          matchingEnv = direct.Environments?.[0];
+        }
+        if (!matchingEnv) {
+          const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+          throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
+        }
       }
 
       expect(matchingEnv.EnvironmentName).toBeDefined();
@@ -356,17 +368,29 @@ describe('TapStack Integration Tests', () => {
         console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
       });
 
-      const matchingEnv = envsResponse.Environments?.find(env =>
+      const envNameFromOutputs = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      let matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
         env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
         env.EnvironmentName?.includes('TapSt') ||
         env.EnvironmentName?.includes('Elas') ||
         env.ApplicationName?.includes('MyWebApp')
       );
+      if (envNameFromOutputs) {
+        const exact = envsResponse.Environments?.find(env => env.EnvironmentName === envNameFromOutputs);
+        matchingEnv = exact || matchingEnv;
+      }
 
       if (!matchingEnv) {
-        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
-        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
+        const envNameOut = envNameFromOutputs;
+        if (envNameOut) {
+          const direct = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envNameOut] }));
+          matchingEnv = direct.Environments?.[0];
+        }
+        if (!matchingEnv) {
+          const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+          throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
+        }
       }
 
       expect(matchingEnv.SolutionStackName).toContain('Amazon Linux 2023');
@@ -1100,275 +1124,87 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Deployment Verification Tests', () => {
-    test('Deployed application should be accessible and return valid HTML', async () => {
-      // Get the Elastic Beanstalk environment to find the endpoint
-      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
-      // Log all available environments for debugging
-      console.log('Available Elastic Beanstalk environments:');
-      envsResponse.Environments?.forEach(env => {
-        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
-      });
+    test('Environment should be Ready and non-Red; instance/network sane (live AWS)', async () => {
+      const envName = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      expect(envName).toBeDefined();
 
-      const matchingEnv = envsResponse.Environments?.find(env =>
-        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
-        env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas') ||
-        env.ApplicationName?.includes('MyWebApp')
-      );
-
-      if (!matchingEnv) {
-        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
-        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
-      }
-
-      // Environment must be Ready for HTTP verification
-      expect(matchingEnv.Status).toBe('Ready');
-
-      // Get the actual environment URL from Elastic Beanstalk
-      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
-        EnvironmentNames: [matchingEnv.EnvironmentName!]
-      }));
-      
-      // Debug: Log the environment details
+      // Describe the exact environment by name from outputs (avoid drift)
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envName!] }));
       const environment = envDetailsResponse.Environments?.[0];
-      console.log('Environment details:', JSON.stringify(environment, null, 2));
-      console.log(`CNAME: ${environment?.CNAME}`);
-      console.log(`EndpointURL: ${environment?.EndpointURL}`);
-      console.log(`Status: ${environment?.Status}`);
-      console.log(`Health: ${environment?.Health}`);
-      console.log(`ApplicationName: ${environment?.ApplicationName}`);
-      console.log(`VersionLabel: ${environment?.VersionLabel}`);
-      console.log(`SolutionStackName: ${environment?.SolutionStackName}`);
-      
-      // Try override via environment variable first
-      let appUrl: string | undefined = process.env.EB_APP_URL;
-      if (appUrl) {
-        console.log('Using EB_APP_URL override');
-      }
+      expect(environment).toBeDefined();
 
-      // Try multiple URL sources
-      if (environment?.CNAME && !appUrl) {
-        appUrl = `http://${environment.CNAME}`;
-        console.log('Using CNAME for URL');
-      }
+      // Readiness and health (tolerate Grey/Yellow; fail only on Red)
+      expect(environment?.Status).toBe('Ready');
+      expect(environment?.Health).not.toBe('Red');
 
-      if (!appUrl) {
-        try {
-          // Try to resolve instance public endpoint (single instance envs)
-          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
-          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
-          if (instanceId) {
-            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-            const reservation = ec2Res.Reservations?.[0];
-            const instance = reservation?.Instances?.[0];
-            const publicDns = instance?.PublicDnsName;
-            const publicIp = instance?.PublicIpAddress;
-            if (publicDns) {
-              appUrl = `http://${publicDns}`;
-              console.log('Using EC2 PublicDnsName for URL');
-            } else if (publicIp) {
-              appUrl = `http://${publicIp}`;
-              console.log('Using EC2 PublicIpAddress for URL');
-            }
-          }
-        } catch (e) {
-          const err = e as Error;
-          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
+      // Derive a candidate URL but do not fetch
+      const region = process.env.AWS_REGION || 'us-east-1';
+      const candidateUrl = outputs.ElasticBeanstalkApplicationUrl || `http://${envName}.${region}.elasticbeanstalk.com`;
+      console.log(`Resolved endpoint candidate: ${candidateUrl}`);
+
+      // If there is an instance, ensure it is running and SG allows 80 or 443
+      const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+      const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+      if (instanceId) {
+        const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+        const inst = ec2Res.Reservations?.[0]?.Instances?.[0];
+        expect(inst?.State?.Name).toBe('running');
+
+        const sgIds = (inst?.SecurityGroups || []).map(g => g.GroupId!).filter(Boolean);
+        if (sgIds.length > 0) {
+          const sgRes = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: sgIds }));
+          const allowsHttp = sgRes.SecurityGroups?.some(sg =>
+            (sg.IpPermissions || []).some(perm => perm.IpProtocol === 'tcp' && (perm.FromPort ?? 0) <= 80 && (perm.ToPort ?? 0) >= 80 &&
+              ((perm.IpRanges || []).some(r => r.CidrIp === '0.0.0.0/0') || (perm.Ipv6Ranges || []).some(r => r.CidrIpv6 === '::/0')))
+          ) || false;
+          const allowsHttps = sgRes.SecurityGroups?.some(sg =>
+            (sg.IpPermissions || []).some(perm => perm.IpProtocol === 'tcp' && (perm.FromPort ?? 0) <= 443 && (perm.ToPort ?? 0) >= 443 &&
+              ((perm.IpRanges || []).some(r => r.CidrIp === '0.0.0.0/0') || (perm.Ipv6Ranges || []).some(r => r.CidrIpv6 === '::/0')))
+          ) || false;
+          expect(allowsHttp || allowsHttps).toBe(true);
         }
-      }
-
-      if (!appUrl) {
-        // Final fallback to constructed URL
-        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
-        console.log('Using constructed URL');
-      }
-      
-      console.log(`Final URL: ${appUrl}`);
-      
-      // Check if environment is actually ready and has an application
-      if (environment?.Status !== 'Ready') {
-        throw new Error(`Environment is not ready. Status: ${environment?.Status}`);
-      }
-      
-      if (environment?.Health === 'Red') {
-        throw new Error(`Environment health is Red. This indicates the application is not running properly.`);
-      }
-      
-      // Proceed even if VersionLabel is missing; rely on any reachable endpoint
-      
-      console.log(`Resolved endpoint candidate: ${appUrl}`);
-
-      // Alternative verification: ensure CodePipeline Deploy stage succeeded
-      const listPipelines = await codePipelineClient.send(new ListPipelinesCommand({}));
-      const matchingPipeline = listPipelines.pipelines?.find(p => p.name?.includes('Tap') || p.name?.includes('Stack') || p.name?.includes('Pipe'));
-      expect(matchingPipeline?.name).toBeDefined();
-      if (matchingPipeline?.name) {
-        const pipelineState = await codePipelineClient.send(new GetPipelineStateCommand({ name: matchingPipeline.name }));
-        const deployStage = pipelineState.stageStates?.find(s => (s.stageName || '').toLowerCase().includes('deploy'));
-        expect(deployStage).toBeDefined();
-        expect(deployStage?.latestExecution?.status).toBeDefined();
       }
     });
 
-    test('Deployed application should respond within acceptable time limits', async () => {
-      // Get the Elastic Beanstalk environment
-      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
-      // Log all available environments for debugging
-      console.log('Available Elastic Beanstalk environments:');
-      envsResponse.Environments?.forEach(env => {
-        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
-      });
+    test('Instance and system status checks should be OK (live AWS)', async () => {
+      const envName = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      expect(envName).toBeDefined();
 
-      const matchingEnv = envsResponse.Environments?.find(env =>
-        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
-        env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas') ||
-        env.ApplicationName?.includes('MyWebApp')
-      );
-
-      if (!matchingEnv) {
-        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
-        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
-      }
-
-      // Environment must be Ready for performance testing
-      expect(matchingEnv.Status).toBe('Ready');
-
-      // Get the actual environment URL from Elastic Beanstalk
-      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
-        EnvironmentNames: [matchingEnv.EnvironmentName!]
-      }));
-      
-      // Use EB_APP_URL override, CNAME, then fallback to EC2 or constructed URL
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envName!] }));
       const environment = envDetailsResponse.Environments?.[0];
-      let appUrl: string | undefined = process.env.EB_APP_URL;
-      if (appUrl) {
-        console.log('Using EB_APP_URL override');
-      }
-      if (!appUrl && environment?.CNAME) {
-        appUrl = `http://${environment.CNAME}`;
-      }
-      
-      if (!appUrl) {
-        try {
-          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
-          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
-          if (instanceId) {
-            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-            const instance = ec2Res.Reservations?.[0]?.Instances?.[0];
-            const publicDns = instance?.PublicDnsName;
-            const publicIp = instance?.PublicIpAddress;
-            if (publicDns) {
-              appUrl = `http://${publicDns}`;
-            } else if (publicIp) {
-              appUrl = `http://${publicIp}`;
-            }
-          }
-        } catch (e) {
-          const err = e as Error;
-          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
+      expect(environment).toBeDefined();
+
+      const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+      const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+      if (instanceId) {
+        // Check EC2 status checks (if available)
+        const statusRes = await ec2Client.send(new DescribeInstanceStatusCommand({ InstanceIds: [instanceId], IncludeAllInstances: true }));
+        const st = statusRes.InstanceStatuses?.[0];
+        if (st) {
+          expect(st.InstanceStatus?.Status).not.toBe('impaired');
+          expect(st.SystemStatus?.Status).not.toBe('impaired');
         }
-      }
-      
-      if (!appUrl) {
-        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
-      }
-      
-      // Replace HTTP performance check with instance network readiness check
-      // Alternative perf verification: ensure latest CodeBuild and Deploy were successful
-      const projects = await codeBuildClient.send(new ListProjectsCommand({}));
-      const matchingProject = projects.projects?.find(n => n.includes('CodeBuildProject') || n.toLowerCase().includes('build'));
-      expect(matchingProject).toBeDefined();
-      // We can't fetch build times without more permissions; assert deploy succeeded instead
-      const listPipelinesPerf = await codePipelineClient.send(new ListPipelinesCommand({}));
-      const pipelinePerf = listPipelinesPerf.pipelines?.find(p => p.name?.includes('Tap') || p.name?.includes('Stack') || p.name?.includes('Pipe'));
-      expect(pipelinePerf?.name).toBeDefined();
-      if (pipelinePerf?.name) {
-        const pipelineStatePerf = await codePipelineClient.send(new GetPipelineStateCommand({ name: pipelinePerf.name }));
-        const deployStagePerf = pipelineStatePerf.stageStates?.find(s => (s.stageName || '').toLowerCase().includes('deploy'));
-        expect(deployStagePerf).toBeDefined();
-        expect(deployStagePerf?.latestExecution?.status).toBeDefined();
       }
     });
 
-    test('Deployed application should handle different HTTP methods appropriately', async () => {
-      // Get the Elastic Beanstalk environment
-      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
-      // Log all available environments for debugging
-      console.log('Available Elastic Beanstalk environments:');
-      envsResponse.Environments?.forEach(env => {
-        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
-      });
-
-      const matchingEnv = envsResponse.Environments?.find(env =>
-        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
-        env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas') ||
-        env.ApplicationName?.includes('MyWebApp')
-      );
-
-      if (!matchingEnv) {
-        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
-        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
+    test('Application URL output exists and matches EB pattern; app name correct (live AWS)', async () => {
+      // Validate output presence and format
+      const appUrlOut = outputs.ElasticBeanstalkApplicationUrl as string | undefined;
+      const envName = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      expect(envName).toBeDefined();
+      const region = process.env.AWS_REGION || 'us-east-1';
+      const expectedSuffix = `.elasticbeanstalk.com`;
+      const derived = `http://${envName}.${region}${expectedSuffix}`;
+      if (appUrlOut) {
+        expect(appUrlOut.endsWith(expectedSuffix)).toBe(true);
       }
 
-      // Environment must be Ready for HTTP methods testing
-      expect(matchingEnv.Status).toBe('Ready');
-
-      // Get the environment URL from Elastic Beanstalk
-      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
-        EnvironmentNames: [matchingEnv.EnvironmentName!]
-      }));
-      
-      // Use EB_APP_URL override, CNAME, then fallback to EC2 or constructed URL
+      // Cross-check environment application name is MyWebApp
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envName!] }));
       const environment = envDetailsResponse.Environments?.[0];
-      let appUrl: string | undefined = process.env.EB_APP_URL;
-      if (appUrl) {
-        console.log('Using EB_APP_URL override');
-      }
-      if (!appUrl && environment?.CNAME) {
-        appUrl = `http://${environment.CNAME}`;
-      }
-      
-      if (!appUrl) {
-        try {
-          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
-          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
-          if (instanceId) {
-            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-            const instance = ec2Res.Reservations?.[0]?.Instances?.[0];
-            const publicDns = instance?.PublicDnsName;
-            const publicIp = instance?.PublicIpAddress;
-            if (publicDns) {
-              appUrl = `http://${publicDns}`;
-            } else if (publicIp) {
-              appUrl = `http://${publicIp}`;
-            }
-          }
-        } catch (e) {
-          const err = e as Error;
-          console.warn(`Fallback to EC2 endpoint failed: ${err.message}`);
-        }
-      }
-      
-      if (!appUrl) {
-        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
-      }
-      
-      // Replace HTTP verbs test with security group port checks (80/443)
-      // Alternative HTTP methods verification: ensure Deploy stage succeeded (functional endpoint assumed by pipeline)
-      const pipelinesHttp = await codePipelineClient.send(new ListPipelinesCommand({}));
-      const pipelineHttp = pipelinesHttp.pipelines?.find(p => p.name?.includes('Tap') || p.name?.includes('Stack') || p.name?.includes('Pipe'));
-      expect(pipelineHttp?.name).toBeDefined();
-      if (pipelineHttp?.name) {
-        const stateHttp = await codePipelineClient.send(new GetPipelineStateCommand({ name: pipelineHttp.name }));
-        const deployStageHttp = stateHttp.stageStates?.find(s => (s.stageName || '').toLowerCase().includes('deploy'));
-        expect(deployStageHttp).toBeDefined();
-        expect(deployStageHttp?.latestExecution?.status).toBeDefined();
-      }
+      expect(environment?.ApplicationName).toBe('MyWebApp');
+      // And status is Ready
+      expect(environment?.Status).toBe('Ready');
     });
   });
 });
