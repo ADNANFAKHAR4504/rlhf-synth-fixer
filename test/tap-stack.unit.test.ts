@@ -89,7 +89,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       const primaryKeyPolicy = JSON.parse(config.resource.aws_kms_key['primary-kms-key'].policy);
       const secondaryKeyPolicy = JSON.parse(config.resource.aws_kms_key['secondary-kms-key'].policy);
-      
+
       expect(primaryKeyPolicy.Statement).toHaveLength(2);
       expect(secondaryKeyPolicy.Statement).toHaveLength(2);
       expect(primaryKeyPolicy.Statement[1].Principal.Service).toBe('logs.us-east-2.amazonaws.com');
@@ -128,7 +128,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       const primaryVpcTags = config.resource.aws_vpc['primary-vpc'].tags;
       const secondaryVpcTags = config.resource.aws_vpc['secondary-vpc'].tags;
-      
+
       expect(primaryVpcTags.App).toBe('financial-processor');
       expect(primaryVpcTags.Environment).toBe('production');
       expect(primaryVpcTags.ManagedBy).toBe('CDKTF');
@@ -281,7 +281,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       // The financial processor stack includes a DynamoDB table for transactions
       const config = JSON.parse(synthesized);
       const dynamoTable = config.resource.aws_dynamodb_table['transaction-table'];
-      
+
       expect(dynamoTable).toBeDefined();
       expect(dynamoTable.billing_mode).toBe('PAY_PER_REQUEST');
       expect(dynamoTable.hash_key).toBe('transactionId');
@@ -291,7 +291,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure DynamoDB table with proper attributes', () => {
       const config = JSON.parse(synthesized);
       const dynamoTable = config.resource.aws_dynamodb_table['transaction-table'];
-      
+
       expect(dynamoTable.attribute).toHaveLength(3);
       expect(dynamoTable.attribute).toContainEqual({ name: 'transactionId', type: 'S' });
       expect(dynamoTable.attribute).toContainEqual({ name: 'timestamp', type: 'S' });
@@ -301,7 +301,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure DynamoDB table with global secondary index', () => {
       const config = JSON.parse(synthesized);
       const dynamoTable = config.resource.aws_dynamodb_table['transaction-table'];
-      
+
       expect(dynamoTable.global_secondary_index).toHaveLength(1);
       expect(dynamoTable.global_secondary_index[0].name).toBe('UserIndex');
       expect(dynamoTable.global_secondary_index[0].hash_key).toBe('userId');
@@ -312,7 +312,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure DynamoDB table with encryption and PITR', () => {
       const config = JSON.parse(synthesized);
       const dynamoTable = config.resource.aws_dynamodb_table['transaction-table'];
-      
+
       expect(dynamoTable.server_side_encryption.enabled).toBe(true);
       expect(dynamoTable.server_side_encryption.kms_key_arn).toContain('aws_kms_key.primary-kms-key.arn');
       expect(dynamoTable.point_in_time_recovery.enabled).toBe(true);
@@ -321,7 +321,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure DynamoDB table with cross-region replica', () => {
       const config = JSON.parse(synthesized);
       const dynamoTable = config.resource.aws_dynamodb_table['transaction-table'];
-      
+
       expect(dynamoTable.replica).toHaveLength(1);
       expect(dynamoTable.replica[0].region_name).toBe('us-west-2');
       expect(dynamoTable.replica[0].kms_key_arn).toContain('aws_kms_key.secondary-kms-key.arn');
@@ -347,7 +347,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_s3_bucket_server_side_encryption_configuration).toHaveProperty('primary-bucket-encryption');
       expect(config.resource.aws_s3_bucket_server_side_encryption_configuration).toHaveProperty('secondary-bucket-encryption');
-      
+
       const primaryEncryption = config.resource.aws_s3_bucket_server_side_encryption_configuration['primary-bucket-encryption'];
       expect(primaryEncryption.rule[0].apply_server_side_encryption_by_default.sse_algorithm).toBe('aws:kms');
     });
@@ -356,7 +356,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_s3_bucket_public_access_block).toHaveProperty('primary-bucket-pab');
       expect(config.resource.aws_s3_bucket_public_access_block).toHaveProperty('secondary-bucket-pab');
-      
+
       const pab = config.resource.aws_s3_bucket_public_access_block['primary-bucket-pab'];
       expect(pab.block_public_acls).toBe(true);
       expect(pab.block_public_policy).toBe(true);
@@ -426,7 +426,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure EventBridge rules', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudwatch_event_rule).toHaveProperty('health-check-event-rule');
-      
+
       const eventRule = config.resource.aws_cloudwatch_event_rule['health-check-event-rule'];
       expect(eventRule.schedule_expression).toBe('rate(2 minutes)');
     });
@@ -437,7 +437,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_lb).toHaveProperty('primary-alb');
       expect(config.resource.aws_lb).toHaveProperty('secondary-alb');
-      
+
       const primaryAlb = config.resource.aws_lb['primary-alb'];
       expect(primaryAlb.load_balancer_type).toBe('application');
       expect(primaryAlb.internal).toBe(false);
@@ -447,7 +447,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_lb_listener).toHaveProperty('primary-alb-listener');
       expect(config.resource.aws_lb_listener).toHaveProperty('secondary-alb-listener');
-      
+
       const listener = config.resource.aws_lb_listener['primary-alb-listener'];
       expect(listener.port).toBe(80);
       expect(listener.protocol).toBe('HTTP');
@@ -472,7 +472,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should create Route 53 hosted zone', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_route53_zone).toHaveProperty('hosted-zone');
-      
+
       const hostedZone = config.resource.aws_route53_zone['hosted-zone'];
       expect(hostedZone.name).toBe('finproc-demo.internal');
     });
@@ -481,7 +481,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_route53_record).toHaveProperty('primary-dns-record');
       expect(config.resource.aws_route53_record).toHaveProperty('secondary-dns-record');
-      
+
       const primaryRecord = config.resource.aws_route53_record['primary-dns-record'];
       expect(primaryRecord.failover_routing_policy.type).toBe('PRIMARY');
       expect(primaryRecord.type).toBe('A');
@@ -491,7 +491,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_route53_health_check).toHaveProperty('primary-health-check');
       expect(config.resource.aws_route53_health_check).toHaveProperty('secondary-health-check');
-      
+
       const healthCheck = config.resource.aws_route53_health_check['primary-health-check'];
       expect(healthCheck.type).toBe('HTTP');
       expect(healthCheck.resource_path).toBe('/health');
@@ -502,7 +502,7 @@ describe('Financial Processor Stack Unit Tests', () => {
   describe('Resource Tagging', () => {
     test('should include all required tags on resources', () => {
       const config = JSON.parse(synthesized);
-      
+
       // Check VPC tags
       const vpcTags = config.resource.aws_vpc['primary-vpc'].tags;
       expect(vpcTags.App).toBe('financial-processor');
@@ -513,15 +513,15 @@ describe('Financial Processor Stack Unit Tests', () => {
 
     test('should have consistent tagging across resources', () => {
       const config = JSON.parse(synthesized);
-      
+
       const s3Tags = config.resource.aws_s3_bucket['primary-bucket'].tags;
       const kmsKeys = config.resource.aws_kms_key['primary-kms-key'].tags;
       const lambdaTags = config.resource.aws_lambda_function['health-check-lambda'].tags;
-      
+
       expect(s3Tags.App).toBe('financial-processor');
       expect(kmsKeys.App).toBe('financial-processor');
       expect(lambdaTags.App).toBe('financial-processor');
-      
+
       expect(s3Tags.Environment).toBe('production');
       expect(kmsKeys.Environment).toBe('production');
       expect(lambdaTags.Environment).toBe('production');
@@ -547,7 +547,7 @@ describe('Financial Processor Stack Unit Tests', () => {
   describe('Multi-Region Configuration', () => {
     test('should configure resources in both primary and secondary regions', () => {
       const config = JSON.parse(synthesized);
-      
+
       // Check resources have appropriate provider configurations
       expect(config.resource.aws_vpc['primary-vpc'].provider).toBe('aws.primary');
       expect(config.resource.aws_vpc['secondary-vpc'].provider).toBe('aws.secondary');
@@ -557,7 +557,7 @@ describe('Financial Processor Stack Unit Tests', () => {
 
     test('should have region-specific resource naming', () => {
       const config = JSON.parse(synthesized);
-      
+
       expect(config.resource.aws_vpc['primary-vpc'].tags.Name).toContain('primary');
       expect(config.resource.aws_vpc['secondary-vpc'].tags.Name).toContain('secondary');
     });
@@ -565,7 +565,7 @@ describe('Financial Processor Stack Unit Tests', () => {
     test('should configure cross-region replication', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_s3_bucket_replication_configuration).toHaveProperty('primary-bucket-replication');
-      
+
       const replication = config.resource.aws_s3_bucket_replication_configuration['primary-bucket-replication'];
       expect(replication.rule[0].destination.bucket).toContain('aws_s3_bucket.secondary-bucket.arn');
     });
@@ -617,7 +617,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       });
       const devSynthesized = Testing.synth(devStack);
       const devConfig = JSON.parse(devSynthesized);
-      
+
       const primaryProvider = devConfig.provider.aws.find((p: any) => p.alias === 'primary');
       const secondaryProvider = devConfig.provider.aws.find((p: any) => p.alias === 'secondary');
       expect(primaryProvider.region).toBe('us-east-1');
@@ -637,7 +637,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       });
       const euSynthesized = Testing.synth(euStack);
       const euConfig = JSON.parse(euSynthesized);
-      
+
       const primaryProvider = euConfig.provider.aws.find((p: any) => p.alias === 'primary');
       const secondaryProvider = euConfig.provider.aws.find((p: any) => p.alias === 'secondary');
       expect(primaryProvider.region).toBe('eu-west-1');
@@ -658,7 +658,7 @@ describe('Financial Processor Stack Unit Tests', () => {
         domainName: 'test.internal',
       });
       const minimalSynthesized = Testing.synth(minimalStack);
-      
+
       expect(minimalStack).toBeDefined();
       expect(minimalSynthesized).toBeDefined();
       expect(typeof minimalSynthesized).toBe('string');
@@ -668,7 +668,7 @@ describe('Financial Processor Stack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       const primaryBucket = config.resource.aws_s3_bucket['primary-bucket'].bucket;
       const secondaryBucket = config.resource.aws_s3_bucket['secondary-bucket'].bucket;
-      
+
       expect(primaryBucket).toContain('financial-processor-primary');
       expect(secondaryBucket).toContain('financial-processor-secondary');
       expect(primaryBucket).not.toBe(secondaryBucket);
