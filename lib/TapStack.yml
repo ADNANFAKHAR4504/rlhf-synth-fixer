@@ -966,6 +966,7 @@ Resources:
   # AWS Backup Plan
   BackupPlan:
     Type: AWS::Backup::BackupPlan
+    Condition: IsPrimaryRegion
     Properties:
       BackupPlan:
         BackupPlanName: !Sub '${CompanyName}-${Environment}-dr-backup-plan'
@@ -986,15 +987,14 @@ Resources:
 
   BackupVault:
     Type: AWS::Backup::BackupVault
+    Condition: IsPrimaryRegion
     Properties:
       BackupVaultName: !Sub '${CompanyName}-${Environment}-dr-backup-vault'
-      EncryptionKeyArn: !If
-        - IsPrimaryRegion
-        - !GetAtt PrimaryKMSKey.Arn
-        - !Sub 'arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key'
+      EncryptionKeyArn: !GetAtt PrimaryKMSKey.Arn
 
   BackupSelection:
     Type: AWS::Backup::BackupSelection
+    Condition: IsPrimaryRegion
     Properties:
       BackupPlanId: !Ref BackupPlan
       BackupSelection:
@@ -1011,6 +1011,7 @@ Resources:
   # Backup Role
   BackupRole:
     Type: AWS::IAM::Role
+    Condition: IsPrimaryRegion
     Properties:
       RoleName: !Sub '${CompanyName}-${Environment}-backup-role'
       AssumeRolePolicyDocument:
@@ -1346,12 +1347,14 @@ Outputs:
 
   # Backup Outputs
   BackupPlanId:
+    Condition: IsPrimaryRegion
     Description: 'Backup Plan ID'
     Value: !Ref BackupPlan
     Export:
       Name: !Sub '${AWS::StackName}-BackupPlanId'
 
   BackupVaultName:
+    Condition: IsPrimaryRegion
     Description: 'Backup Vault Name'
     Value: !Ref BackupVault
     Export:

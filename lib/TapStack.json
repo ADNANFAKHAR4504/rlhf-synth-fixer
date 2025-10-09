@@ -1417,6 +1417,7 @@
         },
         "BackupPlan": {
             "Type": "AWS::Backup::BackupPlan",
+            "Condition": "IsPrimaryRegion",
             "Properties": {
                 "BackupPlan": {
                     "BackupPlanName": {
@@ -1453,28 +1454,22 @@
         },
         "BackupVault": {
             "Type": "AWS::Backup::BackupVault",
+            "Condition": "IsPrimaryRegion",
             "Properties": {
                 "BackupVaultName": {
                     "Fn::Sub": "${CompanyName}-${Environment}-dr-backup-vault"
                 },
                 "EncryptionKeyArn": {
-                    "Fn::If": [
-                        "IsPrimaryRegion",
-                        {
-                            "Fn::GetAtt": [
-                                "PrimaryKMSKey",
-                                "Arn"
-                            ]
-                        },
-                        {
-                            "Fn::Sub": "arn:aws:kms:${SecondaryRegion}:${AWS::AccountId}:alias/${CompanyName}-${Environment}-secondary-dr-key"
-                        }
+                    "Fn::GetAtt": [
+                        "PrimaryKMSKey",
+                        "Arn"
                     ]
                 }
             }
         },
         "BackupSelection": {
             "Type": "AWS::Backup::BackupSelection",
+            "Condition": "IsPrimaryRegion",
             "Properties": {
                 "BackupPlanId": {
                     "Ref": "BackupPlan"
@@ -1508,6 +1503,7 @@
         },
         "BackupRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "IsPrimaryRegion",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "${CompanyName}-${Environment}-backup-role"
@@ -2068,6 +2064,7 @@
             }
         },
         "BackupPlanId": {
+            "Condition": "IsPrimaryRegion",
             "Description": "Backup Plan ID",
             "Value": {
                 "Ref": "BackupPlan"
@@ -2079,6 +2076,7 @@
             }
         },
         "BackupVaultName": {
+            "Condition": "IsPrimaryRegion",
             "Description": "Backup Vault Name",
             "Value": {
                 "Ref": "BackupVault"
