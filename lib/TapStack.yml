@@ -22,7 +22,6 @@ Metadata:
         Parameters:
           - DBInstanceClass
           - DBUsername
-          - DBPassword
           - DBAllocatedStorage
       - Label:
           default: 'Cache Configuration'
@@ -82,14 +81,6 @@ Parameters:
     Description: 'Database administrator username'
     MinLength: 1
     MaxLength: 16
-  
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: 'TempPassword123!'
-    Description: 'Database administrator password (change in production)'
-    MinLength: 8
-    MaxLength: 41
   
   DBAllocatedStorage:
     Type: Number
@@ -299,15 +290,11 @@ Resources:
     Properties:
       Name: !Sub 'ForumDBCredentials-${EnvironmentSuffix}'
       Description: 'RDS PostgreSQL credentials for Discourse forum'
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}",
-          "engine": "postgres",
-          "host": "${ForumDatabase.Endpoint.Address}",
-          "port": ${ForumDatabase.Endpoint.Port},
-          "dbname": "discourse"
-        }
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -352,7 +339,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -676,12 +663,12 @@ Resources:
       - DBSecret
     Properties:
       InstanceType: !Ref EC2InstanceType
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       KeyName: !Ref SSHKeyName
       IamInstanceProfile: !Ref EC2InstanceProfile
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
-          DeviceIndex: '0'
+          DeviceIndex: 0
           GroupSet:
             - !Ref EC2SecurityGroup
           SubnetId: !FindInMap [NetworkConfig, ExistingInfrastructure, PublicSubnet1Id]
@@ -991,6 +978,12 @@ Outputs:
     Value: !Ref DomainName
     Export:
       Name: !Sub '${AWS::StackName}-DomainName'
+  
+  DBSecretArn:
+    Description: 'Database Secret ARN in Secrets Manager'
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBSecretArn'
   
   LogGroupName:
     Description: 'CloudWatch Log Group Name'
