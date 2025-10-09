@@ -1,5 +1,6 @@
 package app.constructs;
 
+import app.config.AppConfig;
 import app.config.NetworkConfig;
 import com.hashicorp.cdktf.providers.aws.eip.Eip;
 import com.hashicorp.cdktf.providers.aws.internet_gateway.InternetGateway;
@@ -12,11 +13,10 @@ import com.hashicorp.cdktf.providers.aws.vpc.Vpc;
 import software.constructs.Construct;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class NetworkConstruct extends Construct {
+public class NetworkConstruct extends BaseConstruct {
 
     private final Vpc vpc;
 
@@ -28,47 +28,51 @@ public class NetworkConstruct extends Construct {
 
     private final NatGateway natGateway;
 
-    public NetworkConstruct(final Construct scope, final String id, final NetworkConfig config,
-                            final Map<String, String> tags) {
+    public NetworkConstruct(final Construct scope, final String id) {
         super(scope, id);
+
+        AppConfig config = getConfig();
+
+        NetworkConfig networkConfig = config.networkConfig();
+        Map<String, String> tags = config.tags();
 
         // Create VPC
         this.vpc = Vpc.Builder.create(this, "vpc")
-                .cidrBlock(config.vpcCidr())
-                .enableDnsHostnames(config.enableDnsHostnames())
-                .enableDnsSupport(config.enableDnsSupport())
-                .tags(mergeTags(tags, Map.of("Name", id + "-vpc")))
+                .cidrBlock(networkConfig.vpcCidr())
+                .enableDnsHostnames(networkConfig.enableDnsHostnames())
+                .enableDnsSupport(networkConfig.enableDnsSupport())
+                .tags(mergeTags(Map.of("Name", id + "-vpc")))
                 .build();
 
         // Create Internet Gateway
         this.internetGateway = InternetGateway.Builder.create(this, "igw")
                 .vpcId(vpc.getId())
-                .tags(mergeTags(tags, Map.of("Name", id + "-igw")))
+                .tags(mergeTags(Map.of("Name", id + "-igw")))
                 .build();
 
         // Create subnets
-        this.publicSubnets = createPublicSubnets(config, tags);
-        this.privateSubnets = createPrivateSubnets(config, tags);
+        this.publicSubnets = createPublicSubnets(networkConfig, tags);
+        this.privateSubnets = createPrivateSubnets(networkConfig, tags);
 
         // Create NAT Gateway if enabled
-        if (config.enableNatGateway()) {
+        if (networkConfig.enableNatGateway()) {
             Eip natEip = Eip.Builder.create(this, "nat-eip")
                     .domain("vpc")
-                    .tags(mergeTags(tags, Map.of("Name", id + "-nat-eip")))
+                    .tags(mergeTags(Map.of("Name", id + "-nat-eip")))
                     .build();
 
             this.natGateway = NatGateway.Builder.create(this, "nat")
                     .allocationId(natEip.getId())
                     .subnetId(publicSubnets.get(0).getId())
-                    .tags(mergeTags(tags, Map.of("Name", id + "-nat")))
+                    .tags(mergeTags(Map.of("Name", id + "-nat")))
                     .build();
 
-            setupPrivateRouting(tags);
+            setupPrivateRouting();
         } else {
             this.natGateway = null;
         }
 
-        setupPublicRouting(tags);
+        setupPublicRouting();
     }
 
     private List<Subnet> createPublicSubnets(final NetworkConfig config, final Map<String, String> tags) {
@@ -80,7 +84,7 @@ public class NetworkConstruct extends Construct {
                     .cidrBlock(config.publicSubnetCidrs().get(i))
                     .availabilityZone(config.availabilityZones().get(i))
                     .mapPublicIpOnLaunch(true)
-                    .tags(mergeTags(tags, Map.of(
+                    .tags(mergeTags(Map.of(
                             "Name", "public-subnet-" + config.availabilityZones().get(i),
                             "Type", "Public"
                     )))
@@ -100,7 +104,7 @@ public class NetworkConstruct extends Construct {
                     .cidrBlock(config.privateSubnetCidrs().get(i))
                     .availabilityZone(config.availabilityZones().get(i))
                     .mapPublicIpOnLaunch(false)
-                    .tags(mergeTags(tags, Map.of(
+                    .tags(mergeTags(Map.of(
                             "Name", "private-subnet-" + config.availabilityZones().get(i),
                             "Type", "Private"
                     )))
@@ -111,10 +115,10 @@ public class NetworkConstruct extends Construct {
         return subnets;
     }
 
-    private void setupPublicRouting(final Map<String, String> tags) {
+    private void setupPublicRouting() {
         RouteTable publicRouteTable = RouteTable.Builder.create(this, "public-rt")
                 .vpcId(vpc.getId())
-                .tags(mergeTags(tags, Map.of("Name", "public-route-table")))
+                .tags(mergeTags(Map.of("Name", "public-route-table")))
                 .build();
 
         Route.Builder.create(this, "public-route")
@@ -131,10 +135,10 @@ public class NetworkConstruct extends Construct {
         }
     }
 
-    private void setupPrivateRouting(final Map<String, String> tags) {
+    private void setupPrivateRouting() {
         RouteTable privateRouteTable = RouteTable.Builder.create(this, "private-rt")
                 .vpcId(vpc.getId())
-                .tags(mergeTags(tags, Map.of("Name", "private-route-table")))
+                .tags(mergeTags(Map.of("Name", "private-route-table")))
                 .build();
 
         Route.Builder.create(this, "private-route")
@@ -149,12 +153,6 @@ public class NetworkConstruct extends Construct {
                     .subnetId(privateSubnets.get(i).getId())
                     .build();
         }
-    }
-
-    private Map<String, String> mergeTags(final Map<String, String> baseTags, final Map<String, String> additionalTags) {
-        Map<String, String> merged = new HashMap<>(baseTags);
-        merged.putAll(additionalTags);
-        return merged;
     }
 
     // Getters

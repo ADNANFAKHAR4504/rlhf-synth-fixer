@@ -1,5 +1,6 @@
 package app.constructs;
 
+import app.config.AppConfig;
 import app.config.MonitoringConfig;
 import com.hashicorp.cdktf.providers.aws.cloudwatch_dashboard.CloudwatchDashboard;
 import com.hashicorp.cdktf.providers.aws.cloudwatch_metric_alarm.CloudwatchMetricAlarm;
@@ -11,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class MonitoringConstruct extends Construct {
+public class MonitoringConstruct extends BaseConstruct {
 
     private final SnsTopic alarmTopic;
 
@@ -19,34 +20,36 @@ public class MonitoringConstruct extends Construct {
 
     private final CloudwatchDashboard dashboard;
 
-    public MonitoringConstruct(final Construct scope, final String id, final MonitoringConfig config,
-                               final String autoScalingGroupName, final String albArn,
-                               final Map<String, String> tags) {
+    public MonitoringConstruct(final Construct scope, final String id, final String autoScalingGroupName,
+                               final String albArn) {
         super(scope, id);
 
+        AppConfig config = getConfig();
+
+        MonitoringConfig monitoringConfig = config.monitoringConfig();
         this.alarms = new ArrayList<>();
 
         // Create SNS topic for alarms
         this.alarmTopic = SnsTopic.Builder.create(this, "alarm-topic")
                 .name(id + "-alarms")
                 .displayName("VPC Migration Alarms")
-                .tags(tags)
+                .tags(config.tags())
                 .build();
 
         // Subscribe email to SNS topic
         SnsTopicSubscription.Builder.create(this, "email-subscription")
                 .topicArn(alarmTopic.getArn())
                 .protocol("email")
-                .endpoint(config.snsTopicEmail())
+                .endpoint(monitoringConfig.snsTopicEmail())
                 .build();
 
         // Create CloudWatch alarms
-        createCpuAlarm(config, autoScalingGroupName);
+        createCpuAlarm(monitoringConfig, autoScalingGroupName);
         createTargetHealthAlarm(albArn);
         createRequestCountAlarm(albArn);
 
         // Create CloudWatch Dashboard
-        this.dashboard = createDashboard(autoScalingGroupName, albArn, tags);
+        this.dashboard = createDashboard(autoScalingGroupName);
     }
 
     private void createCpuAlarm(final MonitoringConfig config, final String autoScalingGroupName) {
@@ -70,7 +73,7 @@ public class MonitoringConstruct extends Construct {
     }
 
     private void createTargetHealthAlarm(final String albArn) {
-        String albName = albArn.substring(albArn.lastIndexOf("/") + 1);
+        String albDimension = albArn.substring(albArn.indexOf("loadbalancer/") + "loadbalancer/".length());
 
         CloudwatchMetricAlarm healthAlarm = CloudwatchMetricAlarm.Builder.create(this, "target-health-alarm")
                 .alarmName("unhealthy-targets")
@@ -84,7 +87,7 @@ public class MonitoringConstruct extends Construct {
                 .threshold(1)
                 .actionsEnabled(true)
                 .alarmActions(List.of(alarmTopic.getArn()))
-                .dimensions(Map.of("LoadBalancer", albName))
+                .dimensions(Map.of("LoadBalancer", albDimension))
                 .treatMissingData("breaching")
                 .build();
 
@@ -92,7 +95,7 @@ public class MonitoringConstruct extends Construct {
     }
 
     private void createRequestCountAlarm(final String albArn) {
-        String albName = albArn.substring(albArn.lastIndexOf("/") + 1);
+        String albDimension = albArn.substring(albArn.indexOf("loadbalancer/") + "loadbalancer/".length());
 
         CloudwatchMetricAlarm requestAlarm = CloudwatchMetricAlarm.Builder.create(this, "request-count-alarm")
                 .alarmName("high-request-count")
@@ -106,14 +109,13 @@ public class MonitoringConstruct extends Construct {
                 .threshold(10000)
                 .actionsEnabled(true)
                 .alarmActions(List.of(alarmTopic.getArn()))
-                .dimensions(Map.of("LoadBalancer", albName))
+                .dimensions(Map.of("LoadBalancer", albDimension))
                 .build();
 
         alarms.add(requestAlarm);
     }
 
-    private CloudwatchDashboard createDashboard(final String autoScalingGroupName, final String albArn,
-                                                final Map<String, String> tags) {
+    private CloudwatchDashboard createDashboard(final String autoScalingGroupName) {
         String dashboardBody = String.format("""
                 {
                     "widgets": [

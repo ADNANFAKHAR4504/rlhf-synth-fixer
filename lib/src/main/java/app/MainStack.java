@@ -1,7 +1,10 @@
 package app;
 
-import app.config.AppConfig;
-import app.constructs.*;
+import app.constructs.ComputeConstruct;
+import app.constructs.NetworkConstruct;
+import app.constructs.SecurityConstruct;
+import app.constructs.MonitoringConstruct;
+import app.constructs.LoadBalancerConstruct;
 import com.hashicorp.cdktf.TerraformOutput;
 import com.hashicorp.cdktf.TerraformOutputConfig;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProviderConfig;
@@ -11,9 +14,6 @@ import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
 
 /**
  * CDKTF Java template stack demonstrating basic AWS infrastructure.
- * 
- * This stack creates a simple S3 bucket with proper tagging for
- * cost tracking and resource management.
  */
 public class MainStack extends TerraformStack {
     /**
@@ -25,42 +25,37 @@ public class MainStack extends TerraformStack {
 
     private final String stackId;
 
-    public MainStack(final Construct scope, final String id, AppConfig config) {
+    public MainStack(final Construct scope, final String id, final String region) {
         super(scope, id);
         this.stackId = id;
 
         // Configure AWS Provider
         new AwsProvider(this, "aws", AwsProviderConfig.builder()
-                .region(config.region())
+                .region(region)
                 .build());
 
         // Create networking infrastructure
-        NetworkConstruct network = new NetworkConstruct(this, config.projectName() + "-network",
-                config.networkConfig(), config.tags()
-        );
+        NetworkConstruct network = new NetworkConstruct(this, "network");
 
         // Create security infrastructure
-        SecurityConstruct security = new SecurityConstruct(this, config.projectName() + "-security",
-                config.securityConfig(), network.getVpcId(), config.tags()
-        );
+        SecurityConstruct security = new SecurityConstruct(this, "security", network.getVpcId());
 
         // Allow ALB to communicate with instances
         security.allowAlbToInstances(80);
 
         // Create load balancer
-        LoadBalancerConstruct loadBalancer = new LoadBalancerConstruct(this, config.projectName() + "-alb",
-                network.getPublicSubnetIds(), security.getAlbSecurityGroupId(), network.getVpcId(), config
+        LoadBalancerConstruct loadBalancer = new LoadBalancerConstruct(this, "alb", network.getPublicSubnetIds(),
+                security.getAlbSecurityGroupId(), network.getVpcId()
         );
 
         // Create compute resources
-        ComputeConstruct compute = new ComputeConstruct(this, config.projectName() + "-compute",
-                config.securityConfig(), network.getPrivateSubnetIds(), security, loadBalancer.getTargetGroup().getArn(),
-                config.tags()
+        ComputeConstruct compute = new ComputeConstruct(this, "compute", network.getPrivateSubnetIds(),
+                security, loadBalancer.getTargetGroup().getArn()
         );
 
         // Create monitoring
-        MonitoringConstruct monitoring = new MonitoringConstruct(this, config.projectName() + "-monitoring",
-                config.monitoringConfig(), compute.getAutoScalingGroupName(), loadBalancer.getAlb().getArn(), config.tags()
+        MonitoringConstruct monitoring = new MonitoringConstruct(this, "monitoring", compute.getAutoScalingGroupName(),
+                loadBalancer.getAlb().getArn()
         );
 
         // Define outputs
@@ -75,7 +70,7 @@ public class MainStack extends TerraformStack {
                 .build());
 
         new TerraformOutput(this, "alb-dns-name", TerraformOutputConfig.builder()
-                .value(loadBalancer.getAlbDnsName())
+                .value(loadBalancer.getAlb().getDnsName())
                 .description("DNS name of the Application Load Balancer")
                 .build());
 

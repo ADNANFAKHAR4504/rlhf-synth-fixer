@@ -1,17 +1,27 @@
 package app.constructs;
 
+import app.config.AppConfig;
 import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroup;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroupLaunchTemplate;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroupTag;
 import com.hashicorp.cdktf.providers.aws.instance.Instance;
 import com.hashicorp.cdktf.providers.aws.instance.InstanceRootBlockDevice;
-import com.hashicorp.cdktf.providers.aws.launch_template.*;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplate;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateConfig;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateMonitoring;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateIamInstanceProfile;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateTagSpecifications;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateBlockDeviceMappings;
+import com.hashicorp.cdktf.providers.aws.launch_template.LaunchTemplateBlockDeviceMappingsEbs;
 import software.constructs.Construct;
 
-import java.util.*;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.Base64;
 
-public class ComputeConstruct extends Construct {
+public class ComputeConstruct extends BaseConstruct {
 
     private final LaunchTemplate launchTemplate;
 
@@ -19,30 +29,34 @@ public class ComputeConstruct extends Construct {
 
     private final List<Instance> instances;
 
-    public ComputeConstruct(final Construct scope, final String id, final SecurityConfig config, final List<String> subnetIds,
-                            final  SecurityConstruct security, final String targetGroupArn,
-                            final Map<String, String> tags) {
+    private final Map<String, String> tags;
+
+    public ComputeConstruct(final Construct scope, final String id, final List<String> subnetIds,
+                            final SecurityConstruct security, final String targetGroupArn) {
         super(scope, id);
 
+        AppConfig config = getConfig();
+
+        SecurityConfig securityConfig = config.securityConfig();
         this.instances = new ArrayList<>();
+        this.tags = config.tags();
 
         String securityGroupId = security.getInstanceSecurityGroupId();
         String instanceProfileArn = security.getInstanceProfileArn();
         String kmsKeyId = security.getKmsKeyId();
 
         // Create launch template for blue-green deployment
-        this.launchTemplate = createLaunchTemplate(config, securityGroupId, instanceProfileArn, kmsKeyId, tags);
+        this.launchTemplate = createLaunchTemplate(securityConfig, securityGroupId, instanceProfileArn, kmsKeyId, id);
 
         // Create Auto Scaling Group
-        this.autoScalingGroup = createAutoScalingGroup(subnetIds, targetGroupArn, tags);
+        this.autoScalingGroup = createAutoScalingGroup(subnetIds, targetGroupArn, id);
 
         // Create initial instances for migration
-        createMigrationInstances(config, subnetIds, securityGroupId, instanceProfileArn, kmsKeyId, tags);
+        createMigrationInstances(securityConfig, subnetIds, securityGroupId, instanceProfileArn, kmsKeyId);
     }
 
     private LaunchTemplate createLaunchTemplate(final SecurityConfig config, final String securityGroupId,
-                                                final String instanceProfileArn, final String kmsKeyId,
-                                                final Map<String, String> tags) {
+                                                final String instanceProfileArn, final String kmsKeyId, final String id) {
 
         String userData = Base64.getEncoder().encodeToString("""
                 #!/bin/bash
@@ -102,11 +116,11 @@ public class ComputeConstruct extends Construct {
                 .tagSpecifications(List.of(
                         LaunchTemplateTagSpecifications.builder()
                                 .resourceType("instance")
-                                .tags(mergeTags(tags, Map.of("Name", "migrated-instance")))
+                                .tags(mergeTags(Map.of("Name", "migrated-instance")))
                                 .build(),
                         LaunchTemplateTagSpecifications.builder()
                                 .resourceType("volume")
-                                .tags(mergeTags(tags, Map.of("Name", "migrated-volume")))
+                                .tags(mergeTags(Map.of("Name", "migrated-volume")))
                                 .build()
                 ))
                 .tags(tags);
@@ -130,7 +144,7 @@ public class ComputeConstruct extends Construct {
     }
 
     private AutoscalingGroup createAutoScalingGroup(final List<String> subnetIds, final String targetGroupArn,
-                                                    final Map<String, String> tags) {
+                                                    final String id) {
 
         List<AutoscalingGroupTag> asgTags = tags.entrySet().stream()
                 .map(entry -> AutoscalingGroupTag.builder()
@@ -159,16 +173,20 @@ public class ComputeConstruct extends Construct {
 
     private void createMigrationInstances(final SecurityConfig config, final List<String> subnetIds,
                                           final String securityGroupId, final String instanceProfileArn,
-                                          final String kmsKeyId, final Map<String, String> tags) {
+                                          final String kmsKeyId) {
 
         // Create instances for immediate migration (blue-green approach)
         for (int i = 0; i < Math.min(2, subnetIds.size()); i++) {
+            String instanceProfileName = instanceProfileArn.contains("/")
+                ? instanceProfileArn.substring(instanceProfileArn.lastIndexOf("/") + 1)
+                : instanceProfileArn;
+
             Instance instance = Instance.Builder.create(this, "migration-instance-" + i)
                     .ami(config.amiId())
                     .instanceType(config.instanceType())
                     .subnetId(subnetIds.get(i))
                     .vpcSecurityGroupIds(List.of(securityGroupId))
-                    .iamInstanceProfile(instanceProfileArn.split("/")[1]) // Extract name from ARN
+                    .iamInstanceProfile(instanceProfileName)
                     .monitoring(true)
                     .rootBlockDevice(InstanceRootBlockDevice.builder()
                             .encrypted(config.enableEncryption())
@@ -176,7 +194,7 @@ public class ComputeConstruct extends Construct {
                             .volumeSize(30)
                             .volumeType("gp3")
                             .build())
-                    .tags(mergeTags(tags, Map.of(
+                    .tags(mergeTags(Map.of(
                             "Name", "migration-instance-" + i,
                             "Type", "Migration"
                     )))
@@ -184,12 +202,6 @@ public class ComputeConstruct extends Construct {
 
             instances.add(instance);
         }
-    }
-
-    private Map<String, String> mergeTags(final Map<String, String> baseTags, final Map<String, String> additionalTags) {
-        Map<String, String> merged = new HashMap<>(baseTags);
-        merged.putAll(additionalTags);
-        return merged;
     }
 
     // Getters

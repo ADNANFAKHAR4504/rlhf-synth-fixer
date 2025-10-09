@@ -11,11 +11,10 @@ import com.hashicorp.cdktf.providers.aws.lb_target_group_attachment.LbTargetGrou
 import com.hashicorp.cdktf.providers.aws.lb_target_group_attachment.LbTargetGroupAttachmentConfig;
 import software.constructs.Construct;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LoadBalancerConstruct extends Construct {
+public class LoadBalancerConstruct extends BaseConstruct {
 
     private final Lb applicationLoadBalancer;
 
@@ -24,25 +23,28 @@ public class LoadBalancerConstruct extends Construct {
     private final LbListener httpListener;
 
     public LoadBalancerConstruct(final Construct scope, final String id, final List<String> subnetIds,
-                                 final String securityGroupId, final String vpcId, final AppConfig config) {
+                                 final String securityGroupId, final String vpcId) {
         super(scope, id);
 
+        AppConfig config = getConfig();
+
         // Create Application Load Balancer
+        String albName = (id + "-alb").substring(0, Math.min(32, (id + "-alb").length()));
         this.applicationLoadBalancer = Lb.Builder.create(this, "alb")
-                .name(id + "-alb")
+                .name(albName)
                 .internal(false)
                 .loadBalancerType("application")
                 .securityGroups(List.of(securityGroupId))
                 .subnets(subnetIds)
                 .enableDeletionProtection(false)
                 .enableHttp2(true)
-                .enableCrossZoneLoadBalancing(true)
-                .tags(mergeTags(config.tags(), Map.of("Name", id + "-alb")))
+                .tags(mergeTags(Map.of("Name", id + "-alb")))
                 .build();
 
         // Create Target Group
+        String tgName = (id + "-tg").substring(0, Math.min(32, (id + "-tg").length()));
         this.targetGroup = LbTargetGroup.Builder.create(this, "tg")
-                .name(id + "-tg")
+                .name(tgName)
                 .port(80)
                 .protocol("HTTP")
                 .vpcId(vpcId)
@@ -63,7 +65,7 @@ public class LoadBalancerConstruct extends Construct {
                         .type("lb_cookie")
                         .cookieDuration(86400)
                         .build())
-                .tags(mergeTags(config.tags(), Map.of("Name", id + "-tg")))
+                .tags(mergeTags(Map.of("Name", id + "-tg")))
                 .build();
 
         // Create HTTP Listener
@@ -101,12 +103,6 @@ public class LoadBalancerConstruct extends Construct {
                         .targetId(instanceId)
                         .port(port)
                         .build());
-    }
-
-    private Map<String, String> mergeTags(final Map<String, String> baseTags, final Map<String, String> additionalTags) {
-        Map<String, String> merged = new HashMap<>(baseTags);
-        merged.putAll(additionalTags);
-        return merged;
     }
 
     // Getters

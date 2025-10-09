@@ -1,6 +1,7 @@
 package app.config;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,5 +17,11 @@ public record AppConfig(String environment, String region, String projectName, N
                 "Project", "VPC-Migration",
                 "CreatedAt", new Date().toString()
         ));
+    }
+
+    public Map<String, String> mergeWithTags(final Map<String, String> additionalTags) {
+        var merged = new HashMap<>(this.tags);
+        merged.putAll(additionalTags);
+        return Map.copyOf(merged);
     }
 }

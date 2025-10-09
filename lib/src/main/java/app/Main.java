@@ -1,5 +1,6 @@
 package app;
 
+import app.config.AppConfig;
 import com.hashicorp.cdktf.S3Backend;
 import com.hashicorp.cdktf.S3BackendConfig;
 
@@ -18,7 +19,7 @@ public final class Main {
     public static void main(final String[] args) {
         final App app = new App();
 
-        MainStack stack = new MainStack(app, "ec2-instance-migration");
+        MainStack stack = new MainStack(app, "ec2-instance-migration", AppConfig.defaultConfig().region());
 
         /*
          * Configures S3 backend for remote Terraform state storage.

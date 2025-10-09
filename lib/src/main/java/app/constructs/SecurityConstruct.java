@@ -1,5 +1,6 @@
 package app.constructs;
 
+import app.config.AppConfig;
 import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.iam_instance_profile.IamInstanceProfile;
 import com.hashicorp.cdktf.providers.aws.iam_role.IamRole;
@@ -12,11 +13,10 @@ import com.hashicorp.cdktf.providers.aws.security_group.SecurityGroup;
 import com.hashicorp.cdktf.providers.aws.security_group_rule.SecurityGroupRule;
 import software.constructs.Construct;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class SecurityConstruct extends Construct {
+public class SecurityConstruct extends BaseConstruct {
 
     private final SecurityGroup instanceSecurityGroup;
 
@@ -28,49 +28,51 @@ public class SecurityConstruct extends Construct {
 
     private final KmsKey kmsKey;
 
-    public SecurityConstruct(final Construct scope, final String id, SecurityConfig config, final String vpcId,
-                             final Map<String, String> tags) {
+    public SecurityConstruct(final Construct scope, final String id, final String vpcId) {
         super(scope, id);
+
+        AppConfig config = getConfig();
+
+        SecurityConfig securityConfig = config.securityConfig();
 
         // Create KMS Key for encryption
         this.kmsKey = new KmsKey(this, "kms-key", KmsKeyConfig.builder()
                 .description("KMS key for VPC migration encryption")
                 .enableKeyRotation(true)
-                .tags(mergeTags(tags, Map.of("Name", id + "-kms-key")))
+                .tags(mergeTags(Map.of("Name", id + "-kms-key")))
                 .build());
 
         new KmsAlias(this, "kms-alias", KmsAliasConfig.builder()
-                .name(config.kmsKeyAlias())
+                .name(securityConfig.kmsKeyAlias())
                 .targetKeyId(kmsKey.getId())
                 .build());
 
         // Create instance security group
-        this.instanceSecurityGroup = createInstanceSecurityGroup(config, vpcId, tags);
+        this.instanceSecurityGroup = createInstanceSecurityGroup(securityConfig, vpcId);
 
         // Create ALB security group
-        this.albSecurityGroup = createAlbSecurityGroup(config, vpcId, tags);
+        this.albSecurityGroup = createAlbSecurityGroup(securityConfig, vpcId);
 
         // Create IAM role for instances
-        this.instanceRole = createInstanceRole(tags);
+        this.instanceRole = createInstanceRole(config.tags());
 
         // Create instance profile
         this.instanceProfile = IamInstanceProfile.Builder.create(this, "instance-profile")
                 .role(instanceRole.getName())
                 .name(id + "-instance-profile")
-                .tags(tags)
+                .tags(config.tags())
                 .build();
 
         // Attach necessary policies
         attachPolicies();
     }
 
-    private SecurityGroup createInstanceSecurityGroup(final SecurityConfig config, final String vpcId,
-                                                      final Map<String, String> tags) {
+    private SecurityGroup createInstanceSecurityGroup(final SecurityConfig config, final String vpcId) {
         SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "instance-sg")
                 .name("instance-security-group")
                 .description("Security group for EC2 instances")
                 .vpcId(vpcId)
-                .tags(mergeTags(tags, Map.of("Name", "instance-sg")))
+                .tags(mergeTags(Map.of("Name", "instance-sg")))
                 .build();
 
         // SSH access from specific IP
@@ -100,13 +102,12 @@ public class SecurityConstruct extends Construct {
         return securityGroup;
     }
 
-    private SecurityGroup createAlbSecurityGroup(final SecurityConfig config, final String vpcId,
-                                                 final Map<String, String> tags) {
+    private SecurityGroup createAlbSecurityGroup(final SecurityConfig config, final String vpcId) {
         SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "alb-sg")
                 .name("alb-security-group")
                 .description("Security group for Application Load Balancer")
                 .vpcId(vpcId)
-                .tags(mergeTags(tags, Map.of("Name", "alb-sg")))
+                .tags(mergeTags(Map.of("Name", "alb-sg")))
                 .build();
 
         // HTTP ingress
@@ -193,12 +194,6 @@ public class SecurityConstruct extends Construct {
                 .securityGroupId(instanceSecurityGroup.getId())
                 .description("Allow ALB to communicate with instances")
                 .build();
-    }
-
-    private Map<String, String> mergeTags(final Map<String, String> baseTags, final Map<String, String> additionalTags) {
-        Map<String, String> merged = new HashMap<>(baseTags);
-        merged.putAll(additionalTags);
-        return merged;
     }
 
     // Getters
