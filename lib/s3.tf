@@ -1,5 +1,7 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "terraform-state-bucket-${var.resource_suffix}"
+  bucket = "terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}"
 
   tags = {
     Name                = "Terraform State Bucket-${var.resource_suffix}"
