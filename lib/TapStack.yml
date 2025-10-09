@@ -680,7 +680,7 @@ Resources:
             Encrypted: true
             DeleteOnTermination: false
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           exec > >(tee /var/log/user-data.log) 2>&1
           echo "=== UserData Started ==="
