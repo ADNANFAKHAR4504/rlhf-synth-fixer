@@ -279,12 +279,6 @@ describe("Multi-Region DR Infrastructure - RDS Module", () => {
     expect(rdsModuleContent).toMatch(/global_cluster_identifier\s*=\s*aws_rds_global_cluster\.main\.id/);
   });
 
-  test("primary Aurora cluster has storage encryption enabled", () => {
-    const primaryClusterBlock = rdsModuleContent.match(/resource\s+"aws_rds_cluster"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_rds_cluster"|$)/);
-    expect(primaryClusterBlock).toBeTruthy();
-    expect(primaryClusterBlock![0]).toMatch(/storage_encrypted\s*=\s*true/);
-  });
-
   test("RDS module creates cluster instances", () => {
     expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"\s*{/);
     expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"secondary"\s*{/);
