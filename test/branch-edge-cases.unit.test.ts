@@ -186,7 +186,7 @@ describe('Branch Coverage Edge Cases', () => {
       });
 
       // Check output exists
-      template.hasOutput('MediaConvertJobTemplateName', {
+      template.hasOutput('JobTemplateName', {
         Description: 'MediaConvert job template name'
       });
     });
@@ -209,7 +209,15 @@ describe('Branch Coverage Edge Cases', () => {
               Effect: 'Allow',
               Action: Match.arrayWith([
                 's3:GetObject*',
-                's3:PutObject*'
+                's3:GetBucket*',
+                's3:List*',
+                's3:DeleteObject*',
+                's3:PutObject',
+                's3:PutObjectLegalHold',
+                's3:PutObjectRetention',
+                's3:PutObjectTagging',
+                's3:PutObjectVersionTagging',
+                's3:Abort*'
               ])
             })
           ])
