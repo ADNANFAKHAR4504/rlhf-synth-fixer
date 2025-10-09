@@ -28,7 +28,8 @@ class TapStackArgs:
     TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
     Args:
-        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+        environment_suffix (Optional[str]): An optional suffix for identifying the deployment 
+            environment (e.g., 'dev', 'prod').
         tags (Optional[dict]): Optional default tags to apply to resources.
         config (Optional[dict]): Optional configuration dictionary.
     """

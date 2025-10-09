@@ -294,25 +294,49 @@ class TestTapStack(unittest.TestCase):
         
         # Mock stack methods
         self.mock_lambda_stack.get_main_function_name.return_value = Output.from_input('test-lambda')
-        self.mock_lambda_stack.get_main_function_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-lambda')
-        self.mock_lambda_stack.get_main_function_invoke_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-lambda')
+        self.mock_lambda_stack.get_main_function_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-lambda'
+        )
+        self.mock_lambda_stack.get_main_function_invoke_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-lambda'
+        )
         self.mock_lambda_stack.get_log_processor_function_name.return_value = Output.from_input('test-log-processor')
-        self.mock_lambda_stack.get_log_processor_function_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-log-processor')
+        self.mock_lambda_stack.get_log_processor_function_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-log-processor'
+        )
         
         self.mock_api_gateway_stack.get_rest_api_id.return_value = Output.from_input('test-api-id')
-        self.mock_api_gateway_stack.get_rest_api_arn.return_value = Output.from_input('arn:aws:apigateway:us-east-1::/restapis/test-api-id')
-        self.mock_api_gateway_stack.get_invoke_url.return_value = Output.from_input('https://test-api-id.execute-api.us-east-1.amazonaws.com/prod')
-        self.mock_api_gateway_stack.get_execution_arn.return_value = Output.from_input('arn:aws:execute-api:us-east-1:123456789012:test-api-id')
+        self.mock_api_gateway_stack.get_rest_api_arn.return_value = Output.from_input(
+            'arn:aws:apigateway:us-east-1::/restapis/test-api-id'
+        )
+        self.mock_api_gateway_stack.get_invoke_url.return_value = Output.from_input(
+            'https://test-api-id.execute-api.us-east-1.amazonaws.com/prod'
+        )
+        self.mock_api_gateway_stack.get_execution_arn.return_value = Output.from_input(
+            'arn:aws:execute-api:us-east-1:123456789012:test-api-id'
+        )
         
         self.mock_s3_stack.get_logs_bucket_name.return_value = Output.from_input('test-logs-bucket')
-        self.mock_s3_stack.get_logs_bucket_arn.return_value = Output.from_input('arn:aws:s3:::test-logs-bucket')
-        self.mock_s3_stack.get_logs_bucket_domain_name.return_value = Output.from_input('test-logs-bucket.s3.amazonaws.com')
+        self.mock_s3_stack.get_logs_bucket_arn.return_value = Output.from_input(
+            'arn:aws:s3:::test-logs-bucket'
+        )
+        self.mock_s3_stack.get_logs_bucket_domain_name.return_value = Output.from_input(
+            'test-logs-bucket.s3.amazonaws.com'
+        )
         
-        self.mock_iam_stack.get_lambda_execution_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-lambda-role')
-        self.mock_iam_stack.get_api_gateway_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-api-role')
-        self.mock_iam_stack.get_log_processing_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-log-role')
+        self.mock_iam_stack.get_lambda_execution_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-lambda-role'
+        )
+        self.mock_iam_stack.get_api_gateway_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-api-role'
+        )
+        self.mock_iam_stack.get_log_processing_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-log-role'
+        )
         
-        self.mock_cloudwatch_stack.get_dashboard_url.return_value = Output.from_input('https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=test-dashboard')
+        self.mock_cloudwatch_stack.get_dashboard_url.return_value = Output.from_input(
+            'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=test-dashboard'
+        )
         self.mock_cloudwatch_stack.get_log_groups.return_value = {
             'main': MagicMock(name=Output.from_input('/aws/lambda/test-lambda')),
             'processor': MagicMock(name=Output.from_input('/aws/lambda/test-log-processor')),
@@ -460,29 +484,53 @@ class TestTapStack(unittest.TestCase):
         """Helper method to setup mock methods for all stacks."""
         # Lambda stack mocks
         self.mock_lambda_stack.get_main_function_name.return_value = Output.from_input('test-lambda')
-        self.mock_lambda_stack.get_main_function_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-lambda')
-        self.mock_lambda_stack.get_main_function_invoke_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-lambda')
+        self.mock_lambda_stack.get_main_function_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-lambda'
+        )
+        self.mock_lambda_stack.get_main_function_invoke_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-lambda'
+        )
         self.mock_lambda_stack.get_log_processor_function_name.return_value = Output.from_input('test-log-processor')
-        self.mock_lambda_stack.get_log_processor_function_arn.return_value = Output.from_input('arn:aws:lambda:us-east-1:123456789012:function:test-log-processor')
+        self.mock_lambda_stack.get_log_processor_function_arn.return_value = Output.from_input(
+            'arn:aws:lambda:us-east-1:123456789012:function:test-log-processor'
+        )
         
         # API Gateway stack mocks
         self.mock_api_gateway_stack.get_rest_api_id.return_value = Output.from_input('test-api-id')
-        self.mock_api_gateway_stack.get_rest_api_arn.return_value = Output.from_input('arn:aws:apigateway:us-east-1::/restapis/test-api-id')
-        self.mock_api_gateway_stack.get_invoke_url.return_value = Output.from_input('https://test-api-id.execute-api.us-east-1.amazonaws.com/prod')
-        self.mock_api_gateway_stack.get_execution_arn.return_value = Output.from_input('arn:aws:execute-api:us-east-1:123456789012:test-api-id')
+        self.mock_api_gateway_stack.get_rest_api_arn.return_value = Output.from_input(
+            'arn:aws:apigateway:us-east-1::/restapis/test-api-id'
+        )
+        self.mock_api_gateway_stack.get_invoke_url.return_value = Output.from_input(
+            'https://test-api-id.execute-api.us-east-1.amazonaws.com/prod'
+        )
+        self.mock_api_gateway_stack.get_execution_arn.return_value = Output.from_input(
+            'arn:aws:execute-api:us-east-1:123456789012:test-api-id'
+        )
         
         # S3 stack mocks
         self.mock_s3_stack.get_logs_bucket_name.return_value = Output.from_input('test-logs-bucket')
-        self.mock_s3_stack.get_logs_bucket_arn.return_value = Output.from_input('arn:aws:s3:::test-logs-bucket')
-        self.mock_s3_stack.get_logs_bucket_domain_name.return_value = Output.from_input('test-logs-bucket.s3.amazonaws.com')
+        self.mock_s3_stack.get_logs_bucket_arn.return_value = Output.from_input(
+            'arn:aws:s3:::test-logs-bucket'
+        )
+        self.mock_s3_stack.get_logs_bucket_domain_name.return_value = Output.from_input(
+            'test-logs-bucket.s3.amazonaws.com'
+        )
         
         # IAM stack mocks
-        self.mock_iam_stack.get_lambda_execution_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-lambda-role')
-        self.mock_iam_stack.get_api_gateway_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-api-role')
-        self.mock_iam_stack.get_log_processing_role_arn.return_value = Output.from_input('arn:aws:iam::123456789012:role/test-log-role')
+        self.mock_iam_stack.get_lambda_execution_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-lambda-role'
+        )
+        self.mock_iam_stack.get_api_gateway_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-api-role'
+        )
+        self.mock_iam_stack.get_log_processing_role_arn.return_value = Output.from_input(
+            'arn:aws:iam::123456789012:role/test-log-role'
+        )
         
         # CloudWatch stack mocks
-        self.mock_cloudwatch_stack.get_dashboard_url.return_value = Output.from_input('https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=test-dashboard')
+        self.mock_cloudwatch_stack.get_dashboard_url.return_value = Output.from_input(
+            'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=test-dashboard'
+        )
         self.mock_cloudwatch_stack.get_log_groups.return_value = {
             'main': MagicMock(name=Output.from_input('/aws/lambda/test-lambda')),
             'processor': MagicMock(name=Output.from_input('/aws/lambda/test-log-processor')),
@@ -696,7 +744,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_iam_module_import(self):
         """Test IAM module can be imported and basic functionality."""
-        from infrastructure.iam import IAMStack
 
         # Test that IAMStack class exists and has expected methods
         self.assertTrue(hasattr(IAMStack, '__init__'))
@@ -706,7 +753,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_s3_module_import(self):
         """Test S3 module can be imported and basic functionality."""
-        from infrastructure.s3 import S3Stack
 
         # Test that S3Stack class exists and has expected methods
         self.assertTrue(hasattr(S3Stack, '__init__'))
@@ -716,7 +762,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_lambda_module_import(self):
         """Test Lambda module can be imported and basic functionality."""
-        from infrastructure.lambda_function import LambdaStack
 
         # Test that LambdaStack class exists and has expected methods
         self.assertTrue(hasattr(LambdaStack, '__init__'))
@@ -728,7 +773,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_api_gateway_module_import(self):
         """Test API Gateway module can be imported and basic functionality."""
-        from infrastructure.api_gateway import APIGatewayStack
 
         # Test that APIGatewayStack class exists and has expected methods
         self.assertTrue(hasattr(APIGatewayStack, '__init__'))
@@ -739,7 +783,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_cloudwatch_module_import(self):
         """Test CloudWatch module can be imported and basic functionality."""
-        from infrastructure.cloudwatch import CloudWatchStack
 
         # Test that CloudWatchStack class exists and has expected methods
         self.assertTrue(hasattr(CloudWatchStack, '__init__'))
@@ -749,7 +792,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_logging_module_import(self):
         """Test Logging module can be imported and basic functionality."""
-        from infrastructure.logging import LoggingStack
 
         # Test that LoggingStack class exists and has expected methods
         self.assertTrue(hasattr(LoggingStack, '__init__'))
@@ -757,7 +799,6 @@ class TestInfrastructureModuleImports(unittest.TestCase):
 
     def test_config_module_import(self):
         """Test Config module can be imported and basic functionality."""
-        from infrastructure.config import InfrastructureConfig
 
         # Test that InfrastructureConfig class exists and has expected methods
         self.assertTrue(hasattr(InfrastructureConfig, '__init__'))
@@ -791,7 +832,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
     @patch('infrastructure.iam.iam.RolePolicyAttachment')
     def test_iam_stack_methods(self, mock_role_policy_attachment, mock_policy, mock_role):
         """Test IAMStack methods with mocking."""
-        from infrastructure.iam import IAMStack
 
         # Mock the role and policy returns
         mock_role.return_value = MagicMock()
@@ -815,7 +855,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
     def test_s3_stack_methods(self, mock_bucket_policy, mock_public_access_block, 
                              mock_lifecycle, mock_encryption, mock_versioning, mock_bucket):
         """Test S3Stack methods with mocking."""
-        from infrastructure.s3 import S3Stack
 
         # Mock the bucket and related resources
         mock_bucket.return_value = MagicMock()
@@ -837,7 +876,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
     @patch('pulumi.FileAsset')
     def test_lambda_stack_methods(self, mock_file_asset, mock_function):
         """Test LambdaStack methods with mocking."""
-        from infrastructure.lambda_function import LambdaStack
 
         # Mock the function and file asset
         mock_function.return_value = MagicMock()
@@ -864,7 +902,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
                                       mock_method_response, mock_integration, mock_method,
                                       mock_resource, mock_rest_api):
         """Test APIGatewayStack methods with mocking."""
-        from infrastructure.api_gateway import APIGatewayStack
 
         # Mock all the API Gateway resources
         mock_rest_api.return_value = MagicMock()
@@ -889,7 +926,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
     @patch('infrastructure.cloudwatch.cloudwatch.Dashboard')
     def test_cloudwatch_stack_methods(self, mock_dashboard, mock_metric_alarm, mock_log_group):
         """Test CloudWatchStack methods with mocking."""
-        from infrastructure.cloudwatch import CloudWatchStack
 
         # Mock the CloudWatch resources
         mock_log_group.return_value = MagicMock()
@@ -907,7 +943,6 @@ class TestInfrastructureModuleMethods(unittest.TestCase):
     @patch('infrastructure.logging.cloudwatch.LogSubscriptionFilter')
     def test_logging_stack_methods(self, mock_subscription_filter):
         """Test LoggingStack methods with mocking."""
-        from infrastructure.logging import LoggingStack
 
         # Mock the subscription filter
         mock_subscription_filter.return_value = MagicMock()
@@ -943,7 +978,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
     @patch('infrastructure.iam.iam.RolePolicyAttachment')
     def test_iam_stack_get_methods(self, mock_role_policy_attachment, mock_policy, mock_role):
         """Test IAMStack getter methods to improve coverage."""
-        from infrastructure.iam import IAMStack
 
         # Mock the role and policy returns
         mock_role.return_value = MagicMock()
@@ -972,7 +1006,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
     def test_s3_stack_get_methods(self, mock_bucket_policy, mock_public_access_block, 
                              mock_lifecycle, mock_encryption, mock_versioning, mock_bucket):
         """Test S3Stack getter methods to improve coverage."""
-        from infrastructure.s3 import S3Stack
 
         # Mock the bucket and related resources
         mock_bucket.return_value = MagicMock()
@@ -999,7 +1032,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
     @patch('pulumi.FileAsset')
     def test_lambda_stack_get_methods(self, mock_file_asset, mock_function):
         """Test LambdaStack getter methods to improve coverage."""
-        from infrastructure.lambda_function import LambdaStack
 
         # Mock the function and file asset
         mock_function.return_value = MagicMock()
@@ -1033,7 +1065,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
                                       mock_method_response, mock_integration, mock_method,
                                       mock_resource, mock_rest_api):
         """Test APIGatewayStack getter methods to improve coverage."""
-        from infrastructure.api_gateway import APIGatewayStack
 
         # Mock all the API Gateway resources
         mock_rest_api.return_value = MagicMock()
@@ -1064,7 +1095,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
     @patch('infrastructure.cloudwatch.cloudwatch.Dashboard')
     def test_cloudwatch_stack_get_methods(self, mock_dashboard, mock_metric_alarm, mock_log_group):
         """Test CloudWatchStack getter methods to improve coverage."""
-        from infrastructure.cloudwatch import CloudWatchStack
 
         # Mock the CloudWatch resources
         mock_log_group.return_value = MagicMock()
@@ -1087,7 +1117,6 @@ class TestInfrastructureModuleCoverage(unittest.TestCase):
     @patch('infrastructure.logging.cloudwatch.LogSubscriptionFilter')
     def test_logging_stack_get_methods(self, mock_subscription_filter):
         """Test LoggingStack getter methods to improve coverage."""
-        from infrastructure.logging import LoggingStack
 
         # Mock the subscription filter
         mock_subscription_filter.return_value = MagicMock()
@@ -1131,7 +1160,6 @@ class TestAPIGatewayMissingMethods(unittest.TestCase):
                                           mock_method_response, mock_integration, mock_method,
                                           mock_resource, mock_rest_api):
         """Test API Gateway usage plan, API key, and usage plan key methods."""
-        from infrastructure.api_gateway import APIGatewayStack
 
         # Mock all the API Gateway resources
         mock_rest_api.return_value = MagicMock()
@@ -1181,7 +1209,6 @@ class TestAPIGatewayMissingMethods(unittest.TestCase):
                                           mock_integration_response, mock_method_response, 
                                           mock_integration, mock_method, mock_resource, mock_rest_api):
         """Test API Gateway deployment and stage methods."""
-        from infrastructure.api_gateway import APIGatewayStack
 
         # Mock all the API Gateway resources
         mock_rest_api.return_value = MagicMock()
@@ -1230,7 +1257,6 @@ class TestLoggingMissingMethods(unittest.TestCase):
     @patch('infrastructure.logging.cloudwatch.LogSubscriptionFilter')
     def test_logging_create_log_subscriptions(self, mock_subscription_filter):
         """Test LoggingStack _create_log_subscriptions method."""
-        from infrastructure.logging import LoggingStack
 
         # Mock the subscription filter
         mock_subscription_filter.return_value = MagicMock()
@@ -1357,7 +1383,7 @@ class TestIntegrationPoints(unittest.TestCase):
         
         # This is more of a structural test - the actual dependency validation
         # would be done in integration tests
-        self.assertTrue(True)  # Placeholder for dependency validation
+        # Placeholder for dependency validation - actual validation would be done in integration tests
 
     def test_resource_naming_consistency(self):
         """Test that resource naming is consistent across components."""
