@@ -1,5 +1,6 @@
 package app.constructs;
 
+import app.config.AppConfig;
 import com.hashicorp.cdktf.providers.aws.lb.Lb;
 import com.hashicorp.cdktf.providers.aws.lb_listener.LbListener;
 import com.hashicorp.cdktf.providers.aws.lb_listener.LbListenerDefaultAction;
@@ -23,8 +24,7 @@ public class LoadBalancerConstruct extends Construct {
     private final LbListener httpListener;
 
     public LoadBalancerConstruct(final Construct scope, final String id, final List<String> subnetIds,
-                                 final String securityGroupId, final String vpcId,
-                                 final List<String> instanceIds, final Map<String, String> tags) {
+                                 final String securityGroupId, final String vpcId, final AppConfig config) {
         super(scope, id);
 
         // Create Application Load Balancer
@@ -37,7 +37,7 @@ public class LoadBalancerConstruct extends Construct {
                 .enableDeletionProtection(false)
                 .enableHttp2(true)
                 .enableCrossZoneLoadBalancing(true)
-                .tags(mergeTags(tags, Map.of("Name", id + "-alb")))
+                .tags(mergeTags(config.tags(), Map.of("Name", id + "-alb")))
                 .build();
 
         // Create Target Group
@@ -63,7 +63,7 @@ public class LoadBalancerConstruct extends Construct {
                         .type("lb_cookie")
                         .cookieDuration(86400)
                         .build())
-                .tags(mergeTags(tags, Map.of("Name", id + "-tg")))
+                .tags(mergeTags(config.tags(), Map.of("Name", id + "-tg")))
                 .build();
 
         // Create HTTP Listener
@@ -75,11 +75,11 @@ public class LoadBalancerConstruct extends Construct {
                         .type("forward")
                         .targetGroupArn(targetGroup.getArn())
                         .build()))
-                .tags(tags)
+                .tags(config.tags())
                 .build();
 
         // Attach existing instances to target group if provided
-        attachInstances(instanceIds);
+        attachInstances(config.existingInstanceIds());
     }
 
     private void attachInstances(final List<String> instanceIds) {

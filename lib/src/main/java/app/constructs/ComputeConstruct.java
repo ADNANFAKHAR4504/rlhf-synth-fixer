@@ -20,11 +20,15 @@ public class ComputeConstruct extends Construct {
     private final List<Instance> instances;
 
     public ComputeConstruct(final Construct scope, final String id, final SecurityConfig config, final List<String> subnetIds,
-                            final String securityGroupId, final String instanceProfileArn, final String kmsKeyId,
-                            final String targetGroupArn, final Map<String, String> tags) {
+                            final  SecurityConstruct security, final String targetGroupArn,
+                            final Map<String, String> tags) {
         super(scope, id);
 
         this.instances = new ArrayList<>();
+
+        String securityGroupId = security.getInstanceSecurityGroupId();
+        String instanceProfileArn = security.getInstanceProfileArn();
+        String kmsKeyId = security.getKmsKeyId();
 
         // Create launch template for blue-green deployment
         this.launchTemplate = createLaunchTemplate(config, securityGroupId, instanceProfileArn, kmsKeyId, tags);

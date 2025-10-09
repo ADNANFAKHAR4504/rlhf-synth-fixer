@@ -35,57 +35,32 @@ public class MainStack extends TerraformStack {
                 .build());
 
         // Create networking infrastructure
-        NetworkConstruct network = new NetworkConstruct(
-                this,
-                config.projectName() + "-network",
-                config.networkConfig(),
-                config.tags()
+        NetworkConstruct network = new NetworkConstruct(this, config.projectName() + "-network",
+                config.networkConfig(), config.tags()
         );
 
         // Create security infrastructure
-        SecurityConstruct security = new SecurityConstruct(
-                this,
-                config.projectName() + "-security",
-                config.securityConfig(),
-                network.getVpcId(),
-                config.tags()
+        SecurityConstruct security = new SecurityConstruct(this, config.projectName() + "-security",
+                config.securityConfig(), network.getVpcId(), config.tags()
         );
 
         // Allow ALB to communicate with instances
         security.allowAlbToInstances(80);
 
         // Create load balancer
-        LoadBalancerConstruct loadBalancer = new LoadBalancerConstruct(
-                this,
-                config.projectName() + "-alb",
-                network.getPublicSubnetIds(),
-                security.getAlbSecurityGroupId(),
-                network.getVpcId(),
-                config.existingInstanceIds(),
-                config.tags()
+        LoadBalancerConstruct loadBalancer = new LoadBalancerConstruct(this, config.projectName() + "-alb",
+                network.getPublicSubnetIds(), security.getAlbSecurityGroupId(), network.getVpcId(), config
         );
 
         // Create compute resources
-        ComputeConstruct compute = new ComputeConstruct(
-                this,
-                config.projectName() + "-compute",
-                config.securityConfig(),
-                network.getPrivateSubnetIds(),
-                security.getInstanceSecurityGroupId(),
-                security.getInstanceProfileArn(),
-                security.getKmsKeyId(),
-                loadBalancer.getTargetGroupArn(),
+        ComputeConstruct compute = new ComputeConstruct(this, config.projectName() + "-compute",
+                config.securityConfig(), network.getPrivateSubnetIds(), security, loadBalancer.getTargetGroup().getArn(),
                 config.tags()
         );
 
         // Create monitoring
-        MonitoringConstruct monitoring = new MonitoringConstruct(
-                this,
-                config.projectName() + "-monitoring",
-                config.monitoringConfig(),
-                compute.getAutoScalingGroupName(),
-                loadBalancer.getAlbArn(),
-                config.tags()
+        MonitoringConstruct monitoring = new MonitoringConstruct(this, config.projectName() + "-monitoring",
+                config.monitoringConfig(), compute.getAutoScalingGroupName(), loadBalancer.getAlb().getArn(), config.tags()
         );
 
         // Define outputs
