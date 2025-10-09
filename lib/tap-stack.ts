@@ -263,7 +263,7 @@ export class TapStack extends TerraformStack {
       pathPart: '{id}',
     });
 
-// Set up API integrations
+    // Set up API integrations
     apiGateway.createLambdaIntegration(
       productsResource,
       'GET',
