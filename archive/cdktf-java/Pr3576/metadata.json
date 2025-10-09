@@ -1,0 +1,22 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348983",
+  "team": "6",
+  "startedAt": "2025-10-05T13:54:46.963Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "CloudTrail, RDS, EC2, IAM, S3, VPC",
+  "training_quality": 7,
+  "training_quality_justification": "High-value training data demonstrating common CDKTF Java pitfalls including API versioning, security best practices (password generation), multi-AZ architecture, and proper resource configuration. The model showed good architectural understanding but failed on critical implementation details, making this excellent data for improving practical IaC skills.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
+}

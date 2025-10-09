@@ -103,11 +103,11 @@ EOF
     echo "ℹ️ lib directory not found, skipping Go unit tests"
   fi
 
-elif [ "$LANGUAGE" = "js" ]; then
-  echo "✅ JavaScript project detected, running unit tests..."
+elif [ "$LANGUAGE" = "js" ] || { [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; }; then
+  echo "✅ JavaScript/CloudFormation JSON project detected, running JS unit tests..."
   npm run test:unit-js
 
-elif [ "$LANGUAGE" = "py" ]; then
+elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
   pipenv run test-py-unit
 
