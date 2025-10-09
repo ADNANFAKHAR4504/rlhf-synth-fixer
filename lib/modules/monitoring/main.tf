@@ -1,10 +1,10 @@
 # CloudWatch Alarms and Monitoring
 
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-dr-alerts-${var.environment}"
+  name = "${var.project_name}-dr-alerts-${var.environment}-${var.resource_suffix}"
 
   tags = {
-    Name        = "${var.project_name}-sns-alerts"
+    Name        = "${var.project_name}-sns-alerts-${var.resource_suffix}"
     Environment = var.environment
   }
 }
@@ -25,7 +25,7 @@ resource "aws_lambda_permission" "sns" {
 
 # CloudWatch Alarm - Primary ALB Unhealthy Targets
 resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
-  alarm_name          = "${var.project_name}-primary-alb-unhealthy-targets"
+  alarm_name          = "${var.project_name}-primary-alb-unhealthy-targets-${var.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UnHealthyHostCount"
@@ -51,7 +51,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
 
 # CloudWatch Alarm - Primary Aurora DB Connections
 resource "aws_cloudwatch_metric_alarm" "primary_db_connections" {
-  alarm_name          = "${var.project_name}-primary-db-connections-critical"
+  alarm_name          = "${var.project_name}-primary-db-connections-critical-${var.resource_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "3"
   metric_name         = "DatabaseConnections"
@@ -76,7 +76,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_db_connections" {
 
 # CloudWatch Alarm - Primary Region Total Failures
 resource "aws_cloudwatch_metric_alarm" "primary_region_failure" {
-  alarm_name          = "${var.project_name}-primary-region-total-failure"
+  alarm_name          = "${var.project_name}-primary-region-total-failure-${var.resource_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "HealthyHostCount"
@@ -103,7 +103,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_region_failure" {
 
 # Monitor Lambda failover function errors
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  alarm_name          = "${var.project_name}-lambda-failover-errors"
+  alarm_name          = "${var.project_name}-lambda-failover-errors-${var.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "Errors"
@@ -128,7 +128,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 
 # Monitor ALB response time
 resource "aws_cloudwatch_metric_alarm" "primary_alb_latency" {
-  alarm_name          = "${var.project_name}-primary-alb-high-latency"
+  alarm_name          = "${var.project_name}-primary-alb-high-latency-${var.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "TargetResponseTime"
@@ -153,7 +153,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_alb_latency" {
 
 # Monitor DynamoDB read/write throttling
 resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
-  alarm_name          = "${var.project_name}-dynamodb-throttled-requests"
+  alarm_name          = "${var.project_name}-dynamodb-throttled-requests-${var.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UserErrors"
@@ -181,12 +181,12 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
 # ============================================================================
 
 resource "aws_cloudwatch_event_rule" "health_check" {
-  name                = "${var.project_name}-dr-health-check"
+  name                = "${var.project_name}-dr-health-check-${var.resource_suffix}"
   description         = "Periodic health check for DR readiness"
   schedule_expression = "rate(5 minutes)"
 
   tags = {
-    Name        = "${var.project_name}-eventbridge-health"
+    Name        = "${var.project_name}-eventbridge-health-${var.resource_suffix}"
     Environment = var.environment
   }
 }

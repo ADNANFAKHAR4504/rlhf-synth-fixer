@@ -43,3 +43,8 @@ variable "secondary_alb_dns" {
   type        = string
 }
 
+variable "resource_suffix" {
+  description = "Suffix to append to resource names for uniqueness"
+  type        = string
+}
+

@@ -1,7 +1,7 @@
 # Lambda Failover Function
 
 resource "aws_cloudwatch_log_group" "lambda_failover" {
-  name              = "/aws/lambda/${var.project_name}-failover"
+  name              = "/aws/lambda/${var.project_name}-failover-${var.resource_suffix}"
   retention_in_days = 7
 
   tags = {
@@ -79,7 +79,7 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "failover" {
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  function_name    = "${var.project_name}-failover-automation"
+  function_name    = "${var.project_name}-failover-automation-${var.resource_suffix}"
   role             = var.lambda_role_arn
   handler          = "index.handler"
   runtime          = "python3.11"

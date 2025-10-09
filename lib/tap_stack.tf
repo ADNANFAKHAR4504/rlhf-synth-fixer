@@ -107,6 +107,7 @@ module "rds" {
   primary_kms_key_arn    = module.kms.rds_primary_key_arn
   secondary_kms_key_arn  = module.kms.rds_secondary_key_arn
   instance_class         = var.aurora_instance_class
+  resource_suffix        = var.resource_suffix
 
   providers = {
     aws           = aws
@@ -124,6 +125,7 @@ module "dynamodb" {
   project_name     = var.project_name
   environment      = var.environment
   secondary_region = var.secondary_region
+  resource_suffix  = var.resource_suffix
 }
 
 # ============================================================================
@@ -139,6 +141,7 @@ module "alb_primary" {
   public_subnet_ids = module.vpc_primary.public_subnet_ids
   alb_sg_id         = module.security_groups_primary.alb_sg_id
   region_name       = "primary"
+  resource_suffix   = var.resource_suffix
 
   providers = {
     aws = aws
@@ -154,6 +157,7 @@ module "alb_secondary" {
   public_subnet_ids = module.vpc_secondary.public_subnet_ids
   alb_sg_id         = module.security_groups_secondary.alb_sg_id
   region_name       = "secondary"
+  resource_suffix   = var.resource_suffix
 
   providers = {
     aws = aws.secondary
@@ -166,10 +170,10 @@ module "alb_secondary" {
 
 # Note: We need to create a placeholder SNS topic first for IAM module
 resource "aws_sns_topic" "alerts_placeholder" {
-  name = "${var.project_name}-dr-alerts-${var.environment}-placeholder"
+  name = "${var.project_name}-dr-alerts-${var.environment}-${var.resource_suffix}"
 
   tags = {
-    Name        = "${var.project_name}-sns-alerts-placeholder"
+    Name        = "${var.project_name}-sns-alerts-${var.resource_suffix}"
     Environment = var.environment
   }
 
@@ -189,6 +193,7 @@ module "iam" {
   environment        = var.environment
   dynamodb_table_arn = module.dynamodb.table_arn
   sns_topic_arn      = aws_sns_topic.alerts_placeholder.arn
+  resource_suffix    = var.resource_suffix
 }
 
 # ============================================================================
@@ -207,6 +212,7 @@ module "lambda" {
   sns_topic_arn      = aws_sns_topic.alerts_placeholder.arn
   primary_alb_dns    = module.alb_primary.alb_dns_name
   secondary_alb_dns  = module.alb_secondary.alb_dns_name
+  resource_suffix    = var.resource_suffix
 }
 
 # ============================================================================
@@ -271,6 +277,7 @@ module "monitoring" {
   primary_db_cluster_id  = module.rds.primary_cluster_id
   dynamodb_table_name    = module.dynamodb.table_name
   asg_desired_capacity   = var.asg_desired_capacity
+  resource_suffix        = var.resource_suffix
 }
 
 # ============================================================================
@@ -285,6 +292,7 @@ module "backup" {
   backup_role_arn            = module.iam.backup_role_arn
   primary_aurora_cluster_arn = "arn:aws:rds:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster:${module.rds.primary_cluster_id}"
   dynamodb_table_arn         = module.dynamodb.table_arn
+  resource_suffix            = var.resource_suffix
 }
 
 data "aws_caller_identity" "current" {}

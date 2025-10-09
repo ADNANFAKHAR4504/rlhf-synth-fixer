@@ -1,7 +1,7 @@
 # DynamoDB Global Table
 
 resource "aws_dynamodb_table" "main" {
-  name             = "${var.project_name}-dynamodb-${var.environment}"
+  name             = "${var.project_name}-dynamodb-${var.environment}-${var.resource_suffix}"
   billing_mode     = "PAY_PER_REQUEST"
   hash_key         = "id"
   stream_enabled   = true

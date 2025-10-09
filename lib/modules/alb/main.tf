@@ -17,7 +17,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-tg-${var.region_name}"
+  name     = "${var.project_name}-tg-${var.region_name}-${var.resource_suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id

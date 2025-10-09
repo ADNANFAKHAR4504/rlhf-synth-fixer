@@ -72,3 +72,9 @@ variable "project_name" {
   default     = "dr-app"
 }
 
+variable "resource_suffix" {
+  description = "Suffix to append to resource names for uniqueness"
+  type        = string
+  default     = "v2"
+}
+

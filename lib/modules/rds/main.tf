@@ -1,34 +1,34 @@
 # Aurora Global Database
 
 resource "aws_db_subnet_group" "primary" {
-  name       = "${var.project_name}-db-subnet-group-primary"
+  name       = "${var.project_name}-db-subnet-group-primary-${var.resource_suffix}"
   subnet_ids = var.primary_subnet_ids
 
   tags = {
-    Name        = "${var.project_name}-db-subnet-group-primary"
+    Name        = "${var.project_name}-db-subnet-group-primary-${var.resource_suffix}"
     Environment = var.environment
   }
 }
 
 resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
-  name       = "${var.project_name}-db-subnet-group-secondary"
+  name       = "${var.project_name}-db-subnet-group-secondary-${var.resource_suffix}"
   subnet_ids = var.secondary_subnet_ids
 
   tags = {
-    Name        = "${var.project_name}-db-subnet-group-secondary"
+    Name        = "${var.project_name}-db-subnet-group-secondary-${var.resource_suffix}"
     Environment = var.environment
   }
 }
 
 resource "aws_rds_global_cluster" "main" {
-  global_cluster_identifier = "${var.project_name}-global-db-${var.environment}"
+  global_cluster_identifier = "${var.project_name}-global-db-${var.environment}-${var.resource_suffix}"
   engine                    = "aurora-mysql"
   engine_version            = "8.0.mysql_aurora.3.04.0"
 }
 
 resource "aws_rds_cluster" "primary" {
-  cluster_identifier           = "${var.project_name}-aurora-primary"
+  cluster_identifier           = "${var.project_name}-aurora-primary-${var.resource_suffix}"
   engine                       = aws_rds_global_cluster.main.engine
   engine_version               = aws_rds_global_cluster.main.engine_version
   database_name                = "${replace(var.project_name, "-", "")}db"
@@ -55,13 +55,13 @@ resource "aws_rds_cluster" "primary" {
 
 resource "aws_rds_cluster_instance" "primary" {
   count              = 2
-  identifier         = "${var.project_name}-aurora-primary-${count.index + 1}"
+  identifier         = "${var.project_name}-aurora-primary-${var.resource_suffix}-${count.index + 1}"
   cluster_identifier = aws_rds_cluster.primary.id
   instance_class     = var.instance_class
   engine             = aws_rds_cluster.primary.engine
 
   tags = {
-    Name        = "${var.project_name}-aurora-primary-instance-${count.index + 1}"
+    Name        = "${var.project_name}-aurora-primary-instance-${var.resource_suffix}-${count.index + 1}"
     Environment = var.environment
   }
 
@@ -72,7 +72,7 @@ resource "aws_rds_cluster_instance" "primary" {
 
 resource "aws_rds_cluster" "secondary" {
   provider                  = aws.secondary
-  cluster_identifier        = "${var.project_name}-aurora-secondary"
+  cluster_identifier        = "${var.project_name}-aurora-secondary-${var.resource_suffix}"
   engine                    = aws_rds_global_cluster.main.engine
   engine_version            = aws_rds_global_cluster.main.engine_version
   db_subnet_group_name      = aws_db_subnet_group.secondary.name
@@ -94,13 +94,13 @@ resource "aws_rds_cluster" "secondary" {
 resource "aws_rds_cluster_instance" "secondary" {
   count              = 2
   provider           = aws.secondary
-  identifier         = "${var.project_name}-aurora-secondary-${count.index + 1}"
+  identifier         = "${var.project_name}-aurora-secondary-${var.resource_suffix}-${count.index + 1}"
   cluster_identifier = aws_rds_cluster.secondary.id
   instance_class     = var.instance_class
   engine             = aws_rds_cluster.secondary.engine
 
   tags = {
-    Name        = "${var.project_name}-aurora-secondary-instance-${count.index + 1}"
+    Name        = "${var.project_name}-aurora-secondary-instance-${var.resource_suffix}-${count.index + 1}"
     Environment = var.environment
   }
 

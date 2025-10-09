@@ -2,7 +2,7 @@
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role-${var.environment}"
+  name = "${var.project_name}-ec2-role-${var.environment}-${var.resource_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -56,13 +56,13 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile-${var.environment}"
+  name = "${var.project_name}-ec2-profile-${var.environment}-${var.resource_suffix}"
   role = aws_iam_role.ec2_role.name
 }
 
 # Lambda Execution Role
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.project_name}-lambda-failover-role"
+  name = "${var.project_name}-lambda-failover-role-${var.resource_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -129,7 +129,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
 
 # AWS Backup Role
 resource "aws_iam_role" "backup_role" {
-  name = "${var.project_name}-backup-role"
+  name = "${var.project_name}-backup-role-${var.resource_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

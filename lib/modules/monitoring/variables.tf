@@ -43,3 +43,8 @@ variable "asg_desired_capacity" {
   type        = number
 }
 
+variable "resource_suffix" {
+  description = "Suffix to append to resource names for uniqueness"
+  type        = string
+}
+

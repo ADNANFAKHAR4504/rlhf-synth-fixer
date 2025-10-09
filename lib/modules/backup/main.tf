@@ -1,17 +1,17 @@
 # AWS Backup Plan for Disaster Recovery
 
 resource "aws_backup_vault" "main" {
-  name = "${var.project_name}-backup-vault"
+  name = "${var.project_name}-backup-vault-${var.resource_suffix}"
 
   tags = {
-    Name        = "${var.project_name}-backup-vault"
+    Name        = "${var.project_name}-backup-vault-${var.resource_suffix}"
     Environment = var.environment
     Purpose     = "Centralized backup storage"
   }
 }
 
 resource "aws_backup_plan" "daily" {
-  name = "${var.project_name}-daily-backup-plan"
+  name = "${var.project_name}-daily-backup-plan-${var.resource_suffix}"
 
   rule {
     rule_name         = "daily_backup_rule"
@@ -36,7 +36,7 @@ resource "aws_backup_plan" "daily" {
 }
 
 resource "aws_backup_selection" "aurora_backup" {
-  name         = "${var.project_name}-aurora-backup-selection"
+  name         = "${var.project_name}-aurora-backup-selection-${var.resource_suffix}"
   plan_id      = aws_backup_plan.daily.id
   iam_role_arn = var.backup_role_arn
 
