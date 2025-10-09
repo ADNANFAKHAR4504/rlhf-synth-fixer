@@ -456,7 +456,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-data-${AWS::AccountId}"
+          "Fn::Sub": "tapstack-${EnvironmentSuffix}-data-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"

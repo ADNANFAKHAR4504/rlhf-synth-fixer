@@ -54,7 +54,7 @@ The infrastructure consists of:
 
 #### Storage
 
-**S3Bucket**: S3 bucket with versioning enabled for all objects. Encryption uses customer-managed KMS key with bucket key enabled for cost optimization. Public access is completely blocked. Lifecycle policy automatically deletes noncurrent versions after 90 days to manage storage costs. Bucket name uses stack name and account ID to ensure global uniqueness while maintaining lowercase requirements.
+**S3Bucket**: S3 bucket with versioning enabled for all objects. Encryption uses customer-managed KMS key with bucket key enabled for cost optimization. Public access is completely blocked. Lifecycle policy automatically deletes noncurrent versions after 90 days to manage storage costs. Bucket name uses lowercase prefix "tapstack" with environment suffix and account ID to ensure global uniqueness and comply with S3 naming requirements (lowercase only).
 
 **DynamoDBTable**: DynamoDB table with partition key "partitionKey" (String) and sort key "sortKey" (String). Uses provisioned billing mode with 5 read capacity units and 5 write capacity units as required. KMS encryption enabled using customer-managed key. Point-in-time recovery enabled for data protection.
 
@@ -619,7 +619,7 @@ The template exports the following outputs with stack name prefix for cross-stac
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-data-${AWS::AccountId}"
+          "Fn::Sub": "tapstack-${EnvironmentSuffix}-data-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
