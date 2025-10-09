@@ -41,8 +41,9 @@ variable "security_group_ids" {
 }
 
 variable "eventbridge_rule_arn" {
-  description = "ARN of EventBridge rule"
+  description = "ARN of EventBridge rule (optional, permission created after EventBridge module)"
   type        = string
+  default     = ""
 }
 
 variable "timeout" {

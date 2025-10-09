@@ -118,6 +118,8 @@ resource "aws_lambda_function" "failover" {
 }
 
 resource "aws_lambda_permission" "allow_eventbridge" {
+  count = var.eventbridge_rule_arn != "" ? 1 : 0
+
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.failover.function_name
