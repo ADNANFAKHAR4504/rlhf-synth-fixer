@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document contains the corrected, production-ready Pulumi Java infrastructure code for a news portal serving 7,200 daily readers. All compilation errors have been fixed, and the code follows AWS and Pulumi best practices.
+This document contains the corrected, production-ready Pulumi Java infrastructure code for a news portal serving 7,200 daily readers. All compilation errors have been fixed, and the code follows AWS and Pulumi best practice.
 
 ## Key Improvements from MODEL_RESPONSE.md
 
