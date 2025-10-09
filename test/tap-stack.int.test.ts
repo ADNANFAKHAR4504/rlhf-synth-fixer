@@ -1376,7 +1376,7 @@ describe('TapStack Integration Tests', () => {
       // Environment must be Ready for HTTP methods testing
       expect(matchingEnv.Status).toBe('Ready');
 
-      // Get the actual environment URL from Elastic Beanstalk
+      // Get the environment URL from Elastic Beanstalk
       const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
         EnvironmentNames: [matchingEnv.EnvironmentName!]
       }));
