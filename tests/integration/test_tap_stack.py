@@ -136,8 +136,10 @@ class TestTapStack(unittest.TestCase):
         """Test the API Gateway endpoint"""
         import requests
         try:
+            api_endpoint = self.api_endpoint+"items"
+            print(f"Testing API Gateway endpoint: {api_endpoint}")
             # Send a GET request to the API Gateway endpoint
-            response = requests.get(self.api_endpoint+"items", timeout=10)
+            response = requests.get(api_endpoint, timeout=10)
 
             # Validate the response
             self.assertEqual(response.status_code, 200)
