@@ -7,6 +7,10 @@
   "team": "synth",
   "startedAt": "2025-10-03T19:02:38+05:30",
   "training_quality": 9,
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],  
   "aws_services": [
     "VPC",
     "Application Load Balancer",
