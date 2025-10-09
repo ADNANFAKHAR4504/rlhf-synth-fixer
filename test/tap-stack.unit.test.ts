@@ -162,7 +162,7 @@ describe('Notification System CloudFormation Template', () => {
     test('IAM role should have DynamoDB permissions', () => {
       const role = template.Resources.NotificationProcessorRole.Properties;
       const policy = role.Policies[0].PolicyDocument;
-      const dynamoStatement = policy.Statement.find(s =>
+      const dynamoStatement = policy.Statement.find((s: any) =>
         s.Action.includes('dynamodb:PutItem')
       );
       expect(dynamoStatement).toBeDefined();
@@ -173,7 +173,7 @@ describe('Notification System CloudFormation Template', () => {
     test('IAM role should have SES permissions', () => {
       const role = template.Resources.NotificationProcessorRole.Properties;
       const policy = role.Policies[0].PolicyDocument;
-      const sesStatement = policy.Statement.find(s =>
+      const sesStatement = policy.Statement.find((s: any) =>
         s.Action.includes('ses:SendEmail')
       );
       expect(sesStatement).toBeDefined();
@@ -262,8 +262,8 @@ describe('Notification System CloudFormation Template', () => {
         const resource = template.Resources[resourceName];
         if (resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          const envTag = tags.find(t => t.Key === 'Environment');
-          const appTag = tags.find(t => t.Key === 'Application');
+          const envTag = tags.find((t: any) => t.Key === 'Environment');
+          const appTag = tags.find((t: any) => t.Key === 'Application');
 
           expect(envTag).toBeDefined();
           expect(appTag).toBeDefined();
@@ -309,7 +309,7 @@ describe('Notification System CloudFormation Template', () => {
 
       // Should not have * resources for sensitive actions
       const statements = policy.Statement;
-      statements.forEach(statement => {
+      statements.forEach((statement: any) => {
         if (statement.Action.includes('dynamodb:')) {
           expect(statement.Resource).not.toBe('*');
         }
