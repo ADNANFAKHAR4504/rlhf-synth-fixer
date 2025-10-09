@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "94218765",
+  "team": "synth",
+  "startedAt": "2025-10-08T12:51:39+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch Logs",
+    "Kinesis Data Firehose",
+    "S3",
+    "Lambda",
+    "CloudWatch Insights",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

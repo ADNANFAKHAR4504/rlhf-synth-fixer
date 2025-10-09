@@ -10,12 +10,12 @@ aws-cdk-aws-lambda-python-alpha = "*"
 cdktf = "0.21.0"
 cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
-pytest-cov = "*"
 cfn-lint = "*"
 pulumi = "*"
 pulumi-aws = "*"
 boto3 = "*"
 cfn-flip = "*"
+moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
 
 [dev-packages]
@@ -26,11 +26,11 @@ pytest-env = "*"
 pylint = "*"
 pytest = "*"
 requests = "*"
-pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.12.11"
