@@ -418,6 +418,7 @@ export class S3Module extends Construct {
     );
 
     // Create KMS key for S3 encryption with proper permissions for CloudWatch Logs
+    // In S3Module constructor, update the KMS key policy:
     this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
       description: 'KMS key for S3 bucket encryption and CloudWatch Logs',
       enableKeyRotation: true,
@@ -451,6 +452,36 @@ export class S3Module extends Construct {
             Condition: {
               ArnLike: {
                 'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${awsRegion}:${callerIdentity.accountId}:*`,
+              },
+            },
+          },
+          // ADD THIS NEW STATEMENT FOR CLOUDTRAIL
+          {
+            Sid: 'Allow CloudTrail',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
+            Resource: '*',
+            Condition: {
+              StringLike: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:*:${callerIdentity.accountId}:trail/*`,
+              },
+            },
+          },
+          // ADD THIS STATEMENT FOR CLOUDTRAIL DECRYPTION
+          {
+            Sid: 'Allow CloudTrail to decrypt',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 'kms:Decrypt',
+            Resource: '*',
+            Condition: {
+              Null: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': 'false',
               },
             },
           },
@@ -912,6 +943,7 @@ export class CloudTrailModule extends Construct {
     );
 
     // S3 bucket policy for CloudTrail
+    // In CloudTrailModule, update the S3 bucket policy:
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'trail-bucket-policy', {
       bucket: this.trailBucket.id,
       policy: JSON.stringify({
@@ -937,6 +969,7 @@ export class CloudTrailModule extends Construct {
             Condition: {
               StringEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
+                's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.arn,
               },
             },
           },
