@@ -2,6 +2,8 @@ package lib
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
@@ -14,6 +16,24 @@ import (
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
+
+// getLambdaAssetPath returns the correct path to Lambda assets
+// accounting for different execution contexts (root vs lib directory)
+func getLambdaAssetPath(relativePath string) string {
+	// Try the path as-is first (works from root)
+	if _, err := os.Stat(relativePath); err == nil {
+		return relativePath
+	}
+
+	// Try from parent directory (works from lib/)
+	parentPath := filepath.Join("..", relativePath)
+	if _, err := os.Stat(parentPath); err == nil {
+		return parentPath
+	}
+
+	// Fallback to original path
+	return relativePath
+}
 
 // TapStackProps defines the properties for the TapStack CDK stack.
 //
@@ -211,10 +231,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	})
 
 	// Create Lambda function with optimized settings
+	lambdaPath := getLambdaAssetPath("lib/lambda/image-processor")
 	imageProcessor := awslambda.NewFunction(stack, jsii.String("ImageProcessorFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("image-processor-%s", environmentSuffix)),
 		Runtime:      awslambda.Runtime_PROVIDED_AL2023(), // Go custom runtime
-		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda/image-processor"), nil),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaPath), nil),
 		Handler:      jsii.String("bootstrap"),
 		Role:         lambdaRole,
 
