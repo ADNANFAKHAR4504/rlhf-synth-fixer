@@ -16,8 +16,9 @@ variable "account_id" {
 }
 
 variable "lambda_log_group_arn" {
-  description = "ARN of Lambda log group"
+  description = "ARN of Lambda log group (optional, will use wildcard if not provided)"
   type        = string
+  default     = ""
 }
 
 variable "primary_bucket_arn" {

@@ -40,9 +40,11 @@ resource "aws_iam_role_policy" "lambda_failover" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = [
+        Resource = var.lambda_log_group_arn != "" ? [
           var.lambda_log_group_arn,
           "${var.lambda_log_group_arn}:*"
+        ] : [
+          "arn:aws:logs:${var.region}:${var.account_id}:log-group:/aws/lambda/${var.name_prefix}*"
         ]
       },
       {
