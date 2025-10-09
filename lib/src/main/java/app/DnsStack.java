@@ -27,17 +27,21 @@ public class DnsStack {
                 "Environment", "production"))
             .build());
 
-    // Default record for all locations
+    // Default record for all locations (with default geolocation)
     var defaultRecord = new Record("news-portal-default",
         RecordArgs.builder()
             .zoneId(hostedZone.zoneId())
             .name("www")
             .type("A")
+            .setIdentifier("Default")
             .aliases(
                 RecordAliasArgs.builder()
                     .name(cdn.getDistribution().domainName())
                     .zoneId(cdn.getDistribution().hostedZoneId())
                     .evaluateTargetHealth(false)
+                    .build())
+            .geolocationRoutingPolicies(
+                RecordGeolocationRoutingPolicyArgs.builder()
                     .build())
             .build());
 
