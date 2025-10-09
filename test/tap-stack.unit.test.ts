@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
@@ -22,1006 +22,859 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have all required top-level sections', () => {
-      expect(template.Parameters).toBeDefined();
-      expect(template.Resources).toBeDefined();
-      expect(template.Outputs).toBeDefined();
-      expect(template.Conditions).toBeDefined();
+      expect(template).toHaveProperty('AWSTemplateFormatVersion');
+      expect(template).toHaveProperty('Description');
+      expect(template).toHaveProperty('Parameters');
+      expect(template).toHaveProperty('Resources');
+      expect(template).toHaveProperty('Outputs');
+    });
+
+    test('should have valid JSON structure', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
+      expect(template).not.toBeNull();
     });
   });
 
-  describe('Parameters', () => {
-    test('should have DomainName parameter', () => {
-      expect(template.Parameters.DomainName).toBeDefined();
-      expect(template.Parameters.DomainName.Type).toBe('String');
-      expect(template.Parameters.DomainName.Default).toBe('');
-    });
+  describe('Parameters Validation', () => {
+    test('should have all required parameters', () => {
+      const expectedParams = [
+        'ProjectName',
+        'Environment',
+        'EnvironmentSuffix',
+        'VpcCidr',
+        'TrustedIPRange',
+        'InstanceType',
+        'DBInstanceClass',
+        'DBMasterUsername',
+        'DomainName',
+        'MinInstances',
+        'MaxInstances',
+        'DesiredInstances',
+        'LatestAmiId'
+      ];
 
-    test('should have Environment parameter with valid values', () => {
-      expect(template.Parameters.Environment).toBeDefined();
-      expect(template.Parameters.Environment.Type).toBe('String');
-      expect(template.Parameters.Environment.Default).toBe('dev');
-      expect(template.Parameters.Environment.AllowedValues).toEqual([
-        'dev',
-        'staging',
-        'prod',
-      ]);
-    });
-
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(template.Parameters.EnvironmentSuffix.Description).toBeDefined();
-    });
-
-    test('should have AlertEmail parameter', () => {
-      expect(template.Parameters.AlertEmail).toBeDefined();
-      expect(template.Parameters.AlertEmail.Type).toBe('String');
-      expect(template.Parameters.AlertEmail.Default).toBe(
-        'alerts@example.com'
-      );
-    });
-
-    test('all parameters should have descriptions', () => {
-      Object.keys(template.Parameters).forEach(paramName => {
-        expect(template.Parameters[paramName].Description).toBeDefined();
-        expect(template.Parameters[paramName].Description.length).toBeGreaterThan(
-          0
-        );
+      expectedParams.forEach(param => {
+        expect(template.Parameters).toHaveProperty(param);
       });
     });
-  });
 
-  describe('Conditions', () => {
-    test('should have HasDomainName condition', () => {
-      expect(template.Conditions.HasDomainName).toBeDefined();
-      expect(template.Conditions.HasDomainName['Fn::Not']).toBeDefined();
+    test('ProjectName parameter should have correct properties', () => {
+      const param = template.Parameters.ProjectName;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('ha-webapp');
+      expect(param.Description).toBeDefined();
+    });
+
+    test('Environment parameter should have correct allowed values', () => {
+      const param = template.Parameters.Environment;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('production');
+      expect(param.AllowedValues).toContain('production');
+      expect(param.AllowedValues).toContain('staging');
+      expect(param.AllowedValues).toContain('development');
+    });
+
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.Description).toBeDefined();
+    });
+
+    test('VpcCidr parameter should have CIDR pattern validation', () => {
+      const param = template.Parameters.VpcCidr;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('10.0.0.0/16');
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('TrustedIPRange parameter should have CIDR pattern validation', () => {
+      const param = template.Parameters.TrustedIPRange;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('0.0.0.0/0');
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('InstanceType parameter should have allowed values', () => {
+      const param = template.Parameters.InstanceType;
+      expect(param.Type).toBe('String');
+      expect(param.AllowedValues).toContain('t3.medium');
+      expect(param.AllowedValues).toContain('t3.large');
+      expect(param.AllowedValues).toContain('m5.large');
+    });
+
+    test('DBInstanceClass parameter should be defined', () => {
+      const param = template.Parameters.DBInstanceClass;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('db.t3.small');
+    });
+
+    test('DBMasterUsername parameter should have constraints', () => {
+      const param = template.Parameters.DBMasterUsername;
+      expect(param.Type).toBe('String');
+      expect(param.MinLength).toBe(1);
+      expect(param.MaxLength).toBe(16);
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('MinInstances, MaxInstances, DesiredInstances should be numbers', () => {
+      expect(template.Parameters.MinInstances.Type).toBe('Number');
+      expect(template.Parameters.MaxInstances.Type).toBe('Number');
+      expect(template.Parameters.DesiredInstances.Type).toBe('Number');
+      expect(template.Parameters.MinInstances.MinValue).toBe(2);
+      expect(template.Parameters.MaxInstances.MinValue).toBe(2);
     });
   });
 
-  describe('S3 Resources', () => {
-    test('should have MarketingWebsiteBucket', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket).toBeDefined();
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
+  describe('VPC Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('MarketingWebsiteBucket should have deletion policies', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket.DeletionPolicy).toBe('Delete');
-      expect(bucket.UpdateReplacePolicy).toBe('Delete');
+    test('VPC should have DNS enabled', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
     });
 
-    test('MarketingWebsiteBucket should have encryption enabled', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(
-        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
-      ).toBeDefined();
-      expect(
-        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
-          .ServerSideEncryptionByDefault.SSEAlgorithm
-      ).toBe('AES256');
+    test('VPC should reference VpcCidr parameter', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
     });
 
-    test('MarketingWebsiteBucket should have versioning enabled', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    test('VPC should have proper tags', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.Tags).toBeDefined();
+      expect(Array.isArray(vpc.Properties.Tags)).toBe(true);
+
+      const tagKeys = vpc.Properties.Tags.map((tag: any) => tag.Key);
+      expect(tagKeys).toContain('Name');
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
     });
 
-    test('MarketingWebsiteBucket should block public access', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      const publicAccessBlock =
-        bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccessBlock.BlockPublicAcls).toBe(true);
-      expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
-      expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
-      expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
+    test('should have Internet Gateway', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
     });
 
-    test('MarketingWebsiteBucket should have environment tag', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket.Properties.Tags).toBeDefined();
-      expect(bucket.Properties.Tags.length).toBeGreaterThan(0);
-      const envTag = bucket.Properties.Tags.find(
-        (tag: any) => tag.Key === 'Environment'
-      );
-      expect(envTag).toBeDefined();
-    });
-
-    test('MarketingWebsiteBucket name should use lowercase and EnvironmentSuffix', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket.Properties.BucketName['Fn::Sub']).toMatch(/^tapstack/);
-      expect(bucket.Properties.BucketName['Fn::Sub']).toContain(
-        '${EnvironmentSuffix}'
-      );
-    });
-
-    test('should have MarketingWebsiteBucketPolicy', () => {
-      const policy = template.Resources.MarketingWebsiteBucketPolicy;
-      expect(policy).toBeDefined();
-      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
-      expect(policy.DeletionPolicy).toBe('Delete');
-      expect(policy.UpdateReplacePolicy).toBe('Delete');
+    test('should have VPC Gateway Attachment', () => {
+      const attachment = template.Resources.AttachGateway;
+      expect(attachment).toBeDefined();
+      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+      expect(attachment.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
     });
   });
 
-  describe('CloudFront Resources', () => {
-    test('should have CloudFrontOriginAccessIdentity', () => {
-      const oai = template.Resources.CloudFrontOriginAccessIdentity;
-      expect(oai).toBeDefined();
-      expect(oai.Type).toBe('AWS::CloudFront::CloudFrontOriginAccessIdentity');
-      expect(oai.DeletionPolicy).toBe('Delete');
-      expect(oai.UpdateReplacePolicy).toBe('Delete');
+  describe('Subnet Resources', () => {
+    test('should have public subnets in 2 AZs', () => {
+      expect(template.Resources.PublicSubnetAZ1).toBeDefined();
+      expect(template.Resources.PublicSubnetAZ2).toBeDefined();
+      expect(template.Resources.PublicSubnetAZ1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnetAZ2.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('should have CloudFrontDistribution', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      expect(distribution).toBeDefined();
-      expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
-      expect(distribution.DeletionPolicy).toBe('Delete');
-      expect(distribution.UpdateReplacePolicy).toBe('Delete');
+    test('public subnets should have MapPublicIpOnLaunch enabled', () => {
+      expect(template.Resources.PublicSubnetAZ1.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(template.Resources.PublicSubnetAZ2.Properties.MapPublicIpOnLaunch).toBe(true);
     });
 
-    test('CloudFrontDistribution should be enabled', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      expect(distribution.Properties.DistributionConfig.Enabled).toBe(true);
+    test('should have private subnets in 2 AZs', () => {
+      expect(template.Resources.PrivateSubnetAZ1).toBeDefined();
+      expect(template.Resources.PrivateSubnetAZ2).toBeDefined();
+      expect(template.Resources.PrivateSubnetAZ1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnetAZ2.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('CloudFrontDistribution should use HTTPS', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      const defaultBehavior =
-        distribution.Properties.DistributionConfig.DefaultCacheBehavior;
-      expect(defaultBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
+    test('should have DB subnets in 2 AZs', () => {
+      expect(template.Resources.DBSubnetAZ1).toBeDefined();
+      expect(template.Resources.DBSubnetAZ2).toBeDefined();
+      expect(template.Resources.DBSubnetAZ1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.DBSubnetAZ2.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('CloudFrontDistribution should have minimum TLS 1.2', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      const viewerCert =
-        distribution.Properties.DistributionConfig.ViewerCertificate;
-      expect(viewerCert.MinimumProtocolVersion).toBe('TLSv1.2_2021');
+    test('subnets should have different CIDR blocks', () => {
+      const cidrs = [
+        template.Resources.PublicSubnetAZ1.Properties.CidrBlock,
+        template.Resources.PublicSubnetAZ2.Properties.CidrBlock,
+        template.Resources.PrivateSubnetAZ1.Properties.CidrBlock,
+        template.Resources.PrivateSubnetAZ2.Properties.CidrBlock,
+        template.Resources.DBSubnetAZ1.Properties.CidrBlock,
+        template.Resources.DBSubnetAZ2.Properties.CidrBlock
+      ];
+
+      const uniqueCidrs = new Set(cidrs);
+      expect(uniqueCidrs.size).toBe(cidrs.length);
     });
 
-    test('should have SSLCertificate with conditional creation', () => {
-      const cert = template.Resources.SSLCertificate;
-      expect(cert).toBeDefined();
-      expect(cert.Type).toBe('AWS::CertificateManager::Certificate');
-      expect(cert.Condition).toBe('HasDomainName');
-      expect(cert.DeletionPolicy).toBe('Delete');
-      expect(cert.UpdateReplacePolicy).toBe('Delete');
-    });
-  });
+    test('subnets should be in different availability zones', () => {
+      const az1Subnets = [
+        template.Resources.PublicSubnetAZ1,
+        template.Resources.PrivateSubnetAZ1,
+        template.Resources.DBSubnetAZ1
+      ];
 
-  describe('DynamoDB Resources', () => {
-    test('should have CouponsTable', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table).toBeDefined();
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
+      const az2Subnets = [
+        template.Resources.PublicSubnetAZ2,
+        template.Resources.PrivateSubnetAZ2,
+        template.Resources.DBSubnetAZ2
+      ];
 
-    test('CouponsTable should have deletion policies', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
+      az1Subnets.forEach(subnet => {
+        expect(subnet.Properties.AvailabilityZone).toEqual({
+          'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+        });
+      });
 
-    test('CouponsTable should use PAY_PER_REQUEST billing', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
-    });
-
-    test('CouponsTable should have encryption enabled', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
-    });
-
-    test('CouponsTable should have point-in-time recovery disabled', () => {
-      const table = template.Resources.CouponsTable;
-      expect(
-        table.Properties.PointInTimeRecoverySpecification
-          .PointInTimeRecoveryEnabled
-      ).toBe(false);
-    });
-
-    test('CouponsTable should have stream enabled', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table.Properties.StreamSpecification.StreamViewType).toBe(
-        'NEW_AND_OLD_IMAGES'
-      );
-    });
-
-    test('CouponsTable should have TTL enabled', () => {
-      const table = template.Resources.CouponsTable;
-      expect(table.Properties.TimeToLiveSpecification.Enabled).toBe(true);
-      expect(table.Properties.TimeToLiveSpecification.AttributeName).toBe(
-        'ttl'
-      );
-    });
-
-    test('CouponsTable should have required GSIs', () => {
-      const table = template.Resources.CouponsTable;
-      const gsis = table.Properties.GlobalSecondaryIndexes;
-      expect(gsis).toBeDefined();
-      expect(gsis.length).toBeGreaterThanOrEqual(2);
-
-      const retailerIndex = gsis.find(
-        (gsi: any) => gsi.IndexName === 'RetailerIndex'
-      );
-      const categoryIndex = gsis.find(
-        (gsi: any) => gsi.IndexName === 'CategoryIndex'
-      );
-
-      expect(retailerIndex).toBeDefined();
-      expect(categoryIndex).toBeDefined();
-    });
-
-    test('should have UserPreferencesTable', () => {
-      const table = template.Resources.UserPreferencesTable;
-      expect(table).toBeDefined();
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('UserPreferencesTable should have EmailIndex GSI', () => {
-      const table = template.Resources.UserPreferencesTable;
-      const gsis = table.Properties.GlobalSecondaryIndexes;
-      const emailIndex = gsis.find(
-        (gsi: any) => gsi.IndexName === 'EmailIndex'
-      );
-      expect(emailIndex).toBeDefined();
-    });
-
-    test('DynamoDB tables should have lowercase names with EnvironmentSuffix', () => {
-      const couponsTable = template.Resources.CouponsTable;
-      const userPrefsTable = template.Resources.UserPreferencesTable;
-
-      expect(couponsTable.Properties.TableName['Fn::Sub']).toMatch(/^tapstack/);
-      expect(couponsTable.Properties.TableName['Fn::Sub']).toContain(
-        '${EnvironmentSuffix}'
-      );
-      expect(userPrefsTable.Properties.TableName['Fn::Sub']).toMatch(
-        /^tapstack/
-      );
-      expect(userPrefsTable.Properties.TableName['Fn::Sub']).toContain(
-        '${EnvironmentSuffix}'
-      );
-    });
-  });
-
-  describe('Secrets Manager Resources', () => {
-    test('should have RetailerAPIKeysSecret', () => {
-      const secret = template.Resources.RetailerAPIKeysSecret;
-      expect(secret).toBeDefined();
-      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      expect(secret.DeletionPolicy).toBe('Delete');
-      expect(secret.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('RetailerAPIKeysSecret should have valid JSON string', () => {
-      const secret = template.Resources.RetailerAPIKeysSecret;
-      const secretString = secret.Properties.SecretString;
-      expect(secretString).toBeDefined();
-      expect(() => JSON.parse(secretString)).not.toThrow();
-    });
-
-    test('RetailerAPIKeysSecret should have environment tag', () => {
-      const secret = template.Resources.RetailerAPIKeysSecret;
-      expect(secret.Properties.Tags).toBeDefined();
-      const envTag = secret.Properties.Tags.find(
-        (tag: any) => tag.Key === 'Environment'
-      );
-      expect(envTag).toBeDefined();
-    });
-  });
-
-  describe('IAM Resources', () => {
-    test('should have LambdaExecutionRole', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      expect(role).toBeDefined();
-      expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.DeletionPolicy).toBe('Delete');
-      expect(role.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('LambdaExecutionRole should have correct trust policy', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(trustPolicy.Version).toBe('2012-10-17');
-      expect(trustPolicy.Statement[0].Effect).toBe('Allow');
-      expect(trustPolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-      expect(trustPolicy.Statement[0].Action).toBe('sts:AssumeRole');
-    });
-
-    test('LambdaExecutionRole should have basic execution policy', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const managedPolicies = role.Properties.ManagedPolicyArns;
-      expect(managedPolicies).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-      );
-    });
-
-    test('LambdaExecutionRole should have DynamoDB policy with least privilege', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-      const dynamoPolicy = policies.find(
-        (p: any) => p.PolicyName === 'DynamoDBAccess'
-      );
-
-      expect(dynamoPolicy).toBeDefined();
-      const statement = dynamoPolicy.PolicyDocument.Statement[0];
-      expect(statement.Effect).toBe('Allow');
-      expect(statement.Action).toEqual(
-        expect.arrayContaining([
-          'dynamodb:PutItem',
-          'dynamodb:GetItem',
-          'dynamodb:UpdateItem',
-          'dynamodb:DeleteItem',
-          'dynamodb:Query',
-          'dynamodb:Scan',
-        ])
-      );
-      expect(statement.Resource).toBeDefined();
-    });
-
-    test('LambdaExecutionRole should have Secrets Manager policy with least privilege', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-      const secretsPolicy = policies.find(
-        (p: any) => p.PolicyName === 'SecretsManagerAccess'
-      );
-
-      expect(secretsPolicy).toBeDefined();
-      const statement = secretsPolicy.PolicyDocument.Statement[0];
-      expect(statement.Effect).toBe('Allow');
-      expect(statement.Action).toContain('secretsmanager:GetSecretValue');
-      expect(statement.Resource).toBeDefined();
-    });
-
-    test('LambdaExecutionRole should have SNS publish policy', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-      const snsPolicy = policies.find(
-        (p: any) => p.PolicyName === 'SNSPublishAccess'
-      );
-
-      expect(snsPolicy).toBeDefined();
-      expect(snsPolicy.PolicyDocument.Statement[0].Action).toContain(
-        'sns:Publish'
-      );
-    });
-
-    test('LambdaExecutionRole policies should follow least privilege principle', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const policies = role.Properties.Policies;
-
-      policies.forEach((policy: any) => {
-        policy.PolicyDocument.Statement.forEach((statement: any) => {
-          expect(statement.Effect).toBe('Allow');
-          // Ensure actions are specific arrays, not wildcards
-          if (policy.PolicyName === 'DynamoDBAccess') {
-            expect(Array.isArray(statement.Action)).toBe(true);
-            expect(statement.Action.some((a: string) => a.includes('*'))).toBe(
-              false
-            );
-          }
+      az2Subnets.forEach(subnet => {
+        expect(subnet.Properties.AvailabilityZone).toEqual({
+          'Fn::Select': [1, { 'Fn::GetAZs': '' }]
         });
       });
     });
   });
 
-  describe('Lambda Resources', () => {
-    const lambdaFunctions = [
-      'CouponAggregatorFunction',
-      'APIHandlerFunction',
-      'CronJobsFunction',
-    ];
-
-    lambdaFunctions.forEach(functionName => {
-      test(`should have ${functionName}`, () => {
-        const func = template.Resources[functionName];
-        expect(func).toBeDefined();
-        expect(func.Type).toBe('AWS::Lambda::Function');
-        expect(func.DeletionPolicy).toBe('Delete');
-        expect(func.UpdateReplacePolicy).toBe('Delete');
-      });
-
-      test(`${functionName} should have correct runtime`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.Runtime).toBe('python3.10');
-      });
-
-      test(`${functionName} should have valid timeout`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.Timeout).toBeGreaterThan(0);
-        expect(func.Properties.Timeout).toBeLessThanOrEqual(900);
-      });
-
-      test(`${functionName} should have valid memory size`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.MemorySize).toBeGreaterThanOrEqual(128);
-        expect(func.Properties.MemorySize).toBeLessThanOrEqual(10240);
-      });
-
-      test(`${functionName} should have execution role`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.Role).toBeDefined();
-        expect(func.Properties.Role['Fn::GetAtt']).toContain(
-          'LambdaExecutionRole'
-        );
-      });
-
-      test(`${functionName} should have environment variables`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.Environment).toBeDefined();
-        expect(func.Properties.Environment.Variables).toBeDefined();
-      });
-
-      test(`${functionName} should have inline code`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.Code.ZipFile).toBeDefined();
-        expect(func.Properties.Code.ZipFile.length).toBeGreaterThan(0);
-      });
-
-      test(`${functionName} name should use lowercase and EnvironmentSuffix`, () => {
-        const func = template.Resources[functionName];
-        expect(func.Properties.FunctionName['Fn::Sub']).toMatch(/^tapstack/);
-        expect(func.Properties.FunctionName['Fn::Sub']).toContain(
-          '${EnvironmentSuffix}'
-        );
-      });
+  describe('NAT Gateway Resources', () => {
+    test('should have NAT Gateways in 2 AZs', () => {
+      expect(template.Resources.NatGatewayAZ1).toBeDefined();
+      expect(template.Resources.NatGatewayAZ2).toBeDefined();
+      expect(template.Resources.NatGatewayAZ1.Type).toBe('AWS::EC2::NatGateway');
+      expect(template.Resources.NatGatewayAZ2.Type).toBe('AWS::EC2::NatGateway');
     });
 
-    test('CouponAggregatorFunction should have correct environment variables', () => {
-      const func = template.Resources.CouponAggregatorFunction;
-      const envVars = func.Properties.Environment.Variables;
-      expect(envVars.COUPONS_TABLE).toBeDefined();
-      expect(envVars.SECRET_NAME).toBeDefined();
-      expect(envVars.ALERT_TOPIC_ARN).toBeDefined();
+    test('should have Elastic IPs for NAT Gateways', () => {
+      expect(template.Resources.NatGatewayEIPAZ1).toBeDefined();
+      expect(template.Resources.NatGatewayEIPAZ2).toBeDefined();
+      expect(template.Resources.NatGatewayEIPAZ1.Type).toBe('AWS::EC2::EIP');
+      expect(template.Resources.NatGatewayEIPAZ2.Type).toBe('AWS::EC2::EIP');
     });
 
-    test('APIHandlerFunction should have correct environment variables', () => {
-      const func = template.Resources.APIHandlerFunction;
-      const envVars = func.Properties.Environment.Variables;
-      expect(envVars.COUPONS_TABLE).toBeDefined();
-      expect(envVars.USER_PREFS_TABLE).toBeDefined();
-      expect(envVars.AGGREGATOR_FUNCTION).toBeDefined();
+    test('NAT Gateway EIPs should depend on Gateway Attachment', () => {
+      expect(template.Resources.NatGatewayEIPAZ1.DependsOn).toBe('AttachGateway');
+      expect(template.Resources.NatGatewayEIPAZ2.DependsOn).toBe('AttachGateway');
     });
 
-    test('CronJobsFunction should have correct environment variables', () => {
-      const func = template.Resources.CronJobsFunction;
-      const envVars = func.Properties.Environment.Variables;
-      expect(envVars.COUPONS_TABLE).toBeDefined();
-      expect(envVars.USER_PREFS_TABLE).toBeDefined();
-      expect(envVars.AGGREGATOR_FUNCTION).toBeDefined();
+    test('NAT Gateways should be in public subnets', () => {
+      expect(template.Resources.NatGatewayAZ1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnetAZ1' });
+      expect(template.Resources.NatGatewayAZ2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnetAZ2' });
     });
   });
 
-  describe('API Gateway Resources', () => {
-    test('should have CouponAPI', () => {
-      const api = template.Resources.CouponAPI;
-      expect(api).toBeDefined();
-      expect(api.Type).toBe('AWS::ApiGateway::RestApi');
-      expect(api.DeletionPolicy).toBe('Delete');
-      expect(api.UpdateReplacePolicy).toBe('Delete');
+  describe('Route Table Resources', () => {
+    test('should have public route table', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PublicRouteTable.Type).toBe('AWS::EC2::RouteTable');
     });
 
-    test('CouponAPI should have correct endpoint configuration', () => {
-      const api = template.Resources.CouponAPI;
-      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
+    test('should have private route tables in 2 AZs', () => {
+      expect(template.Resources.PrivateRouteTableAZ1).toBeDefined();
+      expect(template.Resources.PrivateRouteTableAZ2).toBeDefined();
     });
 
-    const apiResources = [
-      'ApiResourceCoupons',
-      'ApiResourceCouponsRefresh',
-      'ApiResourceUsers',
-      'ApiResourceUserId',
-      'ApiResourceUserPreferences',
-    ];
-
-    apiResources.forEach(resourceName => {
-      test(`should have ${resourceName}`, () => {
-        const resource = template.Resources[resourceName];
-        expect(resource).toBeDefined();
-        expect(resource.Type).toBe('AWS::ApiGateway::Resource');
-        expect(resource.DeletionPolicy).toBe('Delete');
-        expect(resource.UpdateReplacePolicy).toBe('Delete');
-      });
+    test('public route should route to Internet Gateway', () => {
+      const route = template.Resources.PublicRoute;
+      expect(route.Type).toBe('AWS::EC2::Route');
+      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+      expect(route.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
+      expect(route.DependsOn).toBe('AttachGateway');
     });
 
-    const apiMethods = [
-      'GetCouponsMethod',
-      'PostRefreshMethod',
-      'GetUserPreferencesMethod',
-      'PutUserPreferencesMethod',
-      'CouponsOptionsMethod',
-    ];
-
-    apiMethods.forEach(methodName => {
-      test(`should have ${methodName}`, () => {
-        const method = template.Resources[methodName];
-        expect(method).toBeDefined();
-        expect(method.Type).toBe('AWS::ApiGateway::Method');
-        expect(method.DeletionPolicy).toBe('Delete');
-        expect(method.UpdateReplacePolicy).toBe('Delete');
-      });
-
-      test(`${methodName} should use AWS_PROXY integration`, () => {
-        const method = template.Resources[methodName];
-        expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
-      });
+    test('private routes should route to NAT Gateways', () => {
+      expect(template.Resources.PrivateRouteAZ1.Properties.NatGatewayId).toEqual({ Ref: 'NatGatewayAZ1' });
+      expect(template.Resources.PrivateRouteAZ2.Properties.NatGatewayId).toEqual({ Ref: 'NatGatewayAZ2' });
     });
 
-    test('should have ApiDeployment', () => {
-      const deployment = template.Resources.ApiDeployment;
-      expect(deployment).toBeDefined();
-      expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
-      expect(deployment.DeletionPolicy).toBe('Delete');
-      expect(deployment.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('ApiDeployment should have metrics enabled', () => {
-      const deployment = template.Resources.ApiDeployment;
-      expect(
-        deployment.Properties.StageDescription.MetricsEnabled
-      ).toBe(true);
-    });
-
-    test('ApiDeployment should not have logging enabled', () => {
-      const deployment = template.Resources.ApiDeployment;
-      expect(deployment.Properties.StageDescription.LoggingLevel).toBeUndefined();
-      expect(deployment.Properties.StageDescription.DataTraceEnabled).toBeUndefined();
-    });
-
-    test('should have ApiGatewayInvokePermission', () => {
-      const permission = template.Resources.ApiGatewayInvokePermission;
-      expect(permission).toBeDefined();
-      expect(permission.Type).toBe('AWS::Lambda::Permission');
-      expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
-      expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
+    test('should have subnet route table associations', () => {
+      expect(template.Resources.PublicSubnetAZ1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnetAZ2RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnetAZ1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnetAZ2RouteTableAssociation).toBeDefined();
     });
   });
 
-  describe('EventBridge Resources', () => {
-    const scheduleRules = [
-      'AggregationScheduleRule',
-      'ExpiryCheckScheduleRule',
-      'WeeklyDigestScheduleRule',
-    ];
-
-    scheduleRules.forEach(ruleName => {
-      test(`should have ${ruleName}`, () => {
-        const rule = template.Resources[ruleName];
-        expect(rule).toBeDefined();
-        expect(rule.Type).toBe('AWS::Events::Rule');
-        expect(rule.DeletionPolicy).toBe('Delete');
-        expect(rule.UpdateReplacePolicy).toBe('Delete');
-      });
-
-      test(`${ruleName} should be enabled`, () => {
-        const rule = template.Resources[ruleName];
-        expect(rule.Properties.State).toBe('ENABLED');
-      });
-
-      test(`${ruleName} should have schedule expression`, () => {
-        const rule = template.Resources[ruleName];
-        expect(rule.Properties.ScheduleExpression).toBeDefined();
-      });
-
-      test(`${ruleName} should have target`, () => {
-        const rule = template.Resources[ruleName];
-        expect(rule.Properties.Targets).toBeDefined();
-        expect(rule.Properties.Targets.length).toBeGreaterThan(0);
-      });
-
-      test(`${ruleName} name should use lowercase and EnvironmentSuffix`, () => {
-        const rule = template.Resources[ruleName];
-        expect(rule.Properties.Name['Fn::Sub']).toMatch(/^tapstack/);
-        expect(rule.Properties.Name['Fn::Sub']).toContain(
-          '${EnvironmentSuffix}'
-        );
-      });
+  describe('Security Group Resources', () => {
+    test('should have ALB security group', () => {
+      const sg = template.Resources.ALBSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    const schedulePermissions = [
-      'AggregationSchedulePermission',
-      'ExpiryCheckSchedulePermission',
-      'WeeklyDigestSchedulePermission',
-    ];
+    test('ALB security group should allow HTTP and HTTPS from trusted IPs', () => {
+      const sg = template.Resources.ALBSecurityGroup;
+      const ingress = sg.Properties.SecurityGroupIngress;
 
-    schedulePermissions.forEach(permissionName => {
-      test(`should have ${permissionName}`, () => {
-        const permission = template.Resources[permissionName];
-        expect(permission).toBeDefined();
-        expect(permission.Type).toBe('AWS::Lambda::Permission');
-        expect(permission.DeletionPolicy).toBe('Delete');
-        expect(permission.UpdateReplacePolicy).toBe('Delete');
-        expect(permission.Properties.Principal).toBe('events.amazonaws.com');
-      });
+      expect(ingress).toHaveLength(2);
+
+      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
+      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
+
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+      expect(httpRule.CidrIp).toEqual({ Ref: 'TrustedIPRange' });
+      expect(httpsRule.CidrIp).toEqual({ Ref: 'TrustedIPRange' });
+    });
+
+    test('should have WebServer security group', () => {
+      const sg = template.Resources.WebServerSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('WebServer security group should only allow traffic from ALB', () => {
+      const sg = template.Resources.WebServerSecurityGroup;
+      const ingress = sg.Properties.SecurityGroupIngress;
+
+      expect(ingress).toHaveLength(1);
+      expect(ingress[0].FromPort).toBe(80);
+      expect(ingress[0].ToPort).toBe(80);
+      expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+    });
+
+    test('should have Database security group', () => {
+      const sg = template.Resources.DatabaseSecurityGroup;
+      expect(sg).toBeDefined();
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('Database security group should only allow MySQL from web servers', () => {
+      const sg = template.Resources.DatabaseSecurityGroup;
+      const ingress = sg.Properties.SecurityGroupIngress;
+
+      expect(ingress).toHaveLength(1);
+      expect(ingress[0].FromPort).toBe(3306);
+      expect(ingress[0].ToPort).toBe(3306);
+      expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'WebServerSecurityGroup' });
     });
   });
 
-  describe('SNS Resources', () => {
-    const topics = ['AlertTopic', 'CloudWatchAlarmTopic'];
+  describe('S3 Bucket Resources', () => {
+    test('should have StaticContentBucket', () => {
+      const bucket = template.Resources.StaticContentBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+    });
 
-    topics.forEach(topicName => {
-      test(`should have ${topicName}`, () => {
-        const topic = template.Resources[topicName];
-        expect(topic).toBeDefined();
-        expect(topic.Type).toBe('AWS::SNS::Topic');
-        expect(topic.DeletionPolicy).toBe('Delete');
-        expect(topic.UpdateReplacePolicy).toBe('Delete');
-      });
+    test('StaticContentBucket should have encryption enabled', () => {
+      const bucket = template.Resources.StaticContentBucket;
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
 
-      test(`${topicName} should have email subscription`, () => {
-        const topic = template.Resources[topicName];
-        expect(topic.Properties.Subscription).toBeDefined();
-        expect(topic.Properties.Subscription.length).toBeGreaterThan(0);
-        expect(topic.Properties.Subscription[0].Protocol).toBe('email');
-      });
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ Ref: 'KMSKey' });
+    });
 
-      test(`${topicName} name should use lowercase and EnvironmentSuffix`, () => {
-        const topic = template.Resources[topicName];
-        expect(topic.Properties.TopicName['Fn::Sub']).toMatch(/^tapstack/);
-        expect(topic.Properties.TopicName['Fn::Sub']).toContain(
-          '${EnvironmentSuffix}'
-        );
+    test('StaticContentBucket should block public access', () => {
+      const bucket = template.Resources.StaticContentBucket;
+      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+
+      expect(publicAccess.BlockPublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
+      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('StaticContentBucket should have versioning enabled', () => {
+      const bucket = template.Resources.StaticContentBucket;
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('should have LogsBucket', () => {
+      const bucket = template.Resources.LogsBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('LogsBucket should have lifecycle policy', () => {
+      const bucket = template.Resources.LogsBucket;
+      const rules = bucket.Properties.LifecycleConfiguration.Rules;
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].Status).toBe('Enabled');
+      expect(rules[0].ExpirationInDays).toBe(90);
+    });
+
+    test('should have LogsBucketPolicy for ALB access', () => {
+      const policy = template.Resources.LogsBucketPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+
+      const statements = policy.Properties.PolicyDocument.Statement;
+      expect(statements.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('KMS Resources', () => {
+    test('should have KMS Key', () => {
+      const key = template.Resources.KMSKey;
+      expect(key).toBeDefined();
+      expect(key.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('KMS Key should have proper key policy', () => {
+      const key = template.Resources.KMSKey;
+      const policy = key.Properties.KeyPolicy;
+
+      expect(policy.Version).toBe('2012-10-17');
+      expect(Array.isArray(policy.Statement)).toBe(true);
+      expect(policy.Statement.length).toBeGreaterThan(0);
+    });
+
+    test('KMS Key policy should allow root account', () => {
+      const key = template.Resources.KMSKey;
+      const statements = key.Properties.KeyPolicy.Statement;
+
+      const rootStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
+      expect(rootStatement).toBeDefined();
+      expect(rootStatement.Effect).toBe('Allow');
+      expect(rootStatement.Action).toBe('kms:*');
+    });
+
+    test('should have KMS Key Alias', () => {
+      const alias = template.Resources.KMSKeyAlias;
+      expect(alias).toBeDefined();
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+  });
+
+  describe('IAM Resources', () => {
+    test('should have EC2 IAM Role', () => {
+      const role = template.Resources.EC2Role;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('EC2 Role should have proper trust policy', () => {
+      const role = template.Resources.EC2Role;
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+
+      expect(trustPolicy.Version).toBe('2012-10-17');
+      expect(trustPolicy.Statement[0].Effect).toBe('Allow');
+      expect(trustPolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+      expect(trustPolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    });
+
+    test('EC2 Role should have CloudWatch managed policy', () => {
+      const role = template.Resources.EC2Role;
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
+    });
+
+    test('EC2 Role should have S3 access policy following least privilege', () => {
+      const role = template.Resources.EC2Role;
+      const policies = role.Properties.Policies;
+
+      const s3Policy = policies.find((p: any) => p.PolicyName === 'S3Access');
+      expect(s3Policy).toBeDefined();
+
+      const statements = s3Policy.PolicyDocument.Statement;
+      expect(statements.length).toBeGreaterThan(0);
+
+      // Check for specific S3 permissions, not wildcard
+      const s3Statement = statements.find((s: any) =>
+        s.Action.includes('s3:GetObject') || s.Action.includes('s3:PutObject')
+      );
+      expect(s3Statement).toBeDefined();
+    });
+
+    test('should have EC2 Instance Profile', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile).toBeDefined();
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2Role' });
+    });
+  });
+
+  describe('Load Balancer Resources', () => {
+    test('should have Application Load Balancer', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb).toBeDefined();
+      expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+    });
+
+    test('ALB should be internet-facing', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(alb.Properties.Type).toBe('application');
+    });
+
+    test('ALB should be in public subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnetAZ1' });
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnetAZ2' });
+    });
+
+    test('should have ALB Target Group', () => {
+      const tg = template.Resources.ALBTargetGroup;
+      expect(tg).toBeDefined();
+      expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+    });
+
+    test('ALB Target Group should have health checks configured', () => {
+      const tg = template.Resources.ALBTargetGroup;
+      expect(tg.Properties.HealthCheckEnabled).toBe(true);
+      expect(tg.Properties.HealthCheckPath).toBe('/health');
+      expect(tg.Properties.HealthCheckProtocol).toBe('HTTP');
+      expect(tg.Properties.HealthCheckIntervalSeconds).toBeDefined();
+      expect(tg.Properties.HealthyThresholdCount).toBeDefined();
+      expect(tg.Properties.UnhealthyThresholdCount).toBeDefined();
+    });
+
+    test('should have HTTP Listener', () => {
+      const listener = template.Resources.ALBListenerHTTP;
+      expect(listener).toBeDefined();
+      expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
+    });
+  });
+
+  describe('Auto Scaling Resources', () => {
+    test('should have Launch Template', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt).toBeDefined();
+      expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
+    });
+
+    test('Launch Template should use latest AMI parameter', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.Properties.LaunchTemplateData.ImageId).toEqual({ Ref: 'LatestAmiId' });
+    });
+
+    test('Launch Template should have IAM Instance Profile', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.Properties.LaunchTemplateData.IamInstanceProfile).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.IamInstanceProfile.Arn).toEqual({
+        'Fn::GetAtt': ['EC2InstanceProfile', 'Arn']
       });
+    });
+
+    test('Launch Template should have UserData', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.Properties.LaunchTemplateData.UserData).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.UserData['Fn::Base64']).toBeDefined();
+    });
+
+    test('should have Auto Scaling Group', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg).toBeDefined();
+      expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+    });
+
+    test('ASG should use Min, Max, Desired parameters', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.MinSize).toEqual({ Ref: 'MinInstances' });
+      expect(asg.Properties.MaxSize).toEqual({ Ref: 'MaxInstances' });
+      expect(asg.Properties.DesiredCapacity).toEqual({ Ref: 'DesiredInstances' });
+    });
+
+    test('ASG should be in private subnets', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnetAZ1' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnetAZ2' });
+    });
+
+    test('ASG should have ELB health check', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+      expect(asg.Properties.HealthCheckGracePeriod).toBeDefined();
+    });
+
+    test('should have Scaling Policy', () => {
+      const policy = template.Resources.ScaleUpPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::AutoScaling::ScalingPolicy');
+      expect(policy.Properties.PolicyType).toBe('TargetTrackingScaling');
+    });
+  });
+
+  describe('RDS Resources', () => {
+    test('should have DB Master Password Secret', () => {
+      const secret = template.Resources.DBMasterPasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('DB Secret should be encrypted with KMS', () => {
+      const secret = template.Resources.DBMasterPasswordSecret;
+      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+
+    test('DB Secret should generate complex password', () => {
+      const secret = template.Resources.DBMasterPasswordSecret;
+      const config = secret.Properties.GenerateSecretString;
+
+      expect(config.PasswordLength).toBe(32);
+      expect(config.RequireEachIncludedType).toBe(true);
+      expect(config.ExcludeCharacters).toBeDefined();
+    });
+
+    test('should have DB Subnet Group', () => {
+      const subnetGroup = template.Resources.DBSubnetGroup;
+      expect(subnetGroup).toBeDefined();
+      expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+    });
+
+    test('DB Subnet Group should include DB subnets', () => {
+      const subnetGroup = template.Resources.DBSubnetGroup;
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'DBSubnetAZ1' });
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'DBSubnetAZ2' });
+    });
+
+    test('should have RDS Database Instance', () => {
+      const db = template.Resources.Database;
+      expect(db).toBeDefined();
+      expect(db.Type).toBe('AWS::RDS::DBInstance');
+    });
+
+    test('Database should be Multi-AZ', () => {
+      const db = template.Resources.Database;
+      expect(db.Properties.MultiAZ).toBe(true);
+    });
+
+    test('Database should have encryption enabled', () => {
+      const db = template.Resources.Database;
+      expect(db.Properties.StorageEncrypted).toBe(true);
+      expect(db.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+
+    test('Database should have backup retention', () => {
+      const db = template.Resources.Database;
+      expect(db.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
+      expect(db.Properties.PreferredBackupWindow).toBeDefined();
+    });
+
+    test('Database should have CloudWatch logs enabled', () => {
+      const db = template.Resources.Database;
+      expect(db.Properties.EnableCloudwatchLogsExports).toBeDefined();
+      expect(Array.isArray(db.Properties.EnableCloudwatchLogsExports)).toBe(true);
+      expect(db.Properties.EnableCloudwatchLogsExports.length).toBeGreaterThan(0);
     });
   });
 
   describe('CloudWatch Resources', () => {
-    const alarms = [
-      'LambdaErrorAlarm',
-      'DynamoDBThrottleAlarm',
-      'APIGateway4XXAlarm',
-    ];
-
-    alarms.forEach(alarmName => {
-      test(`should have ${alarmName}`, () => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm).toBeDefined();
-        expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-        expect(alarm.DeletionPolicy).toBe('Delete');
-        expect(alarm.UpdateReplacePolicy).toBe('Delete');
-      });
-
-      test(`${alarmName} should have valid threshold`, () => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.Properties.Threshold).toBeGreaterThan(0);
-      });
-
-      test(`${alarmName} should have alarm actions`, () => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.Properties.AlarmActions).toBeDefined();
-        expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
-      });
-
-      test(`${alarmName} should have valid comparison operator`, () => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.Properties.ComparisonOperator).toBe(
-          'GreaterThanThreshold'
-        );
-      });
-
-      test(`${alarmName} name should use lowercase and EnvironmentSuffix`, () => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.Properties.AlarmName['Fn::Sub']).toMatch(/^tapstack/);
-        expect(alarm.Properties.AlarmName['Fn::Sub']).toContain(
-          '${EnvironmentSuffix}'
-        );
-      });
+    test('should have Application Log Group', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
     });
 
-    test('should have MonitoringDashboard', () => {
-      const dashboard = template.Resources.MonitoringDashboard;
-      expect(dashboard).toBeDefined();
-      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
-      expect(dashboard.DeletionPolicy).toBe('Delete');
-      expect(dashboard.UpdateReplacePolicy).toBe('Delete');
+    test('Log Group should have retention policy', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup.Properties.RetentionInDays).toBeDefined();
+      expect(logGroup.Properties.RetentionInDays).toBeGreaterThan(0);
     });
 
-    test('MonitoringDashboard should have valid body', () => {
-      const dashboard = template.Resources.MonitoringDashboard;
-      const body = dashboard.Properties.DashboardBody['Fn::Sub'];
-      expect(() => JSON.parse(body)).not.toThrow();
+    test('Log Group should be encrypted', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup.Properties.KmsKeyId).toBeDefined();
     });
 
-    const logGroups = [
-      'APIHandlerLogGroup',
-      'CouponAggregatorLogGroup',
-      'CronJobsLogGroup',
-    ];
+    test('should have ALB Target Health Alarm', () => {
+      const alarm = template.Resources.ALBTargetHealthAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
 
-    logGroups.forEach(logGroupName => {
-      test(`should have ${logGroupName}`, () => {
-        const logGroup = template.Resources[logGroupName];
-        expect(logGroup).toBeDefined();
-        expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-        expect(logGroup.DeletionPolicy).toBe('Delete');
-        expect(logGroup.UpdateReplacePolicy).toBe('Delete');
-      });
+    test('should have High CPU Alarm', () => {
+      const alarm = template.Resources.HighCPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(alarm.Properties.Threshold).toBeGreaterThan(0);
+    });
 
-      test(`${logGroupName} should have retention policy`, () => {
-        const logGroup = template.Resources[logGroupName];
-        expect(logGroup.Properties.RetentionInDays).toBeDefined();
-        expect(logGroup.Properties.RetentionInDays).toBeGreaterThan(0);
-      });
+    test('should have Database CPU Alarm', () => {
+      const alarm = template.Resources.DatabaseCPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(alarm.Properties.Namespace).toBe('AWS/RDS');
+    });
+
+    test('should have Database Storage Alarm', () => {
+      const alarm = template.Resources.DatabaseStorageSpaceAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.MetricName).toBe('FreeStorageSpace');
+    });
+  });
+
+  describe('Route53 Resources', () => {
+    test('should have Hosted Zone', () => {
+      const hz = template.Resources.HostedZone;
+      expect(hz).toBeDefined();
+      expect(hz.Type).toBe('AWS::Route53::HostedZone');
+    });
+
+    test('Hosted Zone should use DomainName parameter', () => {
+      const hz = template.Resources.HostedZone;
+      expect(hz.Properties.Name).toEqual({ Ref: 'DomainName' });
+    });
+
+    test('should have Route53 Health Check', () => {
+      const hc = template.Resources.Route53HealthCheck;
+      expect(hc).toBeDefined();
+      expect(hc.Type).toBe('AWS::Route53::HealthCheck');
+    });
+
+    test('Health Check should monitor ALB health endpoint', () => {
+      const hc = template.Resources.Route53HealthCheck;
+      expect(hc.Properties.HealthCheckConfig.ResourcePath).toBe('/health');
+      expect(hc.Properties.HealthCheckConfig.Type).toBe('HTTP');
+    });
+
+    test('should have Route53 RecordSet', () => {
+      const rs = template.Resources.Route53RecordSet;
+      expect(rs).toBeDefined();
+      expect(rs.Type).toBe('AWS::Route53::RecordSet');
+    });
+
+    test('RecordSet should point to ALB', () => {
+      const rs = template.Resources.Route53RecordSet;
+      expect(rs.Properties.Type).toBe('A');
+      expect(rs.Properties.AliasTarget).toBeDefined();
+      expect(rs.Properties.AliasTarget.EvaluateTargetHealth).toBe(true);
     });
   });
 
   describe('Outputs', () => {
-    test('should have MarketingWebsiteURL output', () => {
-      const output = template.Outputs.MarketingWebsiteURL;
-      expect(output).toBeDefined();
+    test('should have all required outputs', () => {
+      const expectedOutputs = [
+        'LoadBalancerDNS',
+        'StaticContentBucketName',
+        'LogsBucketName',
+        'DatabaseEndpoint',
+        'WebServerSecurityGroupId'
+      ];
+
+      expectedOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
+      });
+    });
+
+    test('LoadBalancerDNS output should be correct', () => {
+      const output = template.Outputs.LoadBalancerDNS;
       expect(output.Description).toBeDefined();
-      expect(output.Value).toBeDefined();
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName']
+      });
+      expect(output.Export).toBeDefined();
     });
 
-    test('should have APIEndpoint output', () => {
-      const output = template.Outputs.APIEndpoint;
-      expect(output).toBeDefined();
-      expect(output.Description).toBeDefined();
-      expect(output.Value).toBeDefined();
+    test('StaticContentBucketName output should be correct', () => {
+      const output = template.Outputs.StaticContentBucketName;
+      expect(output.Value).toEqual({ Ref: 'StaticContentBucket' });
+      expect(output.Export).toBeDefined();
     });
 
-    test('should have S3BucketName output', () => {
-      const output = template.Outputs.S3BucketName;
-      expect(output).toBeDefined();
-      expect(output.Value).toEqual({ Ref: 'MarketingWebsiteBucket' });
+    test('DatabaseEndpoint output should be correct', () => {
+      const output = template.Outputs.DatabaseEndpoint;
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['Database', 'Endpoint.Address']
+      });
     });
 
-    test('should have CloudFrontDistributionId output', () => {
-      const output = template.Outputs.CloudFrontDistributionId;
-      expect(output).toBeDefined();
-      expect(output.Value).toEqual({ Ref: 'CloudFrontDistribution' });
-    });
-
-    test('should have CouponsTableName output', () => {
-      const output = template.Outputs.CouponsTableName;
-      expect(output).toBeDefined();
-      expect(output.Value).toEqual({ Ref: 'CouponsTable' });
-    });
-
-    test('should have UserPreferencesTableName output', () => {
-      const output = template.Outputs.UserPreferencesTableName;
-      expect(output).toBeDefined();
-      expect(output.Value).toEqual({ Ref: 'UserPreferencesTable' });
-    });
-
-    test('should have MonitoringDashboardURL output', () => {
-      const output = template.Outputs.MonitoringDashboardURL;
-      expect(output).toBeDefined();
-      expect(output.Description).toBeDefined();
-    });
-
-    test('all outputs should have descriptions', () => {
-      Object.keys(template.Outputs).forEach(outputName => {
-        expect(template.Outputs[outputName].Description).toBeDefined();
-        expect(
-          template.Outputs[outputName].Description.length
-        ).toBeGreaterThan(0);
+    test('all outputs should have exports', () => {
+      Object.keys(template.Outputs).forEach(key => {
+        expect(template.Outputs[key].Export).toBeDefined();
+        expect(template.Outputs[key].Export.Name).toBeDefined();
       });
     });
   });
 
-  describe('Deletion Policies', () => {
-    test('all resources should have DeletionPolicy set to Delete', () => {
-      Object.keys(template.Resources).forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        expect(resource.DeletionPolicy).toBe('Delete');
+  describe('Resource Tagging', () => {
+    test('all taggable resources should have Environment tag', () => {
+      const taggableResources = Object.keys(template.Resources).filter(key => {
+        const resource = template.Resources[key];
+        return resource.Properties && (resource.Properties.Tags || resource.Properties.HostedZoneTags || resource.Properties.HealthCheckTags);
+      });
+
+      taggableResources.forEach(resourceKey => {
+        const resource = template.Resources[resourceKey];
+        const tags = resource.Properties.Tags || resource.Properties.HostedZoneTags || resource.Properties.HealthCheckTags;
+
+        const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+        expect(envTag).toBeDefined();
       });
     });
 
-    test('all resources should have UpdateReplacePolicy set to Delete', () => {
-      Object.keys(template.Resources).forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        expect(resource.UpdateReplacePolicy).toBe('Delete');
+    test('all taggable resources should have Project tag', () => {
+      const taggableResources = Object.keys(template.Resources).filter(key => {
+        const resource = template.Resources[key];
+        return resource.Properties && (resource.Properties.Tags || resource.Properties.HostedZoneTags || resource.Properties.HealthCheckTags);
+      });
+
+      taggableResources.forEach(resourceKey => {
+        const resource = template.Resources[resourceKey];
+        const tags = resource.Properties.Tags || resource.Properties.HostedZoneTags || resource.Properties.HealthCheckTags;
+
+        const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+        expect(projectTag).toBeDefined();
       });
     });
   });
 
   describe('Security Best Practices', () => {
     test('S3 buckets should have encryption enabled', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      const buckets = [template.Resources.StaticContentBucket, template.Resources.LogsBucket];
+
+      buckets.forEach(bucket => {
+        expect(bucket.Properties.BucketEncryption).toBeDefined();
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+      });
     });
 
-    test('S3 buckets should block public access', () => {
-      const bucket = template.Resources.MarketingWebsiteBucket;
-      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.BlockPublicPolicy).toBe(true);
+    test('RDS should have deletion protection disabled (for dev)', () => {
+      const db = template.Resources.Database;
+      expect(db.Properties.DeletionProtection).toBe(false);
+      expect(db.DeletionPolicy).toBe('Delete');
     });
 
-    test('DynamoDB tables should have encryption enabled', () => {
-      const couponsTable = template.Resources.CouponsTable;
-      const userPrefsTable = template.Resources.UserPreferencesTable;
-      expect(couponsTable.Properties.SSESpecification.SSEEnabled).toBe(true);
-      expect(userPrefsTable.Properties.SSESpecification.SSEEnabled).toBe(true);
-    });
-
-    test('CloudFront should enforce HTTPS', () => {
-      const distribution = template.Resources.CloudFrontDistribution;
-      const defaultBehavior =
-        distribution.Properties.DistributionConfig.DefaultCacheBehavior;
-      expect(defaultBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-    });
-
-    test('IAM roles should not use wildcard resources for sensitive operations', () => {
-      const role = template.Resources.LambdaExecutionRole;
-      const dynamoPolicy = role.Properties.Policies.find(
-        (p: any) => p.PolicyName === 'DynamoDBAccess'
-      );
-      const secretsPolicy = role.Properties.Policies.find(
-        (p: any) => p.PolicyName === 'SecretsManagerAccess'
-      );
-
-      expect(dynamoPolicy.PolicyDocument.Statement[0].Resource).not.toBe('*');
-      expect(secretsPolicy.PolicyDocument.Statement[0].Resource).not.toBe('*');
-    });
-  });
-
-  describe('Naming Conventions', () => {
-    test('all resource names should use EnvironmentSuffix', () => {
-      const resourcesWithNames = [
-        'MarketingWebsiteBucket',
-        'CouponsTable',
-        'UserPreferencesTable',
-        'RetailerAPIKeysSecret',
-        'LambdaExecutionRole',
-        'CouponAggregatorFunction',
-        'APIHandlerFunction',
-        'CronJobsFunction',
-        'CouponAPI',
-        'AlertTopic',
-        'CloudWatchAlarmTopic',
+    test('security groups should have descriptions', () => {
+      const securityGroups = [
+        template.Resources.ALBSecurityGroup,
+        template.Resources.WebServerSecurityGroup,
+        template.Resources.DatabaseSecurityGroup
       ];
 
-      resourcesWithNames.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        const nameProperty =
-          resource.Properties.BucketName ||
-          resource.Properties.TableName ||
-          resource.Properties.Name ||
-          resource.Properties.RoleName ||
-          resource.Properties.FunctionName ||
-          resource.Properties.TopicName;
-
-        if (nameProperty && nameProperty['Fn::Sub']) {
-          expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
-        }
+      securityGroups.forEach(sg => {
+        expect(sg.Properties.GroupDescription).toBeDefined();
+        expect(sg.Properties.GroupDescription.length).toBeGreaterThan(0);
       });
     });
 
-    test('resource names should use lowercase', () => {
-      const resourcesWithNames = [
-        'MarketingWebsiteBucket',
-        'CouponsTable',
-        'UserPreferencesTable',
-      ];
+    test('database credentials should use Secrets Manager', () => {
+      const db = template.Resources.Database;
+      const password = db.Properties.MasterUserPassword;
 
-      resourcesWithNames.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        const nameProperty =
-          resource.Properties.BucketName ||
-          resource.Properties.TableName ||
-          resource.Properties.Name;
-
-        if (nameProperty && nameProperty['Fn::Sub']) {
-          const nameTemplate = nameProperty['Fn::Sub'];
-          // Check that the static part before ${} is lowercase
-          const staticPart = nameTemplate.split('${')[0];
-          expect(staticPart).toBe(staticPart.toLowerCase());
-        }
-      });
+      expect(password['Fn::Sub']).toBeDefined();
+      expect(password['Fn::Sub']).toContain('secretsmanager');
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+  describe('High Availability', () => {
+    test('resources should be distributed across multiple AZs', () => {
+      // Check subnets are in 2 AZs
+      expect(template.Resources.PublicSubnetAZ1).toBeDefined();
+      expect(template.Resources.PublicSubnetAZ2).toBeDefined();
+
+      // Check NAT Gateways in 2 AZs
+      expect(template.Resources.NatGatewayAZ1).toBeDefined();
+      expect(template.Resources.NatGatewayAZ2).toBeDefined();
+
+      // Check RDS Multi-AZ
+      expect(template.Resources.Database.Properties.MultiAZ).toBe(true);
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
+    test('Auto Scaling should span multiple AZs', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have multiple resources', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(20);
-    });
-
-    test('all resource references should point to existing resources', () => {
-      const resourceNames = Object.keys(template.Resources);
-
-      Object.keys(template.Resources).forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        const resourceJson = JSON.stringify(resource);
-
-        // Find all Ref references
-        const refMatches = resourceJson.match(/"Ref":"([^"]+)"/g);
-        if (refMatches) {
-          refMatches.forEach(match => {
-            const ref = match.match(/"Ref":"([^"]+)"/)?.[1];
-            if (
-              ref &&
-              !ref.startsWith('AWS::') &&
-              ref !== 'AWS::NoValue' &&
-              !Object.keys(template.Parameters).includes(ref)
-            ) {
-              expect(resourceNames).toContain(ref);
-            }
-          });
-        }
-
-        // Find all GetAtt references
-        const getAttMatches = resourceJson.match(/"Fn::GetAtt":\["([^"]+)"/g);
-        if (getAttMatches) {
-          getAttMatches.forEach(match => {
-            const ref = match.match(/"Fn::GetAtt":\["([^"]+)"/)?.[1];
-            if (ref) {
-              expect(resourceNames).toContain(ref);
-            }
-          });
-        }
-      });
-    });
-  });
-
-  describe('Environment Variables and Configuration', () => {
-    test('Lambda functions should reference correct DynamoDB tables', () => {
-      const apiHandler = template.Resources.APIHandlerFunction;
-      const cronJobs = template.Resources.CronJobsFunction;
-
-      expect(
-        apiHandler.Properties.Environment.Variables.COUPONS_TABLE.Ref
-      ).toBe('CouponsTable');
-      expect(
-        apiHandler.Properties.Environment.Variables.USER_PREFS_TABLE.Ref
-      ).toBe('UserPreferencesTable');
-      expect(
-        cronJobs.Properties.Environment.Variables.COUPONS_TABLE.Ref
-      ).toBe('CouponsTable');
-      expect(
-        cronJobs.Properties.Environment.Variables.USER_PREFS_TABLE.Ref
-      ).toBe('UserPreferencesTable');
-    });
-
-    test('Lambda functions should reference correct other resources', () => {
-      const aggregator = template.Resources.CouponAggregatorFunction;
-      expect(aggregator.Properties.Environment.Variables.SECRET_NAME.Ref).toBe(
-        'RetailerAPIKeysSecret'
-      );
-      expect(
-        aggregator.Properties.Environment.Variables.ALERT_TOPIC_ARN.Ref
-      ).toBe('AlertTopic');
-    });
-  });
-
-  describe('Tags', () => {
-    test('taggable resources should have Environment tag', () => {
-      const taggedResources = [
-        'MarketingWebsiteBucket',
-        'CouponsTable',
-        'UserPreferencesTable',
-        'RetailerAPIKeysSecret',
-        'SSLCertificate',
-      ];
-
-      taggedResources.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        if (!resource.Condition || resourceName !== 'SSLCertificate') {
-          expect(resource.Properties.Tags).toBeDefined();
-          const envTag = resource.Properties.Tags.find(
-            (tag: any) => tag.Key === 'Environment'
-          );
-          expect(envTag).toBeDefined();
-        }
-      });
+    test('Load Balancer should span multiple AZs', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Subnets.length).toBeGreaterThanOrEqual(2);
     });
   });
 });

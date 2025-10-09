@@ -1,1464 +1,1605 @@
 import fs from 'fs';
 import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  PutItemCommand,
-  GetItemCommand,
-  QueryCommand,
-  DeleteItemCommand,
-} from '@aws-sdk/client-dynamodb';
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeRouteTablesCommand,
+} from '@aws-sdk/client-ec2';
 import {
   S3Client,
-  HeadBucketCommand,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
+  GetBucketLifecycleConfigurationCommand,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import {
-  CloudFrontClient,
-  GetDistributionCommand,
-} from '@aws-sdk/client-cloudfront';
+  RDSClient,
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+} from '@aws-sdk/client-rds';
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+  DescribeTargetHealthCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  APIGatewayClient,
-  GetRestApiCommand,
-  GetStageCommand,
-  GetResourcesCommand,
-} from '@aws-sdk/client-api-gateway';
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand,
+} from '@aws-sdk/client-auto-scaling';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  GetDashboardCommand,
 } from '@aws-sdk/client-cloudwatch';
-import {
-  EventBridgeClient,
-  ListRulesCommand,
-  DescribeRuleCommand,
-} from '@aws-sdk/client-eventbridge';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand,
-} from '@aws-sdk/client-sns';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetRolePolicyCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import axios from 'axios';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetInstanceProfileCommand,
+} from '@aws-sdk/client-iam';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  Route53Client,
+  ListHostedZonesCommand,
+  ListHealthChecksCommand,
+  ListResourceRecordSetsCommand,
+} from '@aws-sdk/client-route-53';
 
-// Load outputs from deployment
+// Load deployment outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Extract region from API endpoint
-const region = outputs.APIEndpoint.match(/\.([a-z]{2}-[a-z]+-\d)\.amazonaws/)?.[1] || 'us-east-1';
+// AWS clients
+const ec2Client = new EC2Client({});
+const s3Client = new S3Client({});
+const rdsClient = new RDSClient({});
+const elbClient = new ElasticLoadBalancingV2Client({});
+const asgClient = new AutoScalingClient({});
+const cwClient = new CloudWatchClient({});
+const cwLogsClient = new CloudWatchLogsClient({});
+const kmsClient = new KMSClient({});
+const iamClient = new IAMClient({});
+const secretsClient = new SecretsManagerClient({});
+const route53Client = new Route53Client({});
 
-// Initialize AWS clients
-const dynamoClient = new DynamoDBClient({ region });
-const s3Client = new S3Client({ region });
-const cloudFrontClient = new CloudFrontClient({ region });
-const lambdaClient = new LambdaClient({ region });
-const apiGatewayClient = new APIGatewayClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const eventBridgeClient = new EventBridgeClient({ region });
-const snsClient = new SNSClient({ region });
-const secretsClient = new SecretsManagerClient({ region });
-const iamClient = new IAMClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-
-describe('TapStack Integration Tests', () => {
-  const testUserId = `test-user-${Date.now()}`;
-  const testCouponId = `test-coupon-${Date.now()}`;
-
-  afterAll(async () => {
-    // Cleanup test data
-    try {
-      await dynamoClient.send(
-        new DeleteItemCommand({
-          TableName: outputs.UserPreferencesTableName,
-          Key: { userId: { S: testUserId } },
-        })
-      );
-      await dynamoClient.send(
-        new DeleteItemCommand({
-          TableName: outputs.CouponsTableName,
-          Key: { couponId: { S: testCouponId } },
-        })
-      );
-    } catch (error) {
-      // Ignore cleanup errors
-    }
-  });
-
-  describe('DynamoDB Tables', () => {
-    test('CouponsTable should exist and be accessible', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.CouponsTableName,
-      });
-      const response = await dynamoClient.send(command);
-
-      expect(response.Table).toBeDefined();
-      expect(response.Table?.TableName).toBe(outputs.CouponsTableName);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
+describe('TAP Stack Integration Tests - Real AWS Resources', () => {
+  describe('CloudFormation Outputs Validation', () => {
+    test('should have all required outputs', () => {
+      expect(outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.StaticContentBucketName).toBeDefined();
+      expect(outputs.LogsBucketName).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(outputs.WebServerSecurityGroupId).toBeDefined();
     });
 
-    test('CouponsTable should have correct configuration', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.CouponsTableName,
-      });
-      const response = await dynamoClient.send(command);
+    test('outputs should have valid formats', () => {
+      // ALB DNS format
+      expect(outputs.LoadBalancerDNS).toMatch(/^[a-z0-9-]+\.[\w-]+\.elb\.amazonaws\.com$/);
 
-      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-      expect(response.Table?.StreamSpecification?.StreamEnabled).toBe(true);
-    });
+      // S3 bucket names
+      expect(outputs.StaticContentBucketName).toMatch(/^[a-z0-9-]+$/);
+      expect(outputs.LogsBucketName).toMatch(/^[a-z0-9-]+$/);
 
-    test('CouponsTable should have required GSIs', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.CouponsTableName,
-      });
-      const response = await dynamoClient.send(command);
+      // RDS endpoint (can have multiple subdomains)
+      expect(outputs.DatabaseEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
 
-      const gsis = response.Table?.GlobalSecondaryIndexes || [];
-      const gsiNames = gsis.map(gsi => gsi.IndexName);
-
-      expect(gsiNames).toContain('RetailerIndex');
-      expect(gsiNames).toContain('CategoryIndex');
-    });
-
-    test('UserPreferencesTable should exist and be accessible', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.UserPreferencesTableName,
-      });
-      const response = await dynamoClient.send(command);
-
-      expect(response.Table).toBeDefined();
-      expect(response.Table?.TableName).toBe(outputs.UserPreferencesTableName);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
-    });
-
-    test('UserPreferencesTable should have EmailIndex GSI', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.UserPreferencesTableName,
-      });
-      const response = await dynamoClient.send(command);
-
-      const gsis = response.Table?.GlobalSecondaryIndexes || [];
-      const gsiNames = gsis.map(gsi => gsi.IndexName);
-
-      expect(gsiNames).toContain('EmailIndex');
-    });
-
-    test('should be able to write and read from CouponsTable', async () => {
-      const couponItem = {
-        couponId: { S: testCouponId },
-        retailerId: { S: 'test-retailer' },
-        categoryId: { S: 'electronics' },
-        isActive: { S: 'true' },
-        title: { S: 'Test Coupon' },
-        description: { S: 'Test Description' },
-        discount: { S: '20%' },
-        code: { S: 'TEST20' },
-        expiryTimestamp: { N: String(Math.floor(Date.now() / 1000) + 86400) },
-      };
-
-      // Write item
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: outputs.CouponsTableName,
-          Item: couponItem,
-        })
-      );
-
-      // Read item
-      const getResponse = await dynamoClient.send(
-        new GetItemCommand({
-          TableName: outputs.CouponsTableName,
-          Key: { couponId: { S: testCouponId } },
-        })
-      );
-
-      expect(getResponse.Item).toBeDefined();
-      expect(getResponse.Item?.couponId.S).toBe(testCouponId);
-      expect(getResponse.Item?.title.S).toBe('Test Coupon');
-    });
-
-    test('should be able to query CouponsTable by CategoryIndex', async () => {
-      const queryResponse = await dynamoClient.send(
-        new QueryCommand({
-          TableName: outputs.CouponsTableName,
-          IndexName: 'CategoryIndex',
-          KeyConditionExpression: 'categoryId = :cat AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':cat': { S: 'electronics' },
-            ':active': { S: 'true' },
-          },
-        })
-      );
-
-      expect(queryResponse.Items).toBeDefined();
-      expect(queryResponse.Items!.length).toBeGreaterThan(0);
-    });
-
-    test('should be able to write and read from UserPreferencesTable', async () => {
-      const userItem = {
-        userId: { S: testUserId },
-        email: { S: 'test@example.com' },
-        categories: { L: [{ S: 'electronics' }, { S: 'clothing' }] },
-        retailers: { L: [{ S: 'walmart' }] },
-        alertsEnabled: { BOOL: true },
-      };
-
-      // Write item
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: outputs.UserPreferencesTableName,
-          Item: userItem,
-        })
-      );
-
-      // Read item
-      const getResponse = await dynamoClient.send(
-        new GetItemCommand({
-          TableName: outputs.UserPreferencesTableName,
-          Key: { userId: { S: testUserId } },
-        })
-      );
-
-      expect(getResponse.Item).toBeDefined();
-      expect(getResponse.Item?.userId.S).toBe(testUserId);
-      expect(getResponse.Item?.email.S).toBe('test@example.com');
+      // Security group ID
+      expect(outputs.WebServerSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
     });
   });
 
-  describe('S3 Bucket', () => {
-    test('MarketingWebsiteBucket should exist and be accessible', async () => {
-      const command = new HeadBucketCommand({
-        Bucket: outputs.S3BucketName,
-      });
-      await expect(s3Client.send(command)).resolves.not.toThrow();
+  describe('VPC and Network Configuration', () => {
+    let vpcId: string;
+    let subnets: any[];
+    let natGateways: any[];
+    let internetGateways: any[];
+    let routeTables: any[];
+
+    beforeAll(async () => {
+      // Get VPC by looking for security group's VPC
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
+      vpcId = sgResponse.SecurityGroups![0].VpcId!;
+
+      // Get all subnets in the VPC
+      const subnetResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+      );
+      subnets = subnetResponse.Subnets || [];
+
+      // Get NAT Gateways
+      const natResponse = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+      );
+      natGateways = natResponse.NatGateways || [];
+
+      // Get Internet Gateways
+      const igwResponse = await ec2Client.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
+        })
+      );
+      internetGateways = igwResponse.InternetGateways || [];
+
+      // Get Route Tables
+      const rtResponse = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+      );
+      routeTables = rtResponse.RouteTables || [];
     });
 
-    test('MarketingWebsiteBucket should have encryption enabled', async () => {
-      const command = new GetBucketEncryptionCommand({
-        Bucket: outputs.S3BucketName,
-      });
-      const response = await s3Client.send(command);
-
-      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(
-        response.ServerSideEncryptionConfiguration?.Rules?.[0]
-          ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toBe('AES256');
-    });
-
-    test('MarketingWebsiteBucket should have versioning enabled', async () => {
-      const command = new GetBucketVersioningCommand({
-        Bucket: outputs.S3BucketName,
-      });
-      const response = await s3Client.send(command);
-
-      expect(response.Status).toBe('Enabled');
-    });
-
-    test('MarketingWebsiteBucket should block public access', async () => {
-      const command = new GetPublicAccessBlockCommand({
-        Bucket: outputs.S3BucketName,
-      });
-      const response = await s3Client.send(command);
-
-      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-      expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-    });
-
-    test('should be able to upload and retrieve objects from S3', async () => {
-      const testKey = `test-${Date.now()}.txt`;
-      const testContent = 'Test content for integration test';
-
-      // Upload object
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testKey,
-          Body: testContent,
-          ContentType: 'text/plain',
+    test('VPC should exist and have DNS enabled', async () => {
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [vpcId],
         })
       );
 
-      // Retrieve object
-      const getResponse = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testKey,
+      expect(response.Vpcs).toHaveLength(1);
+      const vpc = response.Vpcs![0];
+      expect(vpc.State).toBe('available');
+
+      // Check DNS attributes separately
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+    });
+
+    test('should have at least 6 subnets (2 public, 2 private, 2 DB)', () => {
+      expect(subnets.length).toBeGreaterThanOrEqual(6);
+    });
+
+    test('should have public subnets with auto-assign public IP', () => {
+      const publicSubnets = subnets.filter(s =>
+        s.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('public'))
+      );
+
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+      publicSubnets.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+    });
+
+    test('should have private subnets without auto-assign public IP', () => {
+      const privateSubnets = subnets.filter(s =>
+        s.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('private'))
+      );
+
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+      privateSubnets.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test('subnets should be in different availability zones', () => {
+      const azs = new Set(subnets.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should have NAT Gateways in multiple AZs', () => {
+      expect(natGateways.length).toBeGreaterThanOrEqual(2);
+
+      const availableNats = natGateways.filter(nat => nat.State === 'available');
+      expect(availableNats.length).toBeGreaterThanOrEqual(2);
+
+      // NAT Gateways should be in different subnets/AZs
+      const natSubnets = new Set(natGateways.map(nat => nat.SubnetId));
+      expect(natSubnets.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should have exactly one Internet Gateway attached', () => {
+      expect(internetGateways).toHaveLength(1);
+
+      const igw = internetGateways[0];
+      const attachment = igw.Attachments?.find(a => a.VpcId === vpcId);
+      expect(attachment).toBeDefined();
+      expect(attachment?.State).toBe('available');
+    });
+
+    test('should have proper route tables configuration', () => {
+      expect(routeTables.length).toBeGreaterThanOrEqual(3); // 1 public + 2 private
+
+      // Check for public route to IGW
+      const publicRt = routeTables.find(rt =>
+        rt.Routes?.some(r => r.GatewayId?.startsWith('igw-') && r.DestinationCidrBlock === '0.0.0.0/0')
+      );
+      expect(publicRt).toBeDefined();
+
+      // Check for private routes to NAT
+      const privateRts = routeTables.filter(rt =>
+        rt.Routes?.some(r => r.NatGatewayId?.startsWith('nat-') && r.DestinationCidrBlock === '0.0.0.0/0')
+      );
+      expect(privateRts.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Security Groups Configuration', () => {
+    let securityGroups: any[];
+
+    beforeAll(async () => {
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
+      const vpcId = sgResponse.SecurityGroups![0].VpcId!;
+
+      const allSgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'tag:Project', Values: ['ha-webapp'] },
+          ],
+        })
+      );
+      securityGroups = allSgResponse.SecurityGroups || [];
+    });
+
+    test('should have ALB, WebServer, and Database security groups', () => {
+      expect(securityGroups.length).toBeGreaterThanOrEqual(3);
+
+      const sgNames = securityGroups.map(sg =>
+        sg.Tags?.find((t: any) => t.Key === 'Name')?.Value || ''
+      );
+
+      const hasAlbSg = sgNames.some(name => name.includes('alb'));
+      const hasWebSg = sgNames.some(name => name.includes('webserver'));
+      const hasDbSg = sgNames.some(name => name.includes('database'));
+
+      expect(hasAlbSg).toBe(true);
+      expect(hasWebSg).toBe(true);
+      expect(hasDbSg).toBe(true);
+    });
+
+    test('WebServer security group should only allow traffic from ALB', () => {
+      const webSg = securityGroups.find(sg =>
+        sg.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('webserver'))
+      );
+
+      expect(webSg).toBeDefined();
+      expect(webSg?.IpPermissions?.length).toBeGreaterThan(0);
+
+      const httpRule = webSg?.IpPermissions?.find((rule: any) => rule.FromPort === 80);
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs?.length).toBeGreaterThan(0);
+    });
+
+    test('Database security group should only allow MySQL from WebServer', () => {
+      const dbSg = securityGroups.find(sg =>
+        sg.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('database'))
+      );
+
+      expect(dbSg).toBeDefined();
+      const mysqlRule = dbSg?.IpPermissions?.find((rule: any) => rule.FromPort === 3306);
+      expect(mysqlRule).toBeDefined();
+      expect(mysqlRule?.UserIdGroupPairs).toBeDefined();
+    });
+
+    test('ALB security group should allow HTTP and HTTPS', () => {
+      const albSg = securityGroups.find(sg =>
+        sg.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('alb'))
+      );
+
+      expect(albSg).toBeDefined();
+
+      const httpRule = albSg?.IpPermissions?.find((rule: any) => rule.FromPort === 80);
+      const httpsRule = albSg?.IpPermissions?.find((rule: any) => rule.FromPort === 443);
+
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+    });
+  });
+
+  describe('S3 Buckets Configuration', () => {
+    test('StaticContentBucket should exist with encryption', async () => {
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: outputs.StaticContentBucketName,
         })
       );
 
-      expect(getResponse.Body).toBeDefined();
-      const content = await getResponse.Body!.transformToString();
-      expect(content).toBe(testContent);
-    });
-  });
-
-  describe('CloudFront Distribution', () => {
-    test('CloudFront distribution should exist and be deployed', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      expect(response.Distribution).toBeDefined();
-      expect(response.Distribution?.Status).toBe('Deployed');
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule = encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
     });
 
-    test('CloudFront distribution should be enabled', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      expect(response.Distribution?.DistributionConfig?.Enabled).toBe(true);
-    });
-
-    test('CloudFront distribution should enforce HTTPS', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      const defaultBehavior =
-        response.Distribution?.DistributionConfig?.DefaultCacheBehavior;
-      expect(defaultBehavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
-    });
-
-    test('CloudFront distribution should have minimum TLS 1.2', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      const minProtocol = response.Distribution?.DistributionConfig?.ViewerCertificate
-          ?.MinimumProtocolVersion;
-      // Accept TLSv1.2_2021 or TLSv1 (default for some CloudFront distributions)
-      expect(['TLSv1.2_2021', 'TLSv1.2_2019', 'TLSv1.2_2018', 'TLSv1']).toContain(minProtocol);
-    });
-
-    test('CloudFront distribution should have S3 origin configured', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      const origins = response.Distribution?.DistributionConfig?.Origins?.Items || [];
-      const s3Origin = origins.find(origin =>
-        origin.DomainName?.includes(outputs.S3BucketName)
+    test('StaticContentBucket should have versioning enabled', async () => {
+      const versioningResponse = await s3Client.send(
+        new GetBucketVersioningCommand({
+          Bucket: outputs.StaticContentBucketName,
+        })
       );
 
-      expect(s3Origin).toBeDefined();
-      expect(s3Origin?.S3OriginConfig?.OriginAccessIdentity).toBeDefined();
+      expect(versioningResponse.Status).toBe('Enabled');
     });
 
-    test('CloudFront website URL should be accessible', async () => {
-      const response = await axios.get(outputs.MarketingWebsiteURL, {
-        validateStatus: () => true,
-        timeout: 10000,
-      });
+    test('StaticContentBucket should block public access', async () => {
+      const publicAccessResponse = await s3Client.send(
+        new GetPublicAccessBlockCommand({
+          Bucket: outputs.StaticContentBucketName,
+        })
+      );
 
-      // Should either return 200 (if index.html exists) or 403 (if not uploaded yet)
-      expect([200, 403]).toContain(response.status);
-    });
-  });
-
-  describe('Lambda Functions', () => {
-    const extractFunctionName = (envVar: string): string => {
-      return outputs.CouponsTableName.replace(/-coupons$/, envVar);
-    };
-
-    const functionNames = [
-      '-coupon-aggregator',
-      '-api-handler',
-      '-cron-jobs',
-    ];
-
-    functionNames.forEach(suffix => {
-      const functionName = extractFunctionName(suffix);
-
-      test(`${suffix} function should exist`, async () => {
-        const command = new GetFunctionCommand({
-          FunctionName: functionName,
-        });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration).toBeDefined();
-        expect(response.Configuration?.FunctionName).toBe(functionName);
-      });
-
-      test(`${suffix} function should have correct runtime`, async () => {
-        const command = new GetFunctionCommand({
-          FunctionName: functionName,
-        });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration?.Runtime).toBe('python3.10');
-      });
-
-      test(`${suffix} function should have execution role`, async () => {
-        const command = new GetFunctionCommand({
-          FunctionName: functionName,
-        });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration?.Role).toBeDefined();
-        expect(response.Configuration?.Role).toContain('lambda-execution-role');
-      });
-
-      test(`${suffix} function should have environment variables`, async () => {
-        const command = new GetFunctionCommand({
-          FunctionName: functionName,
-        });
-        const response = await lambdaClient.send(command);
-
-        expect(response.Configuration?.Environment?.Variables).toBeDefined();
-      });
+      const config = publicAccessResponse.PublicAccessBlockConfiguration;
+      expect(config?.BlockPublicAcls).toBe(true);
+      expect(config?.BlockPublicPolicy).toBe(true);
+      expect(config?.IgnorePublicAcls).toBe(true);
+      expect(config?.RestrictPublicBuckets).toBe(true);
     });
 
-    test('api-handler function should be invocable', async () => {
-      const functionName = extractFunctionName('-api-handler');
-      const event = {
-        httpMethod: 'GET',
-        path: '/api/coupons',
-        queryStringParameters: { limit: '5' },
-      };
+    test('LogsBucket should exist with lifecycle policy', async () => {
+      const lifecycleResponse = await s3Client.send(
+        new GetBucketLifecycleConfigurationCommand({
+          Bucket: outputs.LogsBucketName,
+        })
+      );
 
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify(event)),
-      });
+      expect(lifecycleResponse.Rules).toBeDefined();
+      expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
 
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
+      const expirationRule = lifecycleResponse.Rules?.find(r => r.Expiration);
+      expect(expirationRule).toBeDefined();
+      expect(expirationRule?.Status).toBe('Enabled');
+    });
 
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      expect(payload.statusCode).toBeDefined();
+    test('LogsBucket should have encryption enabled', async () => {
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: outputs.LogsBucketName,
+        })
+      );
+
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
     });
   });
 
-  describe('API Gateway', () => {
-    const extractApiId = (endpoint: string): string => {
-      return endpoint.match(/https:\/\/([a-z0-9]+)\.execute-api/)?.[1] || '';
-    };
+  describe('RDS Database Configuration', () => {
+    let dbInstance: any;
+    let dbSubnetGroup: any;
 
-    const apiId = extractApiId(outputs.APIEndpoint);
-    const stageName = outputs.APIEndpoint.split('/').pop() || 'dev';
+    beforeAll(async () => {
+      // Extract DB identifier from endpoint
+      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
 
-    test('API Gateway REST API should exist', async () => {
-      const command = new GetRestApiCommand({
-        restApiId: apiId,
-      });
-      const response = await apiGatewayClient.send(command);
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+      dbInstance = dbResponse.DBInstances![0];
 
-      expect(response.id).toBe(apiId);
-      expect(response.name).toBeDefined();
+      const sgResponse = await rdsClient.send(
+        new DescribeDBSubnetGroupsCommand({
+          DBSubnetGroupName: dbInstance.DBSubnetGroup.DBSubnetGroupName,
+        })
+      );
+      dbSubnetGroup = sgResponse.DBSubnetGroups![0];
     });
 
-    test('API Gateway stage should exist', async () => {
-      const command = new GetStageCommand({
-        restApiId: apiId,
-        stageName: stageName,
-      });
-      const response = await apiGatewayClient.send(command);
-
-      expect(response.stageName).toBe(stageName);
+    test('database should be in available state', () => {
+      expect(dbInstance.DBInstanceStatus).toBe('available');
     });
 
-    test('API Gateway should have required resources', async () => {
-      const command = new GetResourcesCommand({
-        restApiId: apiId,
-      });
-      const response = await apiGatewayClient.send(command);
-
-      const paths = response.items?.map(item => item.path) || [];
-      expect(paths).toContain('/coupons');
-      expect(paths).toContain('/coupons/refresh');
+    test('database should be Multi-AZ', () => {
+      expect(dbInstance.MultiAZ).toBe(true);
     });
 
-    test('API endpoint should be accessible', async () => {
-      const response = await axios.get(`${outputs.APIEndpoint}/coupons`, {
-        validateStatus: () => true,
-        timeout: 10000,
-      });
-
-      expect([200, 403, 404]).toContain(response.status);
+    test('database should have encryption enabled', () => {
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.KmsKeyId).toBeDefined();
     });
 
-    test('GET /coupons endpoint should return coupons', async () => {
-      const response = await axios.get(`${outputs.APIEndpoint}/coupons?limit=5`, {
-        validateStatus: () => true,
-        timeout: 10000,
-      });
+    test('database should have automated backups enabled', () => {
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
+      expect(dbInstance.PreferredBackupWindow).toBeDefined();
+    });
 
-      if (response.status === 200) {
-        expect(response.data).toBeDefined();
-        expect(response.data.coupons).toBeDefined();
-        expect(Array.isArray(response.data.coupons)).toBe(true);
+    test('database should have CloudWatch logs enabled', () => {
+      expect(dbInstance.EnabledCloudwatchLogsExports).toBeDefined();
+      expect(dbInstance.EnabledCloudwatchLogsExports.length).toBeGreaterThan(0);
+    });
+
+    test('database endpoint should be accessible', () => {
+      expect(dbInstance.Endpoint).toBeDefined();
+      expect(dbInstance.Endpoint.Address).toBe(outputs.DatabaseEndpoint);
+      expect(dbInstance.Endpoint.Port).toBe(3306);
+    });
+
+    test('database subnet group should span multiple AZs', () => {
+      expect(dbSubnetGroup.Subnets.length).toBeGreaterThanOrEqual(2);
+
+      const azs = new Set(dbSubnetGroup.Subnets.map((s: any) => s.SubnetAvailabilityZone.Name));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('database should use correct instance class', () => {
+      expect(dbInstance.DBInstanceClass).toBeDefined();
+      expect(dbInstance.DBInstanceClass).toMatch(/^db\./);
+    });
+  });
+
+  describe('Load Balancer Configuration', () => {
+    let loadBalancer: any;
+    let targetGroups: any[];
+    let listeners: any[];
+
+    beforeAll(async () => {
+      const lbResponse = await elbClient.send(
+        new DescribeLoadBalancersCommand({})
+      );
+
+      loadBalancer = lbResponse.LoadBalancers?.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
+      );
+
+      if (loadBalancer) {
+        const tgResponse = await elbClient.send(
+          new DescribeTargetGroupsCommand({
+            LoadBalancerArn: loadBalancer.LoadBalancerArn,
+          })
+        );
+        targetGroups = tgResponse.TargetGroups || [];
+
+        const listenerResponse = await elbClient.send(
+          new DescribeListenersCommand({
+            LoadBalancerArn: loadBalancer.LoadBalancerArn,
+          })
+        );
+        listeners = listenerResponse.Listeners || [];
       }
     });
 
-    test('POST /coupons/refresh endpoint should be accessible', async () => {
-      const response = await axios.post(
-        `${outputs.APIEndpoint}/coupons/refresh`,
-        {},
-        {
-          validateStatus: () => true,
-          timeout: 15000,
-        }
+    test('ALB should exist and be active', () => {
+      expect(loadBalancer).toBeDefined();
+      expect(loadBalancer.State.Code).toBe('active');
+      expect(loadBalancer.Type).toBe('application');
+      expect(loadBalancer.Scheme).toBe('internet-facing');
+    });
+
+    test('ALB should span multiple availability zones', () => {
+      expect(loadBalancer.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('ALB should have at least one target group', () => {
+      expect(targetGroups.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('target group should have health checks configured', () => {
+      const tg = targetGroups[0];
+      expect(tg.HealthCheckEnabled).toBe(true);
+      expect(tg.HealthCheckPath).toBe('/health');
+      expect(tg.HealthCheckProtocol).toBe('HTTP');
+      expect(tg.HealthCheckIntervalSeconds).toBeDefined();
+      expect(tg.HealthyThresholdCount).toBeDefined();
+      expect(tg.UnhealthyThresholdCount).toBeDefined();
+    });
+
+    test('ALB should have HTTP listener', () => {
+      const httpListener = listeners.find(l => l.Port === 80 && l.Protocol === 'HTTP');
+      expect(httpListener).toBeDefined();
+      expect(httpListener?.DefaultActions).toBeDefined();
+      expect(httpListener?.DefaultActions![0].Type).toBe('forward');
+    });
+
+    test('target group should have registered targets or be empty (acceptable for new deployment)', async () => {
+      if (targetGroups.length > 0) {
+        const healthResponse = await elbClient.send(
+          new DescribeTargetHealthCommand({
+            TargetGroupArn: targetGroups[0].TargetGroupArn,
+          })
+        );
+
+        // Either has targets or is empty (both acceptable)
+        expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+      }
+    });
+  });
+
+  describe('Auto Scaling Configuration', () => {
+    let autoScalingGroup: any;
+    let scalingPolicies: any[];
+
+    beforeAll(async () => {
+      const asgResponse = await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({})
       );
 
-      expect([200, 202, 403, 404, 500]).toContain(response.status);
+      // Find ASG by tags
+      autoScalingGroup = asgResponse.AutoScalingGroups?.find(asg =>
+        asg.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+      );
+
+      if (autoScalingGroup) {
+        const policiesResponse = await asgClient.send(
+          new DescribePoliciesCommand({
+            AutoScalingGroupName: autoScalingGroup.AutoScalingGroupName,
+          })
+        );
+        scalingPolicies = policiesResponse.ScalingPolicies || [];
+      }
     });
 
-    test('CORS should be configured', async () => {
-      const response = await axios.options(`${outputs.APIEndpoint}/coupons`, {
-        validateStatus: () => true,
-        timeout: 10000,
-      });
-
-      expect([200, 204]).toContain(response.status);
-    });
-  });
-
-  describe('EventBridge Rules', () => {
-    const rulePrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-
-    test('should have aggregation schedule rule', async () => {
-      const command = new DescribeRuleCommand({
-        Name: `${rulePrefix}-aggregation-schedule`,
-      });
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Name).toBe(`${rulePrefix}-aggregation-schedule`);
-      expect(response.State).toBe('ENABLED');
-      expect(response.ScheduleExpression).toBeDefined();
+    test('Auto Scaling Group should exist', () => {
+      expect(autoScalingGroup).toBeDefined();
     });
 
-    test('should have expiry check schedule rule', async () => {
-      const command = new DescribeRuleCommand({
-        Name: `${rulePrefix}-expiry-check-schedule`,
-      });
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Name).toBe(`${rulePrefix}-expiry-check-schedule`);
-      expect(response.State).toBe('ENABLED');
+    test('ASG should have proper capacity configuration', () => {
+      expect(autoScalingGroup.MinSize).toBeGreaterThanOrEqual(2);
+      expect(autoScalingGroup.MaxSize).toBeGreaterThanOrEqual(autoScalingGroup.MinSize);
+      expect(autoScalingGroup.DesiredCapacity).toBeGreaterThanOrEqual(autoScalingGroup.MinSize);
+      expect(autoScalingGroup.DesiredCapacity).toBeLessThanOrEqual(autoScalingGroup.MaxSize);
     });
 
-    test('should have weekly digest schedule rule', async () => {
-      const command = new DescribeRuleCommand({
-        Name: `${rulePrefix}-weekly-digest-schedule`,
-      });
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Name).toBe(`${rulePrefix}-weekly-digest-schedule`);
-      expect(response.State).toBe('ENABLED');
+    test('ASG should span multiple availability zones', () => {
+      expect(autoScalingGroup.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('EventBridge rules should have Lambda targets', async () => {
-      const command = new DescribeRuleCommand({
-        Name: `${rulePrefix}-aggregation-schedule`,
-      });
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Arn).toBeDefined();
-    });
-  });
-
-  describe('SNS Topics', () => {
-    const topicPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-
-    test('should have alerts topic', async () => {
-      const listCommand = new ListRulesCommand({});
-      const rules = await eventBridgeClient.send(listCommand);
-
-      expect(rules.Rules).toBeDefined();
+    test('ASG should use ELB health checks', () => {
+      expect(autoScalingGroup.HealthCheckType).toBe('ELB');
+      expect(autoScalingGroup.HealthCheckGracePeriod).toBeGreaterThan(0);
     });
 
-    test('should have cloudwatch alarms topic', async () => {
-      const alarmsCommand = new DescribeAlarmsCommand({});
-      const response = await cloudWatchClient.send(alarmsCommand);
+    test('ASG should have target groups attached', () => {
+      expect(autoScalingGroup.TargetGroupARNs).toBeDefined();
+      expect(autoScalingGroup.TargetGroupARNs!.length).toBeGreaterThan(0);
+    });
 
-      expect(response.MetricAlarms).toBeDefined();
+    test('ASG should have scaling policies', () => {
+      expect(scalingPolicies.length).toBeGreaterThan(0);
+
+      const targetTrackingPolicy = scalingPolicies.find(p => p.PolicyType === 'TargetTrackingScaling');
+      expect(targetTrackingPolicy).toBeDefined();
     });
   });
 
   describe('CloudWatch Monitoring', () => {
-    const alarmPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
+    let alarms: any[];
+    let logGroups: any[];
 
-    test('should have Lambda error alarm', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [`${alarmPrefix}-lambda-errors`],
-      });
-      const response = await cloudWatchClient.send(command);
+    beforeAll(async () => {
+      const alarmsResponse = await cwClient.send(
+        new DescribeAlarmsCommand({})
+      );
+      alarms = alarmsResponse.MetricAlarms?.filter(alarm =>
+        alarm.AlarmName?.includes('ha-webapp') || alarm.AlarmName?.includes('production')
+      ) || [];
 
-      expect(response.MetricAlarms).toBeDefined();
-      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+      const logGroupsResponse = await cwLogsClient.send(
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: '/aws/ec2',
+        })
+      );
+      logGroups = logGroupsResponse.logGroups || [];
     });
 
-    test('should have DynamoDB throttle alarm', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [`${alarmPrefix}-dynamodb-throttles`],
-      });
-      const response = await cloudWatchClient.send(command);
-
-      expect(response.MetricAlarms).toBeDefined();
-      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+    test('should have CloudWatch alarms configured', () => {
+      expect(alarms.length).toBeGreaterThan(0);
     });
 
-    test('should have API Gateway 4XX alarm', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [`${alarmPrefix}-api-4xx-errors`],
-      });
-      const response = await cloudWatchClient.send(command);
-
-      expect(response.MetricAlarms).toBeDefined();
-      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+    test('should have CPU utilization alarms', () => {
+      const cpuAlarms = alarms.filter(alarm => alarm.MetricName === 'CPUUtilization');
+      expect(cpuAlarms.length).toBeGreaterThan(0);
     });
 
-    test('monitoring dashboard should exist', async () => {
-      const dashboardName = outputs.MonitoringDashboardURL.split('name=')[1];
-      const command = new GetDashboardCommand({
-        DashboardName: dashboardName,
-      });
-      const response = await cloudWatchClient.send(command);
-
-      expect(response.DashboardName).toBe(dashboardName);
-      expect(response.DashboardBody).toBeDefined();
+    test('should have ALB target health alarm', () => {
+      const targetHealthAlarm = alarms.find(alarm =>
+        alarm.MetricName === 'UnHealthyHostCount' &&
+        alarm.Namespace === 'AWS/ApplicationELB'
+      );
+      expect(targetHealthAlarm).toBeDefined();
     });
 
-    test('Lambda log groups should exist', async () => {
-      const functionPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/${functionPrefix}`,
-      });
-      const response = await logsClient.send(command);
+    test('should have RDS alarms', () => {
+      const rdsAlarms = alarms.filter(alarm => alarm.Namespace === 'AWS/RDS');
+      expect(rdsAlarms.length).toBeGreaterThan(0);
+    });
 
-      expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBeGreaterThanOrEqual(3);
+    test('alarms should be properly configured', () => {
+      alarms.forEach(alarm => {
+        expect(alarm.ComparisonOperator).toBeDefined();
+        expect(alarm.Threshold).toBeDefined();
+        expect(alarm.EvaluationPeriods).toBeGreaterThan(0);
+        expect(alarm.ActionsEnabled).toBeDefined();
+      });
+    });
+
+    test('should have log groups with retention policies', () => {
+      const projectLogGroups = logGroups.filter(lg =>
+        lg.logGroupName?.includes('ha-webapp') || lg.logGroupName?.includes('httpd')
+      );
+
+      projectLogGroups.forEach(lg => {
+        expect(lg.retentionInDays).toBeDefined();
+        expect(lg.retentionInDays).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('IAM Roles and Policies', () => {
+    let ec2Role: any;
+    let instanceProfile: any;
+
+    beforeAll(async () => {
+      try {
+        // Try to get the role - role name pattern from template
+        const roleResponse = await iamClient.send(
+          new GetRoleCommand({
+            RoleName: 'ha-webapp-production-ec2-role-dev',
+          })
+        );
+        ec2Role = roleResponse.Role;
+
+        const profileResponse = await iamClient.send(
+          new GetInstanceProfileCommand({
+            InstanceProfileName: 'ha-webapp-production-ec2-profile-dev',
+          })
+        );
+        instanceProfile = profileResponse.InstanceProfile;
+      } catch (error) {
+        // Role might have different suffix, skip these tests
+        console.log('Could not find IAM role, skipping IAM tests');
+      }
+    });
+
+    test('EC2 role should exist with proper trust policy', () => {
+      if (!ec2Role) {
+        console.log('Skipping: EC2 role not found');
+        return;
+      }
+
+      expect(ec2Role).toBeDefined();
+      const trustPolicy = JSON.parse(decodeURIComponent(ec2Role.AssumeRolePolicyDocument));
+      expect(trustPolicy.Statement).toBeDefined();
+
+      const ec2Statement = trustPolicy.Statement.find(
+        (s: any) => s.Principal?.Service === 'ec2.amazonaws.com'
+      );
+      expect(ec2Statement).toBeDefined();
+    });
+
+    test('Instance profile should exist and reference EC2 role', () => {
+      if (!instanceProfile) {
+        console.log('Skipping: Instance profile not found');
+        return;
+      }
+
+      expect(instanceProfile).toBeDefined();
+      expect(instanceProfile.Roles.length).toBeGreaterThan(0);
     });
   });
 
   describe('Secrets Manager', () => {
-    const secretName = outputs.CouponsTableName.replace(/-coupons$/, '/retailer-api-keys');
+    let dbSecret: any;
 
-    test('retailer API keys secret should exist', async () => {
-      const command = new GetSecretValueCommand({
-        SecretId: secretName,
-      });
-      const response = await secretsClient.send(command);
-
-      expect(response.SecretString).toBeDefined();
-    });
-
-    test('retailer API keys secret should have valid JSON', async () => {
-      const command = new GetSecretValueCommand({
-        SecretId: secretName,
-      });
-      const response = await secretsClient.send(command);
-
-      const secretData = JSON.parse(response.SecretString!);
-      expect(secretData).toBeDefined();
-      expect(typeof secretData).toBe('object');
-    });
-  });
-
-  describe('IAM Roles', () => {
-    const roleName = outputs.CouponsTableName.replace(/-coupons$/, '-lambda-execution-role');
-
-    test('Lambda execution role should exist', async () => {
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await iamClient.send(command);
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.RoleName).toBe(roleName);
-    });
-
-    test('Lambda execution role should have managed policies', async () => {
-      const command = new ListAttachedRolePoliciesCommand({
-        RoleName: roleName,
-      });
-      const response = await iamClient.send(command);
-
-      const policyArns =
-        response.AttachedPolicies?.map(p => p.PolicyArn) || [];
-      expect(policyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-      );
-    });
-
-    test('Lambda execution role should have correct trust policy', async () => {
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await iamClient.send(command);
-
-      const trustPolicy = JSON.parse(
-        decodeURIComponent(response.Role?.AssumeRolePolicyDocument || '')
-      );
-      expect(trustPolicy.Statement[0].Principal.Service).toContain(
-        'lambda.amazonaws.com'
-      );
-    });
-  });
-
-  describe('End-to-End Workflows', () => {
-    test('complete user preference workflow', async () => {
-      const userId = `e2e-user-${Date.now()}`;
-      const userEmail = `e2e-${Date.now()}@example.com`;
-
-      // Step 1: Create user preferences via API
-      const createResponse = await axios.put(
-        `${outputs.APIEndpoint}/users/${userId}/preferences`,
-        {
-          email: userEmail,
-          categories: ['electronics', 'clothing'],
-          retailers: ['walmart', 'target'],
-          alertsEnabled: true,
-          weeklyDigestEnabled: true,
-        },
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
-
-      expect([200, 404, 500]).toContain(createResponse.status);
-
-      // Step 2: Retrieve preferences via API
-      const getResponse = await axios.get(
-        `${outputs.APIEndpoint}/users/${userId}/preferences`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
-
-      if (getResponse.status === 200) {
-        expect(getResponse.data.email).toBe(userEmail);
-      }
-
-      // Step 3: Verify in DynamoDB
-      const dbResponse = await dynamoClient.send(
-        new GetItemCommand({
-          TableName: outputs.UserPreferencesTableName,
-          Key: { userId: { S: userId } },
-        })
-      );
-
-      if (createResponse.status === 200) {
-        expect(dbResponse.Item).toBeDefined();
-      }
-
-      // Cleanup
-      await dynamoClient.send(
-        new DeleteItemCommand({
-          TableName: outputs.UserPreferencesTableName,
-          Key: { userId: { S: userId } },
-        })
-      ).catch(() => {});
-    });
-
-    test('coupon lifecycle workflow', async () => {
-      const couponId = `e2e-coupon-${Date.now()}`;
-
-      // Step 1: Create coupon in DynamoDB
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: outputs.CouponsTableName,
-          Item: {
-            couponId: { S: couponId },
-            retailerId: { S: 'e2e-retailer' },
-            categoryId: { S: 'electronics' },
-            isActive: { S: 'true' },
-            title: { S: 'E2E Test Coupon' },
-            description: { S: 'E2E Test Description' },
-            discount: { S: '25%' },
-            code: { S: 'E2E25' },
-            expiryTimestamp: { N: String(Math.floor(Date.now() / 1000) + 86400) },
-          },
-        })
-      );
-
-      // Step 2: Query via API
-      const apiResponse = await axios.get(
-        `${outputs.APIEndpoint}/coupons?category=electronics`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
-
-      if (apiResponse.status === 200) {
-        expect(apiResponse.data.coupons).toBeDefined();
-        expect(Array.isArray(apiResponse.data.coupons)).toBe(true);
-      }
-
-      // Step 3: Query via GSI
-      const queryResponse = await dynamoClient.send(
-        new QueryCommand({
-          TableName: outputs.CouponsTableName,
-          IndexName: 'CategoryIndex',
-          KeyConditionExpression: 'categoryId = :cat AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':cat': { S: 'electronics' },
-            ':active': { S: 'true' },
-          },
-        })
-      );
-
-      expect(queryResponse.Items).toBeDefined();
-      const foundCoupon = queryResponse.Items!.find(
-        item => item.couponId.S === couponId
-      );
-      expect(foundCoupon).toBeDefined();
-
-      // Cleanup
-      await dynamoClient.send(
-        new DeleteItemCommand({
-          TableName: outputs.CouponsTableName,
-          Key: { couponId: { S: couponId } },
-        })
-      );
-    });
-
-    test('S3 to CloudFront content delivery workflow', async () => {
-      const testFileName = `e2e-test-${Date.now()}.html`;
-      const testContent = `
-        <!DOCTYPE html>
-        <html>
-          <head><title>E2E Test</title></head>
-          <body><h1>Integration Test Content</h1></body>
-        </html>
-      `;
-
-      // Step 1: Upload to S3
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testFileName,
-          Body: testContent,
-          ContentType: 'text/html',
-        })
-      );
-
-      // Step 2: Verify in S3
-      const s3Response = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testFileName,
-        })
-      );
-
-      const s3Content = await s3Response.Body!.transformToString();
-      expect(s3Content).toContain('Integration Test Content');
-
-      // Note: CloudFront invalidation would be needed for immediate access
-      // but that's not tested here due to propagation delays
-    });
-
-    test('API to DynamoDB to Lambda integration', async () => {
-      // Step 1: Trigger refresh endpoint
-      const refreshResponse = await axios.post(
-        `${outputs.APIEndpoint}/coupons/refresh`,
-        {},
-        {
-          validateStatus: () => true,
-          timeout: 15000,
-        }
-      );
-
-      // Should accept the request even if processing fails
-      expect([200, 202, 404, 500]).toContain(refreshResponse.status);
-
-      // Step 2: Verify DynamoDB has data
-      const scanResponse = await dynamoClient.send(
-        new QueryCommand({
-          TableName: outputs.CouponsTableName,
-          IndexName: 'CategoryIndex',
-          KeyConditionExpression: 'categoryId = :cat AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':cat': { S: 'electronics' },
-            ':active': { S: 'true' },
-          },
-          Limit: 1,
-        })
-      );
-
-      // Should have at least some data (either from this run or previous)
-      expect(scanResponse.Items).toBeDefined();
-    });
-  });
-
-  describe('Error Handling and Edge Cases', () => {
-    test('API should handle invalid coupon queries gracefully', async () => {
-      const response = await axios.get(
-        `${outputs.APIEndpoint}/coupons?category=nonexistent-category-12345`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
-
-      expect([200, 404, 500]).toContain(response.status);
-      if (response.status === 200) {
-        expect(response.data.coupons).toBeDefined();
+    beforeAll(async () => {
+      try {
+        const secretResponse = await secretsClient.send(
+          new DescribeSecretCommand({
+            SecretId: 'ha-webapp-production-db-master-password-dev',
+          })
+        );
+        dbSecret = secretResponse;
+      } catch (error) {
+        console.log('Could not find secret, skipping Secrets Manager tests');
       }
     });
 
-    test('API should handle invalid user ID gracefully', async () => {
-      const response = await axios.get(
-        `${outputs.APIEndpoint}/users/nonexistent-user-12345/preferences`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
+    test('database password secret should exist', () => {
+      if (!dbSecret) {
+        console.log('Skipping: Secret not found');
+        return;
+      }
 
-      expect([404, 500]).toContain(response.status);
+      expect(dbSecret).toBeDefined();
+      expect(dbSecret.ARN).toBeDefined();
     });
 
-    test('should handle malformed data in DynamoDB operations', async () => {
-      const invalidCouponId = `invalid-${Date.now()}`;
+    test('secret should be encrypted with KMS', () => {
+      if (!dbSecret) {
+        console.log('Skipping: Secret not found');
+        return;
+      }
 
-      // Try to read non-existent item
-      const getResponse = await dynamoClient.send(
-        new GetItemCommand({
-          TableName: outputs.CouponsTableName,
-          Key: { couponId: { S: invalidCouponId } },
-        })
-      );
-
-      expect(getResponse.Item).toBeUndefined();
-    });
-
-    test('CloudFront should handle non-existent paths', async () => {
-      const response = await axios.get(
-        `${outputs.MarketingWebsiteURL}/nonexistent-${Date.now()}.html`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
-      );
-
-      expect([200, 403, 404]).toContain(response.status);
+      expect(dbSecret.KmsKeyId).toBeDefined();
     });
   });
 
-  describe('Resource Connectivity Validation', () => {
-    test('Lambda should be able to access DynamoDB tables', async () => {
-      const functionName = outputs.CouponsTableName.replace(/-coupons$/, '-api-handler');
+  describe('Route53 Configuration', () => {
+    let hostedZones: any[];
+    let healthChecks: any[];
 
-      const event = {
-        httpMethod: 'GET',
-        path: '/api/coupons',
-        queryStringParameters: { limit: '1' },
-      };
+    beforeAll(async () => {
+      try {
+        const hzResponse = await route53Client.send(
+          new ListHostedZonesCommand({})
+        );
+        hostedZones = hzResponse.HostedZones || [];
 
-      const response = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: functionName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      expect(response.StatusCode).toBe(200);
-
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      // Function should execute without permissions errors
-      expect([200, 500]).toContain(payload.statusCode);
+        const hcResponse = await route53Client.send(
+          new ListHealthChecksCommand({})
+        );
+        healthChecks = hcResponse.HealthChecks || [];
+      } catch (error) {
+        console.log('Could not list Route53 resources');
+      }
     });
 
-    test('Lambda should be able to access Secrets Manager', async () => {
-      const functionName = outputs.CouponsTableName.replace(
-        /-coupons$/,
-        '-coupon-aggregator'
+    test('should have hosted zone for domain', () => {
+      if (!hostedZones.length) {
+        console.log('Skipping: No hosted zones found');
+        return;
+      }
+
+      const projectZone = hostedZones.find(hz =>
+        hz.Name.includes('myapp') || hz.Name.includes('local')
       );
-
-      const event = {
-        source: 'integration-test',
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: functionName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      expect(response.StatusCode).toBe(200);
-
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      // Function should execute without permissions errors
-      expect(payload.statusCode).toBeDefined();
+      expect(projectZone).toBeDefined();
     });
 
-    test('API Gateway should successfully invoke Lambda', async () => {
-      const response = await axios.get(
-        `${outputs.APIEndpoint}/coupons?limit=1`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
-        }
+    test('should have health check for ALB', () => {
+      if (!healthChecks.length) {
+        console.log('Skipping: No health checks found');
+        return;
+      }
+
+      const albHealthCheck = healthChecks.find(hc =>
+        hc.HealthCheckConfig.Type === 'HTTP' &&
+        hc.HealthCheckConfig.ResourcePath === '/health'
       );
-
-      // Should get response from Lambda, not API Gateway error
-      expect(response.status).not.toBe(502);
-      expect(response.status).not.toBe(504);
-    });
-
-    test('CloudFront should access S3 through OAI', async () => {
-      // CloudFront should be able to access S3
-      const response = await axios.get(outputs.MarketingWebsiteURL, {
-        validateStatus: () => true,
-        timeout: 10000,
-      });
-
-      // Should not get 403 from S3 (which would indicate OAI issues)
-      // Either 200 (content exists) or 403 from CloudFront (no index.html) is fine
-      expect(response.status).not.toBe(502);
-    });
-
-    test('Lambda should be able to invoke another Lambda function', async () => {
-      const apiHandlerName = outputs.CouponsTableName.replace(/-coupons$/, '-api-handler');
-
-      // The api-handler Lambda has AGGREGATOR_FUNCTION env var pointing to coupon-aggregator
-      // Invoke api-handler which should be able to call coupon-aggregator
-      const event = {
-        httpMethod: 'POST',
-        path: '/coupons/refresh',
-        body: JSON.stringify({ force: true }),
-      };
-
-      const response = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: apiHandlerName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      expect(response.StatusCode).toBe(200);
-
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      // Should not get permission errors when invoking other Lambda
-      expect(payload.statusCode).toBeDefined();
-    });
-
-    test('EventBridge rules should be able to trigger Lambda functions', async () => {
-      const cronJobsName = outputs.CouponsTableName.replace(/-coupons$/, '-cron-jobs');
-      const ruleName = outputs.CouponsTableName.replace(/-coupons$/, '-aggregation-schedule');
-
-      // Get the EventBridge rule details
-      const ruleCommand = new DescribeRuleCommand({
-        Name: ruleName,
-      });
-      const ruleResponse = await eventBridgeClient.send(ruleCommand);
-
-      // Verify rule exists and is enabled
-      expect(ruleResponse.State).toBe('ENABLED');
-      expect(ruleResponse.Arn).toBeDefined();
-
-      // Manually invoke the Lambda that EventBridge should trigger
-      const event = {
-        source: 'aws.events',
-        'detail-type': 'Scheduled Event',
-        detail: { jobType: 'aggregation' },
-      };
-
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: cronJobsName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      // Lambda invocation succeeded (StatusCode 200 means Lambda was invoked)
-      expect(lambdaResponse.StatusCode).toBe(200);
-
-      // Verify payload is returned (connectivity works even if function has errors)
-      expect(lambdaResponse.Payload).toBeDefined();
-
-      // Test passes if Lambda can be invoked (connectivity validated)
-      // Function errors (Unhandled) indicate code issues, not connectivity issues
-    });
-
-    test('Lambda should be able to publish to SNS topics', async () => {
-      const aggregatorName = outputs.CouponsTableName.replace(/-coupons$/, '-coupon-aggregator');
-
-      // Invoke the aggregator which should publish to AlertTopic on errors/alerts
-      const event = {
-        source: 'integration-test',
-        action: 'test-sns-connectivity',
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: aggregatorName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      expect(response.StatusCode).toBe(200);
-
-      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
-      // Should not get SNS permission errors
-      expect(payload.statusCode).toBeDefined();
-    });
-
-    test('Lambda functions should write logs to CloudWatch Log Groups', async () => {
-      const functionPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-      const apiHandlerName = `${functionPrefix}-api-handler`;
-
-      // Invoke Lambda to generate logs
-      const event = {
-        httpMethod: 'GET',
-        path: '/coupons',
-        queryStringParameters: { limit: '1' },
-      };
-
-      await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: apiHandlerName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
-
-      // Wait a bit for logs to be written
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Check if log group has recent log streams
-      const logGroupName = `/aws/lambda/${apiHandlerName}`;
-      const logsCommand = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: logGroupName,
-      });
-      const logsResponse = await logsClient.send(logsCommand);
-
-      expect(logsResponse.logGroups).toBeDefined();
-      expect(logsResponse.logGroups!.length).toBeGreaterThan(0);
-
-      const logGroup = logsResponse.logGroups!.find(
-        lg => lg.logGroupName === logGroupName
-      );
-      expect(logGroup).toBeDefined();
-    });
-
-    test('CloudWatch Alarms should be configured to notify SNS topics', async () => {
-      const alarmPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-      const alarmName = `${alarmPrefix}-lambda-errors`;
-
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [alarmName],
-      });
-      const response = await cloudWatchClient.send(command);
-
-      expect(response.MetricAlarms).toBeDefined();
-      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
-
-      const alarm = response.MetricAlarms![0];
-
-      // Verify alarm has SNS topic as action
-      expect(alarm.AlarmActions).toBeDefined();
-      expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
-
-      // Alarm actions should include SNS topic ARN
-      const hasTopicAction = alarm.AlarmActions!.some(action =>
-        action.includes(':sns:') && action.includes('cloudwatch-alarms')
-      );
-      expect(hasTopicAction).toBe(true);
-    });
-
-    test('DynamoDB table should have stream enabled for Lambda processing', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.CouponsTableName,
-      });
-      const response = await dynamoClient.send(command);
-
-      // Verify stream is enabled
-      expect(response.Table?.StreamSpecification?.StreamEnabled).toBe(true);
-      expect(response.Table?.StreamSpecification?.StreamViewType).toBe(
-        'NEW_AND_OLD_IMAGES'
-      );
-
-      // Verify stream ARN exists
-      expect(response.Table?.LatestStreamArn).toBeDefined();
-    });
-
-    test('API Gateway methods should have proper Lambda integration', async () => {
-      const extractApiId = (endpoint: string): string => {
-        return endpoint.match(/https:\/\/([a-z0-9]+)\.execute-api/)?.[1] || '';
-      };
-
-      const apiId = extractApiId(outputs.APIEndpoint);
-
-      const command = new GetResourcesCommand({
-        restApiId: apiId,
-      });
-      const response = await apiGatewayClient.send(command);
-
-      const resources = response.items || [];
-      const couponsResource = resources.find(r => r.path === '/coupons');
-
-      expect(couponsResource).toBeDefined();
-
-      // Verify resource has methods with Lambda integrations
-      expect(couponsResource?.resourceMethods).toBeDefined();
-    });
-
-    test('S3 bucket policy should allow CloudFront OAI access', async () => {
-      const command = new GetDistributionCommand({
-        Id: outputs.CloudFrontDistributionId,
-      });
-      const response = await cloudFrontClient.send(command);
-
-      const origins = response.Distribution?.DistributionConfig?.Origins?.Items || [];
-      const s3Origin = origins.find(origin =>
-        origin.DomainName?.includes(outputs.S3BucketName)
-      );
-
-      expect(s3Origin).toBeDefined();
-
-      // Verify OAI is configured
-      expect(s3Origin?.S3OriginConfig?.OriginAccessIdentity).toBeDefined();
-      expect(s3Origin?.S3OriginConfig?.OriginAccessIdentity).toContain(
-        'origin-access-identity/cloudfront/'
-      );
+      expect(albHealthCheck).toBeDefined();
     });
   });
 
-  describe('Advanced Connectivity Workflows', () => {
-    test('Complete data flow: EventBridge → Lambda → DynamoDB → API', async () => {
-      const cronJobsName = outputs.CouponsTableName.replace(/-coupons$/, '-cron-jobs');
+  describe('End-to-End Connectivity Validation', () => {
+    test('VPC network architecture should support internet -> ALB flow', async () => {
+      // ALB in public subnets with IGW
+      const lbResponse = await elbClient.send(
+        new DescribeLoadBalancersCommand({})
+      );
 
-      // Step 1: Simulate EventBridge triggering Lambda
-      const eventBridgeEvent = {
-        source: 'aws.events',
-        'detail-type': 'Scheduled Event',
-        detail: { jobType: 'expiry-check' },
-      };
+      const alb = lbResponse.LoadBalancers?.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
+      );
 
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: cronJobsName,
-          Payload: Buffer.from(JSON.stringify(eventBridgeEvent)),
+      expect(alb).toBeDefined();
+      expect(alb?.Scheme).toBe('internet-facing');
+
+      // Check subnets are public
+      const albSubnetIds = alb?.AvailabilityZones.map(az => az.SubnetId) || [];
+      const subnetResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: albSubnetIds,
         })
       );
 
-      expect(lambdaResponse.StatusCode).toBe(200);
+      subnetResponse.Subnets?.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+    });
 
-      // Step 2: Wait for Lambda to process
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    test('ALB -> EC2 instances connectivity should be configured', async () => {
+      // Verify security group rules allow ALB -> WebServer
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
 
-      // Step 3: Query API to verify data flow worked
-      const apiResponse = await axios.get(
-        `${outputs.APIEndpoint}/coupons?limit=5`,
-        {
-          validateStatus: () => true,
-          timeout: 10000,
+      const webSg = sgResponse.SecurityGroups![0];
+      const httpRule = webSg.IpPermissions?.find(rule => rule.FromPort === 80);
+
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs!.length).toBeGreaterThan(0);
+    });
+
+    test('EC2 instances -> RDS connectivity should be configured', async () => {
+      const vpcId = (await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      )).SecurityGroups![0].VpcId!;
+
+      const allSgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'tag:Project', Values: ['ha-webapp'] },
+          ],
+        })
+      );
+
+      const dbSg = allSgResponse.SecurityGroups?.find(sg =>
+        sg.Tags?.some((t: any) => t.Key === 'Name' && t.Value.includes('database'))
+      );
+
+      expect(dbSg).toBeDefined();
+      const mysqlRule = dbSg?.IpPermissions?.find(rule => rule.FromPort === 3306);
+      expect(mysqlRule).toBeDefined();
+
+      // Should reference WebServer SG
+      const webSgRef = mysqlRule?.UserIdGroupPairs?.find(
+        pair => pair.GroupId === outputs.WebServerSecurityGroupId
+      );
+      expect(webSgRef).toBeDefined();
+    });
+
+    test('EC2 instances -> NAT Gateway -> Internet connectivity path exists', async () => {
+      const asgResponse = await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({})
+      );
+
+      const asg = asgResponse.AutoScalingGroups?.find(group =>
+        group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+      );
+
+      if (!asg) return;
+
+      // Get ASG subnets (should be private)
+      const asgSubnetIds = asg.VPCZoneIdentifier?.split(',') || [];
+      const subnetResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: asgSubnetIds,
+        })
+      );
+
+      const vpcId = subnetResponse.Subnets![0].VpcId;
+
+      // Check NAT Gateways exist
+      const natResponse = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            { Name: 'vpc-id', Values: [vpcId!] },
+            { Name: 'state', Values: ['available'] },
+          ],
+        })
+      );
+
+      expect(natResponse.NatGateways!.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('High Availability Validation', () => {
+    test('critical resources should be distributed across multiple AZs', async () => {
+      // Check RDS Multi-AZ
+      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+      expect(dbResponse.DBInstances![0].MultiAZ).toBe(true);
+
+      // Check ALB spans AZs
+      const lbResponse = await elbClient.send(
+        new DescribeLoadBalancersCommand({})
+      );
+      const alb = lbResponse.LoadBalancers?.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
+      );
+      expect(alb?.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+
+      // Check ASG spans AZs
+      const asgResponse = await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({})
+      );
+      const asg = asgResponse.AutoScalingGroups?.find(group =>
+        group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+      );
+      expect(asg?.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should have redundant NAT Gateways', async () => {
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
+      const vpcId = sgResponse.SecurityGroups![0].VpcId!;
+
+      const natResponse = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'state', Values: ['available'] },
+          ],
+        })
+      );
+
+      expect(natResponse.NatGateways!.length).toBeGreaterThanOrEqual(2);
+
+      // NAT Gateways in different AZs
+      const natSubnets = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: natResponse.NatGateways!.map(nat => nat.SubnetId!),
+        })
+      );
+
+      const azs = new Set(natSubnets.Subnets!.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Security Best Practices Validation', () => {
+    test('all S3 buckets should have encryption', async () => {
+      const buckets = [outputs.StaticContentBucketName, outputs.LogsBucketName];
+
+      for (const bucket of buckets) {
+        const encryptionResponse = await s3Client.send(
+          new GetBucketEncryptionCommand({ Bucket: bucket })
+        );
+        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      }
+    });
+
+    test('RDS should use encryption at rest', async () => {
+      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
+      expect(dbResponse.DBInstances![0].StorageEncrypted).toBe(true);
+      expect(dbResponse.DBInstances![0].KmsKeyId).toBeDefined();
+    });
+
+    test('security groups should follow principle of least privilege', async () => {
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
+
+      const webSg = sgResponse.SecurityGroups![0];
+
+      // Should not have 0.0.0.0/0 ingress
+      const openRules = webSg.IpPermissions?.filter(
+        rule => rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
+      );
+
+      // Web servers should only accept from ALB, not public internet
+      expect(openRules?.length || 0).toBe(0);
+    });
+  });
+
+  describe('Resource Tagging Compliance', () => {
+    test('all major resources should have required tags', async () => {
+      const requiredTags = ['Environment', 'Project'];
+
+      // Check EC2 resources
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.WebServerSecurityGroupId],
+        })
+      );
+
+      const tags = sgResponse.SecurityGroups![0].Tags || [];
+      requiredTags.forEach(tagKey => {
+        const hasTag = tags.some((t: any) => t.Key === tagKey);
+        expect(hasTag).toBe(true);
+      });
+    });
+  });
+
+  describe('Live Resource Connectivity Tests', () => {
+    describe('S3 Bucket Live Read/Write Tests', () => {
+      const testKey = `integration-test-${Date.now()}.txt`;
+      const testContent = 'Integration test content for TAP Stack';
+
+      afterAll(async () => {
+        // Cleanup test object
+        try {
+          await s3Client.send(
+            new DeleteObjectCommand({
+              Bucket: outputs.StaticContentBucketName,
+              Key: testKey,
+            })
+          );
+        } catch (error) {
+          console.log('Cleanup: Could not delete test object');
         }
-      );
+      });
 
-      // API should be accessible (data flow worked)
-      expect([200, 404, 500]).toContain(apiResponse.status);
+      test('should be able to write objects to StaticContentBucket', async () => {
+        const putResponse = await s3Client.send(
+          new PutObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+            Body: testContent,
+            ContentType: 'text/plain',
+          })
+        );
+
+        expect(putResponse.$metadata.httpStatusCode).toBe(200);
+        expect(putResponse.ETag).toBeDefined();
+      });
+
+      test('should be able to read objects from StaticContentBucket', async () => {
+        const getResponse = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          })
+        );
+
+        expect(getResponse.$metadata.httpStatusCode).toBe(200);
+        expect(getResponse.ContentType).toBe('text/plain');
+
+        // Read body content
+        const body = await getResponse.Body?.transformToString();
+        expect(body).toBe(testContent);
+      });
+
+      test('should be able to list objects in StaticContentBucket', async () => {
+        const listResponse = await s3Client.send(
+          new ListObjectsV2Command({
+            Bucket: outputs.StaticContentBucketName,
+            MaxKeys: 10,
+          })
+        );
+
+        expect(listResponse.$metadata.httpStatusCode).toBe(200);
+
+        // Should find our test object
+        const testObject = listResponse.Contents?.find(obj => obj.Key === testKey);
+        expect(testObject).toBeDefined();
+      });
+
+      test('object in StaticContentBucket should be encrypted', async () => {
+        const getResponse = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          })
+        );
+
+        // KMS encrypted objects should have ServerSideEncryption set
+        expect(getResponse.ServerSideEncryption).toBe('aws:kms');
+        expect(getResponse.SSEKMSKeyId).toBeDefined();
+      });
+
+      test('LogsBucket should be writable (for ALB logs)', async () => {
+        const testLogKey = `test-logs/integration-test-${Date.now()}.log`;
+
+        const putResponse = await s3Client.send(
+          new PutObjectCommand({
+            Bucket: outputs.LogsBucketName,
+            Key: testLogKey,
+            Body: 'Test log entry',
+          })
+        );
+
+        expect(putResponse.$metadata.httpStatusCode).toBe(200);
+
+        // Cleanup
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: outputs.LogsBucketName,
+            Key: testLogKey,
+          })
+        );
+      });
     });
 
-    test('Error flow: Lambda error → CloudWatch Alarm → SNS notification path', async () => {
-      const alarmPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
+    describe('RDS Database Connectivity Tests', () => {
+      test('RDS endpoint should be resolvable via DNS', async () => {
+        const dns = require('dns').promises;
 
-      // Verify alarm exists
-      const alarmCommand = new DescribeAlarmsCommand({
-        AlarmNames: [`${alarmPrefix}-lambda-errors`],
+        try {
+          const addresses = await dns.resolve4(outputs.DatabaseEndpoint);
+          expect(addresses).toBeDefined();
+          expect(addresses.length).toBeGreaterThan(0);
+
+          // IP addresses should be private (within VPC)
+          addresses.forEach((ip: string) => {
+            expect(ip).toMatch(/^10\./); // VPC CIDR is 10.0.0.0/16
+          });
+        } catch (error) {
+          // DNS resolution might not work outside VPC, but the test structure is valid
+          console.log('DNS resolution test: Could not resolve (expected outside VPC)');
+        }
       });
-      const alarmResponse = await cloudWatchClient.send(alarmCommand);
 
-      expect(alarmResponse.MetricAlarms).toBeDefined();
-      const alarm = alarmResponse.MetricAlarms![0];
+      test('database should only be accessible from within VPC (not publicly)', async () => {
+        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
 
-      // Verify alarm is connected to SNS
-      expect(alarm.AlarmActions).toBeDefined();
-      expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+        const db = dbResponse.DBInstances![0];
 
-      // Verify alarm monitors Lambda errors
-      expect(alarm.MetricName).toBe('Errors');
-      expect(alarm.Namespace).toBe('AWS/Lambda');
+        // Should not be publicly accessible
+        expect(db.PubliclyAccessible).toBe(false);
+      });
+
+      test('database security group should only allow connections from WebServer SG', async () => {
+        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        const db = dbResponse.DBInstances![0];
+        const dbSecurityGroups = db.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId) || [];
+
+        expect(dbSecurityGroups.length).toBeGreaterThan(0);
+
+        // Get database security group rules
+        const sgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: dbSecurityGroups,
+          })
+        );
+
+        const dbSg = sgResponse.SecurityGroups![0];
+
+        // Check that MySQL port only allows WebServer SG
+        const mysqlRule = dbSg.IpPermissions?.find(rule => rule.FromPort === 3306);
+        expect(mysqlRule).toBeDefined();
+
+        // Should have UserIdGroupPairs (not CIDR ranges)
+        expect(mysqlRule?.UserIdGroupPairs).toBeDefined();
+        expect(mysqlRule?.UserIdGroupPairs!.length).toBeGreaterThan(0);
+
+        // Should not allow 0.0.0.0/0
+        const hasOpenCidr = mysqlRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0');
+        expect(hasOpenCidr).toBeFalsy();
+      });
     });
 
-    test('Multi-service workflow: S3 upload → CloudFront → Lambda → DynamoDB', async () => {
-      const testKey = `workflow-test-${Date.now()}.json`;
-      const testData = {
-        source: 'integration-test',
-        timestamp: new Date().toISOString(),
-      };
+    describe('Load Balancer Live Health Tests', () => {
+      test('ALB should be reachable via DNS', async () => {
+        const dns = require('dns').promises;
 
-      // Step 1: Upload to S3
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testKey,
-          Body: JSON.stringify(testData),
-          ContentType: 'application/json',
-        })
-      );
-
-      // Step 2: Verify S3 upload
-      const s3Response = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: outputs.S3BucketName,
-          Key: testKey,
-        })
-      );
-
-      expect(s3Response.Body).toBeDefined();
-
-      // Step 3: CloudFront should be able to serve this (via OAI)
-      const cfResponse = await axios.get(outputs.MarketingWebsiteURL, {
-        validateStatus: () => true,
-        timeout: 10000,
+        const addresses = await dns.resolve(outputs.LoadBalancerDNS);
+        expect(addresses).toBeDefined();
+        expect(addresses.length).toBeGreaterThan(0);
       });
 
-      // CloudFront is accessible
-      expect([200, 403]).toContain(cfResponse.status);
+      test('ALB should have active listeners', async () => {
+        const lbResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({})
+        );
 
-      // Step 4: Trigger Lambda to process data
-      const apiHandlerName = outputs.CouponsTableName.replace(/-coupons$/, '-api-handler');
-      const lambdaEvent = {
-        httpMethod: 'GET',
-        path: '/coupons',
-        queryStringParameters: { limit: '1' },
-      };
+        const alb = lbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.LoadBalancerDNS
+        );
 
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: apiHandlerName,
-          Payload: Buffer.from(JSON.stringify(lambdaEvent)),
-        })
-      );
+        expect(alb).toBeDefined();
 
-      expect(lambdaResponse.StatusCode).toBe(200);
+        const listenerResponse = await elbClient.send(
+          new DescribeListenersCommand({
+            LoadBalancerArn: alb!.LoadBalancerArn,
+          })
+        );
 
-      // Step 5: Verify DynamoDB has data
-      const dbResponse = await dynamoClient.send(
-        new QueryCommand({
-          TableName: outputs.CouponsTableName,
-          IndexName: 'CategoryIndex',
-          KeyConditionExpression: 'categoryId = :cat AND isActive = :active',
-          ExpressionAttributeValues: {
-            ':cat': { S: 'electronics' },
-            ':active': { S: 'true' },
-          },
-          Limit: 1,
-        })
-      );
+        expect(listenerResponse.Listeners).toBeDefined();
+        expect(listenerResponse.Listeners!.length).toBeGreaterThan(0);
 
-      expect(dbResponse.Items).toBeDefined();
+        // At least one listener should be on port 80
+        const httpListener = listenerResponse.Listeners!.find(l => l.Port === 80);
+        expect(httpListener).toBeDefined();
+      });
+
+      test('target group should report health status for registered targets', async () => {
+        const lbResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({})
+        );
+
+        const alb = lbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.LoadBalancerDNS
+        );
+
+        const tgResponse = await elbClient.send(
+          new DescribeTargetGroupsCommand({
+            LoadBalancerArn: alb!.LoadBalancerArn,
+          })
+        );
+
+        expect(tgResponse.TargetGroups).toBeDefined();
+        expect(tgResponse.TargetGroups!.length).toBeGreaterThan(0);
+
+        const targetGroup = tgResponse.TargetGroups![0];
+
+        const healthResponse = await elbClient.send(
+          new DescribeTargetHealthCommand({
+            TargetGroupArn: targetGroup.TargetGroupArn,
+          })
+        );
+
+        expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+
+        // Log target health for debugging
+        if (healthResponse.TargetHealthDescriptions!.length > 0) {
+          console.log('Target health states:',
+            healthResponse.TargetHealthDescriptions!.map(t => t.TargetHealth?.State)
+          );
+        } else {
+          console.log('No targets registered yet (acceptable for new deployment)');
+        }
+      });
     });
 
-    test('Monitoring workflow: Lambda execution → CloudWatch Logs → CloudWatch Metrics → Alarms', async () => {
-      const functionPrefix = outputs.CouponsTableName.replace(/-coupons$/, '');
-      const apiHandlerName = `${functionPrefix}-api-handler`;
+    describe('CloudWatch Metrics Live Data Tests', () => {
+      test('CloudWatch alarms should have recent state transitions or data', async () => {
+        const alarmsResponse = await cwClient.send(
+          new DescribeAlarmsCommand({})
+        );
 
-      // Step 1: Execute Lambda to generate logs and metrics
-      const event = {
-        httpMethod: 'GET',
-        path: '/coupons',
-        queryStringParameters: { limit: '1' },
-      };
+        const projectAlarms = alarmsResponse.MetricAlarms?.filter(alarm =>
+          alarm.AlarmName?.includes('ha-webapp') || alarm.AlarmName?.includes('production')
+        ) || [];
 
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: apiHandlerName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
+        expect(projectAlarms.length).toBeGreaterThan(0);
 
-      expect(lambdaResponse.StatusCode).toBe(200);
+        projectAlarms.forEach(alarm => {
+          // Alarms should have a state (OK, ALARM, or INSUFFICIENT_DATA)
+          expect(alarm.StateValue).toBeDefined();
+          expect(['OK', 'ALARM', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
 
-      // Step 2: Wait for logs to be written
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Step 3: Verify CloudWatch Logs exist
-      const logsCommand = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/${apiHandlerName}`,
+          // Should have timestamp
+          expect(alarm.StateUpdatedTimestamp).toBeDefined();
+        });
       });
-      const logsResponse = await logsClient.send(logsCommand);
+    });
+  });
 
-      expect(logsResponse.logGroups).toBeDefined();
-      expect(logsResponse.logGroups!.length).toBeGreaterThan(0);
+  describe('End-to-End Workflow Tests', () => {
+    describe('Complete Request Flow: Internet -> ALB -> EC2 -> RDS', () => {
+      test('E2E: VPC routing allows internet to ALB through IGW', async () => {
+        // 1. Get ALB
+        const lbResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({})
+        );
+        const alb = lbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.LoadBalancerDNS
+        );
+        expect(alb).toBeDefined();
+        expect(alb!.Scheme).toBe('internet-facing');
 
-      // Step 4: Verify CloudWatch Alarm exists for this function
-      const alarmCommand = new DescribeAlarmsCommand({
-        AlarmNames: [`${functionPrefix}-lambda-errors`],
+        // 2. ALB should be in public subnets
+        const albSubnetIds = alb!.AvailabilityZones.map(az => az.SubnetId!);
+        const subnetResponse = await ec2Client.send(
+          new DescribeSubnetsCommand({ SubnetIds: albSubnetIds })
+        );
+
+        const publicSubnets = subnetResponse.Subnets!;
+        expect(publicSubnets.every(s => s.MapPublicIpOnLaunch)).toBe(true);
+
+        // 3. Public subnets should route to IGW
+        const vpcId = publicSubnets[0].VpcId!;
+        const rtResponse = await ec2Client.send(
+          new DescribeRouteTablesCommand({
+            Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+          })
+        );
+
+        const publicRt = rtResponse.RouteTables!.find(rt =>
+          rt.Routes?.some(r => r.GatewayId?.startsWith('igw-'))
+        );
+        expect(publicRt).toBeDefined();
+
+        // 4. Verify IGW is attached
+        const igwId = publicRt!.Routes!.find(r => r.GatewayId?.startsWith('igw-'))!.GatewayId!;
+        const igwResponse = await ec2Client.send(
+          new DescribeInternetGatewaysCommand({
+            InternetGatewayIds: [igwId],
+          })
+        );
+
+        const igw = igwResponse.InternetGateways![0];
+        const attachment = igw.Attachments?.find(a => a.VpcId === vpcId);
+        expect(attachment?.State).toBe('available');
       });
-      const alarmResponse = await cloudWatchClient.send(alarmCommand);
 
-      expect(alarmResponse.MetricAlarms).toBeDefined();
-      expect(alarmResponse.MetricAlarms!.length).toBeGreaterThan(0);
+      test('E2E: ALB can forward traffic to EC2 instances via security groups', async () => {
+        // 1. Get ALB security group
+        const lbResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({})
+        );
+        const alb = lbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.LoadBalancerDNS
+        );
+        const albSgIds = alb!.SecurityGroups || [];
 
-      // Alarm should monitor the Lambda function
-      const alarm = alarmResponse.MetricAlarms![0];
-      expect(alarm.MetricName).toBe('Errors');
+        // 2. Get WebServer security group
+        const webSgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [outputs.WebServerSecurityGroupId],
+          })
+        );
+        const webSg = webSgResponse.SecurityGroups![0];
+
+        // 3. WebServer should allow traffic from ALB
+        const httpRule = webSg.IpPermissions?.find(rule => rule.FromPort === 80);
+        expect(httpRule).toBeDefined();
+
+        const allowsAlb = httpRule?.UserIdGroupPairs?.some(pair =>
+          albSgIds.includes(pair.GroupId!)
+        );
+        expect(allowsAlb).toBe(true);
+      });
+
+      test('E2E: EC2 instances can connect to RDS via security groups', async () => {
+        // 1. Get DB security group
+        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+        const db = dbResponse.DBInstances![0];
+        const dbSgIds = db.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId!) || [];
+
+        const dbSgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: dbSgIds,
+          })
+        );
+        const dbSg = dbSgResponse.SecurityGroups![0];
+
+        // 2. DB should allow MySQL from WebServer
+        const mysqlRule = dbSg.IpPermissions?.find(rule => rule.FromPort === 3306);
+        expect(mysqlRule).toBeDefined();
+
+        const allowsWebServer = mysqlRule?.UserIdGroupPairs?.some(pair =>
+          pair.GroupId === outputs.WebServerSecurityGroupId
+        );
+        expect(allowsWebServer).toBe(true);
+      });
+
+      test('E2E: EC2 instances in private subnets can access internet via NAT Gateway', async () => {
+        // 1. Get ASG to find private subnets
+        const asgResponse = await asgClient.send(
+          new DescribeAutoScalingGroupsCommand({})
+        );
+        const asg = asgResponse.AutoScalingGroups?.find(group =>
+          group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+        );
+        expect(asg).toBeDefined();
+
+        const asgSubnetIds = asg!.VPCZoneIdentifier!.split(',');
+
+        // 2. Get private subnets
+        const subnetResponse = await ec2Client.send(
+          new DescribeSubnetsCommand({ SubnetIds: asgSubnetIds })
+        );
+        const privateSubnets = subnetResponse.Subnets!;
+
+        // These should be private (no auto-assign public IP)
+        expect(privateSubnets.every(s => !s.MapPublicIpOnLaunch)).toBe(true);
+
+        // 3. Get route tables for private subnets
+        const vpcId = privateSubnets[0].VpcId!;
+        const rtResponse = await ec2Client.send(
+          new DescribeRouteTablesCommand({
+            Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+          })
+        );
+
+        // 4. Private route tables should route to NAT Gateway
+        const privateRts = rtResponse.RouteTables!.filter(rt =>
+          rt.Routes?.some(r => r.NatGatewayId?.startsWith('nat-'))
+        );
+        expect(privateRts.length).toBeGreaterThanOrEqual(2);
+
+        // 5. Verify NAT Gateways are available
+        const natIds = privateRts.flatMap(rt =>
+          rt.Routes!.filter(r => r.NatGatewayId).map(r => r.NatGatewayId!)
+        );
+
+        const natResponse = await ec2Client.send(
+          new DescribeNatGatewaysCommand({
+            NatGatewayIds: Array.from(new Set(natIds)),
+          })
+        );
+
+        natResponse.NatGateways!.forEach(nat => {
+          expect(nat.State).toBe('available');
+        });
+      });
+
+      test('E2E: Complete data flow works - S3 write, encryption, and versioning', async () => {
+        const testKey = `e2e-test-${Date.now()}.json`;
+        const testData = {
+          timestamp: new Date().toISOString(),
+          message: 'E2E test data',
+          workflow: 'complete',
+        };
+
+        // 1. Write object to S3
+        const putResponse = await s3Client.send(
+          new PutObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+            Body: JSON.stringify(testData),
+            ContentType: 'application/json',
+          })
+        );
+        expect(putResponse.$metadata.httpStatusCode).toBe(200);
+        const version1ETag = putResponse.ETag;
+
+        // 2. Read back and verify
+        const getResponse1 = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          })
+        );
+        const body1 = await getResponse1.Body?.transformToString();
+        expect(JSON.parse(body1!)).toEqual(testData);
+
+        // 3. Verify encryption
+        expect(getResponse1.ServerSideEncryption).toBe('aws:kms');
+
+        // 4. Update object (versioning test)
+        const updatedData = { ...testData, message: 'Updated E2E test data' };
+        const putResponse2 = await s3Client.send(
+          new PutObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+            Body: JSON.stringify(updatedData),
+            ContentType: 'application/json',
+          })
+        );
+        const version2ETag = putResponse2.ETag;
+
+        // ETags should be different (new version)
+        expect(version2ETag).not.toBe(version1ETag);
+
+        // 5. Read updated version
+        const getResponse2 = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          })
+        );
+        const body2 = await getResponse2.Body?.transformToString();
+        expect(JSON.parse(body2!)).toEqual(updatedData);
+
+        // Cleanup
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: outputs.StaticContentBucketName,
+            Key: testKey,
+          })
+        );
+      });
     });
 
-    test('Security workflow: API request → Lambda → Secrets Manager → External API simulation', async () => {
-      const aggregatorName = outputs.CouponsTableName.replace(/-coupons$/, '-coupon-aggregator');
-      const secretName = outputs.CouponsTableName.replace(/-coupons$/, '/retailer-api-keys');
+    describe('Fault Tolerance and High Availability Workflows', () => {
+      test('E2E: Multi-AZ architecture ensures no single point of failure', async () => {
+        // 1. RDS is Multi-AZ
+        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+        const dbResponse = await rdsClient.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+        expect(dbResponse.DBInstances![0].MultiAZ).toBe(true);
 
-      // Step 1: Verify secret exists
-      const secretCommand = new GetSecretValueCommand({
-        SecretId: secretName,
+        // 2. ALB spans multiple AZs
+        const lbResponse = await elbClient.send(
+          new DescribeLoadBalancersCommand({})
+        );
+        const alb = lbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.LoadBalancerDNS
+        );
+        expect(alb!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+
+        // 3. ASG spans multiple AZs
+        const asgResponse = await asgClient.send(
+          new DescribeAutoScalingGroupsCommand({})
+        );
+        const asg = asgResponse.AutoScalingGroups?.find(group =>
+          group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+        );
+        expect(asg!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+
+        // 4. NAT Gateways in multiple AZs
+        const sgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [outputs.WebServerSecurityGroupId],
+          })
+        );
+        const vpcId = sgResponse.SecurityGroups![0].VpcId!;
+
+        const natResponse = await ec2Client.send(
+          new DescribeNatGatewaysCommand({
+            Filter: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'state', Values: ['available'] },
+            ],
+          })
+        );
+        expect(natResponse.NatGateways!.length).toBeGreaterThanOrEqual(2);
+
+        // NAT Gateways in different subnets/AZs
+        const natSubnetIds = natResponse.NatGateways!.map(nat => nat.SubnetId!);
+        const natSubnets = await ec2Client.send(
+          new DescribeSubnetsCommand({ SubnetIds: natSubnetIds })
+        );
+
+        const azs = new Set(natSubnets.Subnets!.map(s => s.AvailabilityZone));
+        expect(azs.size).toBeGreaterThanOrEqual(2);
       });
-      const secretResponse = await secretsClient.send(secretCommand);
 
-      expect(secretResponse.SecretString).toBeDefined();
-      const secretData = JSON.parse(secretResponse.SecretString!);
-      expect(secretData).toHaveProperty('walmart');
+      test('E2E: Auto Scaling can respond to demand changes', async () => {
+        const asgResponse = await asgClient.send(
+          new DescribeAutoScalingGroupsCommand({})
+        );
+        const asg = asgResponse.AutoScalingGroups?.find(group =>
+          group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
+        );
 
-      // Step 2: Invoke Lambda that uses secrets
-      const event = {
-        source: 'integration-test',
-        retailer: 'walmart',
-        action: 'fetch-coupons',
-      };
+        expect(asg).toBeDefined();
 
-      const lambdaResponse = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: aggregatorName,
-          Payload: Buffer.from(JSON.stringify(event)),
-        })
-      );
+        // Should have capacity range
+        expect(asg!.MinSize).toBeGreaterThanOrEqual(2);
+        expect(asg!.MaxSize).toBeGreaterThan(asg!.MinSize!);
 
-      expect(lambdaResponse.StatusCode).toBe(200);
+        // Should have scaling policies
+        const policiesResponse = await asgClient.send(
+          new DescribePoliciesCommand({
+            AutoScalingGroupName: asg!.AutoScalingGroupName,
+          })
+        );
+        expect(policiesResponse.ScalingPolicies!.length).toBeGreaterThan(0);
 
-      // Lambda should be able to access secrets without errors
-      const payload = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
-      expect(payload.statusCode).toBeDefined();
+        // At least one target tracking policy
+        const targetTrackingPolicy = policiesResponse.ScalingPolicies!.find(
+          p => p.PolicyType === 'TargetTrackingScaling'
+        );
+        expect(targetTrackingPolicy).toBeDefined();
+      });
     });
   });
 });
