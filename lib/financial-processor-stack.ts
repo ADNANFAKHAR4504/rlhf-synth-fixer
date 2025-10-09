@@ -695,6 +695,9 @@ export class FinancialProcessorStack extends TerraformStack {
           filter: {
             prefix: '',
           },
+          deleteMarkerReplication: {
+            status: 'Enabled',
+          },
           destination: {
             bucket: secondaryBucket.arn,
             storageClass: 'STANDARD_IA',
