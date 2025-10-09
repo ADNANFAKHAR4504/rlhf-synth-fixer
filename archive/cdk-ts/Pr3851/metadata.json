@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "68172439",
+  "team": "synth",
+  "startedAt": "2025-10-08T15:31:23+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Kinesis Data Streams",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SageMaker",
+    "CloudWatch",
+    "EventBridge",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

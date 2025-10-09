@@ -1,0 +1,775 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Lead Scoring Pipeline Infrastructure",
+  "Parameters": {
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for high-score lead notifications",
+      "Default": "sales-team@company.com"
+    }
+  },
+  "Resources": {
+    "ModelArtifactsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "lead-scoring-models-synth59183624-1759502912-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LeadsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "lead-scores-synth59183624",
+        "BillingMode": "PAY_PER_REQUEST",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "leadId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "leadId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "HighScoreTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "high-score-leads-synth59183624",
+        "DisplayName": "High Score Lead Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LeadScoringSecrets": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "lead-scoring-config-synth59183624",
+        "Description": "Configuration for SageMaker endpoint and external API keys",
+        "SecretString": {
+          "Fn::Sub": "{\"sagemakerEndpoint\":\"xgboost-endpoint-${AWS::AccountId}\",\"enrichmentApiKey\":\"demo-api-key-12345\",\"scoringThreshold\":80,\"batchSize\":100}"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LeadEventBus": {
+      "Type": "AWS::Events::EventBus",
+      "Properties": {
+        "Name": "lead-routing-synth59183624",
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "HighValueLeadRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "high-value-leads-synth59183624",
+        "Description": "Routes leads with score > 80 to senior sales",
+        "EventBusName": {
+          "Ref": "LeadEventBus"
+        },
+        "EventPattern": {
+          "source": [
+            "lead.scoring"
+          ],
+          "detail-type": [
+            "Lead Scored"
+          ],
+          "detail": {
+            "score": [
+              {
+                "numeric": [
+                  ">",
+                  80
+                ]
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "LeadRoutingLogGroup",
+                "Arn"
+              ]
+            },
+            "Id": "1"
+          }
+        ]
+      }
+    },
+    "VeryHighScoreRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": "very-high-score-alerts-synth59183624",
+        "Description": "Sends SNS alerts for leads with score > 95",
+        "EventBusName": {
+          "Ref": "LeadEventBus"
+        },
+        "EventPattern": {
+          "source": [
+            "lead.scoring"
+          ],
+          "detail-type": [
+            "Lead Scored"
+          ],
+          "detail": {
+            "score": [
+              {
+                "numeric": [
+                  ">",
+                  95
+                ]
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "HighScoreTopic"
+            },
+            "Id": "1"
+          }
+        ]
+      }
+    },
+    "BatchProcessingSchedulerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "scheduler.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SchedulerExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "BatchProcessingFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "BatchLeadProcessingSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "Name": "batch-lead-processing-synth59183624",
+        "Description": "Process queued leads in batches every 15 minutes",
+        "ScheduleExpression": "rate(15 minutes)",
+        "FlexibleTimeWindow": {
+          "Mode": "FLEXIBLE",
+          "MaximumWindowInMinutes": 5
+        },
+        "Target": {
+          "Arn": {
+            "Fn::GetAtt": [
+              "BatchProcessingFunction",
+              "Arn"
+            ]
+          },
+          "RoleArn": {
+            "Fn::GetAtt": [
+              "BatchProcessingSchedulerRole",
+              "Arn"
+            ]
+          },
+          "Input": "{\"action\":\"processQueuedLeads\",\"batchSize\":50}"
+        },
+        "State": "ENABLED"
+      }
+    },
+    "BatchProcessingFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "batch-lead-processing-synth59183624",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "BatchProcessingExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 512,
+        "Timeout": 60,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "LeadsTable"
+            },
+            "SECRET_ARN": {
+              "Ref": "LeadScoringSecrets"
+            },
+            "SCORING_FUNCTION_NAME": {
+              "Ref": "LeadScoringFunction"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime, timedelta\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb')\nlambda_client = boto3.client('lambda')\nsecrets_client = boto3.client('secretsmanager')\n\ndef get_config():\n    \"\"\"Retrieve configuration from Secrets Manager\"\"\"\n    try:\n        response = secrets_client.get_secret_value(\n            SecretId=os.environ['SECRET_ARN']\n        )\n        return json.loads(response['SecretString'])\n    except Exception as e:\n        logger.error(f'Failed to retrieve secrets: {str(e)}')\n        return {'batchSize': 50, 'scoringThreshold': 80}\n\ndef lambda_handler(event, context):\n    \"\"\"Process queued leads in batches\"\"\"\n    try:\n        config = get_config()\n        batch_size = event.get('batchSize', config.get('batchSize', 50))\n        \n        # Query DynamoDB for unprocessed leads\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        \n        # Scan for leads that need processing (simplified for demo)\n        response = table.scan(\n            Limit=batch_size,\n            FilterExpression='attribute_not_exists(processedAt)'\n        )\n        \n        items = response.get('Items', [])\n        logger.info(f'Found {len(items)} leads to process')\n        \n        processed_count = 0\n        error_count = 0\n        \n        for item in items:\n            try:\n                # Invoke scoring function for each lead\n                scoring_response = lambda_client.invoke(\n                    FunctionName=os.environ['SCORING_FUNCTION_NAME'],\n                    InvocationType='Event',\n                    Payload=json.dumps(item.get('leadData', {}))\n                )\n                \n                # Mark as processed\n                table.update_item(\n                    Key={\n                        'leadId': item['leadId'],\n                        'timestamp': item['timestamp']\n                    },\n                    UpdateExpression='SET processedAt = :now',\n                    ExpressionAttributeValues={\n                        ':now': int(datetime.now().timestamp())\n                    }\n                )\n                \n                processed_count += 1\n                \n            except Exception as e:\n                logger.error(f'Error processing lead {item.get(\"leadId\")}: {str(e)}')\n                error_count += 1\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'processed': processed_count,\n                'errors': error_count,\n                'total': len(items)\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f'Batch processing failed: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "BatchProcessingExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "BatchProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:Scan",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:GetItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LeadsTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LeadScoringFunction",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "LeadScoringSecrets"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LeadScoringPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LeadsTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "events:PutEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LeadEventBus",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "LeadScoringSecrets"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LeadScoringLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/lead-scoring-synth59183624",
+        "RetentionInDays": 7
+      }
+    },
+    "LeadRoutingLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/events/lead-routing-synth59183624",
+        "RetentionInDays": 7
+      }
+    },
+    "LeadScoringFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "lead-scoring-synth59183624",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {
+              "Ref": "LeadsTable"
+            },
+            "EVENT_BUS_NAME": {
+              "Ref": "LeadEventBus"
+            },
+            "SECRET_ARN": {
+              "Ref": "LeadScoringSecrets"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "import json\nimport boto3\nimport os\nimport time\nfrom datetime import datetime, timedelta\nimport hashlib\nimport logging\nimport random\nfrom decimal import Decimal\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndynamodb = boto3.resource('dynamodb', region_name='${AWS::Region}')\nevents = boto3.client('events', region_name='${AWS::Region}')\ncloudwatch = boto3.client('cloudwatch', region_name='${AWS::Region}')\nsecrets_client = boto3.client('secretsmanager', region_name='${AWS::Region}')\n\ndef get_config():\n    \"\"\"Retrieve configuration from Secrets Manager\"\"\"\n    try:\n        response = secrets_client.get_secret_value(\n            SecretId=os.environ['SECRET_ARN']\n        )\n        return json.loads(response['SecretString'])\n    except Exception as e:\n        logger.error(f'Failed to retrieve secrets: {str(e)}')\n        return {'scoringThreshold': 80, 'enrichmentApiKey': ''}\n\ndef calculate_mock_score(lead_data, config):\n    \"\"\"Calculate a mock score based on lead attributes and config\"\"\"\n    company_size = float(lead_data.get('companySize', 0))\n    engagement_metrics = float(lead_data.get('engagementMetrics', 0))\n    threshold = config.get('scoringThreshold', 80)\n    \n    # Mock scoring logic with threshold from config\n    base_score = min(100, (company_size / 1000) * 30 + engagement_metrics * 0.7)\n    \n    # Add some randomness for realistic variation\n    variation = random.uniform(-5, 5)\n    score = max(0, min(100, base_score + variation))\n    \n    return score\n\ndef lambda_handler(event, context):\n    try:\n        # Get configuration from Secrets Manager\n        config = get_config()\n        \n        # Parse request body\n        if 'body' in event:\n            lead_data = json.loads(event['body'])\n        else:\n            lead_data = event\n        \n        # Validate required fields\n        required_fields = ['companySize', 'industry', 'engagementMetrics']\n        for field in required_fields:\n            if field not in lead_data:\n                return {\n                    'statusCode': 400,\n                    'body': json.dumps({'error': f'Missing required field: {field}'})\n                }\n        \n        # Generate lead ID\n        lead_id = hashlib.md5(json.dumps(lead_data, sort_keys=True).encode()).hexdigest()\n        timestamp = int(time.time())\n        \n        # Check cache in DynamoDB\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        cache_response = table.get_item(\n            Key={'leadId': lead_id, 'timestamp': timestamp}\n        )\n        \n        if 'Item' in cache_response:\n            logger.info('Using cached score')\n            score = cache_response['Item']['score']\n        else:\n            # Calculate mock score with config (replace with SageMaker call when model is ready)\n            start_time = time.time()\n            score = calculate_mock_score(lead_data, config)\n            \n            # Calculate latency\n            latency = (time.time() - start_time) * 1000  # Convert to milliseconds\n            \n            # Store in DynamoDB with TTL\n            ttl = int(time.time() + 86400)  # 24 hours from now\n            table.put_item(\n                Item={\n                    'leadId': lead_id,\n                    'timestamp': timestamp,\n                    'score': Decimal(str(score)),\n                    'leadData': lead_data,\n                    'ttl': ttl,\n                    'configuredThreshold': Decimal(str(config.get('scoringThreshold', 80)))\n                }\n            )\n            \n            # Send metrics to CloudWatch\n            cloudwatch.put_metric_data(\n                Namespace='LeadScoring',\n                MetricData=[\n                    {\n                        'MetricName': 'ScoringLatency',\n                        'Value': latency,\n                        'Unit': 'Milliseconds'\n                    },\n                    {\n                        'MetricName': 'LeadScore',\n                        'Value': score,\n                        'Unit': 'None'\n                    }\n                ]\n            )\n        \n        # Publish event to EventBridge\n        events.put_events(\n            Entries=[\n                {\n                    'Source': 'lead.scoring',\n                    'DetailType': 'Lead Scored',\n                    'Detail': json.dumps({\n                        'leadId': lead_id,\n                        'score': score,\n                        'leadData': lead_data,\n                        'timestamp': timestamp\n                    }),\n                    'EventBusName': os.environ['EVENT_BUS_NAME']\n                }\n            ]\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'leadId': lead_id,\n                'score': score,\n                'cached': 'Item' in cache_response\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f'Error processing lead: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      },
+      "DependsOn": [
+        "LeadScoringLogGroup"
+      ]
+    },
+    "ApiGatewayRestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": "lead-scoring-api-synth59183624",
+        "Description": "API for lead data ingestion",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "ApiGatewayResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGatewayRestApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "score"
+      }
+    },
+    "ApiGatewayRequestValidator": {
+      "Type": "AWS::ApiGateway::RequestValidator",
+      "Properties": {
+        "Name": "RequestBodyValidator",
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ValidateRequestBody": true,
+        "ValidateRequestParameters": false
+      }
+    },
+    "ApiGatewayModel": {
+      "Type": "AWS::ApiGateway::Model",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ContentType": "application/json",
+        "Name": "LeadDataModel",
+        "Schema": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "title": "Lead Data",
+          "type": "object",
+          "properties": {
+            "companySize": {
+              "type": "number"
+            },
+            "industry": {
+              "type": "string"
+            },
+            "engagementMetrics": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "companySize",
+            "industry",
+            "engagementMetrics"
+          ]
+        }
+      }
+    },
+    "ApiGatewayMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "RequestValidatorId": {
+          "Ref": "ApiGatewayRequestValidator"
+        },
+        "RequestModels": {
+          "application/json": {
+            "Ref": "ApiGatewayModel"
+          }
+        },
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LeadScoringFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayUsagePlan": {
+      "Type": "AWS::ApiGateway::UsagePlan",
+      "Properties": {
+        "UsagePlanName": "lead-scoring-plan-synth59183624",
+        "Description": "Usage plan with throttling",
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "ApiGatewayRestApi"
+            },
+            "Stage": {
+              "Ref": "ApiGatewayStage"
+            },
+            "Throttle": {
+              "/score/POST": {
+                "RateLimit": 100,
+                "BurstLimit": 200
+              }
+            }
+          }
+        ],
+        "Throttle": {
+          "RateLimit": 100,
+          "BurstLimit": 200
+        }
+      }
+    },
+    "ApiGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "Description": "Production deployment"
+      },
+      "DependsOn": [
+        "ApiGatewayMethod"
+      ]
+    },
+    "ApiGatewayStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": "prod",
+        "RestApiId": {
+          "Ref": "ApiGatewayRestApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiGatewayDeployment"
+        },
+        "MethodSettings": [
+          {
+            "ResourcePath": "/score",
+            "HttpMethod": "POST",
+            "ThrottlingRateLimit": 100,
+            "ThrottlingBurstLimit": 200,
+            "MetricsEnabled": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "lead-scoring-system"
+          }
+        ]
+      }
+    },
+    "LambdaApiGatewayPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LeadScoringFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*"
+        }
+      }
+    },
+    "LatencyAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "lead-scoring-high-latency-synth59183624",
+        "AlarmDescription": "Alarm when scoring latency exceeds 3 seconds",
+        "MetricName": "ScoringLatency",
+        "Namespace": "LeadScoring",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 3000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ScoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": "lead-scoring-dashboard-synth59183624",
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"LeadScoring\", \"ScoringLatency\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Scoring Latency\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"LeadScoring\", \"LeadScore\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Average Lead Score\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Invocations\"\n      }\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpointUrl": {
+      "Description": "API Gateway endpoint URL for lead scoring",
+      "Value": {
+        "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/score"
+      }
+    },
+    "DashboardUrl": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ScoringDashboard}"
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "LeadsTable"
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for high-score alerts",
+      "Value": {
+        "Ref": "HighScoreTopic"
+      }
+    },
+    "SecretsManagerArn": {
+      "Description": "ARN of the Secrets Manager secret for configuration",
+      "Value": {
+        "Ref": "LeadScoringSecrets"
+      }
+    },
+    "BatchProcessingScheduleName": {
+      "Description": "Name of the EventBridge Scheduler for batch processing",
+      "Value": {
+        "Ref": "BatchLeadProcessingSchedule"
+      }
+    },
+    "BatchProcessingFunctionArn": {
+      "Description": "ARN of the Lambda function for batch processing",
+      "Value": {
+        "Fn::GetAtt": [
+          "BatchProcessingFunction",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

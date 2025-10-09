@@ -1,0 +1,1151 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure Global eBook Delivery System with S3, CloudFront, and KMS encryption",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "DomainName",
+                        "HostedZoneId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "KmsKeyAlias",
+                        "EnableLogging"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Cost Optimization"
+                    },
+                    "Parameters": [
+                        "EnableWAF",
+                        "EnableLifecyclePolicies"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "test",
+                "prod"
+            ],
+            "Description": "Environment name for resource naming and configuration"
+        },
+        "DomainName": {
+            "Type": "String",
+            "Description": "Custom domain name for eBook delivery (e.g., ebooks.publisher.com)",
+            "Default": ""
+        },
+        "HostedZoneId": {
+            "Type": "String",
+            "Description": "Route 53 Hosted Zone ID for the domain (leave empty if not using custom domain)",
+            "Default": ""
+        },
+        "KmsKeyAlias": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing KMS key alias (leave empty to create a new one)"
+        },
+        "EnableLogging": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable CloudFront and S3 access logging"
+        },
+        "EnableWAF": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable WAF for production environments"
+        },
+        "EnableLifecyclePolicies": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable S3 lifecycle policies for cost optimization"
+        }
+    },
+    "Conditions": {
+        "CreateKmsKey": {
+            "Fn::Equals": [
+                {
+                    "Ref": "KmsKeyAlias"
+                },
+                ""
+            ]
+        },
+        "EnableLoggingCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableLogging"
+                },
+                "true"
+            ]
+        },
+        "EnableWAFCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableWAF"
+                },
+                "true"
+            ]
+        },
+        "EnableLifecycleCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableLifecyclePolicies"
+                },
+                "true"
+            ]
+        },
+        "HasCustomDomain": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DomainName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasHostedZone": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "HostedZoneId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "EbooksS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "ebooks-storage-${Environment}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::If": [
+                                        "CreateKmsKey",
+                                        {
+                                            "Ref": "EbooksKmsKey"
+                                        },
+                                        {
+                                            "Fn::Sub": "alias/${KmsKeyAlias}"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Fn::If": [
+                        "EnableLifecycleCondition",
+                        {
+                            "Rules": [
+                                {
+                                    "Id": "TransitionOldVersions",
+                                    "Status": "Enabled",
+                                    "NoncurrentVersionExpirationInDays": 90,
+                                    "NoncurrentVersionTransitions": [
+                                        {
+                                            "TransitionInDays": 30,
+                                            "StorageClass": "STANDARD_IA"
+                                        },
+                                        {
+                                            "TransitionInDays": 60,
+                                            "StorageClass": "GLACIER"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "Fn::If": [
+                        "EnableLoggingCondition",
+                        {
+                            "DestinationBucketName": {
+                                "Ref": "LoggingBucket"
+                            },
+                            "LogFilePrefix": "s3-access-logs/"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "eBook-storage"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "EnableLoggingCondition",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "ebooks-logs-${Environment}-${AWS::AccountId}"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Access-logs"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EbooksKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Condition": "CreateKmsKey",
+            "Properties": {
+                "Description": "KMS key for eBook encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudFront to decrypt",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "eBook-encryption"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EbooksKmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Condition": "CreateKmsKey",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/ebooks-kms-${Environment}"
+                },
+                "TargetKeyId": {
+                    "Ref": "EbooksKmsKey"
+                }
+            }
+        },
+        "CloudFrontOAI": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": {
+                        "Fn::Sub": "OAI for eBook delivery ${Environment}"
+                    }
+                }
+            }
+        },
+        "EbooksS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "EbooksS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontOAI",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Sid": "DenyDirectAccess",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "EbooksS3Bucket",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EbooksCloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Enabled": true,
+                    "Comment": {
+                        "Fn::Sub": "eBook delivery distribution - ${Environment}"
+                    },
+                    "PriceClass": "PriceClass_All",
+                    "HttpVersion": "http2",
+                    "IPV6Enabled": true,
+                    "Origins": [
+                        {
+                            "Id": "S3-ebooks",
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "EbooksS3Bucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                                }
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3-ebooks",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "Compress": true,
+                        "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+                        "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf",
+                        "ResponseHeadersPolicyId": "5cc3b908-e619-4b99-88e5-2cf7f45965bd"
+                    },
+                    "CustomErrorResponses": [
+                        {
+                            "ErrorCode": 403,
+                            "ResponseCode": 403,
+                            "ResponsePagePath": "/error-403.html",
+                            "ErrorCachingMinTTL": 300
+                        },
+                        {
+                            "ErrorCode": 404,
+                            "ResponseCode": 404,
+                            "ResponsePagePath": "/error-404.html",
+                            "ErrorCachingMinTTL": 300
+                        }
+                    ],
+                    "Aliases": {
+                        "Fn::If": [
+                            "HasCustomDomain",
+                            [
+                                {
+                                    "Ref": "DomainName"
+                                }
+                            ],
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "ViewerCertificate": {
+                        "Fn::If": [
+                            "HasCustomDomain",
+                            {
+                                "AcmCertificateArn": {
+                                    "Ref": "SSLCertificate"
+                                },
+                                "SslSupportMethod": "sni-only",
+                                "MinimumProtocolVersion": "TLSv1.2_2021"
+                            },
+                            {
+                                "CloudFrontDefaultCertificate": true
+                            }
+                        ]
+                    },
+                    "Logging": {
+                        "Fn::If": [
+                            "EnableLoggingCondition",
+                            {
+                                "Bucket": {
+                                    "Fn::GetAtt": [
+                                        "LoggingBucket",
+                                        "DomainName"
+                                    ]
+                                },
+                                "Prefix": "cloudfront-logs/",
+                                "IncludeCookies": false
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "WebACLId": {
+                        "Fn::If": [
+                            "EnableWAFCondition",
+                            {
+                                "Ref": "CloudFrontWebACL"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "eBook-delivery"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "SSLCertificate": {
+            "Type": "AWS::CertificateManager::Certificate",
+            "Condition": "HasCustomDomain",
+            "Properties": {
+                "DomainName": {
+                    "Ref": "DomainName"
+                },
+                "DomainValidationOptions": {
+                    "Fn::If": [
+                        "HasHostedZone",
+                        [
+                            {
+                                "DomainName": {
+                                    "Ref": "DomainName"
+                                },
+                                "HostedZoneId": {
+                                    "Ref": "HostedZoneId"
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                "DomainName": {
+                                    "Ref": "DomainName"
+                                }
+                            }
+                        ]
+                    ]
+                },
+                "ValidationMethod": "DNS",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "SSL-certificate"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "Route53Record": {
+            "Type": "AWS::Route53::RecordSetGroup",
+            "Condition": "HasCustomDomain",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZoneId"
+                },
+                "RecordSets": [
+                    {
+                        "Name": {
+                            "Ref": "DomainName"
+                        },
+                        "Type": "A",
+                        "AliasTarget": {
+                            "HostedZoneId": "Z2FDTNDATAQYW2",
+                            "DNSName": {
+                                "Fn::GetAtt": [
+                                    "EbooksCloudFrontDistribution",
+                                    "DomainName"
+                                ]
+                            },
+                            "EvaluateTargetHealth": false
+                        }
+                    },
+                    {
+                        "Name": {
+                            "Ref": "DomainName"
+                        },
+                        "Type": "AAAA",
+                        "AliasTarget": {
+                            "HostedZoneId": "Z2FDTNDATAQYW2",
+                            "DNSName": {
+                                "Fn::GetAtt": [
+                                    "EbooksCloudFrontDistribution",
+                                    "DomainName"
+                                ]
+                            },
+                            "EvaluateTargetHealth": false
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "eBook-Delivery-${Environment}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/CloudFront\", \"Requests\", { \"stat\": \"Sum\", \"period\": 300 } ],\n          [ \".\", \"BytesDownloaded\", { \"stat\": \"Sum\", \"period\": 300 } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"us-east-1\",\n        \"title\": \"CloudFront Requests & Data Transfer\",\n        \"dimensions\": {\n          \"DistributionId\": \"${EbooksCloudFrontDistribution}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/CloudFront\", \"CacheHitRate\", { \"stat\": \"Average\", \"period\": 300 } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"us-east-1\",\n        \"title\": \"Cache Hit Rate\",\n        \"dimensions\": {\n          \"DistributionId\": \"${EbooksCloudFrontDistribution}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/CloudFront\", \"4xxErrorRate\", { \"stat\": \"Average\", \"period\": 300 } ],\n          [ \".\", \"5xxErrorRate\", { \"stat\": \"Average\", \"period\": 300 } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"us-east-1\",\n        \"title\": \"Error Rates\",\n        \"dimensions\": {\n          \"DistributionId\": \"${EbooksCloudFrontDistribution}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/CloudFront\", \"OriginLatency\", { \"stat\": \"Average\", \"period\": 300 } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"us-east-1\",\n        \"title\": \"Origin Latency\",\n        \"dimensions\": {\n          \"DistributionId\": \"${EbooksCloudFrontDistribution}\"\n        }\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "HighErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "eBook-HighErrorRate-${Environment}"
+                },
+                "AlarmDescription": "Alert when 4xx/5xx error rate is high",
+                "MetricName": "4xxErrorRate",
+                "Namespace": "AWS/CloudFront",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DistributionId",
+                        "Value": {
+                            "Ref": "EbooksCloudFrontDistribution"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSAlertTopic"
+                    }
+                ]
+            }
+        },
+        "LowCacheHitRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "eBook-LowCacheHitRate-${Environment}"
+                },
+                "AlarmDescription": "Alert when cache hit rate is low",
+                "MetricName": "CacheHitRate",
+                "Namespace": "AWS/CloudFront",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 3,
+                "Threshold": 70,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DistributionId",
+                        "Value": {
+                            "Ref": "EbooksCloudFrontDistribution"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSAlertTopic"
+                    }
+                ]
+            }
+        },
+        "SNSAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "eBook-Alerts-${Environment}"
+                },
+                "DisplayName": "eBook Delivery System Alerts",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Alert-notifications"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudFrontWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Condition": "EnableWAFCondition",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "eBook-WAF-${Environment}"
+                },
+                "Scope": "CLOUDFRONT",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "RateLimitRule",
+                        "Priority": 1,
+                        "Statement": {
+                            "RateBasedStatement": {
+                                "Limit": 2000,
+                                "AggregateKeyType": "IP"
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "RateLimitRule"
+                        }
+                    },
+                    {
+                        "Name": "GeoBlockRule",
+                        "Priority": 2,
+                        "Statement": {
+                            "NotStatement": {
+                                "Statement": {
+                                    "GeoMatchStatement": {
+                                        "CountryCodes": [
+                                            "US",
+                                            "CA",
+                                            "GB",
+                                            "AU",
+                                            "DE",
+                                            "FR",
+                                            "JP"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        "Action": {
+                            "Block": {}
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "GeoBlockRule"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "eBook-WAF-${Environment}"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Web-application-firewall"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CostMonitoringFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "eBook-CostMonitoring-${Environment}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "CostMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET": {
+                            "Ref": "EbooksS3Bucket"
+                        },
+                        "CLOUDFRONT_DISTRIBUTION_ID": {
+                            "Ref": "EbooksCloudFrontDistribution"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSAlertTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime, timedelta\n\ndef handler(event, context):\n    s3 = boto3.client('s3')\n    cloudfront = boto3.client('cloudfront')\n    sns = boto3.client('sns')\n    \n    # Get S3 storage metrics\n    bucket_name = os.environ['S3_BUCKET']\n    distribution_id = os.environ['CLOUDFRONT_DISTRIBUTION_ID']\n    sns_topic_arn = os.environ['SNS_TOPIC_ARN']\n    \n    try:\n        # Calculate storage costs\n        response = s3.list_objects_v2(Bucket=bucket_name)\n        total_size = sum(obj['Size'] for obj in response.get('Contents', []))\n        \n        # Get CloudFront metrics\n        end_time = datetime.utcnow()\n        start_time = end_time - timedelta(days=1)\n        \n        cf_metrics = cloudfront.get_distribution_metrics(\n            DistributionId=distribution_id,\n            StartTime=start_time,\n            EndTime=end_time\n        )\n        \n        # Send cost report\n        message = {\n            'timestamp': datetime.utcnow().isoformat(),\n            's3_storage_gb': total_size / (1024**3),\n            'cloudfront_requests': cf_metrics.get('Requests', 0),\n            'estimated_daily_cost': calculate_daily_cost(total_size, cf_metrics)\n        }\n        \n        sns.publish(\n            TopicArn=sns_topic_arn,\n            Message=json.dumps(message),\n            Subject='eBook Delivery Cost Report'\n        )\n        \n        return {'statusCode': 200, 'body': json.dumps(message)}\n        \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}\n\ndef calculate_daily_cost(storage_bytes, cf_metrics):\n    # Simplified cost calculation\n    storage_gb = storage_bytes / (1024**3)\n    storage_cost = storage_gb * 0.023  # S3 Standard pricing\n    requests = cf_metrics.get('Requests', 0)\n    request_cost = requests * 0.0000004  # CloudFront request pricing\n    return round(storage_cost + request_cost, 2)\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Cost-monitoring"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CostMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "eBook-CostMonitoring-Role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CostMonitoringPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "EbooksS3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudfront:GetDistribution",
+                                        "cloudfront:ListDistributions"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSAlertTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Lambda-execution-role"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CostMonitoringSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "eBook-CostMonitoring-Schedule-${Environment}"
+                },
+                "Description": "Daily cost monitoring for eBook delivery system",
+                "ScheduleExpression": "rate(1 day)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "CostMonitoringFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "CostMonitoringTarget",
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "CostMonitoringRole",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CostMonitoringPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "CostMonitoringFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "CostMonitoringSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket storing eBooks",
+            "Value": {
+                "Ref": "EbooksS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
+                }
+            }
+        },
+        "CloudFrontDistributionDomain": {
+            "Description": "CloudFront distribution domain name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EbooksCloudFrontDistribution",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudFrontDomain"
+                }
+            }
+        },
+        "CloudFrontDistributionId": {
+            "Description": "CloudFront distribution ID",
+            "Value": {
+                "Ref": "EbooksCloudFrontDistribution"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudFrontId"
+                }
+            }
+        },
+        "Route53RecordName": {
+            "Description": "Route 53 record for custom domain",
+            "Value": {
+                "Fn::If": [
+                    "HasCustomDomain",
+                    {
+                        "Ref": "DomainName"
+                    },
+                    "No custom domain configured"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CustomDomain"
+                }
+            }
+        },
+        "CloudFrontOAIId": {
+            "Description": "CloudFront Origin Access Identity ID",
+            "Value": {
+                "Ref": "CloudFrontOAI"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OAI-Id"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Fn::If": [
+                    "CreateKmsKey",
+                    {
+                        "Ref": "EbooksKmsKey"
+                    },
+                    {
+                        "Fn::Sub": "alias/${KmsKeyAlias}"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyId"
+                }
+            }
+        },
+        "LoggingBucketName": {
+            "Condition": "EnableLoggingCondition",
+            "Description": "Name of the logging bucket",
+            "Value": {
+                "Ref": "LoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoggingBucket"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for alerts",
+            "Value": {
+                "Ref": "SNSAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopic"
+                }
+            }
+        },
+        "CostMonitoringFunctionArn": {
+            "Description": "ARN of the cost monitoring Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CostMonitoringFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CostMonitoringFunction"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Environment name used for this deployment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        }
+    }
+}

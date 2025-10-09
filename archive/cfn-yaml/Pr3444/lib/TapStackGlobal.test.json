@@ -1,0 +1,324 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Global Resources for CloudFront (WAF and Lambda@Edge) - Must be deployed in us-east-1",
+  "Parameters": {
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the website (e.g., example.com)",
+      "Default": "example.com"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    }
+  },
+  "Resources": {
+    "LambdaEdgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com",
+                  "edgelambda.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SecurityHeadersFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": [
+            "${DomainNameClean}-security-headers-${EnvironmentSuffix}",
+            {
+              "DomainNameClean": {
+                "Fn::Join": [
+                  "-",
+                  {
+                    "Fn::Split": [
+                      ".",
+                      {
+                        "Ref": "DomainName"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "Runtime": "nodejs18.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaEdgeRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 5,
+        "MemorySize": 128,
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n    const request = event.Records[0].cf.request;\n    const headers = request.headers;\n\n    // Add security headers\n    headers['x-frame-options'] = [{key: 'X-Frame-Options', value: 'DENY'}];\n    headers['x-content-type-options'] = [{key: 'X-Content-Type-Options', value: 'nosniff'}];\n    headers['strict-transport-security'] = [{key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains'}];\n    headers['x-xss-protection'] = [{key: 'X-XSS-Protection', value: '1; mode=block'}];\n\n    return request;\n};\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SecurityHeadersFunctionVersion": {
+      "Type": "AWS::Lambda::Version",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecurityHeadersFunction"
+        }
+      }
+    },
+    "CustomHeadersFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": [
+            "${DomainNameClean}-custom-headers-${EnvironmentSuffix}",
+            {
+              "DomainNameClean": {
+                "Fn::Join": [
+                  "-",
+                  {
+                    "Fn::Split": [
+                      ".",
+                      {
+                        "Ref": "DomainName"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "Runtime": "nodejs18.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaEdgeRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 5,
+        "MemorySize": 128,
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n    const response = event.Records[0].cf.response;\n    const headers = response.headers;\n\n    // Add cache control headers for static content\n    if (!headers['cache-control']) {\n        headers['cache-control'] = [{\n            key: 'Cache-Control',\n            value: 'public, max-age=86400'\n        }];\n    }\n\n    // Remove server headers for security\n    delete headers['server'];\n    delete headers['x-amzn-trace-id'];\n\n    // Add custom header\n    headers['x-custom-header'] = [{key: 'X-Custom-Header', value: 'CloudFront-Enhanced'}];\n\n    return response;\n};\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CustomHeadersFunctionVersion": {
+      "Type": "AWS::Lambda::Version",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "CustomHeadersFunction"
+        }
+      }
+    },
+    "WebACL": {
+      "Type": "AWS::WAFv2::WebACL",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": [
+            "${DomainNameClean}-waf-${EnvironmentSuffix}",
+            {
+              "DomainNameClean": {
+                "Fn::Join": [
+                  "-",
+                  {
+                    "Fn::Split": [
+                      ".",
+                      {
+                        "Ref": "DomainName"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "Scope": "CLOUDFRONT",
+        "DefaultAction": {
+          "Allow": {}
+        },
+        "Rules": [
+          {
+            "Name": "RateLimitRule",
+            "Priority": 1,
+            "Statement": {
+              "RateBasedStatement": {
+                "Limit": 2000,
+                "AggregateKeyType": "IP"
+              }
+            },
+            "Action": {
+              "Block": {
+                "CustomResponse": {
+                  "ResponseCode": 429,
+                  "ResponseHeaders": [
+                    {
+                      "Name": "Retry-After",
+                      "Value": "300"
+                    }
+                  ]
+                }
+              }
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "RateLimitRule"
+            }
+          },
+          {
+            "Name": "AWSManagedRulesCommonRuleSet",
+            "Priority": 2,
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesCommonRuleSet",
+                "ExcludedRules": []
+              }
+            },
+            "OverrideAction": {
+              "None": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "CommonRuleSetMetric"
+            }
+          },
+          {
+            "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+            "Priority": 3,
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                "ExcludedRules": []
+              }
+            },
+            "OverrideAction": {
+              "None": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "KnownBadInputsMetric"
+            }
+          },
+          {
+            "Name": "AWSManagedRulesSQLiRuleSet",
+            "Priority": 4,
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesSQLiRuleSet",
+                "ExcludedRules": []
+              }
+            },
+            "OverrideAction": {
+              "None": {}
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "SQLiRuleSetMetric"
+            }
+          }
+        ],
+        "VisibilityConfig": {
+          "SampledRequestsEnabled": true,
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": "WebACLMetric"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "WebACLArn": {
+      "Description": "AWS WAF WebACL ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebACL",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebACLArn"
+        }
+      }
+    },
+    "SecurityHeadersFunctionArn": {
+      "Description": "Lambda@Edge Security Headers Function ARN",
+      "Value": {
+        "Ref": "SecurityHeadersFunctionVersion"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityHeadersFunction"
+        }
+      }
+    },
+    "CustomHeadersFunctionArn": {
+      "Description": "Lambda@Edge Custom Headers Function ARN",
+      "Value": {
+        "Ref": "CustomHeadersFunctionVersion"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CustomHeadersFunction"
+        }
+      }
+    }
+  }
+}
