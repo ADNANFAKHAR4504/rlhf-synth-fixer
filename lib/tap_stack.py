@@ -109,7 +109,6 @@ class TapStack(cdk.Stack):
             encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
             encryption_key=kms_key,
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            point_in_time_recovery=True,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -166,33 +165,53 @@ BUCKET_NAME = os.environ['BUCKET_NAME']
 
 def handler(event, context):
     try:
-        # Parse the incoming data
-        data = json.loads(event['body']) if 'body' in event else event
+        http_method = event['httpMethod']
+        if http_method == 'POST':
+            # Parse the incoming data
+            data = json.loads(event['body']) if 'body' in event else event
 
-        # Generate a unique ID and timestamp
-        item_id = str(uuid.uuid4())
-        timestamp = int(datetime.now().timestamp() * 1000)
+            # Generate a unique ID and timestamp
+            item_id = str(uuid.uuid4())
+            timestamp = int(datetime.now().timestamp() * 1000)
 
-        # Store the data in DynamoDB
-        table = dynamodb.Table(TABLE_NAME)
-        table.put_item(Item={
-            'id': item_id,
-            'timestamp': timestamp,
-            'data': data,
-        })
+            # Store the data in DynamoDB
+            table = dynamodb.Table(TABLE_NAME)
+            table.put_item(Item={
+                'id': item_id,
+                'timestamp': timestamp,
+                'data': data,
+            })
 
-        # Store the raw data in S3
-        s3.put_object(
-            Bucket=BUCKET_NAME,
-            Key=f"raw/{item_id}.json",
-            Body=json.dumps(data),
-            ServerSideEncryption='aws:kms',
-        )
+            # Store the raw data in S3
+            s3.put_object(
+                Bucket=BUCKET_NAME,
+                Key=f"raw/{item_id}.json",
+                Body=json.dumps(data),
+                ServerSideEncryption='aws:kms',
+            )
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Data processed successfully', 'id': item_id}),
-        }
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'message': 'Data processed successfully', 'id': item_id}),
+            }
+
+        elif http_method == 'GET':
+            # Retrieve all items from DynamoDB
+            table = dynamodb.Table(TABLE_NAME)
+            response = table.scan()
+            items = response.get('Items', [])
+
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'items': items}),
+            }
+
+        else:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'message': 'Unsupported HTTP method'}),
+            }
+
     except Exception as e:
         print(f"Error processing data: {e}")
         return {
@@ -221,6 +240,7 @@ def handler(event, context):
             description="API for real-time data processing",
         )
         api.root.add_method("POST", apigateway.LambdaIntegration(lambda_function))
+        api.root.add_method("GET", apigateway.LambdaIntegration(lambda_function))
 
         # ===========================================
         # CloudWatch Alarms
@@ -239,6 +259,14 @@ def handler(event, context):
         # ===========================================
         CfnOutput(self, "ApiEndpoint", value=api.url, description="API Gateway endpoint URL")
         CfnOutput(self, "S3BucketName", value=data_bucket.bucket_name, description="S3 Bucket Name")
+        CfnOutput(self, "S3BucketArn", value=data_bucket.bucket_arn, description="S3 Bucket ARN")
         CfnOutput(self, "DynamoDBTableName", value=data_table.table_name, description="DynamoDB Table Name")
+        CfnOutput(self, "DynamoDBTableArn", value=data_table.table_arn, description="DynamoDB Table ARN")
         CfnOutput(self, "LambdaFunctionName", value=lambda_function.function_name, description="Lambda Function Name")
+        CfnOutput(self, "LambdaFunctionArn", value=lambda_function.function_arn, description="Lambda Function ARN")
         CfnOutput(self, "CloudWatchAlarmName", value=error_alarm.alarm_name, description="CloudWatch Alarm Name")
+        CfnOutput(self, "CloudWatchAlarmArn", value=error_alarm.alarm_arn, description="CloudWatch Alarm ARN")
+        CfnOutput(self, "KMSKeyId", value=kms_key.key_id, description="KMS Key ID")
+        CfnOutput(self, "KMSKeyArn", value=kms_key.key_arn, description="KMS Key ARN")
+        CfnOutput(self, "DLQName", value=dlq.queue_name, description="Dead Letter Queue Name")
+        CfnOutput(self, "DLQArn", value=dlq.queue_arn, description="Dead Letter Queue ARN")
