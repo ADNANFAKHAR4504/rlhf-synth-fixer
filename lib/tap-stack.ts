@@ -116,9 +116,22 @@ export class TapStack extends cdk.Stack {
       'echo "<h1>Blog Platform - Environment: ' +
         environmentSuffix +
         '</h1>" > /var/www/html/index.html',
-      'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")',
-      'INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/instance-id)',
-      'echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html'
+      // Robust metadata retrieval with retries and error handling
+      'for i in {1..10}; do',
+      '  TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" --connect-timeout 5 --max-time 10 2>/dev/null)',
+      '  if [ ! -z "$TOKEN" ] && [ "$TOKEN" != "curl: " ]; then',
+      '    INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/instance-id --connect-timeout 5 --max-time 10 2>/dev/null)',
+      '    if [ ! -z "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "curl: " ]; then',
+      '      echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html',
+      '      break',
+      '    fi',
+      '  fi',
+      '  sleep 2',
+      'done',
+      // Fallback if metadata service is not available
+      'if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "curl: " ]; then',
+      '  echo "<p>Instance ID: metadata-unavailable</p>" >> /var/www/html/index.html',
+      'fi'
     );
 
     this.instance = new ec2.Instance(this, `EC2-${namingSuffix}`, {
