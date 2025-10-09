@@ -30,7 +30,10 @@ import {
   DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetHealthCommand,
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
+  type Listener,
+  type LoadBalancer,
+  type TargetHealthDescription,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 import {
@@ -79,7 +82,7 @@ const s3 = new S3Client({ region });
 const ec2 = new EC2Client({ region });
 const rds = new RDSClient({ region });
 const cf = new CloudFrontClient({ region });
-const elb = new ELBv2Client({ region });
+const elb = new ElasticLoadBalancingV2Client({ region });
 const logs = new CloudWatchLogsClient({ region });
 const lambda = new LambdaClient({ region });
 
@@ -147,13 +150,17 @@ describe('TapStack Infra – Integration (live functionality)', () => {
     test('ALB has at least one healthy target', async () => {
       // Find LB by DNS name
       const lbs = await elb.send(new DescribeLoadBalancersCommand({}));
-      const match = lbs.LoadBalancers?.find(lb => lb.DNSName === outputs.ALBDNSName);
+      const match = lbs.LoadBalancers?.find(
+        (lb: LoadBalancer) => lb.DNSName === outputs.ALBDNSName
+      );
       expect(match).toBeDefined();
       lbArn = match!.LoadBalancerArn;
 
       // Find its default action TG via listeners
       const listeners = await elb.send(new DescribeListenersCommand({ LoadBalancerArn: lbArn }));
-      const defaultListener = listeners.Listeners?.find(l => (l.Port ?? 0) === 80) || listeners.Listeners?.[0];
+      const defaultListener =
+        listeners.Listeners?.find((l: Listener) => (l.Port ?? 0) === 80) ||
+        listeners.Listeners?.[0];
       expect(defaultListener?.DefaultActions?.[0]?.TargetGroupArn).toBeDefined();
       tgArn = defaultListener!.DefaultActions![0].TargetGroupArn;
 
@@ -162,9 +169,10 @@ describe('TapStack Infra – Integration (live functionality)', () => {
       let attempts = 0;
       while (attempts < 10) {
         const th = await elb.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
-        healthy = (th.TargetHealthDescriptions || []).filter(
-          d => d.TargetHealth?.State === 'healthy'
-        ).length;
+        healthy =
+          (th.TargetHealthDescriptions || []).filter(
+            (d: TargetHealthDescription) => d.TargetHealth?.State === 'healthy'
+          ).length;
         if (healthy > 0) break;
         attempts += 1;
         await sleep(10_000);
@@ -182,23 +190,29 @@ describe('TapStack Infra – Integration (live functionality)', () => {
       if (outputs.DataBucketName) {
         try {
           await s3.send(new DeleteObjectCommand({ Bucket: outputs.DataBucketName, Key: key }));
-        } catch { /* ignore cleanup errors */ }
+        } catch {
+          /* ignore cleanup errors */
+        }
       }
     });
 
     test('can PUT and HEAD an object (encrypted at rest with KMS)', async () => {
-      const put = await s3.send(new PutObjectCommand({
-        Bucket: outputs.DataBucketName,
-        Key: key,
-        Body: 'hello data bucket',
-      }));
+      const put = await s3.send(
+        new PutObjectCommand({
+          Bucket: outputs.DataBucketName,
+          Key: key,
+          Body: 'hello data bucket',
+        })
+      );
       // ETag should be present
       expect(put.ETag).toBeDefined();
 
-      const head = await s3.send(new HeadObjectCommand({
-        Bucket: outputs.DataBucketName,
-        Key: key,
-      }));
+      const head = await s3.send(
+        new HeadObjectCommand({
+          Bucket: outputs.DataBucketName,
+          Key: key,
+        })
+      );
 
       // Bucket default SSE uses KMS per template; verify indicators
       expect(head.ServerSideEncryption).toBe('aws:kms');
@@ -267,10 +281,12 @@ describe('TapStack Infra – Integration (live functionality)', () => {
         ],
       };
 
-      const resp = await lambda.send(new InvokeCommand({
-        FunctionName: outputs.LambdaFunctionArn,
-        Payload: new TextEncoder().encode(JSON.stringify(payload)),
-      }));
+      const resp = await lambda.send(
+        new InvokeCommand({
+          FunctionName: outputs.LambdaFunctionArn,
+          Payload: new TextEncoder().encode(JSON.stringify(payload)),
+        })
+      );
 
       expect(resp.StatusCode).toBe(200);
       const body = resp.Payload ? new TextDecoder().decode(resp.Payload) : '';
@@ -295,7 +311,6 @@ describe('TapStack Infra – Integration (live functionality)', () => {
       expect(db.MultiAZ).toBe(true);
 
       // Template sets EnableCloudwatchLogsExports: ["postgresql"]
-      // Some regions need a bit of time after create; allow either present or eventually consistent.
       const exportsSet = (db.EnabledCloudwatchLogsExports || []).includes('postgresql');
       expect(exportsSet).toBe(true);
     });
