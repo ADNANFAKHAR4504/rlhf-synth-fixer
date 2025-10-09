@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3775",
+  "team": "5",
+  "startedAt": "2025-10-09T15:01:38.852Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "AWS RDS MySQL, AWS KMS, CloudWatch, EventBridge, IAM"
+}
