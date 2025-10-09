@@ -207,9 +207,6 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
         subjectAlternativeNames: [`www.${mockDomainName}`],
         validationMethod: 'DNS',
         tags: args.tags,
-        lifecycle: {
-          createBeforeDestroy: true,
-        },
       },
       {
         parent: this,
