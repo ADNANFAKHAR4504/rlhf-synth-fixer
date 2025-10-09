@@ -85,13 +85,13 @@ resource "aws_kms_key" "audit_logs" {
 }
 
 resource "aws_kms_alias" "audit_logs" {
-  name          = "alias/${local.resource_prefix}-audit-log"
+  name          = "alias/${local.resource_prefix}-audits-log"
   target_key_id = aws_kms_key.audit_logs.key_id
 }
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "audit_events" {
-  name              = "/aws/${local.resource_prefix}/audit-event"
+  name              = "/aws/${local.resource_prefix}/audits-event"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.audit_logs.arn
 
@@ -118,7 +118,7 @@ resource "aws_cloudwatch_query_definition" "audit_query" {
 
 # S3 Bucket for immutable log storage with Object Lock
 resource "aws_s3_bucket" "audit_logs" {
-  bucket = "${local.resource_prefix}-log-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.resource_prefix}-new-log-${data.aws_caller_identity.current.account_id}"
 
   object_lock_enabled = true
 
@@ -226,7 +226,7 @@ resource "aws_s3_bucket_policy" "audit_logs" {
 
 # IAM Role for Lambda log processor
 resource "aws_iam_role" "lambda_log_processor" {
-  name = "${local.resource_prefix}-lambda-log-processor-new"
+  name = "${local.resource_prefix}-lambda-logs-processor-new"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -362,7 +362,7 @@ resource "aws_cloudwatch_event_rule" "critical_events" {
 }
 
 resource "aws_cloudwatch_log_group" "eventbridge_logs" {
-  name              = "/aws/event/${local.resource_prefix}-critical-event"
+  name              = "/aws/event/${local.resource_prefix}-critical-event-new"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.audit_logs.arn
 
@@ -432,7 +432,7 @@ resource "aws_appsync_api_key" "monitoring" {
 }
 
 resource "aws_cloudwatch_log_group" "appsync" {
-  name              = "/aws/appsync/${local.resource_prefix}-monitoring-event"
+  name              = "/aws/appsync/${local.resource_prefix}-monitoring-event-new"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.audit_logs.arn
 
@@ -441,7 +441,7 @@ resource "aws_cloudwatch_log_group" "appsync" {
 
 # IAM role for AppSync logging
 resource "aws_iam_role" "appsync_logs" {
-  name = "${local.resource_prefix}-appsync-logs-new"
+  name = "${local.resource_prefix}-appsync-new-log"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
