@@ -23,10 +23,12 @@ output "application_log_group_arn" {
 output "alarm_names" {
   description = "Map of CloudWatch alarm names"
   value = {
-    lambda_errors    = aws_cloudwatch_metric_alarm.lambda_errors.alarm_name
-    s3_errors        = aws_cloudwatch_metric_alarm.s3_bucket_errors.alarm_name
-    lambda_duration  = aws_cloudwatch_metric_alarm.lambda_duration.alarm_name
-    lambda_throttles = aws_cloudwatch_metric_alarm.lambda_throttles.alarm_name
+    lambda_errors         = aws_cloudwatch_metric_alarm.lambda_errors.alarm_name
+    s3_errors             = aws_cloudwatch_metric_alarm.s3_bucket_errors.alarm_name
+    lambda_duration       = aws_cloudwatch_metric_alarm.lambda_duration.alarm_name
+    lambda_throttles      = aws_cloudwatch_metric_alarm.lambda_throttles.alarm_name
+    alb_unhealthy_targets = aws_cloudwatch_metric_alarm.alb_unhealthy_targets.alarm_name
+    alb_response_time     = aws_cloudwatch_metric_alarm.alb_response_time.alarm_name
   }
 }
 

@@ -35,13 +35,11 @@ variable "application_log_retention_days" {
 variable "alb_target_group_arn" {
   description = "ARN of ALB target group"
   type        = string
-  default     = ""
 }
 
 variable "alb_arn_suffix" {
   description = "ARN suffix of ALB"
   type        = string
-  default     = ""
 }
 
 variable "tags" {

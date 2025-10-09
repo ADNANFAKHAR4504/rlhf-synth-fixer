@@ -136,7 +136,6 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
 
 # ALB Target Health Alarm
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_targets" {
-  count               = var.alb_target_group_arn != "" ? 1 : 0
   alarm_name          = "${var.name_prefix}-alb-unhealthy-targets"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -150,7 +149,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_targets" {
   alarm_actions       = [var.sns_topic_arn]
 
   dimensions = {
-    TargetGroup  = var.alb_target_group_arn != "" ? split(":", var.alb_target_group_arn)[5] : ""
+    TargetGroup  = split(":", var.alb_target_group_arn)[5]
     LoadBalancer = var.alb_arn_suffix
   }
 
@@ -165,7 +164,6 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_targets" {
 
 # ALB Response Time Alarm
 resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
-  count               = var.alb_target_group_arn != "" ? 1 : 0
   alarm_name          = "${var.name_prefix}-alb-high-response-time"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
