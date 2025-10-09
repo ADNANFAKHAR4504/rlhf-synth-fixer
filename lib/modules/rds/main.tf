@@ -25,6 +25,7 @@ resource "aws_rds_global_cluster" "main" {
   global_cluster_identifier = "${var.project_name}-global-db-${var.environment}-${var.resource_suffix}"
   engine                    = "aurora-mysql"
   engine_version            = "8.0.mysql_aurora.3.04.0"
+  storage_encrypted         = true
 }
 
 resource "aws_rds_cluster" "primary" {
@@ -39,7 +40,6 @@ resource "aws_rds_cluster" "primary" {
   backup_retention_period      = 7
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "mon:04:00-mon:05:00"
-  storage_encrypted            = true
   kms_key_id                   = var.primary_kms_key_arn
   skip_final_snapshot          = true
   global_cluster_identifier    = aws_rds_global_cluster.main.id
@@ -77,7 +77,6 @@ resource "aws_rds_cluster" "secondary" {
   engine_version            = aws_rds_global_cluster.main.engine_version
   db_subnet_group_name      = aws_db_subnet_group.secondary.name
   vpc_security_group_ids    = [var.secondary_db_sg_id]
-  storage_encrypted         = true
   kms_key_id                = var.secondary_kms_key_arn
   skip_final_snapshot       = true
   global_cluster_identifier = aws_rds_global_cluster.main.id
