@@ -539,7 +539,7 @@ public class DnsStack {
         // Create Route 53 hosted zone
         this.hostedZone = new Zone("news-portal-zone",
             ZoneArgs.builder()
-                .name("newsportal.example.com")
+                .name("newsportal-pr3916.iac-test.com")
                 .comment("Hosted zone for news portal")
                 .tags(Map.of(
                     "Name", "NewsPortalZone",
