@@ -1128,10 +1128,46 @@ describe('TapStack Integration Tests', () => {
         EnvironmentNames: [matchingEnv.EnvironmentName!]
       }));
       
-      // Use the CNAME from the environment details, fallback to constructed URL
+      // Debug: Log the environment details
       const environment = envDetailsResponse.Environments?.[0];
-      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
-                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      console.log('Environment details:', JSON.stringify(environment, null, 2));
+      console.log(`CNAME: ${environment?.CNAME}`);
+      console.log(`EndpointURL: ${environment?.EndpointURL}`);
+      console.log(`Status: ${environment?.Status}`);
+      console.log(`Health: ${environment?.Health}`);
+      console.log(`ApplicationName: ${environment?.ApplicationName}`);
+      console.log(`VersionLabel: ${environment?.VersionLabel}`);
+      console.log(`SolutionStackName: ${environment?.SolutionStackName}`);
+      
+      // Try multiple URL sources
+      let appUrl: string;
+      if (environment?.CNAME) {
+        appUrl = `http://${environment.CNAME}`;
+        console.log('Using CNAME for URL');
+      } else if (environment?.EndpointURL) {
+        appUrl = environment.EndpointURL;
+        console.log('Using EndpointURL for URL');
+      } else {
+        // For single instance environments, try the standard pattern
+        appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+        console.log('Using constructed URL');
+      }
+      
+      console.log(`Final URL: ${appUrl}`);
+      
+      // Check if environment is actually ready and has an application
+      if (environment?.Status !== 'Ready') {
+        throw new Error(`Environment is not ready. Status: ${environment?.Status}`);
+      }
+      
+      if (environment?.Health === 'Red') {
+        throw new Error(`Environment health is Red. This indicates the application is not running properly.`);
+      }
+      
+      // Check if there's an application version deployed
+      if (!environment?.VersionLabel) {
+        throw new Error(`No application version is deployed to this environment. The environment exists but has no application code.`);
+      }
       
       console.log(`Testing deployed application at: ${appUrl}`);
 
