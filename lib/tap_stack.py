@@ -610,19 +610,26 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Register outputs
+        # Store outputs as instance attributes for external access
+        self.api_endpoint = pulumi.Output.concat(
+            "https://", rest_api.id, ".execute-api.",
+            aws_region, ".amazonaws.com/", api_stage.stage_name
+        )
+        self.table_name = tracking_table.name
+        self.lambda_function_name = tracking_lambda.name
+        self.dlq_url = dlq.url
+        self.dashboard_url = pulumi.Output.concat(
+            "https://console.aws.amazon.com/cloudwatch/home?region=",
+            aws_region,
+            "#dashboards:name=",
+            dashboard.dashboard_name
+        )
+
+        # Register outputs for ComponentResource
         self.register_outputs({
-            "api_endpoint": pulumi.Output.concat(
-                "https://", rest_api.id, ".execute-api.",
-                aws_region, ".amazonaws.com/", api_stage.stage_name
-            ),
-            "table_name": tracking_table.name,
-            "lambda_function_name": tracking_lambda.name,
-            "dlq_url": dlq.url,
-            "dashboard_url": pulumi.Output.concat(
-                "https://console.aws.amazon.com/cloudwatch/home?region=",
-                aws_region,
-                "#dashboards:name=",
-                dashboard.dashboard_name
-            )
+            "api_endpoint": self.api_endpoint,
+            "table_name": self.table_name,
+            "lambda_function_name": self.lambda_function_name,
+            "dlq_url": self.dlq_url,
+            "dashboard_url": self.dashboard_url
         })
