@@ -32,13 +32,6 @@ Metadata:
           default: 'Monitoring Configuration'
         Parameters:
           - AdminEmail
-      - Label:
-          default: 'SMTP Configuration'
-        Parameters:
-          - SMTPServer
-          - SMTPPort
-          - SMTPUsername
-          - SMTPPassword
 
 Parameters:
   EnvironmentSuffix:
@@ -94,7 +87,7 @@ Parameters:
     Type: String
     NoEcho: true
     Default: 'TempPassword123!'
-    Description: 'Database administrator password'
+    Description: 'Database administrator password (change in production)'
     MinLength: 8
     MaxLength: 41
   
@@ -128,27 +121,6 @@ Parameters:
       - 'true'
       - 'false'
     Description: 'Create DNS resources (HostedZone, SSL). Set to false to skip DNS setup.'
-  
-  SMTPServer:
-    Type: String
-    Description: 'SMTP server hostname for email notifications'
-    Default: 'email-smtp.us-east-1.amazonaws.com'
-  
-  SMTPPort:
-    Type: Number
-    Default: 587
-    Description: 'SMTP server port'
-  
-  SMTPUsername:
-    Type: String
-    Description: 'SMTP username'
-    Default: ''
-  
-  SMTPPassword:
-    Type: String
-    NoEcho: true
-    Description: 'SMTP password'
-    Default: ''
 
 Conditions:
   ShouldCreateDNS: !Equals [!Ref CreateDNS, 'true']
@@ -322,6 +294,8 @@ Resources:
   
   DBSecret:
     Type: AWS::SecretsManager::Secret
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
     Properties:
       Name: !Sub 'ForumDBCredentials-${EnvironmentSuffix}'
       Description: 'RDS PostgreSQL credentials for Discourse forum'
@@ -366,6 +340,7 @@ Resources:
   
   ForumDatabase:
     Type: AWS::RDS::DBInstance
+    UpdateReplacePolicy: Snapshot
     DeletionPolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'forum-database-${EnvironmentSuffix}'
@@ -642,6 +617,7 @@ Resources:
   HostedZone:
     Type: AWS::Route53::HostedZone
     Condition: ShouldCreateDNS
+    UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
     Properties:
       Name: !Ref DomainName
