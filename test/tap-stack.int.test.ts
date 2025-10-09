@@ -1206,5 +1206,75 @@ describe('TapStack Integration Tests', () => {
       // And status is Ready
       expect(environment?.Status).toBe('Ready');
     });
+
+    test('Deployed application should be responsive over HTTP (live AWS)', async () => {
+      const envName = outputs.ElasticBeanstalkEnvironmentName as string | undefined;
+      expect(envName).toBeDefined();
+
+      // Describe the environment
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({ EnvironmentNames: [envName!] }));
+      const environment = envDetailsResponse.Environments?.[0];
+      expect(environment).toBeDefined();
+      expect(environment?.Status).toBe('Ready');
+      expect(environment?.Health).not.toBe('Red');
+
+      // Resolve best endpoint: EB_APP_URL override -> CNAME -> EC2 PublicDnsName -> EC2 PublicIpAddress
+      let targetUrl: string | undefined = process.env.EB_APP_URL;
+      if (!targetUrl && environment?.CNAME) {
+        targetUrl = `http://${environment.CNAME}`;
+      }
+      if (!targetUrl) {
+        try {
+          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+          const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
+          if (instanceId) {
+            const ec2Res = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+            const instance = ec2Res.Reservations?.[0]?.Instances?.[0];
+            if (instance?.PublicDnsName) {
+              targetUrl = `http://${instance.PublicDnsName}`;
+            } else if (instance?.PublicIpAddress) {
+              targetUrl = `http://${instance.PublicIpAddress}`;
+            }
+          }
+        } catch (e) {
+          const err = e as Error;
+          console.warn(`Failed resolving EC2 endpoint: ${err.message}`);
+        }
+      }
+
+      // As a final log only, derive constructed URL (do not use for fetch due to DNS risk)
+      const region = process.env.AWS_REGION || 'us-east-1';
+      const constructed = `http://${envName}.${region}.elasticbeanstalk.com`;
+      console.log(`Endpoint candidates -> chosen: ${targetUrl || 'none'} | constructed: ${constructed}`);
+
+      if (!targetUrl) {
+        throw new Error('No resolvable endpoint found (no CNAME and no EC2 public endpoint).');
+      }
+
+      // Simple HTTP GET with retries and timeout
+      const httpGetWithRetry = async (url: string, attempts = 3, timeoutMs = 8000) => {
+        let lastErr: any;
+        for (let i = 0; i < attempts; i++) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const res = await fetch(`${url}/`, { method: 'GET', redirect: 'follow', signal: controller.signal as any });
+            clearTimeout(timer);
+            return res;
+          } catch (e) {
+            clearTimeout(timer);
+            lastErr = e;
+            await new Promise(r => setTimeout(r, Math.min(2000 * (i + 1), 5000)));
+          }
+        }
+        throw lastErr;
+      };
+
+      const response = await httpGetWithRetry(targetUrl, 3, 8000);
+      // Consider 2xx/3xx as responsive; tolerate common 4xx from placeholder apps
+      expect(response.status).toBeLessThan(500);
+      const ct = response.headers.get('content-type') || '';
+      expect(ct.length).toBeGreaterThan(0);
+    });
   });
 });
