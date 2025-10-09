@@ -42,7 +42,7 @@ export class PodcastTranscodingStack extends Construct {
               Outputs: [
                 {
                   ContainerSettings: {
-                    Container: 'MP3',
+                    Container: 'MP4',
                   },
                   AudioDescriptions: [
                     {
@@ -60,7 +60,7 @@ export class PodcastTranscodingStack extends Construct {
                 },
                 {
                   ContainerSettings: {
-                    Container: 'MP3',
+                    Container: 'MP4',
                   },
                   AudioDescriptions: [
                     {
@@ -78,7 +78,7 @@ export class PodcastTranscodingStack extends Construct {
                 },
                 {
                   ContainerSettings: {
-                    Container: 'MP3',
+                    Container: 'MP4',
                   },
                   AudioDescriptions: [
                     {

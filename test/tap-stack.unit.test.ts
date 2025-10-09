@@ -287,21 +287,21 @@ describe('TapStack', () => {
   describe('Route 53 Configuration', () => {
     test('creates hosted zone', () => {
       template.hasResourceProperties('AWS::Route53::HostedZone', {
-        Name: Match.stringLikeRegexp('podcast.*example.com')
+        Name: Match.stringLikeRegexp('.*\\.podcast-platform\\.cloud\\.$')
       });
     });
 
     test('creates A record for CloudFront', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'A',
-        Name: Match.stringLikeRegexp('cdn.podcast.*example.com')
+        Name: Match.stringLikeRegexp('cdn\\..*\\.podcast-platform\\.cloud\\.$')
       });
     });
 
     test('creates AAAA record for IPv6', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'AAAA',
-        Name: Match.stringLikeRegexp('cdn.podcast.*example.com')
+        Name: Match.stringLikeRegexp('cdn\\..*\\.podcast-platform\\.cloud\\.$')
       });
     });
   });
