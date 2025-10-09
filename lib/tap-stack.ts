@@ -14,7 +14,6 @@ import {
   ElbModule,
   MonitoringModule,
   RdsModule,
-  Route53Module,
   S3Module,
   SecretsModule,
   VpcModule,
@@ -84,9 +83,7 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // ? Add your stack instantiations here
-    // Domain configuration
-    const domainName = 'tapts.com'; // Replace with your domain
-    const adminEmail = 'admin@tapts.com'; // Replace with your email
+    const adminEmail = 'admin@tap.com'; // Replace with your email
 
     // ========== Storage (Create logs bucket first) ==========
     const logsBucket = new S3Module(this, 'logs-bucket', {
@@ -132,17 +129,10 @@ export class TapStack extends TerraformStack {
       tags: globalTags,
     });
 
-    // ========== DNS and SSL ==========
-    const route53Module = new Route53Module(this, 'dns', {
-      domainName: domainName,
-      tags: globalTags,
-    });
-
     // ========== Load Balancer ==========
     const elbModule = new ElbModule(this, 'elb', {
       vpcId: vpcModule.vpc.id,
       publicSubnetIds: vpcModule.publicSubnets.map(s => s.id),
-      certificateArn: route53Module.certificate.arn,
       targetGroupPort: 80,
       healthCheckPath: '/health.html',
       tags: globalTags,
@@ -257,44 +247,8 @@ export class TapStack extends TerraformStack {
     const cloudFrontModule = new CloudFrontModule(this, 'cdn', {
       s3BucketDomainName: assetsBucket.bucket.bucketRegionalDomainName,
       s3BucketId: assetsBucket.bucket.id,
-      certificateArn: route53Module.certificate.arn,
-      domainNames: [domainName, `www.${domainName}`],
       tags: globalTags,
       logBucket: logsBucket.bucketName,
-    });
-
-    // ========== Update Route53 Records ==========
-    new aws.route53Record.Route53Record(this, 'api-record', {
-      zoneId: route53Module.hostedZone.zoneId,
-      name: `api.${domainName}`,
-      type: 'A',
-      alias: {
-        name: elbModule.alb.dnsName,
-        zoneId: elbModule.alb.zoneId,
-        evaluateTargetHealth: true,
-      },
-    });
-
-    new aws.route53Record.Route53Record(this, 'cdn-record', {
-      zoneId: route53Module.hostedZone.zoneId,
-      name: domainName,
-      type: 'A',
-      alias: {
-        name: cloudFrontModule.distribution.domainName,
-        zoneId: 'Z2FDTNDATAQYW2', // CloudFront's hosted zone ID
-        evaluateTargetHealth: false,
-      },
-    });
-
-    new aws.route53Record.Route53Record(this, 'cdn-www-record', {
-      zoneId: route53Module.hostedZone.zoneId,
-      name: `www.${domainName}`,
-      type: 'A',
-      alias: {
-        name: cloudFrontModule.distribution.domainName,
-        zoneId: 'Z2FDTNDATAQYW2',
-        evaluateTargetHealth: false,
-      },
     });
 
     // ========== Audit and Compliance ==========
@@ -328,8 +282,7 @@ export class TapStack extends TerraformStack {
           action: {
             block: {},
           },
-          statement: {
-          },
+          statement: {},
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
             metricName: 'RateLimitRule',
@@ -362,7 +315,7 @@ export class TapStack extends TerraformStack {
     });
 
     // S3 Bucket Policy for ALB Access Logs
-    const elbAccountId = process.env.CURRENT_ACCOUNT_ID
+    const elbAccountId = process.env.CURRENT_ACCOUNT_ID;
 
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'alb-logs-bucket-policy', {
       bucket: logsBucket.bucket.id,
@@ -403,7 +356,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'alb-url', {
-      value: `https://api.${domainName}`,
+      value: `http://${elbModule.alb.dnsName}`,
       description: 'Application Load Balancer URL',
     });
 
@@ -429,7 +382,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'cdn-url', {
-      value: `https://${domainName}`,
+      value: `https://${cloudFrontModule.distribution.domainName}`,
       description: 'CDN URL',
     });
 
@@ -441,11 +394,6 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 's3-assets-bucket', {
       value: assetsBucket.bucketName,
       description: 'S3 Assets Bucket Name',
-    });
-
-    new TerraformOutput(this, 'route53-hosted-zone-id', {
-      value: route53Module.hostedZone.zoneId,
-      description: 'Route 53 Hosted Zone ID',
     });
 
     new TerraformOutput(this, 'cloudtrail-name', {
@@ -481,11 +429,6 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'nat-gateway-ips', {
       value: vpcModule.natGateways.map(n => n.publicIp),
       description: 'NAT Gateway Elastic IPs',
-    });
-
-    new TerraformOutput(this, 'acm-certificate-arn', {
-      value: route53Module.certificate.arn,
-      description: 'ACM Certificate ARN',
     });
 
     new TerraformOutput(this, 'ssm-parameter-prefix', {

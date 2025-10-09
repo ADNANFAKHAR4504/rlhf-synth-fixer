@@ -673,7 +673,6 @@ export class RdsModule extends Construct {
 export interface ElbModuleConfig {
   vpcId: string;
   publicSubnetIds: string[];
-  certificateArn: string;
   targetGroupPort: number;
   healthCheckPath: string;
   tags: { [key: string]: string };
@@ -709,16 +708,6 @@ export class ElbModule extends Construct {
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: this.securityGroup.id,
       description: 'HTTP from anywhere',
-    });
-
-    new aws.securityGroupRule.SecurityGroupRule(this, 'alb-ingress-https', {
-      type: 'ingress',
-      fromPort: 443,
-      toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-      securityGroupId: this.securityGroup.id,
-      description: 'HTTPS from anywhere',
     });
 
     // Egress rule
@@ -784,26 +773,6 @@ export class ElbModule extends Construct {
       loadBalancerArn: this.alb.arn,
       port: 80,
       protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'redirect',
-          redirect: {
-            port: '443',
-            protocol: 'HTTPS',
-            statusCode: 'HTTP_301',
-          },
-        },
-      ],
-      tags: config.tags,
-    });
-
-    // HTTPS Listener
-    new aws.lbListener.LbListener(this, 'https-listener', {
-      loadBalancerArn: this.alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: config.certificateArn,
       defaultAction: [
         {
           type: 'forward',
@@ -969,8 +938,6 @@ export class S3Module extends Construct {
 export interface CloudFrontModuleConfig {
   s3BucketDomainName: string;
   s3BucketId: string;
-  certificateArn: string;
-  domainNames: string[];
   tags: { [key: string]: string };
   logBucket: string;
 }
@@ -1005,7 +972,6 @@ export class CloudFrontModule extends Construct {
         isIpv6Enabled: true,
         comment: `CloudFront distribution for ${id}`,
         defaultRootObject: 'index.html',
-        aliases: config.domainNames,
         priceClass: 'PriceClass_100',
 
         origin: [
@@ -1042,9 +1008,7 @@ export class CloudFrontModule extends Construct {
         },
 
         viewerCertificate: {
-          acmCertificateArn: config.certificateArn,
-          sslSupportMethod: 'sni-only',
-          minimumProtocolVersion: 'TLSv1.2_2021',
+          cloudfrontDefaultCertificate: true,
         },
 
         loggingConfig: {
