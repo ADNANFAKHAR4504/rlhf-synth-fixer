@@ -102,7 +102,7 @@ resource "aws_cloudwatch_log_group" "audit_events" {
 
 # CloudWatch Logs Insights Query Definition
 resource "aws_cloudwatch_query_definition" "audit_query" {
-  name = "${local.resource_prefix}-audit-insights"
+  name = "${local.resource_prefix}-audit-insights-new"
 
   log_group_names = [
     aws_cloudwatch_log_group.audit_events.name
@@ -291,7 +291,7 @@ resource "aws_iam_role_policy" "lambda_log_processor" {
 # Lambda function for log processing
 resource "aws_lambda_function" "log_processor" {
   filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "${local.resource_prefix}-log-processor"
+  function_name    = "${local.resource_prefix}-log-processor-new"
   role             = aws_iam_role.lambda_log_processor.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256

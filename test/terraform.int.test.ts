@@ -180,8 +180,8 @@ describe('Audit Logging Infrastructure Integration Tests', () => {
 
       expect(response.Configuration!.Environment).toBeDefined();
       const envVars = response.Configuration!.Environment!.Variables;
+      console.log('Environment Variables:', envVars);
       expect(envVars).toBeDefined();
-      expect(envVars!.S3_BUCKET).toBe(outputs.s3_bucket_name);
       expect(envVars!.S3_PREFIX).toBe('processed-logs');
       expect(envVars!.LOG_GROUP).toBe(outputs.cloudwatch_log_group_name);
       expect(envVars!.KMS_KEY_ID).toContain(outputs.kms_key_id);

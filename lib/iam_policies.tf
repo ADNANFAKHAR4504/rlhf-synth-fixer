@@ -1,6 +1,6 @@
 # IAM policy for read-only access to audit logs
 resource "aws_iam_policy" "audit_log_reader" {
-  name        = "${local.resource_prefix}-audit-log-reader"
+  name        = "${local.resource_prefix}-audit-log-reader-new"
   description = "Read-only access to audit logs"
 
   policy = jsonencode({
@@ -47,7 +47,7 @@ resource "aws_iam_policy" "audit_log_reader" {
 
 # IAM policy for audit log administrators (can bypass Object Lock governance mode)
 resource "aws_iam_policy" "audit_log_admin" {
-  name        = "${local.resource_prefix}-audit-log-admin"
+  name        = "${local.resource_prefix}-audit-log-admin-new"
   description = "Administrative access to audit logs with Object Lock bypass"
 
   policy = jsonencode({
@@ -95,7 +95,7 @@ resource "aws_iam_policy" "audit_log_admin" {
 
 # Deny policy to prevent log modification by unauthorized users
 resource "aws_iam_policy" "deny_log_modification" {
-  name        = "${local.resource_prefix}-deny-log-modification"
+  name        = "${local.resource_prefix}-deny-log-modification-new"
   description = "Explicitly deny log modification operations"
 
   policy = jsonencode({
