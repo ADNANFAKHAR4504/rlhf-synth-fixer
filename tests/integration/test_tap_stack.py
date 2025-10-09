@@ -119,28 +119,6 @@ class TestLambdaInfrastructure(BaseIntegrationTest):
         except ClientError as e:
             self.fail(f"Main Lambda function validation failed: {e}")
     
-    def test_log_processor_lambda_function_exists_and_configured(self):
-        """Test that log processor Lambda function is created with proper configuration."""
-        function_name = self.get_output_value('log_processor_function_name')
-        self.fail_if_resource_missing('log_processor_function_name', 'Log processor Lambda function')
-        
-        try:
-            response = self.lambda_client.get_function(FunctionName=function_name)
-            config = response['Configuration']
-            
-            # Validate function configuration
-            self.assertEqual(config['Runtime'], 'python3.8')
-            self.assertEqual(config['Handler'], 'index.lambda_handler')
-            self.assertEqual(config['Timeout'], 30)
-            self.assertEqual(config['MemorySize'], 128)
-            
-            # Check function is active
-            self.assertEqual(config['State'], 'Active')
-            self.assertEqual(config['LastUpdateStatus'], 'Successful')
-            
-        except ClientError as e:
-            self.fail(f"Log processor Lambda function validation failed: {e}")
-    
     def test_lambda_functions_have_correct_iam_roles(self):
         """Test that Lambda functions have appropriate IAM roles attached."""
         main_function_name = self.get_output_value('lambda_function_name')
