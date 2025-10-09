@@ -181,17 +181,11 @@
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
-<<<<<<< HEAD
-    "uuid": "^11.1.0",
-    "yaml-cfn": "^0.3.2"
-||||||| parent of 00f6812ae (feat(dev-ops): enforce conventional commits client-side)
-    "uuid": "^11.1.0"
-=======
+    "yaml-cfn": "^0.3.2",
     "uuid": "^11.1.0",
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
     "husky": "^9.0.0"
->>>>>>> 00f6812ae (feat(dev-ops): enforce conventional commits client-side)
   },
   "dependencies": {
     "@aws-cdk/aws-pipes-alpha": "^2.204.0-alpha.0",
