@@ -106,8 +106,7 @@ export class TapStack extends TerraformStack {
     // This is a dummy key - replace with your actual public key
     const validSshPublicKey =
       process.env.SSH_PUBLIC_KEY ||
-      `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCuR0J1zjE5lgZYYe5qDnmX0SkKhiuD3yTVGpE+ReEdQ8W9+eXzIuZokWmjqbPlGRC9vZTiNUYfwZSGHa5FbZvjVnlUXG7gKfHZuLQlmWUS9zjyzPjCmlZPw4w3+e5gqZ1CBqGnlphZjWbaG8Tkh4Z1l8CtIh5Q3W9uQhDfugHHuVvR4GqgQeQ8u92UgPJDxxix4a8Ub34F8KchjhiuZ9t7htzkRPsE6RV1f8Z4drsu8Tht4+n6s+1D2I1lYWUuXkPoK1umx6T0K4QaejKQys6bPHD3n4pSSeKP7kDqAZwH2uZlK87W3YzB3OMljShJHVSp6yRhG6bKn test-key@example
-`;
+      'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCcJ4MAs1bEJ1KM0exmMSmjdpbQqQ4oWTi0qtcefl3jCL3RsGXErxTZZw6MwP0YZj1qQIbZjA7VsjR5CqiQr2qsZOFRlsqNZGEJlH4TAsVJINEYSLDWQa+7iS5gqY7f5Y2mW+R3glqRP87jhZNeFOkRS5vqCss9Bo3pNAFVYWkuM2s3qWZYyDVYTt4B0GPRE+i9l5Acr3JuaN40vXR5A0fs3T8IC/4Ft1SueHs7nu7TeMdXW72DE6Rj7gkb6BEQE6Q3ewc+0tZXS88pq7MzMNbuGkhaLnCslDSMNVBmH9pY2camOavjVZ0Fqc9xsFVIWlrnVNqnGZCVDIxqM6HDFZXX test@example.com';
 
     // Only create key pair if a valid key is provided
     let keyPair;
@@ -143,15 +142,11 @@ export class TapStack extends TerraformStack {
       );
 
     // FIXED: Then set ACL after ownership controls
-    const logsBucketAcl = new aws.s3BucketAcl.S3BucketAcl(
-      this,
-      'logs-bucket-acl',
-      {
-        bucket: logsBucket.id,
-        acl: 'log-delivery-write',
-        dependsOn: [logsBucketOwnership],
-      }
-    );
+    new aws.s3BucketAcl.S3BucketAcl(this, 'logs-bucket-acl', {
+      bucket: logsBucket.id,
+      acl: 'log-delivery-write',
+      dependsOn: [logsBucketOwnership],
+    });
 
     // FIXED: Configure bucket versioning
     new aws.s3BucketVersioning.S3BucketVersioningA(this, 'logs-versioning', {
@@ -174,6 +169,46 @@ export class TapStack extends TerraformStack {
             },
           },
         ],
+      }
+    );
+
+    const logsBucketAclForCloudFront = new aws.s3BucketAcl.S3BucketAcl(
+      this,
+      'logs-bucket-acl-cloudfront',
+      {
+        bucket: logsBucket.id,
+        accessControlPolicy: {
+          grant: [
+            {
+              grantee: {
+                // This is the CloudFront log delivery account for all regions
+                id: 'c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0',
+                type: 'CanonicalUser',
+              },
+              permission: 'FULL_CONTROL',
+            },
+            {
+              grantee: {
+                // Bucket owner
+                type: 'CanonicalUser',
+                id: new aws.dataAwsCanonicalUserId.DataAwsCanonicalUserId(
+                  this,
+                  'current-user-id',
+                  {}
+                ).id,
+              },
+              permission: 'FULL_CONTROL',
+            },
+          ],
+          owner: {
+            id: new aws.dataAwsCanonicalUserId.DataAwsCanonicalUserId(
+              this,
+              'owner-id',
+              {}
+            ).id,
+          },
+        },
+        dependsOn: [logsBucketOwnership],
       }
     );
 
@@ -245,16 +280,22 @@ export class TapStack extends TerraformStack {
             Action: 's3:PutObject',
             Resource: `${logsBucket.arn}/alb-logs/*`,
           },
-          // CloudTrail Access
+          // CloudTrail - Get Bucket ACL
           {
             Sid: 'CloudTrailBucketAcl',
             Effect: 'Allow',
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
             },
-            Action: 's3:GetBucketAcl',
+            Action: ['s3:GetBucketAcl', 's3:ListBucket'],
             Resource: logsBucket.arn,
+            Condition: {
+              StringEquals: {
+                'aws:SourceAccount': accountId,
+              },
+            },
           },
+          // CloudTrail - Write logs
           {
             Sid: 'CloudTrailWrite',
             Effect: 'Allow',
@@ -262,11 +303,10 @@ export class TapStack extends TerraformStack {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${logsBucket.arn}/cloudtrail/*`,
+            Resource: `${logsBucket.arn}/cloudtrail/AWSLogs/${accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'aws:SourceAccount': accountId,
               },
             },
           },
@@ -278,7 +318,7 @@ export class TapStack extends TerraformStack {
               Service: 'delivery.logs.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${logsBucket.arn}/vpc-flow-logs/*`,
+            Resource: `${logsBucket.arn}/vpc-flow-logs/AWSLogs/${accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
@@ -305,14 +345,19 @@ export class TapStack extends TerraformStack {
             Sid: 'CloudFrontLogDelivery',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${accountId}:root`,
+              Service: 'cloudfront.amazonaws.com',
             },
-            Action: ['s3:GetBucketAcl', 's3:PutBucketAcl'],
-            Resource: logsBucket.arn,
+            Action: ['s3:PutObject'],
+            Resource: `${logsBucket.arn}/cloudfront-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
           },
         ],
       }),
-      dependsOn: [logsBucketAcl],
+      dependsOn: [logsBucketAclForCloudFront], // Update dependency
     });
 
     // ========== Load Balancer ==========
