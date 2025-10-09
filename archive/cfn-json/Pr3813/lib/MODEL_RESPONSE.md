@@ -1,0 +1,601 @@
+# Video Streaming Media Storage Solution
+
+I'll create a comprehensive CloudFormation template for your video streaming platform with all the components you requested.
+
+## CloudFormation Template (template.json)
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Video streaming media storage solution with S3, CloudFront, and monitoring",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "production",
+      "Description": "Environment name for resource tagging"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarm notifications",
+      "Default": "admin@example.com"
+    }
+  },
+  "Resources": {
+    "VideoStorageBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "video-storage-${AWS::AccountId}-${AWS::Region}"
+        },
+        "AccelerateConfiguration": {
+          "AccelerationStatus": "Enabled"
+        },
+        "IntelligentTieringConfigurations": [
+          {
+            "Id": "VideoFilesIntelligentTiering",
+            "Status": "Enabled",
+            "Tierings": [
+              {
+                "AccessTier": "ARCHIVE_ACCESS",
+                "Days": 90
+              },
+              {
+                "AccessTier": "DEEP_ARCHIVE_ACCESS",
+                "Days": 180
+              }
+            ]
+          }
+        ],
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToDeepArchive",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 365,
+                  "StorageClass": "DEEP_ARCHIVE"
+                }
+              ]
+            }
+          ]
+        },
+        "InventoryConfigurations": [
+          {
+            "Id": "WeeklyInventory",
+            "Enabled": true,
+            "ScheduleFrequency": "Weekly",
+            "IncludedObjectVersions": "Current",
+            "Destination": {
+              "BucketArn": {
+                "Fn::GetAtt": [
+                  "InventoryBucket",
+                  "Arn"
+                ]
+              },
+              "Format": "CSV",
+              "Prefix": "inventory-reports"
+            },
+            "OptionalFields": [
+              "Size",
+              "LastModifiedDate",
+              "StorageClass",
+              "ETag",
+              "IntelligentTieringAccessTier"
+            ]
+          }
+        ],
+        "MetricsConfigurations": [
+          {
+            "Id": "EntireBucketMetrics"
+          }
+        ],
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VideoStorage"
+          },
+          {
+            "Key": "CostCenter",
+            "Value": "MediaServices"
+          }
+        ]
+      }
+    },
+    "InventoryBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "video-inventory-${AWS::AccountId}-${AWS::Region}"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldInventoryReports",
+              "Status": "Enabled",
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "InventoryReports"
+          }
+        ]
+      }
+    },
+    "InventoryBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "InventoryBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowS3InventoryDelivery",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${InventoryBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "VideoStorageBucket",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudFrontOriginAccessControl": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": {
+            "Fn::Sub": "video-oac-${AWS::StackName}"
+          },
+          "OriginAccessControlOriginType": "s3",
+          "SigningBehavior": "always",
+          "SigningProtocol": "sigv4"
+        }
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Comment": "Video streaming distribution",
+          "Enabled": true,
+          "HttpVersion": "http2and3",
+          "PriceClass": "PriceClass_All",
+          "Origins": [
+            {
+              "Id": "S3VideoOrigin",
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "VideoStorageBucket",
+                  "RegionalDomainName"
+                ]
+              },
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              },
+              "OriginAccessControlId": {
+                "Ref": "CloudFrontOriginAccessControl"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3VideoOrigin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": [
+              "GET",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+            "OriginRequestPolicyId": "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VideoDelivery"
+          }
+        ]
+      }
+    },
+    "VideoStorageBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "VideoStorageBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowCloudFrontAccess",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${VideoStorageBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "VideoUploadRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "VideoUploadRole-${AWS::StackName}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "VideoUploadPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "VideoUploadPolicy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowVideoUpload",
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+              ],
+              "Resource": {
+                "Fn::Sub": "${VideoStorageBucket.Arn}/*"
+              }
+            },
+            {
+              "Sid": "AllowListBucket",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "VideoStorageBucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "DenyDelete",
+              "Effect": "Deny",
+              "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:DeleteBucket"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "VideoStorageBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${VideoStorageBucket.Arn}/*"
+                }
+              ]
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "VideoUploadRole"
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "video-storage-alerts-${AWS::StackName}"
+        },
+        "DisplayName": "Video Storage Alerts",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "BucketSizeAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "video-bucket-size-alarm-${AWS::StackName}"
+        },
+        "AlarmDescription": "Alert when bucket size exceeds threshold",
+        "MetricName": "BucketSizeBytes",
+        "Namespace": "AWS/S3",
+        "Statistic": "Average",
+        "Period": 86400,
+        "EvaluationPeriods": 1,
+        "Threshold": 1099511627776,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "BucketName",
+            "Value": {
+              "Ref": "VideoStorageBucket"
+            }
+          },
+          {
+            "Name": "StorageType",
+            "Value": "StandardStorage"
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ObjectCountAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "video-object-count-alarm-${AWS::StackName}"
+        },
+        "AlarmDescription": "Alert when object count exceeds threshold",
+        "MetricName": "NumberOfObjects",
+        "Namespace": "AWS/S3",
+        "Statistic": "Average",
+        "Period": 86400,
+        "EvaluationPeriods": 1,
+        "Threshold": 100000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "BucketName",
+            "Value": {
+              "Ref": "VideoStorageBucket"
+            }
+          },
+          {
+            "Name": "StorageType",
+            "Value": "AllStorageTypes"
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "CloudWatchLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/s3/video-storage/${AWS::StackName}"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "VideoStorageDashboard-${AWS::StackName}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"BucketSizeBytes\",{\"stat\":\"Average\",\"period\":86400}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Bucket Size\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"NumberOfObjects\",{\"stat\":\"Average\",\"period\":86400}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Object Count\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/CloudFront\",\"Requests\",{\"stat\":\"Sum\"}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"us-east-1\",\"title\":\"CloudFront Requests\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/CloudFront\",\"BytesDownloaded\",{\"stat\":\"Sum\"}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"us-east-1\",\"title\":\"Bytes Downloaded\",\"period\":300}}]}",
+            {}
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VideoStorageBucketName": {
+      "Description": "Name of the video storage bucket",
+      "Value": {
+        "Ref": "VideoStorageBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VideoStorageBucket"
+        }
+      }
+    },
+    "VideoStorageBucketArn": {
+      "Description": "ARN of the video storage bucket",
+      "Value": {
+        "Fn::GetAtt": [
+          "VideoStorageBucket",
+          "Arn"
+        ]
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Description": "CloudFront distribution ID",
+      "Value": {
+        "Ref": "CloudFrontDistribution"
+      }
+    },
+    "CloudFrontDistributionDomain": {
+      "Description": "CloudFront distribution domain name",
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudFrontDistribution",
+          "DomainName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudFrontDomain"
+        }
+      }
+    },
+    "TransferAccelerationEndpoint": {
+      "Description": "S3 Transfer Acceleration endpoint",
+      "Value": {
+        "Fn::Sub": "${VideoStorageBucket}.s3-accelerate.amazonaws.com"
+      }
+    },
+    "VideoUploadRoleArn": {
+      "Description": "ARN of the video upload IAM role",
+      "Value": {
+        "Fn::GetAtt": [
+          "VideoUploadRole",
+          "Arn"
+        ]
+      }
+    },
+    "InventoryBucketName": {
+      "Description": "Name of the inventory reports bucket",
+      "Value": {
+        "Ref": "InventoryBucket"
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=VideoStorageDashboard-${AWS::StackName}"
+      }
+    }
+  }
+}
+```
+
+This CloudFormation template provides:
+
+1. **S3 Storage with Intelligent-Tiering**: Main bucket with automatic cost optimization and Transfer Acceleration enabled
+2. **CloudFront Distribution**: Global content delivery using Origin Access Control for secure S3 access
+3. **Lifecycle Management**: Automatic transition to Glacier Deep Archive after 365 days
+4. **S3 Inventory**: Weekly reports with detailed object metadata including Intelligent-Tiering tier information
+5. **CloudWatch Monitoring**: Alarms for bucket size and object count, with a dashboard for visualization
+6. **IAM Security**: Upload role with least privilege - allows uploads but denies deletions
+7. **Proper Tagging**: Consistent tagging across all resources for cost tracking and management
+8. **SNS Notifications**: Email alerts for storage threshold breaches
+
+The template uses parameters for environment and notification email, making it reusable across different deployments.

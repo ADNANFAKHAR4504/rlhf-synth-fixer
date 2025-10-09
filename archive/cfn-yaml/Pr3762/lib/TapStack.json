@@ -1,0 +1,931 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Scalable Travel Platform API with Caching, Monitoring, and Event-Driven Integration",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Project Configuration"
+          },
+          "Parameters": [
+            "ProjectName",
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "API Configuration"
+          },
+          "Parameters": [
+            "ApiThrottlingRate",
+            "ApiThrottlingBurst",
+            "CacheNodeType"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "ProjectName": {
+      "Type": "String",
+      "Default": "TravelPlatform",
+      "Description": "Name of the project for resource tagging",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "CacheNodeType": {
+      "Type": "String",
+      "Default": "cache.t3.micro",
+      "Description": "ElastiCache node instance type",
+      "AllowedValues": [
+        "cache.t3.micro",
+        "cache.t3.small",
+        "cache.t3.medium"
+      ]
+    },
+    "ApiThrottlingRate": {
+      "Type": "Number",
+      "Default": 10000,
+      "Description": "API Gateway throttling rate limit"
+    },
+    "ApiThrottlingBurst": {
+      "Type": "Number",
+      "Default": 5000,
+      "Description": "API Gateway throttling burst limit"
+    }
+  },
+  "Resources": {
+    "TravelDataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TravelData${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "searchType",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "searchId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "searchType",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "searchId",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "timestamp-index",
+            "KeySchema": [
+              {
+                "AttributeName": "searchType",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "CacheSubnetGroup": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "Description": "Subnet group for ElastiCache cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnetA"
+          },
+          {
+            "Ref": "PrivateSubnetB"
+          }
+        ]
+      }
+    },
+    "CacheCluster": {
+      "Type": "AWS::ElastiCache::CacheCluster",
+      "Properties": {
+        "CacheNodeType": {
+          "Ref": "CacheNodeType"
+        },
+        "Engine": "redis",
+        "NumCacheNodes": 1,
+        "CacheSubnetGroupName": {
+          "Ref": "CacheSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "CacheSecurityGroup"
+          }
+        ]
+      }
+    },
+    "CacheSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for ElastiCache Redis cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": -1,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TravelApiPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:BatchGetItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TravelDataTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${TravelDataTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticache:DescribeCacheClusters"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "events:PutEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "EventBus",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RedisLayer": {
+      "Type": "AWS::Lambda::LayerVersion",
+      "Properties": {
+        "LayerName": {
+          "Fn::Sub": "redis-layer-${EnvironmentSuffix}"
+        },
+        "Description": "Redis Python library for Lambda functions",
+        "Content": {
+          "S3Bucket": "aws-lambda-layers-us-east-1",
+          "S3Key": "redis/redis-4.6.0.zip"
+        },
+        "CompatibleRuntimes": [
+          "python3.9",
+          "python3.10",
+          "python3.11"
+        ]
+      }
+    },
+    "SearchLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "TravelSearchApi${EnvironmentSuffix}"
+        },
+        "Description": "Lambda function for processing travel search requests with Redis caching, performance monitoring, and real-time event publishing for external integrations",
+        "Runtime": "python3.9",
+        "Handler": "lambda_handler.lambda_handler",
+        "Code": {
+          "ZipFile": "# Placeholder - replace with actual deployment package\nimport json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Deploy from lambda/search/ directory')}"
+        },
+        "Layers": [
+          {
+            "Ref": "RedisLayer"
+          }
+        ],
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TravelDataTable"
+            },
+            "EVENT_BUS_NAME": {
+              "Ref": "EventBus"
+            },
+            "REDIS_ENDPOINT": {
+              "Fn::GetAtt": [
+                "CacheCluster",
+                "RedisEndpoint.Address"
+              ]
+            },
+            "CACHE_TTL": "3600"
+          }
+        },
+        "MemorySize": 512,
+        "Timeout": 30,
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnetA"
+            },
+            {
+              "Ref": "PrivateSubnetB"
+            }
+          ]
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "TravelApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TravelApi${EnvironmentSuffix}"
+        },
+        "Description": "Travel Platform REST API with API Key authentication",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ApiKey": {
+      "Type": "AWS::ApiGateway::ApiKey",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TravelApiKey${EnvironmentSuffix}"
+        },
+        "Description": "API Key for Travel Platform API",
+        "Enabled": true,
+        "StageKeys": [
+          {
+            "RestApiId": {
+              "Ref": "TravelApi"
+            },
+            "StageName": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      },
+      "DependsOn": [
+        "ApiStage"
+      ]
+    },
+    "UsagePlan": {
+      "Type": "AWS::ApiGateway::UsagePlan",
+      "Properties": {
+        "UsagePlanName": {
+          "Fn::Sub": "TravelApiUsagePlan${EnvironmentSuffix}"
+        },
+        "Description": "Usage plan for Travel Platform API",
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "TravelApi"
+            },
+            "Stage": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ],
+        "Throttle": {
+          "RateLimit": {
+            "Ref": "ApiThrottlingRate"
+          },
+          "BurstLimit": {
+            "Ref": "ApiThrottlingBurst"
+          }
+        },
+        "Quota": {
+          "Limit": 10000,
+          "Period": "DAY"
+        }
+      },
+      "DependsOn": [
+        "ApiStage"
+      ]
+    },
+    "UsagePlanKey": {
+      "Type": "AWS::ApiGateway::UsagePlanKey",
+      "Properties": {
+        "KeyId": {
+          "Ref": "ApiKey"
+        },
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "UsagePlan"
+        }
+      }
+    },
+    "SearchResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "TravelApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "TravelApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "search"
+      }
+    },
+    "SearchMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "TravelApi"
+        },
+        "ResourceId": {
+          "Ref": "SearchResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "ApiKeyRequired": true,
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SearchLambdaFunction.Arn}/invocations"
+          }
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": "200",
+            "ResponseModels": {
+              "application/json": "Empty"
+            }
+          },
+          {
+            "StatusCode": "400",
+            "ResponseModels": {
+              "application/json": "Empty"
+            }
+          },
+          {
+            "StatusCode": "403",
+            "ResponseModels": {
+              "application/json": "Empty"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SearchLambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TravelApi}/*/*/*"
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "SearchMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "TravelApi"
+        }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "TravelApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        },
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "ThrottlingRateLimit": {
+              "Ref": "ApiThrottlingRate"
+            },
+            "ThrottlingBurstLimit": {
+              "Ref": "ApiThrottlingBurst"
+            },
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": false,
+            "MetricsEnabled": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "EventBus": {
+      "Type": "AWS::Events::EventBus",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TravelEvents${EnvironmentSuffix}"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IntegrationRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ExternalIntegration${EnvironmentSuffix}"
+        },
+        "Description": "Route search events to external systems",
+        "EventBusName": {
+          "Ref": "EventBus"
+        },
+        "EventPattern": {
+          "source": [
+            "travel.platform.search"
+          ],
+          "detail-type": [
+            "Search Request"
+          ]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "IntegrationQueue",
+                "Arn"
+              ]
+            },
+            "Id": "IntegrationTarget"
+          }
+        ]
+      }
+    },
+    "IntegrationQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "TravelIntegration${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 1209600,
+        "ReceiveMessageWaitTimeSeconds": 20,
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "iac-rlhf-amazon",
+            "Value": "true"
+          }
+        ]
+      }
+    },
+    "IntegrationQueuePolicy": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "IntegrationQueue"
+          }
+        ],
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "IntegrationQueue",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "IntegrationRule",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "TravelPlatform${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"Count\", \"ApiName\", \"${TravelApi}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"4XXError\", \".\", \".\", { \"stat\": \"Sum\", \"color\": \"#ff7f00\" } ],\n          [ \".\", \"5XXError\", \".\", \".\", { \"stat\": \"Sum\", \"color\": \"#d62728\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Requests\"\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    },
+    "ApiErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TravelApi${EnvironmentSuffix}-Errors"
+        },
+        "AlarmDescription": "Alert when API error rate exceeds threshold",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiName",
+            "Value": {
+              "Ref": "TravelApi"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "XRayServiceMap": {
+      "Type": "AWS::XRay::Group",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "TravelPlatform${EnvironmentSuffix}"
+        },
+        "FilterExpression": {
+          "Fn::Sub": "service(\"${SearchLambdaFunction}\")"
+        }
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true
+      }
+    },
+    "PrivateSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.0.1.0/24"
+      }
+    },
+    "PrivateSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.0.2.0/24"
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${TravelApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+        }
+      }
+    },
+    "TravelDataTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TravelDataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TravelDataTableName"
+        }
+      }
+    },
+    "TravelDataTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TravelDataTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TravelDataTableArn"
+        }
+      }
+    },
+    "CacheEndpoint": {
+      "Description": "ElastiCache Redis endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "CacheCluster",
+          "RedisEndpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CacheEndpoint"
+        }
+      }
+    },
+    "EventBusName": {
+      "Description": "EventBridge event bus name",
+      "Value": {
+        "Ref": "EventBus"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EventBusName"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MonitoringDashboard}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DashboardURL"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "ApiKeyId": {
+      "Description": "API Key ID for accessing the Travel Platform API",
+      "Value": {
+        "Ref": "ApiKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiKeyId"
+        }
+      }
+    },
+    "ApiUsage": {
+      "Description": "API Usage Instructions",
+      "Value": "Include 'X-API-Key' header with API key value when making requests to the endpoint",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiUsage"
+        }
+      }
+    }
+  }
+}

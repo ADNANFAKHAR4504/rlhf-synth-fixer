@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "100254",
+  "team": "1",
+  "startedAt": "2025-10-06T11:54:57.226Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IoT Core",
+    "Kinesis Data Streams",
+    "Lambda",
+    "DynamoDB",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "QuickSight",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
