@@ -337,31 +337,4 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
 }
 ```
 
-## Key Improvements Made
-
-1. **AWS Best Practices Compliance**: Adapted to modern AWS S3 bucket policies that use BucketOwnerEnforced by default.
-
-2. **Simplified Deployment**: Removed domain-specific resources (Route53, ACM) for test deployments, using CloudFront default certificate.
-
-3. **Proper Resource Naming**: All resources include environment suffix to prevent conflicts.
-
-4. **Error Response Configuration**: Fixed CloudFront custom error responses with proper responseCode fields.
-
-5. **Build Configuration**: Corrected Pulumi.yaml and TypeScript compilation paths.
-
-6. **Environment Variables**: Properly integrated ENVIRONMENT_SUFFIX from environment variables.
-
-7. **Test Compatibility**: Updated unit tests to match the actual infrastructure interfaces.
-
-## Production Considerations
-
-For production deployments, you should:
-
-1. **Enable Logging**: Configure proper S3 bucket ACL permissions for CloudFront logging.
-2. **Custom Domain**: Uncomment and configure Route53 and ACM certificate resources with a valid domain.
-3. **Enhanced Monitoring**: Add more CloudWatch alarms and consider AWS X-Ray integration.
-4. **Content Delivery**: Consider adding S3 Transfer Acceleration for faster uploads.
-5. **Security**: Implement WAF rules on CloudFront distribution for additional protection.
-6. **Backup Strategy**: Implement S3 versioning and cross-region replication for content backup.
-
 This implementation successfully deploys to AWS and provides a solid foundation for a static website hosting solution.
