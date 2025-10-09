@@ -201,6 +201,10 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
       expect(tfContent).toMatch(/special\s*=\s*true/);
     });
 
+    test('password excludes RDS-incompatible special characters', () => {
+      expect(tfContent).toMatch(/override_special\s*=\s*"!#\$%&\*\(\)-_=\+\[\]\{\}<>:\?"/);
+    });
+
     test('stores password in Secrets Manager with KMS encryption', () => {
       expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_password"/);
       expect(tfContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.rds\.arn/);

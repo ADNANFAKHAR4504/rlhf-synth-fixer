@@ -362,8 +362,9 @@ resource "aws_kms_alias" "rds" {
 # ================================================================================
 
 resource "random_password" "master" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
