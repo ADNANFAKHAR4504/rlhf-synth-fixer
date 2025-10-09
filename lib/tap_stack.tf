@@ -1031,11 +1031,6 @@ resource "aws_cloudtrail" "main" {
       type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*/*"]
     }
-    
-    data_resource {
-      type   = "AWS::RDS::DBCluster"
-      values = ["arn:aws:rds:*:*:cluster:*"]
-    }
   }
   
   tags = merge(local.common_tags, {

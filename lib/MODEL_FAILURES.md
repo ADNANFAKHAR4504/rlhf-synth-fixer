@@ -14,3 +14,17 @@
 │ 
 │ An argument named "enable_drop_invalid_header_fields" is not expected here.
 ```
+
+```
+
+╷
+│ Error: expected event_selector.0.data_resource.1.type to be one of ["AWS::DynamoDB::Table" "AWS::Lambda::Function" "AWS::S3::Object"], got AWS::RDS::DBCluster
+│ 
+│   with aws_cloudtrail.main,
+│   on tap_stack.tf line 1036, in resource "aws_cloudtrail" "main":
+│ 1036:       type   = "AWS::RDS::DBCluster"
+│ 
+╵
+Error: Terraform exited with code 1.
+
+```
