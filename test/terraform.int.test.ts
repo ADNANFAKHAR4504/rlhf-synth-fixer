@@ -1,7 +1,3 @@
-// test/terraform.int.test.ts
-// End-to-end integration tests for e-books content delivery infrastructure
-// Tests real AWS resources deployed by Terraform
-
 import {
   S3Client,
   GetBucketVersioningCommand,
