@@ -21,6 +21,7 @@ resource "aws_sns_topic_policy" "failover_notifications" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AllowCloudWatchPublish"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"
@@ -34,6 +35,7 @@ resource "aws_sns_topic_policy" "failover_notifications" {
         }
       },
       {
+        Sid    = "AllowLambdaPublish"
         Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
