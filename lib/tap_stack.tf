@@ -321,7 +321,7 @@ resource "aws_network_acl" "main" {
 
 # Security Group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name_prefix = "sg-ec2-${var.project_name}-"
+  name_prefix = "ec2-sg-${var.project_name}-"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
   
@@ -363,7 +363,7 @@ resource "aws_security_group" "ec2" {
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name_prefix = "sg-rds-${var.project_name}-"
+  name_prefix = "rds-sg-${var.project_name}-"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
   
@@ -396,7 +396,7 @@ resource "aws_security_group" "rds" {
 
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  name_prefix = "sg-alb-${var.project_name}-"
+  name_prefix = "alb-sg-${var.project_name}-"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
   
