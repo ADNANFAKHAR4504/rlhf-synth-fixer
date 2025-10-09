@@ -772,7 +772,6 @@
     },
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": ["LambdaLogGroup"],
       "Properties": {
         "Runtime": "python3.8",
         "Handler": "index.lambda_handler",

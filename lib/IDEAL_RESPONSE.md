@@ -78,7 +78,7 @@ The infrastructure consists of:
 
 **LambdaLogGroup**: CloudWatch log group created before the Lambda function to prevent race conditions. Retention is 30 days with KMS encryption enabled.
 
-**LambdaFunction**: Lambda function with Python 3.8 runtime. The function is deployed in both private subnets for high availability. It has explicit dependency on the log group to ensure proper creation order. The inline code:
+**LambdaFunction**: Lambda function with Python 3.8 runtime. The function is deployed in both private subnets for high availability. The dependency on the log group is automatically enforced through the LoggingConfig reference. The inline code:
 - Imports boto3 for AWS SDK, json for data handling, os for environment variables, datetime for timestamps
 - Creates DynamoDB resource, S3 client, and SNS client
 - Reads environment variables for table name, bucket name, and SNS topic ARN
@@ -935,7 +935,6 @@ The template exports the following outputs with stack name prefix for cross-stac
     },
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": ["LambdaLogGroup"],
       "Properties": {
         "Runtime": "python3.8",
         "Handler": "index.lambda_handler",

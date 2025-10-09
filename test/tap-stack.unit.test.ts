@@ -53,11 +53,6 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('should configure Lambda with dependency on log group', () => {
-      const lambda = template.Resources.LambdaFunction;
-      expect(lambda.DependsOn).toContain('LambdaLogGroup');
-    });
-
     test('should configure Lambda with LoggingConfig', () => {
       const lambda = template.Resources.LambdaFunction;
       expect(lambda.Properties.LoggingConfig.LogGroup).toEqual({
