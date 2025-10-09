@@ -6,7 +6,7 @@ import { App, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 export class GamingDatabaseStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, enableAutoScaling?: boolean) {
     super(scope, id);
 
     // AWS Provider configuration - version 5.0+ targeting us-west-2
@@ -17,7 +17,7 @@ export class GamingDatabaseStack extends TerraformStack {
     // Auto-scaling flag - disabled by default for on-demand tables
     // WARNING: Enabling this requires switching table billing mode to PROVISIONED
     // DynamoDB limitation: on-demand tables don't support auto scaling
-    const enableGsiAutoscaling = false;
+    const enableGsiAutoscaling = enableAutoScaling || process.env.ENABLE_GSI_AUTOSCALING === 'true' || false;
 
     // DynamoDB Table - GamePlayerProfiles
     const gameTable = new DynamodbTable(this, 'game-player-profiles', {
