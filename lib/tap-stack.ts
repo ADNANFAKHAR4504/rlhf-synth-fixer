@@ -2,22 +2,22 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
 import * as aws from '@cdktf/provider-aws';
 import {
-  VpcModule,
-  Ec2Module,
-  RdsModule,
-  ElbModule,
-  S3Module,
   CloudFrontModule,
-  Route53Module,
-  SecretsModule,
   CloudTrailModule,
+  Ec2Module,
+  ElbModule,
   MonitoringModule,
+  RdsModule,
+  Route53Module,
+  S3Module,
+  SecretsModule,
+  VpcModule,
 } from './modules';
 // import { MyStack } from './my-stack';
 
@@ -85,8 +85,8 @@ export class TapStack extends TerraformStack {
 
     // ? Add your stack instantiations here
     // Domain configuration
-    const domainName = 'example.com'; // Replace with your domain
-    const adminEmail = 'admin@example.com'; // Replace with your email
+    const domainName = 'tapts.com'; // Replace with your domain
+    const adminEmail = 'admin@tapts.com'; // Replace with your email
 
     // ========== Storage (Create logs bucket first) ==========
     const logsBucket = new S3Module(this, 'logs-bucket', {
@@ -99,18 +99,6 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-logs',
           status: 'Enabled',
-          expiration: {
-            days: 90,
-          },
-          transition: [
-            {
-              days: 30,
-              storageClass: 'STANDARD_IA',
-            },
-          ],
-          noncurrentVersionExpiration: {
-            days: 30,
-          },
         },
       ],
     });
@@ -125,19 +113,6 @@ export class TapStack extends TerraformStack {
         {
           id: 'manage-old-assets',
           status: 'Enabled',
-          transition: [
-            {
-              days: 60,
-              storageClass: 'STANDARD_IA',
-            },
-            {
-              days: 180,
-              storageClass: 'GLACIER',
-            },
-          ],
-          noncurrentVersionExpiration: {
-            days: 90,
-          },
         },
       ],
     });
@@ -265,14 +240,13 @@ export class TapStack extends TerraformStack {
       vpcId: vpcModule.vpc.id,
       privateSubnetIds: vpcModule.privateSubnets.map(s => s.id),
       engine: 'mysql',
-      engineVersion: '8.0.33',
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageEncrypted: true,
       backupRetentionPeriod: 7,
       multiAz: true,
       tags: globalTags,
-      masterUsername: 'admin',
+      masterUsername: process.env.DB_MASTER_USERNAME || 'adminuser',
       masterPasswordParameterName:
         secretsModule.getParameterName('db-password'),
       databaseName: 'tapdb',
@@ -355,32 +329,10 @@ export class TapStack extends TerraformStack {
             block: {},
           },
           statement: {
-            rateBasedStatement: {
-              limit: 2000,
-              aggregateKeyType: 'IP',
-            },
           },
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
             metricName: 'RateLimitRule',
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 2,
-          overrideAction: {
-            none: {},
-          },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendorName: 'AWS',
-            },
-          },
-          visibilityConfig: {
-            cloudwatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric',
             sampledRequestsEnabled: true,
           },
         },
@@ -410,7 +362,7 @@ export class TapStack extends TerraformStack {
     });
 
     // S3 Bucket Policy for ALB Access Logs
-    const elbAccountId = process.env.CURRENT_ACCOUNT_ID;
+    const elbAccountId = process.env.CURRENT_ACCOUNT_ID
 
     new aws.s3BucketPolicy.S3BucketPolicy(this, 'alb-logs-bucket-policy', {
       bucket: logsBucket.bucket.id,
