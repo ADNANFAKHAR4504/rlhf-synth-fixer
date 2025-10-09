@@ -1,4 +1,4 @@
-// lib/modules.ts
+// lib/modules.ts - Fixed version
 import { Construct } from 'constructs';
 
 // Archive provider for Lambda inline code
@@ -55,6 +55,14 @@ export interface DynamoTableConfig {
     rangeKeyType?: string;
     projectionType?: string;
   }[];
+}
+
+// Interface for method dependencies
+export interface ApiMethodDependencies {
+  method: ApiGatewayMethod;
+  integration: ApiGatewayIntegration;
+  methodResponse?: ApiGatewayMethodResponse;
+  integrationResponse?: ApiGatewayIntegrationResponse;
 }
 
 export class LambdaConstruct extends Construct {
@@ -214,6 +222,7 @@ export class DynamoTableConstruct extends Construct {
 
 export class ApiGatewayConstruct extends Construct {
   public readonly api: ApiGatewayRestApi;
+  public readonly allDependencies: any[] = [];
 
   constructor(
     scope: Construct,
@@ -236,17 +245,8 @@ export class ApiGatewayConstruct extends Construct {
   public addCorsOptions(
     resource: ApiGatewayResource,
     resourceName: string
-  ): ApiGatewayMethod {
-    new ApiGatewayIntegration(this, `${resourceName}-options-integration`, {
-      restApiId: this.api.id,
-      resourceId: resource.id,
-      httpMethod: 'OPTIONS',
-      type: 'MOCK',
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
-    });
-
+  ): ApiMethodDependencies {
+    // 1. Create method first
     const optionsMethod = new ApiGatewayMethod(
       this,
       `${resourceName}-options-method`,
@@ -258,19 +258,42 @@ export class ApiGatewayConstruct extends Construct {
       }
     );
 
-    new ApiGatewayMethodResponse(this, `${resourceName}-options-response`, {
-      restApiId: this.api.id,
-      resourceId: resource.id,
-      httpMethod: optionsMethod.httpMethod,
-      statusCode: '200',
-      responseParameters: {
-        'method.response.header.Access-Control-Allow-Headers': true,
-        'method.response.header.Access-Control-Allow-Methods': true,
-        'method.response.header.Access-Control-Allow-Origin': true,
-      },
-    });
+    // 2. Create integration after method
+    const integration = new ApiGatewayIntegration(
+      this,
+      `${resourceName}-options-integration`,
+      {
+        restApiId: this.api.id,
+        resourceId: resource.id,
+        httpMethod: 'OPTIONS',
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+        dependsOn: [optionsMethod],
+      }
+    );
 
-    new ApiGatewayIntegrationResponse(
+    // 3. Create method response after method
+    const methodResponse = new ApiGatewayMethodResponse(
+      this,
+      `${resourceName}-options-response`,
+      {
+        restApiId: this.api.id,
+        resourceId: resource.id,
+        httpMethod: optionsMethod.httpMethod,
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+        dependsOn: [optionsMethod],
+      }
+    );
+
+    // 4. Create integration response after both integration and method response
+    const integrationResponse = new ApiGatewayIntegrationResponse(
       this,
       `${resourceName}-options-integration-response`,
       {
@@ -288,10 +311,24 @@ export class ApiGatewayConstruct extends Construct {
         responseTemplates: {
           'application/json': '',
         },
+        dependsOn: [integration, methodResponse],
       }
     );
 
-    return optionsMethod;
+    // Add all resources to dependencies
+    this.allDependencies.push(
+      optionsMethod,
+      integration,
+      methodResponse,
+      integrationResponse
+    );
+
+    return {
+      method: optionsMethod,
+      integration,
+      methodResponse,
+      integrationResponse,
+    };
   }
 
   public createLambdaIntegration(
@@ -299,8 +336,21 @@ export class ApiGatewayConstruct extends Construct {
     httpMethod: string,
     lambda: LambdaFunction,
     resourceName: string
-  ): ApiGatewayMethod {
-    new ApiGatewayIntegration(
+  ): ApiMethodDependencies {
+    // 1. Create method first
+    const method = new ApiGatewayMethod(
+      this,
+      `${resourceName}-${httpMethod}-method`,
+      {
+        restApiId: this.api.id,
+        resourceId: resource.id,
+        httpMethod,
+        authorization: 'NONE',
+      }
+    );
+
+    // 2. Create integration after method
+    const integration = new ApiGatewayIntegration(
       this,
       `${resourceName}-${httpMethod}-integration`,
       {
@@ -310,17 +360,7 @@ export class ApiGatewayConstruct extends Construct {
         integrationHttpMethod: 'POST',
         type: 'AWS_PROXY',
         uri: lambda.invokeArn,
-      }
-    );
-
-    const method = new ApiGatewayMethod(
-      this,
-      `${resourceName}-${httpMethod}-method`,
-      {
-        restApiId: this.api.id,
-        resourceId: resource.id,
-        httpMethod,
-        authorization: 'NONE',
+        dependsOn: [method],
       }
     );
 
@@ -333,7 +373,17 @@ export class ApiGatewayConstruct extends Construct {
       sourceArn: `${this.api.executionArn}/*/*`,
     });
 
-    return method;
+    // Add to dependencies
+    this.allDependencies.push(method, integration);
+
+    return {
+      method,
+      integration,
+    };
+  }
+
+  public getDeploymentDependencies(): any[] {
+    return this.allDependencies;
   }
 }
 

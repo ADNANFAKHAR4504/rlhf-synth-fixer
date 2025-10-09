@@ -263,45 +263,41 @@ export class TapStack extends TerraformStack {
       pathPart: '{id}',
     });
 
-    // Set up API integrations
-    const productsMethods = [
-      apiGateway.createLambdaIntegration(
-        productsResource,
-        'GET',
-        productsLambda.lambda,
-        'products' // Static resource name
-      ),
-      apiGateway.createLambdaIntegration(
-        productIdResource,
-        'GET',
-        productsLambda.lambda,
-        'product-id' // Static resource name
-      ),
-      apiGateway.addCorsOptions(productsResource, 'products'), // Static resource name
-      apiGateway.addCorsOptions(productIdResource, 'product-id'), // Static resource name
-    ];
+// Set up API integrations
+    apiGateway.createLambdaIntegration(
+      productsResource,
+      'GET',
+      productsLambda.lambda,
+      'products'
+    );
+    apiGateway.createLambdaIntegration(
+      productIdResource,
+      'GET',
+      productsLambda.lambda,
+      'product-id'
+    );
+    apiGateway.addCorsOptions(productsResource, 'products');
+    apiGateway.addCorsOptions(productIdResource, 'product-id');
 
-    const ordersMethods = [
-      apiGateway.createLambdaIntegration(
-        ordersResource,
-        'POST',
-        ordersLambda.lambda,
-        'orders' // Static resource name
-      ),
-      apiGateway.createLambdaIntegration(
-        orderIdResource,
-        'GET',
-        ordersLambda.lambda,
-        'order-id' // Static resource name
-      ),
-      apiGateway.addCorsOptions(ordersResource, 'orders'), // Static resource name
-      apiGateway.addCorsOptions(orderIdResource, 'order-id'), // Static resource name
-    ];
+    apiGateway.createLambdaIntegration(
+      ordersResource,
+      'POST',
+      ordersLambda.lambda,
+      'orders'
+    );
+    apiGateway.createLambdaIntegration(
+      orderIdResource,
+      'GET',
+      ordersLambda.lambda,
+      'order-id'
+    );
+    apiGateway.addCorsOptions(ordersResource, 'orders');
+    apiGateway.addCorsOptions(orderIdResource, 'order-id');
 
-    // Deploy API
+    // Deploy API - use the collected dependencies
     const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
       restApiId: apiGateway.api.id,
-      dependsOn: [...productsMethods, ...ordersMethods],
+      dependsOn: apiGateway.getDeploymentDependencies(),
       description: `Deployment for ${environmentSuffix} stage at ${new Date().toISOString()}`,
     });
 
