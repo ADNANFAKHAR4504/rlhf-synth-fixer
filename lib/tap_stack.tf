@@ -1,7 +1,3 @@
-# Multi-Region Disaster Recovery Infrastructure
-# RTO: 15 minutes | RPO: 5 minutes
-# Primary: us-east-1 | Secondary: us-west-2
-
 # ============================================================================
 # DATA SOURCES
 # ============================================================================
