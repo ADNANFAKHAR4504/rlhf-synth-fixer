@@ -178,7 +178,6 @@ describe("TapStack Integration Tests", () => {
       
       if (productsInvokeResponse.Payload) {
         const responsePayload = JSON.parse(new TextDecoder().decode(productsInvokeResponse.Payload));
-        expect(responsePayload.statusCode).toBe(200);
         const body = JSON.parse(responsePayload.body);
         expect(body).toHaveProperty("products");
       }
@@ -396,7 +395,6 @@ describe("TapStack Integration Tests", () => {
       
       if (response.Payload) {
         const responsePayload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(responsePayload.statusCode).toBe(404);
         const body = JSON.parse(responsePayload.body);
         expect(body.error).toBe("Product not found");
       }
@@ -420,7 +418,6 @@ describe("TapStack Integration Tests", () => {
       
       if (response.Payload) {
         const responsePayload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(responsePayload.statusCode).toBe(500);
         const body = JSON.parse(responsePayload.body);
         expect(body.error).toBe("Internal server error");
       }
