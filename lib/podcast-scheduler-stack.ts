@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as scheduler from 'aws-cdk-lib/aws-scheduler';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import { Construct } from 'constructs';
 
 interface PodcastSchedulerStackProps {
@@ -38,7 +38,7 @@ export class PodcastSchedulerStack extends Construct {
 const { DynamoDB } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocument } = require('@aws-sdk/lib-dynamodb');
 
-const ddb = DynamoDBDocument.from(new DynamoDB({ region: 'us-west-2' }));
+const ddb = DynamoDBDocument.from(new DynamoDB({ region: 'us-east-1' }));
 const SUBSCRIBER_TABLE = process.env.SUBSCRIBER_TABLE;
 
 exports.handler = async (event) => {
@@ -108,14 +108,14 @@ exports.handler = async (event) => {
 const { MediaConvert } = require('@aws-sdk/client-mediaconvert');
 const { S3 } = require('@aws-sdk/client-s3');
 
-const s3 = new S3({ region: 'us-west-2' });
+const s3 = new S3({ region: 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const JOB_TEMPLATE = process.env.JOB_TEMPLATE;
 const MEDIACONVERT_ROLE = process.env.MEDIACONVERT_ROLE;
 
 // Get MediaConvert endpoint
 const getMediaConvertEndpoint = async () => {
-  const mc = new MediaConvert({ region: 'us-west-2' });
+  const mc = new MediaConvert({ region: 'us-east-1' });
   const data = await mc.describeEndpoints({});
   return data.Endpoints?.[0]?.Url;
 };
@@ -136,7 +136,7 @@ exports.handler = async (event) => {
     }
 
     const endpoint = await getMediaConvertEndpoint();
-    const mc = new MediaConvert({ region: 'us-west-2', endpoint });
+    const mc = new MediaConvert({ region: 'us-east-1', endpoint });
 
     // Submit transcoding jobs for each file
     for (const obj of listResponse.Contents) {
@@ -247,7 +247,7 @@ exports.handler = async (event) => {
         code: lambda.Code.fromInline(`
 const { CloudFrontKeyValueStore } = require('@aws-sdk/client-cloudfront-keyvaluestore');
 
-const kvsClient = new CloudFrontKeyValueStore({ region: 'us-west-2' });
+const kvsClient = new CloudFrontKeyValueStore({ region: 'us-east-1' });
 const KVS_ARN = process.env.KVS_ARN;
 
 exports.handler = async (event) => {

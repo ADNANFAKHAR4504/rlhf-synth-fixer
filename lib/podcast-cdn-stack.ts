@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface PodcastCdnStackProps {
@@ -68,8 +68,8 @@ const { DynamoDB } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocument } = require('@aws-sdk/lib-dynamodb');
 const { CloudFrontKeyValueStore } = require('@aws-sdk/client-cloudfront-keyvaluestore');
 
-const ddb = DynamoDBDocument.from(new DynamoDB({ region: 'us-west-2' }));
-const kvsClient = new CloudFrontKeyValueStore({ region: 'us-west-2' });
+const ddb = DynamoDBDocument.from(new DynamoDB({ region: 'us-east-1' }));
+const kvsClient = new CloudFrontKeyValueStore({ region: 'us-east-1' });
 const SUBSCRIBER_TABLE = '${props.subscriberTable.tableName}';
 const KVS_ARN = '${this.keyValueStore.attrArn}';
 
