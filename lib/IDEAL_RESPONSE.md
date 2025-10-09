@@ -193,6 +193,8 @@ Resources:
           Value: !Sub '${EnvironmentSuffix}-config-bucket'
         - Key: Purpose
           Value: AWS Config Data Storage
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # S3 Bucket Policy for AWS Config
   ConfigS3BucketPolicy:
@@ -263,6 +265,8 @@ Resources:
           Value: !Sub '${EnvironmentSuffix}-config-service-role'
         - Key: Purpose
           Value: AWS Config Service Role
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # AWS Config Configuration Recorder
   ConfigRecorder:
@@ -350,6 +354,11 @@ Resources:
                 EncryptionConfiguration:
                   ReplicaKmsKeyID: 'arn:aws:kms:*:*:alias/aws/s3'
         - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-data-bucket'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # KMS Key for S3 Bucket Encryption
   S3BucketKMSKey:
@@ -378,6 +387,11 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-s3-kms-key'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # IAM Replication Role
   S3ReplicationRole:
@@ -442,6 +456,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-vpc'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Internet Gateway
   InternetGateway:
@@ -450,6 +466,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-igw'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -468,6 +486,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-public-subnet-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -479,6 +499,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-public-subnet-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Private Subnets
   PrivateSubnet1:
@@ -491,6 +513,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-private-subnet-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -502,6 +526,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-private-subnet-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # NAT Gateways
   NatGateway1EIP:
@@ -524,6 +550,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-nat-gateway-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -533,6 +561,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-nat-gateway-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Route Tables
   PublicRouteTable:
@@ -542,6 +572,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-public-routes'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -570,6 +602,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-private-routes-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -591,6 +625,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-private-routes-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -641,6 +677,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-app-sg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -656,6 +694,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-sg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # EC2 Instance Profile
   EC2InstanceProfile:
@@ -739,6 +779,9 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-app-instance'
           PropagateAtLaunch: true
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+          PropagateAtLaunch: true
 
   # CPU Scale-Out Policy
   ScaleOutPolicy:
@@ -765,6 +808,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-alb'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -792,6 +837,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-alb-tg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # RDS Database
   DbSubnetGroup:
@@ -804,6 +851,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-subnet-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   DbParameterGroup:
     Type: AWS::RDS::DBParameterGroup
@@ -817,6 +866,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-parameter-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   DbSecret:
     Type: AWS::SecretsManager::Secret
@@ -831,6 +882,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-secret'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   DbInstance:
     Type: AWS::RDS::DBInstance
@@ -864,6 +917,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-db-instance'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   RDSMonitoringRole:
     Type: AWS::IAM::Role
@@ -916,6 +971,11 @@ Resources:
                   'statusCode': 200,
                   'body': 'Secret rotation processed'
               }
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-secret-rotation-lambda'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   SecretRotationLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -1250,6 +1310,11 @@ Resources:
                   },
                   'body': json.dumps(response_data, indent=2)
               }
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-webapp-lambda'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   WebAppLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -1269,6 +1334,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-api'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   ApiGatewayRootMethod:
     Type: AWS::ApiGateway::Method
@@ -1315,6 +1382,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-cloudtrail'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
@@ -1340,6 +1409,11 @@ Resources:
             NoncurrentVersionExpirationInDays: 1
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 1
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-cloudtrail-bucket'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CloudTrailS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1369,6 +1443,11 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}'
       RetentionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-cloudtrail-log-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   CloudTrailLogsRole:
     Type: AWS::IAM::Role
@@ -1397,12 +1476,22 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/${EnvironmentSuffix}-app'
       RetentionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-app-log-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${EnvironmentSuffix}-webapp-lambda'
       RetentionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-lambda-log-group'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # AWS WAF
   WebACL:
@@ -1461,6 +1550,8 @@ Resources:
           Value: !Sub '${EnvironmentSuffix}-hosted-zone'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+        - Key: iac-rlhf-amazon
+          Value: 'true'
 
   # Route 53 A Record for ALB (HTTP)
   ALBRecord:

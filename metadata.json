@@ -10,5 +10,30 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "S3, ASG, VPC, CloudWatch, CloudTrail, Lambda, Route53"
+  "aws_services": [
+    "S3",
+    "EC2",
+    "VPC",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "Route 53",
+    "CloudTrail",
+    "CloudWatch",
+    "AWS Config",
+    "WAF",
+    "KMS",
+    "Secrets Manager",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "ACM",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }

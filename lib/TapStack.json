@@ -269,6 +269,10 @@
                     {
                         "Key": "Purpose",
                         "Value": "AWS Config Data Storage"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -407,6 +411,10 @@
                     {
                         "Key": "Purpose",
                         "Value": "AWS Config Service Role"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -565,7 +573,19 @@
                             "Ref": "AWS::NoValue"
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-data-bucket"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "S3BucketKMSKey": {
@@ -604,7 +624,19 @@
                             "Resource": "*"
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-s3-kms-key"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "S3ReplicationRole": {
@@ -736,6 +768,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-vpc"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -749,6 +785,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-igw"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -786,6 +826,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-public-subnet-1"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -812,6 +856,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-public-subnet-2"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -838,6 +886,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-private-subnet-1"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -864,6 +916,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-private-subnet-2"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -900,6 +956,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-nat-gateway-1"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -922,6 +982,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-nat-gateway-2"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -938,6 +1002,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-public-routes"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -989,6 +1057,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-private-routes-1"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1028,6 +1100,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-private-routes-2"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1109,6 +1185,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-app-sg"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1137,6 +1217,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-db-sg"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1282,6 +1366,11 @@
                             "Fn::Sub": "${EnvironmentSuffix}-app-instance"
                         },
                         "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true",
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
@@ -1327,6 +1416,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-alb"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1370,6 +1463,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-alb-tg"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1392,6 +1489,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1412,6 +1513,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-db-parameter-group"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1435,6 +1540,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-db-secret"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1516,6 +1625,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-db-instance"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1585,7 +1698,19 @@
                 },
                 "Code": {
                     "ZipFile": "import boto3\nimport os\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    # Note: This is a placeholder for a real rotation function\n    # Actual implementation would handle secret rotation logic\n    return {\n        'statusCode': 200,\n        'body': 'Secret rotation processed'\n    }\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-secret-rotation-lambda"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "SecretRotationLambdaPermission": {
@@ -1751,7 +1876,19 @@
                 },
                 "Code": {
                     "ZipFile": "import json\nimport boto3\nimport os\nimport logging\nfrom datetime import datetime\nimport socket\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef test_database_connectivity():\n    \"\"\"Test database connectivity and return results\"\"\"\n    db_test_result = {\n        'connection_attempted': False,\n        'connection_successful': False,\n        'error': None,\n        'endpoint': None,\n        'port_accessible': False,\n        'credentials_retrieved': False,\n        'mysql_handshake_received': False,\n        'mysql_version': None,\n        'protocol_version': None,\n        'network_info': {}\n    }\n    \n    try:\n        # Collect network information for debugging\n        try:\n            import subprocess\n            import urllib.request\n            \n            # Get Lambda's network interface info\n            network_info = {}\n            \n            # Get Lambda's IP address by checking what IP it uses for outbound connections\n            try:\n                # Try to get our outbound IP (this will show what IP Lambda uses)\n                req = urllib.request.Request('https://api.ipify.org', headers={'User-Agent': 'Lambda-Test'})\n                with urllib.request.urlopen(req, timeout=5) as response:\n                    network_info['lambda_outbound_ip'] = response.read().decode('utf-8')\n            except:\n                network_info['lambda_outbound_ip'] = 'Unable to determine'\n            \n            # Get VPC endpoint information if available\n            try:\n                # Check if we can resolve internal AWS services (indicates VPC setup)\n                vpc_dns_test = socket.gethostbyname('s3.amazonaws.com')\n                network_info['vpc_dns_working'] = True\n                network_info['s3_resolved_ip'] = vpc_dns_test\n            except:\n                network_info['vpc_dns_working'] = False\n            \n            # Check Lambda's environment network details\n            network_info['aws_region'] = os.environ.get('AWS_REGION', 'unknown')\n            network_info['lambda_function_name'] = os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown')\n            \n            db_test_result['network_info'] = network_info\n            \n        except Exception as net_error:\n            db_test_result['network_info'] = {'error': str(net_error)}\n        \n        # Check if we have database configuration\n        db_secret_arn = os.environ.get('DB_SECRET_ARN')\n        if not db_secret_arn:\n            db_test_result['error'] = 'DB_SECRET_ARN not configured'\n            return db_test_result\n        \n        # Try to get database credentials\n        secrets_client = boto3.client('secretsmanager')\n        secret_response = secrets_client.get_secret_value(SecretId=db_secret_arn)\n        credentials = json.loads(secret_response['SecretString'])\n        db_test_result['credentials_retrieved'] = True\n        \n        # Get RDS endpoint from environment variable\n        db_endpoint = os.environ.get('DB_ENDPOINT')\n        if not db_endpoint:\n            db_test_result['error'] = 'DB_ENDPOINT not configured'\n            return db_test_result\n        \n        db_test_result['endpoint'] = db_endpoint\n        db_test_result['connection_attempted'] = True\n        \n        # Test TCP connectivity to database port\n        try:\n            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            sock.settimeout(5)\n            result = sock.connect_ex((db_endpoint, 3306))\n            sock.close()\n            \n            if result == 0:\n                db_test_result['port_accessible'] = True\n                logger.info(f\"TCP connection to {db_endpoint}:3306 successful\")\n            else:\n                logger.warning(f\"TCP connection to {db_endpoint}:3306 failed with code {result}\")\n        \n        except Exception as tcp_error:\n            logger.warning(f\"TCP test failed: {str(tcp_error)}\")\n        \n        # Test MySQL protocol handshake (simpler approach)\n        try:\n            # Create socket connection to MySQL port\n            import struct\n            import time\n            \n            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            sock.settimeout(10)\n            sock.connect((db_endpoint, 3306))\n            \n            # Read MySQL initial handshake packet\n            # This will tell us if MySQL is actually responding\n            try:\n                # MySQL sends an initial handshake packet when you connect\n                data = sock.recv(1024)\n                \n                if len(data) > 5:\n                    # Parse basic MySQL handshake packet\n                    # First 4 bytes are packet length + sequence\n                    packet_length = struct.unpack('<I', data[0:4] + b'\\x00')[0] & 0xffffff\n                    protocol_version = data[4]\n                    \n                    # Find the server version string (null-terminated)\n                    version_start = 5\n                    version_end = data.find(b'\\x00', version_start)\n                    \n                    if version_end > version_start:\n                        mysql_version = data[version_start:version_end].decode('utf-8', errors='ignore')\n                        \n                        db_test_result['connection_successful'] = True\n                        db_test_result['mysql_handshake_received'] = True\n                        db_test_result['mysql_version'] = mysql_version\n                        db_test_result['protocol_version'] = protocol_version\n                        \n                        logger.info(f\"MySQL handshake successful - Version: {mysql_version}\")\n                    else:\n                        db_test_result['connection_successful'] = True\n                        db_test_result['mysql_handshake_received'] = True\n                        db_test_result['mysql_version'] = 'Unknown'\n                        logger.info(\"MySQL handshake received but version parsing failed\")\n                else:\n                    db_test_result['error'] = 'Received data too short for MySQL handshake'\n                    logger.warning(\"Received data too short for MySQL handshake\")\n            \n            except Exception as handshake_error:\n                db_test_result['error'] = f'Handshake parsing failed: {str(handshake_error)}'\n                logger.warning(f\"MySQL handshake parsing failed: {str(handshake_error)}\")\n            \n            finally:\n                sock.close()\n                \n        except Exception as socket_error:\n            db_test_result['connection_successful'] = False\n            db_test_result['error'] = f'Socket connection failed: {str(socket_error)}'\n            logger.error(f\"Socket connection to MySQL failed: {str(socket_error)}\")\n        \n        # Test DNS resolution\n        try:\n            import socket as socket_module\n            resolved_ip = socket_module.gethostbyname(db_endpoint)\n            db_test_result['dns_resolution'] = {\n                'successful': True,\n                'resolved_ip': resolved_ip\n            }\n            logger.info(f\"DNS resolution successful: {db_endpoint} -> {resolved_ip}\")\n        except Exception as dns_error:\n            db_test_result['dns_resolution'] = {\n                'successful': False,\n                'error': str(dns_error)\n            }\n            logger.error(f\"DNS resolution failed: {str(dns_error)}\")\n        \n        # Test different connection approaches\n        connection_tests = []\n        \n        # Test 1: Quick connection test\n        try:\n            test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            test_sock.settimeout(3)\n            start_time = time.time()\n            result = test_sock.connect_ex((db_endpoint, 3306))\n            end_time = time.time()\n            test_sock.close()\n            \n            connection_tests.append({\n                'test': 'quick_connect',\n                'successful': result == 0,\n                'response_time_ms': round((end_time - start_time) * 1000, 2),\n                'error_code': result if result != 0 else None\n            })\n        except Exception as test_error:\n            connection_tests.append({\n                'test': 'quick_connect',\n                'successful': False,\n                'error': str(test_error)\n            })\n        \n        db_test_result['connection_tests'] = connection_tests\n    \n    except Exception as e:\n        db_test_result['error'] = str(e)\n        logger.error(f\"Database test failed: {str(e)}\")\n    \n    return db_test_result\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {event}\")\n    \n    # Test database connectivity\n    db_test = test_database_connectivity()\n    \n    # Create response data\n    response_data = {\n        'message': 'Hello from TapStack WebApp Lambda!',\n        'timestamp': datetime.utcnow().isoformat() + 'Z',\n        'environment': os.environ.get('AWS_LAMBDA_FUNCTION_NAME', 'unknown'),\n        'region': os.environ.get('AWS_REGION', 'unknown'),\n        'data': {\n            'users': [\n                {'id': 1, 'name': 'John Doe', 'email': 'john@example.com'},\n                {'id': 2, 'name': 'Jane Smith', 'email': 'jane@example.com'},\n                {'id': 3, 'name': 'Bob Johnson', 'email': 'bob@example.com'}\n            ],\n            'stats': {\n                'total_users': 3,\n                'active_sessions': 12,\n                'last_updated': '2024-01-15T10:30:00Z'\n            }\n        },\n        'config': {\n            's3_bucket': os.environ.get('S3_BUCKET', 'not-configured'),\n            'db_secret_configured': bool(os.environ.get('DB_SECRET_ARN')),\n            'vpc_enabled': True\n        },\n        'database_test': db_test\n    }\n    \n    return {\n        'statusCode': 200,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Headers': 'Content-Type',\n            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'\n        },\n        'body': json.dumps(response_data, indent=2)\n    }\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-webapp-lambda"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "WebAppLambdaPermission": {
@@ -1781,6 +1918,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-api"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1871,6 +2012,10 @@
                         "Value": {
                             "Fn::Sub": "${EnvironmentSuffix}-cloudtrail"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
@@ -1912,7 +2057,19 @@
                             }
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-cloudtrail-bucket"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "CloudTrailS3BucketPolicy": {
@@ -1964,7 +2121,19 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"
                 },
-                "RetentionInDays": 90
+                "RetentionInDays": 90,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-cloudtrail-log-group"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "CloudTrailLogsRole": {
@@ -2013,7 +2182,19 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/ec2/${EnvironmentSuffix}-app"
                 },
-                "RetentionInDays": 90
+                "RetentionInDays": 90,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-app-log-group"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "LambdaLogGroup": {
@@ -2022,7 +2203,19 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/lambda/${EnvironmentSuffix}-webapp-lambda"
                 },
-                "RetentionInDays": 90
+                "RetentionInDays": 90,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-lambda-log-group"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
             }
         },
         "WebACL": {
@@ -2126,6 +2319,10 @@
                         "Value": {
                             "Ref": "EnvironmentSuffix"
                         }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
                     }
                 ]
             }
