@@ -18,11 +18,11 @@ data "aws_region" "secondary" {
 resource "aws_s3_bucket" "primary_bucket" {
   provider = aws.primary
   bucket   = "${var.app_name}-${var.environment}-primary-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
-    Name        = "${var.app_name}-primary-bucket"
-    Region      = var.primary_region
-    Compliance  = "GDPR"
+    Name       = "${var.app_name}-primary-bucket"
+    Region     = var.primary_region
+    Compliance = "GDPR"
   })
 }
 
@@ -30,7 +30,7 @@ resource "aws_s3_bucket" "primary_bucket" {
 resource "aws_s3_bucket_versioning" "primary_versioning" {
   provider = aws.primary
   bucket   = aws_s3_bucket.primary_bucket.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -94,11 +94,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary_lifecycle" {
 resource "aws_s3_bucket" "secondary_bucket" {
   provider = aws.secondary
   bucket   = "${var.app_name}-${var.environment}-secondary-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
-    Name        = "${var.app_name}-secondary-bucket"
-    Region      = var.secondary_region
-    Compliance  = "GDPR"
+    Name       = "${var.app_name}-secondary-bucket"
+    Region     = var.secondary_region
+    Compliance = "GDPR"
   })
 }
 
@@ -106,7 +106,7 @@ resource "aws_s3_bucket" "secondary_bucket" {
 resource "aws_s3_bucket_versioning" "secondary_versioning" {
   provider = aws.secondary
   bucket   = aws_s3_bucket.secondary_bucket.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -275,18 +275,18 @@ resource "aws_s3_bucket_replication_configuration" "replication" {
     destination {
       bucket        = aws_s3_bucket.secondary_bucket.arn
       storage_class = "STANDARD_IA" # Cost optimization for replicated data
-      
+
       encryption_configuration {
         replica_kms_key_id = aws_kms_key.secondary_key.arn
       }
-      
+
       replication_time {
         status = "Enabled"
         time {
           minutes = 15 # RTO target
         }
       }
-      
+
       metrics {
         status = "Enabled"
         event_threshold {
@@ -351,40 +351,40 @@ resource "aws_dynamodb_table" "global_table" {
   billing_mode     = "PAY_PER_REQUEST" # Auto-scaling for serverless
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-  
+
   # Hash key for user identification
   hash_key = "userId"
-  
+
   # Optional range key for multi-tenancy
   range_key = "tenantId"
-  
+
   attribute {
     name = "userId"
     type = "S"
   }
-  
+
   attribute {
     name = "tenantId"
     type = "S"
   }
-  
+
   attribute {
     name = "email"
     type = "S"
   }
-  
+
   attribute {
     name = "createdAt"
     type = "N"
   }
-  
+
   # Global secondary index for email lookups
   global_secondary_index {
     name            = "email-index"
     hash_key        = "email"
     projection_type = "ALL"
   }
-  
+
   # Global secondary index for time-based queries
   global_secondary_index {
     name            = "tenant-created-index"
@@ -392,33 +392,31 @@ resource "aws_dynamodb_table" "global_table" {
     range_key       = "createdAt"
     projection_type = "ALL"
   }
-  
+
   # Point-in-time recovery for compliance
   point_in_time_recovery {
     enabled = true
   }
-  
+
   # Server-side encryption
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.primary_key.arn
   }
-  
+
   # Enable global table replication
   replica {
-    region_name            = var.secondary_region
-    kms_key_arn           = aws_kms_key.secondary_key.arn
-    point_in_time_recovery {
-      enabled = true
-    }
+    region_name = var.secondary_region
+    kms_key_arn = aws_kms_key.secondary_key.arn
+    point_in_time_recovery = true
   }
-  
+
   # TTL for GDPR data retention compliance
   ttl {
     attribute_name = "ttl"
     enabled        = true
   }
-  
+
   tags = merge(var.common_tags, {
     Name       = "${var.app_name}-global-table"
     Compliance = "GDPR"
@@ -426,12 +424,10 @@ resource "aws_dynamodb_table" "global_table" {
 }
 
 # ==================== LAMBDA FUNCTIONS ====================
-# IAM role for Lambda execution
-resource "aws_iam_role" "lambda_role" {
-  for_each = toset([var.primary_region, var.secondary_region])
-  provider = each.key == var.primary_region ? aws.primary : aws.secondary
-  
-  name = "${var.app_name}-lambda-role-${each.key}"
+# IAM role for Lambda execution - Primary Region
+resource "aws_iam_role" "lambda_role_primary" {
+  provider = aws.primary
+  name     = "${var.app_name}-lambda-role-${var.primary_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -445,19 +441,41 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-  
+
   tags = merge(var.common_tags, {
-    Name   = "${var.app_name}-lambda-role"
-    Region = each.key
+    Name   = "${var.app_name}-lambda-role-primary"
+    Region = var.primary_region
   })
 }
 
-# Lambda execution policy with comprehensive permissions
-resource "aws_iam_policy" "lambda_policy" {
-  for_each = toset([var.primary_region, var.secondary_region])
-  provider = each.key == var.primary_region ? aws.primary : aws.secondary
-  
-  name = "${var.app_name}-lambda-policy-${each.key}"
+# IAM role for Lambda execution - Secondary Region
+resource "aws_iam_role" "lambda_role_secondary" {
+  provider = aws.secondary
+  name     = "${var.app_name}-lambda-role-${var.secondary_region}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.common_tags, {
+    Name   = "${var.app_name}-lambda-role-secondary"
+    Region = var.secondary_region
+  })
+}
+
+# Lambda execution policy - Primary Region
+resource "aws_iam_policy" "lambda_policy_primary" {
+  provider = aws.primary
+  name     = "${var.app_name}-lambda-policy-${var.primary_region}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -469,7 +487,7 @@ resource "aws_iam_policy" "lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${each.key}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -484,8 +502,8 @@ resource "aws_iam_policy" "lambda_policy" {
           "dynamodb:BatchWriteItem"
         ]
         Resource = [
-          "arn:aws:dynamodb:${each.key}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*",
-          "arn:aws:dynamodb:${each.key}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*/index/*"
+          "arn:aws:dynamodb:${var.primary_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*",
+          "arn:aws:dynamodb:${var.primary_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*/index/*"
         ]
       },
       {
@@ -509,7 +527,7 @@ resource "aws_iam_policy" "lambda_policy" {
           "kms:DescribeKey"
         ]
         Resource = [
-          each.key == var.primary_region ? aws_kms_key.primary_key.arn : aws_kms_key.secondary_key.arn
+          aws_kms_key.primary_key.arn
         ]
       },
       {
@@ -519,8 +537,8 @@ resource "aws_iam_policy" "lambda_policy" {
           "xray:PutTelemetryRecords"
         ]
         Resource = [
-          "arn:aws:xray:${each.key}:${data.aws_caller_identity.current.account_id}:group/*",
-          "arn:aws:xray:${each.key}:${data.aws_caller_identity.current.account_id}:sampling-rule/*"
+          "arn:aws:xray:${var.primary_region}:${data.aws_caller_identity.current.account_id}:group/*",
+          "arn:aws:xray:${var.primary_region}:${data.aws_caller_identity.current.account_id}:sampling-rule/*"
         ]
       },
       {
@@ -528,25 +546,117 @@ resource "aws_iam_policy" "lambda_policy" {
         Action = [
           "events:PutEvents"
         ]
-        Resource = "arn:aws:events:${each.key}:${data.aws_caller_identity.current.account_id}:event-bus/*"
+        Resource = "arn:aws:events:${var.primary_region}:${data.aws_caller_identity.current.account_id}:event-bus/*"
       }
     ]
   })
 }
 
-# Attach policy to Lambda role
-resource "aws_iam_role_policy_attachment" "lambda_policy" {
-  for_each   = toset([var.primary_region, var.secondary_region])
-  provider   = each.key == var.primary_region ? aws.primary : aws.secondary
-  role       = aws_iam_role.lambda_role[each.key].name
-  policy_arn = aws_iam_policy.lambda_policy[each.key].arn
+# Lambda execution policy - Secondary Region
+resource "aws_iam_policy" "lambda_policy_secondary" {
+  provider = aws.secondary
+  name     = "${var.app_name}-lambda-policy-${var.secondary_region}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:BatchGetItem",
+          "dynamodb:BatchWriteItem"
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*",
+          "arn:aws:dynamodb:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:table/${var.app_name}-${var.environment}-*/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.app_name}-${var.environment}-*",
+          "arn:aws:s3:::${var.app_name}-${var.environment}-*/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.secondary_key.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = [
+          "arn:aws:xray:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:group/*",
+          "arn:aws:xray:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:sampling-rule/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "events:PutEvents"
+        ]
+        Resource = "arn:aws:events:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:event-bus/*"
+      }
+    ]
+  })
 }
 
-# Attach AWS managed policy for Lambda VPC access
-resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
-  for_each   = toset([var.primary_region, var.secondary_region])
-  provider   = each.key == var.primary_region ? aws.primary : aws.secondary
-  role       = aws_iam_role.lambda_role[each.key].name
+# Attach policy to Lambda role - Primary
+resource "aws_iam_role_policy_attachment" "lambda_policy_primary" {
+  provider   = aws.primary
+  role       = aws_iam_role.lambda_role_primary.name
+  policy_arn = aws_iam_policy.lambda_policy_primary.arn
+}
+
+# Attach policy to Lambda role - Secondary
+resource "aws_iam_role_policy_attachment" "lambda_policy_secondary" {
+  provider   = aws.secondary
+  role       = aws_iam_role.lambda_role_secondary.name
+  policy_arn = aws_iam_policy.lambda_policy_secondary.arn
+}
+
+# Attach AWS managed policy for Lambda VPC access - Primary
+resource "aws_iam_role_policy_attachment" "lambda_vpc_policy_primary" {
+  provider   = aws.primary
+  role       = aws_iam_role.lambda_role_primary.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+# Attach AWS managed policy for Lambda VPC access - Secondary
+resource "aws_iam_role_policy_attachment" "lambda_vpc_policy_secondary" {
+  provider   = aws.secondary
+  role       = aws_iam_role.lambda_role_secondary.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
@@ -554,7 +664,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
 data "archive_file" "lambda_package" {
   type        = "zip"
   output_path = "/tmp/lambda_function.zip"
-  
+
   source {
     content  = file("${path.module}/lambda_function.py")
     filename = "lambda_function.py"
@@ -566,40 +676,39 @@ resource "aws_lambda_function" "api_handler_primary" {
   provider         = aws.primary
   filename         = data.archive_file.lambda_package.output_path
   function_name    = "${var.app_name}-${var.environment}-api-handler-primary"
-  role            = aws_iam_role.lambda_role[var.primary_region].arn
-  handler         = "lambda_function.lambda_handler"
+  role             = aws_iam_role.lambda_role_primary.arn
+  handler          = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_package.output_base64sha256
-  runtime         = "python3.11"
-  timeout         = var.lambda_timeout
-  memory_size     = var.lambda_memory_size
-  architectures   = ["arm64"] # Graviton2 processor for cost optimization
-  
+  runtime          = "python3.11"
+  timeout          = var.lambda_timeout
+  memory_size      = var.lambda_memory_size
+  architectures    = ["arm64"] # Graviton2 processor for cost optimization
+
   environment {
     variables = {
-      ENVIRONMENT     = var.environment
-      TABLE_NAME      = aws_dynamodb_table.global_table.name
-      REGION          = var.primary_region
-      BUCKET_NAME     = aws_s3_bucket.primary_bucket.id
-      KMS_KEY_ID      = aws_kms_key.primary_key.id
-      EVENT_BUS_NAME  = aws_cloudwatch_event_bus.primary_bus.name
+      ENVIRONMENT    = var.environment
+      TABLE_NAME     = aws_dynamodb_table.global_table.name
+      REGION         = var.primary_region
+      BUCKET_NAME    = aws_s3_bucket.primary_bucket.id
+      KMS_KEY_ID     = aws_kms_key.primary_key.id
+      EVENT_BUS_NAME = aws_cloudwatch_event_bus.primary_bus.name
     }
   }
-  
+
   tracing_config {
     mode = "Active" # Enable X-Ray tracing
   }
-  
+
   reserved_concurrent_executions = var.lambda_reserved_concurrency
-  
+
   tags = merge(var.common_tags, {
     Name         = "${var.app_name}-api-handler-primary"
     Architecture = "Graviton2"
   })
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_policy,
-    aws_dynamodb_table.global_table,
-    aws_cloudwatch_log_group.lambda_logs_primary
+    aws_iam_role_policy_attachment.lambda_policy_primary,
+    aws_dynamodb_table.global_table
   ]
 }
 
@@ -608,40 +717,39 @@ resource "aws_lambda_function" "api_handler_secondary" {
   provider         = aws.secondary
   filename         = data.archive_file.lambda_package.output_path
   function_name    = "${var.app_name}-${var.environment}-api-handler-secondary"
-  role            = aws_iam_role.lambda_role[var.secondary_region].arn
-  handler         = "lambda_function.lambda_handler"
+  role             = aws_iam_role.lambda_role_secondary.arn
+  handler          = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_package.output_base64sha256
-  runtime         = "python3.11"
-  timeout         = var.lambda_timeout
-  memory_size     = var.lambda_memory_size
-  architectures   = ["arm64"] # Graviton2 processor
-  
+  runtime          = "python3.11"
+  timeout          = var.lambda_timeout
+  memory_size      = var.lambda_memory_size
+  architectures    = ["arm64"] # Graviton2 processor
+
   environment {
     variables = {
-      ENVIRONMENT     = var.environment
-      TABLE_NAME      = aws_dynamodb_table.global_table.name
-      REGION          = var.secondary_region
-      BUCKET_NAME     = aws_s3_bucket.secondary_bucket.id
-      KMS_KEY_ID      = aws_kms_key.secondary_key.id
-      EVENT_BUS_NAME  = aws_cloudwatch_event_bus.secondary_bus.name
+      ENVIRONMENT    = var.environment
+      TABLE_NAME     = aws_dynamodb_table.global_table.name
+      REGION         = var.secondary_region
+      BUCKET_NAME    = aws_s3_bucket.secondary_bucket.id
+      KMS_KEY_ID     = aws_kms_key.secondary_key.id
+      EVENT_BUS_NAME = aws_cloudwatch_event_bus.secondary_bus.name
     }
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   reserved_concurrent_executions = var.lambda_reserved_concurrency
-  
+
   tags = merge(var.common_tags, {
     Name         = "${var.app_name}-api-handler-secondary"
     Architecture = "Graviton2"
   })
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_policy,
-    aws_dynamodb_table.global_table,
-    aws_cloudwatch_log_group.lambda_logs_secondary
+    aws_iam_role_policy_attachment.lambda_policy_secondary,
+    aws_dynamodb_table.global_table
   ]
 }
 
@@ -651,11 +759,11 @@ resource "aws_api_gateway_rest_api" "primary_api" {
   provider    = aws.primary
   name        = "${var.app_name}-${var.environment}-api-primary"
   description = "Primary API Gateway for ${var.app_name}"
-  
+
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-api-primary"
     Region = var.primary_region
@@ -759,7 +867,7 @@ resource "aws_api_gateway_method" "primary_get_user" {
   resource_id   = aws_api_gateway_resource.primary_user_id.id
   http_method   = "GET"
   authorization = "AWS_IAM"
-  
+
   request_parameters = {
     "method.request.path.userId" = true
   }
@@ -800,7 +908,6 @@ resource "aws_api_gateway_integration" "primary_post_integration" {
 resource "aws_api_gateway_deployment" "primary_deployment" {
   provider    = aws.primary
   rest_api_id = aws_api_gateway_rest_api.primary_api.id
-  stage_name  = var.environment
   
   depends_on = [
     aws_api_gateway_integration.primary_get_integration,
@@ -811,6 +918,19 @@ resource "aws_api_gateway_deployment" "primary_deployment" {
   lifecycle {
     create_before_destroy = true
   }
+  
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.primary_health.id,
+      aws_api_gateway_resource.primary_users.id,
+      aws_api_gateway_method.primary_health.id,
+      aws_api_gateway_method.primary_get_user.id,
+      aws_api_gateway_method.primary_post_user.id,
+      aws_api_gateway_integration.primary_health_integration.id,
+      aws_api_gateway_integration.primary_get_integration.id,
+      aws_api_gateway_integration.primary_post_integration.id,
+    ]))
+  }
 }
 
 # API Gateway stage settings for primary region
@@ -819,10 +939,10 @@ resource "aws_api_gateway_stage" "primary_stage" {
   deployment_id = aws_api_gateway_deployment.primary_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.primary_api.id
   stage_name    = var.environment
-  
+
   # Enable X-Ray tracing
   xray_tracing_enabled = true
-  
+
   # Access logging settings
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs_primary.arn
@@ -839,7 +959,7 @@ resource "aws_api_gateway_stage" "primary_stage" {
       responseLength = "$context.responseLength"
     })
   }
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-api-stage-primary"
   })
@@ -853,16 +973,16 @@ resource "aws_api_gateway_method_settings" "primary_settings" {
   rest_api_id = aws_api_gateway_rest_api.primary_api.id
   stage_name  = aws_api_gateway_stage.primary_stage.stage_name
   method_path = "*/*"
-  
+
   settings {
     metrics_enabled        = true
-    logging_level         = "INFO"
-    data_trace_enabled    = true
+    logging_level          = "INFO"
+    data_trace_enabled     = true
     throttling_burst_limit = var.api_throttle_burst_limit
     throttling_rate_limit  = var.api_throttle_rate_limit
-    caching_enabled       = var.api_cache_enabled
-    cache_ttl_in_seconds  = var.api_cache_ttl
-    cache_data_encrypted  = true
+    caching_enabled        = var.api_cache_enabled
+    cache_ttl_in_seconds   = var.api_cache_ttl
+    cache_data_encrypted   = true
   }
 }
 
@@ -881,11 +1001,11 @@ resource "aws_api_gateway_rest_api" "secondary_api" {
   provider    = aws.secondary
   name        = "${var.app_name}-${var.environment}-api-secondary"
   description = "Secondary API Gateway for ${var.app_name}"
-  
+
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-api-secondary"
     Region = var.secondary_region
@@ -986,7 +1106,7 @@ resource "aws_api_gateway_method" "secondary_get_user" {
   resource_id   = aws_api_gateway_resource.secondary_user_id.id
   http_method   = "GET"
   authorization = "AWS_IAM"
-  
+
   request_parameters = {
     "method.request.path.userId" = true
   }
@@ -1023,7 +1143,6 @@ resource "aws_api_gateway_integration" "secondary_post_integration" {
 resource "aws_api_gateway_deployment" "secondary_deployment" {
   provider    = aws.secondary
   rest_api_id = aws_api_gateway_rest_api.secondary_api.id
-  stage_name  = var.environment
   
   depends_on = [
     aws_api_gateway_integration.secondary_get_integration,
@@ -1034,6 +1153,19 @@ resource "aws_api_gateway_deployment" "secondary_deployment" {
   lifecycle {
     create_before_destroy = true
   }
+  
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.secondary_health.id,
+      aws_api_gateway_resource.secondary_users.id,
+      aws_api_gateway_method.secondary_health.id,
+      aws_api_gateway_method.secondary_get_user.id,
+      aws_api_gateway_method.secondary_post_user.id,
+      aws_api_gateway_integration.secondary_health_integration.id,
+      aws_api_gateway_integration.secondary_get_integration.id,
+      aws_api_gateway_integration.secondary_post_integration.id,
+    ]))
+  }
 }
 
 # API Gateway stage settings for secondary region
@@ -1042,9 +1174,9 @@ resource "aws_api_gateway_stage" "secondary_stage" {
   deployment_id = aws_api_gateway_deployment.secondary_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.secondary_api.id
   stage_name    = var.environment
-  
+
   xray_tracing_enabled = true
-  
+
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs_secondary.arn
     format = jsonencode({
@@ -1060,7 +1192,7 @@ resource "aws_api_gateway_stage" "secondary_stage" {
       responseLength = "$context.responseLength"
     })
   }
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-api-stage-secondary"
   })
@@ -1074,16 +1206,16 @@ resource "aws_api_gateway_method_settings" "secondary_settings" {
   rest_api_id = aws_api_gateway_rest_api.secondary_api.id
   stage_name  = aws_api_gateway_stage.secondary_stage.stage_name
   method_path = "*/*"
-  
+
   settings {
     metrics_enabled        = true
-    logging_level         = "INFO"
-    data_trace_enabled    = true
+    logging_level          = "INFO"
+    data_trace_enabled     = true
     throttling_burst_limit = var.api_throttle_burst_limit
     throttling_rate_limit  = var.api_throttle_rate_limit
-    caching_enabled       = var.api_cache_enabled
-    cache_ttl_in_seconds  = var.api_cache_ttl
-    cache_data_encrypted  = true
+    caching_enabled        = var.api_cache_enabled
+    cache_ttl_in_seconds   = var.api_cache_ttl
+    cache_data_encrypted   = true
   }
 }
 
@@ -1101,7 +1233,7 @@ resource "aws_lambda_permission" "secondary_api_permission" {
 resource "aws_route53_zone" "main" {
   name    = var.domain_name
   comment = "Managed by Terraform for ${var.app_name}"
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-hosted-zone"
   })
@@ -1115,7 +1247,7 @@ resource "aws_route53_health_check" "primary_health" {
   resource_path     = "/${var.environment}/health"
   failure_threshold = 3
   request_interval  = 30
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-primary-health-check"
     Region = var.primary_region
@@ -1130,7 +1262,7 @@ resource "aws_route53_health_check" "secondary_health" {
   resource_path     = "/${var.environment}/health"
   failure_threshold = 3
   request_interval  = 30
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-secondary-health-check"
     Region = var.secondary_region
@@ -1143,15 +1275,15 @@ resource "aws_route53_record" "primary_api" {
   name    = "api.${var.domain_name}"
   type    = "CNAME"
   ttl     = 60
-  
+
   set_identifier = "${var.primary_region}-api"
-  
+
   latency_routing_policy {
     region = var.primary_region
   }
-  
+
   records = ["${aws_api_gateway_rest_api.primary_api.id}.execute-api.${var.primary_region}.amazonaws.com"]
-  
+
   health_check_id = aws_route53_health_check.primary_health.id
 }
 
@@ -1161,15 +1293,15 @@ resource "aws_route53_record" "secondary_api" {
   name    = "api.${var.domain_name}"
   type    = "CNAME"
   ttl     = 60
-  
+
   set_identifier = "${var.secondary_region}-api"
-  
+
   latency_routing_policy {
     region = var.secondary_region
   }
-  
+
   records = ["${aws_api_gateway_rest_api.secondary_api.id}.execute-api.${var.secondary_region}.amazonaws.com"]
-  
+
   health_check_id = aws_route53_health_check.secondary_health.id
 }
 
@@ -1179,96 +1311,96 @@ resource "aws_wafv2_web_acl" "primary_waf" {
   provider = aws.primary
   name     = "${var.app_name}-${var.environment}-waf-primary"
   scope    = "REGIONAL"
-  
+
   default_action {
     allow {}
   }
-  
+
   # Rate limiting rule
   rule {
     name     = "RateLimitRule"
     priority = 1
-    
+
     action {
       block {}
     }
-    
+
     statement {
       rate_based_statement {
         limit              = var.waf_rate_limit
         aggregate_key_type = "IP"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-rate-limit"
       sampled_requests_enabled   = true
     }
   }
-  
+
   # Geo-blocking rule for GDPR compliance
   rule {
     name     = "GeoBlockingRule"
     priority = 2
-    
+
     action {
       block {}
     }
-    
+
     statement {
       geo_match_statement {
         country_codes = var.blocked_countries
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-geo-block"
       sampled_requests_enabled   = true
     }
   }
-  
+
   # SQL injection protection
   rule {
     name     = "SQLiRule"
     priority = 3
-    
+
     action {
       block {}
     }
-    
+
     statement {
       sqli_match_statement {
         field_to_match {
           all_query_arguments {}
         }
-        
+
         text_transformation {
           priority = 1
           type     = "URL_DECODE"
         }
-        
+
         text_transformation {
           priority = 2
           type     = "HTML_ENTITY_DECODE"
         }
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-sqli"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${var.app_name}-waf-primary"
     sampled_requests_enabled   = true
   }
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-waf-primary"
     Region = var.primary_region
@@ -1280,93 +1412,93 @@ resource "aws_wafv2_web_acl" "secondary_waf" {
   provider = aws.secondary
   name     = "${var.app_name}-${var.environment}-waf-secondary"
   scope    = "REGIONAL"
-  
+
   default_action {
     allow {}
   }
-  
+
   rule {
     name     = "RateLimitRule"
     priority = 1
-    
+
     action {
       block {}
     }
-    
+
     statement {
       rate_based_statement {
         limit              = var.waf_rate_limit
         aggregate_key_type = "IP"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-rate-limit"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "GeoBlockingRule"
     priority = 2
-    
+
     action {
       block {}
     }
-    
+
     statement {
       geo_match_statement {
         country_codes = var.blocked_countries
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-geo-block"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "SQLiRule"
     priority = 3
-    
+
     action {
       block {}
     }
-    
+
     statement {
       sqli_match_statement {
         field_to_match {
           all_query_arguments {}
         }
-        
+
         text_transformation {
           priority = 1
           type     = "URL_DECODE"
         }
-        
+
         text_transformation {
           priority = 2
           type     = "HTML_ENTITY_DECODE"
         }
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.app_name}-sqli"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${var.app_name}-waf-secondary"
     sampled_requests_enabled   = true
   }
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-waf-secondary"
     Region = var.secondary_region
@@ -1402,7 +1534,7 @@ resource "aws_wafv2_web_acl_association" "secondary_api_waf" {
 resource "aws_cloudwatch_event_bus" "primary_bus" {
   provider = aws.primary
   name     = "${var.app_name}-${var.environment}-primary"
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-event-bus-primary"
     Region = var.primary_region
@@ -1413,7 +1545,7 @@ resource "aws_cloudwatch_event_bus" "primary_bus" {
 resource "aws_cloudwatch_event_bus" "secondary_bus" {
   provider = aws.secondary
   name     = "${var.app_name}-${var.environment}-secondary"
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-event-bus-secondary"
     Region = var.secondary_region
@@ -1425,14 +1557,14 @@ resource "aws_cloudwatch_event_rule" "primary_user_events" {
   provider    = aws.primary
   name        = "${var.app_name}-user-events-primary"
   description = "Capture user events for analytics"
-  
+
   event_pattern = jsonencode({
     source      = ["custom.${var.app_name}"]
     detail-type = ["User Activity"]
   })
-  
+
   event_bus_name = aws_cloudwatch_event_bus.primary_bus.name
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-user-events-rule-primary"
   })
@@ -1445,7 +1577,7 @@ resource "aws_cloudwatch_event_target" "cross_region_replication" {
   target_id      = "CrossRegionTarget"
   arn            = aws_cloudwatch_event_bus.secondary_bus.arn
   event_bus_name = aws_cloudwatch_event_bus.primary_bus.name
-  
+
   role_arn = aws_iam_role.eventbridge_role.arn
 }
 
@@ -1499,7 +1631,7 @@ resource "aws_iam_role_policy_attachment" "eventbridge_policy" {
 resource "aws_s3_bucket" "synthetics_primary" {
   provider = aws.primary
   bucket   = "${var.app_name}-${var.environment}-synthetics-primary-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-synthetics-primary"
   })
@@ -1509,7 +1641,7 @@ resource "aws_s3_bucket" "synthetics_primary" {
 resource "aws_s3_bucket_versioning" "synthetics_primary_versioning" {
   provider = aws.primary
   bucket   = aws_s3_bucket.synthetics_primary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1544,7 +1676,7 @@ resource "aws_s3_bucket_public_access_block" "synthetics_primary" {
 resource "aws_s3_bucket" "synthetics_secondary" {
   provider = aws.secondary
   bucket   = "${var.app_name}-${var.environment}-synthetics-secondary-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-synthetics-secondary"
   })
@@ -1554,7 +1686,7 @@ resource "aws_s3_bucket" "synthetics_secondary" {
 resource "aws_s3_bucket_versioning" "synthetics_secondary_versioning" {
   provider = aws.secondary
   bucket   = aws_s3_bucket.synthetics_secondary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1585,12 +1717,10 @@ resource "aws_s3_bucket_public_access_block" "synthetics_secondary" {
   restrict_public_buckets = true
 }
 
-# IAM role for CloudWatch Synthetics
-resource "aws_iam_role" "synthetics_role" {
-  for_each = toset([var.primary_region, var.secondary_region])
-  provider = each.key == var.primary_region ? aws.primary : aws.secondary
-  
-  name = "${var.app_name}-synthetics-role-${each.key}"
+# IAM role for CloudWatch Synthetics - Primary Region
+resource "aws_iam_role" "synthetics_role_primary" {
+  provider = aws.primary
+  name     = "${var.app_name}-synthetics-role-${var.primary_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1606,12 +1736,29 @@ resource "aws_iam_role" "synthetics_role" {
   })
 }
 
-# Synthetics policy
-resource "aws_iam_policy" "synthetics_policy" {
-  for_each = toset([var.primary_region, var.secondary_region])
-  provider = each.key == var.primary_region ? aws.primary : aws.secondary
-  
-  name = "${var.app_name}-synthetics-policy-${each.key}"
+# IAM role for CloudWatch Synthetics - Secondary Region
+resource "aws_iam_role" "synthetics_role_secondary" {
+  provider = aws.secondary
+  name     = "${var.app_name}-synthetics-role-${var.secondary_region}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Synthetics policy - Primary Region
+resource "aws_iam_policy" "synthetics_policy_primary" {
+  provider = aws.primary
+  name     = "${var.app_name}-synthetics-policy-${var.primary_region}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1639,7 +1786,7 @@ resource "aws_iam_policy" "synthetics_policy" {
           "logs:PutLogEvents",
           "logs:CreateLogGroup"
         ]
-        Resource = "arn:aws:logs:${each.key}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -1657,20 +1804,76 @@ resource "aws_iam_policy" "synthetics_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "synthetics_policy" {
-  for_each   = toset([var.primary_region, var.secondary_region])
-  provider   = each.key == var.primary_region ? aws.primary : aws.secondary
-  role       = aws_iam_role.synthetics_role[each.key].name
-  policy_arn = aws_iam_policy.synthetics_policy[each.key].arn
+# Synthetics policy - Secondary Region
+resource "aws_iam_policy" "synthetics_policy_secondary" {
+  provider = aws.secondary
+  name     = "${var.app_name}-synthetics-policy-${var.secondary_region}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "arn:aws:s3:::${var.app_name}-${var.environment}-synthetics-*/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
+        Resource = "arn:aws:s3:::${var.app_name}-${var.environment}-synthetics-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:CreateLogGroup"
+        ]
+        Resource = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = ["CloudWatchSynthetics", "AWS/ApiGateway", "AWS/Lambda"]
+          }
+        }
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach Synthetics policy to role - Primary
+resource "aws_iam_role_policy_attachment" "synthetics_policy_primary" {
+  provider   = aws.primary
+  role       = aws_iam_role.synthetics_role_primary.name
+  policy_arn = aws_iam_policy.synthetics_policy_primary.arn
+}
+
+# Attach Synthetics policy to role - Secondary
+resource "aws_iam_role_policy_attachment" "synthetics_policy_secondary" {
+  provider   = aws.secondary
+  role       = aws_iam_role.synthetics_role_secondary.name
+  policy_arn = aws_iam_policy.synthetics_policy_secondary.arn
 }
 
 # Create canary script for primary region monitoring
 data "archive_file" "canary_script_primary" {
   type        = "zip"
   output_path = "/tmp/canary_primary.zip"
-  
+
   source {
-    content = <<-EOT
+    content  = <<-EOT
       const synthetics = require('Synthetics');
       const log = require('SyntheticsLogger');
       const https = require('https');
@@ -1731,35 +1934,35 @@ resource "aws_synthetics_canary" "primary_canary" {
   provider             = aws.primary
   name                 = "${replace(var.app_name, "_", "-")}-api-primary"
   artifact_s3_location = "s3://${aws_s3_bucket.synthetics_primary.bucket}/canary-artifacts"
-  execution_role_arn   = aws_iam_role.synthetics_role[var.primary_region].arn
+  execution_role_arn   = aws_iam_role.synthetics_role_primary.arn
   handler              = "apiCanary.handler"
   zip_file             = data.archive_file.canary_script_primary.output_path
   runtime_version      = "syn-nodejs-puppeteer-3.9"
   start_canary         = true
-  
+
   schedule {
     expression = var.synthetic_canary_schedule
   }
-  
+
   run_config {
     timeout_in_seconds = 60
-    memory_in_mb      = 960
-    active_tracing    = true
+    memory_in_mb       = 960
+    active_tracing     = true
     environment_variables = {
       API_ENDPOINT = "https://${aws_api_gateway_rest_api.primary_api.id}.execute-api.${var.primary_region}.amazonaws.com/${var.environment}/health"
     }
   }
-  
+
   success_retention_period = 31
   failure_retention_period = 31
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-canary-primary"
     Region = var.primary_region
   })
 
   depends_on = [
-    aws_iam_role_policy_attachment.synthetics_policy,
+    aws_iam_role_policy_attachment.synthetics_policy_primary,
     aws_api_gateway_deployment.primary_deployment
   ]
 }
@@ -1768,9 +1971,9 @@ resource "aws_synthetics_canary" "primary_canary" {
 data "archive_file" "canary_script_secondary" {
   type        = "zip"
   output_path = "/tmp/canary_secondary.zip"
-  
+
   source {
-    content = <<-EOT
+    content  = <<-EOT
       const synthetics = require('Synthetics');
       const log = require('SyntheticsLogger');
       const https = require('https');
@@ -1831,35 +2034,35 @@ resource "aws_synthetics_canary" "secondary_canary" {
   provider             = aws.secondary
   name                 = "${replace(var.app_name, "_", "-")}-api-secondary"
   artifact_s3_location = "s3://${aws_s3_bucket.synthetics_secondary.bucket}/canary-artifacts"
-  execution_role_arn   = aws_iam_role.synthetics_role[var.secondary_region].arn
+  execution_role_arn   = aws_iam_role.synthetics_role_secondary.arn
   handler              = "apiCanary.handler"
   zip_file             = data.archive_file.canary_script_secondary.output_path
   runtime_version      = "syn-nodejs-puppeteer-3.9"
   start_canary         = true
-  
+
   schedule {
     expression = var.synthetic_canary_schedule
   }
-  
+
   run_config {
     timeout_in_seconds = 60
-    memory_in_mb      = 960
-    active_tracing    = true
+    memory_in_mb       = 960
+    active_tracing     = true
     environment_variables = {
       API_ENDPOINT = "https://${aws_api_gateway_rest_api.secondary_api.id}.execute-api.${var.secondary_region}.amazonaws.com/${var.environment}/health"
     }
   }
-  
+
   success_retention_period = 31
   failure_retention_period = 31
-  
+
   tags = merge(var.common_tags, {
     Name   = "${var.app_name}-canary-secondary"
     Region = var.secondary_region
   })
 
   depends_on = [
-    aws_iam_role_policy_attachment.synthetics_policy,
+    aws_iam_role_policy_attachment.synthetics_policy_secondary,
     aws_api_gateway_deployment.secondary_deployment
   ]
 }
@@ -1867,19 +2070,19 @@ resource "aws_synthetics_canary" "secondary_canary" {
 # ==================== X-RAY CONFIGURATION ====================
 # X-Ray sampling rule for distributed tracing
 resource "aws_xray_sampling_rule" "main" {
-  provider     = aws.primary
-  rule_name    = "${var.app_name}-sampling-rule"
-  priority     = 1000
-  version      = 1
+  provider       = aws.primary
+  rule_name      = "${var.app_name}-sampling-rule"
+  priority       = 1000
+  version        = 1
   reservoir_size = 1
-  fixed_rate   = 0.1 # Sample 10% of requests
-  url_path     = "*"
-  host         = "*"
-  http_method  = "*"
-  service_type = "*"
-  service_name = "*"
-  resource_arn = "*"
-  
+  fixed_rate     = 0.1 # Sample 10% of requests
+  url_path       = "*"
+  host           = "*"
+  http_method    = "*"
+  service_type   = "*"
+  service_name   = "*"
+  resource_arn   = "*"
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-xray-sampling"
   })
@@ -1890,7 +2093,7 @@ resource "aws_xray_sampling_rule" "main" {
 resource "aws_s3_bucket" "quicksight_data" {
   provider = aws.primary
   bucket   = "${var.app_name}-${var.environment}-quicksight-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
     Name    = "${var.app_name}-quicksight-data"
     Purpose = "Analytics"
@@ -1901,7 +2104,7 @@ resource "aws_s3_bucket" "quicksight_data" {
 resource "aws_s3_bucket_versioning" "quicksight_versioning" {
   provider = aws.primary
   bucket   = aws_s3_bucket.quicksight_data.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1961,7 +2164,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "quicksight_lifecycle" {
 resource "aws_s3_bucket" "athena_results" {
   provider = aws.primary
   bucket   = "${var.app_name}-${var.environment}-athena-results-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(var.common_tags, {
     Name    = "${var.app_name}-athena-results"
     Purpose = "Analytics"
@@ -1972,7 +2175,7 @@ resource "aws_s3_bucket" "athena_results" {
 resource "aws_s3_bucket_versioning" "athena_results_versioning" {
   provider = aws.primary
   bucket   = aws_s3_bucket.athena_results.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -2022,21 +2225,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results_lifecycle" {
 resource "aws_athena_workgroup" "analytics_workgroup" {
   provider = aws.primary
   name     = "${var.app_name}-${var.environment}-analytics"
-  
+
   configuration {
     enforce_workgroup_configuration    = true
     publish_cloudwatch_metrics_enabled = true
-    
+
     result_configuration {
       output_location = "s3://${aws_s3_bucket.athena_results.bucket}/results/"
-      
+
       encryption_configuration {
         encryption_option = "SSE_KMS"
-        kms_key_arn      = aws_kms_key.primary_key.arn
+        kms_key_arn       = aws_kms_key.primary_key.arn
       }
     }
   }
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-athena-workgroup"
   })
@@ -2047,12 +2250,12 @@ resource "aws_athena_database" "analytics_db" {
   provider = aws.primary
   name     = "${replace(var.app_name, "-", "_")}_${var.environment}_analytics"
   bucket   = aws_s3_bucket.athena_results.bucket
-  
+
   encryption_configuration {
     encryption_option = "SSE_KMS"
-    kms_key          = aws_kms_key.primary_key.arn
+    kms_key           = aws_kms_key.primary_key.arn
   }
-  
+
   depends_on = [
     aws_s3_bucket.athena_results,
     aws_s3_bucket_server_side_encryption_configuration.athena_results_encryption
@@ -2065,8 +2268,8 @@ resource "aws_cloudwatch_log_group" "lambda_logs_primary" {
   provider          = aws.primary
   name              = "/aws/lambda/${aws_lambda_function.api_handler_primary.function_name}"
   retention_in_days = var.log_retention_days
-  kms_key_id       = aws_kms_key.primary_key.arn
-  
+  kms_key_id        = aws_kms_key.primary_key.arn
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-lambda-logs-primary"
   })
@@ -2076,8 +2279,8 @@ resource "aws_cloudwatch_log_group" "lambda_logs_secondary" {
   provider          = aws.secondary
   name              = "/aws/lambda/${aws_lambda_function.api_handler_secondary.function_name}"
   retention_in_days = var.log_retention_days
-  kms_key_id       = aws_kms_key.secondary_key.arn
-  
+  kms_key_id        = aws_kms_key.secondary_key.arn
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-lambda-logs-secondary"
   })
@@ -2090,19 +2293,19 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors_primary" {
   alarm_name          = "${var.app_name}-lambda-errors-primary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name        = "Errors"
-  namespace          = "AWS/Lambda"
-  period             = 300
-  statistic          = "Sum"
-  threshold          = 10
-  alarm_description  = "Lambda function error rate is too high"
-  
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "Lambda function error rate is too high"
+
   dimensions = {
     FunctionName = aws_lambda_function.api_handler_primary.function_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-lambda-errors-alarm-primary"
   })
@@ -2114,19 +2317,19 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
   alarm_name          = "${var.app_name}-dynamodb-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name        = "SystemErrors"
-  namespace          = "AWS/DynamoDB"
-  period             = 300
-  statistic          = "Sum"
-  threshold          = 5
-  alarm_description  = "DynamoDB is experiencing throttling"
-  
+  metric_name         = "SystemErrors"
+  namespace           = "AWS/DynamoDB"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "DynamoDB is experiencing throttling"
+
   dimensions = {
     TableName = aws_dynamodb_table.global_table.name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-dynamodb-throttles-alarm"
   })
@@ -2138,21 +2341,21 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx_primary" {
   alarm_name          = "${var.app_name}-api-5xx-errors-primary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name        = "5XXError"
-  namespace          = "AWS/ApiGateway"
-  period             = 300
-  statistic          = "Sum"
-  threshold          = 10
-  alarm_description  = "API Gateway 5xx error rate is too high in primary region"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "5XXError"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "API Gateway 5xx error rate is too high in primary region"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     ApiName = aws_api_gateway_rest_api.primary_api.name
     Stage   = var.environment
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-api-5xx-alarm-primary"
   })
@@ -2164,21 +2367,21 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_latency_primary" {
   alarm_name          = "${var.app_name}-api-latency-primary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name        = "Latency"
-  namespace          = "AWS/ApiGateway"
-  period             = 300
-  statistic          = "Average"
-  threshold          = 1000 # 1 second
-  alarm_description  = "API Gateway latency is too high in primary region"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "Latency"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 1000 # 1 second
+  alarm_description   = "API Gateway latency is too high in primary region"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     ApiName = aws_api_gateway_rest_api.primary_api.name
     Stage   = var.environment
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-api-latency-alarm-primary"
   })
@@ -2190,20 +2393,20 @@ resource "aws_cloudwatch_metric_alarm" "lambda_concurrency_primary" {
   alarm_name          = "${var.app_name}-lambda-concurrency-primary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
-  metric_name        = "ConcurrentExecutions"
-  namespace          = "AWS/Lambda"
-  period             = 60
-  statistic          = "Maximum"
-  threshold          = var.lambda_reserved_concurrency * 0.8 # 80% of reserved
-  alarm_description  = "Lambda concurrent executions approaching limit"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "ConcurrentExecutions"
+  namespace           = "AWS/Lambda"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = var.lambda_reserved_concurrency * 0.8 # 80% of reserved
+  alarm_description   = "Lambda concurrent executions approaching limit"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     FunctionName = aws_lambda_function.api_handler_primary.function_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-lambda-concurrency-alarm-primary"
   })
@@ -2215,21 +2418,21 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx_secondary" {
   alarm_name          = "${var.app_name}-api-5xx-errors-secondary"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name        = "5XXError"
-  namespace          = "AWS/ApiGateway"
-  period             = 300
-  statistic          = "Sum"
-  threshold          = 10
-  alarm_description  = "API Gateway 5xx error rate is too high in secondary region"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "5XXError"
+  namespace           = "AWS/ApiGateway"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "API Gateway 5xx error rate is too high in secondary region"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     ApiName = aws_api_gateway_rest_api.secondary_api.name
     Stage   = var.environment
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_secondary.arn]
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-api-5xx-alarm-secondary"
   })
@@ -2240,9 +2443,9 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx_secondary" {
 resource "aws_sns_topic" "alerts_primary" {
   provider = aws.primary
   name     = "${var.app_name}-alerts-primary"
-  
+
   kms_master_key_id = aws_kms_key.primary_key.id
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-alerts-primary"
   })
@@ -2252,9 +2455,9 @@ resource "aws_sns_topic" "alerts_primary" {
 resource "aws_sns_topic" "alerts_secondary" {
   provider = aws.secondary
   name     = "${var.app_name}-alerts-secondary"
-  
+
   kms_master_key_id = aws_kms_key.secondary_key.id
-  
+
   tags = merge(var.common_tags, {
     Name = "${var.app_name}-alerts-secondary"
   })

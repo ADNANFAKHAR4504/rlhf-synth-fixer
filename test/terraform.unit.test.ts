@@ -235,19 +235,21 @@ describe('Terraform Infrastructure - Multi-Region Resources', () => {
       expect(stackContent).toMatch(/EVENT_BUS_NAME/);
     });
 
-    test('Lambda IAM role is defined', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"/);
-    });
+  test('Lambda IAM roles are defined for both regions', () => {
+    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role_primary"/);
+    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role_secondary"/);
+  });
 
-    test('Lambda IAM policy is defined with least privilege', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_iam_policy"\s+"lambda_policy"/);
-      // Check that there are no wildcard resources in critical permissions
-      const policySection = stackContent.match(/resource\s+"aws_iam_policy"\s+"lambda_policy"[\s\S]*?(?=resource\s+"|$)/);
-      if (policySection) {
-        // Should have specific ARNs, not wildcards for DynamoDB
-        expect(policySection[0]).toMatch(/dynamodb:.*table\/\$\{var\.app_name\}/);
-      }
-    });
+  test('Lambda IAM policies are defined with least privilege', () => {
+    expect(stackContent).toMatch(/resource\s+"aws_iam_policy"\s+"lambda_policy_primary"/);
+    expect(stackContent).toMatch(/resource\s+"aws_iam_policy"\s+"lambda_policy_secondary"/);
+    // Check that there are no wildcard resources in critical permissions
+    const policySection = stackContent.match(/resource\s+"aws_iam_policy"\s+"lambda_policy_primary"[\s\S]*?(?=resource\s+"|$)/);
+    if (policySection) {
+      // Should have specific ARNs, not wildcards for DynamoDB
+      expect(policySection[0]).toMatch(/dynamodb:.*table\/\$\{var\.app_name\}/);
+    }
+  });
 
     test('Lambda deployment package is defined', () => {
       expect(stackContent).toMatch(/data\s+"archive_file"\s+"lambda_package"/);
@@ -456,8 +458,9 @@ describe('Terraform Infrastructure - CloudWatch Synthetics', () => {
     expect(stackContent).toMatch(/active_tracing\s*=\s*true/);
   });
 
-  test('Synthetics IAM role is defined', () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"synthetics_role"/);
+  test('Synthetics IAM roles are defined for both regions', () => {
+    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"synthetics_role_primary"/);
+    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"synthetics_role_secondary"/);
   });
 });
 
