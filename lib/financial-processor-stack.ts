@@ -487,7 +487,7 @@ export class FinancialProcessorStack extends TerraformStack {
     // DynamoDB Global Tables
     const transactionTable = new DynamodbTable(this, 'transaction-table', {
       provider: primaryProvider,
-      name: `${config.appName}-transactions-v2`,
+      name: `${config.appName}-transactions-${uniqueSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'transactionId',
       rangeKey: 'timestamp',
