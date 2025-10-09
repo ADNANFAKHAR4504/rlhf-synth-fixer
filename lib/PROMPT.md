@@ -1,6 +1,6 @@
 # Wiki Platform Infrastructure
 
-I need infrastructure code in CDK TypeScript to deploy a wiki platform in us-west-1 region. The platform will handle 6,400 collaborative edits daily.
+I need infrastructure code in CDK TypeScript to deploy a wiki platform in us-east-2 region. The platform will handle 6,400 collaborative edits daily.
 
 ## Network Configuration
 Create a VPC with CIDR 10.200.0.0/16 with public and private subnets across multiple availability zones.
