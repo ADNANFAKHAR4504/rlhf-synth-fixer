@@ -11,6 +11,7 @@ terraform {
 }
 
 provider "aws" {
+  region = "us-west-2"  # Hardcoded as per requirements
   default_tags {
     tags = {
       iac-rlhf-amazon = "true"

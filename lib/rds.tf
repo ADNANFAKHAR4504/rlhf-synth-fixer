@@ -1,3 +1,23 @@
+# AWS Secrets Manager for secure credential storage
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name                    = "rds-credentials-${var.resource_suffix}"
+  description             = "RDS database credentials"
+  recovery_window_in_days = 7
+
+  tags = {
+    Name                = "rds-credentials-${var.resource_suffix}"
+    iac-rlhf-amazon    = "true"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password
+  })
+}
+
 resource "aws_db_subnet_group" "default" {
   name       = "main-${var.resource_suffix}"
   subnet_ids = [aws_subnet.private.id, aws_subnet.private_2.id]

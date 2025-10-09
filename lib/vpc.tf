@@ -1,5 +1,10 @@
+# Hardcoded to us-west-2 as per requirements
 data "aws_availability_zones" "available" {
   state = "available"
+  filter {
+    name   = "region-name"
+    values = ["us-west-2"]
+  }
 }
 
 resource "aws_vpc" "main" {

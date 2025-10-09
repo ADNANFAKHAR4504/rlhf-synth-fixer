@@ -18,7 +18,15 @@ resource "aws_security_group" "ec2_sg" {
   description = "Security group for EC2 instance"
   vpc_id      = aws_vpc.main.id
 
-  # Removed SSH ingress - using SSM instead
+  # SSH access as per requirements
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.ssh_cidr_blocks
+    description = "SSH access from configurable IP addresses"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -33,7 +41,19 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
-# IAM role for SSM access
+# SSH Key Pair for EC2 access
+resource "aws_key_pair" "deployer" {
+  count      = var.ssh_public_key != "" ? 1 : 0
+  key_name   = "deployer-key-${var.resource_suffix}"
+  public_key = var.ssh_public_key
+
+  tags = {
+    Name                = "deployer-key-${var.resource_suffix}"
+    iac-rlhf-amazon    = "true"
+  }
+}
+
+# IAM role for SSM access (kept for additional security option)
 resource "aws_iam_role" "ec2_ssm_role" {
   name = "ec2-ssm-role-${var.resource_suffix}"
 
@@ -77,6 +97,7 @@ resource "aws_instance" "web" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  key_name               = var.ssh_public_key != "" ? aws_key_pair.deployer[0].key_name : null
 
   tags = {
     Name                = "web-instance-${var.resource_suffix}"

@@ -40,6 +40,7 @@ terraform {
 }
 
 provider "aws" {
+  region = "us-west-2"  # Hardcoded as per requirements
   default_tags {
     tags = {
       iac-rlhf-amazon = "true"
@@ -55,6 +56,18 @@ variable "resource_suffix" {
   description = "A suffix to append to all resource names for uniqueness"
   type        = string
   default     = "dev"
+}
+
+variable "ssh_cidr_blocks" {
+  description = "CIDR blocks allowed for SSH access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Configure restrictively in production
+}
+
+variable "ssh_public_key" {
+  description = "Public key for SSH access to EC2 instances"
+  type        = string
+  default     = ""  # Must be provided at runtime
 }
 
 variable "db_username" {
@@ -302,6 +315,25 @@ resource "aws_security_group" "rds_sg" {
   }
 }
 
+# AWS Secrets Manager for secure credential storage
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name        = "rds-credentials-${var.resource_suffix}"
+  description = "RDS MySQL database credentials"
+
+  tags = {
+    Name                = "rds-credentials-${var.resource_suffix}"
+    iac-rlhf-amazon    = "true"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password
+  })
+}
+
 resource "aws_db_instance" "default" {
   allocated_storage       = 20
   storage_type            = "gp2"
@@ -396,6 +428,11 @@ output "ec2_instance_public_ip" {
 output "rds_endpoint" {
   description = "Endpoint of the RDS instance"
   value       = aws_db_instance.default.endpoint
+}
+
+output "rds_password_secret_arn" {
+  description = "ARN of the RDS password secret in AWS Secrets Manager"
+  value       = aws_secretsmanager_secret.db_credentials.arn
 }
 
 output "s3_bucket_name" {

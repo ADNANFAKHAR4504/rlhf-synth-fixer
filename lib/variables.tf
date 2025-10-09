@@ -4,6 +4,18 @@ variable "resource_suffix" {
   default     = "dev"
 }
 
+variable "ssh_cidr_blocks" {
+  description = "CIDR blocks allowed for SSH access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Configure restrictively in production
+}
+
+variable "ssh_public_key" {
+  description = "Public key for SSH access to EC2 instances"
+  type        = string
+  default     = ""  # Must be provided at runtime
+}
+
 variable "db_username" {
   description = "Username for the RDS database"
   type        = string

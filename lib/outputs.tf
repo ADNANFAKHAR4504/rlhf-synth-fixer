@@ -23,6 +23,11 @@ output "rds_endpoint" {
   value       = aws_db_instance.default.endpoint
 }
 
+output "rds_password_secret_arn" {
+  description = "ARN of the RDS password secret in AWS Secrets Manager"
+  value       = aws_secretsmanager_secret.db_credentials.arn
+}
+
 output "s3_bucket_name" {
   description = "Name of the S3 bucket for Terraform state"
   value       = aws_s3_bucket.terraform_state.bucket
