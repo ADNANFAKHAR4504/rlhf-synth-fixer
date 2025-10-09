@@ -4,6 +4,8 @@
 
 The MODEL_RESPONSE.md addresses a **completely different problem** than what was requested in PROMPT.md.
 
+**Note**: The MODEL_RESPONSE.md being AI-generated is expected behavior since it represents the AI model's response. However, the response quality is the issue being analyzed.
+
 ### What Was Requested (PROMPT.md)
 
 Create a **new production VPC infrastructure** from scratch with:
