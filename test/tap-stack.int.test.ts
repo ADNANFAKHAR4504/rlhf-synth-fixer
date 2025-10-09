@@ -287,7 +287,13 @@ describe('User Profile API Integration Tests', () => {
       expect(multiUpdateResponse.data.email).toBe(newUserData.email); // Still unchanged
       console.log('Multiple updates completed');
 
-      console.log('Step 9: Verifying user removed from list...');
+      // Step 9: Delete the user (hard delete)
+      console.log('Step 9: Deleting user...');
+      const deleteResponse = await axios.delete(`${apiEndpoint}/users/${userId}`);
+      expect(deleteResponse.status).toBe(204);
+      console.log('User deleted');
+
+      console.log('Step 10: Verifying user removed from list...');
       const finalListResponse = await axios.get(`${apiEndpoint}/users?limit=100`);
       const deletedUserInList = finalListResponse.data.users.find((user: any) => user.userId === userId);
       expect(deletedUserInList).toBeUndefined();
