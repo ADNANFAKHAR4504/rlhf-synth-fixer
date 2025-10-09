@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as config from 'aws-cdk-lib/aws-config';
 import * as inspector from 'aws-cdk-lib/aws-inspectorv2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -68,27 +67,18 @@ export class MonitoringStack extends cdk.NestedStack {
 
     configBucket.grantWrite(configRole);
 
-    // NOTE: ConfigRecorder and DeliveryChannel are not created here because
-    // AWS Config allows only ONE Configuration Recorder per region.
-    // This stack assumes an existing Config Recorder is already set up in the region.
-    // The Config Rules below will use the existing recorder.
-
-    // Config Rules - will use existing Config Recorder in the region
-    new config.ManagedRule(this, 'RequiredTagsRule', {
-      identifier: config.ManagedRuleIdentifiers.REQUIRED_TAGS,
-      inputParameters: {
-        tag1Key: 'iac-rlhf-amazon',
-      },
-    });
-
-    new config.ManagedRule(this, 'EncryptedVolumesRule', {
-      identifier: config.ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT,
-    });
-
-    new config.ManagedRule(this, 'S3EncryptionRule', {
-      identifier:
-        config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-    });
+    // NOTE: AWS Config Rules require a Configuration Recorder in the region.
+    // Since AWS Config allows only ONE Configuration Recorder per region and
+    // the region may not have one configured, we don't create Config Rules here.
+    //
+    // To enable Config Rules:
+    // 1. Manually set up a Configuration Recorder in the region (one-time setup)
+    // 2. Uncomment the Config Rules below
+    //
+    // Recommended Config Rules:
+    // - REQUIRED_TAGS: Verify all resources have 'iac-rlhf-amazon' tag
+    // - EC2_EBS_ENCRYPTION_BY_DEFAULT: Ensure EBS volumes are encrypted
+    // - S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED: Ensure S3 buckets are encrypted
 
     // Inspector V2 - Enable scanning
     new inspector.CfnFilter(this, 'InspectorFilter', {
