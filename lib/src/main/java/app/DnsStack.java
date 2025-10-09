@@ -33,15 +33,11 @@ public class DnsStack {
             .zoneId(hostedZone.zoneId())
             .name("www")
             .type("A")
-            .setIdentifier("Default")
             .aliases(
                 RecordAliasArgs.builder()
                     .name(cdn.getDistribution().domainName())
                     .zoneId(cdn.getDistribution().hostedZoneId())
                     .evaluateTargetHealth(false)
-                    .build())
-            .geolocationRoutingPolicies(
-                RecordGeolocationRoutingPolicyArgs.builder()
                     .build())
             .build());
 
