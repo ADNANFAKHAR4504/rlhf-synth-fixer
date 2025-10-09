@@ -28,7 +28,7 @@ export class VpcModule extends Construct {
       enableDnsSupport: true,
       tags: {
         ...config.tags,
-        Name: `${id}-vpc`,
+        Name: 'ts-dev-vpc',
       },
     });
 
@@ -40,7 +40,7 @@ export class VpcModule extends Construct {
         vpcId: this.vpc.id,
         tags: {
           ...config.tags,
-          Name: `${id}-igw`,
+          Name: 'ts-dev-igw',
         },
       }
     );
@@ -60,7 +60,7 @@ export class VpcModule extends Construct {
         mapPublicIpOnLaunch: true,
         tags: {
           ...config.tags,
-          Name: `${id}-public-subnet-${az}`,
+          Name: `ts-dev-public-subnet-${az}`,
           Type: 'Public',
           AvailabilityZone: az,
         },
@@ -74,7 +74,7 @@ export class VpcModule extends Construct {
         availabilityZone: az, // Use the passed AZ directly
         tags: {
           ...config.tags,
-          Name: `${id}-private-subnet-${az}`,
+          Name: `ts-dev-private-subnet-${az}`,
           Type: 'Private',
           AvailabilityZone: az,
         },
@@ -86,7 +86,7 @@ export class VpcModule extends Construct {
         domain: 'vpc',
         tags: {
           ...config.tags,
-          Name: `${id}-nat-eip-${az}`,
+          Name: `ts-dev-nat-eip-${az}`,
         },
       });
 
@@ -99,7 +99,7 @@ export class VpcModule extends Construct {
           subnetId: publicSubnet.id,
           tags: {
             ...config.tags,
-            Name: `${id}-nat-gateway-${az}`,
+            Name: `ts-dev-nat-gateway-${az}`,
           },
         }
       );
@@ -111,7 +111,7 @@ export class VpcModule extends Construct {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
-        Name: `${id}-public-rt`,
+        Name: 'ts-dev-public-rt',
       },
     });
 
@@ -142,7 +142,7 @@ export class VpcModule extends Construct {
           vpcId: this.vpc.id,
           tags: {
             ...config.tags,
-            Name: `${id}-private-rt-${config.availabilityZones[index]}`,
+            Name: `ts-dev-private-rt-${config.availabilityZones[index]}`,
           },
         }
       );
@@ -310,7 +310,7 @@ export class Ec2Module extends Construct {
       description: 'Security group for EC2 instances',
       tags: {
         ...config.tags,
-        Name: `${id}-ec2-sg`,
+        Name: 'ts-dev-ec2-sg',
       },
     });
 
@@ -435,7 +435,7 @@ echo "<h1>Healthy</h1>" > /var/www/html/health.html
       this,
       'launch-template',
       {
-        namePrefix: `${id}-lt-`,
+        namePrefix: 'ts-dev-lt-',
         imageId: ami.id,
         instanceType: config.instanceType,
         keyName: config.keyName,
@@ -449,7 +449,7 @@ echo "<h1>Healthy</h1>" > /var/www/html/health.html
             resourceType: 'instance',
             tags: {
               ...config.tags,
-              Name: `${id}-instance`,
+              Name: 'ts-dev-instance',
             },
           },
         ],
@@ -469,7 +469,7 @@ echo "<h1>Healthy</h1>" > /var/www/html/health.html
       this,
       'asg',
       {
-        name: `${id}-asg`,
+        name: 'ts-dev-asg',
         vpcZoneIdentifier: config.privateSubnetIds,
         minSize: config.minSize,
         maxSize: config.maxSize,
@@ -510,7 +510,6 @@ export interface RdsModuleConfig {
   multiAz: boolean;
   tags: { [key: string]: string };
   masterUsername: string;
-  masterPasswordParameterName: string;
   databaseName: string;
   allowedSecurityGroupIds: string[];
 }
@@ -528,11 +527,11 @@ export class RdsModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: `${id}-db-subnet-group`,
+        name: 'ts-dev-db-subnet-group',
         subnetIds: config.privateSubnetIds,
         tags: {
           ...config.tags,
-          Name: `${id}-db-subnet-group`,
+          Name: 'ts-dev-db-subnet-group',
         },
       }
     );
@@ -543,7 +542,7 @@ export class RdsModule extends Construct {
       description: 'Security group for RDS database',
       tags: {
         ...config.tags,
-        Name: `${id}-rds-sg`,
+        Name: 'ts-dev-rds-sg',
       },
     });
 
@@ -566,13 +565,13 @@ export class RdsModule extends Construct {
 
     // KMS key for encryption
     const kmsKey = new aws.kmsKey.KmsKey(this, 'rds-kms-key', {
-      description: `KMS key for RDS encryption - ${id}`,
+      description: 'KMS key for RDS encryption - ts-dev',
       enableKeyRotation: true,
       tags: config.tags,
     });
 
     new aws.kmsAlias.KmsAlias(this, 'rds-kms-alias', {
-      name: `alias/${id}-rds`,
+      name: 'alias/ts-dev-rds',
       targetKeyId: kmsKey.id,
     });
 
@@ -582,7 +581,7 @@ export class RdsModule extends Construct {
       'db-parameter-group',
       {
         family: config.engine === 'mysql' ? 'mysql8.0' : 'postgres13',
-        name: `${id}-params`,
+        name: 'ts-dev-params',
         parameter:
           config.engine === 'mysql'
             ? [
@@ -609,19 +608,9 @@ export class RdsModule extends Construct {
       }
     );
 
-    // Get password from Parameter Store
-    const passwordData = new aws.dataAwsSsmParameter.DataAwsSsmParameter(
-      this,
-      'db-password',
-      {
-        name: config.masterPasswordParameterName,
-        withDecryption: true,
-      }
-    );
-
     // RDS Instance
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
-      identifier: `${id}-db`,
+      identifier: 'ts-dev-db',
       engine: config.engine,
       engineVersion: config.engineVersion,
       instanceClass: config.instanceClass,
@@ -631,7 +620,7 @@ export class RdsModule extends Construct {
       kmsKeyId: kmsKey.arn,
       dbName: config.databaseName,
       username: config.masterUsername,
-      password: passwordData.value,
+      manageMasterUserPassword: true,
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
       parameterGroupName: parameterGroup.name,
@@ -695,7 +684,7 @@ export class ElbModule extends Construct {
       description: 'Security group for Application Load Balancer',
       tags: {
         ...config.tags,
-        Name: `${id}-alb-sg`,
+        Name: 'ts-dev-alb-sg',
       },
     });
 
@@ -723,7 +712,7 @@ export class ElbModule extends Construct {
 
     // Application Load Balancer
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: `${id}-alb`,
+      name: 'ts-dev-alb',
       loadBalancerType: 'application',
       subnets: config.publicSubnetIds,
       securityGroups: [this.securityGroup.id],
@@ -743,7 +732,7 @@ export class ElbModule extends Construct {
       this,
       'target-group',
       {
-        name: `${id}-tg`,
+        name: 'ts-dev-tg',
         port: config.targetGroupPort,
         protocol: 'HTTP',
         vpcId: config.vpcId,
@@ -961,8 +950,8 @@ export class CloudFrontModule extends Construct {
         this,
         'oac',
         {
-          name: `${id}-oac`,
-          description: `OAC for ${id}`,
+          name: 'ts-dev-oac',
+          description: 'OAC for ts-dev',
           originAccessControlOriginType: 's3',
           signingBehavior: 'always',
           signingProtocol: 'sigv4',
@@ -976,7 +965,7 @@ export class CloudFrontModule extends Construct {
       {
         enabled: true,
         isIpv6Enabled: true,
-        comment: `CloudFront distribution for ${id}`,
+        comment: 'CloudFront distribution for ts-dev',
         defaultRootObject: 'index.html',
         priceClass: 'PriceClass_100',
 
@@ -1162,7 +1151,7 @@ export class Route53Module extends Construct {
         this,
         'health-check-alarm',
         {
-          alarmName: `${id}-health-check-alarm`,
+          alarmName: 'ts-dev-health-check-alarm',
           comparisonOperator: 'LessThanThreshold',
           evaluationPeriods: 2,
           metricName: 'HealthCheckStatus',
@@ -1222,13 +1211,13 @@ export class SecretsModule extends Construct {
 
     // KMS key for parameter encryption
     const kmsKey = new aws.kmsKey.KmsKey(this, 'parameter-kms-key', {
-      description: `KMS key for SSM parameters - ${id}`,
+      description: 'KMS key for SSM parameters - ts-dev',
       enableKeyRotation: true,
       tags: config.tags,
     });
 
     new aws.kmsAlias.KmsAlias(this, 'parameter-kms-alias', {
-      name: `alias/${id}-ssm-params`,
+      name: 'alias/ts-dev-ssm-params',
       targetKeyId: kmsKey.id,
     });
 
@@ -1286,7 +1275,7 @@ export class CloudTrailModule extends Construct {
       this,
       'trail-log-group',
       {
-        name: `/aws/cloudtrail/${id}`,
+        name: '/aws/cloudtrail/ts-dev',
         tags: config.tags,
       }
     );
@@ -1322,7 +1311,7 @@ export class CloudTrailModule extends Construct {
 
     // CloudTrail
     this.trail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
-      name: `${id}-trail`,
+      name: 'ts-dev-trail',
       s3BucketName: config.s3BucketName,
       s3KeyPrefix: 'cloudtrail',
       includeGlobalServiceEvents: true,
@@ -1357,7 +1346,7 @@ export class MonitoringModule extends Construct {
 
     // SNS Topic for alarms
     const snsTopic = new aws.snsTopic.SnsTopic(this, 'alarm-topic', {
-      name: `${id}-alarms`,
+      name: 'ts-dev-alarms',
       displayName: 'Infrastructure Alarms',
       tags: config.tags,
     });
@@ -1377,7 +1366,7 @@ export class MonitoringModule extends Construct {
       this,
       'alb-health-alarm',
       {
-        alarmName: `${id}-alb-unhealthy-targets`,
+        alarmName: 'ts-dev-alb-unhealthy-targets',
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'UnHealthyHostCount',
@@ -1400,7 +1389,7 @@ export class MonitoringModule extends Construct {
       this,
       'asg-cpu-alarm',
       {
-        alarmName: `${id}-asg-high-cpu`,
+        alarmName: 'ts-dev-asg-high-cpu',
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -1423,7 +1412,7 @@ export class MonitoringModule extends Construct {
       this,
       'rds-cpu-alarm',
       {
-        alarmName: `${id}-rds-high-cpu`,
+        alarmName: 'ts-dev-rds-high-cpu',
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -1446,7 +1435,7 @@ export class MonitoringModule extends Construct {
       this,
       'rds-storage-alarm',
       {
-        alarmName: `${id}-rds-low-storage`,
+        alarmName: 'ts-dev-rds-low-storage',
         comparisonOperator: 'LessThanThreshold',
         evaluationPeriods: 1,
         metricName: 'FreeStorageSpace',
@@ -1469,7 +1458,7 @@ export class MonitoringModule extends Construct {
       this,
       'dashboard',
       {
-        dashboardName: `${id}-dashboard`,
+        dashboardName: 'ts-dev-dashboard',
         dashboardBody: JSON.stringify({
           widgets: [
             {

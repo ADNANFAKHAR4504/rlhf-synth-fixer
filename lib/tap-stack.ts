@@ -84,7 +84,6 @@ export class TapStack extends TerraformStack {
       Security: 'Enforced',
       ManagedBy: 'CDKTF',
       Project: 'TAP',
-      CreatedAt: new Date().toISOString(),
     };
 
     // Configure S3 Backend with native state locking
@@ -124,7 +123,7 @@ export class TapStack extends TerraformStack {
     // ========== Storage (Create logs bucket first) ==========
     // FIXED: Create bucket without ACL initially
     const logsBucket = new aws.s3Bucket.S3Bucket(this, 'logs-bucket', {
-      bucket: `tap-logs-${Date.now()}`,
+      bucket: 'tap-logs-655',
       tags: globalTags,
     });
 
@@ -250,7 +249,7 @@ export class TapStack extends TerraformStack {
     });
 
     // ========== Secrets Management ==========
-    const secretsModule = new SecretsModule(this, 'secrets', {
+    new SecretsModule(this, 'secrets', {
       parameterPrefix: '/tap/app',
       tags: globalTags,
     });
@@ -468,8 +467,6 @@ export class TapStack extends TerraformStack {
       multiAz: true,
       tags: globalTags,
       masterUsername: process.env.DB_MASTER_USERNAME || 'adminuser',
-      masterPasswordParameterName:
-        secretsModule.getParameterName('db-password'),
       databaseName: 'tapdb',
       allowedSecurityGroupIds: [ec2Module.securityGroup.id],
     });
