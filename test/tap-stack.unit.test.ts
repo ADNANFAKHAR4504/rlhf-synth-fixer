@@ -46,7 +46,7 @@ describe('Gaming Database Stack Unit Tests', () => {
     });
 
     test('should configure table with dynamic name', () => {
-      expect(synthesized).toMatch(/"name": "GamePlayerProfiles-production-\d{6}"/);
+      expect(synthesized).toMatch(/"name": "GamingPlayerProfiles-production-\d+"/);
     });
 
     test('should use PAY_PER_REQUEST billing mode', () => {

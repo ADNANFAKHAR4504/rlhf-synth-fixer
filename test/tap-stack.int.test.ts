@@ -14,9 +14,9 @@ describe('Gaming Database Stack Integration Tests', () => {
 
   describe('DynamoDB Table Configuration', () => {
     test('should create DynamoDB table with correct configuration', () => {
-      // Verify table exists with correct name
+      // Verify table exists with correct name (dynamic naming)
       expect(synthesized).toContain('aws_dynamodb_table');
-      expect(synthesized).toContain('"name": "GamePlayerProfiles"');
+      expect(synthesized).toMatch(/"name": "GamingPlayerProfiles-production-\d+"/);  // Dynamic name pattern
 
       // Verify billing mode is pay-per-request
       expect(synthesized).toContain('"billing_mode": "PAY_PER_REQUEST"');
@@ -74,7 +74,7 @@ describe('Gaming Database Stack Integration Tests', () => {
   describe('Global Secondary Index (GSI)', () => {
     test('should create score-index GSI with correct configuration', () => {
       expect(synthesized).toContain('"global_secondary_index"');
-      expect(synthesized).toContain('"name": "score-index"');
+      expect(synthesized).toMatch(/"name": "score-index-production-\d+"/);  // Dynamic GSI name
       expect(synthesized).toContain('"hash_key": "gameMode"');
       expect(synthesized).toContain('"range_key": "score"');
       expect(synthesized).toContain('"projection_type": "ALL"');
@@ -84,7 +84,7 @@ describe('Gaming Database Stack Integration Tests', () => {
       // Verify GSI uses gameMode as partition key and score as sort key
       expect(synthesized).toContain('"hash_key": "gameMode"');
       expect(synthesized).toContain('"range_key": "score"');
-      expect(synthesized).toContain('"name": "score-index"');
+      expect(synthesized).toMatch(/"name": "score-index-production-\d+"/);  // Dynamic GSI name
     });
   });
 
@@ -147,10 +147,10 @@ describe('Gaming Database Stack Integration Tests', () => {
     });
 
     test('should have consistent naming convention', () => {
-      // Verify consistent naming patterns
-      expect(synthesized).toContain('GamePlayerProfiles');
-      expect(synthesized).toContain('score-index');
-      expect(synthesized).toContain('level-index');
+      // Verify consistent dynamic naming patterns
+      expect(synthesized).toMatch(/GamingPlayerProfiles-production-\d+/);  // Dynamic table name
+      expect(synthesized).toMatch(/score-index-production-\d+/);  // Dynamic GSI name
+      expect(synthesized).toContain('level-index');  // LSI keeps static name
     });
   });
 
@@ -187,8 +187,8 @@ describe('Gaming Database Stack Integration Tests', () => {
       // Verify table structure supports gaming use cases
       expect(synthesized).toContain('"hash_key": "playerId"'); // Player lookup
       expect(synthesized).toContain('"range_key": "timestamp"'); // Time-based queries
-      expect(synthesized).toContain('"name": "score-index"'); // Leaderboard queries
-      expect(synthesized).toContain('"name": "level-index"'); // Level-based queries
+      expect(synthesized).toMatch(/"name": "score-index-production-\d+"/); // Dynamic leaderboard queries
+      expect(synthesized).toContain('"name": "level-index"'); // Level-based queries (static)
     });
 
     test('should enable efficient leaderboard queries via GSI', () => {
@@ -265,7 +265,7 @@ describe('Gaming Database Stack Integration Tests', () => {
 
     beforeEach(() => {
       appWithScaling = new App();
-      stackWithScaling = new GamingDatabaseStack(appWithScaling, 'gaming-database-stack-with-scaling', true);
+      stackWithScaling = new GamingDatabaseStack(appWithScaling, 'gaming-database-stack-with-scaling', { enableAutoScaling: true });
       synthesizedWithScaling = Testing.synth(stackWithScaling);
     });
 
@@ -359,10 +359,10 @@ describe('Gaming Database Stack Integration Tests', () => {
 
     test('should have consistent resource naming across all components', () => {
       // Ensure all resources follow consistent naming patterns
-      expect(synthesized).toContain('game-player-profiles'); // Terraform resource name
-      expect(synthesized).toContain('GamePlayerProfiles'); // DynamoDB table name
-      expect(synthesized).toContain('score-index'); // GSI name
-      expect(synthesized).toContain('level-index'); // LSI name
+      expect(synthesized).toContain('game-player-profiles'); // Terraform resource name (static)
+      expect(synthesized).toMatch(/GamingPlayerProfiles-production-\d+/); // Dynamic DynamoDB table name
+      expect(synthesized).toMatch(/score-index-production-\d+/); // Dynamic GSI name
+      expect(synthesized).toContain('level-index'); // LSI name (static)
     });
 
     test('should not have any resource conflicts or duplicates', () => {
@@ -394,12 +394,12 @@ describe('Gaming Database Stack Integration Tests', () => {
       expect(synthesizedUndefined).not.toContain('aws_appautoscaling_target');
 
       // Test with explicit false
-      const stackFalse = new GamingDatabaseStack(testApp, 'stack-false', false);
+      const stackFalse = new GamingDatabaseStack(testApp, 'stack-false', { enableAutoScaling: false });
       const synthesizedFalse = Testing.synth(stackFalse);
       expect(synthesizedFalse).not.toContain('aws_appautoscaling_target');
 
       // Test with explicit true
-      const stackTrue = new GamingDatabaseStack(testApp, 'stack-true', true);
+      const stackTrue = new GamingDatabaseStack(testApp, 'stack-true', { enableAutoScaling: true });
       const synthesizedTrue = Testing.synth(stackTrue);
       expect(synthesizedTrue).toContain('aws_appautoscaling_target');
     });
