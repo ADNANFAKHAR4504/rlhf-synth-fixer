@@ -1,31 +1,15 @@
-# AWS Production VPC Infrastructure with Terraform
-
-This solution implements a comprehensive, production-ready AWS infrastructure using Terraform HCL, designed to meet all the specified requirements for a multi-tier VPC architecture with robust security, monitoring, and high availability.
-
-## Infrastructure Overview
-
-The solution creates a complete production environment featuring:
-
-- **VPC and Networking**: Multi-AZ VPC with public/private subnets, Internet Gateway, NAT Gateways, and VPC Flow Logs
-- **Compute Layer**: Auto Scaling Group with Launch Template for web servers in private subnets
-- **Database Layer**: RDS MySQL instance with high availability and security
-- **Monitoring and Alerts**: CloudWatch alarms and SNS notifications
-- **Security**: Proper security groups, IAM roles, and network isolation
+# AWS Production VPC Infrastructure - Terraform Implementation
 
 ## File Structure
 
 ```
 lib/
-├── tap_stack.tf     # Main infrastructure configuration
-├── provider.tf      # AWS provider and Terraform configuration
-└── variables.tf     # Input variables for customization
-
-test/
-├── tap-stack.terraform.unit.test.js # Unit tests for Terraform configuration
-└── tap-stack.terraform.int.test.js  # Integration tests for deployed resources
+├── tap_stack.tf     # Main infrastructure
+├── provider.tf      # Provider configuration
+└── variables.tf     # Variables
 ```
 
-## Implementation Details
+## Code
 
 ### lib/provider.tf
 
@@ -66,7 +50,12 @@ variable "ssh_allowed_ip" {
   default     = "203.0.113.0/32" # Example IP - replace with your actual IP
 }
 
-# Removed db_password variable - now using AWS Secrets Manager for RDS password
+variable "db_password" {
+  description = "RDS database password (use AWS Secrets Manager in production)"
+  type        = string
+  default     = "ChangeMe123!" # WARNING: Change this or use AWS Secrets Manager
+  sensitive   = true
+}
 ```
 
 ### lib/tap_stack.tf
@@ -447,7 +436,7 @@ resource "aws_db_instance" "prod_rds" {
   
   db_name  = "proddb"
   username = "admin"
-  password = "ChangeMe123!"
+  password = var.db_password # TODO: Use AWS Secrets Manager in production
   
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.prod_db_subnet_group.name
@@ -537,101 +526,11 @@ output "cloudwatch_alarm_name" {
 }
 ```
 
-## Key Features Implemented
-
-### 1. VPC and Networking
-- **VPC**: `10.0.0.0/16` CIDR block with DNS support enabled
-- **Multi-AZ**: Resources deployed across two availability zones
-- **Public Subnets**: `10.0.1.0/24` and `10.0.3.0/24` with public IP assignment
-- **Private Subnets**: `10.0.10.0/24` and `10.0.12.0/24` for secure resources
-- **Internet Gateway**: Provides internet access for public subnets
-- **NAT Gateways**: One per AZ for outbound internet access from private subnets
-- **VPC Flow Logs**: Traffic monitoring with CloudWatch Logs integration
-
-### 2. Compute Layer
-- **Auto Scaling Group**: 2-6 instances with initial capacity of 2
-- **Launch Template**: Uses specified AMI `ami-0abcdef1234567890`
-- **Instance Profile**: IAM role with S3 read-only access
-- **Security Group**: Allows HTTP/HTTPS from anywhere, SSH from specific IP
-- **User Data**: Installs and configures Apache HTTP Server
-
-### 3. Database Layer
-- **RDS MySQL 8.0**: `db.t3.micro` instance with encryption
-- **DB Subnet Group**: Spans both private subnets
-- **Security Group**: MySQL port (3306) accessible only from EC2 instances
-- **Private Access**: Not publicly accessible
-
-### 4. Monitoring and Alerts
-- **CloudWatch Alarm**: Monitors Auto Scaling Group CPU utilization (>80%)
-- **SNS Topic**: `ProdAlertTopic` for notifications
-- **Email Subscription**: Sends alerts to `alerts@company.com`
-
-### 5. Security Best Practices
-- **Network Isolation**: Resources in private subnets
-- **Security Groups**: Least privilege access rules
-- **IAM Roles**: Service-specific permissions
-- **Encryption**: RDS storage encryption enabled
-- **SSH Restriction**: Limited to specific IP range
-
-### 6. Tagging Strategy
-- **Consistent Tagging**: All resources tagged with Environment and Project
-- **Resource Naming**: All resources prefixed with "Prod"
-- **Identification**: Easy resource identification and cost tracking
-
-## Deployment Instructions
-
-1. **Initialize Terraform**:
-   ```bash
-   cd lib
-   terraform init
-   ```
-
-2. **Plan Deployment**:
-   ```bash
-   terraform plan
-   ```
-
-3. **Deploy Infrastructure**:
-   ```bash
-   terraform apply
-   ```
-
-4. **Verify Outputs**:
-   ```bash
-   terraform output
-   ```
-
-## Testing
-
-The solution includes comprehensive testing:
-
-- **Unit Tests**: Validate Terraform configuration syntax and resource definitions
-- **Integration Tests**: Verify deployed resources and their configurations
-- **Security Tests**: Validate security group rules and access controls
-- **Compliance Tests**: Ensure proper tagging and naming conventions
-
-## Cleanup
-
-To destroy all resources:
+## Deployment
 
 ```bash
-terraform destroy
+cd lib
+terraform init
+terraform plan
+terraform apply
 ```
-
-## Customization
-
-The infrastructure can be customized through variables:
-
-- `aws_region`: Change deployment region (default: us-east-1)
-- `ssh_allowed_ip`: Specify allowed IP for SSH access
-
-## Architecture Benefits
-
-1. **High Availability**: Multi-AZ deployment ensures resilience
-2. **Security**: Defense in depth with multiple security layers
-3. **Scalability**: Auto Scaling Group handles varying loads
-4. **Monitoring**: Proactive alerts for operational issues
-5. **Cost Optimization**: Right-sized resources with monitoring
-6. **Compliance**: Consistent tagging and naming for governance
-
-This solution provides a robust, secure, and scalable foundation for production workloads while meeting all specified requirements.

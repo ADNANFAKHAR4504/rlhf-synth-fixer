@@ -9,3 +9,10 @@ variable "ssh_allowed_ip" {
   type        = string
   default     = "203.0.113.0/32"
 }
+
+variable "db_password" {
+  description = "RDS database master password (use AWS Secrets Manager in production)"
+  type        = string
+  default     = "ChangeMe123!"
+  sensitive   = true
+}

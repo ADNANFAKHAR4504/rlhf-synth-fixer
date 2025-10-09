@@ -373,7 +373,7 @@ resource "aws_db_instance" "prod_rds" {
 
   db_name  = "proddb"
   username = "admin"
-  password = "ChangeMe123!"
+  password = var.db_password # TODO: Use AWS Secrets Manager in production
 
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.prod_db_subnet_group.name
