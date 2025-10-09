@@ -6,6 +6,10 @@
   "po_id": "75029386",
   "team": "synth",
   "startedAt": "2025-10-02T05:44:54+0000",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],  
   "training_quality": 8,
   "aws_services": ["S3", "CloudFront", "CloudWatch"]
 }
