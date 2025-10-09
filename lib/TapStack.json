@@ -84,9 +84,9 @@
       "Description": "EC2 instance type"
     },
     "KeyName": {
-      "Type": "String",
+      "Type": "AWS::EC2::KeyPair::KeyName",
       "Default": "",
-      "Description": "Optional EC2 Key Pair name (ignored by resources; access via SSM Session Manager)",
+      "Description": "EC2 Key Pair for SSH access (left unused by resources to avoid deployment failure if it does not exist)",
       "AllowedPattern": "^$|[\\w+=,.@-]{1,255}"
     },
     "LatestAmiId": {
@@ -96,11 +96,12 @@
     },
     "DBUsername": {
       "Type": "String",
-      "Default": "dbmasteruser",
+      "Default": "tapstack_admin",
       "MinLength": "1",
       "MaxLength": "16",
-      "AllowedPattern": "^(?!admin$)(?!postgres$)(?!rdsadmin$)[A-Za-z][A-Za-z0-9]*$",
-      "ConstraintDescription": "Start with a letter; alphanumeric only; cannot be admin, postgres, or rdsadmin"
+      "AllowedPattern": "^(?!admin$)[a-zA-Z][a-zA-Z0-9_]*$",
+      "ConstraintDescription": "Must start with a letter, contain only letters, numbers, or underscore, and cannot be 'admin'",
+      "Description": "Database admin username (cannot be 'admin')"
     },
     "DBInstanceClass": {
       "Type": "String",
@@ -813,7 +814,12 @@
           "LaunchTemplateId": {
             "Ref": "LaunchTemplate"
           },
-          "Version": "$Latest"
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
         },
         "MinSize": "1",
         "MaxSize": "4",
@@ -1203,16 +1209,7 @@
               },
               "S3OriginConfig": {
                 "OriginAccessIdentity": {
-                  "Fn::Join": [
-                    "/",
-                    [
-                      "origin-access-identity",
-                      "cloudfront",
-                      {
-                        "Ref": "CloudFrontOAI"
-                      }
-                    ]
-                  ]
+                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
                 }
               }
             }
@@ -1470,8 +1467,8 @@
         }
       }
     },
-    "DeploymentKeyName": {
-      "Description": "Echo of the provided KeyName parameter (not used by resources; fixes cfn-lint W2001).",
+    "ProvidedKeyName": {
+      "Description": "KeyName parameter value provided at deploy time (not used by resources to prevent failures if it doesn't exist).",
       "Value": {
         "Ref": "KeyName"
       }
