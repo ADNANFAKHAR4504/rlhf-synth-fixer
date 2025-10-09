@@ -1190,6 +1190,12 @@
                         "Value": "false"
                     },
                     {
+                        "Key": "access_logs.s3.bucket",
+                        "Value": {
+                            "Ref": "LogsBucket"
+                        }
+                    },
+                    {
                         "Key": "access_logs.s3.prefix",
                         "Value": "alb-logs"
                     }
@@ -1272,10 +1278,7 @@
         },
         "EnableALBLogs": {
             "Type": "Custom::LoadBalancerLogs",
-            "DependsOn": [
-                "ApplicationLoadBalancer",
-                "LogsBucketPolicy"
-            ],
+            "DependsOn": "LogsBucketPolicy",
             "Properties": {
                 "ServiceToken": {
                     "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs"

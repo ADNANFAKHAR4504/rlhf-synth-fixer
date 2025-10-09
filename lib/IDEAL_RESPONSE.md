@@ -6,9 +6,9 @@ This document outlines the ideal infrastructure setup for a highly available and
 
 ---
 
-## test/tap-stack.unit.test.ts
+## lib/TapStack.yml
 
-```typescript
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Highly Available and Fault-Tolerant Web Application Infrastructure'
 
@@ -603,6 +603,7 @@ Resources:
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: LogsBucketPolicy
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-alb-${EnvironmentSuffix}'
       Type: application
@@ -616,7 +617,7 @@ Resources:
         - Key: deletion_protection.enabled
           Value: 'false'
         - Key: access_logs.s3.enabled
-          Value: 'true'
+          Value: 'false'
         - Key: access_logs.s3.bucket
           Value: !Ref LogsBucket
         - Key: access_logs.s3.prefix
@@ -657,6 +658,15 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
+
+  EnableALBLogs:
+    Type: Custom::LoadBalancerLogs
+    DependsOn: LogsBucketPolicy
+    Properties:
+      ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs'
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      S3BucketName: !Ref LogsBucket
+      S3Prefix: 'alb-logs'
 
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -939,7 +949,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 1
-      Threshold: 2147483648  # 2GB in bytes
+      Threshold: 2147483648 # 2GB in bytes
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: DBInstanceIdentifier

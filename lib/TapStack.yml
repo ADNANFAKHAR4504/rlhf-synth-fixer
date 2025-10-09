@@ -607,6 +607,8 @@ Resources:
           Value: 'false'
         - Key: access_logs.s3.enabled
           Value: 'false'
+        - Key: access_logs.s3.bucket
+          Value: !Ref LogsBucket
         - Key: access_logs.s3.prefix
           Value: 'alb-logs'
       Tags:
@@ -648,9 +650,7 @@ Resources:
 
   EnableALBLogs:
     Type: Custom::LoadBalancerLogs
-    DependsOn: 
-      - ApplicationLoadBalancer
-      - LogsBucketPolicy
+    DependsOn: LogsBucketPolicy
     Properties:
       ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs'
       LoadBalancerArn: !Ref ApplicationLoadBalancer

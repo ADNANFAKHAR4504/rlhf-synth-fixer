@@ -1,10 +1,130 @@
 # MODEL_FAILURES.md
 
-This document details the technical fixes applied to address specific infrastructure issues identified in the model responses.
+This document details the technical fixes required in the infrastructure code to address specific failures and reach the ideal state.
 
 ## Infrastructure Fixes
 
-### 1. Application Load Balancer Access Logging Issue
+### 1. Application Load Balancer Access Logging Configuration
+**Error**: ALB UPDATE_FAILED due to incomplete S3 logging configuration and validation issues.
+
+**Root Cause**:
+- Missing required S3 bucket configuration attributes
+- Incorrect dependency ordering between ALB and S3 bucket policy
+- Duplicate logging prefix attribute
+
+**Technical Fix**:
+```yaml
+# 1. Fixed ALB Configuration
+ApplicationLoadBalancer:
+  DependsOn: LogsBucketPolicy    # Ensure S3 bucket policy exists first
+  Properties:
+    LoadBalancerAttributes:
+      - Key: deletion_protection.enabled
+        Value: 'false'
+      - Key: access_logs.s3.enabled
+        Value: 'false'           # Initially disabled
+      - Key: access_logs.s3.bucket
+        Value: !Ref LogsBucket   # Required even when disabled
+      - Key: access_logs.s3.prefix
+        Value: 'alb-logs'        # Required even when disabled
+
+# 2. S3 Bucket Policy for ALB Logging
+LogsBucketPolicy:
+  Type: AWS::S3::BucketPolicy
+  Properties:
+    Bucket: !Ref LogsBucket
+    PolicyDocument:
+      Statement:
+        - Sid: AWSLogDeliveryWrite
+          Effect: Allow
+          Principal:
+            Service: elasticloadbalancing.amazonaws.com
+          Action: 's3:PutObject'
+          Resource: !Sub '${LogsBucket.Arn}/alb-logs/*'
+        - Sid: AWSLogDeliveryAclCheck
+          Effect: Allow
+          Principal:
+            Service: elasticloadbalancing.amazonaws.com
+          Action: 's3:GetBucketAcl'
+          Resource: !GetAtt LogsBucket.Arn
+
+# 3. Custom Resource for Enabling Logs
+EnableALBLogs:
+  Type: Custom::LoadBalancerLogs
+  DependsOn: LogsBucketPolicy
+  Properties:
+    ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs'
+    LoadBalancerArn: !Ref ApplicationLoadBalancer
+    S3BucketName: !Ref LogsBucket
+    S3Prefix: 'alb-logs'
+```
+
+**Implementation Details**:
+1. ALB Configuration:
+   - Added all required S3 logging attributes upfront
+   - Removed duplicate prefix attribute
+   - Added explicit dependency on S3 bucket policy
+
+2. S3 Bucket Policy:
+   - Configured proper permissions for ALB log delivery
+   - Added specific resource paths for log writes
+   - Enabled bucket ACL checks for ALB service
+
+3. Log Enabling Process:
+   - Created custom resource to handle log enabling
+   - Implemented proper resource dependency chain
+   - Separated logging activation from ALB creation
+
+### 2. HTTPS/SSL Implementation Status
+**Current Status**: Not implemented
+**Technical Limitation**: Domain name configuration ends with `.local`
+
+**Configuration Details**:
+```yaml
+Parameters:
+  DomainName:
+    Type: String
+    Default: 'myapp-test.local'  # Cannot obtain valid SSL certificate for .local domains
+```
+
+**Requirements for HTTPS Implementation**:
+1. Valid domain name (not ending in .local)
+2. Domain ownership verification capability
+3. ACM certificate creation and validation
+4. ALB HTTPS listener (port 443)
+5. Security group updates for HTTPS traffic
+
+## Architectural Implications
+1. Load Balancer:
+   - Log delivery to S3 configured but initially disabled
+   - Prepared for future HTTPS implementation
+   - Custom resource handles log activation
+
+2. Security:
+   - Proper S3 bucket policies in place
+   - ALB security group configured for HTTP (port 80)
+   - Service-to-service permissions properly scoped
+
+3. Monitoring:
+   - ALB access logs captured in S3
+   - Log retention policies configured
+   - CloudWatch integration maintained
+
+## Dependencies and Prerequisites
+1. S3 Bucket:
+   - Must exist before ALB creation
+   - Requires proper bucket policy
+   - KMS encryption enabled
+
+2. Networking:
+   - Public subnets available
+   - Internet Gateway attached
+   - Route tables configured
+
+3. IAM:
+   - ELB service principal permissions
+   - S3 bucket access policies
+   - Custom resource execution role
 
 **Problem**: ALB access logging configuration caused UPDATE_FAILED state due to S3 bucket validation issues.
 
@@ -27,6 +147,10 @@ ApplicationLoadBalancer:
     LoadBalancerAttributes:
       - Key: access_logs.s3.enabled
         Value: 'false'  # Initially disabled
+      - Key: access_logs.s3.bucket
+        Value: !Ref LogsBucket  # Required even when disabled
+      - Key: access_logs.s3.prefix
+        Value: 'alb-logs'  # Required even when disabled
 
 EnableALBLogs:
   Type: Custom::LoadBalancerLogs
