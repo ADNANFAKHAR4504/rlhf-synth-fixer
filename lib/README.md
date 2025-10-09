@@ -24,7 +24,7 @@ This AWS CDK project implements a reliable, scalable email notification system f
 4. **Cost Management**
    - Real-time cost tracking per email sent
    - Daily cost analysis and reporting
-   - Budget threshold alerts via SNS
+   - Budget threshold alerts via SNS 
 
 ## Project Structure
 
