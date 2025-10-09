@@ -1,142 +1,155 @@
-## **Task Overview**
+# Build a Secure, Scalable AWS Stack (CloudFormation JSON)
 
-Design a **secure, scalable, and efficient AWS Cloud Architecture** using **AWS CloudFormation (JSON format)** for a **mid-sized company**.
-Your template must follow **AWS security best practices**, ensure **network isolation**, and meet **all requirements** listed below.
+We’re setting up a production-quality AWS foundation for a mid-sized company. Please deliver a **CloudFormation template in JSON** that’s secure by default, easy to deploy, and follows AWS best practices.
 
----
+## What you’re building
 
-## **Requirements**
-
-### **1. Region & Environment**
-
-* All resources must be deployed in **`us-west-2`** (Oregon).
-* Use a **dedicated VPC** to isolate resources from other environments.
+A dedicated VPC in **us-west-2** with public/private subnets, an internet-facing ALB, private EC2 instances, an encrypted PostgreSQL RDS database, S3 buckets for content and logs, a Lambda for log processing, and CloudFront in front of S3. Everything should be locked down and monitored.
 
 ---
 
-### **2. Networking & Access**
+## Must-haves (at a glance)
 
-* Create a **VPC** with at least two **public** and **private** subnets across **two Availability Zones**.
-* Attach an **Internet Gateway** to the VPC.
-* Deploy a **NAT Gateway** in a public subnet to provide secure internet access for instances in private subnets.
-* Configure **route tables** for proper routing between public/private subnets.
-* All traffic must use **SSL/TLS** for encryption in transit.
-* Add a **bastion host** in the public subnet for secure SSH access to private EC2 instances.
+* Region: **us-west-2**
+* Dedicated **VPC** (isolated from anything else)
+* **2 public** and **2 private** subnets across **at least two AZs**
+* **Internet Gateway** + **NAT Gateway** (NAT lives in a public subnet)
+* **Route tables** wired correctly for public/private traffic
+* **Bastion host** in a public subnet for SSH into private EC2
+* **ALB** in public subnets; **EC2** instances in private subnets
+* **Security Groups**:
 
----
-
-### **3. EC2 Instances**
-
-* Deploy EC2 instances in **private subnets**.
-* Create a **Security Group** that allows only:
-
-  * **HTTP (port 80)** inbound traffic from the internet via ALB or public subnet.
-  * **SSH (port 22)** inbound traffic **only from the bastion host**.
-* Configure **CloudWatch Alarms** to monitor **CPU utilization**.
-* Associate an **IAM Role** with EC2 that follows the **principle of least privilege**.
-
----
-
-### **4. S3 Buckets**
-
-* Create S3 buckets for **data storage** and **access logs**.
-* Enable **versioning** and **server access logging** on all buckets.
-* Enforce **SSE-KMS encryption** for data at rest.
-* Add **bucket policies** to **restrict public access** and enforce HTTPS (deny non-SSL requests).
+  * EC2: allow **HTTP (80)** only **from the ALB**
+  * EC2: allow **SSH (22)** only **from the bastion**
+* **S3**: buckets for data + access logs; **versioning** and **SSE-KMS** required; block public access; **deny non-HTTPS**
+* **RDS (PostgreSQL)**: private, **KMS-encrypted**, **Multi-AZ**, SSL required, not publicly accessible
+* **IAM**: least privilege roles for EC2/Lambda/etc.
+* **Lambda**: small function for log processing, optional S3 trigger
+* **CloudFront**: in front of S3; **HTTPS enforced**; use **OAI or OAC**
+* **KMS**: encrypt EBS, S3, and RDS
+* **CloudWatch**: metrics + alarms (at minimum EC2 CPU); logs for S3/Lambda where applicable
+* **TLS everywhere** for traffic in transit
 
 ---
 
-### **5. RDS Instance**
+## Networking & access
 
-* Launch an **Amazon RDS instance** in private subnets.
-* Enable **storage encryption** using **AWS KMS**.
-* Ensure **RDS connections** require SSL for data in transit.
-* Use a **minimal IAM role** for RDS access control.
-* Disallow public accessibility.
+* Create a VPC (CIDR via parameter) with:
 
----
+  * Two **public** subnets (AZ-spread)
+  * Two **private** subnets (AZ-spread)
+* Attach an **Internet Gateway**.
+* Add a **NAT Gateway** in a public subnet for private egress.
+* Wire **route tables** appropriately (public → IGW, private → NAT).
+* Launch a **bastion host** in a public subnet for controlled SSH.
 
-### **6. IAM & Security**
+## Compute (EC2 + ALB)
 
-* Define **IAM Roles and Policies** for EC2, Lambda, and other services.
-* Apply the **principle of least privilege** — each service should only have permissions necessary for its function.
-* Deny all unnecessary public or cross-account access unless explicitly required.
+* EC2 runs in **private subnets** only.
+* Front with an **internet-facing ALB** in **public subnets**.
+* **Security Groups**:
 
----
+  * ALB: allow 80/443 from the internet.
+  * EC2: allow **80 only from the ALB SG**; **22 only from the bastion SG**.
+* **CloudWatch Alarms** for EC2 **CPUUtilization**.
+* EC2 **IAM Role** with least-privilege access to what it needs (e.g., S3/KMS).
 
-### **7. Serverless Components (Lambda)**
+## Storage (S3)
 
-* Add **AWS Lambda functions** for:
+* Buckets:
 
-  * **Log processing** or **automation tasks**.
-  * **S3 event triggers** (optional).
-* Ensure Lambda execution roles have **restricted access** to S3 and CloudWatch Logs only.
+  * **Data** bucket
+  * **Access logs** bucket
+* Enable **versioning** on all buckets.
+* Turn on **server access logging** (logs → logs bucket).
+* Enforce **SSE-KMS**.
+* **Block public access** and add a **policy to deny non-HTTPS**.
 
----
+## Database (RDS)
 
-### **8. Content Delivery**
+* **PostgreSQL** in **private subnets** only.
+* **KMS-encrypted**, **Multi-AZ**, **not publicly accessible**.
+* Require **SSL** for connections.
+* Keep IAM/RDS permissions minimal.
 
-* Configure a **CloudFront Distribution** for S3 bucket content delivery.
-* Enforce **HTTPS (ViewerProtocolPolicy = redirect-to-https)**.
-* Enable **Origin Access Control (OAC)** or **Origin Access Identity (OAI)** to secure direct S3 access.
+## IAM & security
 
----
+* Create roles/policies for EC2, Lambda, and any other services used.
+* **Principle of least privilege** throughout.
+* Avoid public or cross-account access unless explicitly required.
 
-### **9. Encryption & Monitoring**
+## Serverless (Lambda)
 
-* Use **AWS KMS** for encrypting:
+* Add a Lambda for **log processing** or automation tasks.
+* Optionally, wire up **S3 event notifications**.
+* Lambda role: only what’s needed for **CloudWatch Logs** and relevant **S3** actions.
+
+## Content delivery (CloudFront)
+
+* CloudFront in front of the content S3 bucket.
+* **Enforce HTTPS** (ViewerProtocolPolicy = `redirect-to-https`).
+* Use **OAI or OAC** to prevent direct public access to S3.
+
+## Encryption & observability
+
+* **KMS** for:
 
   * RDS storage
   * S3 data
   * EC2 volumes (EBS)
-* Enable **CloudWatch Metrics and Alarms** for monitoring critical resources (EC2, RDS, Lambda).
-* Log all key service activities (S3 access logs, CloudWatch Logs, Lambda logs).
+* **CloudWatch**:
+
+  * Metrics and alarms for EC2 (CPU at minimum)
+  * Logging for Lambda
+  * S3 access logs to the logs bucket
 
 ---
 
-## **Expected Output**
+## What to deliver
 
-A **validated CloudFormation template** written in **JSON**, that:
+A single **CloudFormation template (JSON)** that:
 
-* Passes `aws cloudformation validate-template` and `cfn-lint` checks.
-* Can be **deployed successfully** in **`us-west-2`** without modification.
-* Implements all the requirements above using **secure defaults**.
-* Includes:
+* Passes `aws cloudformation validate-template` and **cfn-lint**
+* Deploys cleanly in **us-west-2** without edits
+* Uses secure defaults and implements everything above
 
-  * **Parameters** for customizable inputs (VPC CIDR, KeyName, InstanceType, etc.)
-  * **Resource Definitions** for networking, compute, storage, IAM, and monitoring.
-  * **Outputs** for key resource information (e.g., VPC ID, Instance IDs, ALB DNS, etc.)
+Include:
 
----
-
-## **Validation Criteria**
-
- Valid JSON syntax and CloudFormation structure.
- Follows **AWS security best practices** (encryption, least privilege, no public exposure).
- Deploys cleanly without dependency or missing reference errors.
- Logging, versioning, and encryption configured for all storage.
- CloudWatch monitoring and alarms implemented for EC2 CPU usage.
- Proper subnet and route isolation (bastion in public, workloads in private).
- CloudFront configured for secure S3 content delivery.
+* **Parameters** (e.g., VPC CIDR, InstanceType, KeyName, etc.)
+* **Resources** for networking, compute, storage, IAM, monitoring
+* **Outputs** (VPC ID, ALB DNS, bucket names, RDS endpoint, etc.)
 
 ---
 
-## **Constraint Items**
+## How we’ll validate
 
-| Constraint              | Description                                 |
-| ----------------------- | ------------------------------------------- |
-| Region                  | Must operate in `us-west-2`                 |
-| VPC Isolation           | Use a dedicated VPC for all resources       |
-| S3 Logging & Versioning | Must be enabled on all S3 buckets           |
-| EC2 Security            | Only HTTP and SSH allowed                   |
-| Bastion Host            | Required for secure SSH access              |
-| NAT Gateway             | Required for private subnet internet access |
-| IAM Roles               | Must follow least privilege                 |
-| CloudFront              | Required for secure S3 delivery             |
-| RDS                     | Must be encrypted with KMS                  |
-| KMS                     | Must encrypt all data at rest               |
-| CloudWatch              | Required for EC2 CPU monitoring             |
-| Lambda                  | Required for serverless log processing      |
-| SSL/TLS                 | Mandatory for encryption in transit         |
+* Valid JSON and proper CloudFormation structure
+* Follows AWS security best practices (encryption, least privilege)
+* No missing references or dependency issues on deploy
+* S3 buckets: versioning, access logs, server-side encryption, HTTPS-only
+* CloudWatch alarms present for EC2 CPU
+* Subnets and routes isolated correctly (bastion in public, workloads in private)
+* CloudFront secured over HTTPS with OAI/OAC to S3
 
 ---
+
+## Constraints (for quick reference)
+
+| Item          | Requirement                                   |
+| ------------- | --------------------------------------------- |
+| Region        | `us-west-2`                                   |
+| VPC Isolation | Dedicated VPC                                 |
+| Subnets       | ≥2 public + ≥2 private across ≥2 AZs          |
+| NAT Gateway   | Required for private egress                   |
+| Bastion Host  | Required for SSH into private EC2             |
+| EC2 Security  | HTTP from ALB only; SSH from bastion only     |
+| S3            | Versioning + logging + SSE-KMS + HTTPS-only   |
+| RDS           | KMS-encrypted, private, SSL, not public       |
+| CloudFront    | HTTPS enforced; OAI/OAC to S3                 |
+| IAM           | Least privilege for all roles                 |
+| KMS           | Encrypt S3, EBS, RDS                          |
+| CloudWatch    | EC2 CPU alarms (and logging where applicable) |
+| TLS           | Encryption in transit everywhere              |
+
+---
+
