@@ -3,6 +3,7 @@ Description: 'Secure RDS MySQL deployment with VPC, encryption, automated backup
 
 Parameters:
   EnvironmentSuffix:
+    Default: dev
     Type: String
     Description: Environment suffix for resource naming (e.g., dev, staging, prod)
     MinLength: 1
