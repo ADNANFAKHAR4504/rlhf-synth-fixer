@@ -52,7 +52,7 @@ Parameters:
     Type: String
     Default: 'forum-example-hobbyforum.com'
     Description: 'Domain name for the forum (e.g., forum.example.com)'
-    AllowedPattern: '^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+    AllowedPattern: '^([a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$'
     ConstraintDescription: 'Must be a valid domain name'
   
   SSHKeyName:
@@ -99,7 +99,7 @@ Parameters:
     Description: 'Database administrator password'
     MinLength: 8
     MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]*$'
+    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?]*$'
     ConstraintDescription: 'Must be 8-41 characters with alphanumeric and special characters'
   
   DBAllocatedStorage:
@@ -122,7 +122,7 @@ Parameters:
     Type: String
     Default: 'admin@example.com'
     Description: 'Email address for CloudWatch alarm notifications'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
     ConstraintDescription: 'Must be a valid email address'
   
   SMTPServer:
@@ -706,10 +706,19 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -e
+
+          # Install cfn-bootstrap tools (required for cfn-signal)
+          yum install -y aws-cfn-bootstrap
+
+          # Update and install required packages
           yum update -y
           yum install -y docker git aws-cli jq
+
+          # Start and enable Docker
           systemctl start docker
           systemctl enable docker
+
+          # Signal success to CloudFormation
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource DiscourseEC2Instance --region ${AWS::Region}
       Tags:
         - Key: Name
@@ -724,7 +733,8 @@ Resources:
           Value: 'true'
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT15M
+        Timeout: PT20M
+        Count: 1
   
   # ============================================
   # MONITORING AND ALARMS
