@@ -18,7 +18,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    
+
     // Define custom YAML types for CloudFormation intrinsic functions
     const CFN_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
       new yaml.Type('!Ref', {
@@ -28,6 +28,17 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       new yaml.Type('!Sub', {
         kind: 'scalar',
         construct: (data) => ({ 'Fn::Sub': data }),
+      }),
+      new yaml.Type('!Sub', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Sub': data }),
+      }),
+      new yaml.Type('!GetAtt', {
+        kind: 'scalar',
+        construct: (data) => {
+          const parts = data.split('.');
+          return { 'Fn::GetAtt': parts };
+        },
       }),
       new yaml.Type('!GetAtt', {
         kind: 'sequence',
