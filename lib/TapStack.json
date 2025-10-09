@@ -1160,6 +1160,7 @@
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "DependsOn": "LogsBucketPolicy",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-alb-${EnvironmentSuffix}"
@@ -1186,13 +1187,7 @@
                     },
                     {
                         "Key": "access_logs.s3.enabled",
-                        "Value": "true"
-                    },
-                    {
-                        "Key": "access_logs.s3.bucket",
-                        "Value": {
-                            "Ref": "LogsBucket"
-                        }
+                        "Value": "false"
                     },
                     {
                         "Key": "access_logs.s3.prefix",
@@ -1273,6 +1268,25 @@
                         }
                     }
                 ]
+            }
+        },
+        "EnableALBLogs": {
+            "Type": "Custom::LoadBalancerLogs",
+            "DependsOn": [
+                "ApplicationLoadBalancer",
+                "LogsBucketPolicy"
+            ],
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs"
+                },
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "S3BucketName": {
+                    "Ref": "LogsBucket"
+                },
+                "S3Prefix": "alb-logs"
             }
         },
         "ALBListenerHTTP": {
