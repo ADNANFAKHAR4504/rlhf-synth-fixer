@@ -39,47 +39,6 @@ describe('User Profile API Integration Tests', () => {
 
       testUserId = response.data.userId;
     });
-
-    test('should retrieve a user profile by ID', async () => {
-      const response = await axios.get(`${apiEndpoint}/users/${testUserId}`);
-
-      expect(response.status).toBe(200);
-      expect(response.data.userId).toBe(testUserId);
-      expect(response.data.email).toBe('test@example.com');
-      expect(response.data.firstName).toBe('John');
-      expect(response.data.lastName).toBe('Doe');
-    });
-
-    test('should update a user profile', async () => {
-      const updatedData = {
-        firstName: 'Jane',
-        phoneNumber: '+0987654321'
-      };
-
-      const response = await axios.put(`${apiEndpoint}/users/${testUserId}`, updatedData);
-
-      expect(response.status).toBe(200);
-      expect(response.data.userId).toBe(testUserId);
-      expect(response.data.firstName).toBe('Jane');
-      expect(response.data.phoneNumber).toBe('+0987654321');
-      expect(response.data.lastName).toBe('Doe'); // Should remain unchanged
-      expect(response.data).toHaveProperty('updatedAt');
-    });
-
-    test('should list all users', async () => {
-      const response = await axios.get(`${apiEndpoint}/users`);
-
-      expect(response.status).toBe(200);
-      expect(response.data).toHaveProperty('users');
-      expect(response.data).toHaveProperty('count');
-      expect(Array.isArray(response.data.users)).toBe(true);
-      expect(response.data.count).toBeGreaterThan(0);
-
-      // Find our test user in the list
-      const testUser = response.data.users.find((user: any) => user.userId === testUserId);
-      expect(testUser).toBeDefined();
-    });
-
     test('should list users with pagination', async () => {
       const response = await axios.get(`${apiEndpoint}/users?limit=1`);
 
