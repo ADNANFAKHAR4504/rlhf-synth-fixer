@@ -10,7 +10,7 @@ s3 = None
 def get_clients():
     """Initialize AWS clients."""
     global dynamodb, s3
-    region = os.environ.get('AWS_REGION', 'us-west-1')
+    region = os.environ.get('AWS_REGION', 'us-east-1')
     if dynamodb is None:
         dynamodb = boto3.resource('dynamodb', region_name=region)
     if s3 is None:

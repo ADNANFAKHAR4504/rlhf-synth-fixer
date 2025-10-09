@@ -13,7 +13,7 @@ sns = None
 def get_clients():
     """Initialize AWS clients."""
     global comprehend, s3, dynamodb, sqs, sns
-    region = os.environ.get('AWS_REGION', 'us-west-1')
+    region = os.environ.get('AWS_REGION', 'us-east-1')
     if comprehend is None:
         comprehend = boto3.client('comprehend', region_name=region)
     if s3 is None:

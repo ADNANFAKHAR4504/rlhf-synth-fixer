@@ -142,8 +142,8 @@ class TestTextModerationLambda:
     @patch('text_moderation.dynamodb')
     @patch('text_moderation.s3')
     @patch('text_moderation.comprehend')
-    def test_text_moderation_toxic_content(self, mock_comprehend, mock_s3,
-                                           mock_dynamodb, mock_sqs, mock_sns):  # pylint: disable=too-many-positional-arguments
+    def test_text_moderation_toxic_content(  # pylint: disable=too-many-positional-arguments
+            self, mock_comprehend, mock_s3, mock_dynamodb, mock_sqs, mock_sns):
         """Test text moderation with toxic content."""
         # Setup mocks
         mock_s3.get_object.return_value = {

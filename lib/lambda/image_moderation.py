@@ -12,7 +12,7 @@ sns = None
 def get_clients():
     """Initialize AWS clients."""
     global rekognition, dynamodb, sqs, sns
-    region = os.environ.get('AWS_REGION', 'us-west-1')
+    region = os.environ.get('AWS_REGION', 'us-east-1')
     if rekognition is None:
         rekognition = boto3.client('rekognition', region_name=region)
     if dynamodb is None:
