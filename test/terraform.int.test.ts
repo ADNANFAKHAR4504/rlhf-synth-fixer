@@ -4,63 +4,55 @@
 
 import {
   APIGatewayClient,
-  GetRestApisCommand,
-  GetStagesCommand,
-  GetDeploymentsCommand,
+  GetRestApisCommand
 } from '@aws-sdk/client-api-gateway';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-  ListFunctionsCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  GetItemCommand,
-  PutItemCommand,
-  DeleteItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetBucketReplicationCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
-import {
-  Route53Client,
-  GetHostedZoneCommand,
-  ListResourceRecordSetsCommand,
-  GetHealthCheckCommand,
-} from '@aws-sdk/client-route-53';
-import {
-  EventBridgeClient,
-  DescribeEventBusCommand,
-  ListRulesCommand,
-} from '@aws-sdk/client-eventbridge';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
+  DeleteItemCommand,
+  DescribeTableCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeEventBusCommand,
+  EventBridgeClient
+} from '@aws-sdk/client-eventbridge';
+import {
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  WAFV2Client,
-  GetWebACLCommand,
+  GetFunctionCommand,
+  LambdaClient,
+  ListFunctionsCommand
+} from '@aws-sdk/client-lambda';
+import {
+  GetHostedZoneCommand,
+  ListResourceRecordSetsCommand,
+  Route53Client
+} from '@aws-sdk/client-route-53';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketReplicationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   ListWebACLsCommand,
+  WAFV2Client
 } from '@aws-sdk/client-wafv2';
 import {
-  XRayClient,
   GetSamplingRulesCommand,
+  XRayClient,
 } from '@aws-sdk/client-xray';
 import fs from 'fs';
-import path from 'path';
 import https from 'https';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 // Determine if we're in CI/CD or local environment
@@ -157,7 +149,7 @@ describe('Multi-Region Serverless SaaS - Integration Tests', () => {
         console.warn('⚠️  Skipping in local mode');
         return;
       }
-      
+
       expect(outputs).toBeTruthy();
       expect(outputs.primary_api_endpoint).toBeDefined();
       expect(outputs.secondary_api_endpoint).toBeDefined();
@@ -604,11 +596,11 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
         });
 
         console.log(`Health check response: ${response.statusCode}`);
-        
+
         // In real deployment, should return 200
         if (IS_CICD) {
           expect(response.statusCode).toBe(200);
-          
+
           const body = JSON.parse(response.body);
           expect(body.status).toBe('healthy');
           expect(body.region).toBeDefined();
@@ -645,7 +637,7 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
         });
 
         console.log(`Secondary health check response: ${response.statusCode}`);
-        
+
         if (IS_CICD) {
           expect(response.statusCode).toBe(200);
         }
@@ -939,10 +931,10 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
       }
 
       const globalEndpoint = outputs.global_api_endpoint?.value;
-      
+
       expect(globalEndpoint).toBeDefined();
       console.log(`Global endpoint with failover: ${globalEndpoint}`);
-      
+
       console.log('✅ Failover architecture validated');
     });
   });
@@ -1021,7 +1013,7 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
               },
             })
           );
-          
+
           if (secondaryResult.Item) {
             expect(secondaryResult.Item.userId.S).toBe(workflowUserId);
             console.log('   ✅ Data replicated to secondary region (Global Table working)');
@@ -1118,7 +1110,7 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
       console.log('\n' + '='.repeat(80));
       console.log('📊 INTEGRATION TEST SUMMARY');
       console.log('='.repeat(80));
-      
+
       if (IS_CICD) {
         console.log('✅ Running in CI/CD mode with actual deployed infrastructure');
       } else {
@@ -1136,7 +1128,7 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
       console.log('   ✓ EventBridge orchestration');
       console.log('   ✓ CloudWatch monitoring');
       console.log('   ✓ X-Ray distributed tracing');
-      
+
       console.log('\n🎯 Real-World Use Cases Tested:');
       console.log('   ✓ Health check endpoints');
       console.log('   ✓ User CRUD operations');
@@ -1145,16 +1137,16 @@ describe('Real-World Use Cases - End-to-End Workflows', () => {
       console.log('   ✓ GDPR compliance (deletion)');
       console.log('   ✓ Security configurations');
       console.log('   ✓ Complete user lifecycle workflow');
-      
+
       console.log('\n🏗️  Architecture Validation:');
       console.log('   ✓ Multi-region deployment');
       console.log('   ✓ Serverless architecture');
       console.log('   ✓ 99.999% uptime design');
       console.log('   ✓ Automated failover');
       console.log('   ✓ Real-time analytics pipeline');
-      
+
       console.log('='.repeat(80) + '\n');
-      
+
       expect(true).toBe(true);
     });
   });
