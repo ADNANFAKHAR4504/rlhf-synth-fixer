@@ -12,7 +12,20 @@
     "Multi-Tier Architecture",
     "AWS Infrastructure Provisioning"
   ],
-  "aws_services": "VPC, EC2, AutoScaling, RDS, CloudWatch, SNS, IAM, NAT Gateway, Internet Gateway",
+  "aws_services": [
+    "VPC",
+    "EC2", 
+    "Auto Scaling",
+    "RDS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "Elastic IP"
+  ],
+  "training_quality": 9,
   "testDependencies": [
     "jest@^29.7.0",
     "hcl2-parser@^1.0.3",
