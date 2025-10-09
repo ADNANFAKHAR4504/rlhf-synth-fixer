@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CLO_YML_MED_RDS_BACKUP_2d3e4f_5a6b7c8dST",
+  "team": "5",
+  "startedAt": "2025-10-09T06:37:27.067Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "RDS, Subnet, KMS, Cloudwatch, IAM"
+}
