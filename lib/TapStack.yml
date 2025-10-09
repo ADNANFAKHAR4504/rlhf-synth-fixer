@@ -129,9 +129,9 @@ Mappings:
       PrivateSubnet2Id: 'subnet-081e4ea0f27920ff0'
 
 Resources:
-  # ============================================
+  
   # SECURITY LAYER
-  # ============================================
+  
   
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -213,9 +213,9 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # ============================================
+  
   # IAM ROLES AND POLICIES
-  # ============================================
+  
   
   EC2Role:
     Type: AWS::IAM::Role
@@ -279,9 +279,9 @@ Resources:
       Roles:
         - !Ref EC2Role
   
-  # ============================================
+  
   # SECRETS MANAGER
-  # ============================================
+  
   
   DBSecret:
     Type: AWS::SecretsManager::Secret
@@ -303,9 +303,9 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # ============================================
+  
   # DATABASE LAYER
-  # ============================================
+  
   
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -362,9 +362,9 @@ Resources:
         - Key: BackupEnabled
           Value: 'true'
   
-  # ============================================
+  
   # CACHING LAYER
-  # ============================================
+  
   
   CacheSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
@@ -404,9 +404,9 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # ============================================
+  
   # STORAGE LAYER
-  # ============================================
+  
   
   UploadsBucket:
     Type: AWS::S3::Bucket
@@ -517,9 +517,9 @@ Resources:
               - !GetAtt BackupsBucket.Arn
               - !Sub '${BackupsBucket.Arn}/*'
   
-  # ============================================
+  
   # CDN AND DISTRIBUTION
-  # ============================================
+  
   
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -597,9 +597,9 @@ Resources:
         - Key: ManagedBy
           Value: 'CloudFormation'
   
-  # ============================================
+  
   # DNS AND CERTIFICATE (OPTIONAL - CONDITIONAL)
-  # ============================================
+  
   
   HostedZone:
     Type: AWS::Route53::HostedZone
@@ -651,9 +651,9 @@ Resources:
         DNSName: !GetAtt CloudFrontDistribution.DomainName
         EvaluateTargetHealth: false
   
-  # ============================================
+  
   # COMPUTE LAYER
-  # ============================================
+  
   
   DiscourseEC2Instance:
     Type: AWS::EC2::Instance
@@ -702,9 +702,9 @@ Resources:
         - Key: BackupEnabled
           Value: 'true'
   
-  # ============================================
+  
   # MONITORING AND ALARMS
-  # ============================================
+  
   
   DiscourseLogGroup:
     Type: AWS::Logs::LogGroup
@@ -821,9 +821,9 @@ Resources:
         - !Ref AlarmSNSTopic
       TreatMissingData: notBreaching
   
-  # ============================================
+  
   # BACKUP CONFIGURATION
-  # ============================================
+  
   
   BackupVault:
     Type: AWS::Backup::BackupVault

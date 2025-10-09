@@ -83,6 +83,38 @@ const cloudWatchClient = new CloudWatchClient({ region });
 // Test timeout for AWS API calls
 const TEST_TIMEOUT = 30000;
 
+// Utility function to add delay between API calls
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Utility function to retry API calls with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | undefined;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a throttling error
+      if (error.name === 'Throttling' || error.name === 'ThrottlingException') {
+        const delayTime = initialDelay * Math.pow(2, attempt);
+        console.log(`    [RETRY] Throttled, waiting ${delayTime}ms before retry ${attempt + 1}/${maxRetries}`);
+        await delay(delayTime);
+      } else {
+        // If it's not a throttling error, throw immediately
+        throw error;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 describe('TapStack CloudFormation Integration Tests', () => {
   
   beforeAll(() => {
@@ -236,12 +268,15 @@ describe('TapStack CloudFormation Integration Tests', () => {
       async () => {
         console.log(`\n[RDS] Testing Instance: ${outputs.RDSEndpoint}`);
         
+        // Add delay before RDS API call to avoid throttling
+        await delay(2000);
+        
         const dbIdentifier = outputs.RDSEndpoint.split('.')[0];
         const command = new DescribeDBInstancesCommand({
           DBInstanceIdentifier: dbIdentifier,
         });
 
-        const response = await rdsClient.send(command);
+        const response = await retryWithBackoff(() => rdsClient.send(command));
         const dbInstance = response.DBInstances?.[0];
 
         console.log(`  DB Instance Status: ${dbInstance?.DBInstanceStatus}`);
@@ -268,12 +303,15 @@ describe('TapStack CloudFormation Integration Tests', () => {
       async () => {
         console.log(`\n[RDS] Testing Network Configuration...`);
         
+        // Add delay before RDS API call to avoid throttling
+        await delay(2000);
+        
         const dbIdentifier = outputs.RDSEndpoint.split('.')[0];
         const command = new DescribeDBInstancesCommand({
           DBInstanceIdentifier: dbIdentifier,
         });
 
-        const response = await rdsClient.send(command);
+        const response = await retryWithBackoff(() => rdsClient.send(command));
         const dbInstance = response.DBInstances?.[0];
 
         console.log(`  VPC: ${dbInstance?.DBSubnetGroup?.VpcId}`);
