@@ -7,6 +7,7 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
+      configuration_aliases = [aws.secondary]
     }
     local = {
       source  = "hashicorp/local"
@@ -25,4 +26,10 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
+}
+
+# Secondary region provider for DR
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
 }
