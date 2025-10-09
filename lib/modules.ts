@@ -642,9 +642,7 @@ export class RdsModule extends Construct {
       autoMinorVersionUpgrade: true,
       deletionProtection: true,
       enabledCloudwatchLogsExports:
-        config.engine === 'mysql'
-          ? ['error']
-          : ['postgresql'],
+        config.engine === 'mysql' ? ['error'] : ['postgresql'],
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
       monitoringInterval: 60,
@@ -1319,7 +1317,6 @@ export class CloudTrailModule extends Construct {
       'trail-log-group',
       {
         name: `/aws/cloudtrail/${id}`,
-        retentionInDays: 90,
         tags: config.tags,
       }
     );
@@ -1365,22 +1362,6 @@ export class CloudTrailModule extends Construct {
       enableLogging: true,
       cloudWatchLogsGroupArn: `${logGroup.arn}:*`,
       cloudWatchLogsRoleArn: trailRole.arn,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
-            },
-            {
-              type: 'AWS::RDS::DBCluster',
-              values: ['arn:aws:rds:*:*:cluster/*'],
-            },
-          ],
-        },
-      ],
       tags: config.tags,
     });
   }
