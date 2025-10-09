@@ -1507,6 +1507,7 @@ data "archive_file" "lambda_zip" {
 
   source {
     content  = <<-EOT
+# Python Lambda Function Code
 import json
 import os
 import boto3
@@ -1882,6 +1883,5 @@ This Terraform configuration provides a production-grade, multi-region, highly a
 ✅ Consistent tagging (Environment, Team)  
 ✅ Cost-effective design  
 ✅ High availability and redundancy  
-✅ No retain policies for clean teardown  
 
 The infrastructure is ready for deployment and can be easily modified for specific requirements while maintaining best practices for security, reliability, and cost optimization.
