@@ -99,6 +99,7 @@ const secondaryClients = {
   s3: new S3Client({ region: 'us-west-2' }),
   kms: new KMSClient({ region: 'us-west-2' }),
   wafv2: new WAFV2Client({ region: 'us-west-2' }),
+  eventbridge: new EventBridgeClient({ region: 'us-west-2' }),
 };
 
 // Helper function to load outputs
