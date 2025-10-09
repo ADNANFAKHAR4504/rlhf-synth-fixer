@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-region deployable CloudFormation template with comprehensive AWS services including AWS Config for compliance monitoring'
 
