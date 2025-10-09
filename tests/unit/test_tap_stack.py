@@ -36,10 +36,11 @@ class TestStackStructure:
         assert stack is not None
         synthesized = Testing.synth(stack)
         assert synthesized is not None
-
-        # Check for AWS Provider configuration
-        provider_config = Testing.to_have_provider(synthesized)
-        assert provider_config is not None
+        
+        # Check for AWS Provider configuration in synthesized output
+        synth_dict = json.loads(synthesized)
+        assert "provider" in synth_dict
+        assert "aws" in synth_dict["provider"]
 
     def test_tap_stack_uses_default_values_when_no_props_provided(self):
         """TapStack uses default values when no props provided."""
@@ -210,18 +211,23 @@ class TestContentModerationStack:
         for func_name, func_config in lambda_functions.items():
             assert func_config["runtime"] == "python3.10"
             assert "environment" in func_config
-            assert "variables" in func_config["environment"][0]
+            # Environment can be either a list with dicts or a dict directly
+            env_data = func_config["environment"]
+            if isinstance(env_data, list):
+                assert "variables" in env_data[0]
+                env_vars = env_data[0]["variables"]
+            else:
+                assert "variables" in env_data
+                env_vars = env_data["variables"]
 
             if "image" in func_name:
                 assert func_config["memory_size"] == 512
                 assert func_config["timeout"] == 60
-                env_vars = func_config["environment"][0]["variables"]
                 assert "CONFIDENCE_THRESHOLD" in env_vars
 
             elif "text" in func_name:
                 assert func_config["memory_size"] == 256
                 assert func_config["timeout"] == 60
-                env_vars = func_config["environment"][0]["variables"]
                 assert "TOXICITY_THRESHOLD" in env_vars
 
             elif "result" in func_name:
@@ -307,7 +313,12 @@ class TestContentModerationStack:
         lambda_functions = synth_dict.get("resource", {}).get("aws_lambda_function", {})
 
         for func_name, func_config in lambda_functions.items():
-            env_vars = func_config["environment"][0]["variables"]
+            # Environment can be either a list with dicts or a dict directly
+            env_data = func_config["environment"]
+            if isinstance(env_data, list):
+                env_vars = env_data[0]["variables"]
+            else:
+                env_vars = env_data["variables"]
 
             # All Lambda functions should have these
             assert "MODERATION_TABLE" in env_vars

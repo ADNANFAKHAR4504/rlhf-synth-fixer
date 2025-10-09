@@ -483,9 +483,9 @@ class ContentModerationStack(Construct):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Image Moderation"}],
-                            [".", "Errors", {"stat": "Sum", "label": "Image Errors"}],
-                            [".", "Duration", {"stat": "Average", "label": "Image Duration"}]
+                            ["AWS/Lambda", "Invocations"],
+                            [".", "Errors"],
+                            [".", "Duration"]
                         ],
                         "period": 300,
                         "stat": "Average",
@@ -497,8 +497,7 @@ class ContentModerationStack(Construct):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/SQS", "ApproximateNumberOfMessagesVisible",
-                             {"dimensions": {"QueueName": f"human-review-queue-{environment_suffix}"}}]
+                            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", f"human-review-queue-{environment_suffix}"]
                         ],
                         "period": 300,
                         "stat": "Average",
@@ -510,9 +509,8 @@ class ContentModerationStack(Construct):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/States", "ExecutionsSucceeded",
-                             {"dimensions": {"StateMachineArn": state_machine.arn}}],
-                            [".", "ExecutionsFailed", {"dimensions": {"StateMachineArn": state_machine.arn}}]
+                            ["AWS/States", "ExecutionsSucceeded", "StateMachineArn", state_machine.arn],
+                            [".", "ExecutionsFailed", ".", "."]
                         ],
                         "period": 300,
                         "stat": "Sum",
