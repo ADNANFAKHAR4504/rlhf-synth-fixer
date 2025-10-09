@@ -328,3 +328,30 @@ class CloudWatchStack:
             "#dashboards:name=",
             self.config.get_resource_name('dashboard')
         )
+    
+    def get_main_log_group_name(self) -> pulumi.Output[str]:
+        """
+        Get the name of the main log group.
+        
+        Returns:
+            Name of the main log group
+        """
+        return self.log_groups['main'].name
+    
+    def get_processor_log_group_name(self) -> pulumi.Output[str]:
+        """
+        Get the name of the processor log group.
+        
+        Returns:
+            Name of the processor log group
+        """
+        return self.log_groups['processor'].name
+    
+    def get_api_log_group_name(self) -> pulumi.Output[str]:
+        """
+        Get the name of the API log group.
+        
+        Returns:
+            Name of the API log group
+        """
+        return self.log_groups['api'].name

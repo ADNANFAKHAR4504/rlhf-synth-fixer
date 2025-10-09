@@ -27,6 +27,9 @@ from pulumi_aws import Provider
 # Import the classes we're testing
 from tap_stack import TapStack, TapStackArgs
 
+# Mock pulumi.export to avoid issues in unit tests
+pulumi.export = Mock()
+
 
 class TestTapStackArgs(unittest.TestCase):
     """Test cases for TapStackArgs configuration class."""

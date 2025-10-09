@@ -122,41 +122,39 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=self.aws_provider)
         )
         
-        # Register comprehensive outputs for integration testing
-        self.register_outputs({
-            # Environment and configuration
-            "environment": self.config.environment,
-            "aws_region": self.config.aws_region,
-            "project_name": self.config.project_name,
-            
-            # Lambda function outputs
-            "lambda_function_name": self.lambda_stack.get_main_function_name(),
-            "lambda_function_arn": self.lambda_stack.get_main_function_arn(),
-            "lambda_function_invoke_arn": self.lambda_stack.get_main_function_invoke_arn(),
-            "log_processor_function_name": self.lambda_stack.get_log_processor_function_name(),
-            "log_processor_function_arn": self.lambda_stack.get_log_processor_function_arn(),
-            
-            # API Gateway outputs
-            "api_gateway_id": self.api_gateway_stack.get_rest_api_id(),
-            "api_gateway_arn": self.api_gateway_stack.get_rest_api_arn(),
-            "api_gateway_invoke_url": self.api_gateway_stack.get_invoke_url(),
-            "api_gateway_execution_arn": self.api_gateway_stack.get_execution_arn(),
-            
-            # S3 bucket outputs
-            "s3_bucket_name": self.s3_stack.get_logs_bucket_name(),
-            "s3_bucket_arn": self.s3_stack.get_logs_bucket_arn(),
-            "s3_bucket_domain_name": self.s3_stack.get_logs_bucket_domain_name(),
-            
-            # IAM role outputs
-            "lambda_execution_role_arn": self.iam_stack.get_lambda_execution_role_arn(),
-            "api_gateway_role_arn": self.iam_stack.get_api_gateway_role_arn(),
-            "log_processing_role_arn": self.iam_stack.get_log_processing_role_arn(),
-            
-            # CloudWatch outputs
-            "cloudwatch_dashboard_url": self.cloudwatch_stack.get_dashboard_url(),
-            
-            # Log group outputs
-            "main_log_group_name": self.cloudwatch_stack.get_log_groups()['main'].name,
-            "processor_log_group_name": self.cloudwatch_stack.get_log_groups()['processor'].name,
-            "api_log_group_name": self.cloudwatch_stack.get_log_groups()['api'].name,
-        })
+        # Export comprehensive outputs for integration testing
+        # Environment and configuration
+        pulumi.export("environment", self.config.environment)
+        pulumi.export("aws_region", self.config.aws_region)
+        pulumi.export("project_name", self.config.project_name)
+        
+        # Lambda function outputs
+        pulumi.export("lambda_function_name", self.lambda_stack.get_main_function_name())
+        pulumi.export("lambda_function_arn", self.lambda_stack.get_main_function_arn())
+        pulumi.export("lambda_function_invoke_arn", self.lambda_stack.get_main_function_invoke_arn())
+        pulumi.export("log_processor_function_name", self.lambda_stack.get_log_processor_function_name())
+        pulumi.export("log_processor_function_arn", self.lambda_stack.get_log_processor_function_arn())
+        
+        # API Gateway outputs
+        pulumi.export("api_gateway_id", self.api_gateway_stack.get_rest_api_id())
+        pulumi.export("api_gateway_arn", self.api_gateway_stack.get_rest_api_arn())
+        pulumi.export("api_gateway_invoke_url", self.api_gateway_stack.get_invoke_url())
+        pulumi.export("api_gateway_execution_arn", self.api_gateway_stack.get_execution_arn())
+        
+        # S3 bucket outputs
+        pulumi.export("s3_bucket_name", self.s3_stack.get_logs_bucket_name())
+        pulumi.export("s3_bucket_arn", self.s3_stack.get_logs_bucket_arn())
+        pulumi.export("s3_bucket_domain_name", self.s3_stack.get_logs_bucket_domain_name())
+        
+        # IAM role outputs
+        pulumi.export("lambda_execution_role_arn", self.iam_stack.get_lambda_execution_role_arn())
+        pulumi.export("api_gateway_role_arn", self.iam_stack.get_api_gateway_role_arn())
+        pulumi.export("log_processing_role_arn", self.iam_stack.get_log_processing_role_arn())
+        
+        # CloudWatch outputs
+        pulumi.export("cloudwatch_dashboard_url", self.cloudwatch_stack.get_dashboard_url())
+        
+        # Log group outputs
+        pulumi.export("main_log_group_name", self.cloudwatch_stack.get_main_log_group_name())
+        pulumi.export("processor_log_group_name", self.cloudwatch_stack.get_processor_log_group_name())
+        pulumi.export("api_log_group_name", self.cloudwatch_stack.get_api_log_group_name())
