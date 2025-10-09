@@ -65,6 +65,7 @@ public final class Main {
 ```
 
 **Key Features**:
+
 - ✅ Proper final class with private constructor
 - ✅ final modifiers on all method parameters
 - ✅ Clear orchestration of all infrastructure stacks
@@ -142,6 +143,7 @@ public class StorageStack {
 ```
 
 **Key Features**:
+
 - ✅ S3 bucket with comprehensive security (all public access blocked)
 - ✅ Lifecycle policy for 120-day GLACIER archival (as required)
 - ✅ Proper resource tagging for management
@@ -248,6 +250,7 @@ public class EdgeFunctionStack {
 ```
 
 **Key Features**:
+
 - ✅ **FIXED**: Lambda code wrapped in AssetArchive with proper file structure
 - ✅ IAM role supports both lambda.amazonaws.com and edgelambda.amazonaws.com
 - ✅ A/B testing logic at viewer-request stage (50/50 split)
@@ -456,15 +459,17 @@ public class CdnStack {
 ```
 
 **Key Features**:
+
 - ✅ **FIXED**: Bucket policy uses `Either.ofLeft()` for proper type handling
 - ✅ **FIXED**: Added import for `com.pulumi.core.Either`
 - ✅ Origin Access Control (OAC) - modern replacement for deprecated OAI
-- ✅ Multiple cache behaviors for different content types (/static/*, /api/*)
+- ✅ Multiple cache behaviors for different content types (/static/_, /api/_)
 - ✅ Lambda@Edge integration at viewer-request stage
 - ✅ HTTPS enforcement via redirect-to-https policy
 - ✅ Proper S3 bucket policy with CloudFront condition
 
 **Critical Fixes**:
+
 1. Added `import com.pulumi.core.Either;`
 2. Wrapped policy JSON string in `Either.ofLeft()`
 3. Declared proper type: `Output<Either<String, com.pulumi.aws.s3.inputs.PolicyDocumentArgs>>`
@@ -598,6 +603,7 @@ public class SecurityStack {
 ```
 
 **Key Features**:
+
 - ✅ Rate limiting at 2000 requests per 5 minutes (as required)
 - ✅ IP-based rate limiting aggregation
 - ✅ AWS Managed Rules for common threats
@@ -732,6 +738,7 @@ public class DnsStack {
 ```
 
 **Key Features**:
+
 - ✅ **FIXED**: All Route53 records use strongly-typed `RecordAliasArgs` builder pattern
 - ✅ **FIXED**: Added import for `com.pulumi.aws.route53.inputs.RecordAliasArgs`
 - ✅ Geolocation routing for multiple continents (NA, EU, AS)
@@ -911,6 +918,7 @@ public class MonitoringStack {
 ```
 
 **Key Features**:
+
 - ✅ **FIXED**: Alarm actions use `.applyValue(arn -> List.of(arn))` for proper type conversion
 - ✅ CloudWatch dashboard with comprehensive viewer metrics
 - ✅ Alarms for high error rates (>5%) and low cache hit rates (<70%)
@@ -934,7 +942,7 @@ public class MonitoringStack {
 
 2. **CloudFront** ✅
    - Distribution with Origin Access Control (OAC, not deprecated OAI)
-   - Multiple cache behaviors (/static/*, /api/*)
+   - Multiple cache behaviors (/static/_, /api/_)
    - Lambda@Edge integration at viewer-request
    - HTTPS enforcement
    - Default root object configured
@@ -984,6 +992,7 @@ public class MonitoringStack {
 ### Code Quality Assessment
 
 **Strengths**:
+
 - Modular design with separate stack classes
 - Comprehensive resource tagging
 - Proper security configurations
@@ -991,6 +1000,7 @@ public class MonitoringStack {
 - Clear documentation
 
 **Improvements Made by QA Trainer**:
+
 - Fixed all 9 compilation errors
 - Added missing imports
 - Corrected type mismatches
@@ -1006,6 +1016,7 @@ public class MonitoringStack {
 ### Production Readiness: ✅ READY
 
 The code is production-ready after QA trainer fixes:
+
 - ✅ Compiles successfully
 - ✅ All tests pass
 - ✅ Follows AWS best practices
@@ -1051,6 +1062,7 @@ The code is production-ready after QA trainer fixes:
 ## Deployment Instructions
 
 1. **Prerequisites**:
+
    ```bash
    # Install Pulumi CLI
    curl -fsSL https://get.pulumi.com | sh
@@ -1063,12 +1075,14 @@ The code is production-ready after QA trainer fixes:
    ```
 
 2. **Deploy**:
+
    ```bash
    cd lib
    pulumi up
    ```
 
 3. **Verify Outputs**:
+
    ```bash
    pulumi stack output bucketName
    pulumi stack output distributionDomainName
@@ -1087,6 +1101,7 @@ The code is production-ready after QA trainer fixes:
 ## Conclusion
 
 This infrastructure code provides a robust, secure, and scalable news portal platform with:
+
 - Comprehensive content delivery via CloudFront + S3
 - Intelligent A/B testing via Lambda@Edge
 - Geographic content routing via Route 53
