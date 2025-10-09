@@ -117,7 +117,8 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
     test('defines two private subnets in different AZs', () => {
       expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"private_a"/);
       expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"private_b"/);
-      expect(countMatches(/availability_zone\s*=\s*data\.aws_availability_zones\.available\.names/)).toBeGreaterThanOrEqual(2);
+      expect(tfContent).toMatch(/availability_zone\s*=\s*data\.aws_availability_zones\.available\.names\[0\]/);
+      expect(tfContent).toMatch(/availability_zone\s*=\s*data\.aws_availability_zones\.available\.names\[1\]/);
     });
 
     test('DB subnet group includes both private subnets', () => {
@@ -215,11 +216,15 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
     });
 
     test('log groups use KMS encryption', () => {
-      expect(countMatches(/kms_key_id\s*=\s*aws_kms_key\.rds\.arn/)).toBeGreaterThanOrEqual(3);
+      // 3 RDS log groups use KMS encryption (plus Secrets Manager, RDS instance, Lambda log group = 6 total)
+      expect(countMatches(/kms_key_id\s+=\s+aws_kms_key\.rds\.arn/g)).toBeGreaterThanOrEqual(3);
     });
 
     test('sets log retention to 30 days', () => {
-      expect(countMatches(/retention_in_days\s*=\s*30/)).toBeGreaterThanOrEqual(3);
+      // Only checking RDS log groups have 30 days (Lambda has 7 days)
+      const rdsLogGroupsWith30Days = (tfContent.match(/resource\s+"aws_cloudwatch_log_group"\s+"rds_\w+"/g) || []).length;
+      expect(rdsLogGroupsWith30Days).toBe(3);
+      expect(countMatches(/retention_in_days\s+=\s+30/g)).toBeGreaterThanOrEqual(3);
     });
   });
 
@@ -301,7 +306,7 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
     });
 
     test('all alarms target SNS topic', () => {
-      expect(countMatches(/alarm_actions\s*=\s*\[aws_sns_topic\.alarms\.arn\]/)).toBe(4);
+      expect(countMatches(/alarm_actions\s+=\s+\[aws_sns_topic\.alarms\.arn\]/g)).toBe(4);
     });
   });
 
@@ -333,7 +338,7 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
 
     test('Lambda log group uses KMS encryption', () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"lambda_snapshot"/);
-      expect(tfContent).toMatch(/\/aws\/lambda\/.*snapshot-manager/);
+      expect(tfContent).toMatch(/\/aws\/lambda\/\$\{aws_lambda_function\.snapshot\.function_name\}/);
     });
   });
 
