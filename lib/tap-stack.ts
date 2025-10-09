@@ -7,18 +7,28 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
 
-interface MonitoringStackProps extends cdk.StackProps {
+interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   notificationEmail?: string;
 }
 
-export class ServerlessMonitoringStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: MonitoringStackProps) {
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    const envSuffix = props?.environmentSuffix || 'dev';
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const envSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
     const email = props?.notificationEmail || 'admin@example.com';
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
 
     // ===========================
     // DynamoDB Table for Error Logs
@@ -61,9 +71,7 @@ export class ServerlessMonitoringStack extends cdk.Stack {
     });
 
     // Subscribe email to SNS topic
-    alertTopic.addSubscription(
-      new sns_subscriptions.EmailSubscription(email)
-    );
+    alertTopic.addSubscription(new sns_subscriptions.EmailSubscription(email));
 
     // ===========================
     // IAM Role for Lambda Functions
@@ -106,7 +114,7 @@ export class ServerlessMonitoringStack extends cdk.Stack {
       'data-aggregator',
     ];
 
-    functionNames.forEach((funcName, index) => {
+    functionNames.forEach(funcName => {
       const func = new lambda.Function(this, `${funcName}Function`, {
         functionName: `${funcName}-${envSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
@@ -183,7 +191,7 @@ exports.handler = async (event) => {
           ERROR_TABLE_NAME: errorLogsTable.tableName,
           FUNCTION_NAME: `${funcName}-${envSuffix}`,
           ENVIRONMENT: envSuffix,
-        }
+        },
       });
 
       lambdaFunctions.push(func);
@@ -203,56 +211,75 @@ exports.handler = async (event) => {
         period: cdk.Duration.minutes(5),
       });
 
-      const errorRateAlarm = new cloudwatch.Alarm(this, `${funcName}ErrorRateAlarm`, {
-        alarmName: `${funcName}-error-rate-${envSuffix}`,
-        alarmDescription: `Error rate exceeded 5% for ${funcName}`,
-        metric: new cloudwatch.MathExpression({
-          expression: '(errors / invocations) * 100',
-          usingMetrics: {
-            errors: errorMetric,
-            invocations: invocationMetric,
-          },
-          period: cdk.Duration.minutes(5),
-        }),
-        threshold: 5,
-        evaluationPeriods: 2,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const errorRateAlarm = new cloudwatch.Alarm(
+        this,
+        `${funcName}ErrorRateAlarm`,
+        {
+          alarmName: `${funcName}-error-rate-${envSuffix}`,
+          alarmDescription: `Error rate exceeded 5% for ${funcName}`,
+          metric: new cloudwatch.MathExpression({
+            expression: '(errors / invocations) * 100',
+            usingMetrics: {
+              errors: errorMetric,
+              invocations: invocationMetric,
+            },
+            period: cdk.Duration.minutes(5),
+          }),
+          threshold: 5,
+          evaluationPeriods: 2,
+          comparisonOperator:
+            cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
-      errorRateAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+      errorRateAlarm.addAlarmAction(
+        new cloudwatch_actions.SnsAction(alertTopic)
+      );
 
       // Latency Alarm (>500ms)
-      const latencyAlarm = new cloudwatch.Alarm(this, `${funcName}LatencyAlarm`, {
-        alarmName: `${funcName}-latency-${envSuffix}`,
-        alarmDescription: `Average duration exceeded 500ms for ${funcName}`,
-        metric: func.metricDuration({
-          statistic: cloudwatch.Stats.AVERAGE,
-          period: cdk.Duration.minutes(5),
-        }),
-        threshold: 500,
-        evaluationPeriods: 2,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const latencyAlarm = new cloudwatch.Alarm(
+        this,
+        `${funcName}LatencyAlarm`,
+        {
+          alarmName: `${funcName}-latency-${envSuffix}`,
+          alarmDescription: `Average duration exceeded 500ms for ${funcName}`,
+          metric: func.metricDuration({
+            statistic: cloudwatch.Stats.AVERAGE,
+            period: cdk.Duration.minutes(5),
+          }),
+          threshold: 500,
+          evaluationPeriods: 2,
+          comparisonOperator:
+            cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       latencyAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
       // Throttle Alarm
-      const throttleAlarm = new cloudwatch.Alarm(this, `${funcName}ThrottleAlarm`, {
-        alarmName: `${funcName}-throttles-${envSuffix}`,
-        alarmDescription: `Function ${funcName} is being throttled`,
-        metric: func.metricThrottles({
-          statistic: cloudwatch.Stats.SUM,
-          period: cdk.Duration.minutes(5),
-        }),
-        threshold: 5,
-        evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const throttleAlarm = new cloudwatch.Alarm(
+        this,
+        `${funcName}ThrottleAlarm`,
+        {
+          alarmName: `${funcName}-throttles-${envSuffix}`,
+          alarmDescription: `Function ${funcName} is being throttled`,
+          metric: func.metricThrottles({
+            statistic: cloudwatch.Stats.SUM,
+            period: cdk.Duration.minutes(5),
+          }),
+          threshold: 5,
+          evaluationPeriods: 1,
+          comparisonOperator:
+            cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
-      throttleAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
+      throttleAlarm.addAlarmAction(
+        new cloudwatch_actions.SnsAction(alertTopic)
+      );
     });
 
     // ===========================
@@ -262,55 +289,54 @@ exports.handler = async (event) => {
       dashboardName: `serverless-monitoring-${envSuffix}`,
     });
 
-    // Add widgets for each function
-    const widgets: cloudwatch.IWidget[] = [];
-
     // Overview widget
-    const invocationWidgets = lambdaFunctions.map((func) =>
-      new cloudwatch.GraphWidget({
-        title: `${func.functionName} - Invocations & Errors`,
-        left: [
-          func.metricInvocations({
-            statistic: cloudwatch.Stats.SUM,
-            period: cdk.Duration.minutes(5),
-          }),
-        ],
-        right: [
-          func.metricErrors({
-            statistic: cloudwatch.Stats.SUM,
-            period: cdk.Duration.minutes(5),
-          }),
-        ],
-        width: 12,
-        height: 6,
-      })
+    const invocationWidgets = lambdaFunctions.map(
+      func =>
+        new cloudwatch.GraphWidget({
+          title: `${func.functionName} - Invocations & Errors`,
+          left: [
+            func.metricInvocations({
+              statistic: cloudwatch.Stats.SUM,
+              period: cdk.Duration.minutes(5),
+            }),
+          ],
+          right: [
+            func.metricErrors({
+              statistic: cloudwatch.Stats.SUM,
+              period: cdk.Duration.minutes(5),
+            }),
+          ],
+          width: 12,
+          height: 6,
+        })
     );
 
-    const durationWidgets = lambdaFunctions.map((func) =>
-      new cloudwatch.GraphWidget({
-        title: `${func.functionName} - Duration`,
-        left: [
-          func.metricDuration({
-            statistic: cloudwatch.Stats.AVERAGE,
-            period: cdk.Duration.minutes(5),
-            label: 'Average',
-          }),
-          func.metricDuration({
-            statistic: cloudwatch.Stats.p(99),
-            period: cdk.Duration.minutes(5),
-            label: 'P99',
-          }),
-        ],
-        width: 12,
-        height: 6,
-      })
+    const durationWidgets = lambdaFunctions.map(
+      func =>
+        new cloudwatch.GraphWidget({
+          title: `${func.functionName} - Duration`,
+          left: [
+            func.metricDuration({
+              statistic: cloudwatch.Stats.AVERAGE,
+              period: cdk.Duration.minutes(5),
+              label: 'Average',
+            }),
+            func.metricDuration({
+              statistic: cloudwatch.Stats.p(99),
+              period: cdk.Duration.minutes(5),
+              label: 'P99',
+            }),
+          ],
+          width: 12,
+          height: 6,
+        })
     );
 
     // Add summary widget
     dashboard.addWidgets(
       new cloudwatch.SingleValueWidget({
         title: 'Total Invocations (24h)',
-        metrics: lambdaFunctions.map((func) =>
+        metrics: lambdaFunctions.map(func =>
           func.metricInvocations({
             statistic: cloudwatch.Stats.SUM,
             period: cdk.Duration.hours(24),
@@ -321,7 +347,7 @@ exports.handler = async (event) => {
       }),
       new cloudwatch.SingleValueWidget({
         title: 'Total Errors (24h)',
-        metrics: lambdaFunctions.map((func) =>
+        metrics: lambdaFunctions.map(func =>
           func.metricErrors({
             statistic: cloudwatch.Stats.SUM,
             period: cdk.Duration.hours(24),
@@ -332,7 +358,7 @@ exports.handler = async (event) => {
       }),
       new cloudwatch.SingleValueWidget({
         title: 'Avg Duration (24h)',
-        metrics: lambdaFunctions.map((func) =>
+        metrics: lambdaFunctions.map(func =>
           func.metricDuration({
             statistic: cloudwatch.Stats.AVERAGE,
             period: cdk.Duration.hours(24),
