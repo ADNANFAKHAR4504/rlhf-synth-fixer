@@ -262,9 +262,14 @@ RoleName: !Sub 'MediaLambdaRole-${Environment}'
                   - 'dynamodb:Query'
                 Resource:
                   - !GetAtt MediaAssetsTable.Arn
-                  - !Sub '${MediaAssetsTable.Arn}/index/_' - Effect: Allow
-Action: - 's3:GetObject' - 's3:HeadObject'
-Resource: - !Sub '${UploadsBucket.Arn}/_' - Effect: Allow
+                  - !Sub '${MediaAssetsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectAttributes'
+                Resource:
+                  - !Sub '${UploadsBucket.Arn}/*'
+              - Effect: Allow
 Action: - 'mediaconvert:CreateJob' - 'mediaconvert:GetJob' - 'mediaconvert:DescribeEndpoints'
 Resource: '_' - Effect: Allow
 Action: - 'iam:PassRole'

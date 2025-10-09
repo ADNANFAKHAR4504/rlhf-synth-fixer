@@ -569,7 +569,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "s3:GetObject",
-                    "s3:HeadObject"
+                    "s3:GetObjectAttributes"
                   ],
                   "Resource": [
                     {
