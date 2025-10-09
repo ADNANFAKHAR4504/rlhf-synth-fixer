@@ -111,7 +111,7 @@
     "KMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
-        "Description": "KMS key for encryption",
+        "Description": "KMS key for encryption (S3/RDS)",
         "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
@@ -135,8 +135,7 @@
                   "s3.amazonaws.com",
                   "rds.amazonaws.com",
                   "lambda.amazonaws.com",
-                  "logs.amazonaws.com",
-                  "ec2.amazonaws.com"
+                  "logs.amazonaws.com"
                 ]
               },
               "Action": [
@@ -147,6 +146,34 @@
                 "kms:DescribeKey"
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "AllowRDSViaService",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
+                  },
+                  "kms:CallerAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
             }
           ]
         }
@@ -670,6 +697,9 @@
         "SubnetId": {
           "Ref": "PublicSubnet1"
         },
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
         "SecurityGroupIds": [
           {
             "Ref": "BastionSecurityGroup"
@@ -681,10 +711,7 @@
             "Ebs": {
               "VolumeSize": 8,
               "VolumeType": "gp3",
-              "Encrypted": true,
-              "KmsKeyId": {
-                "Ref": "KMSKey"
-              }
+              "Encrypted": true
             }
           }
         ],
@@ -777,10 +804,7 @@
               "Ebs": {
                 "VolumeSize": 20,
                 "VolumeType": "gp3",
-                "Encrypted": true,
-                "KmsKeyId": {
-                  "Ref": "KMSKey"
-                }
+                "Encrypted": true
               }
             }
           ],
