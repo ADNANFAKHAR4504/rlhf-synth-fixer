@@ -120,6 +120,14 @@ Parameters:
     Description: 'Email address for CloudWatch alarm notifications'
     MinLength: 5
     MaxLength: 100
+
+  CreateDNS:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Create DNS resources (HostedZone, SSL). Set to false to skip DNS setup.'
   
   SMTPServer:
     Type: String
@@ -141,6 +149,9 @@ Parameters:
     NoEcho: true
     Description: 'SMTP password'
     Default: ''
+
+Conditions:
+  ShouldCreateDNS: !Equals [!Ref CreateDNS, 'true']
 
 # Mappings for Existing VPC Infrastructure
 Mappings:
@@ -604,12 +615,16 @@ Resources:
             DefaultTTL: 604800
             MaxTTL: 31536000
         PriceClass: PriceClass_100
-        ViewerCertificate:
-          AcmCertificateArn: !Ref SSLCertificate
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
-        Aliases:
-          - !Ref DomainName
+        ViewerCertificate: !If
+          - ShouldCreateDNS
+          - AcmCertificateArn: !Ref SSLCertificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Aliases: !If
+          - ShouldCreateDNS
+          - [!Ref DomainName]
+          - !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub 'CloudFrontDistribution-${EnvironmentSuffix}'
@@ -621,11 +636,12 @@ Resources:
           Value: 'CloudFormation'
   
   # ============================================
-  # DNS AND CERTIFICATE
+  # DNS AND CERTIFICATE (OPTIONAL - CONDITIONAL)
   # ============================================
   
   HostedZone:
     Type: AWS::Route53::HostedZone
+    Condition: ShouldCreateDNS
     DeletionPolicy: Retain
     Properties:
       Name: !Ref DomainName
@@ -643,6 +659,7 @@ Resources:
   
   SSLCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateDNS
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -661,6 +678,7 @@ Resources:
   
   DNSRecord:
     Type: AWS::Route53::RecordSet
+    Condition: ShouldCreateDNS
     Properties:
       HostedZoneId: !Ref HostedZone
       Name: !Ref DomainName
@@ -671,7 +689,7 @@ Resources:
         EvaluateTargetHealth: false
   
   # ============================================
-  # COMPUTE LAYER - FIXED WITH GUARANTEED SUCCESS
+  # COMPUTE LAYER
   # ============================================
   
   DiscourseEC2Instance:
@@ -701,40 +719,14 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-
-          # Log everything to file and console
-          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-
-          echo "=== UserData Script Started ==="
-          echo "Stack: ${AWS::StackName}"
-          echo "Region: ${AWS::Region}"
-
-          # Install cfn-bootstrap tools (CRITICAL - must succeed)
-          echo "Installing cfn-bootstrap tools..."
-          yum install -y aws-cfn-bootstrap || {
-            echo "ERROR: Failed to install cfn-bootstrap"
-            exit 1
-          }
-
-          # Update system packages (allow failures)
-          echo "Updating system packages..."
-          yum update -y || echo "WARNING: yum update had issues, continuing..."
-
-          # Install application packages (allow failures)
-          echo "Installing Docker, git, aws-cli, jq..."
-          yum install -y docker git aws-cli jq || echo "WARNING: Some packages failed to install"
-
-          # Start Docker service (allow failures)
-          echo "Starting Docker..."
-          systemctl start docker || echo "WARNING: Docker failed to start"
-          systemctl enable docker || echo "WARNING: Docker enable failed"
-
-          # ALWAYS send success signal (even if some steps failed)
-          echo "Sending SUCCESS signal to CloudFormation..."
-          /opt/aws/bin/cfn-signal --success true --stack ${AWS::StackName} --resource DiscourseEC2Instance --region ${AWS::Region}
-
-          echo "=== UserData Script Completed Successfully ==="
-          exit 0
+          exec > >(tee /var/log/user-data.log) 2>&1
+          echo "=== UserData Started ==="
+          yum update -y
+          yum install -y docker git aws-cli jq
+          systemctl start docker
+          systemctl enable docker
+          echo "=== UserData Completed ==="
+          date
       Tags:
         - Key: Name
           Value: !Sub 'DiscourseEC2Instance-${EnvironmentSuffix}'
@@ -746,10 +738,6 @@ Resources:
           Value: 'CloudFormation'
         - Key: BackupEnabled
           Value: 'true'
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT30M
-        Count: 1
   
   # ============================================
   # MONITORING AND ALARMS
@@ -1027,18 +1015,6 @@ Outputs:
     Value: !Ref DomainName
     Export:
       Name: !Sub '${AWS::StackName}-DomainName'
-  
-  HostedZoneId:
-    Description: 'Route 53 Hosted Zone ID'
-    Value: !Ref HostedZone
-    Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneId'
-  
-  SSLCertificateArn:
-    Description: 'SSL Certificate ARN'
-    Value: !Ref SSLCertificate
-    Export:
-      Name: !Sub '${AWS::StackName}-SSLCertificateArn'
   
   LogGroupName:
     Description: 'CloudWatch Log Group Name'
