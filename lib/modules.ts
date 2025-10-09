@@ -805,7 +805,7 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Create unique bucket name
-    this.bucketName = `${config.bucketPrefix}-${Date.now()}`;
+    this.bucketName = `${config.bucketPrefix}-ts`;
 
     // S3 Bucket
     this.bucket = new aws.s3Bucket.S3Bucket(this, 'bucket', {
