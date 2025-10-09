@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "95142738",
+  "team": "3",
+  "startedAt": "2025-10-03T20:30:24.793Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudFront",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "Cognito",
+    "Secrets Manager",
+    "WAFv2",
+    "KMS",
+    "SQS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deepaktatineni",
+  "dockerS3Location": ""
+}
