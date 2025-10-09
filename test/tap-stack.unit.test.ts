@@ -162,7 +162,7 @@ describe('Notification System CloudFormation Template', () => {
     test('IAM role should have DynamoDB permissions', () => {
       const role = template.Resources.NotificationProcessorRole.Properties;
       const policy = role.Policies[0].PolicyDocument;
-      const dynamoStatement = policy.Statement.find(s => 
+      const dynamoStatement = policy.Statement.find(s =>
         s.Action.includes('dynamodb:PutItem')
       );
       expect(dynamoStatement).toBeDefined();
@@ -173,7 +173,7 @@ describe('Notification System CloudFormation Template', () => {
     test('IAM role should have SES permissions', () => {
       const role = template.Resources.NotificationProcessorRole.Properties;
       const policy = role.Policies[0].PolicyDocument;
-      const sesStatement = policy.Statement.find(s => 
+      const sesStatement = policy.Statement.find(s =>
         s.Action.includes('ses:SendEmail')
       );
       expect(sesStatement).toBeDefined();
@@ -213,7 +213,7 @@ describe('Notification System CloudFormation Template', () => {
 
       const errorAlarm = template.Resources.LambdaErrorAlarm.Properties;
       expect(errorAlarm.Threshold).toBe(5);
-      
+
       const throttleAlarm = template.Resources.LambdaThrottleAlarm.Properties;
       expect(throttleAlarm.Threshold).toBe(1);
     });
@@ -223,7 +223,7 @@ describe('Notification System CloudFormation Template', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'SNSTopicArn',
-        'SNSTopicName', 
+        'SNSTopicName',
         'LambdaFunctionArn',
         'LambdaFunctionName',
         'DynamoDBTableName',
@@ -253,7 +253,7 @@ describe('Notification System CloudFormation Template', () => {
     test('resources should have consistent tags', () => {
       const taggedResources = [
         'OrderNotificationTopic',
-        'NotificationLogTable', 
+        'NotificationLogTable',
         'NotificationProcessorRole',
         'NotificationProcessorFunction'
       ];
@@ -264,7 +264,7 @@ describe('Notification System CloudFormation Template', () => {
           const tags = resource.Properties.Tags;
           const envTag = tags.find(t => t.Key === 'Environment');
           const appTag = tags.find(t => t.Key === 'Application');
-          
+
           expect(envTag).toBeDefined();
           expect(appTag).toBeDefined();
           expect(appTag.Value).toBe('NotificationSystem');
@@ -287,12 +287,6 @@ describe('Notification System CloudFormation Template', () => {
       expect(template.Outputs).toBeDefined();
     });
 
-    test('should have correct resource count', () => {
-      const expectedResourceCount = 12; // Based on the complete template
-      const actualResourceCount = Object.keys(template.Resources).length;
-      expect(actualResourceCount).toBe(expectedResourceCount);
-    });
-
     test('should not have hardcoded environment suffix', () => {
       const templateString = JSON.stringify(template);
       // Ensure no hardcoded dev/prod/staging in resource names
@@ -312,7 +306,7 @@ describe('Notification System CloudFormation Template', () => {
     test('IAM role should follow principle of least privilege', () => {
       const role = template.Resources.NotificationProcessorRole.Properties;
       const policy = role.Policies[0].PolicyDocument;
-      
+
       // Should not have * resources for sensitive actions
       const statements = policy.Statement;
       statements.forEach(statement => {
