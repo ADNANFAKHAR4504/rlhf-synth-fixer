@@ -42,6 +42,8 @@ public class DnsStack {
                     .build())
             .geolocationRoutingPolicies(
                 RecordGeolocationRoutingPolicyArgs.builder()
+                    // Route53 default geolocation catch-all
+                    .country("*")
                     .build())
             .build());
 
