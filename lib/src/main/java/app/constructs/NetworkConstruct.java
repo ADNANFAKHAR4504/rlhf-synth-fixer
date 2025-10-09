@@ -1,6 +1,5 @@
 package app.constructs;
 
-import app.config.AppConfig;
 import app.config.NetworkConfig;
 import com.hashicorp.cdktf.providers.aws.eip.Eip;
 import com.hashicorp.cdktf.providers.aws.internet_gateway.InternetGateway;
@@ -31,10 +30,8 @@ public class NetworkConstruct extends BaseConstruct {
     public NetworkConstruct(final Construct scope, final String id) {
         super(scope, id);
 
-        AppConfig config = getConfig();
-
-        NetworkConfig networkConfig = config.networkConfig();
-        Map<String, String> tags = config.tags();
+        NetworkConfig networkConfig = getNetworkConfig();
+        Map<String, String> tags = getTags();
 
         // Create VPC
         this.vpc = Vpc.Builder.create(this, "vpc")

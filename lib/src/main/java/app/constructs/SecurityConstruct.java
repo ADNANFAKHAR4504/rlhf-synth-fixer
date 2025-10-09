@@ -1,6 +1,5 @@
 package app.constructs;
 
-import app.config.AppConfig;
 import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.iam_instance_profile.IamInstanceProfile;
 import com.hashicorp.cdktf.providers.aws.iam_role.IamRole;
@@ -31,9 +30,7 @@ public class SecurityConstruct extends BaseConstruct {
     public SecurityConstruct(final Construct scope, final String id, final String vpcId) {
         super(scope, id);
 
-        AppConfig config = getConfig();
-
-        SecurityConfig securityConfig = config.securityConfig();
+        SecurityConfig securityConfig = getSecurityConfig();
 
         // Create KMS Key for encryption
         this.kmsKey = new KmsKey(this, "kms-key", KmsKeyConfig.builder()
@@ -54,13 +51,13 @@ public class SecurityConstruct extends BaseConstruct {
         this.albSecurityGroup = createAlbSecurityGroup(securityConfig, vpcId);
 
         // Create IAM role for instances
-        this.instanceRole = createInstanceRole(config.tags());
+        this.instanceRole = createInstanceRole(getTags());
 
         // Create instance profile
         this.instanceProfile = IamInstanceProfile.Builder.create(this, "instance-profile")
                 .role(instanceRole.getName())
                 .name(id + "-instance-profile")
-                .tags(config.tags())
+                .tags(getTags())
                 .build();
 
         // Attach necessary policies
@@ -211,5 +208,9 @@ public class SecurityConstruct extends BaseConstruct {
 
     public String getKmsKeyId() {
         return kmsKey.getId();
+    }
+
+    public String getKmsKeyArn() {
+        return kmsKey.getArn();
     }
 }

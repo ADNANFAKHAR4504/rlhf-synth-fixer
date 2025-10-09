@@ -1,8 +1,12 @@
 package app.constructs;
 
 import app.config.AppConfig;
+import app.config.MonitoringConfig;
+import app.config.NetworkConfig;
+import app.config.SecurityConfig;
 import software.constructs.Construct;
 
+import java.util.List;
 import java.util.Map;
 
 public abstract class BaseConstruct extends Construct {
@@ -18,7 +22,35 @@ public abstract class BaseConstruct extends Construct {
         return config.mergeWithTags(additionalTags);
     }
 
-    protected AppConfig getConfig() {
-        return config;
+    protected String getEnvironment() {
+        return config.environment();
+    }
+
+    protected String getRegion() {
+        return config.region();
+    }
+
+    protected String getProjectName() {
+        return config.projectName();
+    }
+
+    protected NetworkConfig getNetworkConfig() {
+        return config.networkConfig();
+    }
+
+    protected SecurityConfig getSecurityConfig() {
+        return config.securityConfig();
+    }
+
+    protected MonitoringConfig getMonitoringConfig() {
+        return config.monitoringConfig();
+    }
+
+    protected List<String> getExistingInstanceIds() {
+        return config.existingInstanceIds();
+    }
+
+    protected Map<String, String> getTags() {
+        return config.tags();
     }
 }

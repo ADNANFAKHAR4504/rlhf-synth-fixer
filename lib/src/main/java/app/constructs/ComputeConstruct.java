@@ -1,6 +1,5 @@
 package app.constructs;
 
-import app.config.AppConfig;
 import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroup;
 import com.hashicorp.cdktf.providers.aws.autoscaling_group.AutoscalingGroupLaunchTemplate;
@@ -35,18 +34,17 @@ public class ComputeConstruct extends BaseConstruct {
                             final SecurityConstruct security, final String targetGroupArn) {
         super(scope, id);
 
-        AppConfig config = getConfig();
-
-        SecurityConfig securityConfig = config.securityConfig();
+        SecurityConfig securityConfig = getSecurityConfig();
         this.instances = new ArrayList<>();
-        this.tags = config.tags();
+        this.tags = getTags();
 
         String securityGroupId = security.getInstanceSecurityGroupId();
         String instanceProfileArn = security.getInstanceProfileArn();
         String kmsKeyId = security.getKmsKeyId();
+        String kmsKeyArn = security.getKmsKeyArn();
 
         // Create launch template for blue-green deployment
-        this.launchTemplate = createLaunchTemplate(securityConfig, securityGroupId, instanceProfileArn, kmsKeyId, id);
+        this.launchTemplate = createLaunchTemplate(securityConfig, securityGroupId, instanceProfileArn, kmsKeyArn, id);
 
         // Create Auto Scaling Group
         this.autoScalingGroup = createAutoScalingGroup(subnetIds, targetGroupArn, id);
@@ -56,7 +54,7 @@ public class ComputeConstruct extends BaseConstruct {
     }
 
     private LaunchTemplate createLaunchTemplate(final SecurityConfig config, final String securityGroupId,
-                                                final String instanceProfileArn, final String kmsKeyId, final String id) {
+                                                final String instanceProfileArn, final String kmsKeyArn, final String id) {
 
         String userData = Base64.getEncoder().encodeToString("""
                 #!/bin/bash
@@ -131,7 +129,7 @@ public class ComputeConstruct extends BaseConstruct {
                             .deviceName("/dev/xvda")
                             .ebs(LaunchTemplateBlockDeviceMappingsEbs.builder()
                                     .encrypted("true")
-                                    .kmsKeyId(kmsKeyId)
+                                    .kmsKeyId(kmsKeyArn)
                                     .volumeSize(30)
                                     .volumeType("gp3")
                                     .deleteOnTermination("true")

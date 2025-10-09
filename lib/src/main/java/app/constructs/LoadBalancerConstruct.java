@@ -1,6 +1,5 @@
 package app.constructs;
 
-import app.config.AppConfig;
 import com.hashicorp.cdktf.providers.aws.lb.Lb;
 import com.hashicorp.cdktf.providers.aws.lb_listener.LbListener;
 import com.hashicorp.cdktf.providers.aws.lb_listener.LbListenerDefaultAction;
@@ -25,8 +24,6 @@ public class LoadBalancerConstruct extends BaseConstruct {
     public LoadBalancerConstruct(final Construct scope, final String id, final List<String> subnetIds,
                                  final String securityGroupId, final String vpcId) {
         super(scope, id);
-
-        AppConfig config = getConfig();
 
         // Create Application Load Balancer
         String albName = (id + "-alb").substring(0, Math.min(32, (id + "-alb").length()));
@@ -77,11 +74,11 @@ public class LoadBalancerConstruct extends BaseConstruct {
                         .type("forward")
                         .targetGroupArn(targetGroup.getArn())
                         .build()))
-                .tags(config.tags())
+                .tags(getTags())
                 .build();
 
         // Attach existing instances to target group if provided
-        attachInstances(config.existingInstanceIds());
+        attachInstances(getExistingInstanceIds());
     }
 
     private void attachInstances(final List<String> instanceIds) {

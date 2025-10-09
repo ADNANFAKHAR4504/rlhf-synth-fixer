@@ -1,6 +1,5 @@
 package app.constructs;
 
-import app.config.AppConfig;
 import app.config.MonitoringConfig;
 import com.hashicorp.cdktf.providers.aws.cloudwatch_dashboard.CloudwatchDashboard;
 import com.hashicorp.cdktf.providers.aws.cloudwatch_metric_alarm.CloudwatchMetricAlarm;
@@ -24,16 +23,14 @@ public class MonitoringConstruct extends BaseConstruct {
                                final String albArn) {
         super(scope, id);
 
-        AppConfig config = getConfig();
-
-        MonitoringConfig monitoringConfig = config.monitoringConfig();
+        MonitoringConfig monitoringConfig = getMonitoringConfig();
         this.alarms = new ArrayList<>();
 
         // Create SNS topic for alarms
         this.alarmTopic = SnsTopic.Builder.create(this, "alarm-topic")
                 .name(id + "-alarms")
                 .displayName("VPC Migration Alarms")
-                .tags(config.tags())
+                .tags(getTags())
                 .build();
 
         // Subscribe email to SNS topic
