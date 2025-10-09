@@ -1242,7 +1242,7 @@ describe('TapStack Integration Tests', () => {
         }
       }
 
-      // As a final log only, derive constructed URL (do not use for fetch due to DNS risk)
+      // As a final log only, derive constructed URL 
       const region = process.env.AWS_REGION || 'us-east-1';
       const constructed = `http://${envName}.${region}.elasticbeanstalk.com`;
       console.log(`Endpoint candidates -> chosen: ${targetUrl || 'none'} | constructed: ${constructed}`);
@@ -1251,7 +1251,7 @@ describe('TapStack Integration Tests', () => {
         throw new Error('No resolvable endpoint found (no CNAME and no EC2 public endpoint).');
       }
 
-      // Simple HTTP GET with retries and timeout
+      // HTTP GET with retries and timeout
       const httpGetWithRetry = async (url: string, attempts = 3, timeoutMs = 8000) => {
         let lastErr: any;
         for (let i = 0; i < attempts; i++) {
@@ -1271,7 +1271,6 @@ describe('TapStack Integration Tests', () => {
       };
 
       const response = await httpGetWithRetry(targetUrl, 3, 8000);
-      // Consider 2xx/3xx as responsive; tolerate common 4xx from placeholder apps
       expect(response.status).toBeLessThan(500);
       const ct = response.headers.get('content-type') || '';
       expect(ct.length).toBeGreaterThan(0);
