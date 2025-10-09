@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T05:41:54+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "training_quality": 7,
   "aws_services": [
     "CloudFront",
@@ -18,5 +20,13 @@
     "Route53",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "review_status": "completed",
+  "review_date": "2025-10-09",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
