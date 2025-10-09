@@ -1,0 +1,54 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350170",
+  "team": "4",
+  "startedAt": "2025-10-07T11:39:42.130Z",
+  "subtask": "Multi-Region Infrastructure Provisioning",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Region Deployment",
+    "High Availability Architecture"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "Route 53",
+    "AWS Backup",
+    "NAT Gateway",
+    "VPC Endpoints",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
+  "testDependencies": {
+    "@aws-sdk/client-ec2": "^3.883.0",
+    "@aws-sdk/client-rds": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/client-lambda": "^3.883.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.883.0",
+    "@aws-sdk/client-auto-scaling": "^3.846.0",
+    "@aws-sdk/client-cloudwatch": "^3.883.0",
+    "@aws-sdk/client-route-53": "^3.883.0",
+    "@aws-sdk/client-backup": "^3.863.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
