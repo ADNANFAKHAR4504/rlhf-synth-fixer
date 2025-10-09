@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349037",
+  "team": "3",
+  "startedAt": "2025-10-09T07:19:11.356Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, VPC Flow Logs, DNS, ELB, EC2, RDS, S3 + CloudTrail, CloudFront, Route 53, CloudWatch, IAM, NAT"
+}
