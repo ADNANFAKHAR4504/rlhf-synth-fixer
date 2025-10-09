@@ -14,7 +14,6 @@ import {
   DescribeUserPoolCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 import {
-  DeleteItemCommand,
   DescribeTableCommand,
   DynamoDBClient,
   GetItemCommand,
@@ -130,12 +129,11 @@ describe('CloudFormation Deployment Integration Tests', () => {
 
       const response = await lambdaClient.send(invokeCmd);
       expect(response.StatusCode).toBe(200);
+      expect(response.Payload).toBeDefined();
+      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
+      expect(payload.statusCode).toBe(200);
+      expect(payload.body).toBeDefined();
 
-      if (response.Payload) {
-        const payload = JSON.parse(Buffer.from(response.Payload).toString());
-        expect(payload.statusCode).toBe(200);
-        expect(payload.body).toBeDefined();
-      }
     }, 30000);
   });
 
@@ -149,51 +147,44 @@ describe('CloudFormation Deployment Integration Tests', () => {
     });
 
     test('API Gateway has expected resources and methods', async () => {
-      try {
-        const resources = await apigateway.send(new GetResourcesCommand({ restApiId: gatewayId }));
-        expect(resources.items).toBeDefined();
+      const resources = await apigateway.send(new GetResourcesCommand({ restApiId: gatewayId }));
+      expect(resources.items).toBeDefined();
 
-        const paths = resources.items?.map((r: any) => r.path) || [];
-        const expectedPaths = ['/', '/lessons', '/speech', '/progress', '/grammar', '/recommendations'];
+      const paths = resources.items?.map((r: any) => r.path) || [];
+      const expectedPaths = ['/', '/lessons', '/speech', '/progress', '/grammar', '/recommendations'];
 
-        expectedPaths.forEach(expectedPath => {
-          expect(paths.some((p: any) => p === expectedPath || p?.includes(expectedPath.slice(1)))).toBe(true);
+      expectedPaths.forEach(expectedPath => {
+        expect(paths.some((p: any) => p === expectedPath || p?.includes(expectedPath.slice(1)))).toBe(true);
+      });
+
+      // Validate HTTP methods for each resource
+      const resourcesWithMethods = resources.items?.filter((r: any) => r.resourceMethods) || [];
+      expect(resourcesWithMethods.length).toBeGreaterThan(0);
+      resourcesWithMethods.forEach((resource: any) => {
+        const methods = Object.keys(resource.resourceMethods);
+        expect(methods.length).toBeGreaterThan(0);
+        methods.forEach(method => {
+          expect(['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']).toContain(method);
         });
-
-        // Validate HTTP methods for each resource
-        const resourcesWithMethods = resources.items?.filter((r: any) => r.resourceMethods) || [];
-        expect(resourcesWithMethods.length).toBeGreaterThan(0);
-
-      } catch (error: any) {
-        if (error.name === 'NotFoundException') {
-          console.warn(`API ${gatewayId} does not exist - may have been cleaned up`);
-        } else {
-          throw error;
-        }
-      }
+      });
     });
 
     test('API Gateway stage is properly configured', async () => {
-      try {
-        const stage = await apigateway.send(new GetStageCommand({
-          restApiId: gatewayId,
-          stageName: 'v1'
-        }));
 
-        expect(stage.stageName).toBe('v1');
-        expect(stage.methodSettings).toBeDefined();
-        expect(stage.accessLogSettings?.destinationArn).toMatch(/^arn:aws:logs:/);
+      const stage = await apigateway.send(new GetStageCommand({
+        restApiId: gatewayId,
+        stageName: 'v1'
+      }));
 
-        // Validate throttling settings
-        const methodSettings = stage.methodSettings?.['*/*'];
-        expect(methodSettings?.throttlingBurstLimit).toBe(7000);
-        expect(methodSettings?.throttlingRateLimit).toBe(6000);
+      expect(stage.stageName).toBe('v1');
+      expect(stage.methodSettings).toBeDefined();
+      expect(stage.accessLogSettings?.destinationArn).toMatch(/^arn:aws:logs:/);
 
-      } catch (error: any) {
-        if (error.name !== 'NotFoundException') {
-          throw error;
-        }
-      }
+      // Validate throttling settings
+      const methodSettings = stage.methodSettings?.['*/*'];
+      expect(methodSettings?.throttlingBurstLimit).toBe(7000);
+      expect(methodSettings?.throttlingRateLimit).toBe(6000);
+
     });
   });
 
@@ -232,39 +223,24 @@ describe('CloudFormation Deployment Integration Tests', () => {
         TestTimestamp: { S: new Date().toISOString() }
       };
 
-      try {
-        // Test Put Item
-        await dynamoClient.send(new PutItemCommand({
-          TableName: outputs.UserProgressTableName,
-          Item: testItem
-        }));
+      // Test Put Item
+      await dynamoClient.send(new PutItemCommand({
+        TableName: outputs.UserProgressTableName,
+        Item: testItem
+      }));
 
-        // Test Get Item
-        const getResult = await dynamoClient.send(new GetItemCommand({
-          TableName: outputs.UserProgressTableName,
-          Key: {
-            UserId: testItem.UserId,
-            Language: testItem.Language
-          }
-        }));
-
-        expect(getResult.Item).toBeDefined();
-        expect(getResult.Item?.UserId.S).toBe(testItem.UserId.S);
-
-      } finally {
-        // Cleanup test data
-        try {
-          await dynamoClient.send(new DeleteItemCommand({
-            TableName: outputs.UserProgressTableName,
-            Key: {
-              UserId: testItem.UserId,
-              Language: testItem.Language
-            }
-          }));
-        } catch (cleanupError) {
-          console.warn('Failed to cleanup test data:', cleanupError);
+      // Test Get Item
+      const getResult = await dynamoClient.send(new GetItemCommand({
+        TableName: outputs.UserProgressTableName,
+        Key: {
+          UserId: testItem.UserId,
+          Language: testItem.Language
         }
-      }
+      }));
+
+      expect(getResult.Item).toBeDefined();
+      expect(getResult.Item?.UserId.S).toBe(testItem.UserId.S);
+
     }, 30000);
   });
 
@@ -326,20 +302,15 @@ describe('CloudFormation Deployment Integration Tests', () => {
   });
 
   describe('End-to-End API Testing', () => {
+
     test('API Gateway endpoints are accessible', async () => {
       const baseUrl = outputs.ApiGatewayUrl;
+      const response = await axios.get(`${baseUrl}/lessons`, {
+        timeout: 10000,
+        validateStatus: (status) => status === 401 // Expected without auth
+      });
+      expect(response.status).toBe(401);
 
-      // Test public endpoint accessibility (should return 401 without auth)
-      try {
-        const response = await axios.get(`${baseUrl}/lessons`, {
-          timeout: 10000,
-          validateStatus: (status) => status === 401 // Expected without auth
-        });
-        expect(response.status).toBe(401);
-      } catch (error: any) {
-        // Network errors are acceptable for this test
-        expect(error.response?.status).toBe(401);
-      }
     }, 15000);
   });
 
@@ -357,28 +328,24 @@ describe('CloudFormation Deployment Integration Tests', () => {
 
       for (const arn of lambdaArns.slice(0, 2)) { // Test first 2 to avoid rate limits
         const functionName = arn.split(':').pop();
+        const metrics = await cloudwatchClient.send(new GetMetricStatisticsCommand({
+          Namespace: 'AWS/Lambda',
+          MetricName: 'Invocations',
+          Dimensions: [
+            {
+              Name: 'FunctionName',
+              Value: functionName
+            }
+          ],
+          StartTime: startTime,
+          EndTime: endTime,
+          Period: 3600,
+          Statistics: ['SampleCount']
+        }));
 
-        try {
-          const metrics = await cloudwatchClient.send(new GetMetricStatisticsCommand({
-            Namespace: 'AWS/Lambda',
-            MetricName: 'Invocations',
-            Dimensions: [
-              {
-                Name: 'FunctionName',
-                Value: functionName
-              }
-            ],
-            StartTime: startTime,
-            EndTime: endTime,
-            Period: 3600,
-            Statistics: ['SampleCount']
-          }));
-
-          // Metrics should be available (even if no data points)
-          expect(metrics.Datapoints).toBeDefined();
-        } catch (error) {
-          console.warn(`Metrics not available for ${functionName}:`, error);
-        }
+        // Metrics should be available (even if no data points)
+        expect(metrics.Datapoints).toBeDefined();
+        expect(metrics.Label).toBe('Invocations');
       }
     }, 30000);
   });
