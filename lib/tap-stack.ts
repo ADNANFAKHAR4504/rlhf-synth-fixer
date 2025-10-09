@@ -100,7 +100,7 @@ export class TapStack extends TerraformStack {
             days: 30,
           },
           noncurrentVersionExpiration: {
-            days: 7,
+            noncurrent_days: 7,
           },
         },
       ],
