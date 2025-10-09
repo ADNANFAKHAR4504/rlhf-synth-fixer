@@ -29,7 +29,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     // Create CloudTrail
     this.trail = new cloudtrail.Trail(this, 'CloudTrail', {
-      trailName: `${props.environmentSuffix}-trail`,
+      trailName: `${props.environmentSuffix}-trail-v2`,
       bucket: props.cloudTrailBucket,
       encryptionKey: props.kmsKey,
       includeGlobalServiceEvents: true,
@@ -50,7 +50,7 @@ export class MonitoringStack extends cdk.NestedStack {
     });
 
     const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-config`,
+      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-config-v2`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: props.kmsKey,
       enforceSSL: true,
@@ -92,7 +92,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     // Inspector V2 - Enable scanning
     new inspector.CfnFilter(this, 'InspectorFilter', {
-      name: `${props.environmentSuffix}-ec2-filter`,
+      name: `${props.environmentSuffix}-ec2-filter-v2`,
       filterAction: 'NONE',
       filterCriteria: {
         resourceType: [
@@ -106,7 +106,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
     // CloudWatch Dashboard
     new cloudwatch.Dashboard(this, 'SecurityDashboard', {
-      dashboardName: `${props.environmentSuffix}-security-dashboard`,
+      dashboardName: `${props.environmentSuffix}-security-dashboard-v2`,
       widgets: [
         [
           new cloudwatch.TextWidget({

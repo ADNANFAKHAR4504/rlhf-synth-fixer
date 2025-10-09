@@ -425,7 +425,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Monitoring (CloudTrail)', () => {
     test('CloudTrail should be logging', async () => {
-      const trailName = `${environmentSuffix}-trail`;
+      const trailName = `${environmentSuffix}-trail-v2`;
       const command = new GetTrailStatusCommand({ Name: trailName });
       const response = await cloudTrailClient.send(command);
 
@@ -433,7 +433,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('CloudTrail should have log file validation enabled', async () => {
-      const trailName = `${environmentSuffix}-trail`;
+      const trailName = `${environmentSuffix}-trail-v2`;
       const command = new DescribeTrailsCommand({ trailNameList: [trailName] });
       const response = await cloudTrailClient.send(command);
 

@@ -113,7 +113,7 @@ export class ComputeStack extends cdk.NestedStack {
       vpc: props.vpc,
       internetFacing: true,
       securityGroup: props.albSecurityGroup,
-      loadBalancerName: `${props.environmentSuffix}-alb`,
+      loadBalancerName: `${props.environmentSuffix}-alb-v2`,
     });
 
     // Enable ALB access logs
