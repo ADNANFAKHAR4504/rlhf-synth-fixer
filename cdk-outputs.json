@@ -1,13 +1,10 @@
 {
   "TapStackdev": {
-    "BackupQueueUrl": "https://sqs.us-east-1.amazonaws.com/342597974367/TapStackdev-BackupQueue21522817-nXM59t1GZ4mY",
-    "ReplicationBucketName": "backup-replication-dev-342597974367-us-east-1",
-    "SystemCapabilities": "{\"maxUsers\":1000,\"retentionDays\":60,\"rto\":\"2 hours\",\"rpo\":\"24 hours\",\"availability\":\"99.9%\",\"encryption\":\"KMS Customer Managed\",\"replication\":\"Cross-Region\",\"deduplication\":\"Enabled\",\"networkIsolation\":true,\"auditLogging\":\"CloudTrail + S3 Access Logs\",\"costOptimization\":\"Intelligent Tiering + Lifecycle\"}",
-    "DeduplicationTableName": "TapStackdev-DeduplicationTableAD30DFB7-HJCCXPSEUNG5",
-    "BackupBucketName": "backup-primary-dev-342597974367-us-east-1",
-    "NotificationTopicArn": "arn:aws:sns:us-east-1:342597974367:TapStackdev-BackupNotificationTopic97B56C92-eEUsOLAJeYUA",
-    "EncryptionKeyId": "4f26867f-375e-496b-90e9-fa7fe52d852a",
-    "MetadataTableName": "TapStackdev-BackupMetadataTable6AF1164B-17HQA0BOEB26T",
-    "DashboardURL": "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=BackupSystemMonitoring-dev"
+    "WebSocketApiUrl": "wss://03h9lq9axh.execute-api.us-east-1.amazonaws.com/dev",
+    "NotificationQueueUrl": "https://sqs.us-east-1.amazonaws.com/342597974367/shipment-notifications-dev",
+    "ShipmentTrackingApiEndpoint25635AAF": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/",
+    "ShipmentsTableName": "shipments-dev",
+    "NotificationTopicArn": "arn:aws:sns:us-east-1:342597974367:shipment-notifications-dev",
+    "RestApiUrl": "https://mgw2p2brz9.execute-api.us-east-1.amazonaws.com/dev/"
   }
 }

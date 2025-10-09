@@ -1,0 +1,3 @@
+This is a placeholder file since Java compilation is not available.
+The actual Lambda handler code is in URLShortenerHandler.java
+In a real deployment, this directory would contain the compiled JAR file.
