@@ -1,0 +1,220 @@
+package app.constructs;
+
+import app.config.SecurityConfig;
+import com.hashicorp.cdktf.providers.aws.iam_instance_profile.IamInstanceProfile;
+import com.hashicorp.cdktf.providers.aws.iam_role.IamRole;
+import com.hashicorp.cdktf.providers.aws.iam_role_policy_attachment.IamRolePolicyAttachment;
+import com.hashicorp.cdktf.providers.aws.kms_alias.KmsAlias;
+import com.hashicorp.cdktf.providers.aws.kms_alias.KmsAliasConfig;
+import com.hashicorp.cdktf.providers.aws.kms_key.KmsKey;
+import com.hashicorp.cdktf.providers.aws.kms_key.KmsKeyConfig;
+import com.hashicorp.cdktf.providers.aws.security_group.SecurityGroup;
+import com.hashicorp.cdktf.providers.aws.security_group_rule.SecurityGroupRule;
+import software.constructs.Construct;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class SecurityConstruct extends Construct {
+
+    private final SecurityGroup instanceSecurityGroup;
+
+    private final SecurityGroup albSecurityGroup;
+
+    private final IamRole instanceRole;
+
+    private final IamInstanceProfile instanceProfile;
+
+    private final KmsKey kmsKey;
+
+    public SecurityConstruct(final Construct scope, final String id, SecurityConfig config, final String vpcId,
+                             final Map<String, String> tags) {
+        super(scope, id);
+
+        // Create KMS Key for encryption
+        this.kmsKey = new KmsKey(this, "kms-key", KmsKeyConfig.builder()
+                .description("KMS key for VPC migration encryption")
+                .enableKeyRotation(true)
+                .tags(mergeTags(tags, Map.of("Name", id + "-kms-key")))
+                .build());
+
+        new KmsAlias(this, "kms-alias", KmsAliasConfig.builder()
+                .name(config.kmsKeyAlias())
+                .targetKeyId(kmsKey.getId())
+                .build());
+
+        // Create instance security group
+        this.instanceSecurityGroup = createInstanceSecurityGroup(config, vpcId, tags);
+
+        // Create ALB security group
+        this.albSecurityGroup = createAlbSecurityGroup(config, vpcId, tags);
+
+        // Create IAM role for instances
+        this.instanceRole = createInstanceRole(tags);
+
+        // Create instance profile
+        this.instanceProfile = IamInstanceProfile.Builder.create(this, "instance-profile")
+                .role(instanceRole.getName())
+                .name(id + "-instance-profile")
+                .tags(tags)
+                .build();
+
+        // Attach necessary policies
+        attachPolicies();
+    }
+
+    private SecurityGroup createInstanceSecurityGroup(final SecurityConfig config, final String vpcId,
+                                                      final Map<String, String> tags) {
+        SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "instance-sg")
+                .name("instance-security-group")
+                .description("Security group for EC2 instances")
+                .vpcId(vpcId)
+                .tags(mergeTags(tags, Map.of("Name", "instance-sg")))
+                .build();
+
+        // SSH access from specific IP
+        if (!config.allowedSshIp().equals("0.0.0.0/32")) {
+            SecurityGroupRule.Builder.create(this, "ssh-rule")
+                    .type("ingress")
+                    .fromPort(config.sshPort())
+                    .toPort(config.sshPort())
+                    .protocol("tcp")
+                    .cidrBlocks(List.of(config.allowedSshIp()))
+                    .securityGroupId(securityGroup.getId())
+                    .description("SSH access from specific IP")
+                    .build();
+        }
+
+        // Egress rule - allow all outbound
+        SecurityGroupRule.Builder.create(this, "egress-rule")
+                .type("egress")
+                .fromPort(0)
+                .toPort(65535)
+                .protocol("-1")
+                .cidrBlocks(List.of("0.0.0.0/0"))
+                .securityGroupId(securityGroup.getId())
+                .description("Allow all outbound traffic")
+                .build();
+
+        return securityGroup;
+    }
+
+    private SecurityGroup createAlbSecurityGroup(final SecurityConfig config, final String vpcId,
+                                                 final Map<String, String> tags) {
+        SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "alb-sg")
+                .name("alb-security-group")
+                .description("Security group for Application Load Balancer")
+                .vpcId(vpcId)
+                .tags(mergeTags(tags, Map.of("Name", "alb-sg")))
+                .build();
+
+        // HTTP ingress
+        SecurityGroupRule.Builder.create(this, "alb-http-rule")
+                .type("ingress")
+                .fromPort(config.httpPort())
+                .toPort(config.httpPort())
+                .protocol("tcp")
+                .cidrBlocks(List.of("0.0.0.0/0"))
+                .securityGroupId(securityGroup.getId())
+                .description("HTTP access")
+                .build();
+
+        // HTTPS ingress
+        SecurityGroupRule.Builder.create(this, "alb-https-rule")
+                .type("ingress")
+                .fromPort(config.httpsPort())
+                .toPort(config.httpsPort())
+                .protocol("tcp")
+                .cidrBlocks(List.of("0.0.0.0/0"))
+                .securityGroupId(securityGroup.getId())
+                .description("HTTPS access")
+                .build();
+
+        // Egress rule
+        SecurityGroupRule.Builder.create(this, "alb-egress-rule")
+                .type("egress")
+                .fromPort(0)
+                .toPort(65535)
+                .protocol("-1")
+                .cidrBlocks(List.of("0.0.0.0/0"))
+                .securityGroupId(securityGroup.getId())
+                .description("Allow all outbound traffic")
+                .build();
+
+        return securityGroup;
+    }
+
+    private IamRole createInstanceRole(final Map<String, String> tags) {
+        String assumeRolePolicy = """
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                }
+                """;
+
+        return IamRole.Builder.create(this, "instance-role")
+                .name("ec2-instance-role")
+                .assumeRolePolicy(assumeRolePolicy)
+                .tags(tags)
+                .build();
+    }
+
+    private void attachPolicies() {
+        // CloudWatch Logs policy
+        IamRolePolicyAttachment.Builder.create(this, "cloudwatch-policy")
+                .role(instanceRole.getName())
+                .policyArn("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")
+                .build();
+
+        // SSM policy for management
+        IamRolePolicyAttachment.Builder.create(this, "ssm-policy")
+                .role(instanceRole.getName())
+                .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
+                .build();
+    }
+
+    // Allow ALB to communicate with instances
+    public void allowAlbToInstances(final int port) {
+        SecurityGroupRule.Builder.create(this, "alb-to-instance-rule")
+                .type("ingress")
+                .fromPort(port)
+                .toPort(port)
+                .protocol("tcp")
+                .sourceSecurityGroupId(albSecurityGroup.getId())
+                .securityGroupId(instanceSecurityGroup.getId())
+                .description("Allow ALB to communicate with instances")
+                .build();
+    }
+
+    private Map<String, String> mergeTags(final Map<String, String> baseTags, final Map<String, String> additionalTags) {
+        Map<String, String> merged = new HashMap<>(baseTags);
+        merged.putAll(additionalTags);
+        return merged;
+    }
+
+    // Getters
+    public String getInstanceSecurityGroupId() {
+        return instanceSecurityGroup.getId();
+    }
+
+    public String getAlbSecurityGroupId() {
+        return albSecurityGroup.getId();
+    }
+
+    public String getInstanceProfileArn() {
+        return instanceProfile.getArn();
+    }
+
+    public String getKmsKeyId() {
+        return kmsKey.getId();
+    }
+}
