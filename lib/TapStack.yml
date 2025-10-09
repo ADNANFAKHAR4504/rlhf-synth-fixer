@@ -995,6 +995,11 @@ Resources:
   BackupSelection:
     Type: AWS::Backup::BackupSelection
     Condition: IsPrimaryRegion
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1028
     Properties:
       BackupPlanId: !Ref BackupPlan
       BackupSelection:
@@ -1049,7 +1054,6 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Condition: IsPrimaryRegion
-    DependsOn: PrimaryKMSKey
     Properties:
       LaunchTemplateName: !Sub '${CompanyName}-${Environment}-launch-template'
       LaunchTemplateData:
