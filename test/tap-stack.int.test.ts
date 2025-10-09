@@ -1,37 +1,3 @@
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeVpcAttributeCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
@@ -46,25 +12,56 @@ import {
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-} from '@aws-sdk/client-kms';
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
-  GetRoleCommand,
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetInstanceProfileCommand,
+  GetRoleCommand,
+  IAMClient,
 } from '@aws-sdk/client-iam';
 import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
+  KMSClient
+} from '@aws-sdk/client-kms';
 import {
-  Route53Client,
-  ListHostedZonesCommand,
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   ListHealthChecksCommand,
-  ListResourceRecordSetsCommand,
+  ListHostedZonesCommand,
+  Route53Client
 } from '@aws-sdk/client-route-53';
+import {
+  DeleteObjectCommand,
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  GetPublicAccessBlockCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
 
 // Load deployment outputs
 const outputs = JSON.parse(
@@ -244,14 +241,14 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
 
       // Check for public route to IGW
       const publicRt = routeTables.find(rt =>
-        rt.Routes?.some((r: { GatewayId?: string; DestinationCidrBlock?: string }) => 
+        rt.Routes?.some((r: { GatewayId?: string; DestinationCidrBlock?: string }) =>
           r.GatewayId?.startsWith('igw-') && r.DestinationCidrBlock === '0.0.0.0/0')
       );
       expect(publicRt).toBeDefined();
 
       // Check for private routes to NAT
       const privateRts = routeTables.filter(rt =>
-        rt.Routes?.some((r: { NatGatewayId?: string; DestinationCidrBlock?: string }) => 
+        rt.Routes?.some((r: { NatGatewayId?: string; DestinationCidrBlock?: string }) =>
           r.NatGatewayId?.startsWith('nat-') && r.DestinationCidrBlock === '0.0.0.0/0')
       );
       expect(privateRts.length).toBeGreaterThanOrEqual(2);
@@ -923,7 +920,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
       const alb = lbResponse.LoadBalancers?.find(
         lb => lb.DNSName === outputs.LoadBalancerDNS
       );
-      expect(alb?.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      expect(alb?.AvailabilityZones?.length ?? 0).toBeGreaterThanOrEqual(2);
 
       // Check ASG spans AZs
       const asgResponse = await asgClient.send(
@@ -932,7 +929,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
       const asg = asgResponse.AutoScalingGroups?.find(group =>
         group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
       );
-      expect(asg?.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      expect(asg?.AvailabilityZones?.length ?? 0).toBeGreaterThanOrEqual(2);
     });
 
     test('should have redundant NAT Gateways', async () => {
