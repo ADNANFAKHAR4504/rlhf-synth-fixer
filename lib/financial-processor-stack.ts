@@ -958,7 +958,8 @@ export class FinancialProcessorStack extends TerraformStack {
       policyArn: lambdaRoute53Policy.arn,
     });
 
-    // Health Check Lambda Function
+    // Health Check Lambda Function - using minimal dummy ZIP
+    // Note: In production, this would reference a proper deployment package
     const healthCheckLambda = new LambdaFunction(this, 'health-check-lambda', {
       provider: primaryProvider,
       functionName: `${config.appName}-health-check`,
@@ -966,8 +967,8 @@ export class FinancialProcessorStack extends TerraformStack {
       handler: 'index.handler',
       runtime: 'nodejs18.x',
       timeout: 300,
-      filename: 'health-check-lambda.zip',
-      sourceCodeHash: 'dummy-hash', // In real implementation, this would be computed from the zip
+      filename: './lambda-placeholder.zip', // This will be created by the build process
+      sourceCodeHash: 'placeholder-hash-' + Date.now(),
       environment: {
         variables: {
           HOSTED_ZONE_ID: hostedZone.zoneId,
