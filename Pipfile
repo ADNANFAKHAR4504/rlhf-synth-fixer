@@ -16,6 +16,8 @@ pulumi = "*"
 pulumi-aws = "*"
 boto3 = "*"
 cfn-flip = "*"
+moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
+attrs = "*"
 
 [dev-packages]
 boto3 = "*"
