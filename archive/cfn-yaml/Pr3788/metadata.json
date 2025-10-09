@@ -20,5 +20,11 @@
     "CloudWatch",
     "KMS",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
 }
