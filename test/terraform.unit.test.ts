@@ -23,7 +23,7 @@ describe("Terraform DR Stack Unit Tests - tap_stack.tf", () => {
       expect(fs.existsSync(stackPath)).toBe(true);
     });
 
-  test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
+    test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
       expect(stackContent).not.toMatch(/^provider\s+"aws"\s*{/m);
     });
 

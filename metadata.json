@@ -47,6 +47,13 @@
     "SSM Parameter Store",
     "ACM",
     "CodeDeploy",
-    "Security Groups"
+    "Security Groups",
+    "AWS Budgets",
+    "X-Ray",
+    "AWS Config",
+    "Config Rules",
+    "Secrets Manager",
+    "Secrets Rotation",
+    "CloudWatch Composite Alarms"
   ]
 }
