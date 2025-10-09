@@ -734,7 +734,7 @@ export class FinancialProcessorStack extends TerraformStack {
       loadBalancerType: 'application',
       securityGroups: [appSecurityGroup.id],
       subnets: [primaryPublicSubnet1.id, primaryPublicSubnet2.id],
-      enableDeletionProtection: true,
+      enableDeletionProtection: false,
       tags: commonTags,
     });
 
@@ -745,7 +745,7 @@ export class FinancialProcessorStack extends TerraformStack {
       loadBalancerType: 'application',
       securityGroups: [secondaryAppSecurityGroup.id],
       subnets: [secondaryPublicSubnet1.id, secondaryPublicSubnet2.id],
-      enableDeletionProtection: true,
+      enableDeletionProtection: false,
       tags: commonTags,
     });
 
@@ -967,7 +967,7 @@ export class FinancialProcessorStack extends TerraformStack {
       handler: 'index.handler',
       runtime: 'nodejs18.x',
       timeout: 300,
-      filename: './lambda-placeholder.zip', // This will be created by the build process
+      filename: '../../../lib/lambda-placeholder.zip', // Path relative to cdktf.out/stacks/financial-processor
       sourceCodeHash: 'placeholder-hash-' + Date.now(),
       environment: {
         variables: {
