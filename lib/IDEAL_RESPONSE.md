@@ -525,12 +525,3 @@ output "cloudwatch_alarm_name" {
   value       = aws_cloudwatch_metric_alarm.high_cpu.alarm_name
 }
 ```
-
-## Deployment
-
-```bash
-cd lib
-terraform init
-terraform plan
-terraform apply
-```
