@@ -1,11 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as rds from 'aws-cdk-lib/aws-rds';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
 import { Construct } from 'constructs';
@@ -29,6 +30,14 @@ export class ComputeStack extends Construct {
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id);
+
+    // CloudWatch Log Group with timestamp to avoid DELETE_SKIPPED issues
+    const timestamp = Date.now().toString();
+    const ec2LogGroup = new logs.LogGroup(this, 'EC2LogGroup', {
+      logGroupName: `/aws/ec2/compute-stack-${props.environmentSuffix}-${timestamp}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // ALB Security Group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
@@ -189,11 +198,6 @@ export class ComputeStack extends Construct {
           protocol: 'HTTP',
           protocolVersion: 'HTTP1',
           vpcIdentifier: props.vpc.vpcId,
-          healthCheck: {
-            enabled: true,
-            protocol: 'HTTP',
-            path: '/',
-          },
         },
       }
     );
