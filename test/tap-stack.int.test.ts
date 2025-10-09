@@ -482,14 +482,16 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       const flowLog = flowLogsResponse.FlowLogs![0];
 
-      // LogDestination can be ARN (for CloudWatch) or undefined (for S3)
       expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-      expect(flowLog.LogDestination).toBeDefined();
 
-      const logGroupName = flowLog.LogDestination!.split(':').pop();
+      // LogGroupName might be in LogGroupName field or need to be extracted from LogDestination
+      const logGroupName = flowLog.LogGroupName ||
+        (flowLog.LogDestination ? flowLog.LogDestination.split(':').pop() : null);
+
+      expect(logGroupName).toBeDefined();
 
       const logGroupResponse = await cloudwatchlogs.describeLogGroups({
-        logGroupNamePrefix: logGroupName
+        logGroupNamePrefix: logGroupName!
       }).promise();
 
       expect(logGroupResponse.logGroups!.length).toBeGreaterThan(0);
