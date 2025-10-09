@@ -366,7 +366,7 @@ export class TapStack extends TerraformStack {
       targetGroupPort: 80,
       healthCheckPath: '/health.html',
       tags: globalTags,
-      accessLogsBucket: logsBucket.bucket, 
+      accessLogsBucket: logsBucket.bucket,
     });
 
     // ========== Compute ==========
