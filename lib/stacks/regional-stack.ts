@@ -41,7 +41,7 @@ export class RegionalStack extends Construct {
       {
         vpc: props.vpc,
         internetFacing: true,
-        loadBalancerName: `TradingPlatform-${stack.region}${props.environmentSuffix}`,
+        loadBalancerName: `Trading-${stack.region}${props.environmentSuffix}`,
       }
     );
 
@@ -273,10 +273,87 @@ export class RegionalStack extends Construct {
       orderManagementTargetGroup
     );
 
-    // Outputs
+    // Outputs for integration testing
     new cdk.CfnOutput(this, `ALBDnsName${props.environmentSuffix}`, {
       value: this.loadBalancer.loadBalancerDnsName,
       exportName: `ALBDnsName-${stack.region}${props.environmentSuffix}`,
+      description: `ALB DNS Name for ${stack.region}`,
     });
+
+    new cdk.CfnOutput(this, `ALBArn${props.environmentSuffix}`, {
+      value: this.loadBalancer.loadBalancerArn,
+      exportName: `ALBArn-${stack.region}${props.environmentSuffix}`,
+      description: `ALB ARN for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `ECSClusterName${props.environmentSuffix}`, {
+      value: this.ecsCluster.clusterName,
+      exportName: `ECSClusterName-${stack.region}${props.environmentSuffix}`,
+      description: `ECS Cluster Name for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `ECSClusterArn${props.environmentSuffix}`, {
+      value: this.ecsCluster.clusterArn,
+      exportName: `ECSClusterArn-${stack.region}${props.environmentSuffix}`,
+      description: `ECS Cluster ARN for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `TradingServiceName${props.environmentSuffix}`, {
+      value: this.tradingService.serviceName,
+      exportName: `TradingServiceName-${stack.region}${props.environmentSuffix}`,
+      description: `Trading Service Name for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `TradingServiceArn${props.environmentSuffix}`, {
+      value: this.tradingService.serviceArn,
+      exportName: `TradingServiceArn-${stack.region}${props.environmentSuffix}`,
+      description: `Trading Service ARN for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(
+      this,
+      `OrderManagementServiceName${props.environmentSuffix}`,
+      {
+        value: this.orderManagementService.serviceName,
+        exportName: `OrderManagementServiceName-${stack.region}${props.environmentSuffix}`,
+        description: `Order Management Service Name for ${stack.region}`,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `OrderManagementServiceArn${props.environmentSuffix}`,
+      {
+        value: this.orderManagementService.serviceArn,
+        exportName: `OrderManagementServiceArn-${stack.region}${props.environmentSuffix}`,
+        description: `Order Management Service ARN for ${stack.region}`,
+      }
+    );
+
+    new cdk.CfnOutput(this, `ALBHealthCheckUrl${props.environmentSuffix}`, {
+      value: `http://${this.loadBalancer.loadBalancerDnsName}/`,
+      exportName: `ALBHealthCheckUrl-${stack.region}${props.environmentSuffix}`,
+      description: `ALB Health Check URL for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(
+      this,
+      `TradingServiceEndpoint${props.environmentSuffix}`,
+      {
+        value: `http://${this.loadBalancer.loadBalancerDnsName}/trading/`,
+        exportName: `TradingServiceEndpoint-${stack.region}${props.environmentSuffix}`,
+        description: `Trading Service Endpoint for ${stack.region}`,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `OrderManagementEndpoint${props.environmentSuffix}`,
+      {
+        value: `http://${this.loadBalancer.loadBalancerDnsName}/orders/`,
+        exportName: `OrderManagementEndpoint-${stack.region}${props.environmentSuffix}`,
+        description: `Order Management Endpoint for ${stack.region}`,
+      }
+    );
   }
 }

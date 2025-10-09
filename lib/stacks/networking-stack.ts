@@ -6,6 +6,8 @@ interface NetworkingStackProps {
   cidr: string;
   isMainRegion: boolean;
   environmentSuffix: string;
+  remoteCidr?: string;
+  peeringAttachmentId?: string;
 }
 
 export class NetworkingStack extends Construct {
@@ -81,15 +83,90 @@ export class NetworkingStack extends Construct {
       }
     );
 
-    // Add routes from private subnets to Transit Gateway for cross-region communication
-    this.vpc.privateSubnets.forEach((subnet, index) => {
-      new ec2.CfnRoute(this, `TGWRoute${index}${props.environmentSuffix}`, {
-        routeTableId: subnet.routeTable.routeTableId,
-        destinationCidrBlock: props.isMainRegion
-          ? '172.16.0.0/16'
-          : '10.0.0.0/16',
-        transitGatewayId: this.transitGateway.ref,
+    // Add routes for cross-region communication via Transit Gateway
+    // Routes point to the remote VPC CIDR through the Transit Gateway
+    if (props.remoteCidr) {
+      // Add route to private subnets for remote region traffic
+      this.vpc.privateSubnets.forEach((subnet, index) => {
+        new ec2.CfnRoute(
+          this,
+          `TGWRoute-Private-${index}-${props.environmentSuffix}`,
+          {
+            routeTableId: subnet.routeTable.routeTableId,
+            destinationCidrBlock: props.remoteCidr,
+            transitGatewayId: this.transitGateway.ref,
+          }
+        );
       });
+
+      // Add route to isolated subnets for remote region traffic
+      this.vpc.isolatedSubnets.forEach((subnet, index) => {
+        new ec2.CfnRoute(
+          this,
+          `TGWRoute-Isolated-${index}-${props.environmentSuffix}`,
+          {
+            routeTableId: subnet.routeTable.routeTableId,
+            destinationCidrBlock: props.remoteCidr,
+            transitGatewayId: this.transitGateway.ref,
+          }
+        );
+      });
+    }
+
+    // Outputs for integration testing
+    new cdk.CfnOutput(this, `VpcId${props.environmentSuffix}`, {
+      value: this.vpc.vpcId,
+      exportName: `VpcId-${stack.region}-${props.environmentSuffix}`,
+      description: `VPC ID for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `VpcCidr${props.environmentSuffix}`, {
+      value: this.vpc.vpcCidrBlock,
+      exportName: `VpcCidr-${stack.region}-${props.environmentSuffix}`,
+      description: `VPC CIDR for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `TransitGatewayId${props.environmentSuffix}`, {
+      value: this.transitGateway.ref,
+      exportName: `TransitGatewayId-${stack.region}-${props.environmentSuffix}`,
+      description: `Transit Gateway ID for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(
+      this,
+      `TransitGatewayAttachmentId${props.environmentSuffix}`,
+      {
+        value: this.transitGatewayAttachment.ref,
+        exportName: `TransitGatewayAttachmentId-${stack.region}-${props.environmentSuffix}`,
+        description: `Transit Gateway Attachment ID for ${stack.region}`,
+      }
+    );
+
+    new cdk.CfnOutput(this, `PublicSubnetIds${props.environmentSuffix}`, {
+      value: cdk.Fn.join(
+        ',',
+        this.vpc.publicSubnets.map(s => s.subnetId)
+      ),
+      exportName: `PublicSubnetIds-${stack.region}-${props.environmentSuffix}`,
+      description: `Public Subnet IDs for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `PrivateSubnetIds${props.environmentSuffix}`, {
+      value: cdk.Fn.join(
+        ',',
+        this.vpc.privateSubnets.map(s => s.subnetId)
+      ),
+      exportName: `PrivateSubnetIds-${stack.region}-${props.environmentSuffix}`,
+      description: `Private Subnet IDs for ${stack.region}`,
+    });
+
+    new cdk.CfnOutput(this, `IsolatedSubnetIds${props.environmentSuffix}`, {
+      value: cdk.Fn.join(
+        ',',
+        this.vpc.isolatedSubnets.map(s => s.subnetId)
+      ),
+      exportName: `IsolatedSubnetIds-${stack.region}-${props.environmentSuffix}`,
+      description: `Isolated Subnet IDs for ${stack.region}`,
     });
   }
 }

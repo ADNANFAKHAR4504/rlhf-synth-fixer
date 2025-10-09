@@ -23,7 +23,7 @@ export class DatabaseStack extends Construct {
       {
         secretName: `trading-platform/database-credentials${props.environmentSuffix}`,
         generateSecretString: {
-          secretStringTemplate: JSON.stringify({ username: 'admin' }),
+          secretStringTemplate: JSON.stringify({ username: 'dbadmin' }),
           generateStringKey: 'password',
           excludePunctuation: true,
           passwordLength: 16,
@@ -39,7 +39,7 @@ export class DatabaseStack extends Construct {
       {
         globalClusterIdentifier: `trading-platform-global${props.environmentSuffix}`,
         engine: 'aurora-postgresql',
-        engineVersion: '15',
+        engineVersion: '15.4',
         storageEncrypted: true,
       }
     );
@@ -76,14 +76,69 @@ export class DatabaseStack extends Construct {
     cfnPrimaryCluster.globalClusterIdentifier = this.globalCluster.ref;
     cfnPrimaryCluster.addDependency(this.globalCluster);
 
-    // Export DB endpoint for use in other stacks
+    // Export DB endpoints and details for integration testing
     new cdk.CfnOutput(
       this,
       `PrimaryClusterEndpoint${props.environmentSuffix}`,
       {
         value: this.primaryCluster.clusterEndpoint.socketAddress,
         exportName: `PrimaryClusterEndpoint${props.environmentSuffix}`,
+        description: 'Primary Aurora cluster endpoint (host:port)',
       }
     );
+
+    new cdk.CfnOutput(
+      this,
+      `PrimaryClusterReadEndpoint${props.environmentSuffix}`,
+      {
+        value: this.primaryCluster.clusterReadEndpoint.socketAddress,
+        exportName: `PrimaryClusterReadEndpoint${props.environmentSuffix}`,
+        description: 'Primary Aurora cluster read endpoint (host:port)',
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `PrimaryClusterIdentifier${props.environmentSuffix}`,
+      {
+        value: this.primaryCluster.clusterIdentifier,
+        exportName: `PrimaryClusterIdentifier${props.environmentSuffix}`,
+        description: 'Primary Aurora cluster identifier',
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `GlobalClusterIdentifier${props.environmentSuffix}`,
+      {
+        value: this.globalCluster.ref,
+        exportName: `GlobalClusterIdentifier${props.environmentSuffix}`,
+        description: 'Aurora Global cluster identifier',
+      }
+    );
+
+    new cdk.CfnOutput(this, `DBSecretArn${props.environmentSuffix}`, {
+      value: dbCredentials.secretArn,
+      exportName: `DBSecretArn${props.environmentSuffix}`,
+      description: 'Database credentials secret ARN',
+    });
+
+    new cdk.CfnOutput(this, `DBUsername${props.environmentSuffix}`, {
+      value: 'dbadmin',
+      exportName: `DBUsername${props.environmentSuffix}`,
+      description: 'Database username',
+    });
+
+    new cdk.CfnOutput(this, `DBEngine${props.environmentSuffix}`, {
+      value: 'aurora-postgresql',
+      exportName: `DBEngine${props.environmentSuffix}`,
+      description: 'Database engine type',
+    });
+
+    new cdk.CfnOutput(this, `DBEngineVersion${props.environmentSuffix}`, {
+      value: '15.4',
+      exportName: `DBEngineVersion${props.environmentSuffix}`,
+      description: 'Database engine version',
+    });
   }
 }

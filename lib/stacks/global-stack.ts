@@ -52,11 +52,47 @@ export class GlobalStack extends Construct {
       ],
     });
 
-    // Output the Global Accelerator DNS name
+    // Outputs for integration testing
     new cdk.CfnOutput(this, `GlobalAcceleratorDNS${props.environmentSuffix}`, {
       value: this.accelerator.dnsName,
       description: 'The DNS name of the Global Accelerator',
       exportName: `GlobalAcceleratorDNS${props.environmentSuffix}`,
     });
+
+    new cdk.CfnOutput(this, `GlobalAcceleratorArn${props.environmentSuffix}`, {
+      value: this.accelerator.acceleratorArn,
+      description: 'The ARN of the Global Accelerator',
+      exportName: `GlobalAcceleratorArn${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(
+      this,
+      `GlobalAcceleratorEndpoint${props.environmentSuffix}`,
+      {
+        value: `http://${this.accelerator.dnsName}`,
+        description: 'Global Accelerator HTTP endpoint',
+        exportName: `GlobalAcceleratorEndpoint${props.environmentSuffix}`,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `GlobalAcceleratorIpAddress1${props.environmentSuffix}`,
+      {
+        value: cdk.Fn.select(0, this.accelerator.ipv4Addresses ?? []),
+        description: 'Global Accelerator static IP address 1',
+        exportName: `GlobalAcceleratorIpAddress1${props.environmentSuffix}`,
+      }
+    );
+
+    new cdk.CfnOutput(
+      this,
+      `GlobalAcceleratorIpAddress2${props.environmentSuffix}`,
+      {
+        value: cdk.Fn.select(1, this.accelerator.ipv4Addresses ?? []),
+        description: 'Global Accelerator static IP address 2',
+        exportName: `GlobalAcceleratorIpAddress2${props.environmentSuffix}`,
+      }
+    );
   }
 }
