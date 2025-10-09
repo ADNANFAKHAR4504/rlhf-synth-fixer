@@ -10,5 +10,12 @@
   "subject_labels": [
     "Security, Compliance and Governance"
   ],
-  "aws_services": "VPC, Transit Gateway, Network, Firewall, GuardDuty, Security Hub, VPC Flow Logs,IAM, SystemsManager,CloudTrail,Lambda"
+  "aws_services": "VPC, Transit Gateway, Network, Firewall, GuardDuty, Security Hub, VPC Flow Logs,IAM, SystemsManager,CloudTrail,Lambda",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
