@@ -18,14 +18,7 @@ resource "aws_security_group" "ec2_sg" {
   description = "Security group for EC2 instance"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.ssh_cidr_blocks
-    description = "SSH access"
-  }
-
+  # Removed SSH ingress - using SSM instead
   egress {
     from_port   = 0
     to_port     = 0
@@ -40,12 +33,40 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
-resource "aws_key_pair" "deployer" {
-  key_name   = "deployer-key-${var.resource_suffix}"
-  public_key = var.ssh_public_key
+# IAM role for SSM access
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "ec2-ssm-role-${var.resource_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
 
   tags = {
-    Name                = "deployer-key-${var.resource_suffix}"
+    Name                = "ec2-ssm-role-${var.resource_suffix}"
+    iac-rlhf-amazon    = "true"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
+  role       = aws_iam_role.ec2_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2-profile-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.name
+
+  tags = {
+    Name                = "ec2-profile-${var.resource_suffix}"
     iac-rlhf-amazon    = "true"
   }
 }
@@ -55,7 +76,7 @@ resource "aws_instance" "web" {
   instance_type          = var.ec2_instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  key_name               = aws_key_pair.deployer.key_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name                = "web-instance-${var.resource_suffix}"
