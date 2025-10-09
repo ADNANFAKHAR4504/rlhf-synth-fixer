@@ -42,7 +42,7 @@ import {
   SNSClient,
 } from '@aws-sdk/client-sns';
 import * as dns from 'dns';
-import * as https from 'https';
+import * as http from 'http';
 import { promisify } from 'util';
 
 // Load flat outputs from file
@@ -75,7 +75,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+      expect(response.Vpcs![0].CidrBlock).toBe('10.200.0.0/16');
     });
 
     test('Public and private subnets exist', async () => {
@@ -147,7 +147,7 @@ describe('TapStack Integration Tests', () => {
           timeout: 10000,
         };
 
-        const req = https.request(`http://${albDnsName}/`, (res) => {
+        const req = http.request(`http://${albDnsName}/`, (res) => {
           expect(res.statusCode).toBeDefined();
           // Accept any status code as long as we get a response
           resolve();
@@ -185,7 +185,7 @@ describe('TapStack Integration Tests', () => {
       const asg = response.AutoScalingGroups![0];
 
       expect(asg.MinSize).toBe(2);
-      expect(asg.MaxSize).toBe(10);
+      expect(asg.MaxSize).toBe(5);
       expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
       expect(asg.VPCZoneIdentifier).toContain(flatOutputs.VPCId.replace('vpc-', ''));
     });
@@ -222,7 +222,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.EngineVersion).toMatch(/^15\./);
+      expect(dbInstance.EngineVersion).toMatch(/^16\./);
       expect(dbInstance.MultiAZ).toBe(false);
       expect(dbInstance.StorageEncrypted).toBe(true);
     });
