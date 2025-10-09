@@ -10,5 +10,18 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Lambda, Dynamodb, Cloudwatch, SNS, IAM"
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
