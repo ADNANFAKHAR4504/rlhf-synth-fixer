@@ -8,6 +8,7 @@ import { DescribeKeyCommand, KMSClient, ListAliasesCommand } from '@aws-sdk/clie
 import { GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetTopicAttributesCommand, ListSubscriptionsByTopicCommand, SNSClient } from '@aws-sdk/client-sns';
 import fs from 'fs';
+import fetch from 'node-fetch';
 
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -317,26 +318,22 @@ describe('TapStack Integration Tests', () => {
 
       expect(matchingEnv.EnvironmentName).toBeDefined();
       
-      // Accept both Ready and Terminated states - Terminated indicates environment needs recreation
-      expect(['Ready', 'Terminated']).toContain(matchingEnv.Status);
+      // Environment must be Ready for proper testing
+      expect(matchingEnv.Status).toBe('Ready');
       
-      if (matchingEnv.Status === 'Ready') {
-        // Note: Health might be Grey initially, so we'll check for valid health status
-        expect(['Green', 'Yellow', 'Red', 'Grey']).toContain(matchingEnv.Health);
-      }
+      // Note: Health might be Grey initially, so we'll check for valid health status
+      expect(['Green', 'Yellow', 'Red', 'Grey']).toContain(matchingEnv.Health);
       expect(matchingEnv.Tier?.Name).toBe('WebServer');
       expect(matchingEnv.Tier?.Type).toBe('Standard');
 
-      // Only check health for Ready environments
-      if (matchingEnv.Status === 'Ready') {
-        const healthResponse = await ebClient.send(new DescribeEnvironmentHealthCommand({
-          EnvironmentName: matchingEnv.EnvironmentName!,
-          AttributeNames: ['HealthStatus', 'Status', 'Color']
-        }));
-        expect(healthResponse.HealthStatus).toBeDefined();
-        expect(healthResponse.Status).toBeDefined();
-        expect(healthResponse.Color).toBeDefined();
-      }
+      // Check environment health
+      const healthResponse = await ebClient.send(new DescribeEnvironmentHealthCommand({
+        EnvironmentName: matchingEnv.EnvironmentName!,
+        AttributeNames: ['HealthStatus', 'Status', 'Color']
+      }));
+      expect(healthResponse.HealthStatus).toBeDefined();
+      expect(healthResponse.Status).toBeDefined();
+      expect(healthResponse.Color).toBeDefined();
     });
 
     test('ElasticBeanstalkEnvironment should have correct configuration', async () => {
@@ -935,8 +932,8 @@ describe('TapStack Integration Tests', () => {
       expect(project?.name).toBe(matchingProject);
       expect(env?.EnvironmentName).toBe(matchingEnv.EnvironmentName);
       
-      // Accept both Ready and Terminated states - Terminated indicates environment needs recreation
-      expect(['Ready', 'Terminated']).toContain(env?.Status);
+      // Environment must be Ready for proper testing
+      expect(env?.Status).toBe('Ready');
     });
 
     test('All outputs should be accessible and valid', async () => {
@@ -1003,13 +1000,11 @@ describe('TapStack Integration Tests', () => {
       const project = projectsResponse.projects?.[0];
       const pipeline = pipelineResponse.pipeline;
 
-      // Accept both Ready and Terminated states - Terminated indicates environment needs recreation
-      expect(['Ready', 'Terminated']).toContain(env?.Status);
+      // Environment must be Ready for proper testing
+      expect(env?.Status).toBe('Ready');
       
-      if (env?.Status === 'Ready') {
-        // Note: Health might be Grey initially, so we'll check for valid health status
-        expect(['Green', 'Yellow', 'Red', 'Grey']).toContain(env?.Health);
-      }
+      // Note: Health might be Grey initially, so we'll check for valid health status
+      expect(['Green', 'Yellow', 'Red', 'Grey']).toContain(env?.Health);
       expect(project).toBeDefined();
       expect(pipeline).toBeDefined();
     });
@@ -1029,6 +1024,182 @@ describe('TapStack Integration Tests', () => {
       expect(matchingEnv.ApplicationName).toBeDefined();
       expect(matchingEnv.SolutionStackName).toBeDefined();
       expect(matchingEnv.PlatformArn).toBeDefined();
+    });
+  });
+
+  describe('Deployment Verification Tests', () => {
+    test('Deployed application should be accessible and return valid HTML', async () => {
+      // Get the Elastic Beanstalk environment to find the endpoint
+      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      const matchingEnv = envsResponse.Environments?.find(env =>
+        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas')
+      );
+
+      if (!matchingEnv) {
+        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+      }
+
+      // Environment must be Ready for HTTP verification
+      expect(matchingEnv.Status).toBe('Ready');
+
+      // Construct the application URL
+      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      
+      console.log(`Testing deployed application at: ${appUrl}`);
+
+      try {
+        // Make HTTP request to the deployed application
+        const response = await fetch(appUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          timeout: 30000 // 30 second timeout
+        });
+
+        // Verify response status
+        expect(response.status).toBe(200);
+        expect(response.ok).toBe(true);
+
+        // Get response content
+        const htmlContent = await response.text();
+        expect(htmlContent).toBeDefined();
+        expect(htmlContent.length).toBeGreaterThan(0);
+
+        // Verify it's HTML content
+        expect(htmlContent.toLowerCase()).toMatch(/<html|<!doctype html|<head|<body/);
+
+        // Check for common web application elements
+        const hasTitle = /<title[^>]*>.*<\/title>/i.test(htmlContent);
+        const hasHead = /<head[^>]*>/i.test(htmlContent);
+        const hasBody = /<body[^>]*>/i.test(htmlContent);
+
+        // At least one of these should be present for a valid HTML page
+        expect(hasTitle || hasHead || hasBody).toBe(true);
+
+        // Check for error pages (common error indicators)
+        const isErrorPage = /error|404|500|not found|internal server error|access denied/i.test(htmlContent);
+        expect(isErrorPage).toBe(false);
+
+        console.log(`Application verification successful: ${response.status} ${response.statusText}`);
+        console.log(`Response size: ${htmlContent.length} characters`);
+        console.log(`Content type: ${response.headers.get('content-type')}`);
+
+      } catch (error) {
+        const err = error as Error;
+        console.error(`HTTP request failed: ${err.message}`);
+        console.error(`URL tested: ${appUrl}`);
+        
+        // If it's a network error, provide helpful debugging info
+        if ((err as any).code === 'ENOTFOUND' || (err as any).code === 'ECONNREFUSED') {
+          console.error(`Network error - check if environment is running and accessible`);
+          console.error(`Environment status: ${matchingEnv.Status}`);
+          console.error(`Environment health: ${matchingEnv.Health}`);
+        }
+        
+        throw error;
+      }
+    });
+
+    test('Deployed application should respond within acceptable time limits', async () => {
+      // Get the Elastic Beanstalk environment
+      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      const matchingEnv = envsResponse.Environments?.find(env =>
+        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas')
+      );
+
+      if (!matchingEnv) {
+        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+      }
+
+      // Environment must be Ready for performance testing
+      expect(matchingEnv.Status).toBe('Ready');
+
+      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      
+      const startTime = Date.now();
+      
+      try {
+        const response = await fetch(appUrl, {
+          method: 'GET',
+          timeout: 10000 // 10 second timeout for performance test
+        });
+        
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        
+        expect(response.status).toBe(200);
+        expect(responseTime).toBeLessThan(10000); // Should respond within 10 seconds
+        
+        console.log(`Response time: ${responseTime}ms`);
+        
+        // Performance expectations
+        if (responseTime < 2000) {
+          console.log(`Excellent response time: ${responseTime}ms`);
+        } else if (responseTime < 5000) {
+          console.log(`Good response time: ${responseTime}ms`);
+        } else {
+          console.log(`Slow response time: ${responseTime}ms`);
+        }
+        
+      } catch (error) {
+        const err = error as Error;
+        console.error(`Performance test failed: ${err.message}`);
+        throw error;
+      }
+    });
+
+    test('Deployed application should handle different HTTP methods appropriately', async () => {
+      // Get the Elastic Beanstalk environment
+      const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      const matchingEnv = envsResponse.Environments?.find(env =>
+        env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas')
+      );
+
+      if (!matchingEnv) {
+        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+      }
+
+      // Environment must be Ready for HTTP methods testing
+      expect(matchingEnv.Status).toBe('Ready');
+
+      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      
+      try {
+        // Test GET request (should work)
+        const getResponse = await fetch(appUrl, { method: 'GET' });
+        expect(getResponse.status).toBe(200);
+        
+        // Test HEAD request (should work)
+        const headResponse = await fetch(appUrl, { method: 'HEAD' });
+        expect([200, 405].includes(headResponse.status)).toBe(true); // 405 is acceptable for HEAD
+        
+        // Test POST request (may return 405 Method Not Allowed, which is acceptable)
+        const postResponse = await fetch(appUrl, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ test: 'data' })
+        });
+        expect([200, 405, 400].includes(postResponse.status)).toBe(true);
+        
+        console.log(`HTTP methods test completed successfully`);
+        console.log(`GET: ${getResponse.status}, HEAD: ${headResponse.status}, POST: ${postResponse.status}`);
+        
+      } catch (error) {
+        const err = error as Error;
+        console.error(`HTTP methods test failed: ${err.message}`);
+        throw error;
+      }
     });
   });
 });
