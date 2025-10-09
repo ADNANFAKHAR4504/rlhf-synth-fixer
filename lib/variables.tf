@@ -1,18 +1,21 @@
 variable "resource_suffix" {
   description = "A suffix to append to all resource names for uniqueness"
   type        = string
+  default     = "dev"
 }
 
 variable "db_username" {
   description = "Username for the RDS database"
   type        = string
   sensitive   = true
+  default     = "admin"
 }
 
 variable "db_password" {
   description = "Password for the RDS database"
   type        = string
   sensitive   = true
+  default     = "TempPassword123!"
 }
 
 variable "db_name" {
@@ -42,4 +45,5 @@ variable "ssh_cidr_blocks" {
 variable "ssh_public_key" {
   description = "SSH public key for EC2 instance access"
   type        = string
+  default     = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... default-key"
 }
