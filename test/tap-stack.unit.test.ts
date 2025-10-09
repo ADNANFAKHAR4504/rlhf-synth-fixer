@@ -14,9 +14,31 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Production Readiness', () => {
+    test('should have point-in-time recovery enabled for DynamoDB table', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('should have server-side encryption enabled for DynamoDB table', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.Properties.SSESpecification.KMSMasterKeyId).toBe('alias/aws/dynamodb');
+    });
+
+    test('should have appropriate tags for resource management', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const tags = table.Properties.Tags;
+      
+      expect(tags).toBeDefined();
+      expect(tags).toHaveLength(3);
+      
+      const tagNames = tags.map((tag: any) => tag.Key);
+      expect(tagNames).toContain('Name');
+      expect(tagNames).toContain('Environment');
+      expect(tagNames).toContain('Purpose');
     });
   });
 

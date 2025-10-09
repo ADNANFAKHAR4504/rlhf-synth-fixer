@@ -4,8 +4,8 @@
   "Parameters": {
     "EnvironmentName": {
       "Type": "String",
-      "Default": "Production",
-      "Description": "Environment name that will be prefixed to resource names"
+      "Default": "production",
+      "Description": "Lowercase environment name used in names and tags (use lowercase to keep S3 naming valid)"
     },
     "InstanceType": {
       "Type": "String",
@@ -19,8 +19,8 @@
       "Description": "EC2 instance type"
     },
     "KeyPairName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "Description": "EC2 Key Pair for SSH access",
+      "Type": "String",
+      "Description": "Optional EC2 key pair name. Leave blank to skip attaching a key.",
       "Default": ""
     },
     "DBInstanceClass": {
@@ -41,21 +41,10 @@
       "MaxLength": "64",
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
     },
-    "DBUsername": {
-      "Type": "String",
-      "Default": "admin",
-      "Description": "Database admin username",
-      "MinLength": "1",
-      "MaxLength": "16",
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": "true",
-      "Description": "Database admin password",
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "[a-zA-Z0-9]*"
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "Amazon Linux 2 AMI ID from SSM Parameter Store"
     }
   },
   "Mappings": {
@@ -72,6 +61,20 @@
       "PrivateSubnetA": {
         "CIDR": "10.0.10.0/24"
       }
+    }
+  },
+  "Conditions": {
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -91,7 +94,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-VPC"
+              "Fn::Sub": "${EnvironmentName}-vpc"
             }
           },
           {
@@ -108,7 +111,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-IGW"
+              "Fn::Sub": "${EnvironmentName}-igw"
             }
           },
           {
@@ -252,7 +255,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-NAT-EIP"
+              "Fn::Sub": "${EnvironmentName}-nat-eip"
             }
           },
           {
@@ -278,7 +281,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-NAT"
+              "Fn::Sub": "${EnvironmentName}-nat"
             }
           },
           {
@@ -390,7 +393,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-VPN-Gateway"
+              "Fn::Sub": "${EnvironmentName}-vgw"
             }
           },
           {
@@ -441,7 +444,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "Public-EC2-SecurityGroup"
+            "Value": "Public-EC2-SG"
           },
           {
             "Key": "Environment",
@@ -486,7 +489,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "Private-EC2-SecurityGroup"
+            "Value": "Private-EC2-SG"
           },
           {
             "Key": "Environment",
@@ -519,7 +522,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "ALB-SecurityGroup"
+            "Value": "ALB-SG"
           },
           {
             "Key": "Environment",
@@ -589,10 +592,6 @@
           }
         ]
       }
-    },
-    "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
     },
     "PublicEC2Instance": {
       "Type": "AWS::EC2::Instance",
@@ -714,7 +713,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-ALB"
+          "Fn::Sub": "${EnvironmentName}-alb"
         },
         "Subnets": [
           {
@@ -733,7 +732,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-ALB"
+              "Fn::Sub": "${EnvironmentName}-alb"
             }
           },
           {
@@ -747,7 +746,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-TG"
+          "Fn::Sub": "${EnvironmentName}-tg"
         },
         "Port": 80,
         "Protocol": "HTTP",
@@ -839,8 +838,29 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "RDS-SecurityGroup"
+            "Value": "RDS-SG"
           },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-mysql-credentials"
+        },
+        "Description": "RDS MySQL master credentials (username/password)",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludePunctuation": true
+        },
+        "Tags": [
           {
             "Key": "Environment",
             "Value": "Production"
@@ -861,12 +881,12 @@
           "Ref": "DBInstanceClass"
         },
         "Engine": "mysql",
-        "EngineVersion": "8.0.35",
+        "EngineVersion": "8.0.41",
         "MasterUsername": {
-          "Ref": "DBUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
         },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
@@ -882,12 +902,14 @@
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "PubliclyAccessible": false,
         "MultiAZ": false,
+        "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-MySQL-DB"
+              "Fn::Sub": "${EnvironmentName}-mysql-db"
             }
           },
           {
@@ -901,7 +923,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${EnvironmentName}-Public-EC2-CPU-Alarm"
+          "Fn::Sub": "${EnvironmentName}-public-ec2-cpu-gt80"
         },
         "AlarmDescription": "Alarm when CPU exceeds 80%",
         "MetricName": "CPUUtilization",
@@ -918,14 +940,15 @@
               "Ref": "PublicEC2Instance"
             }
           }
-        ]
+        ],
+        "TreatMissingData": "notBreaching"
       }
     },
     "PrivateEC2CPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "${EnvironmentName}-Private-EC2-CPU-Alarm"
+          "Fn::Sub": "${EnvironmentName}-private-ec2-cpu-gt80"
         },
         "AlarmDescription": "Alarm when CPU exceeds 80%",
         "MetricName": "CPUUtilization",
@@ -942,7 +965,8 @@
               "Ref": "PrivateEC2Instance"
             }
           }
-        ]
+        ],
+        "TreatMissingData": "notBreaching"
       }
     },
     "VPCFlowLogsRole": {
@@ -995,7 +1019,13 @@
         "LogGroupName": {
           "Fn::Sub": "/aws/vpc/${EnvironmentName}"
         },
-        "RetentionInDays": 7
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
       }
     },
     "VPCFlowLog": {
@@ -1020,7 +1050,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-VPC-FlowLog"
+              "Fn::Sub": "${EnvironmentName}-vpc-flowlog"
             }
           },
           {
@@ -1033,9 +1063,6 @@
     "BackupS3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "${AWS::AccountId}-${EnvironmentName}-backup-bucket"
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -1052,7 +1079,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-Backup-Bucket"
+              "Fn::Sub": "${EnvironmentName}-backup-bucket"
             }
           },
           {
@@ -1088,20 +1115,6 @@
           ]
         }
       }
-    }
-  },
-  "Conditions": {
-    "HasKeyPair": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "KeyPairName"
-            },
-            ""
-          ]
-        }
-      ]
     }
   },
   "Outputs": {
@@ -1218,6 +1231,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-VPNGateway-ID"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of Secrets Manager secret storing DB credentials",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
         }
       }
     }
