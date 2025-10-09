@@ -75,14 +75,12 @@ public class MainIntegrationTest {
      * Uncomment @Disabled and configure environment to run this test.
      */
     @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
     void testPulumiPreview() throws Exception {
         // Skip if Pulumi CLI is not available
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
 
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", "test")
-                .directory(Paths.get("lib").toFile())
+        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", "TapStackdev")
                 .redirectErrorStream(true);
 
         Process process = pb.start();
@@ -171,5 +169,115 @@ public class MainIntegrationTest {
     private boolean isTestingEnvironment() {
         String env = System.getenv("ENVIRONMENT_SUFFIX");
         return env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"));
+    }
+
+    /**
+     * Test that verifies the actual deployed infrastructure by checking stack outputs.
+     * This test uses real deployed resources, not mocked values.
+     */
+    @Test
+    void testDeployedInfrastructureOutputs() throws Exception {
+        // Skip if Pulumi CLI is not available
+        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
+
+        ProcessBuilder pb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "TapStackdev")
+                .directory(Paths.get("").toAbsolutePath().toFile()); // Run from project root
+        
+        // Set environment variable for passphrase
+        pb.environment().put("PULUMI_CONFIG_PASSPHRASE", "");
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+
+        assertTrue(finished, "Getting stack outputs should complete within 30 seconds");
+        
+        // Debug output
+        String output = new String(process.getInputStream().readAllBytes());
+        System.out.println("Pulumi command output: " + output);
+        System.out.println("Exit code: " + process.exitValue());
+        
+        assertEquals(0, process.exitValue(), "Should be able to get stack outputs successfully. Error: " + output);
+
+        // Read the output to verify real resource values exist
+        assertFalse(output.trim().isEmpty(), "Stack outputs should not be empty");
+        
+        // Verify that key outputs exist (these are real values from deployed infrastructure)
+        assertTrue(output.contains("documentBucketName"), "Document bucket name should be in outputs");
+        assertTrue(output.contains("kmsKeyId"), "KMS key ID should be in outputs");
+        assertTrue(output.contains("documentAccessPolicyArn"), "IAM policy ARN should be in outputs");
+        assertTrue(output.contains("cloudtrailName"), "CloudTrail name should be in outputs");
+        
+        System.out.println("Real deployed infrastructure outputs: " + output);
+    }
+
+    /**
+     * Test that verifies actual AWS resources exist by checking them via AWS CLI.
+     * This test directly validates the deployed infrastructure in AWS.
+     */
+    @Test
+    void testAwsResourcesExist() throws Exception {
+        // Skip if AWS CLI is not available
+        Assumptions.assumeTrue(isAwsCliAvailable(), "AWS CLI should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+
+        // Get the bucket name from Pulumi outputs
+        ProcessBuilder getOutputsPb = new ProcessBuilder("pulumi", "stack", "output", "documentBucketName", "--stack", "TapStackdev")
+                .directory(Paths.get("").toAbsolutePath().toFile()); // Run from project root
+        getOutputsPb.environment().put("PULUMI_CONFIG_PASSPHRASE", "");
+        getOutputsPb.redirectErrorStream(true);
+        Process outputsProcess = getOutputsPb.start();
+        outputsProcess.waitFor(30, TimeUnit.SECONDS);
+        
+        if (outputsProcess.exitValue() == 0) {
+            String bucketName = new String(outputsProcess.getInputStream().readAllBytes()).trim();
+            
+            // Verify the S3 bucket actually exists in AWS
+            ProcessBuilder s3CheckPb = new ProcessBuilder("aws", "s3api", "head-bucket", "--bucket", bucketName)
+                    .redirectErrorStream(true);
+            Process s3Process = s3CheckPb.start();
+            boolean s3Finished = s3Process.waitFor(30, TimeUnit.SECONDS);
+            
+            assertTrue(s3Finished, "S3 bucket check should complete within 30 seconds");
+            assertEquals(0, s3Process.exitValue(), "S3 bucket should exist in AWS: " + bucketName);
+            
+            System.out.println("Verified S3 bucket exists: " + bucketName);
+        }
+
+        // Get the KMS key ID from Pulumi outputs
+        ProcessBuilder getKmsOutputsPb = new ProcessBuilder("pulumi", "stack", "output", "kmsKeyId", "--stack", "TapStackdev")
+                .directory(Paths.get("").toAbsolutePath().toFile()); // Run from project root
+        getKmsOutputsPb.environment().put("PULUMI_CONFIG_PASSPHRASE", "");
+        getKmsOutputsPb.redirectErrorStream(true);
+        Process kmsOutputsProcess = getKmsOutputsPb.start();
+        kmsOutputsProcess.waitFor(30, TimeUnit.SECONDS);
+        
+        if (kmsOutputsProcess.exitValue() == 0) {
+            String kmsKeyId = new String(kmsOutputsProcess.getInputStream().readAllBytes()).trim();
+            
+            // Verify the KMS key actually exists in AWS
+            ProcessBuilder kmsCheckPb = new ProcessBuilder("aws", "kms", "describe-key", "--key-id", kmsKeyId)
+                    .redirectErrorStream(true);
+            Process kmsProcess = kmsCheckPb.start();
+            boolean kmsFinished = kmsProcess.waitFor(30, TimeUnit.SECONDS);
+            
+            assertTrue(kmsFinished, "KMS key check should complete within 30 seconds");
+            assertEquals(0, kmsProcess.exitValue(), "KMS key should exist in AWS: " + kmsKeyId);
+            
+            System.out.println("Verified KMS key exists: " + kmsKeyId);
+        }
+    }
+
+    /**
+     * Helper method to check if AWS CLI is available.
+     */
+    private boolean isAwsCliAvailable() {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("aws", "--version");
+            Process process = pb.start();
+            return process.waitFor(10, TimeUnit.SECONDS) && process.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
