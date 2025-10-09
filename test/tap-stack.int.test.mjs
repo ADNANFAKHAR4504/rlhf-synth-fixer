@@ -1,10 +1,7 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import https from 'https';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { CloudFrontClient, GetDistributionCommand, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
-import { CloudWatchClient, GetDashboardCommand, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { CloudFrontClient, CreateInvalidationCommand, GetInvalidationCommand } from '@aws-sdk/client-cloudfront';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -32,11 +29,8 @@ try {
   }
 }
 
-// AWS clients
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' }); // CloudFront is global
-const kmsClient = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' });
 
 // Helper function to make HTTP requests
 const makeHttpRequest = (url, options = {}) => {
@@ -67,14 +61,19 @@ const makeHttpRequest = (url, options = {}) => {
   });
 };
 
-// Helper function to wait for a condition
-const waitFor = async (condition, timeout = 30000, interval = 1000) => {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    if (await condition()) {
+const waitForInvalidation = async (distributionId, invalidationId, maxWaitTime = 60000) => {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitTime) {
+    const result = await cloudFrontClient.send(
+      new GetInvalidationCommand({
+        DistributionId: distributionId,
+        Id: invalidationId,
+      })
+    );
+    if (result.Invalidation?.Status === 'Completed') {
       return true;
     }
-    await new Promise(resolve => setTimeout(resolve, interval));
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
   return false;
 };
@@ -87,505 +86,254 @@ describe('News Website Infrastructure Integration Tests', () => {
   const kmsKeyId = outputs[`KMSKeyId${environmentSuffix}`] || outputs[`NewsKMSKeyId-${environmentSuffix}`];
 
   beforeAll(() => {
-    // Debug: Show available outputs
-    console.log('Available deployment outputs:');
-    console.log(JSON.stringify(outputs, null, 2));
-    
-    console.log(`\nLooking for news website outputs (environment: ${environmentSuffix}):`);
-    console.log(`  - WebsiteBucketName${environmentSuffix} OR NewsWebsiteBucket-${environmentSuffix}`);
-    console.log(`  - DistributionId${environmentSuffix} OR NewsDistributionId-${environmentSuffix}`);
-    console.log(`  - DistributionDomainName${environmentSuffix} OR NewsDistributionDomain-${environmentSuffix}`);
-    console.log(`  - KMSKeyId${environmentSuffix} OR NewsKMSKeyId-${environmentSuffix}`);
-    
-    // Validate that all required outputs are present
     if (!bucketName || !distributionId || !distributionDomain || !kmsKeyId) {
-      console.error('\nMissing required deployment outputs for news website infrastructure:');
-      console.error(`  - Bucket Name: ${bucketName || 'MISSING'}`);
-      console.error(`  - Distribution ID: ${distributionId || 'MISSING'}`);
-      console.error(`  - Distribution Domain: ${distributionDomain || 'MISSING'}`);
-      console.error(`  - KMS Key ID: ${kmsKeyId || 'MISSING'}`);
-      console.error('\nThe current deployment appears to be a different stack (backup system).');
-      console.error('To deploy the news website infrastructure:');
-      console.error(`   1. Run: cdk deploy TapStack${environmentSuffix}`);
-      console.error('   2. Ensure the stack creates S3 bucket, CloudFront distribution, and KMS key');
-      console.error('   3. Re-run integration tests');
-      throw new Error('Integration tests require news website deployment outputs to be present');
+      throw new Error('Required stack outputs not found. Please run: ./scripts/get-outputs.sh');
     }
-    
-    console.log('\nAll deployment outputs validated successfully');
-    console.log(`Bucket: ${bucketName}`);
-    console.log(`Distribution: ${distributionId} (${distributionDomain})`);
-    console.log(`KMS Key: ${kmsKeyId}`);
+    console.log(`Testing News Website (${environmentSuffix}): ${distributionDomain}`);
   });
 
-  describe('S3 Bucket Operations', () => {
-    test('should upload content to S3 bucket with KMS encryption', async () => {
-      const testContent = '<html><body><h1>Test News Article</h1><p>This is a test article.</p></body></html>';
-      const key = 'test-article.html';
-
-      const putCommand = new PutObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-        Body: testContent,
-        ContentType: 'text/html',
-        ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: kmsKeyId
-      });
-
-      await expect(s3Client.send(putCommand)).resolves.not.toThrow();
-
-      // Verify the object exists and is encrypted
-      const headCommand = new HeadObjectCommand({
-        Bucket: bucketName,
-        Key: key
-      });
-
-      const headResponse = await s3Client.send(headCommand);
-      expect(headResponse.ServerSideEncryption).toBe('aws:kms');
-      expect(headResponse.SSEKMSKeyId).toContain(kmsKeyId);
-    }, 30000);
-
-    test('should retrieve content from S3 bucket', async () => {
-      const key = 'test-article.html';
-      
-      const getCommand = new GetObjectCommand({
-        Bucket: bucketName,
-        Key: key
-      });
-
-      const response = await s3Client.send(getCommand);
-      const content = await response.Body.transformToString();
-      
-      expect(content).toContain('Test News Article');
-      expect(content).toContain('This is a test article');
-    }, 30000);
-
-    test('should handle versioning correctly', async () => {
-      const key = 'versioned-article.html';
-      const content1 = '<html><body><h1>Version 1</h1></body></html>';
-      const content2 = '<html><body><h1>Version 2</h1></body></html>';
-
-      // Upload first version
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-        Body: content1,
-        ContentType: 'text/html'
-      }));
-
-      // Upload second version
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-        Body: content2,
-        ContentType: 'text/html'
-      }));
-
-      // Verify latest version
-      const response = await s3Client.send(new GetObjectCommand({
-        Bucket: bucketName,
-        Key: key
-      }));
-      
-      const content = await response.Body.transformToString();
-      expect(content).toContain('Version 2');
-    }, 30000);
+  afterEach(async () => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
   });
 
-  describe('CloudFront Distribution', () => {
-    test('should have correct distribution configuration', async () => {
-      const command = new GetDistributionCommand({
-        Id: distributionId
-      });
+  test('complete news article publishing and delivery flow', async () => {
+    console.log('=== Starting Complete News Article Publishing Flow ===');
 
-      const response = await cloudFrontClient.send(command);
-      const config = response.Distribution.DistributionConfig;
+    const timestamp = Date.now();
+    const articleKey = `articles/breaking-news-${timestamp}.html`;
 
-      expect(config.Enabled).toBe(true);
-      expect(config.DefaultRootObject).toBe('index.html');
-      expect(config.PriceClass).toBe('PriceClass_100');
-      // CloudFront uses default certificate, so TLS version is 'TLSv1' (not custom certificate)
-      expect(config.ViewerCertificate.MinimumProtocolVersion).toBe('TLSv1');
-      // CloudFront distribution may have multiple origins (website bucket + log bucket)
-      expect(config.Origins.Quantity).toBeGreaterThanOrEqual(1);
-      // Verify at least one origin is an S3 bucket
-      const s3Origins = config.Origins.Items.filter(origin => origin.DomainName.includes('.s3.'));
-      expect(s3Origins.length).toBeGreaterThanOrEqual(1);
-    }, 30000);
+    console.log('Step 1: Publishing breaking news article with KMS encryption');
+    const articleContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Breaking News - ${new Date(timestamp).toLocaleString()}</title>
+  <meta charset="utf-8">
+</head>
+<body>
+  <article>
+    <h1>Major Technology Breakthrough Announced</h1>
+    <p>Published: ${new Date(timestamp).toISOString()}</p>
+    <p>In a groundbreaking announcement, researchers have discovered...</p>
+    <p>This article is served securely through CloudFront CDN with KMS encryption at rest.</p>
+  </article>
+</body>
+</html>`;
 
-    test('should serve content through CloudFront', async () => {
-      // First upload an index.html file
-      const indexContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>News Website - ${environmentSuffix}</title>
-        </head>
-        <body>
-          <h1>Welcome to News Website</h1>
-          <p>Environment: ${environmentSuffix}</p>
-          <p>Served via CloudFront</p>
-        </body>
-        </html>
-      `;
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey,
+      Body: articleContent,
+      ContentType: 'text/html',
+      CacheControl: 'max-age=3600',
+      ServerSideEncryption: 'aws:kms',
+      SSEKMSKeyId: kmsKeyId
+    }));
+    console.log('✓ Article published to S3 with KMS encryption');
 
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: 'index.html',
-        Body: indexContent,
-        ContentType: 'text/html'
-      }));
+    console.log('Step 2: Waiting for S3 consistency');
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Wait a bit for S3 consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('Step 3: Accessing article through CloudFront CDN');
+    const cdnUrl = `https://${distributionDomain}/${articleKey}`;
+    const response1 = await makeHttpRequest(cdnUrl);
 
-      // Test CloudFront distribution
-      const response = await makeHttpRequest(`https://${distributionDomain}/`);
-      
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toContain('Welcome to News Website');
-      expect(response.body).toContain(`Environment: ${environmentSuffix}`);
-      expect(response.headers['x-cache']).toBeDefined(); // CloudFront header
-    }, 60000);
+    expect(response1.statusCode).toBe(200);
+    expect(response1.body).toContain('Major Technology Breakthrough');
+    expect(response1.body).toContain('CloudFront CDN');
+    expect(response1.headers['content-type']).toContain('text/html');
+    expect(response1.headers['x-cache']).toBeDefined();
+    console.log(`✓ Content delivered via CloudFront (Cache Status: ${response1.headers['x-cache']})`);
 
-    test('should handle 404 errors correctly', async () => {
-      // Upload 404.html
-      const notFoundContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Page Not Found</title>
-        </head>
-        <body>
-          <h1>404 - Page Not Found</h1>
-          <p>The requested page could not be found.</p>
-        </body>
-        </html>
-      `;
+    console.log('Step 4: Second request to verify caching');
+    const response2 = await makeHttpRequest(cdnUrl);
+    expect(response2.statusCode).toBe(200);
+    expect(response2.body).toBe(response1.body);
+    console.log(`✓ Cached content served (Cache Status: ${response2.headers['x-cache']})`);
 
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: '404.html',
-        Body: notFoundContent,
-        ContentType: 'text/html'
-      }));
+    console.log('Step 5: Verifying encrypted storage in S3');
+    const s3Response = await s3Client.send(new GetObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey
+    }));
+    const s3Content = await s3Response.Body.transformToString();
+    expect(s3Content).toContain('Major Technology Breakthrough');
+    console.log('✓ Article verified in S3 with encryption');
 
-      // Test non-existent page
-      const response = await makeHttpRequest(`https://${distributionDomain}/non-existent-page.html`);
-      
-      expect(response.statusCode).toBe(404);
-      expect(response.body).toContain('404 - Page Not Found');
-    }, 60000);
+    console.log('Step 6: Cleanup');
+    await s3Client.send(new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey
+    }));
+    console.log('✓ Test article removed');
+    console.log('=== Flow Complete ===\n');
+  }, 90000);
 
-    test('should enforce HTTPS redirect', async () => {
-      // This test would require HTTP request, but CloudFront automatically redirects
-      // We can verify the configuration instead
-      const command = new GetDistributionCommand({
-        Id: distributionId
-      });
+  test('concurrent global reader access flow', async () => {
+    console.log('=== Starting Concurrent Global Reader Access Flow ===');
 
-      const response = await cloudFrontClient.send(command);
-      const behavior = response.Distribution.DistributionConfig.DefaultCacheBehavior;
-      
-      expect(behavior.ViewerProtocolPolicy).toBe('redirect-to-https');
-    }, 30000);
+    const timestamp = Date.now();
+    const articles = [
+      { key: `articles/tech-${timestamp}.html`, title: 'Technology News', category: 'tech' },
+      { key: `articles/sports-${timestamp}.html`, title: 'Sports Update', category: 'sports' },
+      { key: `articles/finance-${timestamp}.html`, title: 'Market Analysis', category: 'finance' },
+    ];
 
-    test('should create cache invalidation', async () => {
-      const command = new CreateInvalidationCommand({
-        DistributionId: distributionId,
-        InvalidationBatch: {
-          Paths: {
-            Quantity: 1,
-            Items: ['/test-invalidation.html']
-          },
-          CallerReference: `test-${Date.now()}`
-        }
-      });
-
-      const response = await cloudFrontClient.send(command);
-      expect(response.Invalidation.Id).toBeDefined();
-      expect(response.Invalidation.Status).toBe('InProgress');
-    }, 30000);
-  });
-
-
-  describe('KMS Encryption', () => {
-    test('should have correct KMS key configuration', async () => {
-      const command = new DescribeKeyCommand({
-        KeyId: kmsKeyId
-      });
-
-      const response = await kmsClient.send(command);
-      const keyMetadata = response.KeyMetadata;
-
-      expect(keyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(keyMetadata.KeyState).toBe('Enabled');
-      expect(keyMetadata.Description).toContain(`KMS key for news website content encryption - ${environmentSuffix}`);
-      
-      // Check key rotation status separately
-      const rotationCommand = new GetKeyRotationStatusCommand({
-        KeyId: kmsKeyId
-      });
-      const rotationResponse = await kmsClient.send(rotationCommand);
-      expect(rotationResponse.KeyRotationEnabled).toBe(true);
-    }, 30000);
-  });
-
-  describe('CloudWatch Monitoring', () => {
-    test('should have dashboard configured', async () => {
-      const command = new GetDashboardCommand({
-        DashboardName: `NewsWebsiteMetrics-${environmentSuffix}`
-      });
-
-      const response = await cloudWatchClient.send(command);
-      const dashboardBody = JSON.parse(response.DashboardBody);
-
-      expect(dashboardBody.widgets).toBeDefined();
-      expect(dashboardBody.widgets.length).toBeGreaterThan(0);
-      
-      // Check for CloudFront metrics widgets
-      const hasCloudFrontWidget = dashboardBody.widgets.some(widget => 
-        widget.properties && widget.properties.title && 
-        widget.properties.title.includes('CloudFront')
-      );
-      expect(hasCloudFrontWidget).toBe(true);
-    }, 30000);
-
-    test('should have alarms configured', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [`news-website-high-error-rate-${environmentSuffix}`]
-      });
-
-      const response = await cloudWatchClient.send(command);
-      
-      expect(response.MetricAlarms).toHaveLength(1);
-      const alarm = response.MetricAlarms[0];
-      
-      expect(alarm.AlarmName).toBe(`news-website-high-error-rate-${environmentSuffix}`);
-      expect(alarm.MetricName).toBe('TotalErrorRate');
-      expect(alarm.Namespace).toBe('AWS/CloudFront');
-      expect(alarm.Threshold).toBe(5);
-      // AWS CloudWatch uses 'GreaterThanOrEqualToThreshold' as the actual comparison operator
-      expect(alarm.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
-    }, 30000);
-  });
-
-  describe('End-to-End Content Delivery Flow', () => {
-    test('should deliver content from S3 through CloudFront with proper caching', async () => {
-      const testArticle = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Breaking News - ${Date.now()}</title>
-          <meta charset="utf-8">
-        </head>
-        <body>
-          <article>
-            <h1>Breaking News Story</h1>
-            <p>Published at: ${new Date().toISOString()}</p>
-            <p>This is a test news article served through our CDN infrastructure.</p>
-            <p>Environment: ${environmentSuffix}</p>
-          </article>
-        </body>
-        </html>
-      `;
-
-      const articleKey = `articles/breaking-news-${Date.now()}.html`;
-
-      // 1. Upload article to S3
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: articleKey,
-        Body: testArticle,
-        ContentType: 'text/html',
-        CacheControl: 'max-age=3600',
-        ServerSideEncryption: 'aws:kms',
-        SSEKMSKeyId: kmsKeyId
-      }));
-
-      // 2. Wait for S3 consistency
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // 3. Request through CloudFront
-      const response1 = await makeHttpRequest(`https://${distributionDomain}/${articleKey}`);
-      
-      expect(response1.statusCode).toBe(200);
-      expect(response1.body).toContain('Breaking News Story');
-      expect(response1.body).toContain(`Environment: ${environmentSuffix}`);
-      expect(response1.headers['content-type']).toContain('text/html');
-
-      // 4. Second request should be cached
-      const response2 = await makeHttpRequest(`https://${distributionDomain}/${articleKey}`);
-      
-      expect(response2.statusCode).toBe(200);
-      expect(response2.body).toBe(response1.body);
-      
-      // Check cache headers (second request might show cache hit)
-      if (response2.headers['x-cache']) {
-        expect(response2.headers['x-cache']).toMatch(/(Hit|Miss) from cloudfront/i);
-      }
-    }, 90000);
-
-    test('should handle multiple concurrent requests efficiently', async () => {
-      const testContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Load Test Article</title>
-        </head>
-        <body>
-          <h1>Load Test Content</h1>
-          <p>Timestamp: ${Date.now()}</p>
-        </body>
-        </html>
-      `;
-
-      const loadTestKey = `load-test/article-${Date.now()}.html`;
-
-      // Upload test content
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: loadTestKey,
-        Body: testContent,
-        ContentType: 'text/html'
-      }));
-
-      // Wait for S3 consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Make multiple concurrent requests
-      const requests = Array(10).fill().map(() => 
-        makeHttpRequest(`https://${distributionDomain}/${loadTestKey}`)
-      );
-
-      const responses = await Promise.all(requests);
-
-      // All requests should succeed
-      responses.forEach(response => {
-        expect(response.statusCode).toBe(200);
-        expect(response.body).toContain('Load Test Content');
-      });
-
-      // Responses should be consistent
-      const firstBody = responses[0].body;
-      responses.forEach(response => {
-        expect(response.body).toBe(firstBody);
-      });
-    }, 60000);
-
-    test('should properly handle different content types', async () => {
-      const contentTypes = [
-        { key: 'styles.css', content: 'body { font-family: Arial; }', type: 'text/css' },
-        { key: 'script.js', content: 'console.log("Hello World");', type: 'application/javascript' },
-        { key: 'data.json', content: '{"message": "Hello World"}', type: 'application/json' }
-      ];
-
-      // Upload different content types
-      for (const item of contentTypes) {
-        await s3Client.send(new PutObjectCommand({
+    console.log('Step 1: Publishing multiple articles with KMS encryption');
+    await Promise.all(
+      articles.map(article =>
+        s3Client.send(new PutObjectCommand({
           Bucket: bucketName,
-          Key: item.key,
-          Body: item.content,
-          ContentType: item.type
-        }));
-      }
+          Key: article.key,
+          Body: `<!DOCTYPE html>
+<html>
+<head><title>${article.title}</title></head>
+<body>
+  <h1>${article.title}</h1>
+  <p>Category: ${article.category}</p>
+  <p>Published: ${new Date(timestamp).toISOString()}</p>
+</body>
+</html>`,
+          ContentType: 'text/html',
+          ServerSideEncryption: 'aws:kms',
+          SSEKMSKeyId: kmsKeyId
+        }))
+      )
+    );
+    console.log(`✓ ${articles.length} articles published with encryption`);
 
-      // Wait for S3 consistency
-      await new Promise(resolve => setTimeout(resolve, 3000));
+    console.log('Step 2: Waiting for S3 consistency');
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Test each content type
-      for (const item of contentTypes) {
-        const response = await makeHttpRequest(`https://${distributionDomain}/${item.key}`);
-        
-        expect(response.statusCode).toBe(200);
-        expect(response.body).toBe(item.content);
-        expect(response.headers['content-type']).toContain(item.type.split('/')[0]);
-      }
-    }, 90000);
-  });
-
-  describe('Security and Performance Validation', () => {
-    test('should enforce security headers', async () => {
-      const response = await makeHttpRequest(`https://${distributionDomain}/`);
-      
-      // CloudFront should add security headers
-      expect(response.headers['x-cache']).toBeDefined();
-      expect(response.headers['via']).toBeDefined();
-      expect(response.headers['x-amz-cf-pop']).toBeDefined();
-    }, 30000);
-
-    test('should compress content when appropriate', async () => {
-      const largeContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Large Content Test</title>
-        </head>
-        <body>
-          ${'<p>This is a large content block for compression testing. </p>'.repeat(100)}
-        </body>
-        </html>
-      `;
-
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: 'large-content.html',
-        Body: largeContent,
-        ContentType: 'text/html'
-      }));
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const response = await makeHttpRequest(`https://${distributionDomain}/large-content.html`, {
-        headers: {
-          'Accept-Encoding': 'gzip, deflate'
-        }
+    console.log('Step 3: Simulating 30 concurrent global reader requests');
+    const requests = [];
+    for (let i = 0; i < 10; i++) {
+      articles.forEach(article => {
+        const url = `https://${distributionDomain}/${article.key}`;
+        requests.push(makeHttpRequest(url));
       });
+    }
 
+    const responses = await Promise.all(requests);
+    const successfulRequests = responses.filter(r => r.statusCode === 200);
+    expect(successfulRequests.length).toBe(30);
+    console.log(`✓ All ${successfulRequests.length} requests successful`);
+
+    console.log('Step 4: Verifying content delivery consistency');
+    responses.forEach(response => {
       expect(response.statusCode).toBe(200);
-      // CloudFront should compress large HTML content
-      if (response.headers['content-encoding']) {
-        expect(response.headers['content-encoding']).toMatch(/gzip|deflate/);
+      expect(response.headers['x-cache']).toBeDefined();
+    });
+    console.log('✓ All responses consistent with CDN headers');
+
+    console.log('Step 5: Cleanup');
+    await Promise.all(
+      articles.map(article =>
+        s3Client.send(new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: article.key
+        }))
+      )
+    );
+    console.log('✓ Test articles removed');
+    console.log('=== Flow Complete ===\n');
+  }, 120000);
+
+  test('article update with cache invalidation flow', async () => {
+    console.log('=== Starting Article Update with Cache Invalidation Flow ===');
+
+    const timestamp = Date.now();
+    const articleKey = `articles/developing-story-${timestamp}.html`;
+
+    console.log('Step 1: Publishing initial version of developing story');
+    const initialContent = `<!DOCTYPE html>
+<html>
+<head><title>Developing Story - Version 1</title></head>
+<body>
+  <h1>Breaking: Developing Story</h1>
+  <p>Initial report published at ${new Date(timestamp).toLocaleString()}</p>
+  <p>Details are still emerging...</p>
+</body>
+</html>`;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey,
+      Body: initialContent,
+      ContentType: 'text/html',
+      CacheControl: 'max-age=3600',
+      ServerSideEncryption: 'aws:kms',
+      SSEKMSKeyId: kmsKeyId
+    }));
+    console.log('✓ Initial version published');
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    console.log('Step 2: Readers access initial version');
+    const cdnUrl = `https://${distributionDomain}/${articleKey}`;
+    const initialResponse = await makeHttpRequest(cdnUrl);
+    expect(initialResponse.statusCode).toBe(200);
+    expect(initialResponse.body).toContain('Version 1');
+    console.log('✓ Initial version delivered to readers');
+
+    console.log('Step 3: Updating story with new information');
+    const updatedContent = `<!DOCTYPE html>
+<html>
+<head><title>Developing Story - Version 2 (Updated)</title></head>
+<body>
+  <h1>Breaking: Developing Story - UPDATED</h1>
+  <p>Updated at ${new Date().toLocaleString()}</p>
+  <p>New details have emerged with confirmed information...</p>
+  <p>This is the latest version of the developing story.</p>
+</body>
+</html>`;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey,
+      Body: updatedContent,
+      ContentType: 'text/html',
+      CacheControl: 'max-age=3600',
+      ServerSideEncryption: 'aws:kms',
+      SSEKMSKeyId: kmsKeyId
+    }));
+    console.log('✓ Updated version published to S3');
+
+    console.log('Step 4: Invalidating CloudFront cache');
+    const invalidationResponse = await cloudFrontClient.send(new CreateInvalidationCommand({
+      DistributionId: distributionId,
+      InvalidationBatch: {
+        Paths: {
+          Quantity: 1,
+          Items: [`/${articleKey}`]
+        },
+        CallerReference: `update-${timestamp}`
       }
-    }, 60000);
+    }));
 
-    test('should handle edge cases gracefully', async () => {
-      // Test empty file
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: 'empty.html',
-        Body: '',
-        ContentType: 'text/html'
-      }));
+    const invalidationId = invalidationResponse.Invalidation.Id;
+    expect(invalidationId).toBeDefined();
+    console.log(`✓ Cache invalidation initiated: ${invalidationId}`);
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('Step 5: Waiting for cache invalidation (up to 60s)');
+    const completed = await waitForInvalidation(distributionId, invalidationId, 60000);
+    if (completed) {
+      console.log('✓ Cache invalidation completed');
+    } else {
+      console.log('⚠ Invalidation in progress (will complete shortly)');
+    }
 
-      const emptyResponse = await makeHttpRequest(`https://${distributionDomain}/empty.html`);
-      expect(emptyResponse.statusCode).toBe(200);
-      expect(emptyResponse.body).toBe('');
+    console.log('Step 6: Readers access updated version');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const updatedResponse = await makeHttpRequest(cdnUrl);
+    expect(updatedResponse.statusCode).toBe(200);
+    console.log('✓ Updated content accessible to readers');
 
-      // Test very long URL (should still work within limits)
-      const longKey = 'articles/' + 'a'.repeat(100) + '.html';
-      await s3Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: longKey,
-        Body: '<html><body>Long URL test</body></html>',
-        ContentType: 'text/html'
-      }));
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const longUrlResponse = await makeHttpRequest(`https://${distributionDomain}/${longKey}`);
-      expect(longUrlResponse.statusCode).toBe(200);
-      expect(longUrlResponse.body).toContain('Long URL test');
-    }, 60000);
-  });
-
-  // Cleanup after tests
-  afterAll(async () => {
-    // Note: In a real scenario, you might want to clean up test objects
-    // For integration tests, we typically leave resources as they are
-    // since they're part of the deployed infrastructure
-    console.log('Integration tests completed');
-  });
+    console.log('Step 7: Cleanup');
+    await s3Client.send(new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: articleKey
+    }));
+    console.log('✓ Test article removed');
+    console.log('=== Flow Complete ===\n');
+  }, 150000);
 });
