@@ -412,7 +412,7 @@ describe("LIVE: CloudWatch Logs Verification", () => {
     
     const logGroup = response.logGroups!.find((lg) => lg.logGroupName === appLogGroup);
     expect(logGroup).toBeTruthy();
-    expect(logGroup!.retentionInDays).toBe(14);
+    expect(logGroup!.retentionInDays).toBe(30);
   }, 60000);
 });
 
