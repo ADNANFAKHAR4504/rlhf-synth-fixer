@@ -629,9 +629,10 @@ describe("LIVE: Route53 Health Checks", () => {
     });
 
     expect(response.HealthCheck).toBeTruthy();
-    expect(response.HealthCheck!.HealthCheckConfig.Type).toBe("HTTP");
-    expect(response.HealthCheck!.HealthCheckConfig.Port).toBe(80);
-    expect(response.HealthCheck!.HealthCheckConfig.ResourcePath).toBe("/health");
+    expect(response.HealthCheck!.HealthCheckConfig).toBeTruthy();
+    expect(response.HealthCheck!.HealthCheckConfig!.Type).toBe("HTTP");
+    expect(response.HealthCheck!.HealthCheckConfig!.Port).toBe(80);
+    expect(response.HealthCheck!.HealthCheckConfig!.ResourcePath).toBe("/health");
   }, 60000);
 
   test("Secondary ALB health check exists", async () => {
@@ -644,7 +645,8 @@ describe("LIVE: Route53 Health Checks", () => {
     });
 
     expect(response.HealthCheck).toBeTruthy();
-    expect(response.HealthCheck!.HealthCheckConfig.Type).toBe("HTTP");
+    expect(response.HealthCheck!.HealthCheckConfig).toBeTruthy();
+    expect(response.HealthCheck!.HealthCheckConfig!.Type).toBe("HTTP");
   }, 60000);
 });
 
