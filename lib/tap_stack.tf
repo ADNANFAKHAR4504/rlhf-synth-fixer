@@ -167,8 +167,18 @@ locals {
 }
 
 # ================================================================================
+# RANDOM SUFFIX FOR UNIQUE NAMING
+# ================================================================================
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+# ================================================================================
 # DATA SOURCES
 # ================================================================================
+
+data "aws_caller_identity" "current" {}
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -211,11 +221,11 @@ resource "aws_subnet" "private_b" {
 }
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.db_identifier}-subnet-group"
+  name       = "${var.db_identifier}-subnet-group-${random_id.suffix.hex}"
   subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 
   tags = merge(local.tags, {
-    Name = "${var.db_identifier}-subnet-group"
+    Name = "${var.db_identifier}-subnet-group-${random_id.suffix.hex}"
   })
 }
 
@@ -288,13 +298,49 @@ resource "aws_kms_key" "rds" {
   deletion_window_in_days = 30
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(local.tags, {
     Name = "${var.db_identifier}-kms-key"
   })
 }
 
 resource "aws_kms_alias" "rds" {
-  name          = "alias/${var.db_identifier}-rds"
+  name          = "alias/${var.db_identifier}-rds-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.rds.key_id
 }
 
@@ -308,13 +354,13 @@ resource "random_password" "master" {
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.db_identifier}-master-password"
+  name                    = "${var.db_identifier}-master-password-${random_id.suffix.hex}"
   description             = "Master password for RDS MySQL instance"
   kms_key_id              = aws_kms_key.rds.arn
   recovery_window_in_days = 30
 
   tags = merge(local.tags, {
-    Name = "${var.db_identifier}-master-password"
+    Name = "${var.db_identifier}-master-password-${random_id.suffix.hex}"
   })
 }
 
@@ -328,7 +374,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 # ================================================================================
 
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.db_identifier}-params"
+  name   = "${var.db_identifier}-params-${random_id.suffix.hex}"
   family = "mysql8.0"
 
   parameter {
@@ -357,7 +403,7 @@ resource "aws_db_parameter_group" "main" {
   }
 
   tags = merge(local.tags, {
-    Name = "${var.db_identifier}-parameter-group"
+    Name = "${var.db_identifier}-parameter-group-${random_id.suffix.hex}"
   })
 }
 
@@ -366,7 +412,7 @@ resource "aws_db_parameter_group" "main" {
 # ================================================================================
 
 resource "aws_cloudwatch_log_group" "rds_error" {
-  name              = "/aws/rds/instance/${var.db_identifier}/error"
+  name              = "/aws/rds/instance/${var.db_identifier}-${random_id.suffix.hex}/error"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.rds.arn
 
@@ -374,7 +420,7 @@ resource "aws_cloudwatch_log_group" "rds_error" {
 }
 
 resource "aws_cloudwatch_log_group" "rds_general" {
-  name              = "/aws/rds/instance/${var.db_identifier}/general"
+  name              = "/aws/rds/instance/${var.db_identifier}-${random_id.suffix.hex}/general"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.rds.arn
 
@@ -382,7 +428,7 @@ resource "aws_cloudwatch_log_group" "rds_general" {
 }
 
 resource "aws_cloudwatch_log_group" "rds_slowquery" {
-  name              = "/aws/rds/instance/${var.db_identifier}/slowquery"
+  name              = "/aws/rds/instance/${var.db_identifier}-${random_id.suffix.hex}/slowquery"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.rds.arn
 
@@ -394,7 +440,7 @@ resource "aws_cloudwatch_log_group" "rds_slowquery" {
 # ================================================================================
 
 resource "aws_db_instance" "main" {
-  identifier     = var.db_identifier
+  identifier     = "${var.db_identifier}-${random_id.suffix.hex}"
   db_name        = var.db_name
   engine         = "mysql"
   engine_version = var.engine_version
@@ -417,7 +463,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
   deletion_protection = var.deletion_protection
   skip_final_snapshot = false
-  final_snapshot_identifier = "${var.db_identifier}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  final_snapshot_identifier = "${var.db_identifier}-final-snapshot-${random_id.suffix.hex}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   backup_retention_period = var.backup_retention_period
   backup_window           = var.backup_window
@@ -427,7 +473,7 @@ resource "aws_db_instance" "main" {
   iam_database_authentication_enabled = var.enable_iam_auth
 
   tags = merge(local.tags, {
-    Name = var.db_identifier
+    Name = "${var.db_identifier}-${random_id.suffix.hex}"
   })
 
   depends_on = [
@@ -442,11 +488,11 @@ resource "aws_db_instance" "main" {
 # ================================================================================
 
 resource "aws_sns_topic" "alarms" {
-  name              = "${var.db_identifier}-alarms"
+  name              = "${var.db_identifier}-alarms-${random_id.suffix.hex}"
   kms_master_key_id = aws_kms_key.rds.id
 
   tags = merge(local.tags, {
-    Name = "${var.db_identifier}-alarms"
+    Name = "${var.db_identifier}-alarms-${random_id.suffix.hex}"
   })
 }
 
@@ -461,7 +507,7 @@ resource "aws_sns_topic_subscription" "alarms_email" {
 # ================================================================================
 
 resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
-  alarm_name          = "${var.db_identifier}-cpu-utilization"
+  alarm_name          = "${var.db_identifier}-cpu-utilization-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -480,7 +526,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
-  alarm_name          = "${var.db_identifier}-low-memory"
+  alarm_name          = "${var.db_identifier}-low-memory-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "FreeableMemory"
@@ -499,7 +545,7 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "free_storage_space" {
-  alarm_name          = "${var.db_identifier}-low-storage"
+  alarm_name          = "${var.db_identifier}-low-storage-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "FreeStorageSpace"
@@ -518,7 +564,7 @@ resource "aws_cloudwatch_metric_alarm" "free_storage_space" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "database_connections" {
-  alarm_name          = "${var.db_identifier}-high-connections"
+  alarm_name          = "${var.db_identifier}-high-connections-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "DatabaseConnections"
@@ -541,7 +587,7 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 # ================================================================================
 
 resource "aws_iam_role" "lambda_snapshot" {
-  name = "${var.db_identifier}-snapshot-lambda-role"
+  name = "${var.db_identifier}-snapshot-lambda-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -560,7 +606,7 @@ resource "aws_iam_role" "lambda_snapshot" {
 }
 
 resource "aws_iam_role_policy" "lambda_snapshot" {
-  name = "${var.db_identifier}-snapshot-lambda-policy"
+  name = "${var.db_identifier}-snapshot-lambda-policy-${random_id.suffix.hex}"
   role = aws_iam_role.lambda_snapshot.id
 
   policy = jsonencode({
@@ -610,7 +656,7 @@ data "archive_file" "lambda_snapshot" {
 
 resource "aws_lambda_function" "snapshot" {
   filename         = data.archive_file.lambda_snapshot.output_path
-  function_name    = "${var.db_identifier}-snapshot-manager"
+  function_name    = "${var.db_identifier}-snapshot-manager-${random_id.suffix.hex}"
   role             = aws_iam_role.lambda_snapshot.arn
   handler          = "snapshot.handler"
   source_code_hash = data.archive_file.lambda_snapshot.output_base64sha256
@@ -640,7 +686,7 @@ resource "aws_cloudwatch_log_group" "lambda_snapshot" {
 # ================================================================================
 
 resource "aws_cloudwatch_event_rule" "daily_snapshot" {
-  name                = "${var.db_identifier}-daily-snapshot"
+  name                = "${var.db_identifier}-daily-snapshot-${random_id.suffix.hex}"
   description         = "Trigger daily RDS snapshot"
   schedule_expression = "cron(0 2 * * ? *)"
 
