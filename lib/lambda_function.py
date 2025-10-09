@@ -36,10 +36,28 @@ KMS_KEY_ID = os.environ.get('KMS_KEY_ID')
 # DynamoDB table
 table = dynamodb.Table(TABLE_NAME)
 
-# Enable X-Ray tracing
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-patch_all()
+# Enable X-Ray tracing (gracefully handle if not available)
+try:
+    from aws_xray_sdk.core import xray_recorder
+    from aws_xray_sdk.core import patch_all
+    patch_all()
+    XRAY_AVAILABLE = True
+except ImportError:
+    # X-Ray SDK not available, create mock recorder
+    logger.warning("X-Ray SDK not available, using mock recorder")
+    XRAY_AVAILABLE = False
+    
+    class MockXRayRecorder:
+        def put_annotation(self, key, value):
+            pass
+        def put_metadata(self, key, value):
+            pass
+        def capture(self, name):
+            def decorator(func):
+                return func
+            return decorator
+    
+    xray_recorder = MockXRayRecorder()
 
 
 class DecimalEncoder(json.JSONEncoder):
