@@ -417,7 +417,7 @@ class TestServiceToServiceIntegration(BaseIntegrationTest):
             # Get API Gateway resources and methods
             resources_response = self.apigateway_client.get_resources(restApiId=api_id)
             
-            # Find the v1 resource
+            # Find the v1 resourcee
             v1_resource = None
             for resource in resources_response['items']:
                 if resource.get('pathPart') == 'v1':
