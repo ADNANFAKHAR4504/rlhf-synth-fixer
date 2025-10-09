@@ -42,7 +42,7 @@ export class PodcastTranscodingStack extends Construct {
               Outputs: [
                 {
                   ContainerSettings: {
-                    Container: 'MP4',
+                    Container: 'RAW',
                   },
                   AudioDescriptions: [
                     {
@@ -58,10 +58,11 @@ export class PodcastTranscodingStack extends Construct {
                     },
                   ],
                   NameModifier: '_64kbps',
+                  Extension: 'mp3',
                 },
                 {
                   ContainerSettings: {
-                    Container: 'MP4',
+                    Container: 'RAW',
                   },
                   AudioDescriptions: [
                     {
@@ -77,10 +78,11 @@ export class PodcastTranscodingStack extends Construct {
                     },
                   ],
                   NameModifier: '_128kbps',
+                  Extension: 'mp3',
                 },
                 {
                   ContainerSettings: {
-                    Container: 'MP4',
+                    Container: 'RAW',
                   },
                   AudioDescriptions: [
                     {
@@ -96,6 +98,7 @@ export class PodcastTranscodingStack extends Construct {
                     },
                   ],
                   NameModifier: '_256kbps',
+                  Extension: 'mp3',
                 },
               ],
               OutputGroupSettings: {
