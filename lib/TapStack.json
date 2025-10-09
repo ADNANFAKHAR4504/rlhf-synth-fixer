@@ -1,0 +1,244 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Monitoring System using AWS CDK - CloudFormation Template",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Default": "admin@example.com",
+      "Description": "Email address for alert notifications"
+    }
+  },
+  "Resources": {
+    "ErrorLogsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "error-logs-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "errorId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "functionName",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "errorId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "FunctionNameIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "functionName",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "DeletionPolicy": "Delete"
+      }
+    },
+    "AlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "monitoring-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": {
+          "Fn::Sub": "Monitoring Alerts - ${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EmailSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "AlertTopic"
+        },
+        "Endpoint": {
+          "Ref": "NotificationEmail"
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Description": {
+          "Fn::Sub": "Execution role for monitored Lambda functions - ${EnvironmentSuffix}"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBWriteAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ErrorLogsTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "UserServiceFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "user-service-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs18.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "ERROR_TABLE_NAME": {
+              "Ref": "ErrorLogsTable"
+            },
+            "FUNCTION_NAME": {
+              "Fn::Sub": "user-service-${EnvironmentSuffix}"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');\nconst dynamodb = new DynamoDBClient({});\n\nexports.handler = async (event) => {\n  const startTime = Date.now();\n  \n  try {\n    console.log('Processing request:', JSON.stringify(event));\n    \n    const processingTime = Math.random() * 400 + 100;\n    await new Promise(resolve => setTimeout(resolve, processingTime));\n    \n    if (Math.random() < 0.07) {\n      throw new Error('Simulated processing error');\n    }\n    \n    const duration = Date.now() - startTime;\n    console.log(`Request completed in ${duration}ms`);\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Success',\n        function: 'user-service',\n        duration: duration,\n        timestamp: new Date().toISOString(),\n      }),\n    };\n  } catch (error) {\n    const duration = Date.now() - startTime;\n    console.error('Error processing request:', error);\n    \n    try {\n      const errorId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n      await dynamodb.send(new PutItemCommand({\n        TableName: process.env.ERROR_TABLE_NAME,\n        Item: {\n          errorId: { S: errorId },\n          timestamp: { S: new Date().toISOString() },\n          functionName: { S: process.env.FUNCTION_NAME },\n          errorMessage: { S: error.message },\n          errorStack: { S: error.stack || 'No stack trace' },\n          duration: { N: duration.toString() },\n          eventData: { S: JSON.stringify(event) },\n        },\n      }));\n    } catch (dbError) {\n      console.error('Failed to log error to DynamoDB:', dbError);\n    }\n    \n    return {\n      statusCode: 500,\n      body: JSON.stringify({\n        error: error.message,\n        function: 'user-service',\n        timestamp: new Date().toISOString(),\n      }),\n    };\n  }\n};"
+        }
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "serverless-monitoring-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 8,\n      \"height\": 4,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"user-service-${EnvironmentSuffix}\" ],\n          [ \"...\", \"order-processor-${EnvironmentSuffix}\" ],\n          [ \"...\", \"payment-handler-${EnvironmentSuffix}\" ],\n          [ \"...\", \"notification-sender-${EnvironmentSuffix}\" ],\n          [ \"...\", \"data-aggregator-${EnvironmentSuffix}\" ]\n        ],\n        \"view\": \"singleValue\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Total Invocations (24h)\",\n        \"period\": 86400,\n        \"stat\": \"Sum\"\n      }\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ErrorLogsTableName": {
+      "Description": "DynamoDB table for error logs",
+      "Value": {
+        "Ref": "ErrorLogsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ErrorLogsTableName"
+        }
+      }
+    },
+    "AlertTopicArn": {
+      "Description": "SNS topic for monitoring alerts",
+      "Value": {
+        "Ref": "AlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopicArn"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverless-monitoring-${EnvironmentSuffix}"
+      }
+    },
+    "Function1Name": {
+      "Description": "Lambda function 1",
+      "Value": {
+        "Ref": "UserServiceFunction"
+      }
+    }
+  }
+}
