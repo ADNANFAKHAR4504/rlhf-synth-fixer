@@ -655,15 +655,14 @@ resource "aws_rds_global_cluster" "main" {
   global_cluster_identifier = "${var.project_name}-global-db-${var.environment}"
   engine                    = "aurora-mysql"
   engine_version            = "8.0.mysql_aurora.3.04.0"
-  database_name             = "${replace(var.project_name, "-", "")}db"
-  storage_encrypted         = true
+  # Note: database_name, storage_encrypted, and engine_lifecycle_support are managed at the cluster level
 }
 
 resource "aws_rds_cluster" "primary" {
   cluster_identifier        = "${var.project_name}-aurora-primary"
   engine                    = aws_rds_global_cluster.main.engine
   engine_version            = aws_rds_global_cluster.main.engine_version
-  database_name             = aws_rds_global_cluster.main.database_name
+  database_name             = "${replace(var.project_name, "-", "")}db"
   master_username           = "admin"
   master_password           = "ChangeMe123456!" # In production, use AWS Secrets Manager
   db_subnet_group_name      = aws_db_subnet_group.primary.name
@@ -691,11 +690,14 @@ resource "aws_rds_cluster_instance" "primary" {
   cluster_identifier = aws_rds_cluster.primary.id
   instance_class     = var.aurora_instance_class
   engine             = aws_rds_cluster.primary.engine
-  engine_version     = aws_rds_cluster.primary.engine_version
 
   tags = {
     Name        = "${var.project_name}-aurora-primary-instance-${count.index + 1}"
     Environment = var.environment
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -727,11 +729,14 @@ resource "aws_rds_cluster_instance" "secondary" {
   cluster_identifier = aws_rds_cluster.secondary.id
   instance_class     = var.aurora_instance_class
   engine             = aws_rds_cluster.secondary.engine
-  engine_version     = aws_rds_cluster.secondary.engine_version
 
   tags = {
     Name        = "${var.project_name}-aurora-secondary-instance-${count.index + 1}"
     Environment = var.environment
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -1239,7 +1244,7 @@ resource "aws_autoscaling_group" "secondary" {
   target_group_arns   = [aws_lb_target_group.secondary.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size            = var.asg_min_capacity
+  min_size            = 0  # Allow 0 instances in standby region
   max_size            = var.asg_max_capacity
   desired_capacity    = 0  # Start with 0 capacity in standby region
 
