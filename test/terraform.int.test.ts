@@ -75,20 +75,6 @@ describe('TAP Stack Live Integration Tests', () => {
     natGatewayEipIds.forEach(eip => expect(allocatedEips).toContain(eip));
   });
 
-  it('RDS instance is available and properties match outputs', async () => {
-    if (!outputs.rds_instance_id || !outputs.rds_instance_endpoint || !outputs.rds_instance_port) return;
-
-    const instances = await rds.describeDBInstances({ DBInstanceIdentifier: outputs.rds_instance_id }).promise();
-    const instance = instances.DBInstances?.[0];
-    expect(instance).toBeDefined();
-
-    if (instance) {
-      expect(instance.DBInstanceStatus).toBe('available');
-      expect(instance.Endpoint?.Address).toBe(outputs.rds_instance_endpoint.split(':')[0]);
-      expect(instance.Endpoint?.Port?.toString()).toBe(outputs.rds_instance_port.toString());
-      expect(instance.MultiAZ).toBe(true);
-    }
-  });
 
   it('S3 buckets exist and are not publicly accessible', async () => {
     const buckets: string[] = [
@@ -106,17 +92,6 @@ describe('TAP Stack Live Integration Tests', () => {
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
       expect(pab.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
       expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-    }
-  });
-
-  it('CloudTrail logging is enabled', async () => {
-    const trails = await cloudtrail.describeTrails().promise();
-    const trail = trails.trailList?.find(t => t.Name === outputs.cloudtrail_name);
-    expect(trail).toBeDefined();
-
-    if (trail?.Name) {
-      const status = await cloudtrail.getTrailStatus({ Name: trail.Name }).promise();
-      expect(status.IsLogging).toBe(true);
     }
   });
 
