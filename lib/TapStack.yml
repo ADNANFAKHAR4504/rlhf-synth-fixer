@@ -52,8 +52,9 @@ Parameters:
     Type: String
     Default: 'forum-example-hobbyforum.com'
     Description: 'Domain name for the forum (e.g., forum.example.com)'
-    AllowedPattern: '^([a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid domain name'
+    MinLength: 3
+    MaxLength: 253
+
   
   SSHKeyName:
     Type: String
