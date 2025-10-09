@@ -1703,15 +1703,6 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DailyMaintenanceRule.Arn
 
-  # AWS Config
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-      RoleARN: !GetAtt ConfigRole.Arn
-
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:

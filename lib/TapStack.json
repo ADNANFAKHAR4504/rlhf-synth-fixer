@@ -2769,33 +2769,6 @@
                 }
             }
         },
-        "ConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                },
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "ConfigSnapshotDeliveryProperties": {
-                    "DeliveryFrequency": "One_Hour"
-                },
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
-                },
-                "S3KeyPrefix": "config"
-            }
-        },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
