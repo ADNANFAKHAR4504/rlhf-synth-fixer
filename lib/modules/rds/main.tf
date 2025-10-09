@@ -15,7 +15,7 @@ resource "aws_db_subnet_group" "primary" {
 resource "aws_rds_cluster" "primary" {
   cluster_identifier              = "${var.project_name}-aurora-${var.environment}-${var.resource_suffix}"
   engine                          = "aurora-mysql"
-  engine_version                  = "8.0.mysql_aurora.3.02.0"
+  engine_version                  = "8.0.mysql_aurora.3.04.0"
   database_name                   = replace("${var.project_name}db", "-", "")
   master_username                 = "admin"
   master_password                 = "ChangeMe123456!" # Use AWS Secrets Manager in production
