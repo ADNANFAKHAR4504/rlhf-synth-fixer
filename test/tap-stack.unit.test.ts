@@ -158,7 +158,7 @@ describe('TapStack CloudFormation Template', () => {
         expect(template.Resources.WebAppTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
         const tg = template.Resources.WebAppTargetGroup.Properties;
         expect(tg.TargetType).toBe('ip');
-        expect(tg.HealthCheckPath).toBe('/health');
+        expect(tg.HealthCheckPath).toBe('/');
       });
     });
 
