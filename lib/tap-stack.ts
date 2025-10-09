@@ -18,7 +18,6 @@ import {
   SecretsModule,
   VpcModule,
 } from './modules';
-// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -28,24 +27,41 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = '';
+// ELB service account IDs for different regions
+const ELB_SERVICE_ACCOUNT_IDS: { [key: string]: string } = {
+  'us-east-1': '127311923021',
+  'us-east-2': '033677994240',
+  'us-west-1': '027434742980',
+  'us-west-2': '797873946194',
+  'af-south-1': '098369216593',
+  'ap-east-1': '754344448648',
+  'ap-south-1': '718504428378',
+  'ap-northeast-2': '600734575887',
+  'ap-southeast-1': '114774131450',
+  'ap-southeast-2': '783225319266',
+  'ap-northeast-1': '582318560864',
+  'ca-central-1': '985666609251',
+  'eu-central-1': '054676820928',
+  'eu-west-1': '156460612806',
+  'eu-west-2': '652711504416',
+  'eu-south-1': '635631232127',
+  'eu-west-3': '009996457667',
+  'eu-north-1': '897822967062',
+  'me-south-1': '076674570225',
+  'sa-east-1': '507241528517',
+};
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    const awsRegion = props?.awsRegion || 'eu-north-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: [
@@ -78,12 +94,22 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
     const adminEmail = 'admin@tap.com'; // Replace with your email
+
+    // ========== Create or Get Key Pair ==========
+    // Check if key pair exists, if not create it
+    const keyPairName = `tap-${environmentSuffix}-keypair`;
+
+    const keyPair = new aws.keyPair.KeyPair(this, 'key-pair', {
+      keyName: keyPairName,
+      publicKey:
+        process.env.SSH_PUBLIC_KEY ||
+        // Default public key - replace with your actual public key
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDxxx... your-public-key',
+      tags: globalTags,
+    });
 
     // ========== Storage (Create logs bucket first) ==========
     const logsBucket = new S3Module(this, 'logs-bucket', {
@@ -104,6 +130,25 @@ export class TapStack extends TerraformStack {
           },
         },
       ],
+    });
+
+    // Enable ACL ownership for the logs bucket
+    new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'logs-bucket-ownership',
+      {
+        bucket: logsBucket.bucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      }
+    );
+
+    // Add ACL configuration for logs bucket (after ownership controls)
+    new aws.s3BucketAcl.S3BucketAcl(this, 'logs-bucket-acl', {
+      bucket: logsBucket.bucket.id,
+      acl: 'log-delivery-write',
+      dependsOn: [logsBucket.bucket],
     });
 
     const assetsBucket = new S3Module(this, 'assets-bucket', {
@@ -133,13 +178,6 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // Add ACL configuration for logs bucket (required for CloudFront and ALB)
-    new aws.s3BucketAcl.S3BucketAcl(this, 'logs-bucket-acl', {
-      bucket: logsBucket.bucket.id,
-      acl: 'log-delivery-write',
-      dependsOn: [logsBucket.bucket],
-    });
-
     // ========== Networking ==========
     const vpcModule = new VpcModule(this, 'vpc', {
       vpcCidr: '10.0.0.0/16',
@@ -153,6 +191,53 @@ export class TapStack extends TerraformStack {
     const secretsModule = new SecretsModule(this, 'secrets', {
       parameterPrefix: '/tap/app',
       tags: globalTags,
+    });
+
+    // ========== S3 Bucket Policy for ALB and CloudTrail Access Logs ==========
+    const elbServiceAccountId =
+      ELB_SERVICE_ACCOUNT_IDS[awsRegion] ||
+      ELB_SERVICE_ACCOUNT_IDS['us-east-1'];
+
+    new aws.s3BucketPolicy.S3BucketPolicy(this, 'logs-bucket-policy', {
+      bucket: logsBucket.bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'ALBAccessLogsPolicy',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${elbServiceAccountId}:root`,
+            },
+            Action: 's3:PutObject',
+            Resource: `${logsBucket.bucket.arn}/alb-logs/*`,
+          },
+          {
+            Sid: 'CloudTrailAccessLogsPolicy',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['s3:GetBucketAcl', 's3:PutObject'],
+            Resource: [logsBucket.bucket.arn, `${logsBucket.bucket.arn}/*`],
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Sid: 'CloudTrailBucketCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: logsBucket.bucket.arn,
+          },
+        ],
+      }),
+      dependsOn: [logsBucket.bucket],
     });
 
     // ========== Load Balancer ==========
@@ -176,7 +261,7 @@ export class TapStack extends TerraformStack {
       desiredCapacity: 3,
       tags: globalTags,
       ssmParameterPrefix: '/tap/app',
-      keyName: 'latest-key-pair', // Create this keypair in AWS console or via CDKTF
+      keyName: keyPair.keyName,
     });
 
     // Attach ASG to Target Group
@@ -294,38 +379,45 @@ export class TapStack extends TerraformStack {
 
     // ========== Additional Security Configurations ==========
 
-    // WAF for CloudFront
-    new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf-web-acl', {
-      name: 'tap-waf-acl',
-      scope: 'CLOUDFRONT',
-      defaultAction: {
-        allow: {},
-      },
-      rule: [
-        {
-          name: 'RateLimitRule',
-          priority: 1,
-          action: {
-            block: {},
-          },
-          statement: {},
-          visibilityConfig: {
-            cloudwatchMetricsEnabled: true,
-            metricName: 'RateLimitRule',
-            sampledRequestsEnabled: true,
-          },
+    // WAF for CloudFront (only create in us-east-1)
+    if (awsRegion === 'us-east-1') {
+      new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf-web-acl', {
+        name: 'tap-waf-acl',
+        scope: 'CLOUDFRONT',
+        defaultAction: {
+          allow: {},
         },
-      ],
-      visibilityConfig: {
-        cloudwatchMetricsEnabled: true,
-        metricName: 'tap-waf-metric',
-        sampledRequestsEnabled: true,
-      },
-      tags: globalTags,
-    });
+        rule: [
+          {
+            name: 'RateLimitRule',
+            priority: 1,
+            action: {
+              block: {},
+            },
+            statement: {
+              rateBasedStatement: {
+                limit: 2000,
+                aggregateKeyType: 'IP',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: 'RateLimitRule',
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+        visibilityConfig: {
+          cloudwatchMetricsEnabled: true,
+          metricName: 'tap-waf-metric',
+          sampledRequestsEnabled: true,
+        },
+        tags: globalTags,
+      });
+    }
 
-    // AWS Config Rules for Compliance (without Config Recorder)
-    new aws.iamRole.IamRole(this, 'config-role', {
+    // AWS Config Role (with correct policy)
+    const configRole = new aws.iamRole.IamRole(this, 'config-role', {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -336,39 +428,18 @@ export class TapStack extends TerraformStack {
           },
         ],
       }),
-      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole'],
       tags: globalTags,
     });
 
-    // S3 Bucket Policy for ALB Access Logs
-    const elbAccountId = process.env.CURRENT_ACCOUNT_ID;
-
-    new aws.s3BucketPolicy.S3BucketPolicy(this, 'alb-logs-bucket-policy', {
-      bucket: logsBucket.bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'ALBAccessLogsPolicy',
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${elbAccountId}:root`,
-            },
-            Action: 's3:PutObject',
-            Resource: `${logsBucket.bucket.arn}/alb-logs/*`,
-          },
-          {
-            Sid: 'CloudTrailAccessLogsPolicy',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: ['s3:GetBucketAcl', 's3:PutObject'],
-            Resource: [logsBucket.bucket.arn, `${logsBucket.bucket.arn}/*`],
-          },
-        ],
-      }),
-    });
+    // Attach AWS Config policy using the correct policy ARN
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'config-role-policy',
+      {
+        role: configRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+      }
+    );
 
     // ========== Terraform Outputs ==========
     new TerraformOutput(this, 'vpc-id', {
@@ -438,7 +509,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'monitoring-dashboard-url', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${monitoringModule.dashboard.dashboardName}`,
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#dashboards:name=${monitoringModule.dashboard.dashboardName}`,
       description: 'CloudWatch Dashboard URL',
     });
 
@@ -461,7 +532,10 @@ export class TapStack extends TerraformStack {
       value: '/tap/app',
       description: 'SSM Parameter Store Prefix for Application Secrets',
     });
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+
+    new TerraformOutput(this, 'key-pair-name', {
+      value: keyPair.keyName,
+      description: 'EC2 Key Pair Name',
+    });
   }
 }
