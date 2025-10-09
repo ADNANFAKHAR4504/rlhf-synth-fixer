@@ -307,13 +307,23 @@ describe('TapStack Integration Tests', () => {
     test('ElasticBeanstalkEnvironment should exist and be healthy', async () => {
       // List all environments and find the one that matches our pattern
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       expect(matchingEnv.EnvironmentName).toBeDefined();
@@ -338,13 +348,23 @@ describe('TapStack Integration Tests', () => {
 
     test('ElasticBeanstalkEnvironment should have correct configuration', async () => {
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       expect(matchingEnv.SolutionStackName).toContain('Amazon Linux 2023');
@@ -700,13 +720,23 @@ describe('TapStack Integration Tests', () => {
     test('Elastic Beanstalk environment should be referenced by CodePipeline', async () => {
       // Get the Elastic Beanstalk environment name
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       // Get the pipeline
@@ -810,13 +840,23 @@ describe('TapStack Integration Tests', () => {
   describe('Performance and Scalability Validation', () => {
     test('Elastic Beanstalk environment should have proper scaling configuration', async () => {
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       expect(matchingEnv.Tier?.Type).toBe('Standard');
@@ -908,13 +948,23 @@ describe('TapStack Integration Tests', () => {
 
       // Get the Elastic Beanstalk environment
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       const pipelineResponse = await codePipelineClient.send(new GetPipelineCommand({ name: matchingPipeline.name! }));
@@ -962,13 +1012,23 @@ describe('TapStack Integration Tests', () => {
     test('All critical resources should be in healthy state', async () => {
       // Get the Elastic Beanstalk environment
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       // Get the CodeBuild project
@@ -1011,13 +1071,23 @@ describe('TapStack Integration Tests', () => {
 
     test('All resources should have proper tags and metadata', async () => {
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
-        env.ApplicationName?.includes('ElasticBeanstalkApplication')
+        env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
+        env.EnvironmentName?.includes('TapSt') ||
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       expect(matchingEnv.Description).toBeDefined();
@@ -1031,15 +1101,23 @@ describe('TapStack Integration Tests', () => {
     test('Deployed application should be accessible and return valid HTML', async () => {
       // Get the Elastic Beanstalk environment to find the endpoint
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
         env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
         env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas')
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       // Environment must be Ready for HTTP verification
@@ -1108,15 +1186,23 @@ describe('TapStack Integration Tests', () => {
     test('Deployed application should respond within acceptable time limits', async () => {
       // Get the Elastic Beanstalk environment
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
         env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
         env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas')
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       // Environment must be Ready for performance testing
@@ -1159,15 +1245,23 @@ describe('TapStack Integration Tests', () => {
     test('Deployed application should handle different HTTP methods appropriately', async () => {
       // Get the Elastic Beanstalk environment
       const envsResponse = await ebClient.send(new DescribeEnvironmentsCommand({}));
+      // Log all available environments for debugging
+      console.log('Available Elastic Beanstalk environments:');
+      envsResponse.Environments?.forEach(env => {
+        console.log(`- ${env.EnvironmentName} (Status: ${env.Status}, App: ${env.ApplicationName})`);
+      });
+
       const matchingEnv = envsResponse.Environments?.find(env =>
         env.EnvironmentName?.includes('ElasticBeanstalkEnvironment') ||
         env.ApplicationName?.includes('ElasticBeanstalkApplication') ||
         env.EnvironmentName?.includes('TapSt') ||
-        env.EnvironmentName?.includes('Elas')
+        env.EnvironmentName?.includes('Elas') ||
+        env.ApplicationName?.includes('MyWebApp')
       );
 
       if (!matchingEnv) {
-        throw new Error('ElasticBeanstalkEnvironment not found. Please deploy the CloudFormation stack first.');
+        const availableEnvs = envsResponse.Environments?.map(env => `${env.EnvironmentName} (${env.Status})`).join(', ') || 'None';
+        throw new Error(`ElasticBeanstalkEnvironment not found. Available environments: ${availableEnvs}. Please deploy the CloudFormation stack first.`);
       }
 
       // Environment must be Ready for HTTP methods testing
