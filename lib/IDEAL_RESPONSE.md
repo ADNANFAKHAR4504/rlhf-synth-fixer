@@ -1,6 +1,6 @@
 # CloudFormation Template for Serverless Infrastructure
 
-This CloudFormation template implements a production-ready serverless infrastructure on AWS that handles HTTP requests and scheduled tasks. The template uses JSON format and deploys all resources in the us-west-2 region with comprehensive security, monitoring, and high availability.
+This CloudFormation template implements a production-ready serverless infrastructure on AWS that handles HTTP requests and scheduled tasks. The template uses JSON format and deploys all resources in the us-west-1 region with comprehensive security, monitoring, and high availability.
 
 ## Architecture Overview
 
