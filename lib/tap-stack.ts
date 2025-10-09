@@ -4,32 +4,21 @@ import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
 
-interface TapStackProps extends cdk.StackProps {
+interface MonitoringStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   notificationEmail?: string;
 }
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+export class ServerlessMonitoringStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: MonitoringStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const envSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+    const envSuffix = props?.environmentSuffix || 'dev';
     const email = props?.notificationEmail || 'admin@example.com';
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
 
     // ===========================
     // DynamoDB Table for Error Logs
@@ -194,8 +183,7 @@ exports.handler = async (event) => {
           ERROR_TABLE_NAME: errorLogsTable.tableName,
           FUNCTION_NAME: `${funcName}-${envSuffix}`,
           ENVIRONMENT: envSuffix,
-        },
-        logRetention: logs.RetentionDays.ONE_WEEK,
+        }
       });
 
       lambdaFunctions.push(func);

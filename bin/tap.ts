@@ -20,7 +20,7 @@ new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix,
   description: `TapStack for ${environmentSuffix} environment`,
-  notificationEmail: 'admin@example.com',// Pass the suffix to the stack
+  notificationEmail: 'admin@example.com', // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
