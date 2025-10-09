@@ -3,7 +3,7 @@ import * as AWS from 'aws-sdk';
 // Configure AWS SDK
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const resourceSuffix = 'primary-2';
+const resourceSuffix = 'primary-3';
 
 AWS.config.update({ region });
 
