@@ -163,6 +163,7 @@ echo "📦 Installing Python dependencies..."
 if [ -f "Pipfile" ]; then
   pipenv install --dev --ignore-pipfile
   pipenv install cfn-lint
+  pipenv install cfn-flip
 else
   echo "ℹ️ No Pipfile found, skipping Python dependencies installation"
 fi
