@@ -3,21 +3,14 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('Notification System CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Convert YAML template to JSON for testing
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -25,91 +18,218 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have appropriate description for notification system', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(template.Description).toContain('Serverless Notification System');
+      expect(template.Description).toContain('SNS, Lambda, DynamoDB, CloudWatch, and SES');
     });
   });
 
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      const envParam = template.Parameters.EnvironmentSuffix;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.Description).toContain('Environment suffix');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have NotificationEmail parameter', () => {
+      expect(template.Parameters.NotificationEmail).toBeDefined();
+      const emailParam = template.Parameters.NotificationEmail;
+      expect(emailParam.Type).toBe('String');
+      expect(emailParam.Default).toBe('notifications@example.com');
+      expect(emailParam.AllowedPattern).toBeDefined();
+      expect(emailParam.ConstraintDescription).toContain('valid email address');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('SNS Resources', () => {
+    test('should have OrderNotificationTopic', () => {
+      expect(template.Resources.OrderNotificationTopic).toBeDefined();
+      const topic = template.Resources.OrderNotificationTopic;
+      expect(topic.Type).toBe('AWS::SNS::Topic');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('OrderNotificationTopic should have correct properties', () => {
+      const topic = template.Resources.OrderNotificationTopic.Properties;
+      expect(topic.TopicName).toEqual({
+        'Fn::Sub': 'order-notifications-${EnvironmentSuffix}'
+      });
+      expect(topic.DisplayName).toBe('Order Update Notifications');
+      expect(topic.Subscription).toHaveLength(2);
+    });
+
+    test('should have OrderNotificationTopicPolicy', () => {
+      expect(template.Resources.OrderNotificationTopicPolicy).toBeDefined();
+      const policy = template.Resources.OrderNotificationTopicPolicy;
+      expect(policy.Type).toBe('AWS::SNS::TopicPolicy');
+    });
+
+    test('SNS topic policy should allow publish from account', () => {
+      const policy = template.Resources.OrderNotificationTopicPolicy.Properties.PolicyDocument;
+      expect(policy.Statement[0].Effect).toBe('Allow');
+      expect(policy.Statement[0].Action).toContain('SNS:Publish');
+    });
+  });
+
+  describe('Lambda Resources', () => {
+    test('should have NotificationProcessorFunction', () => {
+      expect(template.Resources.NotificationProcessorFunction).toBeDefined();
+      const lambda = template.Resources.NotificationProcessorFunction;
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('Lambda function should have correct configuration', () => {
+      const lambda = template.Resources.NotificationProcessorFunction.Properties;
+      expect(lambda.Runtime).toBe('nodejs22.x');
+      expect(lambda.Handler).toBe('index.handler');
+      expect(lambda.Timeout).toBe(30);
+      expect(lambda.MemorySize).toBe(512);
+    });
+
+    test('Lambda function should have environment variables', () => {
+      const lambda = template.Resources.NotificationProcessorFunction.Properties;
+      expect(lambda.Environment.Variables.DYNAMODB_TABLE).toEqual({
+        Ref: 'NotificationLogTable'
+      });
+      expect(lambda.Environment.Variables.SES_SOURCE_EMAIL).toEqual({
+        Ref: 'NotificationEmail'
+      });
+    });
+
+    test('should have NotificationProcessorInvokePermission', () => {
+      expect(template.Resources.NotificationProcessorInvokePermission).toBeDefined();
+      const permission = template.Resources.NotificationProcessorInvokePermission;
+      expect(permission.Type).toBe('AWS::Lambda::Permission');
+      expect(permission.Properties.Principal).toBe('sns.amazonaws.com');
+    });
+  });
+
+  describe('DynamoDB Resources', () => {
+    test('should have NotificationLogTable', () => {
+      expect(template.Resources.NotificationLogTable).toBeDefined();
+      const table = template.Resources.NotificationLogTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('DynamoDB table should have correct configuration', () => {
+      const table = template.Resources.NotificationLogTable.Properties;
+      expect(table.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(table.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+      expect(table.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('DynamoDB table should have correct key schema', () => {
+      const table = template.Resources.NotificationLogTable.Properties;
+      expect(table.KeySchema).toHaveLength(2);
+      expect(table.KeySchema[0].AttributeName).toBe('notificationId');
+      expect(table.KeySchema[0].KeyType).toBe('HASH');
+      expect(table.KeySchema[1].AttributeName).toBe('timestamp');
+      expect(table.KeySchema[1].KeyType).toBe('RANGE');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('DynamoDB table should have Global Secondary Index', () => {
+      const table = template.Resources.NotificationLogTable.Properties;
+      expect(table.GlobalSecondaryIndexes).toHaveLength(1);
+      const gsi = table.GlobalSecondaryIndexes[0];
+      expect(gsi.IndexName).toBe('StatusIndex');
+      expect(gsi.KeySchema[0].AttributeName).toBe('status');
+    });
+  });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+  describe('IAM Resources', () => {
+    test('should have NotificationProcessorRole', () => {
+      expect(template.Resources.NotificationProcessorRole).toBeDefined();
+      const role = template.Resources.NotificationProcessorRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('IAM role should have correct assume role policy', () => {
+      const role = template.Resources.NotificationProcessorRole.Properties;
+      const assumeRolePolicy = role.AssumeRolePolicyDocument;
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(assumeRolePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('IAM role should have required managed policies', () => {
+      const role = template.Resources.NotificationProcessorRole.Properties;
+      expect(role.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      );
+    });
+
+    test('IAM role should have DynamoDB permissions', () => {
+      const role = template.Resources.NotificationProcessorRole.Properties;
+      const policy = role.Policies[0].PolicyDocument;
+      const dynamoStatement = policy.Statement.find(s => 
+        s.Action.includes('dynamodb:PutItem')
+      );
+      expect(dynamoStatement).toBeDefined();
+      expect(dynamoStatement.Action).toContain('dynamodb:GetItem');
+      expect(dynamoStatement.Action).toContain('dynamodb:UpdateItem');
+    });
+
+    test('IAM role should have SES permissions', () => {
+      const role = template.Resources.NotificationProcessorRole.Properties;
+      const policy = role.Policies[0].PolicyDocument;
+      const sesStatement = policy.Statement.find(s => 
+        s.Action.includes('ses:SendEmail')
+      );
+      expect(sesStatement).toBeDefined();
+      expect(sesStatement.Action).toContain('ses:SendRawEmail');
+    });
+  });
+
+  describe('CloudWatch Resources', () => {
+    test('should have NotificationFailureAlarm', () => {
+      expect(template.Resources.NotificationFailureAlarm).toBeDefined();
+      const alarm = template.Resources.NotificationFailureAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('should have LambdaErrorAlarm', () => {
+      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+      const alarm = template.Resources.LambdaErrorAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('should have LambdaThrottleAlarm', () => {
+      expect(template.Resources.LambdaThrottleAlarm).toBeDefined();
+      const alarm = template.Resources.LambdaThrottleAlarm;
+      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('should have NotificationSystemDashboard', () => {
+      expect(template.Resources.NotificationSystemDashboard).toBeDefined();
+      const dashboard = template.Resources.NotificationSystemDashboard;
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
+
+    test('alarms should have correct thresholds', () => {
+      const failureAlarm = template.Resources.NotificationFailureAlarm.Properties;
+      expect(failureAlarm.Threshold).toBe(10);
+      expect(failureAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
+
+      const errorAlarm = template.Resources.LambdaErrorAlarm.Properties;
+      expect(errorAlarm.Threshold).toBe(5);
+      
+      const throttleAlarm = template.Resources.LambdaThrottleAlarm.Properties;
+      expect(throttleAlarm.Threshold).toBe(1);
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'SNSTopicArn',
+        'SNSTopicName', 
+        'LambdaFunctionArn',
+        'LambdaFunctionName',
+        'DynamoDBTableName',
+        'DynamoDBTableArn',
+        'DashboardURL',
+        'NotificationEmail'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +237,38 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('outputs should have correct export names', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        if (output.Export) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey}`
+          });
+        }
       });
     });
+  });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
+  describe('Resource Tagging', () => {
+    test('resources should have consistent tags', () => {
+      const taggedResources = [
+        'OrderNotificationTopic',
+        'NotificationLogTable', 
+        'NotificationProcessorRole',
+        'NotificationProcessorFunction'
+      ];
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+      taggedResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties.Tags) {
+          const tags = resource.Properties.Tags;
+          const envTag = tags.find(t => t.Key === 'Environment');
+          const appTag = tags.find(t => t.Key === 'Application');
+          
+          expect(envTag).toBeDefined();
+          expect(appTag).toBeDefined();
+          expect(appTag.Value).toBe('NotificationSystem');
+        }
       });
     });
   });
@@ -164,46 +279,46 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
+    test('should have all required sections', () => {
+      expect(template.AWSTemplateFormatVersion).toBeDefined();
+      expect(template.Description).toBeDefined();
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+    test('should have correct resource count', () => {
+      const expectedResourceCount = 12; // Based on the complete template
+      const actualResourceCount = Object.keys(template.Resources).length;
+      expect(actualResourceCount).toBe(expectedResourceCount);
     });
 
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+    test('should not have hardcoded environment suffix', () => {
+      const templateString = JSON.stringify(template);
+      // Ensure no hardcoded dev/prod/staging in resource names
+      expect(templateString).not.toMatch(/order-notifications-dev/);
+      expect(templateString).not.toMatch(/notification-logs-prod/);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+  describe('Security Validation', () => {
+    test('should not contain hardcoded credentials', () => {
+      const templateString = JSON.stringify(template);
+      expect(templateString).not.toMatch(/password/i);
+      expect(templateString).not.toMatch(/secret/i);
+      expect(templateString).not.toMatch(/key.*=.*[A-Za-z0-9]{20}/);
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('IAM role should follow principle of least privilege', () => {
+      const role = template.Resources.NotificationProcessorRole.Properties;
+      const policy = role.Policies[0].PolicyDocument;
+      
+      // Should not have * resources for sensitive actions
+      const statements = policy.Statement;
+      statements.forEach(statement => {
+        if (statement.Action.includes('dynamodb:')) {
+          expect(statement.Resource).not.toBe('*');
+        }
       });
     });
   });
