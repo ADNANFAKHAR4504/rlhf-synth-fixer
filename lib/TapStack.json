@@ -3,11 +3,6 @@
   "Description": "Secure Web Application Infrastructure with S3, Lambda, CloudFront, WAF, and API Gateway",
 
   "Parameters": {
-    "VpcId": {
-      "Type": "String",
-      "Default": "",
-      "Description": "The VPC ID where resources will be deployed (optional, not currently used)"
-    },
     "Environment": {
       "Type": "String",
       "Default": "Development",
@@ -34,10 +29,6 @@
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
-        {
-          "Label": { "default": "Network Configuration" },
-          "Parameters": ["VpcId"]
-        },
         {
           "Label": { "default": "SSL Configuration" },
           "Parameters": ["ACMCertificateArn"]
