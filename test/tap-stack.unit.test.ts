@@ -13,9 +13,9 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Lambda Function Configuration', () => {
-    test('should configure Lambda with Python 3.8 runtime', () => {
+    test('should configure Lambda with Python 3.13 runtime', () => {
       const lambda = template.Resources.LambdaFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.8');
+      expect(lambda.Properties.Runtime).toBe('python3.13');
       expect(lambda.Properties.Handler).toBe('index.lambda_handler');
     });
 
