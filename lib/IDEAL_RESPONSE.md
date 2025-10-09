@@ -7,11 +7,11 @@ Here's the complete, production-ready infrastructure code for your wiki platform
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { NetworkStack } from './network-stack';
 import { ComputeStack } from './compute-stack';
 import { DatabaseStack } from './database-stack';
-import { StorageStack } from './storage-stack';
 import { MonitoringStack } from './monitoring-stack';
+import { NetworkStack } from './network-stack';
+import { StorageStack } from './storage-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -53,7 +53,6 @@ export class TapStack extends cdk.Stack {
       openSearchDomain: storageStack.openSearchDomain,
       openSearchSecurityGroup: storageStack.openSearchSecurityGroup,
       mediaBucket: storageStack.mediaBucket,
-      serviceNetwork: networkStack.serviceNetwork,
       environmentSuffix,
     });
 
@@ -101,6 +100,7 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+
 ```
 
 ## lib/network-stack.ts
@@ -183,6 +183,7 @@ export class NetworkStack extends Construct {
     cdk.Tags.of(this.vpc).add('Environment', props.environmentSuffix);
   }
 }
+
 ```
 
 ## lib/database-stack.ts
@@ -270,6 +271,7 @@ export class DatabaseStack extends Construct {
     cdk.Tags.of(this.database).add('Environment', props.environmentSuffix);
   }
 }
+
 ```
 
 ## lib/storage-stack.ts
@@ -389,9 +391,7 @@ export class StorageStack extends Construct {
 
     // S3 Bucket for Media Uploads
     this.mediaBucket = new s3.Bucket(this, 'WikiMediaBucket', {
-      bucketName: `wiki-media-${props.environmentSuffix}-${
-        cdk.Stack.of(this).account
-      }`,
+      bucketName: `wiki-media-${props.environmentSuffix}-${cdk.Stack.of(this).account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -426,21 +426,22 @@ export class StorageStack extends Construct {
     cdk.Tags.of(this.mediaBucket).add('Environment', props.environmentSuffix);
   }
 }
+
 ```
 
 ## lib/compute-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as rds from 'aws-cdk-lib/aws-rds';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
+
 import { Construct } from 'constructs';
 
 interface ComputeStackProps {
@@ -451,7 +452,6 @@ interface ComputeStackProps {
   openSearchDomain: opensearch.Domain;
   openSearchSecurityGroup: ec2.SecurityGroup;
   mediaBucket: s3.Bucket;
-  serviceNetwork: vpclattice.CfnServiceNetwork;
   environmentSuffix: string;
 }
 
@@ -605,66 +605,6 @@ export class ComputeStack extends Construct {
       targetRequestsPerMinute: 1000,
     });
 
-    // VPC Lattice Service
-    const latticeTargetGroup = new vpclattice.CfnTargetGroup(
-      this,
-      'LatticeTargetGroup',
-      {
-        type: 'ALB',
-        targets: [
-          {
-            id: this.alb.loadBalancerArn,
-            port: 80,
-          },
-        ],
-        config: {
-          port: 80,
-          protocol: 'HTTP',
-          protocolVersion: 'HTTP1',
-          vpcIdentifier: props.vpc.vpcId,
-          healthCheck: {
-            enabled: true,
-            protocol: 'HTTP',
-            path: '/',
-          },
-        },
-      }
-    );
-
-    const latticeService = new vpclattice.CfnService(
-      this,
-      'WikiLatticeService',
-      {
-        name: `wiki-service-${props.environmentSuffix}`,
-        authType: 'AWS_IAM',
-      }
-    );
-
-    new vpclattice.CfnListener(this, 'LatticeListener', {
-      serviceIdentifier: latticeService.attrArn,
-      protocol: 'HTTP',
-      port: 80,
-      defaultAction: {
-        forward: {
-          targetGroups: [
-            {
-              targetGroupIdentifier: latticeTargetGroup.attrArn,
-              weight: 100,
-            },
-          ],
-        },
-      },
-    });
-
-    new vpclattice.CfnServiceNetworkServiceAssociation(
-      this,
-      'ServiceAssociation',
-      {
-        serviceIdentifier: latticeService.attrArn,
-        serviceNetworkIdentifier: props.serviceNetwork.attrArn,
-      }
-    );
-
     // Configure Security Group Rules for Database Access
     const dbSecurityGroup = props.database.connections.securityGroups[0];
     dbSecurityGroup.addIngressRule(
@@ -699,6 +639,7 @@ export class ComputeStack extends Construct {
     );
   }
 }
+
 ```
 
 ## lib/monitoring-stack.ts
@@ -898,6 +839,7 @@ export class MonitoringStack extends Construct {
     cdk.Tags.of(alertTopic).add('Environment', props.environmentSuffix);
   }
 }
+
 ```
 
 ## Key Improvements in This Solution
