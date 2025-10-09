@@ -17,7 +17,7 @@ type DeploymentOutputs = {
   public_subnet_id: string;
   rds_endpoint: string;
   rds_password_secret_arn?: string;
-  s3_app_bucket_name: string;
+  s3_bucket_name: string;
   vpc_id: string;
 };
 
@@ -26,7 +26,7 @@ const REQUIRED_OUTPUT_KEYS: Array<keyof DeploymentOutputs> = [
   "ec2_instance_public_ip",
   "public_subnet_id",
   "rds_endpoint",
-  "s3_app_bucket_name",
+  "s3_bucket_name",
   "vpc_id",
 ];
 
@@ -139,7 +139,7 @@ describe("Terraform stack integration", () => {
     expect(outputs.ec2_instance_public_ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
     expect(outputs.public_subnet_id).toMatch(/^subnet-[a-f0-9]+$/);
     expect(outputs.rds_endpoint).toContain(".rds.amazonaws.com");
-    expect(outputs.s3_app_bucket_name).not.toHaveLength(0);
+    expect(outputs.s3_bucket_name).not.toHaveLength(0);
     expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
   });
 
@@ -236,11 +236,11 @@ describe("Terraform stack integration", () => {
 
   test("application bucket exists and enforces server-side encryption", async () => {
     await expect(
-      s3.send(new HeadBucketCommand({ Bucket: outputs.s3_app_bucket_name })),
+      s3.send(new HeadBucketCommand({ Bucket: outputs.s3_bucket_name })),
     ).resolves.toBeDefined();
 
     const encryption = await s3.send(
-      new GetBucketEncryptionCommand({ Bucket: outputs.s3_app_bucket_name }),
+      new GetBucketEncryptionCommand({ Bucket: outputs.s3_bucket_name }),
     );
 
     const rule = encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
