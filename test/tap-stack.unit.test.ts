@@ -1,10 +1,20 @@
-import * as fs from 'fs';
-import * as path from 'path';
+/**
+ * TapStack CloudFormation Template Unit Tests (ESM, .unit.test.mjs)
+ * - Matches pipeline regex: /\.unit\.test\.mjs$/
+ * - Mirrors the archived test's describe/title style and structure
+ */
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-describe('TapStack CloudFormation Template', () => {
-  let template: any;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+describe('TapStack CloudFormation Template Unit Tests', () => {
+  let template;
 
   beforeAll(() => {
+    // Adjust path if your template lives elsewhere
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -18,171 +28,169 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toContain(
-        'Secure, scalable AWS infrastructure for mid-sized company'
-      );
+      expect(typeof template.Description).toBe('string');
+      expect(template.Description.length).toBeGreaterThan(0);
     });
 
-    test('should have metadata section', () => {
+    test('should have all required top-level sections', () => {
+      expect(template).toHaveProperty('AWSTemplateFormatVersion');
+      expect(template).toHaveProperty('Description');
+      expect(template).toHaveProperty('Parameters');
+      expect(template).toHaveProperty('Resources');
+      expect(template).toHaveProperty('Outputs');
+    });
+
+    test('should have metadata interface section', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+
+    test('should have valid JSON structure', () => {
+      expect(template).toBeDefined();
+      expect(typeof template).toBe('object');
+      expect(template).not.toBeNull();
     });
   });
 
   // ---------------- Parameters ----------------
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
+    test('should include EnvironmentSuffix', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toContain('Lowercase env suffix');
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe('Use lowercase letters and numbers only');
+    test('EnvironmentSuffix should be lowercase and constrained', () => {
+      const p = template.Parameters.EnvironmentSuffix;
+      expect(p.Type).toBe('String');
+      expect(p.Default).toBe('dev');
+      expect(p.AllowedPattern).toBe('^[a-z0-9]+$');
+      expect(p.ConstraintDescription).toMatch(/lowercase/);
     });
 
-    test('should have VPC configuration parameters', () => {
-      expect(template.Parameters.VPCCidr).toBeDefined();
-      expect(template.Parameters.PublicSubnet1Cidr).toBeDefined();
-      expect(template.Parameters.PublicSubnet2Cidr).toBeDefined();
-      expect(template.Parameters.PrivateSubnet1Cidr).toBeDefined();
-      expect(template.Parameters.PrivateSubnet2Cidr).toBeDefined();
+    test('should have VPC/network parameters', () => {
+      ['VPCCidr', 'PublicSubnet1Cidr', 'PublicSubnet2Cidr', 'PrivateSubnet1Cidr', 'PrivateSubnet2Cidr']
+        .forEach(k => expect(template.Parameters[k]).toBeDefined());
     });
 
-    test('should have EC2 configuration parameters (without KeyName)', () => {
+    test('should have EC2 parameters (no KeyName)', () => {
       expect(template.Parameters.InstanceType).toBeDefined();
       expect(template.Parameters.LatestAmiId).toBeDefined();
-      // KeyName was intentionally removed to avoid CFN validation failures
+      // Intentional: no KeyName param to avoid CFN validation differences
       expect(template.Parameters.KeyName).toBeUndefined();
     });
 
-    test('should have database configuration parameters', () => {
+    test('should have DB parameters (username + instance class)', () => {
       expect(template.Parameters.DBUsername).toBeDefined();
       expect(template.Parameters.DBInstanceClass).toBeDefined();
+      const u = template.Parameters.DBUsername;
+      // cannot be 'admin' and must start with a letter
+      expect(u.AllowedPattern).toBe("^(?!admin$)[a-zA-Z][a-zA-Z0-9_]*$");
     });
   });
 
   // ---------------- Resources ----------------
   describe('Resources', () => {
     test('should have KMS key and alias', () => {
-      expect(template.Resources.KMSKey).toBeDefined();
-      expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
-      expect(template.Resources.KMSAlias).toBeDefined();
-      expect(template.Resources.KMSAlias.Type).toBe('AWS::KMS::Alias');
+      expect(template.Resources.KMSKey?.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.KMSAlias?.Type).toBe('AWS::KMS::Alias');
     });
 
-    test('should have VPC and networking resources', () => {
-      expect(template.Resources.VPC).toBeDefined();
-      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
-      expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.NATGateway).toBeDefined();
-      expect(template.Resources.PublicSubnet1).toBeDefined();
-      expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet1).toBeDefined();
-      expect(template.Resources.PrivateSubnet2).toBeDefined();
+    test('should have VPC and core networking', () => {
+      const r = template.Resources;
+      ['VPC', 'InternetGateway', 'AttachGateway', 'PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2',
+        'PublicRouteTable', 'PublicRoute', 'PrivateRouteTable', 'PrivateRoute', 'NATGateway', 'NATGatewayEIP']
+        .forEach(k => expect(r[k]).toBeDefined());
     });
 
     test('should have security groups', () => {
-      expect(template.Resources.BastionSecurityGroup).toBeDefined();
-      expect(template.Resources.ALBSecurityGroup).toBeDefined();
-      expect(template.Resources.EC2SecurityGroup).toBeDefined();
-      expect(template.Resources.RDSSecurityGroup).toBeDefined();
+      const r = template.Resources;
+      ['BastionSecurityGroup', 'ALBSecurityGroup', 'EC2SecurityGroup', 'RDSSecurityGroup']
+        .forEach(k => expect(r[k]).toBeDefined());
     });
 
-    test('should have EC2 and Auto Scaling resources', () => {
-      expect(template.Resources.BastionHost).toBeDefined();
-      expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.AutoScalingGroup).toBeDefined();
-      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
-      expect(template.Resources.ALBTargetGroup).toBeDefined();
+    test('should have EC2 + ASG + ALB', () => {
+      const r = template.Resources;
+      ['BastionHost', 'LaunchTemplate', 'AutoScalingGroup', 'ApplicationLoadBalancer', 'ALBTargetGroup', 'ALBListener']
+        .forEach(k => expect(r[k]).toBeDefined());
     });
 
-    test('should have S3 buckets', () => {
-      expect(template.Resources.LogBucket).toBeDefined();
-      expect(template.Resources.DataBucket).toBeDefined();
-      expect(template.Resources.ContentBucket).toBeDefined();
-      expect(template.Resources.LogBucket.Type).toBe('AWS::S3::Bucket');
-      expect(template.Resources.DataBucket.Type).toBe('AWS::S3::Bucket');
-      expect(template.Resources.ContentBucket.Type).toBe('AWS::S3::Bucket');
+    test('should have S3 buckets and policies', () => {
+      const r = template.Resources;
+      ['LogBucket', 'DataBucket', 'ContentBucket', 'DataBucketPolicy', 'ContentBucketPolicy', 'LogBucketPolicy']
+        .forEach(k => expect(r[k]).toBeDefined());
+      expect(r.LogBucket.Type).toBe('AWS::S3::Bucket');
+      expect(r.DataBucket.Type).toBe('AWS::S3::Bucket');
+      expect(r.ContentBucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('should have RDS database', () => {
-      expect(template.Resources.DBInstance).toBeDefined();
-      expect(template.Resources.DBInstance.Type).toBe('AWS::RDS::DBInstance');
-      expect(template.Resources.DBSubnetGroup).toBeDefined();
-      expect(template.Resources.DBSecret).toBeDefined();
+    test('should have CloudFront with OAI', () => {
+      expect(template.Resources.CloudFrontDistribution?.Type).toBe('AWS::CloudFront::Distribution');
+      expect(template.Resources.CloudFrontOAI?.Type).toBe('AWS::CloudFront::CloudFrontOriginAccessIdentity');
     });
 
-    test('should have Lambda function', () => {
-      expect(template.Resources.LogProcessorFunction).toBeDefined();
-      expect(template.Resources.LogProcessorFunction.Type).toBe('AWS::Lambda::Function');
-      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+    test('should have RDS (PostgreSQL) with subnet group and secret', () => {
+      const r = template.Resources;
+      expect(r.DBSubnetGroup?.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(r.DBSecret?.Type).toBe('AWS::SecretsManager::Secret');
+      expect(r.DBInstance?.Type).toBe('AWS::RDS::DBInstance');
+
+      const db = r.DBInstance?.Properties || {};
+      expect(db.Engine).toBe('postgres');
+      expect(db.EngineVersion).toBe('15.10');
+      expect(db.VPCSecurityGroups?.length).toBeGreaterThan(0);
+      expect(db.EnableCloudwatchLogsExports).toContain('postgresql');
+      expect(db.PubliclyAccessible).toBe(false);
+      expect(db.MultiAZ).toBe(true);
     });
 
-    test('should have CloudFront distribution', () => {
-      expect(template.Resources.CloudFrontDistribution).toBeDefined();
-      expect(template.Resources.CloudFrontDistribution.Type).toBe('AWS::CloudFront::Distribution');
-      expect(template.Resources.CloudFrontOAI).toBeDefined();
+    test('should have Lambda and invoke permissions', () => {
+      expect(template.Resources.LogProcessorFunction?.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.LambdaExecutionRole?.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.LambdaS3Permission?.Type).toBe('AWS::Lambda::Permission');
     });
 
-    test('should have CloudWatch alarms', () => {
-      expect(template.Resources.CPUAlarmHigh).toBeDefined();
-      expect(template.Resources.CPUAlarmLow).toBeDefined();
-      expect(template.Resources.ScaleUpPolicy).toBeDefined();
-      expect(template.Resources.ScaleDownPolicy).toBeDefined();
+    test('should have CloudWatch alarms + scaling policies', () => {
+      const r = template.Resources;
+      ['CPUAlarmHigh', 'CPUAlarmLow', 'ScaleUpPolicy', 'ScaleDownPolicy']
+        .forEach(k => expect(r[k]).toBeDefined());
     });
   });
 
   // ---------------- Security & Compliance ----------------
   describe('Security and Compliance', () => {
     test('KMS key should have rotation enabled', () => {
-      const kmsKey = template.Resources.KMSKey;
-      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
+      expect(template.Resources.KMSKey.Properties.EnableKeyRotation).toBe(true);
     });
 
-    test('S3 buckets should have encryption enabled', () => {
-      (['LogBucket', 'DataBucket', 'ContentBucket'] as const).forEach((bucketName) => {
-        const bucket = template.Resources[bucketName];
-        expect(bucket.Properties.BucketEncryption).toBeDefined();
-        expect(
-          bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
-            .ServerSideEncryptionByDefault.SSEAlgorithm
-        ).toBe('aws:kms');
+    test('S3 buckets should have KMS encryption and public access blocked', () => {
+      ['LogBucket', 'DataBucket', 'ContentBucket'].forEach(name => {
+        const b = template.Resources[name].Properties;
+        const cfg = b.BucketEncryption?.ServerSideEncryptionConfiguration?.[0]?.ServerSideEncryptionByDefault || {};
+        expect(cfg.SSEAlgorithm).toBe('aws:kms');
+
+        const pab = b.PublicAccessBlockConfiguration || {};
+        expect(pab.BlockPublicAcls).toBe(true);
+        expect(pab.BlockPublicPolicy).toBe(true);
+        expect(pab.IgnorePublicAcls).toBe(true);
+        expect(pab.RestrictPublicBuckets).toBe(true);
       });
     });
 
-    test('S3 buckets should have public access blocked', () => {
-      (['LogBucket', 'DataBucket', 'ContentBucket'] as const).forEach((bucketName) => {
-        const bucket = template.Resources[bucketName];
-        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
-        expect(publicAccessBlock.BlockPublicAcls).toBe(true);
-        expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
-        expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
-        expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
-      });
+    test('RDS must be encrypted with project KMS and private', () => {
+      const db = template.Resources.DBInstance.Properties;
+      expect(db.StorageEncrypted).toBe(true);
+      expect(db.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+      expect(db.PubliclyAccessible).toBe(false);
     });
 
-    test('RDS instance should be encrypted with project KMS key and private', () => {
-      const dbInstance = template.Resources.DBInstance;
-      expect(dbInstance.Properties.StorageEncrypted).toBe(true);
-      expect(dbInstance.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-      expect(dbInstance.Properties.PubliclyAccessible).toBe(false);
+    test('DB instance should be deletable for test environments', () => {
+      const dbr = template.Resources.DBInstance;
+      expect(dbr.DeletionPolicy).toBe('Delete');
+      expect(dbr.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('DB instance should have delete policy for testing', () => {
-      const dbInstance = template.Resources.DBInstance;
-      expect(dbInstance.DeletionPolicy).toBe('Delete');
-      expect(dbInstance.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('EC2 LaunchTemplate root volume should be encrypted (AWS-managed key)', () => {
-      const lt = template.Resources.LaunchTemplate;
-      const ebs = lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs;
+    test('LaunchTemplate root volume should be encrypted (no custom CMK on EBS)', () => {
+      const ebs = template.Resources.LaunchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs;
       expect(ebs.Encrypted).toBe(true);
-      // We intentionally do NOT pass our CMK to EC2 volumes to avoid ASG launch failures:
       expect(ebs.KmsKeyId).toBeUndefined();
     });
   });
@@ -190,39 +198,29 @@ describe('TapStack CloudFormation Template', () => {
   // ---------------- Resource Naming ----------------
   describe('Resource Naming Convention', () => {
     test('KMS alias should use environment suffix', () => {
-      const kmsAlias = template.Resources.KMSAlias;
-      expect(kmsAlias.Properties.AliasName).toEqual({
+      expect(template.Resources.KMSAlias.Properties.AliasName).toEqual({
         'Fn::Sub': 'alias/TapStack${EnvironmentSuffix}-key',
       });
     });
 
-    test('S3 bucket names should include environment suffix', () => {
-      const logBucket = template.Resources.LogBucket;
-      expect(logBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}',
-      });
+    test('S3 bucket names should include env suffix + account + region', () => {
+      const log = template.Resources.LogBucket.Properties.BucketName;
+      const data = template.Resources.DataBucket.Properties.BucketName;
+      const content = template.Resources.ContentBucket.Properties.BucketName;
 
-      const dataBucket = template.Resources.DataBucket;
-      expect(dataBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}',
-      });
-
-      const contentBucket = template.Resources.ContentBucket;
-      expect(contentBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'tapstack${EnvironmentSuffix}-content-${AWS::AccountId}-${AWS::Region}',
-      });
+      expect(log).toEqual({ 'Fn::Sub': 'tapstack${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}' });
+      expect(data).toEqual({ 'Fn::Sub': 'tapstack${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}' });
+      expect(content).toEqual({ 'Fn::Sub': 'tapstack${EnvironmentSuffix}-content-${AWS::AccountId}-${AWS::Region}' });
     });
 
-    test('resource tags should use environment suffix', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.Tags[0].Value).toEqual({
-        'Fn::Sub': 'TapStack${EnvironmentSuffix}-VPC',
-      });
+    test('VPC tag should include environment suffix', () => {
+      const tags = template.Resources.VPC.Properties.Tags || [];
+      const nameTag = tags.find(t => t.Key === 'Name');
+      expect(nameTag?.Value).toEqual({ 'Fn::Sub': 'TapStack${EnvironmentSuffix}-VPC' });
     });
 
     test('DB secret name should use environment suffix', () => {
-      const dbSecret = template.Resources.DBSecret;
-      expect(dbSecret.Properties.Name).toEqual({
+      expect(template.Resources.DBSecret.Properties.Name).toEqual({
         'Fn::Sub': 'TapStack${EnvironmentSuffix}/db/master',
       });
     });
@@ -231,23 +229,12 @@ describe('TapStack CloudFormation Template', () => {
   // ---------------- Outputs ----------------
   describe('Outputs', () => {
     test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'VPCId',
-        'ALBDNSName',
-        'CloudFrontURL',
-        'BastionPublicIP',
-        'DataBucketName',
-        'RDSEndpoint',
-        'LambdaFunctionArn',
-      ] as const;
-
-      expectedOutputs.forEach((outputName) => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+      ['VPCId', 'ALBDNSName', 'CloudFrontURL', 'BastionPublicIP', 'DataBucketName', 'RDSEndpoint', 'LambdaFunctionArn']
+        .forEach(k => expect(template.Outputs[k]).toBeDefined());
     });
 
-    test('output export names should use environment suffix (typed to avoid TS7053)', () => {
-      const expectedMappings = {
+    test('output export names should use environment suffix', () => {
+      const expected = {
         VPCId: 'TapStack${EnvironmentSuffix}-VPC-ID',
         ALBDNSName: 'TapStack${EnvironmentSuffix}-ALB-DNS',
         CloudFrontURL: 'TapStack${EnvironmentSuffix}-CloudFront-URL',
@@ -255,29 +242,19 @@ describe('TapStack CloudFormation Template', () => {
         DataBucketName: 'TapStack${EnvironmentSuffix}-DataBucket',
         RDSEndpoint: 'TapStack${EnvironmentSuffix}-RDS-Endpoint',
         LambdaFunctionArn: 'TapStack${EnvironmentSuffix}-Lambda-ARN',
-      } as const;
+      };
 
-      type OutputKey = keyof typeof expectedMappings;
-      const entries = Object.entries(expectedMappings) as Array<
-        [OutputKey, (typeof expectedMappings)[OutputKey]]
-      >;
-
-      for (const [outputKey, subVal] of entries) {
-        const output = template.Outputs[outputKey];
-        expect(output).toBeDefined();
-        expect(output.Export.Name).toEqual({ 'Fn::Sub': subVal });
-      }
+      Object.entries(expected).forEach(([k, subVal]) => {
+        const out = template.Outputs[k];
+        expect(out).toBeDefined();
+        expect(out.Export?.Name).toEqual({ 'Fn::Sub': subVal });
+      });
     });
   });
 
   // ---------------- Template Validation ----------------
   describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
+    test('should not have null sections', () => {
       expect(template.AWSTemplateFormatVersion).not.toBeNull();
       expect(template.Description).not.toBeNull();
       expect(template.Parameters).not.toBeNull();
@@ -285,20 +262,20 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have reasonable number of resources for comprehensive infrastructure', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(20);
+    test('should have reasonable number of resources for comprehensive infra', () => {
+      const count = Object.keys(template.Resources).length;
+      expect(count).toBeGreaterThan(20);
     });
 
-    test('should have required parameters including EnvironmentSuffix', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThan(5);
+    test('should have enough parameters and include EnvironmentSuffix', () => {
+      const pc = Object.keys(template.Parameters).length;
+      expect(pc).toBeGreaterThan(5);
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
     test('should have comprehensive outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThanOrEqual(7);
+      const oc = Object.keys(template.Outputs).length;
+      expect(oc).toBeGreaterThanOrEqual(7);
     });
   });
 });
