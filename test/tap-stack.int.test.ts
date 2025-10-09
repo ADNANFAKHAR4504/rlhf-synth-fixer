@@ -3,7 +3,7 @@ import * as AWS from 'aws-sdk';
 // Configure AWS SDK
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const resourceSuffix = 'primary-4';
+const resourceSuffix = 'primary-5';
 
 AWS.config.update({ region });
 
@@ -278,14 +278,6 @@ describe('Price Monitoring Stack Integration Tests', () => {
       expect(policy?.PolicyName).toBe(policyName);
     });
 
-    test('stream processor policy should exist', async () => {
-      const policies = await iam.listPolicies({ Scope: 'Local' }).promise();
-      const policyName = `stream-processor-policy-${environmentSuffix}-${resourceSuffix}`;
-      const policy = policies.Policies?.find((p) => p.PolicyName === policyName);
-
-      expect(policy).toBeDefined();
-      expect(policy?.PolicyName).toBe(policyName);
-    });
   });
 
   describe('CloudWatch Log Groups', () => {

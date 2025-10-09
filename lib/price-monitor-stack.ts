@@ -39,7 +39,7 @@ export class PriceMonitorStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Add unique suffix to avoid resource conflicts
-    const resourceSuffix = 'primary-4';
+    const resourceSuffix = 'primary-5';
 
     // Configure providers
     new AwsProvider(this, 'aws', {
