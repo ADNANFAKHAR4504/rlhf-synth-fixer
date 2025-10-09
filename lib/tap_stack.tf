@@ -1195,8 +1195,7 @@ resource "aws_lb" "main" {
   
   enable_deletion_protection = false
   enable_http2               = true
-  enable_drop_invalid_header_fields = true
-  
+  drop_invalid_header_fields = true 
   access_logs {
     bucket  = aws_s3_bucket.main.id
     prefix  = "alb-logs"
