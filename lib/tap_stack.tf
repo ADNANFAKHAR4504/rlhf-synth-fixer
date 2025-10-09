@@ -1189,8 +1189,6 @@ resource "aws_autoscaling_group" "primary" {
     value               = var.environment
     propagate_at_launch = true
   }
-
-  depends_on = [null_resource.lambda_zip]
 }
 
 # ============================================================================
