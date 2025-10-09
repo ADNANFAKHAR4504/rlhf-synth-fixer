@@ -3,6 +3,7 @@ import { BatchGetProjectsCommand, CodeBuildClient, ListProjectsCommand } from '@
 import { CodePipelineClient, GetPipelineCommand, GetPipelineStateCommand, ListPipelinesCommand } from '@aws-sdk/client-codepipeline';
 import { DescribeApplicationsCommand, DescribeEnvironmentHealthCommand, DescribeEnvironmentsCommand, ElasticBeanstalkClient, DescribeEnvironmentResourcesCommand } from '@aws-sdk/client-elastic-beanstalk';
 import { EC2Client, DescribeInstancesCommand, DescribeInstanceStatusCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { EventBridgeClient, ListRulesCommand, ListTargetsByRuleCommand } from '@aws-sdk/client-eventbridge';
 import { GetInstanceProfileCommand, GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand, ListRolesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient, ListAliasesCommand } from '@aws-sdk/client-kms';
@@ -24,6 +25,7 @@ const codePipelineClient = new CodePipelineClient({ region: process.env.AWS_REGI
 const eventBridgeClient = new EventBridgeClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
 describe('TapStack Integration Tests', () => {
   describe('S3 Resources Validation', () => {
@@ -1142,7 +1144,7 @@ describe('TapStack Integration Tests', () => {
       const candidateUrl = outputs.ElasticBeanstalkApplicationUrl || `http://${envName}.${region}.elasticbeanstalk.com`;
       console.log(`Resolved endpoint candidate: ${candidateUrl}`);
 
-      // If there is an instance, ensure it is running and SG allows 80 or 443
+      // If there is an instance (SingleInstance), ensure it is running and SG allows 80 or 443
       const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
       const instanceId = envRes.EnvironmentResources?.Instances?.[0]?.Id;
       if (instanceId) {
@@ -1218,7 +1220,7 @@ describe('TapStack Integration Tests', () => {
       expect(environment?.Status).toBe('Ready');
       expect(environment?.Health).not.toBe('Red');
 
-      // Resolve best endpoint: EB_APP_URL override -> CNAME -> EC2 PublicDnsName -> EC2 PublicIpAddress
+      // Resolve best endpoint: EB_APP_URL override -> CNAME -> EC2 PublicDnsName -> EC2 PublicIpAddress -> ALB DNS (if exists)
       let targetUrl: string | undefined = process.env.EB_APP_URL;
       if (!targetUrl && environment?.CNAME) {
         targetUrl = `http://${environment.CNAME}`;
@@ -1239,6 +1241,24 @@ describe('TapStack Integration Tests', () => {
         } catch (e) {
           const err = e as Error;
           console.warn(`Failed resolving EC2 endpoint: ${err.message}`);
+        }
+      }
+
+      // Try to resolve Application Load Balancer DNS if present (for environments with load balancer tier)
+      if (!targetUrl) {
+        try {
+          const envRes = await ebClient.send(new DescribeEnvironmentResourcesCommand({ EnvironmentId: environment?.EnvironmentId }));
+          const lbName = envRes.EnvironmentResources?.LoadBalancers?.[0]?.Name;
+          if (lbName) {
+            const lbRes = await elbv2Client.send(new DescribeLoadBalancersCommand({ Names: [lbName] }));
+            const lbDns = lbRes.LoadBalancers?.[0]?.DNSName;
+            if (lbDns) {
+              targetUrl = `http://${lbDns}`;
+            }
+          }
+        } catch (e) {
+          const err = e as Error;
+          console.warn(`Failed resolving ALB endpoint: ${err.message}`);
         }
       }
 

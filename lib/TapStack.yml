@@ -412,7 +412,10 @@ Resources:
           Value: !Ref ElasticBeanstalkServiceRole
         - Namespace: aws:elasticbeanstalk:environment
           OptionName: EnvironmentType
-          Value: SingleInstance
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: LoadBalancerType
+          Value: application
         - Namespace: aws:elasticbeanstalk:healthreporting:system
           OptionName: SystemType
           Value: enhanced
