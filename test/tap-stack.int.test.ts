@@ -53,7 +53,6 @@ const testDataToCleanup: Array<{
 }> = [];
 
 describe('GPS Tracking System Integration Tests', () => {
-  // Skip tests if no deployed resources and not forced
   const shouldSkipTests = !hasDeployedResources && process.env.FORCE_INTEGRATION_TESTS !== 'true';
   
   beforeAll(() => {
