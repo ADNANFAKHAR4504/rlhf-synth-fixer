@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "91031627",
+  "team": "1",
+  "startedAt": "2025-10-03T07:54:42.347Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "IAM, S3, DynamoDB, Lambda, CloudWatch, SNS, Kinesis, KinesisFirehose, IoT Core, Glue, CloudWatch Logs",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

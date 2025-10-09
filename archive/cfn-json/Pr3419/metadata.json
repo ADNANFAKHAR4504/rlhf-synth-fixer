@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "30857192",
+  "team": "synth",
+  "startedAt": "2025-10-01T15:00:00+00:00",
+  "training_quality": 8.5,
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "Amazon RDS",
+    "Amazon S3",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

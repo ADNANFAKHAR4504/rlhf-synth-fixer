@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349421",
+  "team": "6",
+  "startedAt": "2025-10-01T09:08:25.777Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "CloudTrail",
+    "CloudFront",
+    "ALB",
+    "Auto Scaling",
+    "IAM",
+    "VPN Gateway",
+    "Secrets Manager",
+    "EventBridge"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

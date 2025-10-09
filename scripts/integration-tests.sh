@@ -73,6 +73,10 @@ elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running integration tests..."
   npm run test:integration-js
 
+elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
+  echo "✅ CloudFormation JSON project detected, running JS integration tests..."
+  npm run test:integration-js
+
 else
   echo "✅ Running default integration tests..."
   npm run test:integration

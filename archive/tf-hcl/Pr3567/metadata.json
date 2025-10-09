@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348986",
+  "team": "4",
+  "startedAt": "2025-10-05T14:25:52.248Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Elastic IP",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "RDS",
+    "Secrets Manager",
+    "S3",
+    "IAM",
+    "Application Load Balancer",
+    "Target Group",
+    "EC2",
+    "Auto Scaling",
+    "Launch Template"
+  ],
+  "training_quality": 6,
+  "training_quality_justification": "Moderate training value. Demonstrates complex multi-region Terraform architecture with proper correction of AWS resource naming constraints (ALB/Target Group name_prefix length limit). Provides clear before/after comparison for learning from mistakes. However, the error type is a basic validation issue that shouldn't occur in a well-trained model. Limited novelty as multi-region setups are common patterns, though the specific 6-character name_prefix constraint is a valuable edge case.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

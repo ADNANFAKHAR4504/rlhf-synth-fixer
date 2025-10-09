@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "93253849",
+  "team": "1",
+  "startedAt": "2025-10-04T02:23:55.022Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Cognito",
+    "IAM",
+    "Lambda",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "Service Catalog",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

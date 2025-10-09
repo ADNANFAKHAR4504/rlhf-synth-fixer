@@ -1,0 +1,249 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Workout Log Processing System - Handles 3,000+ daily workout logs with auto-scaling, monitoring, and secure access",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "Default": "dev"
+    }
+  },
+  "Resources": {
+    "WorkoutLogsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "WorkoutLogs-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PROVISIONED",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "workoutTimestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "workoutType",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "userId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "workoutTimestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "WorkoutTypeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "workoutType",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "workoutTimestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            },
+            "ProvisionedThroughput": {
+              "ReadCapacityUnits": 5,
+              "WriteCapacityUnits": 5
+            }
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 10,
+          "WriteCapacityUnits": 10
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "WorkoutLogSystem"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "WorkoutLogsTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${WorkoutLogsTable.Arn}/index/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ProcessWorkoutLogFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "ProcessWorkoutLog-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.10",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "WorkoutLogsTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\ntable_name = os.environ['TABLE_NAME']\nenvironment = os.environ['ENVIRONMENT']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    try:\n        body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']\n        \n        required_fields = ['userId', 'workoutType', 'duration', 'caloriesBurned']\n        for field in required_fields:\n            if field not in body:\n                return {\n                    'statusCode': 400,\n                    'headers': {'Content-Type': 'application/json'},\n                    'body': json.dumps({'error': f'Missing required field: {field}'})\n                }\n        \n        workout_timestamp = int(datetime.utcnow().timestamp() * 1000)\n        \n        item = {\n            'userId': body['userId'],\n            'workoutTimestamp': workout_timestamp,\n            'workoutType': body['workoutType'],\n            'duration': Decimal(str(body['duration'])),\n            'caloriesBurned': Decimal(str(body['caloriesBurned'])),\n            'intensity': body.get('intensity', 'moderate'),\n            'notes': body.get('notes', ''),\n            'createdAt': datetime.utcnow().isoformat()\n        }\n        \n        table.put_item(Item=item)\n        \n        cloudwatch.put_metric_data(\n            Namespace='WorkoutApp',\n            MetricData=[{\n                'MetricName': 'WorkoutLogsProcessed',\n                'Value': 1,\n                'Unit': 'Count',\n                'Dimensions': [{'Name': 'Environment', 'Value': environment}]\n            }]\n        )\n        \n        return {\n            'statusCode': 201,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({\n                'message': 'Workout log processed successfully',\n                'workoutId': f\"{body['userId']}-{workout_timestamp}\"\n            })\n        }\n        \n    except Exception as e:\n        print(f\"Error processing workout log: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "WorkoutLogApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "WorkoutLogAPI-${EnvironmentSuffix}"
+        },
+        "Description": "API for processing workout logs",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${WorkoutLogApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "WorkoutLogAPI-Endpoint-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "WorkoutLogsTableName": {
+      "Description": "DynamoDB table name for workout logs",
+      "Value": {
+        "Ref": "WorkoutLogsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "WorkoutLogsTable-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ProcessWorkoutLogFunctionArn": {
+      "Description": "ARN of the Process Workout Log Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "ProcessWorkoutLogFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "ProcessWorkoutLogFunction-Arn-${EnvironmentSuffix}"
+        }
+      }
+    }
+  }
+}
