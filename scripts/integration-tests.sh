@@ -69,8 +69,8 @@ elif [ "$LANGUAGE" = "go" ]; then
     echo "ℹ️ lib directory not found, skipping Go integration tests"
   fi
 
-elif [ "$LANGUAGE" = "js" ]; then
-  echo "✅ JavaScript project detected, running integration tests..."
+elif [ "$LANGUAGE" = "js" ] || { [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; }; then
+  echo "✅ JavaScript/CloudFormation JSON project detected, running JS integration tests..."
   npm run test:integration-js
 
 else
