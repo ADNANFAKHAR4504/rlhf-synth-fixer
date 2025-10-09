@@ -132,16 +132,15 @@ module "sns" {
 module "iam" {
   source = "./modules/iam"
 
-  name_prefix          = local.name_prefix
-  region               = var.aws_region
-  account_id           = data.aws_caller_identity.current.account_id
-  lambda_log_group_arn = module.cloudwatch.lambda_log_group_arn
-  primary_bucket_arn   = module.s3.primary_bucket_arn
-  sns_topic_arn        = module.sns.topic_arn
+  name_prefix        = local.name_prefix
+  region             = var.aws_region
+  account_id         = data.aws_caller_identity.current.account_id
+  primary_bucket_arn = module.s3.primary_bucket_arn
+  sns_topic_arn      = module.sns.topic_arn
 
   tags = local.common_tags
 
-  depends_on = [module.cloudwatch, module.s3, module.sns]
+  depends_on = [module.s3, module.sns]
 }
 
 # ============================================================================
@@ -181,7 +180,7 @@ module "cloudwatch" {
   source = "./modules/cloudwatch"
 
   name_prefix          = local.name_prefix
-  lambda_function_name = "${local.name_prefix}-failover-automation"
+  lambda_function_name = module.lambda.function_name
   primary_bucket_name  = module.s3.primary_bucket_id
   sns_topic_arn        = module.sns.topic_arn
   alb_target_group_arn = module.compute.target_group_arn
@@ -189,7 +188,7 @@ module "cloudwatch" {
 
   tags = local.common_tags
 
-  depends_on = [module.s3, module.sns, module.compute]
+  depends_on = [module.s3, module.sns, module.compute, module.lambda]
 }
 
 # ============================================================================
@@ -215,21 +214,20 @@ module "eventbridge" {
 module "lambda" {
   source = "./modules/lambda"
 
-  function_name        = "${local.name_prefix}-failover-automation"
-  lambda_role_arn      = module.iam.lambda_failover_role_arn
-  primary_bucket_id    = module.s3.primary_bucket_id
-  secondary_region     = var.secondary_region
-  environment          = var.environment
-  sns_topic_arn        = module.sns.topic_arn
-  subnet_ids           = module.vpc.private_subnet_ids
-  security_group_ids   = [module.vpc.lambda_security_group_id]
-  eventbridge_rule_arn = module.eventbridge.rule_arn
-  timeout              = 300
-  memory_size          = 512
+  function_name      = "${local.name_prefix}-failover-automation"
+  lambda_role_arn    = module.iam.lambda_failover_role_arn
+  primary_bucket_id  = module.s3.primary_bucket_id
+  secondary_region   = var.secondary_region
+  environment        = var.environment
+  sns_topic_arn      = module.sns.topic_arn
+  subnet_ids         = module.vpc.private_subnet_ids
+  security_group_ids = [module.vpc.lambda_security_group_id]
+  timeout            = 300
+  memory_size        = 512
 
   tags = local.common_tags
 
-  depends_on = [module.iam, module.s3, module.sns, module.vpc, module.eventbridge]
+  depends_on = [module.iam, module.s3, module.sns, module.vpc]
 }
 
 # ============================================================================
