@@ -991,19 +991,16 @@ fi
       console.log('Total pipeline executions found:', listResponse.pipelineExecutionSummaries.length);
       
       if (listResponse.pipelineExecutionSummaries.length > 0) {
-        // Analyze execution patterns
         const executions = listResponse.pipelineExecutionSummaries;
         const statuses = executions.map(e => e.status);
         
         console.log('Execution statuses:', statuses);
         
-        // Verify we have various execution states
         const validStatuses = ['InProgress', 'Succeeded', 'Failed', 'Stopped', 'Stopping', 'Superseded'];
         statuses.forEach(status => {
           expect(validStatuses).toContain(status);
         });
         
-        // Check if we have our test execution
         if (testExecutionId) {
           const ourExecution = executions.find(e => e.pipelineExecutionId === testExecutionId);
           if (ourExecution) {
