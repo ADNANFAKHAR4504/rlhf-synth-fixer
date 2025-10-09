@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349024",
+  "team": "1",
+  "startedAt": "2025-10-08T08:51:05.069Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "IAM, VPC, S3, CloudTrail, KMS"
+}
