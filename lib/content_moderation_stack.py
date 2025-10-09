@@ -497,7 +497,8 @@ class ContentModerationStack(Construct):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", f"human-review-queue-{environment_suffix}"]
+                            ["AWS/SQS", "ApproximateNumberOfMessagesVisible",
+                             "QueueName", f"human-review-queue-{environment_suffix}"]
                         ],
                         "period": 300,
                         "stat": "Average",

@@ -41,7 +41,8 @@ class TestDeployedResources:
 
         # Check encryption is enabled
         encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
-        assert encryption['ServerSideEncryptionConfiguration']['Rules'][0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] == 'AES256'
+        sse_config = encryption['ServerSideEncryptionConfiguration']['Rules'][0]
+        assert sse_config['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] == 'AES256'
 
         # Check public access block
         public_block = s3_client.get_public_access_block(Bucket=bucket_name)
@@ -79,7 +80,8 @@ class TestDeployedResources:
 
         # Check point-in-time recovery
         pitr_response = dynamodb.describe_continuous_backups(TableName=table_name)
-        assert pitr_response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus'] == 'ENABLED'
+        pitr_desc = pitr_response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']
+        assert pitr_desc['PointInTimeRecoveryStatus'] == 'ENABLED'
 
     def test_lambda_functions_exist(self):
         """Test that all Lambda functions are deployed and configured correctly."""
@@ -224,7 +226,7 @@ class TestDeployedResources:
         iam_client = boto3.client('iam', region_name=self.region)
 
         # Check Lambda execution role exists
-        lambda_role_name = f'moderation-lambda-role-synth27584913'
+        lambda_role_name = 'moderation-lambda-role-synth27584913'
         try:
             response = iam_client.get_role(RoleName=lambda_role_name)
             role = response['Role']
@@ -236,7 +238,7 @@ class TestDeployedResources:
                 pytest.fail(f"Lambda execution role {lambda_role_name} not found")
 
         # Check Step Functions execution role exists
-        sfn_role_name = f'moderation-sfn-role-synth27584913'
+        sfn_role_name = 'moderation-sfn-role-synth27584913'
         try:
             response = iam_client.get_role(RoleName=sfn_role_name)
             role = response['Role']
