@@ -18,6 +18,8 @@ boto3 = "*"
 cfn-flip = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
+aws-lambda-powertools = "*"
+aws-xray-sdk = "*"
 
 [dev-packages]
 boto3 = "*"
