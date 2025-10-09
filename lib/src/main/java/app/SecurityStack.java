@@ -3,8 +3,6 @@ package app;
 import com.pulumi.Context;
 import com.pulumi.aws.wafv2.WebAcl;
 import com.pulumi.aws.wafv2.WebAclArgs;
-import com.pulumi.aws.wafv2.WebAclAssociation;
-import com.pulumi.aws.wafv2.WebAclAssociationArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionAllowArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclRuleArgs;
@@ -26,7 +24,7 @@ import java.util.Map;
 public class SecurityStack {
     private final WebAcl webAcl;
 
-    public SecurityStack(final Context ctx, final CdnStack cdn) {
+    public SecurityStack(final Context ctx) {
         // Create WAF Web ACL with rate limiting
         this.webAcl = new WebAcl("news-portal-waf",
             WebAclArgs.builder()
@@ -107,12 +105,7 @@ public class SecurityStack {
                 ))
                 .build());
 
-        // Associate WAF with CloudFront distribution
-        var wafAssociation = new WebAclAssociation("waf-cloudfront-association",
-            WebAclAssociationArgs.builder()
-                .resourceArn(cdn.getDistribution().arn())
-                .webAclArn(webAcl.arn())
-                .build());
+        // Note: WAF association with CloudFront is handled in the distribution configuration
     }
 
     public WebAcl getWebAcl() {

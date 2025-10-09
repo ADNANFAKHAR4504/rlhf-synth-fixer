@@ -30,7 +30,7 @@ import java.util.Map;
 public class CdnStack {
     private final Distribution distribution;
 
-    public CdnStack(final Context ctx, final StorageStack storage, final EdgeFunctionStack edgeFunction) {
+    public CdnStack(final Context ctx, final StorageStack storage, final EdgeFunctionStack edgeFunction, final SecurityStack security) {
         // Create Origin Access Control for S3
         var oac = new OriginAccessControl("s3-oac",
             OriginAccessControlArgs.builder()
@@ -145,6 +145,7 @@ public class CdnStack {
                         .cloudfrontDefaultCertificate(true)
                         .build()
                 )
+                .webAclId(security.getWebAcl().arn())
                 .tags(Map.of(
                     "Name", "NewsPortalCDN",
                     "Environment", "production"
