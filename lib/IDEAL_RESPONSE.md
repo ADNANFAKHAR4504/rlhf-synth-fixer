@@ -320,6 +320,7 @@ resource "aws_db_instance" "default" {
   backup_window           = "03:00-04:00"  # UTC
   maintenance_window      = "Mon:04:00-Mon:05:00"  # UTC
   identifier              = "mysql-db-${var.resource_suffix}"
+  storage_encrypted       = true  # Enable encryption at rest for security
   
   tags = {
     Name                = "mysql-db-${var.resource_suffix}"
