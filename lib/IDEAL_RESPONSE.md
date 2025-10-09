@@ -14,6 +14,12 @@ variable "project_prefix" {
   default     = "tap"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource names (e.g., dev, staging, prod)"
+  type        = string
+  default     = "prod"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
@@ -128,7 +134,7 @@ variable "alarm_messages_visible_threshold" {
 ### SQS Dead Letter Queue
 
 resource "aws_sqs_queue" "dlq" {
-  name                       = "${var.project_prefix}-dlq"
+  name                       = "${var.project_prefix}-${var.environment_suffix}-dlq"
   message_retention_seconds  = var.sqs_message_retention_seconds
   visibility_timeout_seconds = 30 # Standard for DLQ, no processing expected
   receive_wait_time_seconds  = var.sqs_receive_wait_time_seconds
@@ -144,7 +150,7 @@ resource "aws_sqs_queue" "dlq" {
 ## SQS Main Queue with redrive policy to DLQ
 
 resource "aws_sqs_queue" "main" {
-  name                       = "${var.project_prefix}-queue"
+  name                       = "${var.project_prefix}-${var.environment_suffix}-queue"
   visibility_timeout_seconds = var.sqs_visibility_timeout_seconds
   message_retention_seconds  = var.sqs_message_retention_seconds
   receive_wait_time_seconds  = var.sqs_receive_wait_time_seconds # Long polling for efficiency
@@ -167,7 +173,7 @@ resource "aws_sqs_queue" "main" {
 ### DynamoDB table for task status tracking
 
 resource "aws_dynamodb_table" "task_status" {
-  name         = "${var.project_prefix}-task-status"
+  name         = "${var.project_prefix}-${var.environment_suffix}-task-status"
   billing_mode = "PAY_PER_REQUEST" # On-demand billing for unpredictable workload
   hash_key     = "task_id"
 
@@ -192,7 +198,7 @@ resource "aws_dynamodb_table" "task_status" {
 ### IAM role for Lambda execution
 
 resource "aws_iam_role" "lambda_execution" {
-  name = "${var.project_prefix}-lambda-execution-role"
+  name = "${var.project_prefix}-${var.environment_suffix}-lambda-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -213,7 +219,7 @@ resource "aws_iam_role" "lambda_execution" {
 ### IAM policy for Lambda - least privilege access
 
 resource "aws_iam_role_policy" "lambda_permissions" {
-  name = "${var.project_prefix}-lambda-permissions"
+  name = "${var.project_prefix}-${var.environment_suffix}-lambda-permissions"
   role = aws_iam_role.lambda_execution.id
 
   policy = jsonencode({
@@ -255,7 +261,7 @@ resource "aws_iam_role_policy" "lambda_permissions" {
 ### CloudWatch Log Group for Lambda
 
 resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${var.project_prefix}-processor"
+  name              = "/aws/lambda/${var.project_prefix}-${var.environment_suffix}-processor"
   retention_in_days = var.lambda_log_retention_days
 
   tags = var.tags
@@ -265,14 +271,17 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 
 data "archive_file" "lambda_code" {
   type        = "zip"
-  output_path = "/tmp/${var.project_prefix}-lambda.zip"
+  output_path = "/tmp/${var.project_prefix}-${var.environment_suffix}-lambda.zip"
 
   source {
     content  = <<-EOT
-      const AWS = require('aws-sdk');
-      const dynamodb = new AWS.DynamoDB.DocumentClient();
+      import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+      import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+      
+      const client = new DynamoDBClient({});
+      const dynamodb = DynamoDBDocumentClient.from(client);
 
-      exports.handler = async (event) => {
+      export const handler = async (event) => {
         console.log('Processing batch of', event.Records.length, 'messages');
 
         // Process each message in the batch
@@ -282,7 +291,7 @@ data "archive_file" "lambda_code" {
             const taskId = body.task_id || record.messageId;
 
             // Write status to DynamoDB
-            await dynamodb.put({
+            await dynamodb.send(new PutCommand({
               TableName: process.env.DYNAMODB_TABLE_NAME,
               Item: {
                 task_id: taskId,
@@ -291,7 +300,7 @@ data "archive_file" "lambda_code" {
                 message_body: body,
                 ${var.dynamodb_ttl_enabled ? "expires_at: Math.floor(Date.now() / 1000) + 86400 * 30," : ""}
               }
-            }).promise();
+            }));
 
             console.log('Successfully processed task:', taskId);
           } catch (error) {
@@ -306,7 +315,7 @@ data "archive_file" "lambda_code" {
         return { statusCode: 200 };
       };
     EOT
-    filename = "index.js"
+    filename = "index.mjs"
   }
 }
 
@@ -314,10 +323,10 @@ data "archive_file" "lambda_code" {
 
 resource "aws_lambda_function" "processor" {
   filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${var.project_prefix}-processor"
+  function_name    = "${var.project_prefix}-${var.environment_suffix}-processor"
   role            = aws_iam_role.lambda_execution.arn
   handler         = "index.handler"
-  runtime         = "nodejs18.x"
+  runtime         = "nodejs20.x"
   source_code_hash = data.archive_file.lambda_code.output_base64sha256
 
 #### Timeout must be less than SQS visibility timeout to prevent duplicate processing
@@ -359,7 +368,7 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
 ### Alarm for old messages (processing delay)
 
 resource "aws_cloudwatch_metric_alarm" "queue_old_messages" {
-  alarm_name          = "${var.project_prefix}-queue-old-messages"
+  alarm_name          = "${var.project_prefix}-${var.environment_suffix}-queue-old-messages"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name        = "ApproximateAgeOfOldestMessage"
@@ -380,7 +389,7 @@ resource "aws_cloudwatch_metric_alarm" "queue_old_messages" {
 ### Alarm for queue backlog
 
 resource "aws_cloudwatch_metric_alarm" "queue_backlog" {
-  alarm_name          = "${var.project_prefix}-queue-backlog"
+  alarm_name          = "${var.project_prefix}-${var.environment_suffix}-queue-backlog"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name        = "ApproximateNumberOfMessagesVisible"
@@ -401,7 +410,7 @@ resource "aws_cloudwatch_metric_alarm" "queue_backlog" {
 ### Alarm for Lambda errors
 
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
-  alarm_name          = "${var.project_prefix}-lambda-errors"
+  alarm_name          = "${var.project_prefix}-${var.environment_suffix}-lambda-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name        = "Errors"
@@ -422,7 +431,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
 ### Alarm for Lambda throttles
 
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
-  alarm_name          = "${var.project_prefix}-lambda-throttles"
+  alarm_name          = "${var.project_prefix}-${var.environment_suffix}-lambda-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name        = "Throttles"
@@ -443,7 +452,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
 ### Alarm for DLQ messages (immediate action required)
 
 resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
-  alarm_name          = "${var.project_prefix}-dlq-messages"
+  alarm_name          = "${var.project_prefix}-${var.environment_suffix}-dlq-messages"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name        = "ApproximateNumberOfMessagesVisible"

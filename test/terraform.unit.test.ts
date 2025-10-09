@@ -43,6 +43,10 @@ describe("Terraform Infrastructure Validation", () => {
       expect(variablesContent).toMatch(/variable\s+"project_prefix"\s*{/);
     });
 
+    test("declares environment_suffix variable", () => {
+      expect(variablesContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+    });
+
     test("declares tags variable", () => {
       expect(variablesContent).toMatch(/variable\s+"tags"\s*{/);
     });
@@ -109,7 +113,7 @@ describe("Terraform Infrastructure Validation", () => {
     });
 
     test("DLQ has proper configuration", () => {
-      expect(stackContent).toMatch(/name\s*=\s*"\$\{var\.project_prefix\}-dlq"/);
+      expect(stackContent).toMatch(/name\s*=\s*"\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-dlq"/);
       expect(stackContent).toMatch(/message_retention_seconds\s*=\s*var\.sqs_message_retention_seconds/);
       expect(stackContent).toMatch(/visibility_timeout_seconds\s*=\s*30/);
     });
@@ -140,7 +144,7 @@ describe("Terraform Infrastructure Validation", () => {
     });
 
     test("DynamoDB table has proper configuration", () => {
-      expect(stackContent).toMatch(/name\s*=\s*"\$\{var\.project_prefix\}-task-status"/);
+      expect(stackContent).toMatch(/name\s*=\s*"\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-task-status"/);
       expect(stackContent).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
       expect(stackContent).toMatch(/hash_key\s*=\s*"task_id"/);
     });
@@ -205,7 +209,7 @@ describe("Terraform Infrastructure Validation", () => {
     });
 
     test("CloudWatch log group has proper configuration", () => {
-      expect(stackContent).toMatch(/name\s*=\s*"\/aws\/lambda\/\$\{var\.project_prefix\}-processor"/);
+      expect(stackContent).toMatch(/name\s*=\s*"\/aws\/lambda\/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-processor"/);
       expect(stackContent).toMatch(/retention_in_days\s*=\s*var\.lambda_log_retention_days/);
     });
 
@@ -213,9 +217,10 @@ describe("Terraform Infrastructure Validation", () => {
       expect(stackContent).toMatch(/data\s+"archive_file"\s+"lambda_code"\s*{/);
     });
 
-    test("Lambda code archive has Node.js 18 code", () => {
-      expect(stackContent).toMatch(/const AWS = require\('aws-sdk'\);/);
-      expect(stackContent).toMatch(/runtime\s*=\s*"nodejs18\.x"/);
+    test("Lambda code archive has Node.js 20 code with AWS SDK v3", () => {
+      expect(stackContent).toMatch(/import.*@aws-sdk\/client-dynamodb/);
+      expect(stackContent).toMatch(/import.*@aws-sdk\/lib-dynamodb/);
+      expect(stackContent).toMatch(/runtime\s*=\s*"nodejs20\.x"/);
     });
 
     test("creates Lambda function", () => {
@@ -223,7 +228,7 @@ describe("Terraform Infrastructure Validation", () => {
     });
 
     test("Lambda function has proper configuration", () => {
-      expect(stackContent).toMatch(/function_name\s*=\s*"\$\{var\.project_prefix\}-processor"/);
+      expect(stackContent).toMatch(/function_name\s*=\s*"\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-processor"/);
       expect(stackContent).toMatch(/handler\s*=\s*"index\.handler"/);
       expect(stackContent).toMatch(/timeout\s*=\s*var\.lambda_timeout/);
       expect(stackContent).toMatch(/memory_size\s*=\s*var\.lambda_memory_size/);
@@ -382,12 +387,12 @@ describe("Terraform Infrastructure Validation", () => {
   });
 
   describe("Resource Naming and Structure", () => {
-    test("uses consistent naming with project prefix", () => {
-      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-dlq/);
-      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-queue/);
-      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-task-status/);
-      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-lambda-execution-role/);
-      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-processor/);
+    test("uses consistent naming with project prefix and environment suffix", () => {
+      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-dlq/);
+      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-queue/);
+      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-task-status/);
+      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-lambda-execution-role/);
+      expect(stackContent).toMatch(/\$\{var\.project_prefix\}-\$\{var\.environment_suffix\}-processor/);
     });
 
     test("has proper resource organization", () => {

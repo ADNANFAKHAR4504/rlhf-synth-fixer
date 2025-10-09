@@ -11,6 +11,12 @@ variable "project_prefix" {
   default     = "tap"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource names (e.g., dev, staging, prod)"
+  type        = string
+  default     = "prod"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
