@@ -1,1023 +1,1032 @@
-### Reasoning Trace
+# Ideal Infrastructure Response
 
----
-
-The task requires creating comprehensive test coverage for CloudFormation Infrastructure as Code with specific requirements:
-
-1. **Unit Tests**: 100% coverage (mandatory) for all lib/ code validating CloudFormation template correctness
-2. **Integration Tests**: Using real AWS resources from cfn-outputs/flat-outputs.json with no mocking
-3. **Live Connectivity Testing**: Test actual resource interactions, not just configuration validation
-4. **End-to-End Workflows**: Validate complete workflows on live resources (Internet -> ALB -> EC2 -> RDS)
-5. **Security Validation**: Verify IAM least privilege, security group chains, encryption
-6. **No Environment-Specific Assertions**: Avoid hardcoded environment names or suffixes
-
-The key insight was the requirement: "We need to test the live resources not just their configs but connectivity with other resources as well and e2e test for whole workflow on live resources."
-
-This required a comprehensive testing approach:
-
-**Unit Tests (test/tap-stack.unit.test.ts)**:
-
-- Validate CloudFormation JSON template structure and syntax
-- Verify all parameters have correct types, constraints, and defaults
-- Check all resources are properly defined with correct properties
-- Ensure security best practices (encryption, least privilege IAM, security groups)
-- Validate high availability architecture (Multi-AZ, Auto Scaling, load balancing)
-- Test resource tagging compliance and naming conventions
-
-**Integration Tests (test/tap-stack.int.test.ts)**:
-
-- Query real AWS resources using AWS SDK v3 clients
-- Validate deployed configuration matches template intent
-- Test live S3 read/write operations with KMS encryption verification
-- Verify RDS connectivity, DNS resolution, and security isolation
-- Test ALB health checks, listeners, and target group configuration
-- Validate security group chains (ALB -> WebServer -> Database)
-- Test complete request flows (Internet -> IGW -> ALB -> EC2 -> NAT -> RDS)
-- Verify Multi-AZ fault tolerance and Auto Scaling response
-
-The testing strategy evolved from configuration-only validation to comprehensive live resource interaction testing, ensuring not only correct infrastructure definition but actual operational functionality.
+This document outlines the ideal infrastructure setup for a highly available and fault-tolerant web application using AWS CloudFormation.
 
 ### Answer
 
 ---
 
-I've created comprehensive unit and integration tests for the TAP Stack CloudFormation infrastructure, achieving 100% test coverage through 200 tests (109 unit + 91 integration) that validate both template correctness and live resource functionality with end-to-end workflow validation.
-
 ## test/tap-stack.unit.test.ts
 
 ```typescript
-import fs from 'fs';
-import path from 'path';
-
-describe('TapStack CloudFormation Template Unit Tests', () => {
-  let template: any;
-
-  beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(typeof template.Description).toBe('string');
-      expect(template.Description.length).toBeGreaterThan(0);
-    });
-
-    test('should have all required top-level sections', () => {
-      expect(template).toHaveProperty('AWSTemplateFormatVersion');
-      expect(template).toHaveProperty('Description');
-      expect(template).toHaveProperty('Parameters');
-      expect(template).toHaveProperty('Resources');
-      expect(template).toHaveProperty('Outputs');
-    });
-
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-      expect(template).not.toBeNull();
-    });
-  });
-
-  describe('Parameters Validation', () => {
-    test('should have all required parameters', () => {
-      const expectedParams = [
-        'ProjectName',
-        'Environment',
-        'EnvironmentSuffix',
-        'VpcCidr',
-        'TrustedIPRange',
-        'InstanceType',
-        'DBInstanceClass',
-        'DBMasterUsername',
-        'DomainName',
-        'MinInstances',
-        'MaxInstances',
-        'DesiredInstances',
-        'LatestAmiId',
-      ];
-      expectedParams.forEach(param => {
-        expect(template.Parameters).toHaveProperty(param);
-      });
-    });
-
-    test('ProjectName parameter should have correct properties', () => {
-      const param = template.Parameters.ProjectName;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('ha-webapp');
-      expect(param.Description).toBeDefined();
-    });
-
-    test('Environment parameter should have correct allowed values', () => {
-      const param = template.Parameters.Environment;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('production');
-      expect(param.AllowedValues).toContain('production');
-      expect(param.AllowedValues).toContain('staging');
-      expect(param.AllowedValues).toContain('development');
-    });
-
-    test('VpcCidr parameter should have CIDR pattern validation', () => {
-      const param = template.Parameters.VpcCidr;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('10.0.0.0/16');
-      expect(param.AllowedPattern).toBeDefined();
-    });
-
-    test('TrustedIPRange parameter should have CIDR pattern validation', () => {
-      const param = template.Parameters.TrustedIPRange;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('0.0.0.0/0');
-      expect(param.AllowedPattern).toBeDefined();
-    });
-
-    test('InstanceType parameter should have allowed values', () => {
-      const param = template.Parameters.InstanceType;
-      expect(param.Type).toBe('String');
-      expect(param.AllowedValues).toContain('t3.medium');
-      expect(param.AllowedValues).toContain('t3.large');
-      expect(param.AllowedValues).toContain('m5.large');
-    });
-
-    test('DBMasterUsername parameter should have constraints', () => {
-      const param = template.Parameters.DBMasterUsername;
-      expect(param.Type).toBe('String');
-      expect(param.MinLength).toBe(1);
-      expect(param.MaxLength).toBe(16);
-      expect(param.AllowedPattern).toBeDefined();
-    });
-
-    test('MinInstances, MaxInstances, DesiredInstances should be numbers', () => {
-      expect(template.Parameters.MinInstances.Type).toBe('Number');
-      expect(template.Parameters.MaxInstances.Type).toBe('Number');
-      expect(template.Parameters.DesiredInstances.Type).toBe('Number');
-      expect(template.Parameters.MinInstances.MinValue).toBe(2);
-      expect(template.Parameters.MaxInstances.MinValue).toBe(2);
-    });
-  });
-
-  describe('VPC Resources', () => {
-    test('should have VPC resource', () => {
-      expect(template.Resources.VPC).toBeDefined();
-      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
-    });
-
-    test('VPC should have DNS enabled', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
-      expect(vpc.Properties.EnableDnsSupport).toBe(true);
-    });
-
-    test('VPC should reference VpcCidr parameter', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
-    });
-
-    test('should have Internet Gateway', () => {
-      expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe(
-        'AWS::EC2::InternetGateway'
-      );
-    });
-
-    test('should have VPC Gateway Attachment', () => {
-      const attachment = template.Resources.AttachGateway;
-      expect(attachment).toBeDefined();
-      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-      expect(attachment.Properties.VpcId).toEqual({ Ref: 'VPC' });
-      expect(attachment.Properties.InternetGatewayId).toEqual({
-        Ref: 'InternetGateway',
-      });
-    });
-  });
-
-  describe('Subnet Resources', () => {
-    test('should have public subnets in 2 AZs', () => {
-      expect(template.Resources.PublicSubnetAZ1).toBeDefined();
-      expect(template.Resources.PublicSubnetAZ2).toBeDefined();
-      expect(template.Resources.PublicSubnetAZ1.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PublicSubnetAZ2.Type).toBe('AWS::EC2::Subnet');
-    });
-
-    test('public subnets should have MapPublicIpOnLaunch enabled', () => {
-      expect(
-        template.Resources.PublicSubnetAZ1.Properties.MapPublicIpOnLaunch
-      ).toBe(true);
-      expect(
-        template.Resources.PublicSubnetAZ2.Properties.MapPublicIpOnLaunch
-      ).toBe(true);
-    });
-
-    test('should have private subnets in 2 AZs', () => {
-      expect(template.Resources.PrivateSubnetAZ1).toBeDefined();
-      expect(template.Resources.PrivateSubnetAZ2).toBeDefined();
-    });
-
-    test('should have DB subnets in 2 AZs', () => {
-      expect(template.Resources.DBSubnetAZ1).toBeDefined();
-      expect(template.Resources.DBSubnetAZ2).toBeDefined();
-    });
-
-    test('subnets should have different CIDR blocks', () => {
-      const cidrs = [
-        template.Resources.PublicSubnetAZ1.Properties.CidrBlock,
-        template.Resources.PublicSubnetAZ2.Properties.CidrBlock,
-        template.Resources.PrivateSubnetAZ1.Properties.CidrBlock,
-        template.Resources.PrivateSubnetAZ2.Properties.CidrBlock,
-        template.Resources.DBSubnetAZ1.Properties.CidrBlock,
-        template.Resources.DBSubnetAZ2.Properties.CidrBlock,
-      ];
-      const uniqueCidrs = new Set(cidrs);
-      expect(uniqueCidrs.size).toBe(cidrs.length);
-    });
-
-    test('subnets should be in different availability zones', () => {
-      const az1Subnets = [
-        template.Resources.PublicSubnetAZ1,
-        template.Resources.PrivateSubnetAZ1,
-        template.Resources.DBSubnetAZ1,
-      ];
-      az1Subnets.forEach(subnet => {
-        expect(subnet.Properties.AvailabilityZone).toEqual({
-          'Fn::Select': [0, { 'Fn::GetAZs': '' }],
-        });
-      });
-    });
-  });
-
-  describe('Security Group Resources', () => {
-    test('should have ALB security group', () => {
-      const sg = template.Resources.ALBSecurityGroup;
-      expect(sg).toBeDefined();
-      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-    });
-
-    test('ALB security group should allow HTTP and HTTPS from trusted IPs', () => {
-      const sg = template.Resources.ALBSecurityGroup;
-      const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress).toHaveLength(2);
-      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
-      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-      expect(httpRule.CidrIp).toEqual({ Ref: 'TrustedIPRange' });
-      expect(httpsRule.CidrIp).toEqual({ Ref: 'TrustedIPRange' });
-    });
-
-    test('WebServer security group should only allow traffic from ALB', () => {
-      const sg = template.Resources.WebServerSecurityGroup;
-      const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress).toHaveLength(1);
-      expect(ingress[0].FromPort).toBe(80);
-      expect(ingress[0].SourceSecurityGroupId).toEqual({
-        Ref: 'ALBSecurityGroup',
-      });
-    });
-
-    test('Database security group should only allow MySQL from web servers', () => {
-      const sg = template.Resources.DatabaseSecurityGroup;
-      const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress).toHaveLength(1);
-      expect(ingress[0].FromPort).toBe(3306);
-      expect(ingress[0].SourceSecurityGroupId).toEqual({
-        Ref: 'WebServerSecurityGroup',
-      });
-    });
-  });
-
-  describe('S3 Bucket Resources', () => {
-    test('StaticContentBucket should have encryption enabled', () => {
-      const bucket = template.Resources.StaticContentBucket;
-      expect(bucket.Properties.BucketEncryption).toBeDefined();
-      const encryption =
-        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
-      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
-        'aws:kms'
-      );
-      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
-        Ref: 'KMSKey',
-      });
-    });
-
-    test('StaticContentBucket should block public access', () => {
-      const bucket = template.Resources.StaticContentBucket;
-      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.BlockPublicPolicy).toBe(true);
-      expect(publicAccess.IgnorePublicAcls).toBe(true);
-      expect(publicAccess.RestrictPublicBuckets).toBe(true);
-    });
-
-    test('StaticContentBucket should have versioning enabled', () => {
-      const bucket = template.Resources.StaticContentBucket;
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-    });
-
-    test('LogsBucket should have lifecycle policy', () => {
-      const bucket = template.Resources.LogsBucket;
-      const rules = bucket.Properties.LifecycleConfiguration.Rules;
-      expect(rules).toHaveLength(1);
-      expect(rules[0].Status).toBe('Enabled');
-      expect(rules[0].ExpirationInDays).toBe(90);
-    });
-  });
-
-  describe('IAM Resources', () => {
-    test('should have EC2 IAM Role', () => {
-      const role = template.Resources.EC2Role;
-      expect(role).toBeDefined();
-      expect(role.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('EC2 Role should have proper trust policy', () => {
-      const role = template.Resources.EC2Role;
-      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(trustPolicy.Version).toBe('2012-10-17');
-      expect(trustPolicy.Statement[0].Effect).toBe('Allow');
-      expect(trustPolicy.Statement[0].Principal.Service).toBe(
-        'ec2.amazonaws.com'
-      );
-      expect(trustPolicy.Statement[0].Action).toBe('sts:AssumeRole');
-    });
-
-    test('EC2 Role should have S3 access policy following least privilege', () => {
-      const role = template.Resources.EC2Role;
-      const policies = role.Properties.Policies;
-      const s3Policy = policies.find((p: any) => p.PolicyName === 'S3Access');
-      expect(s3Policy).toBeDefined();
-      const statements = s3Policy.PolicyDocument.Statement;
-      const s3Statement = statements.find(
-        (s: any) =>
-          s.Action.includes('s3:GetObject') || s.Action.includes('s3:PutObject')
-      );
-      expect(s3Statement).toBeDefined();
-    });
-
-    test('should have EC2 Instance Profile', () => {
-      const profile = template.Resources.EC2InstanceProfile;
-      expect(profile).toBeDefined();
-      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2Role' });
-    });
-  });
-
-  describe('RDS Resources', () => {
-    test('should have DB Master Password Secret', () => {
-      const secret = template.Resources.DBMasterPasswordSecret;
-      expect(secret).toBeDefined();
-      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-    });
-
-    test('DB Secret should be encrypted with KMS', () => {
-      const secret = template.Resources.DBMasterPasswordSecret;
-      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
-    test('should have RDS Database Instance', () => {
-      const db = template.Resources.Database;
-      expect(db).toBeDefined();
-      expect(db.Type).toBe('AWS::RDS::DBInstance');
-    });
-
-    test('Database should be Multi-AZ', () => {
-      const db = template.Resources.Database;
-      expect(db.Properties.MultiAZ).toBe(true);
-    });
-
-    test('Database should have encryption enabled', () => {
-      const db = template.Resources.Database;
-      expect(db.Properties.StorageEncrypted).toBe(true);
-      expect(db.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
-    test('Database should have backup retention', () => {
-      const db = template.Resources.Database;
-      expect(db.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
-      expect(db.Properties.PreferredBackupWindow).toBeDefined();
-    });
-  });
-
-  describe('CloudWatch Resources', () => {
-    test('should have Application Log Group', () => {
-      const logGroup = template.Resources.ApplicationLogGroup;
-      expect(logGroup).toBeDefined();
-      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-    });
-
-    test('Log Group should be encrypted', () => {
-      const logGroup = template.Resources.ApplicationLogGroup;
-      expect(logGroup.Properties.KmsKeyId).toBeDefined();
-    });
-
-    test('should have ALB Target Health Alarm', () => {
-      const alarm = template.Resources.ALBTargetHealthAlarm;
-      expect(alarm).toBeDefined();
-      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-    });
-
-    test('should have High CPU Alarm', () => {
-      const alarm = template.Resources.HighCPUAlarm;
-      expect(alarm).toBeDefined();
-      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
-      expect(alarm.Properties.Threshold).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'LoadBalancerDNS',
-        'StaticContentBucketName',
-        'LogsBucketName',
-        'DatabaseEndpoint',
-        'WebServerSecurityGroupId',
-      ];
-      expectedOutputs.forEach(output => {
-        expect(template.Outputs[output]).toBeDefined();
-      });
-    });
-
-    test('all outputs should have exports', () => {
-      Object.keys(template.Outputs).forEach(key => {
-        expect(template.Outputs[key].Export).toBeDefined();
-        expect(template.Outputs[key].Export.Name).toBeDefined();
-      });
-    });
-  });
-
-  describe('Security Best Practices', () => {
-    test('S3 buckets should have encryption enabled', () => {
-      const buckets = [
-        template.Resources.StaticContentBucket,
-        template.Resources.LogsBucket,
-      ];
-      buckets.forEach(bucket => {
-        expect(bucket.Properties.BucketEncryption).toBeDefined();
-        expect(
-          bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
-        ).toBeDefined();
-      });
-    });
-
-    test('security groups should have descriptions', () => {
-      const securityGroups = [
-        template.Resources.ALBSecurityGroup,
-        template.Resources.WebServerSecurityGroup,
-        template.Resources.DatabaseSecurityGroup,
-      ];
-      securityGroups.forEach(sg => {
-        expect(sg.Properties.GroupDescription).toBeDefined();
-        expect(sg.Properties.GroupDescription.length).toBeGreaterThan(0);
-      });
-    });
-
-    test('database credentials should use Secrets Manager', () => {
-      const db = template.Resources.Database;
-      const password = db.Properties.MasterUserPassword;
-      expect(password['Fn::Sub']).toBeDefined();
-      expect(password['Fn::Sub']).toContain('secretsmanager');
-    });
-  });
-
-  describe('High Availability', () => {
-    test('resources should be distributed across multiple AZs', () => {
-      expect(template.Resources.PublicSubnetAZ1).toBeDefined();
-      expect(template.Resources.PublicSubnetAZ2).toBeDefined();
-      expect(template.Resources.NatGatewayAZ1).toBeDefined();
-      expect(template.Resources.NatGatewayAZ2).toBeDefined();
-      expect(template.Resources.Database.Properties.MultiAZ).toBe(true);
-    });
-
-    test('Auto Scaling should span multiple AZs', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('Load Balancer should span multiple AZs', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Subnets.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-});
-```
-
-## test/tap-stack.int.test.ts
-
-```typescript
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeVpcAttributeCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-  DescribePoliciesCommand,
-} from '@aws-sdk/client-auto-scaling';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
-
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
-const ec2Client = new EC2Client({});
-const s3Client = new S3Client({});
-const rdsClient = new RDSClient({});
-const elbClient = new ElasticLoadBalancingV2Client({});
-const asgClient = new AutoScalingClient({});
-const cwClient = new CloudWatchClient({});
-const cwLogsClient = new CloudWatchLogsClient({});
-
-describe('TAP Stack Integration Tests - Real AWS Resources', () => {
-  describe('CloudFormation Outputs Validation', () => {
-    test('should have all required outputs', () => {
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.StaticContentBucketName).toBeDefined();
-      expect(outputs.LogsBucketName).toBeDefined();
-      expect(outputs.DatabaseEndpoint).toBeDefined();
-      expect(outputs.WebServerSecurityGroupId).toBeDefined();
-    });
-
-    test('outputs should have valid formats', () => {
-      expect(outputs.LoadBalancerDNS).toMatch(
-        /^[a-z0-9-]+\.[\w-]+\.elb\.amazonaws\.com$/
-      );
-      expect(outputs.StaticContentBucketName).toMatch(/^[a-z0-9-]+$/);
-      expect(outputs.LogsBucketName).toMatch(/^[a-z0-9-]+$/);
-      expect(outputs.DatabaseEndpoint).toMatch(
-        /^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/
-      );
-      expect(outputs.WebServerSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
-    });
-  });
-
-  describe('VPC and Network Configuration', () => {
-    let vpcId: string;
-    let subnets: any[];
-
-    beforeAll(async () => {
-      const sgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.WebServerSecurityGroupId],
-        })
-      );
-      vpcId = sgResponse.SecurityGroups![0].VpcId!;
-
-      const subnetResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
-        })
-      );
-      subnets = subnetResponse.Subnets || [];
-    });
-
-    test('VPC should exist and have DNS enabled', async () => {
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs![0].State).toBe('available');
-
-      const dnsHostnamesResponse = await ec2Client.send(
-        new DescribeVpcAttributeCommand({
-          VpcId: vpcId,
-          Attribute: 'enableDnsHostnames',
-        })
-      );
-      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
-    });
-
-    test('should have at least 6 subnets (2 public, 2 private, 2 DB)', () => {
-      expect(subnets.length).toBeGreaterThanOrEqual(6);
-    });
-
-    test('subnets should be in different availability zones', () => {
-      const azs = new Set(subnets.map(s => s.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  describe('S3 Buckets Configuration', () => {
-    test('StaticContentBucket should exist with encryption', async () => {
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({
-          Bucket: outputs.StaticContentBucketName,
-        })
-      );
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration
-      ).toBeDefined();
-      const rule =
-        encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
-      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
-        'aws:kms'
-      );
-    });
-
-    test('StaticContentBucket should have versioning enabled', async () => {
-      const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({
-          Bucket: outputs.StaticContentBucketName,
-        })
-      );
-      expect(versioningResponse.Status).toBe('Enabled');
-    });
-
-    test('StaticContentBucket should block public access', async () => {
-      const publicAccessResponse = await s3Client.send(
-        new GetPublicAccessBlockCommand({
-          Bucket: outputs.StaticContentBucketName,
-        })
-      );
-      const config = publicAccessResponse.PublicAccessBlockConfiguration;
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
-    });
-  });
-
-  describe('RDS Database Configuration', () => {
-    let dbInstance: any;
-
-    beforeAll(async () => {
-      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-      const dbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-      );
-      dbInstance = dbResponse.DBInstances![0];
-    });
-
-    test('database should be in available state', () => {
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-    });
-
-    test('database should be Multi-AZ', () => {
-      expect(dbInstance.MultiAZ).toBe(true);
-    });
-
-    test('database should have encryption enabled', () => {
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.KmsKeyId).toBeDefined();
-    });
-
-    test('database should have automated backups enabled', () => {
-      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
-      expect(dbInstance.PreferredBackupWindow).toBeDefined();
-    });
-  });
-
-  describe('Live Resource Connectivity Tests', () => {
-    describe('S3 Bucket Live Read/Write Tests', () => {
-      const testKey = `integration-test-${Date.now()}.txt`;
-      const testContent = 'Integration test content for TAP Stack';
-
-      afterAll(async () => {
-        try {
-          await s3Client.send(
-            new DeleteObjectCommand({
-              Bucket: outputs.StaticContentBucketName,
-              Key: testKey,
-            })
-          );
-        } catch (error) {
-          console.log('Cleanup: Could not delete test object');
-        }
-      });
-
-      test('should be able to write objects to StaticContentBucket', async () => {
-        const putResponse = await s3Client.send(
-          new PutObjectCommand({
-            Bucket: outputs.StaticContentBucketName,
-            Key: testKey,
-            Body: testContent,
-            ContentType: 'text/plain',
-          })
-        );
-        expect(putResponse.$metadata.httpStatusCode).toBe(200);
-        expect(putResponse.ETag).toBeDefined();
-      });
-
-      test('should be able to read objects from StaticContentBucket', async () => {
-        const getResponse = await s3Client.send(
-          new GetObjectCommand({
-            Bucket: outputs.StaticContentBucketName,
-            Key: testKey,
-          })
-        );
-        expect(getResponse.$metadata.httpStatusCode).toBe(200);
-        expect(getResponse.ContentType).toBe('text/plain');
-        const body = await getResponse.Body?.transformToString();
-        expect(body).toBe(testContent);
-      });
-
-      test('object in StaticContentBucket should be encrypted', async () => {
-        const getResponse = await s3Client.send(
-          new GetObjectCommand({
-            Bucket: outputs.StaticContentBucketName,
-            Key: testKey,
-          })
-        );
-        expect(getResponse.ServerSideEncryption).toBe('aws:kms');
-        expect(getResponse.SSEKMSKeyId).toBeDefined();
-      });
-    });
-
-    describe('RDS Database Connectivity Tests', () => {
-      test('database should only be accessible from within VPC (not publicly)', async () => {
-        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-        const dbResponse = await rdsClient.send(
-          new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-        );
-        const db = dbResponse.DBInstances![0];
-        expect(db.PubliclyAccessible).toBe(false);
-      });
-
-      test('database security group should only allow connections from WebServer SG', async () => {
-        const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-        const dbResponse = await rdsClient.send(
-          new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-        );
-        const db = dbResponse.DBInstances![0];
-        const dbSgIds =
-          db.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId!) || [];
-
-        const sgResponse = await ec2Client.send(
-          new DescribeSecurityGroupsCommand({ GroupIds: dbSgIds })
-        );
-        const dbSg = sgResponse.SecurityGroups![0];
-
-        const mysqlRule = dbSg.IpPermissions?.find(
-          rule => rule.FromPort === 3306
-        );
-        expect(mysqlRule).toBeDefined();
-        expect(mysqlRule?.UserIdGroupPairs).toBeDefined();
-        expect(mysqlRule?.UserIdGroupPairs!.length).toBeGreaterThan(0);
-
-        const hasOpenCidr = mysqlRule?.IpRanges?.some(
-          range => range.CidrIp === '0.0.0.0/0'
-        );
-        expect(hasOpenCidr).toBeFalsy();
-      });
-    });
-
-    describe('Load Balancer Live Health Tests', () => {
-      test('ALB should have active listeners', async () => {
-        const lbResponse = await elbClient.send(
-          new DescribeLoadBalancersCommand({})
-        );
-        const alb = lbResponse.LoadBalancers?.find(
-          lb => lb.DNSName === outputs.LoadBalancerDNS
-        );
-        expect(alb).toBeDefined();
-
-        const listenerResponse = await elbClient.send(
-          new DescribeListenersCommand({
-            LoadBalancerArn: alb!.LoadBalancerArn,
-          })
-        );
-        expect(listenerResponse.Listeners).toBeDefined();
-        expect(listenerResponse.Listeners!.length).toBeGreaterThan(0);
-
-        const httpListener = listenerResponse.Listeners!.find(
-          l => l.Port === 80
-        );
-        expect(httpListener).toBeDefined();
-      });
-    });
-  });
-
-  describe('End-to-End Workflow Tests', () => {
-    test('E2E: VPC routing allows internet to ALB through IGW', async () => {
-      const lbResponse = await elbClient.send(
-        new DescribeLoadBalancersCommand({})
-      );
-      const alb = lbResponse.LoadBalancers?.find(
-        lb => lb.DNSName === outputs.LoadBalancerDNS
-      );
-      expect(alb).toBeDefined();
-      expect(alb!.Scheme).toBe('internet-facing');
-
-      const albSubnetIds = alb!.AvailabilityZones.map(az => az.SubnetId!);
-      const subnetResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: albSubnetIds })
-      );
-      const publicSubnets = subnetResponse.Subnets!;
-      expect(publicSubnets.every(s => s.MapPublicIpOnLaunch)).toBe(true);
-    });
-
-    test('E2E: ALB can forward traffic to EC2 instances via security groups', async () => {
-      const lbResponse = await elbClient.send(
-        new DescribeLoadBalancersCommand({})
-      );
-      const alb = lbResponse.LoadBalancers?.find(
-        lb => lb.DNSName === outputs.LoadBalancerDNS
-      );
-      const albSgIds = alb!.SecurityGroups || [];
-
-      const webSgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.WebServerSecurityGroupId],
-        })
-      );
-      const webSg = webSgResponse.SecurityGroups![0];
-
-      const httpRule = webSg.IpPermissions?.find(rule => rule.FromPort === 80);
-      expect(httpRule).toBeDefined();
-
-      const allowsAlb = httpRule?.UserIdGroupPairs?.some(pair =>
-        albSgIds.includes(pair.GroupId!)
-      );
-      expect(allowsAlb).toBe(true);
-    });
-
-    test('E2E: EC2 instances can connect to RDS via security groups', async () => {
-      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-      const dbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-      );
-      const db = dbResponse.DBInstances![0];
-      const dbSgIds =
-        db.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId!) || [];
-
-      const dbSgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: dbSgIds })
-      );
-      const dbSg = dbSgResponse.SecurityGroups![0];
-
-      const mysqlRule = dbSg.IpPermissions?.find(
-        rule => rule.FromPort === 3306
-      );
-      expect(mysqlRule).toBeDefined();
-
-      const allowsWebServer = mysqlRule?.UserIdGroupPairs?.some(
-        pair => pair.GroupId === outputs.WebServerSecurityGroupId
-      );
-      expect(allowsWebServer).toBe(true);
-    });
-
-    test('E2E: Multi-AZ architecture ensures no single point of failure', async () => {
-      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-      const dbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-      );
-      expect(dbResponse.DBInstances![0].MultiAZ).toBe(true);
-
-      const lbResponse = await elbClient.send(
-        new DescribeLoadBalancersCommand({})
-      );
-      const alb = lbResponse.LoadBalancers?.find(
-        lb => lb.DNSName === outputs.LoadBalancerDNS
-      );
-      expect(alb!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
-
-      const asgResponse = await asgClient.send(
-        new DescribeAutoScalingGroupsCommand({})
-      );
-      const asg = asgResponse.AutoScalingGroups?.find(group =>
-        group.Tags?.some(
-          (t: any) => t.Key === 'Project' && t.Value === 'ha-webapp'
-        )
-      );
-      expect(asg!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  describe('Security Best Practices Validation', () => {
-    test('all S3 buckets should have encryption', async () => {
-      const buckets = [outputs.StaticContentBucketName, outputs.LogsBucketName];
-      for (const bucket of buckets) {
-        const encryptionResponse = await s3Client.send(
-          new GetBucketEncryptionCommand({ Bucket: bucket })
-        );
-        expect(
-          encryptionResponse.ServerSideEncryptionConfiguration
-        ).toBeDefined();
-      }
-    });
-
-    test('RDS should use encryption at rest', async () => {
-      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-      const dbResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })
-      );
-      expect(dbResponse.DBInstances![0].StorageEncrypted).toBe(true);
-      expect(dbResponse.DBInstances![0].KmsKeyId).toBeDefined();
-    });
-
-    test('security groups should follow principle of least privilege', async () => {
-      const sgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.WebServerSecurityGroupId],
-        })
-      );
-      const webSg = sgResponse.SecurityGroups![0];
-
-      const openRules = webSg.IpPermissions?.filter(rule =>
-        rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
-      );
-      expect(openRules?.length || 0).toBe(0);
-    });
-  });
-});
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Highly Available and Fault-Tolerant Web Application Infrastructure'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'ha-webapp'
+    Description: 'Project name for resource naming and tagging'
+
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues:
+      - production
+      - staging
+      - development
+    Description: 'Environment name'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, test, prod)'
+
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for the VPC'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  TrustedIPRange:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: 'Trusted IP range for HTTP/HTTPS access (e.g., office IP)'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  InstanceType:
+    Type: String
+    Default: 't3.medium'
+    AllowedValues:
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - m5.large
+      - m5.xlarge
+    Description: 'EC2 instance type for web servers'
+
+  DBInstanceClass:
+    Type: String
+    Default: 'db.t3.small'
+    Description: 'RDS instance class'
+
+  DBMasterUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Database master username'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DomainName:
+    Type: String
+    Default: 'myapp-test.local'
+    Description: 'Domain name for Route 53 (e.g., myapp.com). Use .local for testing or provide your actual domain.'
+
+  MinInstances:
+    Type: Number
+    Default: 2
+    Description: 'Minimum number of EC2 instances'
+    MinValue: 2
+
+  MaxInstances:
+    Type: Number
+    Default: 6
+    Description: 'Maximum number of EC2 instances'
+    MinValue: 2
+
+  DesiredInstances:
+    Type: Number
+    Default: 2
+    Description: 'Desired number of EC2 instances'
+    MinValue: 2
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    Description: 'Latest Amazon Linux 2023 AMI ID from SSM Parameter Store (works in all regions)'
+
+Resources:
+  # VPC and Network Infrastructure
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # NAT Gateways for private subnets
+  NatGatewayEIPAZ1:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-eip-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NatGatewayEIPAZ2:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-eip-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NatGatewayAZ1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIPAZ1.AllocationId
+      SubnetId: !Ref PublicSubnetAZ1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  NatGatewayAZ2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIPAZ2.AllocationId
+      SubnetId: !Ref PublicSubnetAZ2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTableAZ1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-rt-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateRouteAZ1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAZ1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayAZ1
+
+  PrivateRouteTableAZ2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-rt-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateRouteAZ2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableAZ2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayAZ2
+
+  # S3 Buckets
+  StaticContentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-static-content-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-static-content-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-logs-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: elasticloadbalancing.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${LogsBucket.Arn}/alb-logs/*'
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: elasticloadbalancing.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt LogsBucket.Arn
+
+  # KMS Key for encryption
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for ${ProjectName} ${Environment} encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - rds.amazonaws.com
+                - secretsmanager.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-kms-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-${EnvironmentSuffix}'
+      TargetKeyId: !Ref KMSKey
+
+  # Subnets
+  PublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PublicSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetAZ2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  PrivateSubnetAZ1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetAZ1
+      RouteTableId: !Ref PrivateRouteTableAZ1
+
+  PrivateSubnetAZ2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetAZ2
+      RouteTableId: !Ref PrivateRouteTableAZ2
+
+  DBSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.21.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-az1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DBSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.22.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-az2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref TrustedIPRange
+          Description: 'HTTP access from trusted IPs'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref TrustedIPRange
+          Description: 'HTTPS access from trusted IPs'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-alb-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTP access from ALB'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-webserver-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: 'MySQL access from web servers'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-database-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM Role for EC2 instances
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub '${StaticContentBucket.Arn}/*'
+                  - !Sub '${LogsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt StaticContentBucket.Arn
+                  - !GetAtt LogsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-ec2-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile-${EnvironmentSuffix}'
+      Roles:
+        - !Ref EC2Role
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-alb-${EnvironmentSuffix}'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetAZ1
+        - !Ref PublicSubnetAZ2
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref LogsBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-logs'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-alb-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-tg-${EnvironmentSuffix}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: '/health'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: 'lb_cookie'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-tg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # Launch Template for Auto Scaling
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${ProjectName}-${Environment}-lt-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${ProjectName}-${Environment}-webserver-${EnvironmentSuffix}'
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Project
+                Value: !Ref ProjectName
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd amazon-cloudwatch-agent
+
+            # Configure simple health check endpoint
+            echo "OK" > /var/www/html/health
+
+            # Start services
+            systemctl start httpd
+            systemctl enable httpd
+
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+            {
+              "metrics": {
+                "namespace": "${ProjectName}/${Environment}",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": [
+                      "cpu_usage_active"
+                    ],
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": [
+                      "used_percent"
+                    ],
+                    "metrics_collection_interval": 60,
+                    "resources": [
+                      "*"
+                    ]
+                  },
+                  "mem": {
+                    "measurement": [
+                      "mem_used_percent"
+                    ],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "/aws/ec2/${ProjectName}/${Environment}/httpd",
+                        "log_stream_name": "{instance_id}/access_log"
+                      },
+                      {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "/aws/ec2/${ProjectName}/${Environment}/httpd",
+                        "log_stream_name": "{instance_id}/error_log"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+
+            # Start CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config \
+              -m ec2 \
+              -s \
+              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${ProjectName}-${Environment}-asg-${EnvironmentSuffix}'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinInstances
+      MaxSize: !Ref MaxInstances
+      DesiredCapacity: !Ref DesiredInstances
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetAZ1
+        - !Ref PrivateSubnetAZ2
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-asg-instance-${EnvironmentSuffix}'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+
+  # Auto Scaling Policies
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0
+
+  # RDS Database
+  DBMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-db-master-password-${EnvironmentSuffix}'
+      Description: !Sub 'Master password for ${ProjectName} ${Environment} RDS database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-password-secret-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${ProjectName}-${Environment}-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref DBSubnetAZ1
+        - !Ref DBSubnetAZ2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub '${ProjectName}-${Environment}-db-${EnvironmentSuffix}'
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      MultiAZ: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-db-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # CloudWatch Log Groups
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${ProjectName}/${Environment}/httpd'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt KMSKey.Arn
+
+  # CloudWatch Alarms
+  ALBTargetHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-alb-unhealthy-targets-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when ALB has unhealthy targets'
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt ALBTargetGroup.TargetGroupFullName
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-high-cpu-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when CPU utilization is high'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+
+  DatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-database-high-cpu-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when database CPU utilization is high'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+
+  DatabaseStorageSpaceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-database-low-storage-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when database storage space is low'
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648  # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref Database
+
+  # Route 53 Hosted Zone, Health Check and Record
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub 'Hosted zone for ${ProjectName} ${Environment} environment'
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-hosted-zone-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  Route53HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        ResourcePath: '/health'
+        FullyQualifiedDomainName: !GetAtt ApplicationLoadBalancer.DNSName
+        Port: 80
+        RequestInterval: 30
+        FailureThreshold: 3
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-health-check-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  Route53RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Ref DomainName
+      Type: A
+      SetIdentifier: !Sub '${AWS::Region}-primary'
+      Weight: 100
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+      HealthCheckId: !Ref Route53HealthCheck
+
+Outputs:
+  LoadBalancerDNS:
+    Description: 'DNS name of the load balancer'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-alb-dns-${EnvironmentSuffix}'
+
+  StaticContentBucketName:
+    Description: 'Name of the static content S3 bucket'
+    Value: !Ref StaticContentBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-static-bucket-${EnvironmentSuffix}'
+
+  LogsBucketName:
+    Description: 'Name of the logs S3 bucket'
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-logs-bucket-${EnvironmentSuffix}'
+
+  DatabaseEndpoint:
+    Description: 'RDS database endpoint'
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-db-endpoint-${EnvironmentSuffix}'
+
+  WebServerSecurityGroupId:
+    Description: 'Security group ID for web servers'
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-webserver-sg-${EnvironmentSuffix}'
 ```
 
 ## Key Features Implemented
 
-### 1. Complete Test Coverage (200 tests total)
-
-**Unit Tests (109 tests)**:
-
-- Template structure validation
-- All 13 parameters validation with constraints
-- VPC and networking resources (40+ tests)
-- Security groups validation (12+ tests)
-- S3 buckets with encryption and versioning (8+ tests)
-- KMS, IAM, Secrets Manager (12+ tests)
-- Load Balancer and Auto Scaling (15+ tests)
-- RDS Multi-AZ database (12+ tests)
-- CloudWatch monitoring (10+ tests)
-- Route53 configuration (6+ tests)
-- Security best practices (15+ tests)
-- High availability validation (3+ tests)
-
-**Integration Tests (91 tests)**:
-
-- CloudFormation outputs validation
-- VPC and network configuration with live AWS queries
-- Security groups configuration with actual rules
-- S3 buckets configuration and live read/write operations
-- RDS database Multi-AZ and connectivity validation
-- Load balancer health checks and listeners
-- Auto Scaling groups and policies
-- CloudWatch alarms state validation
-- Live resource connectivity tests
-- End-to-end workflow validation
-- Security best practices verification
-
-### 2. Live Resource Connectivity Testing
-
-**S3 Bucket Live Tests**:
-
-- Write objects to StaticContentBucket with actual S3 API calls
-- Read objects and verify content matches
-- List objects in bucket
-- Verify KMS encryption on stored objects
-- Automatic cleanup of test objects
-
-**RDS Connectivity Tests**:
-
-- Verify database is NOT publicly accessible
-- Security group chain validation (only WebServer SG allowed)
-- DNS resolution for database endpoint
-
-**ALB Health Tests**:
-
-- Active listeners validation with real ALB queries
-- Target health status reporting
-
-### 3. End-to-End Workflow Validation
+### End-to-End Workflow Validation
 
 **Complete Request Flow**: Internet -> IGW -> ALB -> EC2 -> RDS
 
@@ -1035,7 +1044,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
 - ASG spans multiple AZs
 - NAT Gateways in multiple AZs
 
-### 4. Security and Compliance
+### Security and Compliance
 
 **Security Best Practices**:
 
@@ -1051,34 +1060,3 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
 - EC2 role has specific S3 permissions (not wildcard)
 - CloudWatch agent policy attached
 - Proper trust policies for services
-
-### 5. No Mocking - Real AWS Validation
-
-All integration tests use:
-
-- AWS SDK v3 clients for all services
-- Real deployment outputs from cfn-outputs/flat-outputs.json
-- Actual API calls to AWS services (EC2, S3, RDS, ELB, Auto Scaling, CloudWatch)
-- Live resource state validation
-- No hardcoded values or environment suffixes
-- Dynamic lookups for all resource references
-
-## Test Execution
-
-```bash
-# Run unit tests
-npm run test:unit
-
-# Run integration tests
-npm run test:integration
-
-# Run all tests
-npm test
-```
-
-## Test Results
-
-- Unit Tests: 109 tests passing - Complete CloudFormation template validation
-- Integration Tests: 91 tests passing - Live AWS resource verification
-- Total Coverage: 200 tests validating infrastructure correctness and functionality
-- All tests verify both configuration and live resource operations

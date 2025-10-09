@@ -1186,7 +1186,17 @@
                     },
                     {
                         "Key": "access_logs.s3.enabled",
-                        "Value": "false"
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "access_logs.s3.bucket",
+                        "Value": {
+                            "Ref": "LogsBucket"
+                        }
+                    },
+                    {
+                        "Key": "access_logs.s3.prefix",
+                        "Value": "alb-logs"
                     }
                 ],
                 "Tags": [
