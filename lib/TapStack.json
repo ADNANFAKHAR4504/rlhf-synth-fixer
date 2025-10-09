@@ -1576,6 +1576,7 @@
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Condition": "IsPrimaryRegion",
+            "DependsOn": "PrimaryKMSKey",
             "Properties": {
                 "LaunchTemplateName": {
                     "Fn::Sub": "${CompanyName}-${Environment}-launch-template"

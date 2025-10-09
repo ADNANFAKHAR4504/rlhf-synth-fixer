@@ -1048,6 +1048,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Condition: IsPrimaryRegion
+    DependsOn: PrimaryKMSKey
     Properties:
       LaunchTemplateName: !Sub '${CompanyName}-${Environment}-launch-template'
       LaunchTemplateData:
