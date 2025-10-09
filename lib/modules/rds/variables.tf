@@ -89,9 +89,9 @@ variable "availability_zones" {
 }
 
 variable "enable_performance_insights" {
-  description = "Enable Performance Insights"
+  description = "Enable Performance Insights (not supported on db.t3 instances)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "monitoring_interval" {

@@ -162,7 +162,7 @@ module "rds" {
   backup_retention_period     = 7
   skip_final_snapshot         = true
   deletion_protection         = false
-  enable_performance_insights = true
+  enable_performance_insights = false
   monitoring_interval         = 60
   monitoring_role_arn         = module.iam.rds_monitoring_role_arn
 
