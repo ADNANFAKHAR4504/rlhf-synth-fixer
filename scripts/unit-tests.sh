@@ -105,7 +105,7 @@ EOF
 
 elif [ "$LANGUAGE" = "js" ] || { [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; }; then
   echo "✅ JavaScript/CloudFormation JSON project detected, running JS unit tests..."
-  npm run test:unit-js
+  npm run test:unit
 
 elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
