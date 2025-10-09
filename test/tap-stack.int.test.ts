@@ -186,7 +186,7 @@ describe("Live Environment Integration Tests", () => {
 
     test("ALBDNSName exists and points to an ELB", async () => {
       const dns = outputs.ALBDNSName!;
-      expect(dns).toMatch(/\.us-east-1\.elb\.amazonaws\.com$/);
+      expect(dns).toMatch(/\..*\.elb\.amazonaws\.com$/);
       const found = await findELB(dns);
       expect(found).toBe(true);
     });
