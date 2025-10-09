@@ -1,23 +1,58 @@
-# Serverless Monitoring System using AWS CDK (TypeScript)
+# Serverless Monitoring System Implementation
 
-This solution implements a comprehensive serverless monitoring system using AWS CDK to monitor five Lambda functions with automated alerting, performance tracking, and operational overview.
+## Architecture Overview
 
-## Architecture Components
+A serverless monitoring system built with AWS CDK (TypeScript) to monitor five Lambda functions handling 1,500+ daily requests. The system provides automated alerting, performance tracking, and operational overview.
 
-### Core Infrastructure
-- **5 Lambda Functions**: Node.js 18 runtime functions simulating different business services
-- **CloudWatch Monitoring**: Comprehensive metrics, alarms, and dashboards
-- **DynamoDB**: Persistent storage for structured error logs with GSI for querying
-- **SNS**: Real-time alert notifications
-- **IAM**: Secure role-based access with least privilege
+## Key Components
 
-### Key Features
-- Error rate monitoring (threshold: >5%)
-- Latency monitoring (threshold: >500ms)
-- Throttle detection and alerting
-- Centralized error logging to DynamoDB
-- CloudWatch Dashboard with operational overview
-- Email notifications for alerts
+### Lambda Functions (5)
+- **user-service**: Handles user management operations
+- **order-processor**: Processes customer orders
+- **payment-handler**: Manages payment transactions
+- **notification-sender**: Sends notifications to users
+- **data-aggregator**: Aggregates business metrics
+
+Each function runs on Node.js 18 runtime with:
+- 256MB memory allocation
+- 30-second timeout
+- Built-in error simulation (7% error rate)
+- DynamoDB error logging
+- CloudWatch metrics integration
+
+### Monitoring Infrastructure
+
+#### CloudWatch Alarms
+- **Error Rate Monitoring**: Triggers when error rate >5% over 2 evaluation periods
+- **Latency Monitoring**: Alerts when average duration >500ms over 2 evaluation periods  
+- **Throttle Detection**: Monitors function throttling with 1 evaluation period
+
+#### DynamoDB Error Storage
+- Table: `error-logs-{environmentSuffix}`
+- Partition Key: `errorId` 
+- Sort Key: `timestamp`
+- GSI: `FunctionNameIndex` for querying by function name
+- Pay-per-request billing mode
+- Point-in-time recovery enabled
+
+#### SNS Notifications
+- Topic: `monitoring-alerts-{environmentSuffix}`
+- Email subscription for admin notifications
+- Integrated with all CloudWatch alarms
+
+#### CloudWatch Dashboard
+- Dashboard name: `serverless-monitoring-{environmentSuffix}`
+- Summary widgets showing 24h metrics
+- Individual function invocation/error graphs
+- Duration tracking with average and P99 percentiles
+
+### Security & IAM
+
+#### Lambda Execution Role
+- Basic execution permissions via AWS managed policy
+- DynamoDB write permissions for error logging
+- CloudWatch Logs permissions for function logging
+- Least privilege access model
 
 ## Implementation
 
@@ -360,34 +395,33 @@ exports.handler = async (event) => {
 }
 ```
 
-## Key Design Decisions
+## Implementation Code
 
-### Error Handling
-- Comprehensive error logging to DynamoDB with structured data
-- Graceful fallback when DynamoDB logging fails
-- Error metrics tracked via CloudWatch for alerting
-
-### Monitoring Strategy
-- Multi-dimensional alarming: error rate, latency, and throttles
-- Math expressions for calculated metrics (error rate percentage)
-- Appropriate evaluation periods and thresholds for production workloads
-
-### Security
-- Least privilege IAM roles with specific resource permissions
-- No hardcoded credentials or sensitive data
-- Proper resource isolation with environment suffixes
-
-### Scalability
-- Pay-per-request DynamoDB billing for cost optimization
-- Global Secondary Index for efficient error log querying
-- CloudWatch dashboard for operational visibility
+The complete implementation is available in `lib/tap-stack.ts` with proper CDK constructs for all components.
 
 ## Deployment Outputs
 
-The stack outputs essential information for integration testing:
-- DynamoDB table name for error log verification
-- SNS topic ARN for notification testing
-- Lambda function names for invocation testing
-- Dashboard URL for operational monitoring
+Stack provides essential outputs for integration testing:
+- `ErrorLogsTableName`: DynamoDB table name
+- `AlertTopicArn`: SNS topic for notifications  
+- `DashboardURL`: CloudWatch dashboard link
+- `Function1Name` through `Function5Name`: Lambda function names
 
-This solution provides a production-ready monitoring system with automated alerting, comprehensive logging, and operational dashboards suitable for handling 1,500+ daily requests across five Lambda functions.
+## Monitoring Capabilities
+
+### Real-time Alerting
+- Email notifications via SNS
+- Multiple alarm types per function
+- Configurable thresholds and evaluation periods
+
+### Error Tracking
+- Structured error logging to DynamoDB
+- Error metadata capture (stack traces, duration, event data)
+- Queryable by function name and timestamp
+
+### Performance Monitoring
+- Duration metrics with percentiles
+- Invocation and error rate tracking
+- Visual dashboard for operational overview
+
+This implementation provides a production-ready monitoring solution for serverless workloads with comprehensive alerting and error tracking capabilities.
