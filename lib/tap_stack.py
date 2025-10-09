@@ -83,9 +83,11 @@ class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-a
         )
 
         # Create S3 bucket for document translations
+        # S3 bucket names must be lowercase; sanitize the stack suffix.
+        stack_suffix = pulumi.get_stack().lower()
         self.documents_bucket = aws.s3.Bucket(
             f"translation-documents-{self.environment_suffix}",
-            bucket=f"translation-documents-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=f"translation-documents-{self.environment_suffix}-{stack_suffix}",
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=True
             ),
