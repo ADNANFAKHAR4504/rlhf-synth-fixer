@@ -81,8 +81,8 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
     test('should create nested stacks with dependencies', () => {
       const stack = new TapStack(app, 'TestTapStack');
 
-      // Both nested stacks should be created
-      expect(stack.node.children).toHaveLength(4); // 2 stacks + 4 outputs
+      // Main stack should have 6 outputs (added SQS queue outputs)
+      expect(stack.node.children).toHaveLength(6); // 6 outputs only (nested stacks are siblings in the app)
     });
 
     test('should export all required outputs', () => {
@@ -145,6 +145,43 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
       });
     });
 
+    test('should create SQS queue for email processing (PROMPT.md requirement)', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: 'email-processing-queue-test',
+        VisibilityTimeout: 300, // 5 minutes (CDK property name)
+        ReceiveMessageWaitTimeSeconds: 20 // Long polling
+      });
+    });
+
+    test('should create SQS dead letter queue for failed messages', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: 'email-processing-dlq-test',
+        MessageRetentionPeriod: 1209600 // 14 days
+      });
+    });
+
+    test('should configure SQS queue with dead letter queue', () => {
+      // Find the main queue and verify it has DLQ configuration
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: 'email-processing-queue-test',
+        RedrivePolicy: Match.objectLike({
+          maxReceiveCount: 3
+        })
+      });
+    });
+
+    test('should subscribe SQS queue to SNS topic (not Lambda directly)', () => {
+      // Verify SNS subscription is to SQS, not Lambda
+      template.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'sqs',
+        TopicArn: Match.anyValue()
+      });
+
+      // Verify there are multiple SNS subscriptions (including SES feedback topics)
+      // Main subscription is SQS + SES feedback subscriptions (bounce, complaint, delivery)
+      template.resourceCountIs('AWS::SNS::Subscription', 6);
+    });
+
     test('should create DynamoDB table for delivery tracking', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'email-delivery-tracking-test',
@@ -189,6 +226,15 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
       });
     });
 
+    test('should create Lambda event source mapping for SQS queue (PROMPT.md: SQS for reliable processing)', () => {
+      template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+        BatchSize: 10,
+        MaximumBatchingWindowInSeconds: 5,
+        EventSourceArn: Match.anyValue(), // SQS queue ARN
+        FunctionName: Match.anyValue() // Lambda function reference
+      });
+    });
+
     test('should create CloudWatch log group with proper retention', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: '/aws/lambda/email-processor-test',
@@ -224,15 +270,6 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
               ])
             })
           ])
-        }
-      });
-    });
-
-    test('should create SNS subscription for Lambda', () => {
-      template.hasResourceProperties('AWS::SNS::Subscription', {
-        Protocol: 'lambda',
-        TopicArn: {
-          Ref: Match.stringLikeRegexp('OrderEventsTopic')
         }
       });
     });
@@ -556,6 +593,8 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
       template.hasOutput('OrderEventsTopicArn', {});
       template.hasOutput('DeliveryTrackingTableName', {});
       template.hasOutput('EmailProcessorFunctionName', {});
+      template.hasOutput('EmailQueueUrl', {}); // SQS queue output
+      template.hasOutput('EmailDeadLetterQueueUrl', {}); // SQS DLQ output
       template.hasOutput('SystemSetupInstructions', {});
     });
 

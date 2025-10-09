@@ -2,7 +2,13 @@
 
 ## Architecture Overview
 
-This solution implements a scalable email notification system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS for messaging, and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
+This solution implements a scalable email notification system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing (per PROMPT.md requirements), and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
+
+**Key Architecture Changes (SQS Integration):**
+- ✅ **SNS→SQS→Lambda Pattern**: Implemented reliable message processing using SQS queues instead of direct SNS→Lambda subscription
+- ✅ **Dead Letter Queue**: Added SQS DLQ with 3 retry attempts for failed message processing
+- ✅ **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
+- ✅ **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
 
 ## Implementation Files
 
@@ -96,6 +102,18 @@ export class TapStack extends cdk.Stack {
       exportName: `TapStack-EmailProcessorFunction-${environmentSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'EmailQueueUrl', {
+      value: emailNotificationStack.emailQueue.queueUrl,
+      description: 'SQS queue URL for email processing',
+      exportName: `TapStack-EmailQueue-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
+      value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
+      description: 'SQS dead letter queue URL for failed email processing',
+      exportName: `TapStack-EmailDeadLetterQueue-${environmentSuffix}`,
+    });
+
     new cdk.CfnOutput(this, 'SystemSetupInstructions', {
       value: JSON.stringify({
         integration: {
@@ -132,12 +150,17 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Email Notification Core Stack
 
-**email-notification-stack.ts** - The main email processing stack with inline Lambda functions:
+**email-notification-stack.ts** - The main email processing stack with reliable SQS-based processing:
 
 - **SNS Topic** for order events (`email-order-events-{suffix}`)
+- **SQS Queue** (`email-queue-{suffix}`) for reliable message processing with:
+  - Dead letter queue for failed messages (3 retry attempts)
+  - 5-minute visibility timeout
+  - 20-second long polling for efficiency
+- **SQS Dead Letter Queue** (`email-dead-letter-queue-{suffix}`) for failed processing
 - **DynamoDB Table** for email delivery tracking with GSI for order lookups
 - **Email Processor Lambda** (Python 3.11) with inline code for:
-  - Processing SNS order events
+  - Processing SQS messages from order events
   - Sending order confirmation emails via SES
   - Tracking email delivery status in DynamoDB
   - Duplicate order detection
@@ -146,6 +169,7 @@ export class TapStack extends cdk.Stack {
   - Processing SES delivery, bounce, and complaint notifications
   - Updating delivery status in DynamoDB
   - Bounce rate monitoring and alerting
+- **Lambda Event Source Mapping** connecting SQS queue to email processor
 - **CloudWatch Dashboard** with email volume, delivery rate, and cost metrics
 - **CloudWatch Alarms** for high bounce rates and Lambda errors
 - **SNS Topics** for SES feedback (bounces, complaints, delivery)

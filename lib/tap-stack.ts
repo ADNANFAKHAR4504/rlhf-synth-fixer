@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { EmailNotificationStack } from './email-notification-stack';
 import { CostMonitoringStack } from './cost-monitoring-stack';
+import { EmailNotificationStack } from './email-notification-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -80,6 +80,18 @@ export class TapStack extends cdk.Stack {
       value: emailNotificationStack.emailProcessorFunction.functionName,
       description: 'Lambda function name for email processing',
       exportName: `TapStack-EmailProcessorFunction-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailQueueUrl', {
+      value: emailNotificationStack.emailQueue.queueUrl,
+      description: 'SQS queue URL for email processing',
+      exportName: `TapStack-EmailQueueUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
+      value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
+      description: 'SQS dead letter queue URL for failed email processing',
+      exportName: `TapStack-EmailDeadLetterQueueUrl-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SystemSetupInstructions', {

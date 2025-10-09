@@ -4,9 +4,11 @@ import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
 export interface EmailNotificationStackProps extends cdk.StackProps {
@@ -19,6 +21,8 @@ export class EmailNotificationStack extends cdk.Stack {
   public readonly orderEventsTopic: sns.Topic;
   public readonly deliveryTrackingTable: dynamodb.Table;
   public readonly emailProcessorFunction: lambda.Function;
+  public readonly emailQueue: sqs.Queue;
+  public readonly emailDeadLetterQueue: sqs.Queue;
 
   constructor(
     scope: Construct,
@@ -41,6 +45,28 @@ export class EmailNotificationStack extends cdk.Stack {
       topicName: `email-order-events-${environmentSuffix}`,
       displayName: 'E-commerce Order Events Topic',
     });
+
+    // SQS Dead Letter Queue for failed email processing
+    this.emailDeadLetterQueue = new sqs.Queue(this, 'EmailDeadLetterQueue', {
+      queueName: `email-processing-dlq-${environmentSuffix}`,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    // SQS Queue for reliable email processing (PROMPT.md requirement)
+    this.emailQueue = new sqs.Queue(this, 'EmailQueue', {
+      queueName: `email-processing-queue-${environmentSuffix}`,
+      deadLetterQueue: {
+        queue: this.emailDeadLetterQueue,
+        maxReceiveCount: 3, // Retry failed messages 3 times before sending to DLQ
+      },
+      visibilityTimeout: cdk.Duration.minutes(5), // Give Lambda time to process
+      receiveMessageWaitTime: cdk.Duration.seconds(20), // Long polling
+    });
+
+    // Subscribe SQS Queue to SNS Topic (PROMPT.md: Use SQS for reliable message processing)
+    this.orderEventsTopic.addSubscription(
+      new snsSubscriptions.SqsSubscription(this.emailQueue)
+    );
 
     // DynamoDB Table for Email Delivery Tracking
     this.deliveryTrackingTable = new dynamodb.Table(
@@ -132,9 +158,9 @@ VERIFIED_DOMAIN = '${verifiedDomain}'
 
 def lambda_handler(event, context):
     """
-    Process order events and send confirmation emails.
+    Process order events from SQS and send confirmation emails.
     
-    Expected SNS message format:
+    Expected SQS message format (from SNS):
     {
         "orderId": "ORDER123",
         "customerEmail": "customer@example.com",
@@ -145,10 +171,20 @@ def lambda_handler(event, context):
     }
     """
     try:
-        # Process each SNS record
+        # Process each SQS record
         for record in event['Records']:
-            if record['EventSource'] == 'aws:sns':
-                message = json.loads(record['Sns']['Message'])
+            # SQS records contain SNS messages in the body
+            if 'body' in record:
+                # Parse the SQS message body which contains the SNS message
+                body = json.loads(record['body'])
+                
+                # Check if this is an SNS message wrapped in SQS
+                if 'Message' in body:
+                    # This is an SNS message delivered via SQS
+                    message = json.loads(body['Message'])
+                else:
+                    # Direct SQS message
+                    message = body
                 
                 # Validate required fields
                 required_fields = ['orderId', 'customerEmail', 'customerName', 'orderTotal']
@@ -352,9 +388,12 @@ def publish_metrics(metric_name, value):
       }
     );
 
-    // Subscribe Lambda to SNS Topic
-    this.orderEventsTopic.addSubscription(
-      new snsSubscriptions.LambdaSubscription(this.emailProcessorFunction)
+    // Subscribe Lambda to SQS Queue (PROMPT.md: SQS for reliable message processing)
+    this.emailProcessorFunction.addEventSource(
+      new lambdaEventSources.SqsEventSource(this.emailQueue, {
+        batchSize: 10, // Process up to 10 messages at once
+        maxBatchingWindow: cdk.Duration.seconds(5), // Wait up to 5 seconds to batch messages
+      })
     );
 
     // SES Feedback Processing Lambda for delivery tracking
@@ -563,6 +602,18 @@ def publish_metrics(metric_name, value):
       value: this.emailProcessorFunction.functionArn,
       description: 'Lambda function ARN for email processing',
       exportName: `email-processor-function-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailQueueUrl', {
+      value: this.emailQueue.queueUrl,
+      description: 'SQS Queue URL for email processing (PROMPT.md requirement)',
+      exportName: `email-processing-queue-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
+      value: this.emailDeadLetterQueue.queueUrl,
+      description: 'SQS Dead Letter Queue URL for failed email processing',
+      exportName: `email-processing-dlq-${environmentSuffix}`,
     });
   }
 
