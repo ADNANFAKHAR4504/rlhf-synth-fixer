@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { NetworkStack } from './network-stack';
 import { ComputeStack } from './compute-stack';
 import { DatabaseStack } from './database-stack';
-import { StorageStack } from './storage-stack';
 import { MonitoringStack } from './monitoring-stack';
+import { NetworkStack } from './network-stack';
+import { StorageStack } from './storage-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -46,7 +46,6 @@ export class TapStack extends cdk.Stack {
       openSearchDomain: storageStack.openSearchDomain,
       openSearchSecurityGroup: storageStack.openSearchSecurityGroup,
       mediaBucket: storageStack.mediaBucket,
-      serviceNetwork: networkStack.serviceNetwork,
       environmentSuffix,
     });
 
