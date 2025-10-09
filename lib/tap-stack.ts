@@ -116,7 +116,9 @@ export class TapStack extends cdk.Stack {
       'echo "<h1>Blog Platform - Environment: ' +
         environmentSuffix +
         '</h1>" > /var/www/html/index.html',
-      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html'
+      'TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")',
+      'INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/instance-id)',
+      'echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html'
     );
 
     this.instance = new ec2.Instance(this, `EC2-${namingSuffix}`, {
