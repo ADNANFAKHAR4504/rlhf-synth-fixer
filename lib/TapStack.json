@@ -1184,20 +1184,6 @@
                     {
                         "Key": "deletion_protection.enabled",
                         "Value": "false"
-                    },
-                    {
-                        "Key": "access_logs.s3.enabled",
-                        "Value": "false"
-                    },
-                    {
-                        "Key": "access_logs.s3.bucket",
-                        "Value": {
-                            "Ref": "LogsBucket"
-                        }
-                    },
-                    {
-                        "Key": "access_logs.s3.prefix",
-                        "Value": "alb-logs"
                     }
                 ],
                 "Tags": [
@@ -1274,22 +1260,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "EnableALBLogs": {
-            "Type": "Custom::LoadBalancerLogs",
-            "DependsOn": "LogsBucketPolicy",
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs"
-                },
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "S3BucketName": {
-                    "Ref": "LogsBucket"
-                },
-                "S3Prefix": "alb-logs"
             }
         },
         "ALBListenerHTTP": {

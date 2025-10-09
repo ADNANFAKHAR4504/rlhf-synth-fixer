@@ -616,12 +616,6 @@ Resources:
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
           Value: 'false'
-        - Key: access_logs.s3.enabled
-          Value: 'false'
-        - Key: access_logs.s3.bucket
-          Value: !Ref LogsBucket
-        - Key: access_logs.s3.prefix
-          Value: 'alb-logs'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-alb-${EnvironmentSuffix}'
@@ -658,15 +652,6 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectName
-
-  EnableALBLogs:
-    Type: Custom::LoadBalancerLogs
-    DependsOn: LogsBucketPolicy
-    Properties:
-      ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EnableALBLogs'
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      S3BucketName: !Ref LogsBucket
-      S3Prefix: 'alb-logs'
 
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
