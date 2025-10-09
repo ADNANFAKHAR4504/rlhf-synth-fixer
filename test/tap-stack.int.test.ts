@@ -1,251 +1,347 @@
-// Configuration - These are coming from cfn-outputs after deployment
+/* eslint-disable no-console */
+import fs from 'fs';
+import path from 'path';
+
 import {
-  CloudFrontClient,
-  GetDistributionCommand,
-  ListDistributionsCommand
-} from '@aws-sdk/client-cloudfront';
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+
 import {
   DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
-  EC2Client
+  EC2Client,
 } from '@aws-sdk/client-ec2';
-import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import fs from 'fs';
 
-const outputs: Record<string, string> = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+import {
+  CloudFrontClient,
+  GetDistributionCommand,
+  ListDistributionsCommand,
+} from '@aws-sdk/client-cloudfront';
 
-describe('TapStack Infrastructure Integration Tests', () => {
-  const region = 'us-west-2';
-  const s3Client = new S3Client({ region });
-  const ec2Client = new EC2Client({ region });
-  const rdsClient = new RDSClient({ region });
-  const cloudFrontClient = new CloudFrontClient({ region });
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetHealthCommand,
+  ELBv2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 
-  // Small helper to do fetch with timeout (since RequestInit.timeout doesn't exist)
-  const fetchWithTimeout = async (url: string, ms: number) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ms);
-    try {
-      // rely on global fetch (Node 18+ / jest-environment-node 18+)
-      // @ts-ignore - types pick up global fetch
-      return await fetch(url, { method: 'GET', signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
-  };
+import {
+  CloudWatchLogsClient,
+  FilterLogEventsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
 
+import {
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+
+// ---------- Load outputs ----------
+const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+const outputs: Record<string, string> = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+
+// ---------- Derive region/account/suffix ----------
+const parseRegionFromArn = (arn?: string) => (arn ? arn.split(':')[3] : undefined);
+const parseAccountFromArn = (arn?: string) => (arn ? arn.split(':')[4] : undefined);
+const parseRegionFromAlbDns = (dns?: string) => {
+  // e.g. ...eu-central-1.elb.amazonaws.com
+  if (!dns) return undefined;
+  const m = dns.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/);
+  return m?.[1];
+};
+
+const region =
+  parseRegionFromArn(outputs.LambdaFunctionArn) ||
+  parseRegionFromAlbDns(outputs.ALBDNSName) ||
+  process.env.AWS_REGION ||
+  'eu-central-1';
+
+const accountId = parseAccountFromArn(outputs.LambdaFunctionArn);
+
+// Try to infer env suffix from the Data bucket or RDS endpoint (fallback to ENV var)
+const envFromBucket = outputs.DataBucketName?.match(/^tapstack([a-z0-9]+)-data-/)?.[1];
+const envFromRds = outputs.RDSEndpoint?.match(/^tapstack([a-z0-9]+)-/i)?.[1];
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || envFromBucket || envFromRds || 'dev';
+
+// Log bucket name (from template): tapstack${suffix}-logs-${account}-${region}
+const logBucketName =
+  accountId && region ? `tapstack${environmentSuffix}-logs-${accountId}-${region}` : undefined;
+
+// ---------- AWS clients ----------
+const s3 = new S3Client({ region });
+const ec2 = new EC2Client({ region });
+const rds = new RDSClient({ region });
+const cf = new CloudFrontClient({ region });
+const elb = new ELBv2Client({ region });
+const logs = new CloudWatchLogsClient({ region });
+const lambda = new LambdaClient({ region });
+
+// ---------- Helpers ----------
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+async function fetchWithTimeout(url: string, ms: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    // @ts-ignore Node 18+ global fetch
+    return await fetch(url, { method: 'GET', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+jest.setTimeout(300_000); // 5 minutes for cloud calls + retries
+
+describe('TapStack Infra – Integration (live functionality)', () => {
+  // ---------------- VPC & Networking ----------------
   describe('VPC and Networking', () => {
-    test('VPC should exist and be properly configured', async () => {
+    test('VPC exists and DNS features enabled', async () => {
       expect(outputs.VPCId).toBeDefined();
 
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBe(1);
-
-      const vpc = response.Vpcs![0];
+      const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
+      expect(vpcs.Vpcs?.length).toBe(1);
+      const vpc = vpcs.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
 
-      // DnsHostnames / DnsSupport are NOT returned by DescribeVpcs.
-      // They must be checked via DescribeVpcAttribute.
-      const dnsHostnames = await ec2Client.send(
-        new DescribeVpcAttributeCommand({
-          VpcId: outputs.VPCId,
-          Attribute: 'enableDnsHostnames'
-        })
+      const dnsHostnames = await ec2.send(
+        new DescribeVpcAttributeCommand({ VpcId: outputs.VPCId, Attribute: 'enableDnsHostnames' })
       );
-      const dnsSupport = await ec2Client.send(
-        new DescribeVpcAttributeCommand({
-          VpcId: outputs.VPCId,
-          Attribute: 'enableDnsSupport'
-        })
+      const dnsSupport = await ec2.send(
+        new DescribeVpcAttributeCommand({ VpcId: outputs.VPCId, Attribute: 'enableDnsSupport' })
       );
-
       expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
       expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
     });
 
-    test('bastion host should be accessible (format check)', async () => {
-      expect(outputs.BastionPublicIP).toBeDefined();
+    test('Bastion public IP looks valid', () => {
       expect(outputs.BastionPublicIP).toMatch(/^(\d{1,3}\.){3}\d{1,3}$/);
     });
   });
 
-  describe('Load Balancer', () => {
-    test('Application Load Balancer should have a valid DNS name', () => {
-      expect(outputs.ALBDNSName).toBeDefined();
-      expect(outputs.ALBDNSName).toContain('.elb.amazonaws.com');
-    });
+  // ---------------- ALB & EC2 (Functional) ----------------
+  describe('Load Balancer & Targets', () => {
+    let lbArn: string | undefined;
+    let tgArn: string | undefined;
 
-    test('ALB should be accessible via HTTP (basic connectivity)', async () => {
-      expect(outputs.ALBDNSName).toBeDefined();
-
+    test('ALB resolves and returns app content', async () => {
       const url = `http://${outputs.ALBDNSName}`;
+      const res = await fetchWithTimeout(url, 20_000);
+      // We *expect* 200 with the userData page, but tolerate 502/503 during a warm start
+      expect([200, 502, 503]).toContain(res.status);
 
-      try {
-        const res = await fetchWithTimeout(url, 10_000);
-        // We expect either a successful response or a service unavailable (503) or bad gateway (502)
-        expect([200, 503, 502]).toContain(res.status);
-      } catch (error) {
-        // Connection errors are acceptable during initial deployment
-        // eslint-disable-next-line no-console
-        console.log('ALB connection test - transient during initial deployment:', error);
-      }
-    });
-  });
-
-  describe('S3 Storage', () => {
-    test('data bucket should exist and be accessible', async () => {
-      expect(outputs.DataBucketName).toBeDefined();
-      expect(outputs.DataBucketName).toContain(`tapstack${environmentSuffix}-data`);
-
-      const command = new HeadObjectCommand({
-        Bucket: outputs.DataBucketName,
-        Key: 'test-object-that-does-not-exist'
-      });
-
-      try {
-        await s3Client.send(command);
-        // If we ever get here, object unexpectedly exists; fail the test.
-        fail('Expected 404 NotFound, but object exists');
-      } catch (error: any) {
-        // v3 clients surface a specific name; for S3, NotFound is expected
-        expect(error?.name).toBe('NotFound');
+      if (res.status === 200) {
+        const text = await res.text();
+        // the template writes: <h1>Hello from TapStack${EnvironmentSuffix}</h1>
+        expect(text).toContain(`Hello from TapStack${environmentSuffix}`);
       }
     });
 
-    test('bucket names should follow naming convention', () => {
-      expect(outputs.DataBucketName).toBeDefined();
-      expect(outputs.DataBucketName.toLowerCase()).toContain(environmentSuffix.toLowerCase());
-      expect(outputs.DataBucketName).toMatch(/^tapstack.*-data-\d+-us-west-2$/);
-    });
-  });
-
-  describe('Database', () => {
-    test('RDS endpoint should be accessible and properly configured', async () => {
-      expect(outputs.RDSEndpoint).toBeDefined();
-      expect(outputs.RDSEndpoint).toContain('.rds.amazonaws.com');
-
-      // Extract instance identifier from endpoint
-      const instanceId = outputs.RDSEndpoint.split('.')[0];
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: instanceId
-      });
-
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances!.length).toBe(1);
-
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-      expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.PubliclyAccessible).toBe(false);
-      expect(dbInstance.MultiAZ).toBe(true);
-    });
-  });
-
-  describe('CloudFront CDN', () => {
-    test('CloudFront distribution URL should be present and https', () => {
-      expect(outputs.CloudFrontURL).toBeDefined();
-      expect(outputs.CloudFrontURL).toMatch(/^https:\/\/[a-zA-Z0-9]+\.cloudfront\.net$/);
-    });
-
-    test('CloudFront distribution should be properly configured', async () => {
-      expect(outputs.CloudFrontURL).toBeDefined();
-
-      // Extract domain from the URL
-      const domain = outputs.CloudFrontURL.replace('https://', '').replace('/', '');
-
-      // We don't have the Distribution Id in outputs; find it by domain name
-      const list = await cloudFrontClient.send(new ListDistributionsCommand({}));
-      const items = list.DistributionList?.Items ?? [];
-      const match = items.find(i => i.DomainName === domain);
-
+    test('ALB has at least one healthy target', async () => {
+      // Find LB by DNS name
+      const lbs = await elb.send(new DescribeLoadBalancersCommand({}));
+      const match = lbs.LoadBalancers?.find(lb => lb.DNSName === outputs.ALBDNSName);
       expect(match).toBeDefined();
-      const distributionId = match!.Id;
+      lbArn = match!.LoadBalancerArn;
 
-      const response = await cloudFrontClient.send(
-        new GetDistributionCommand({ Id: distributionId })
+      // Find its default action TG via listeners
+      const listeners = await elb.send(new DescribeListenersCommand({ LoadBalancerArn: lbArn }));
+      const defaultListener = listeners.Listeners?.find(l => (l.Port ?? 0) === 80) || listeners.Listeners?.[0];
+      expect(defaultListener?.DefaultActions?.[0]?.TargetGroupArn).toBeDefined();
+      tgArn = defaultListener!.DefaultActions![0].TargetGroupArn;
+
+      // Check target health
+      let healthy = 0;
+      let attempts = 0;
+      while (attempts < 10) {
+        const th = await elb.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
+        healthy = (th.TargetHealthDescriptions || []).filter(
+          d => d.TargetHealth?.State === 'healthy'
+        ).length;
+        if (healthy > 0) break;
+        attempts += 1;
+        await sleep(10_000);
+      }
+
+      expect(healthy).toBeGreaterThan(0);
+    });
+  });
+
+  // ---------------- S3 Data bucket (Functional) ----------------
+  describe('S3 Data bucket', () => {
+    const key = `tests/integration-${Date.now()}.txt`;
+
+    afterAll(async () => {
+      if (outputs.DataBucketName) {
+        try {
+          await s3.send(new DeleteObjectCommand({ Bucket: outputs.DataBucketName, Key: key }));
+        } catch { /* ignore cleanup errors */ }
+      }
+    });
+
+    test('can PUT and HEAD an object (encrypted at rest with KMS)', async () => {
+      const put = await s3.send(new PutObjectCommand({
+        Bucket: outputs.DataBucketName,
+        Key: key,
+        Body: 'hello data bucket',
+      }));
+      // ETag should be present
+      expect(put.ETag).toBeDefined();
+
+      const head = await s3.send(new HeadObjectCommand({
+        Bucket: outputs.DataBucketName,
+        Key: key,
+      }));
+
+      // Bucket default SSE uses KMS per template; verify indicators
+      expect(head.ServerSideEncryption).toBe('aws:kms');
+      expect(head.SSEKMSKeyId).toBeDefined();
+    });
+  });
+
+  // ---------------- S3 -> Lambda (Functional) ----------------
+  describe('Log bucket triggers Lambda on object create', () => {
+    const key = `logs/integration-trigger-${Date.now()}.txt`;
+    const functionArn = outputs.LambdaFunctionArn;
+    const functionName = functionArn?.split(':function:')[1];
+
+    test('uploading to log bucket results in Lambda log line', async () => {
+      if (!logBucketName || !functionName) {
+        console.warn('Skipping S3->Lambda trigger test (missing account/region/function name)');
+        return;
+      }
+
+      // 1) Put a small object to the log bucket
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: logBucketName,
+          Key: key,
+          Body: 'trigger lambda please',
+        })
       );
 
-      // Narrow the type after existence check to satisfy TS
-      const distribution = response.Distribution!;
-      const cfg = distribution.DistributionConfig!;
+      // 2) Poll CloudWatch Logs for the expected line
+      const logGroupName = `/aws/lambda/${functionName}`;
+      const pattern = `Processing log file: ${logBucketName}/${key}`;
+
+      let found = false;
+      const start = Date.now();
+      while (!found && Date.now() - start < 120_000) {
+        const events = await logs.send(
+          new FilterLogEventsCommand({
+            logGroupName,
+            filterPattern: 'Processing log file',
+            startTime: start - 5_000,
+          })
+        );
+        const messages = (events.events || []).map(e => e.message || '');
+        if (messages.some(m => m.includes(pattern))) {
+          found = true;
+          break;
+        }
+        await sleep(5_000);
+      }
+
+      expect(found).toBe(true);
+    });
+  });
+
+  // ---------------- Lambda direct invoke ----------------
+  describe('Lambda direct invoke works', () => {
+    test('invoking LogProcessorFunction returns 200 and expected body', async () => {
+      const payload = {
+        Records: [
+          {
+            s3: {
+              bucket: { name: 'test-bucket' },
+              object: { key: 'test-key' },
+            },
+          },
+        ],
+      };
+
+      const resp = await lambda.send(new InvokeCommand({
+        FunctionName: outputs.LambdaFunctionArn,
+        Payload: new TextEncoder().encode(JSON.stringify(payload)),
+      }));
+
+      expect(resp.StatusCode).toBe(200);
+      const body = resp.Payload ? new TextDecoder().decode(resp.Payload) : '';
+      // Lambda proxy returns JSON string from our inline code
+      expect(body).toContain('Log processing complete');
+    });
+  });
+
+  // ---------------- Database (Describe) ----------------
+  describe('RDS Instance', () => {
+    test('RDS is available, encrypted, private, Multi-AZ, with log export', async () => {
+      const instanceId = outputs.RDSEndpoint.split('.')[0];
+
+      const d = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId }));
+      expect(d.DBInstances?.length).toBe(1);
+
+      const db = d.DBInstances![0];
+      expect(db.DBInstanceStatus).toBe('available');
+      expect(db.Engine).toBe('postgres');
+      expect(db.StorageEncrypted).toBe(true);
+      expect(db.PubliclyAccessible).toBe(false);
+      expect(db.MultiAZ).toBe(true);
+
+      // Template sets EnableCloudwatchLogsExports: ["postgresql"]
+      // Some regions need a bit of time after create; allow either present or eventually consistent.
+      const exportsSet = (db.EnabledCloudwatchLogsExports || []).includes('postgresql');
+      expect(exportsSet).toBe(true);
+    });
+  });
+
+  // ---------------- CloudFront (Describe + HTTPS fetch) ----------------
+  describe('CloudFront Distribution', () => {
+    test('Distribution exists and has expected config', async () => {
+      const domain = outputs.CloudFrontURL.replace(/^https:\/\//, '').replace(/\/$/, '');
+
+      const list = await cf.send(new ListDistributionsCommand({}));
+      const items = list.DistributionList?.Items ?? [];
+      const match = items.find(i => i.DomainName === domain);
+      expect(match).toBeDefined();
+
+      const dist = await cf.send(new GetDistributionCommand({ Id: match!.Id! }));
+      const cfg = dist.Distribution!.DistributionConfig!;
       expect(cfg.Enabled).toBe(true);
       expect(cfg.DefaultRootObject).toBe('index.html');
-      expect(cfg.DefaultCacheBehavior!.ViewerProtocolPolicy).toBe('redirect-to-https');
+      expect(cfg.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe('redirect-to-https');
+    });
+
+    test('HTTPS to CloudFront domain responds (200/403/404)', async () => {
+      const res = await fetchWithTimeout(outputs.CloudFrontURL, 20_000);
+      // If no content uploaded yet, CloudFront usually returns 403 or 404 from S3 origin
+      expect([200, 403, 404]).toContain(res.status);
     });
   });
 
-  describe('Lambda Function', () => {
-    test('Lambda function ARN should be valid', () => {
-      expect(outputs.LambdaFunctionArn).toBeDefined();
-      expect(outputs.LambdaFunctionArn).toMatch(/^arn:aws:lambda:us-west-2:\d{12}:function:.+$/);
-    });
-  });
-
-  describe('Infrastructure Connectivity', () => {
-    test('all components should have consistent environment suffix in naming', () => {
-      if (outputs.VPCId) {
-        expect(outputs.VPCId).toContain('vpc-');
-      }
-
-      if (outputs.DataBucketName) {
-        expect(outputs.DataBucketName.toLowerCase()).toContain(environmentSuffix.toLowerCase());
-      }
-
-      if (outputs.RDSEndpoint) {
-        expect(outputs.RDSEndpoint).toContain('.us-west-2.rds.amazonaws.com');
-      }
-    });
-
-    test('resources should be in the correct region (us-west-2)', () => {
+  // ---------------- Consistency checks (region/suffix) ----------------
+  describe('Naming & Region Consistency', () => {
+    test('Outputs align with region', () => {
+      // ALB DNS and RDS endpoint should include the detected region
       if (outputs.ALBDNSName) {
-        expect(outputs.ALBDNSName).toContain('.us-west-2.elb.amazonaws.com');
+        expect(outputs.ALBDNSName).toContain(`.${region}.elb.amazonaws.com`);
       }
-
       if (outputs.RDSEndpoint) {
-        expect(outputs.RDSEndpoint).toContain('.us-west-2.rds.amazonaws.com');
+        expect(outputs.RDSEndpoint).toContain(`.${region}.rds.amazonaws.com`);
       }
-
       if (outputs.DataBucketName) {
-        expect(outputs.DataBucketName).toContain('-us-west-2');
-      }
-    });
-  });
-
-  describe('Security Validation', () => {
-    test('database should not be publicly accessible', async () => {
-      if (outputs.RDSEndpoint) {
-        const instanceId = outputs.RDSEndpoint.split('.')[0];
-
-        const command = new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: instanceId
-        });
-
-        const response = await rdsClient.send(command);
-        const dbInstance = response.DBInstances![0];
-
-        expect(dbInstance.PubliclyAccessible).toBe(false);
-        expect(dbInstance.StorageEncrypted).toBe(true);
+        expect(outputs.DataBucketName.endsWith(`-${region}`)).toBe(true);
       }
     });
 
-    test('CloudFront should enforce HTTPS', () => {
-      expect(outputs.CloudFrontURL).toBeDefined();
-      expect(outputs.CloudFrontURL).toMatch(/^https:\/\//);
+    test('Data bucket naming includes environment suffix', () => {
+      expect(outputs.DataBucketName.toLowerCase()).toContain(environmentSuffix.toLowerCase());
     });
   });
 });

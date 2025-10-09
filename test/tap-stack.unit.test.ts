@@ -39,9 +39,9 @@ describe('TapStack CloudFormation Template', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toContain('Environment suffix for resource naming');
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe('Must contain only alphanumeric characters');
+      expect(envSuffixParam.Description).toContain('Lowercase env suffix');
+      expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9]+$');
+      expect(envSuffixParam.ConstraintDescription).toBe('Use lowercase letters and numbers only');
     });
 
     test('should have VPC configuration parameters', () => {
@@ -52,10 +52,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.PrivateSubnet2Cidr).toBeDefined();
     });
 
-    test('should have EC2 configuration parameters', () => {
+    test('should have EC2 configuration parameters (without KeyName)', () => {
       expect(template.Parameters.InstanceType).toBeDefined();
-      expect(template.Parameters.KeyName).toBeDefined();
       expect(template.Parameters.LatestAmiId).toBeDefined();
+      // KeyName was intentionally removed to avoid CFN validation failures
+      expect(template.Parameters.KeyName).toBeUndefined();
     });
 
     test('should have database configuration parameters', () => {
@@ -164,14 +165,10 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('RDS instance should be encrypted', () => {
+    test('RDS instance should be encrypted with project KMS key and private', () => {
       const dbInstance = template.Resources.DBInstance;
       expect(dbInstance.Properties.StorageEncrypted).toBe(true);
       expect(dbInstance.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
-    test('RDS instance should not be publicly accessible', () => {
-      const dbInstance = template.Resources.DBInstance;
       expect(dbInstance.Properties.PubliclyAccessible).toBe(false);
     });
 
@@ -181,12 +178,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(dbInstance.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('EC2 instances should have encrypted EBS volumes', () => {
-      const launchTemplate = template.Resources.LaunchTemplate;
-      const blockDeviceMapping =
-        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings[0];
-      expect(blockDeviceMapping.Ebs.Encrypted).toBe(true);
-      expect(blockDeviceMapping.Ebs.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+    test('EC2 LaunchTemplate root volume should be encrypted (AWS-managed key)', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const ebs = lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs;
+      expect(ebs.Encrypted).toBe(true);
+      // We intentionally do NOT pass our CMK to EC2 volumes to avoid ASG launch failures:
+      expect(ebs.KmsKeyId).toBeUndefined();
     });
   });
 
