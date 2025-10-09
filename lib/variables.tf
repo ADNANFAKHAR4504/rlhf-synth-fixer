@@ -14,7 +14,7 @@ variable "project_prefix" {
 variable "environment_suffix" {
   description = "Environment suffix for resource names (e.g., dev, staging, prod)"
   type        = string
-  default     = "prod"
+  default     = "prod-v2"
 }
 
 variable "tags" {
