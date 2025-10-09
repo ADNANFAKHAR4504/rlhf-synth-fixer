@@ -1,24 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import AWS from 'aws-sdk';
 import fs from 'fs';
-import { 
-  SNSClient, 
-  PublishCommand, 
-  GetTopicAttributesCommand 
-} from '@aws-sdk/client-sns';
-import { 
-  DynamoDBClient, 
-  ScanCommand, 
-  QueryCommand,
-  DeleteItemCommand
-} from '@aws-sdk/client-dynamodb';
-import { 
-  LambdaClient, 
-  InvokeCommand 
-} from '@aws-sdk/client-lambda';
-import { 
-  CloudWatchClient, 
-  GetMetricStatisticsCommand 
-} from '@aws-sdk/client-cloudwatch';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -28,10 +10,10 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
-const snsClient = new SNSClient({});
-const dynamodbClient = new DynamoDBClient({});
-const lambdaClient = new LambdaClient({});
-const cloudwatchClient = new CloudWatchClient({});
+const sns = new AWS.SNS();
+const dynamodb = new AWS.DynamoDB();
+const lambda = new AWS.Lambda();
+const cloudwatch = new AWS.CloudWatch();
 
 // Test data
 const testOrderData = {
@@ -40,7 +22,7 @@ const testOrderData = {
   phoneNumber: '+1234567890',
   orderAmount: 99.99,
   items: ['Widget A', 'Widget B'],
-  timestamp: Date.now()
+  timestamp: Date.now(),
 };
 
 describe('Notification System Integration Tests', () => {
@@ -60,78 +42,82 @@ describe('Notification System Integration Tests', () => {
 
   describe('SNS Topic Functionality', () => {
     test('SNS topic exists and is accessible', async () => {
-      const command = new GetTopicAttributesCommand({
-        TopicArn: notificationTopicArn
-      });
-      
-      const response = await snsClient.send(command);
+      const params = {
+        TopicArn: notificationTopicArn,
+      };
+
+      const response = await sns.getTopicAttributes(params).promise();
       expect(response.Attributes).toBeDefined();
-      expect(response.Attributes.TopicArn).toBe(notificationTopicArn);
+      expect(response.Attributes?.TopicArn).toBe(notificationTopicArn);
     });
 
     test('can publish message to SNS topic', async () => {
       const message = JSON.stringify(testOrderData);
-      const command = new PublishCommand({
+      const params = {
         TopicArn: notificationTopicArn,
         Message: message,
         MessageAttributes: {
           channel: {
             DataType: 'String',
-            StringValue: 'email'
-          }
-        }
-      });
+            StringValue: 'email',
+          },
+        },
+      };
 
-      const response = await snsClient.send(command);
+      const response = await sns.publish(params).promise();
       expect(response.MessageId).toBeDefined();
     });
   });
 
   describe('DynamoDB Integration', () => {
     test('DynamoDB table exists and is accessible', async () => {
-      const command = new ScanCommand({
+      const params = {
         TableName: notificationTableName,
-        Limit: 1
-      });
+        Limit: 1,
+      };
 
       // Should not throw error if table exists and is accessible
-      const response = await dynamodbClient.send(command);
+      const response = await dynamodb.scan(params).promise();
       expect(response).toBeDefined();
     });
 
     test('can write notification log to DynamoDB', async () => {
       // Publish message to trigger Lambda function
       const message = JSON.stringify(testOrderData);
-      const publishCommand = new PublishCommand({
+      const publishParams = {
         TopicArn: notificationTopicArn,
         Message: message,
         MessageAttributes: {
           channel: {
             DataType: 'String',
-            StringValue: 'email'
-          }
-        }
-      });
+            StringValue: 'email',
+          },
+        },
+      };
 
-      const publishResponse = await snsClient.send(publishCommand);
+      const publishResponse = await sns.publish(publishParams).promise();
       const messageId = publishResponse.MessageId;
+
+      if (!messageId) {
+        throw new Error('MessageId was not returned from SNS');
+      }
 
       // Wait for Lambda to process and write to DynamoDB
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Query DynamoDB for the notification log
-      const queryCommand = new QueryCommand({
+      const queryParams = {
         TableName: notificationTableName,
         KeyConditionExpression: 'notificationId = :messageId',
         ExpressionAttributeValues: {
-          ':messageId': { S: messageId }
-        }
-      });
+          ':messageId': { S: messageId },
+        },
+      };
 
-      const queryResponse = await dynamodbClient.send(queryCommand);
+      const queryResponse = await dynamodb.query(queryParams).promise();
       expect(queryResponse.Items?.length).toBeGreaterThan(0);
-      
-      const item = queryResponse.Items[0];
+
+      const item = queryResponse.Items![0];
       expect(item.notificationId.S).toBe(messageId);
       expect(item.notificationType.S).toBe('EMAIL');
       expect(item.orderId.S).toBe(testOrderData.orderId);
@@ -140,31 +126,33 @@ describe('Notification System Integration Tests', () => {
     test('can query by delivery status using GSI', async () => {
       // Publish message first
       const message = JSON.stringify(testOrderData);
-      await snsClient.send(new PublishCommand({
-        TopicArn: notificationTopicArn,
-        Message: message,
-        MessageAttributes: {
-          channel: {
-            DataType: 'String',
-            StringValue: 'sms'
-          }
-        }
-      }));
+      await sns
+        .publish({
+          TopicArn: notificationTopicArn,
+          Message: message,
+          MessageAttributes: {
+            channel: {
+              DataType: 'String',
+              StringValue: 'sms',
+            },
+          },
+        })
+        .promise();
 
       // Wait for processing
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Query by delivery status
-      const queryCommand = new QueryCommand({
+      const queryParams = {
         TableName: notificationTableName,
         IndexName: 'StatusIndex',
         KeyConditionExpression: 'deliveryStatus = :status',
         ExpressionAttributeValues: {
-          ':status': { S: 'SENT' }
-        }
-      });
+          ':status': { S: 'SENT' },
+        },
+      };
 
-      const response = await dynamodbClient.send(queryCommand);
+      const response = await dynamodb.query(queryParams).promise();
       expect(response.Items?.length).toBeGreaterThan(0);
     });
   });
@@ -173,103 +161,119 @@ describe('Notification System Integration Tests', () => {
     test('complete email notification workflow', async () => {
       const message = JSON.stringify({
         ...testOrderData,
-        orderId: 'EMAIL-FLOW-TEST-' + Date.now()
+        orderId: 'EMAIL-FLOW-TEST-' + Date.now(),
       });
 
       // Step 1: Publish to SNS
-      const publishCommand = new PublishCommand({
+      const publishParams = {
         TopicArn: notificationTopicArn,
         Message: message,
         MessageAttributes: {
           channel: {
             DataType: 'String',
-            StringValue: 'email'
-          }
-        }
-      });
+            StringValue: 'email',
+          },
+        },
+      };
 
-      const publishResponse = await snsClient.send(publishCommand);
+      const publishResponse = await sns.publish(publishParams).promise();
       const messageId = publishResponse.MessageId;
+
+      if (!messageId) {
+        throw new Error('MessageId was not returned from SNS');
+      }
 
       // Step 2: Wait for Lambda processing
       await new Promise(resolve => setTimeout(resolve, 8000));
 
       // Step 3: Verify notification logged in DynamoDB
-      const queryCommand = new QueryCommand({
+      const queryParams = {
         TableName: notificationTableName,
         KeyConditionExpression: 'notificationId = :messageId',
         ExpressionAttributeValues: {
-          ':messageId': { S: messageId }
-        }
-      });
+          ':messageId': { S: messageId },
+        },
+      };
 
-      const queryResponse = await dynamodbClient.send(queryCommand);
+      const queryResponse = await dynamodb.query(queryParams).promise();
       expect(queryResponse.Items?.length).toBe(1);
 
-      const notificationLog = queryResponse.Items[0];
+      const notificationLog = queryResponse.Items![0];
       expect(notificationLog.notificationType.S).toBe('EMAIL');
       expect(notificationLog.recipient.S).toBe(testOrderData.customerEmail);
       expect(notificationLog.deliveryStatus.S).toBe('SENT');
-      expect(notificationLog.messageBody.S).toContain(testOrderData.orderId.replace('TEST-ORDER', 'EMAIL-FLOW-TEST'));
+      expect(notificationLog.messageBody.S).toContain(
+        testOrderData.orderId.replace('TEST-ORDER', 'EMAIL-FLOW-TEST')
+      );
 
       // Step 4: Verify CloudWatch metrics (basic check)
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-      const metricsCommand = new GetMetricStatisticsCommand({
+      const metricsParams = {
         Namespace: 'AWS/SNS',
         MetricName: 'NumberOfMessagesPublished',
         Dimensions: [
           {
             Name: 'TopicName',
-            Value: `order-notifications-${environmentSuffix}`
-          }
+            Value: `order-notifications-${environmentSuffix}`,
+          },
         ],
         StartTime: oneHourAgo,
         EndTime: now,
         Period: 300,
-        Statistics: ['Sum']
-      });
+        Statistics: ['Sum'],
+      };
 
-      const metricsResponse = await cloudwatchClient.send(metricsCommand);
+      const metricsResponse = await cloudwatch
+        .getMetricStatistics(metricsParams)
+        .promise();
       expect(metricsResponse.Datapoints).toBeDefined();
     });
 
     test('complete SMS notification workflow', async () => {
       const message = JSON.stringify({
         ...testOrderData,
-        orderId: 'SMS-FLOW-TEST-' + Date.now()
+        orderId: 'SMS-FLOW-TEST-' + Date.now(),
       });
 
       // Step 1: Publish to SNS
-      const publishResponse = await snsClient.send(new PublishCommand({
-        TopicArn: notificationTopicArn,
-        Message: message,
-        MessageAttributes: {
-          channel: {
-            DataType: 'String',
-            StringValue: 'sms'
-          }
-        }
-      }));
+      const publishResponse = await sns
+        .publish({
+          TopicArn: notificationTopicArn,
+          Message: message,
+          MessageAttributes: {
+            channel: {
+              DataType: 'String',
+              StringValue: 'sms',
+            },
+          },
+        })
+        .promise();
 
       const messageId = publishResponse.MessageId;
+
+      if (!messageId) {
+        throw new Error('MessageId was not returned from SNS');
+      }
 
       // Step 2: Wait for Lambda processing
       await new Promise(resolve => setTimeout(resolve, 8000));
 
       // Step 3: Verify notification logged in DynamoDB
-      const queryResponse = await dynamodbClient.send(new QueryCommand({
-        TableName: notificationTableName,
-        KeyConditionExpression: 'notificationId = :messageId',
-        ExpressionAttributeValues: {
-          ':messageId': { S: messageId }
-        }
-      }));
+      const queryResponse = await dynamodb
+        .query({
+          TableName: notificationTableName,
+          KeyConditionExpression: 'notificationId = :messageId',
+          ExpressionAttributeValues: {
+            ':messageId': { S: messageId },
+          },
+        })
+        .promise();
 
       expect(queryResponse.Items?.length).toBe(1);
 
-      const notificationLog = queryResponse.Items[0];
+      const notificationLog = queryResponse.Items![0];
       expect(notificationLog.notificationType.S).toBe('SMS');
       expect(notificationLog.recipient.S).toBe(testOrderData.phoneNumber);
       expect(notificationLog.deliveryStatus.S).toBe('SENT');
@@ -278,39 +282,49 @@ describe('Notification System Integration Tests', () => {
     test('dual channel notification (both email and SMS)', async () => {
       const message = JSON.stringify({
         ...testOrderData,
-        orderId: 'DUAL-FLOW-TEST-' + Date.now()
+        orderId: 'DUAL-FLOW-TEST-' + Date.now(),
       });
 
       // Publish with 'both' channel
-      const publishResponse = await snsClient.send(new PublishCommand({
-        TopicArn: notificationTopicArn,
-        Message: message,
-        MessageAttributes: {
-          channel: {
-            DataType: 'String',
-            StringValue: 'both'
-          }
-        }
-      }));
+      const publishResponse = await sns
+        .publish({
+          TopicArn: notificationTopicArn,
+          Message: message,
+          MessageAttributes: {
+            channel: {
+              DataType: 'String',
+              StringValue: 'both',
+            },
+          },
+        })
+        .promise();
 
       const messageId = publishResponse.MessageId;
+
+      if (!messageId) {
+        throw new Error('MessageId was not returned from SNS');
+      }
 
       // Wait for both Lambda functions to process
       await new Promise(resolve => setTimeout(resolve, 10000));
 
       // Verify both email and SMS notifications were processed
-      const queryResponse = await dynamodbClient.send(new QueryCommand({
-        TableName: notificationTableName,
-        KeyConditionExpression: 'notificationId = :messageId',
-        ExpressionAttributeValues: {
-          ':messageId': { S: messageId }
-        }
-      }));
+      const queryResponse = await dynamodb
+        .query({
+          TableName: notificationTableName,
+          KeyConditionExpression: 'notificationId = :messageId',
+          ExpressionAttributeValues: {
+            ':messageId': { S: messageId },
+          },
+        })
+        .promise();
 
       expect(queryResponse.Items?.length).toBe(2);
 
-      const notifications = queryResponse.Items;
-      const notificationTypes = notifications.map(item => item.notificationType.S);
+      const notifications = queryResponse.Items!;
+      const notificationTypes = notifications.map(
+        (item: any) => item.notificationType.S
+      );
       expect(notificationTypes).toContain('EMAIL');
       expect(notificationTypes).toContain('SMS');
     });
@@ -320,16 +334,18 @@ describe('Notification System Integration Tests', () => {
     test('handles invalid message format gracefully', async () => {
       const invalidMessage = '{ invalid json';
 
-      const publishResponse = await snsClient.send(new PublishCommand({
-        TopicArn: notificationTopicArn,
-        Message: invalidMessage,
-        MessageAttributes: {
-          channel: {
-            DataType: 'String',
-            StringValue: 'email'
-          }
-        }
-      }));
+      const publishResponse = await sns
+        .publish({
+          TopicArn: notificationTopicArn,
+          Message: invalidMessage,
+          MessageAttributes: {
+            channel: {
+              DataType: 'String',
+              StringValue: 'email',
+            },
+          },
+        })
+        .promise();
 
       // Wait for processing
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -343,24 +359,28 @@ describe('Notification System Integration Tests', () => {
   async function cleanupTestData() {
     try {
       // Get all test items from DynamoDB
-      const scanResponse = await dynamodbClient.send(new ScanCommand({
-        TableName: notificationTableName,
-        FilterExpression: 'contains(orderId, :prefix)',
-        ExpressionAttributeValues: {
-          ':prefix': { S: 'TEST-' }
-        }
-      }));
+      const scanResponse = await dynamodb
+        .scan({
+          TableName: notificationTableName,
+          FilterExpression: 'contains(orderId, :prefix)',
+          ExpressionAttributeValues: {
+            ':prefix': { S: 'TEST-' },
+          },
+        })
+        .promise();
 
       // Delete each test item
       if (scanResponse.Items && scanResponse.Items.length > 0) {
         for (const item of scanResponse.Items) {
-          await dynamodbClient.send(new DeleteItemCommand({
-            TableName: notificationTableName,
-            Key: {
-              notificationId: item.notificationId,
-              timestamp: item.timestamp
-            }
-          }));
+          await dynamodb
+            .deleteItem({
+              TableName: notificationTableName,
+              Key: {
+                notificationId: item.notificationId,
+                timestamp: item.timestamp,
+              },
+            })
+            .promise();
         }
       }
     } catch (error) {
