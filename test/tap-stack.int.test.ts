@@ -1123,8 +1123,15 @@ describe('TapStack Integration Tests', () => {
       // Environment must be Ready for HTTP verification
       expect(matchingEnv.Status).toBe('Ready');
 
-      // Construct the application URL
-      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      // Get the actual environment URL from Elastic Beanstalk
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
+        EnvironmentNames: [matchingEnv.EnvironmentName!]
+      }));
+      
+      // Use the CNAME from the environment details, fallback to constructed URL
+      const environment = envDetailsResponse.Environments?.[0];
+      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
+                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
       
       console.log(`Testing deployed application at: ${appUrl}`);
 
@@ -1208,7 +1215,15 @@ describe('TapStack Integration Tests', () => {
       // Environment must be Ready for performance testing
       expect(matchingEnv.Status).toBe('Ready');
 
-      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      // Get the actual environment URL from Elastic Beanstalk
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
+        EnvironmentNames: [matchingEnv.EnvironmentName!]
+      }));
+      
+      // Use the CNAME from the environment details, fallback to constructed URL
+      const environment = envDetailsResponse.Environments?.[0];
+      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
+                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
       
       const startTime = Date.now();
       
@@ -1267,7 +1282,15 @@ describe('TapStack Integration Tests', () => {
       // Environment must be Ready for HTTP methods testing
       expect(matchingEnv.Status).toBe('Ready');
 
-      const appUrl = `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
+      // Get the actual environment URL from Elastic Beanstalk
+      const envDetailsResponse = await ebClient.send(new DescribeEnvironmentsCommand({
+        EnvironmentNames: [matchingEnv.EnvironmentName!]
+      }));
+      
+      // Use the CNAME from the environment details, fallback to constructed URL
+      const environment = envDetailsResponse.Environments?.[0];
+      const appUrl = environment?.CNAME ? `http://${environment.CNAME}` : 
+                    `http://${matchingEnv.EnvironmentName}.${process.env.AWS_REGION || 'us-east-1'}.elasticbeanstalk.com`;
       
       try {
         // Test GET request (should work)
