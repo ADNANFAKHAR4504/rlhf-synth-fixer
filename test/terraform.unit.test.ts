@@ -41,7 +41,8 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
         'connection_alarm_threshold',
         'snapshot_retention_days',
         'lambda_runtime',
-        'sns_email_endpoint'
+        'sns_email_endpoint',
+        'environment_suffix'
       ];
       expectedVariables.forEach(v =>
         expect(tfContent).toMatch(new RegExp(`variable\\s+"${v}"`))
@@ -61,11 +62,33 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
   });
 
   // -------------------------
+  // Random Resources
+  // -------------------------
+  describe('Random Resources', () => {
+    test('defines random_string for environment suffix', () => {
+      expect(tfContent).toMatch(/resource\s+"random_string"\s+"environment_suffix"/);
+      expect(tfContent).toMatch(/length\s*=\s*8/);
+      expect(tfContent).toMatch(/special\s*=\s*false/);
+      expect(tfContent).toMatch(/upper\s*=\s*false/);
+    });
+
+    test('random_string has conditional count based on variable', () => {
+      expect(tfContent).toMatch(/count\s*=\s*var\.environment_suffix\s*==\s*""\s*\?\s*1\s*:\s*0/);
+    });
+
+    test('defines random_password for database master password', () => {
+      expect(tfContent).toMatch(/resource\s+"random_password"\s+"master"/);
+      expect(tfContent).toMatch(/length\s*=\s*32/);
+    });
+  });
+
+  // -------------------------
   // Locals
   // -------------------------
   describe('Locals', () => {
     test('defines expected locals', () => {
       const expectedLocals = [
+        'env_suffix',
         'tags',
         'vpc_cidr',
         'private_subnet_cidrs'
@@ -73,6 +96,10 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
       expectedLocals.forEach(l =>
         expect(tfContent).toMatch(new RegExp(`${l}\\s*=`))
       );
+    });
+
+    test('env_suffix uses conditional logic', () => {
+      expect(tfContent).toMatch(/env_suffix\s*=\s*var\.environment_suffix\s*!=\s*""\s*\?\s*var\.environment_suffix\s*:\s*random_string\.environment_suffix\[0\]\.result/);
     });
 
     test('tags local contains all required keys', () => {
