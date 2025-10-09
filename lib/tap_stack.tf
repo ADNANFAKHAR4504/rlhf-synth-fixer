@@ -143,7 +143,7 @@ module "iam" {
 }
 
 # ============================================================================
-# RDS AURORA MODULE (Multi-AZ + Multi-Region)
+# RDS AURORA MODULE (Multi-AZ)
 # ============================================================================
 
 module "rds" {
@@ -155,13 +155,13 @@ module "rds" {
   database_name               = "financialdb"
   master_username             = var.db_master_username
   master_password             = var.db_master_password
-  engine_version              = "8.0.mysql_aurora.3.04.0"
-  instance_class              = "db.r5.large"
+  engine_version              = "8.0.mysql_aurora.3.02.0"
+  instance_class              = "db.t3.medium"
   instance_count              = 2 # Multi-AZ deployment
+  availability_zones          = slice(data.aws_availability_zones.available.names, 0, 2)
   backup_retention_period     = 7
-  skip_final_snapshot         = false
-  deletion_protection         = true
-  enable_global_cluster       = true # Multi-region support
+  skip_final_snapshot         = true
+  deletion_protection         = false
   enable_performance_insights = true
   monitoring_interval         = 60
   monitoring_role_arn         = module.iam.rds_monitoring_role_arn
@@ -308,11 +308,6 @@ output "aurora_reader_endpoint" {
   sensitive   = true
 }
 
-output "aurora_global_cluster_id" {
-  description = "ID of Aurora global cluster"
-  value       = module.rds.global_cluster_id
-}
-
 output "alb_dns_name" {
   description = "DNS name of Application Load Balancer"
   value       = module.compute.alb_dns_name
@@ -370,11 +365,11 @@ output "cloudwatch_alarms" {
 output "architecture_summary" {
   description = "Summary of deployed architecture"
   value = {
-    multi_region        = "Aurora Global Database Cluster configured for ${var.aws_region} and ${var.secondary_region}"
     multi_az_database   = "Aurora MySQL with ${module.rds.cluster_identifier} deployed across multiple AZs"
     auto_scaling        = "ASG with ${module.compute.autoscaling_group_name} (min: 2, max: 6, desired: 2)"
     load_balancer       = "Application Load Balancer at ${module.compute.alb_dns_name}"
     failover_automation = "Lambda function ${module.lambda.function_name} monitoring every 5 minutes"
     high_availability   = "Multi-AZ VPC with NAT Gateways across 2 availability zones"
+    primary_region      = "${var.aws_region}"
   }
 }

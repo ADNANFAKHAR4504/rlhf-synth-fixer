@@ -37,13 +37,13 @@ variable "master_password" {
 variable "engine_version" {
   description = "Aurora MySQL engine version"
   type        = string
-  default     = "8.0.mysql_aurora.3.04.0"
+  default     = "8.0.mysql_aurora.3.02.0"
 }
 
 variable "instance_class" {
   description = "Instance class for Aurora instances"
   type        = string
-  default     = "db.r5.large"
+  default     = "db.t3.medium"
 }
 
 variable "instance_count" {
@@ -82,10 +82,10 @@ variable "deletion_protection" {
   default     = true
 }
 
-variable "enable_global_cluster" {
-  description = "Enable global cluster for multi-region"
-  type        = bool
-  default     = true
+variable "availability_zones" {
+  description = "List of availability zones for Multi-AZ deployment"
+  type        = list(string)
+  default     = []
 }
 
 variable "enable_performance_insights" {

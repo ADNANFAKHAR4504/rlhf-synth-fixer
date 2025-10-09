@@ -30,11 +30,6 @@ output "cluster_port" {
   value       = aws_rds_cluster.primary.port
 }
 
-output "global_cluster_id" {
-  description = "ID of the global cluster"
-  value       = var.enable_global_cluster ? aws_rds_global_cluster.main[0].id : null
-}
-
 output "instance_ids" {
   description = "IDs of Aurora instances"
   value       = aws_rds_cluster_instance.primary[*].id

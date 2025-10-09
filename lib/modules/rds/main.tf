@@ -13,18 +13,6 @@ resource "aws_db_subnet_group" "aurora" {
   )
 }
 
-# RDS Global Cluster for multi-region support
-resource "aws_rds_global_cluster" "main" {
-  count                     = var.enable_global_cluster ? 1 : 0
-  global_cluster_identifier = "${var.name_prefix}-global-cluster"
-  engine                    = "aurora-mysql"
-  engine_version            = var.engine_version
-  database_name             = var.database_name
-  storage_encrypted         = true
-
-  # Global clusters don't support deletion_protection in terraform, but you can enable it in AWS Console
-}
-
 # Primary Aurora Cluster (Multi-AZ)
 resource "aws_rds_cluster" "primary" {
   cluster_identifier              = "${var.name_prefix}-aurora-cluster"
@@ -41,13 +29,13 @@ resource "aws_rds_cluster" "primary" {
   storage_encrypted               = true
   skip_final_snapshot             = var.skip_final_snapshot
   final_snapshot_identifier       = var.skip_final_snapshot ? null : "${var.name_prefix}-aurora-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
-
-  # Multi-region configuration
-  global_cluster_identifier = var.enable_global_cluster ? aws_rds_global_cluster.main[0].id : null
+  enabled_cloudwatch_logs_exports = ["error", "slowquery"]
 
   # Enable deletion protection for production
   deletion_protection = var.deletion_protection
+
+  # Multi-AZ deployment through multiple instances
+  availability_zones = var.availability_zones
 
   tags = merge(
     var.tags,
@@ -59,7 +47,8 @@ resource "aws_rds_cluster" "primary" {
 
   lifecycle {
     ignore_changes = [
-      final_snapshot_identifier
+      final_snapshot_identifier,
+      availability_zones
     ]
   }
 }
