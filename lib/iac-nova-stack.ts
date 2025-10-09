@@ -366,7 +366,8 @@ export class IaCNovaStack extends NestedStack {
     );
 
     this.emailEventsBucket = new s3.Bucket(this, 'EmailEventsBucket', {
-      bucketName: formatResourceName('email-events', true),
+      bucketName:
+        `app-email-events-${this.stringSuffixToken}-${Date.now().toString().slice(-6)}`.toLowerCase(),
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -436,14 +437,14 @@ export class IaCNovaStack extends NestedStack {
     const rdsCredentialsSecret =
       rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
         ? secretsmanager.Secret.fromSecretCompleteArn(
-          this,
-          'ImportedRdsCredentialsSecret',
-          rdsCredentialsSecretArn
-        )
+            this,
+            'ImportedRdsCredentialsSecret',
+            rdsCredentialsSecretArn
+          )
         : this.createManagedDatabaseSecret(
-          formatResourceName('db-credentials', true),
-          dbMasterUsername
-        );
+            formatResourceName('db-credentials', true),
+            dbMasterUsername
+          );
     if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
       applyCommonTags(
         rdsCredentialsSecret,
@@ -500,7 +501,7 @@ export class IaCNovaStack extends NestedStack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
-        subnetGroupName: formatResourceName('db-subnet-group'),
+        subnetGroupName: `app-db-subnet-group-${this.stringSuffixToken}-${Date.now().toString().slice(-6)}`,
       }
     );
     applyCommonTags(dbSubnetGroup, formatResourceName('db-subnet-group'));
@@ -613,7 +614,12 @@ export class IaCNovaStack extends NestedStack {
   }
 
   public formatResourceName(purpose: string, lowercase = false): string {
-    const composed = `app-${purpose}-${this.environmentIdToken}-${this.stringSuffixToken}`;
+    // Avoid duplication when environmentId and stringSuffix are the same
+    const suffix =
+      this.environmentIdToken === this.stringSuffixToken
+        ? this.stringSuffixToken
+        : `${this.environmentIdToken}-${this.stringSuffixToken}`;
+    const composed = `app-${purpose}-${suffix}`;
     return lowercase ? composed.toLowerCase() : composed;
   }
 
