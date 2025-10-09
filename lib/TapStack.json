@@ -84,9 +84,9 @@
       "Description": "EC2 instance type"
     },
     "KeyName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Type": "String",
       "Default": "",
-      "Description": "EC2 Key Pair for SSH access (leave blank to skip setting KeyName)",
+      "Description": "Optional EC2 Key Pair name (ignored by this stack; use SSM Session Manager for access)",
       "AllowedPattern": "^$|[\\w+=,.@-]{1,255}"
     },
     "LatestAmiId": {
@@ -111,20 +111,6 @@
         "db.t3.medium"
       ],
       "Description": "RDS instance class"
-    }
-  },
-  "Conditions": {
-    "HasKeyName": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "KeyName"
-            },
-            ""
-          ]
-        }
-      ]
     }
   },
   "Resources": {
@@ -687,17 +673,6 @@
           "Ref": "LatestAmiId"
         },
         "InstanceType": "t3.micro",
-        "KeyName": {
-          "Fn::If": [
-            "HasKeyName",
-            {
-              "Ref": "KeyName"
-            },
-            {
-              "Ref": "AWS::NoValue"
-            }
-          ]
-        },
         "SubnetId": {
           "Ref": "PublicSubnet1"
         },
@@ -791,17 +766,6 @@
           },
           "InstanceType": {
             "Ref": "InstanceType"
-          },
-          "KeyName": {
-            "Fn::If": [
-              "HasKeyName",
-              {
-                "Ref": "KeyName"
-              },
-              {
-                "Ref": "AWS::NoValue"
-              }
-            ]
           },
           "IamInstanceProfile": {
             "Name": {
