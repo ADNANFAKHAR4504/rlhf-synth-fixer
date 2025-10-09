@@ -1,13 +1,11 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import axios from 'axios';
 import fs from 'fs';
-
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
-
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr45';
 
 describe('User Profile API Integration Tests', () => {
   const apiEndpoint = outputs.ApiEndpoint;
@@ -211,5 +209,148 @@ describe('User Profile API Integration Tests', () => {
         expect(arn).toMatch(/^arn:aws:lambda:[\w-]+:\d+:function:[\w-]+$/);
       });
     });
+  });
+
+  describe('Complete User Lifecycle Flow', () => {
+    test('should execute complete flow', async () => {
+      // Step 1: Create a new user with full profile
+      console.log('Step 1: Creating user...');
+      const newUserData = {
+        email: `lifecycle-test-${Date.now()}@example.com`,
+        firstName: 'Alice',
+        lastName: 'Johnson',
+        phoneNumber: '+1555123456',
+        metadata: {
+          signupSource: 'mobile-app',
+          preferences: {
+            notifications: true,
+            newsletter: false
+          }
+        }
+      };
+
+      const createResponse = await axios.post(`${apiEndpoint}/users`, newUserData);
+      expect(createResponse.status).toBe(201);
+      expect(createResponse.data).toHaveProperty('userId');
+      expect(createResponse.data.active).toBe(true);
+
+      const userId = createResponse.data.userId;
+      const createdAt = createResponse.data.createdAt;
+      console.log(`User created with ID: ${userId}`);
+
+      // Step 2: Retrieve the user and verify all fields
+      console.log('Step 2: Retrieving user...');
+      const getResponse = await axios.get(`${apiEndpoint}/users/${userId}`);
+      expect(getResponse.status).toBe(200);
+      expect(getResponse.data.userId).toBe(userId);
+      expect(getResponse.data.email).toBe(newUserData.email);
+      expect(getResponse.data.firstName).toBe(newUserData.firstName);
+      expect(getResponse.data.lastName).toBe(newUserData.lastName);
+      expect(getResponse.data.phoneNumber).toBe(newUserData.phoneNumber);
+      expect(getResponse.data.metadata).toEqual(newUserData.metadata);
+      expect(getResponse.data.createdAt).toBe(createdAt);
+      console.log('User retrieved successfully');
+
+      // Step 3: Update user profile
+      console.log('Step 3: Updating user profile...');
+      const updateData = {
+        firstName: 'Alicia',
+        phoneNumber: '+1555987654',
+        metadata: {
+          signupSource: 'mobile-app',
+          preferences: {
+            notifications: false,
+            newsletter: true
+          },
+          lastLogin: new Date().toISOString()
+        }
+      };
+
+      const updateResponse = await axios.put(`${apiEndpoint}/users/${userId}`, updateData);
+      expect(updateResponse.status).toBe(200);
+      expect(updateResponse.data.firstName).toBe(updateData.firstName);
+      expect(updateResponse.data.phoneNumber).toBe(updateData.phoneNumber);
+      expect(updateResponse.data.lastName).toBe(newUserData.lastName); // Unchanged
+      expect(updateResponse.data.email).toBe(newUserData.email); // Unchanged
+      expect(updateResponse.data.metadata).toEqual(updateData.metadata);
+      expect(updateResponse.data.updatedAt).not.toBe(createdAt);
+      console.log('User updated successfully');
+
+      // Step 4: Verify update persisted
+      console.log('Step 4: Verifying update persisted...');
+      const verifyResponse = await axios.get(`${apiEndpoint}/users/${userId}`);
+      expect(verifyResponse.status).toBe(200);
+      expect(verifyResponse.data.firstName).toBe(updateData.firstName);
+      expect(verifyResponse.data.phoneNumber).toBe(updateData.phoneNumber);
+      expect(verifyResponse.data.metadata.lastLogin).toBeDefined();
+      console.log('Update verified');
+
+      // Step 5: List users and find our test user
+      console.log('Step 5: Listing users...');
+      const listResponse = await axios.get(`${apiEndpoint}/users?limit=50`);
+      expect(listResponse.status).toBe(200);
+      expect(Array.isArray(listResponse.data.users)).toBe(true);
+
+      const foundUser = listResponse.data.users.find((user: any) => user.userId === userId);
+      expect(foundUser).toBeDefined();
+      expect(foundUser.firstName).toBe(updateData.firstName);
+      console.log(`Found user in list of ${listResponse.data.count} users`);
+
+      // Step 6: Deactivate user (soft delete simulation)
+      console.log('Step 6: Deactivating user...');
+      const deactivateResponse = await axios.put(`${apiEndpoint}/users/${userId}`, {
+        active: false
+      });
+      expect(deactivateResponse.status).toBe(200);
+      expect(deactivateResponse.data.active).toBe(false);
+      console.log('User deactivated');
+
+      // Step 7: Verify deactivation
+      console.log('Step 7: Verifying deactivation...');
+      const deactivatedUserResponse = await axios.get(`${apiEndpoint}/users/${userId}`);
+      expect(deactivatedUserResponse.status).toBe(200);
+      expect(deactivatedUserResponse.data.active).toBe(false);
+      console.log('Deactivation verified');
+
+      // Step 8: Perform multiple partial updates
+      console.log('Step 8: Performing multiple partial updates...');
+      await axios.put(`${apiEndpoint}/users/${userId}`, {
+        firstName: 'Alicia-Updated'
+      });
+
+      await axios.put(`${apiEndpoint}/users/${userId}`, {
+        phoneNumber: '+1555111222'
+      });
+
+      const multiUpdateResponse = await axios.get(`${apiEndpoint}/users/${userId}`);
+      expect(multiUpdateResponse.data.firstName).toBe('Alicia-Updated');
+      expect(multiUpdateResponse.data.phoneNumber).toBe('+1555111222');
+      expect(multiUpdateResponse.data.email).toBe(newUserData.email); // Still unchanged
+      console.log('Multiple updates completed');
+
+      // Step 9: Delete the user (hard delete)
+      console.log('Step 9: Deleting user...');
+      const deleteResponse = await axios.delete(`${apiEndpoint}/users/${userId}`);
+      expect(deleteResponse.status).toBe(204);
+      console.log('User deleted');
+
+      // Step 10: Verify deletion
+      console.log('Step 10: Verifying deletion...');
+      try {
+        await axios.get(`${apiEndpoint}/users/${userId}`);
+        fail('Expected request to fail with 404 after deletion');
+      } catch (error: any) {
+        expect(error.response.status).toBe(404);
+        expect(error.response.data.error).toBe('User not found');
+        console.log('Deletion verified - user not found');
+      }
+
+      // Step 11: Verify user removed from list
+      console.log('Step 11: Verifying user removed from list...');
+      const finalListResponse = await axios.get(`${apiEndpoint}/users?limit=100`);
+      const deletedUserInList = finalListResponse.data.users.find((user: any) => user.userId === userId);
+      expect(deletedUserInList).toBeUndefined();
+      console.log('Complete lifecycle test passed! ✓');
+    }, 30000); // 30 second timeout for complete flow
   });
 });
