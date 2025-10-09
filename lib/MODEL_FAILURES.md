@@ -1,3 +1,7 @@
+1. Deployment failed with the genearted resposne by model as it used wrong data source in cloudtrail.
+
+2. Deployment failed because it used wrong parameter in ALB creation.
+
 ```
 │ Error: expected event_selector.0.data_resource.1.type to be one of ["AWS::DynamoDB::Table" "AWS::Lambda::Function" "AWS::S3::Object"], got AWS::RDS::DBCluster
 │ 
