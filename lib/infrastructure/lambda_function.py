@@ -263,7 +263,7 @@ def lambda_handler(event, context):
                 "index.py": pulumi.StringAsset(log_processor_code)
             }),
             role=self.iam_stack.get_log_processing_role_arn(),
-            timeout=300,  # 5 minutes for log processing
+            timeout=30,  # 30 seconds for log processing
             memory_size=256,  # More memory for log processing
             environment=lambda_.FunctionEnvironmentArgs(
                 variables={
