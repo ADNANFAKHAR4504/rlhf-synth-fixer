@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349484",
+  "team": "6",
+  "startedAt": "2025-10-06T08:18:44.950Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "AutoScaling",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "SSM",
+    "Secrets Manager"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "High-value training data with 4 critical fixes: (1) Fatal CDKTF syntax error (AZ interpolation using template literals instead of Fn.element), (2) Complete omission of VPC Flow Log resource despite correct dependencies, (3) Property casing errors (snake_case vs camelCase in TypeScript bindings), (4) Architectural security gap (missing RDS egress rules). The corrections demonstrate precise CDKTF-specific knowledge gaps and architectural security considerations. Domain complexity is high (production multi-tier AWS infrastructure with HA, monitoring, security). The MODEL_FAILURES.md provides excellent documentation of each failure with evidence. Strong improvement potential for CDKTF TypeScript syntax and AWS security best practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

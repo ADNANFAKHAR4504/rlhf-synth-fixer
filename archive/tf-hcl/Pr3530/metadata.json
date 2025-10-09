@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410121",
+  "team": "4",
+  "startedAt": "2025-10-03T18:26:58.246Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "EC2",
+    "Security Groups",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 6,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
