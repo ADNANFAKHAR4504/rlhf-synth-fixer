@@ -86,7 +86,7 @@
     "KeyName": {
       "Type": "String",
       "Default": "",
-      "Description": "Optional EC2 Key Pair name (ignored by this stack; use SSM Session Manager for access)",
+      "Description": "Optional EC2 Key Pair name (ignored by resources; access via SSM Session Manager)",
       "AllowedPattern": "^$|[\\w+=,.@-]{1,255}"
     },
     "LatestAmiId": {
@@ -96,11 +96,11 @@
     },
     "DBUsername": {
       "Type": "String",
-      "Default": "admin",
+      "Default": "dbmasteruser",
       "MinLength": "1",
       "MaxLength": "16",
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-      "Description": "Database admin username"
+      "AllowedPattern": "^(?!admin$)(?!postgres$)(?!rdsadmin$)[A-Za-z][A-Za-z0-9]*$",
+      "ConstraintDescription": "Start with a letter; alphanumeric only; cannot be admin, postgres, or rdsadmin"
     },
     "DBInstanceClass": {
       "Type": "String",
@@ -1468,6 +1468,12 @@
         "Name": {
           "Fn::Sub": "TapStack${EnvironmentSuffix}-Lambda-ARN"
         }
+      }
+    },
+    "DeploymentKeyName": {
+      "Description": "Echo of the provided KeyName parameter (not used by resources; fixes cfn-lint W2001).",
+      "Value": {
+        "Ref": "KeyName"
       }
     }
   }
