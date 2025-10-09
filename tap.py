@@ -17,8 +17,9 @@ from lib.tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
-# Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+# Get environment suffix from ENV var or Pulumi config, fallback to 'dev'
+# Prefer CI-provided ENVIRONMENT_SUFFIX when available to align with deploy scripts.
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
