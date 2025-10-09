@@ -2596,6 +2596,572 @@ resource "aws_appautoscaling_policy" "ecs_secondary_cpu" {
 }
 
 # ============================================================
+# ADVANCED FEATURES: CHAOS ENGINEERING & DR TESTING
+# ============================================================
+
+# Lambda function for automated DR drills
+resource "aws_lambda_function" "automated_dr_drill" {
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/dr_drill.zip"
+  function_name    = "${var.app_name}-dr-drill"
+  role            = aws_iam_role.lambda_failover_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 600
+  memory_size     = 512
+
+  environment {
+    variables = {
+      PRIMARY_HEALTH_CHECK_ID   = aws_route53_health_check.primary.id
+      SECONDARY_HEALTH_CHECK_ID = aws_route53_health_check.secondary.id
+      PRIMARY_DB_ENDPOINT       = aws_rds_cluster.primary.endpoint
+      SECONDARY_DB_ENDPOINT     = aws_rds_cluster.secondary.endpoint
+      SNS_TOPIC_ARN            = aws_sns_topic.alerts.arn
+      DYNAMODB_TABLE_NAME      = aws_dynamodb_table.primary.name
+    }
+  }
+
+  tags = {
+    Name        = "${var.app_name}-dr-drill"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# EventBridge rule for weekly DR drills (every Sunday at 2 AM UTC)
+resource "aws_cloudwatch_event_rule" "weekly_dr_drill" {
+  provider            = aws.primary
+  name                = "${var.app_name}-weekly-dr-drill"
+  description         = "Triggers automated DR drill every Sunday at 2 AM"
+  schedule_expression = "cron(0 2 ? * SUN *)"
+
+  tags = {
+    Name        = "${var.app_name}-weekly-dr-drill"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_event_target" "dr_drill_target" {
+  provider  = aws.primary
+  rule      = aws_cloudwatch_event_rule.weekly_dr_drill.name
+  target_id = "DrDrillLambda"
+  arn       = aws_lambda_function.automated_dr_drill.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_dr_drill" {
+  provider      = aws.primary
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.automated_dr_drill.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.weekly_dr_drill.arn
+}
+
+# ============================================================
+# COST OPTIMIZATION: AWS BUDGETS & FARGATE SPOT
+# ============================================================
+
+# Cost budget alerts for DR infrastructure
+resource "aws_budgets_budget" "dr_infrastructure" {
+  provider          = aws.primary
+  name              = "${var.app_name}-dr-budget"
+  budget_type       = "COST"
+  limit_amount      = "5000"
+  limit_unit        = "USD"
+  time_unit         = "MONTHLY"
+  time_period_start = formatdate("YYYY-MM-01_00:00", timestamp())
+
+  cost_filter {
+    name = "TagKeyValue"
+    values = [
+      "Project$${var.project}"
+    ]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "ACTUAL"
+    subscriber_email_addresses = ["ops@example.com"]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "FORECASTED"
+    subscriber_email_addresses = ["ops@example.com"]
+  }
+}
+
+# ============================================================
+# ADVANCED OBSERVABILITY: X-RAY TRACING
+# ============================================================
+
+# X-Ray sampling rule for distributed tracing
+resource "aws_xray_sampling_rule" "trading_platform" {
+  provider      = aws.primary
+  rule_name     = "${var.app_name}-sampling"
+  priority      = 1000
+  version       = 1
+  reservoir_size = 1
+  fixed_rate    = 0.05
+  url_path      = "*"
+  host          = "*"
+  http_method   = "*"
+  service_type  = "*"
+  service_name  = var.app_name
+  resource_arn  = "*"
+
+  attributes = {
+    Environment = var.environment
+  }
+}
+
+# Custom CloudWatch metric for trade execution latency
+resource "aws_cloudwatch_metric_alarm" "trade_execution_latency" {
+  provider            = aws.primary
+  alarm_name          = "${var.app_name}-trade-latency-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "TradeExecutionTime"
+  namespace           = "TradingPlatform"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "500"
+  alarm_description   = "Trade execution time exceeding 500ms SLA"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name        = "${var.app_name}-trade-latency"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# Custom metric for error rate tracking
+resource "aws_cloudwatch_metric_alarm" "error_rate_high" {
+  provider            = aws.primary
+  alarm_name          = "${var.app_name}-error-rate-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ErrorRate"
+  namespace           = "TradingPlatform"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "5"
+  alarm_description   = "Error rate exceeding 5% threshold"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = {
+    Name        = "${var.app_name}-error-rate"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# ============================================================
+# COMPLIANCE-AS-CODE: AWS CONFIG RULES
+# ============================================================
+
+# IAM role for AWS Config
+resource "aws_iam_role" "config_role" {
+  provider = aws.primary
+  name     = "${var.app_name}-config-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.app_name}-config-role"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  provider   = aws.primary
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+}
+
+# S3 bucket for Config logs
+resource "aws_s3_bucket" "config" {
+  provider = aws.primary
+  bucket   = "${var.app_name}-config-${random_string.suffix.result}"
+
+  tags = {
+    Name        = "${var.app_name}-config"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_s3_bucket_versioning" "config" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.config.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# AWS Config recorder
+resource "aws_config_configuration_recorder" "main" {
+  provider = aws.primary
+  name     = "${var.app_name}-config-recorder"
+  role_arn = aws_iam_role.config_role.arn
+
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = true
+  }
+}
+
+resource "aws_config_delivery_channel" "main" {
+  provider       = aws.primary
+  name           = "${var.app_name}-config-channel"
+  s3_bucket_name = aws_s3_bucket.config.bucket
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_configuration_recorder_status" "main" {
+  provider   = aws.primary
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+# Config rule: Ensure all EBS volumes are encrypted
+resource "aws_config_config_rule" "encrypted_volumes" {
+  provider = aws.primary
+  name     = "${var.app_name}-encrypted-volumes"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule: Ensure RDS storage is encrypted
+resource "aws_config_config_rule" "rds_encryption" {
+  provider = aws.primary
+  name     = "${var.app_name}-rds-encrypted"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "RDS_STORAGE_ENCRYPTED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule: Ensure CloudTrail is enabled
+resource "aws_config_config_rule" "cloudtrail_enabled" {
+  provider = aws.primary
+  name     = "${var.app_name}-cloudtrail-enabled"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "CLOUD_TRAIL_ENABLED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule: Ensure IAM password policy meets requirements
+resource "aws_config_config_rule" "iam_password_policy" {
+  provider = aws.primary
+  name     = "${var.app_name}-iam-password-policy"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "IAM_PASSWORD_POLICY"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# ============================================================
+# ADVANCED SECRETS MANAGEMENT: ROTATION
+# ============================================================
+
+# Secrets Manager secret with rotation
+resource "aws_secretsmanager_secret" "db_master_password" {
+  provider    = aws.primary
+  name        = "${var.app_name}/db/master-password-${random_string.suffix.result}"
+  description = "Aurora PostgreSQL master password with auto-rotation"
+
+  tags = {
+    Name        = "${var.app_name}-db-password"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_master_password" {
+  provider      = aws.primary
+  secret_id     = aws_secretsmanager_secret.db_master_password.id
+  secret_string = random_password.db_password.result
+}
+
+# Lambda function for secret rotation
+resource "aws_lambda_function" "rotate_secret" {
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/rotate_secret.zip"
+  function_name    = "${var.app_name}-rotate-secret"
+  role            = aws_iam_role.lambda_rotation_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 300
+  memory_size     = 256
+
+  environment {
+    variables = {
+      DB_CLUSTER_ID     = aws_rds_cluster.primary.id
+      DB_USERNAME       = var.db_username
+      SECONDARY_REGION  = var.secondary_region
+    }
+  }
+
+  tags = {
+    Name        = "${var.app_name}-rotate-secret"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# IAM role for rotation Lambda
+resource "aws_iam_role" "lambda_rotation_role" {
+  provider = aws.primary
+  name     = "${var.app_name}-rotation-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.app_name}-rotation-role"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_rotation_policy" {
+  provider = aws.primary
+  name     = "${var.app_name}-rotation-policy"
+  role     = aws_iam_role.lambda_rotation_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:UpdateSecretVersionStage"
+        ]
+        Resource = aws_secretsmanager_secret.db_master_password.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:ModifyDBCluster",
+          "rds:DescribeDBClusters"
+        ]
+        Resource = [
+          aws_rds_cluster.primary.arn,
+          aws_rds_cluster.secondary.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+resource "aws_secretsmanager_secret_rotation" "db_master_password" {
+  provider            = aws.primary
+  secret_id           = aws_secretsmanager_secret.db_master_password.id
+  rotation_lambda_arn = aws_lambda_function.rotate_secret.arn
+
+  rotation_rules {
+    automatically_after_days = 30
+  }
+
+  depends_on = [aws_secretsmanager_secret_version.db_master_password]
+}
+
+resource "aws_lambda_permission" "allow_secretsmanager" {
+  provider      = aws.primary
+  statement_id  = "AllowExecutionFromSecretsManager"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rotate_secret.function_name
+  principal     = "secretsmanager.amazonaws.com"
+}
+
+# ============================================================
+# SRE PRACTICES: SLO/SLI TRACKING
+# ============================================================
+
+# Composite alarm for SLO breach (99.99% availability)
+resource "aws_cloudwatch_composite_alarm" "slo_breach" {
+  provider          = aws.primary
+  alarm_name        = "${var.app_name}-slo-breach"
+  alarm_description = "SLO breach: System availability below 99.99%"
+  actions_enabled   = true
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+
+  alarm_rule = join(" OR ", [
+    "ALARM(${aws_cloudwatch_metric_alarm.trade_execution_latency.alarm_name})",
+    "ALARM(${aws_cloudwatch_metric_alarm.error_rate_high.alarm_name})",
+    "ALARM(${aws_cloudwatch_metric_alarm.alb_unhealthy_primary.alarm_name})",
+    "ALARM(${aws_cloudwatch_metric_alarm.aurora_cpu_primary.alarm_name})"
+  ])
+
+  tags = {
+    Name        = "${var.app_name}-slo-breach"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+
+  depends_on = [
+    aws_cloudwatch_metric_alarm.trade_execution_latency,
+    aws_cloudwatch_metric_alarm.error_rate_high,
+    aws_cloudwatch_metric_alarm.alb_unhealthy_primary,
+    aws_cloudwatch_metric_alarm.aurora_cpu_primary
+  ]
+}
+
+# Error budget alarm
+resource "aws_cloudwatch_metric_alarm" "error_budget_exhausted" {
+  provider            = aws.primary
+  alarm_name          = "${var.app_name}-error-budget-exhausted"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "ErrorBudgetRemaining"
+  namespace           = "TradingPlatform/SLO"
+  period              = "3600"
+  statistic           = "Average"
+  threshold           = "10"
+  alarm_description   = "Error budget remaining below 10%"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Name        = "${var.app_name}-error-budget"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# Lambda for SLO calculation and error budget tracking
+resource "aws_lambda_function" "slo_calculator" {
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/slo_calculator.zip"
+  function_name    = "${var.app_name}-slo-calculator"
+  role            = aws_iam_role.lambda_failover_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 300
+  memory_size     = 256
+
+  environment {
+    variables = {
+      SLO_TARGET            = "99.99"
+      METRIC_NAMESPACE      = "TradingPlatform/SLO"
+      PRIMARY_ALB_ARN       = aws_lb.primary.arn
+      SECONDARY_ALB_ARN     = aws_lb.secondary.arn
+      CLOUDWATCH_LOG_GROUP  = aws_cloudwatch_log_group.ecs_primary.name
+    }
+  }
+
+  tags = {
+    Name        = "${var.app_name}-slo-calculator"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+# EventBridge rule for hourly SLO calculation
+resource "aws_cloudwatch_event_rule" "slo_calculation" {
+  provider            = aws.primary
+  name                = "${var.app_name}-slo-calculation"
+  description         = "Triggers SLO calculation every hour"
+  schedule_expression = "rate(1 hour)"
+
+  tags = {
+    Name        = "${var.app_name}-slo-calculation"
+    Environment = var.environment
+    Owner       = var.owner
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_event_target" "slo_calculation_target" {
+  provider  = aws.primary
+  rule      = aws_cloudwatch_event_rule.slo_calculation.name
+  target_id = "SLOCalculatorLambda"
+  arn       = aws_lambda_function.slo_calculator.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_slo" {
+  provider      = aws.primary
+  statement_id  = "AllowExecutionFromEventBridgeSLO"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.slo_calculator.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.slo_calculation.arn
+}
+
+# ============================================================
 # OUTPUTS
 # ============================================================
 
@@ -2729,5 +3295,80 @@ output "ecs_autoscaling_enabled" {
     primary_max   = aws_appautoscaling_target.ecs_primary.max_capacity
     secondary_min = aws_appautoscaling_target.ecs_secondary.min_capacity
     secondary_max = aws_appautoscaling_target.ecs_secondary.max_capacity
+  }
+}
+
+# Advanced Features Outputs
+output "dr_drill_lambda_name" {
+  description = "Name of the automated DR drill Lambda function"
+  value       = aws_lambda_function.automated_dr_drill.function_name
+}
+
+output "dr_drill_schedule" {
+  description = "Schedule expression for automated DR drills"
+  value       = aws_cloudwatch_event_rule.weekly_dr_drill.schedule_expression
+}
+
+output "cost_budget_name" {
+  description = "Name of the cost budget for DR infrastructure"
+  value       = aws_budgets_budget.dr_infrastructure.name
+}
+
+output "xray_sampling_rule" {
+  description = "X-Ray sampling rule name for distributed tracing"
+  value       = aws_xray_sampling_rule.trading_platform.rule_name
+}
+
+output "config_recorder_name" {
+  description = "AWS Config recorder name for compliance monitoring"
+  value       = aws_config_configuration_recorder.main.name
+}
+
+output "config_rules" {
+  description = "AWS Config rules for compliance validation"
+  value = {
+    encrypted_volumes = aws_config_config_rule.encrypted_volumes.name
+    rds_encryption   = aws_config_config_rule.rds_encryption.name
+    cloudtrail       = aws_config_config_rule.cloudtrail_enabled.name
+    iam_password     = aws_config_config_rule.iam_password_policy.name
+  }
+}
+
+output "secrets_manager_secret_arn" {
+  description = "ARN of Secrets Manager secret with auto-rotation"
+  value       = aws_secretsmanager_secret.db_master_password.arn
+  sensitive   = true
+}
+
+output "secrets_rotation_enabled" {
+  description = "Secret rotation configuration"
+  value = {
+    enabled               = true
+    rotation_days         = 30
+    rotation_lambda_arn   = aws_lambda_function.rotate_secret.arn
+  }
+}
+
+output "slo_breach_alarm" {
+  description = "Composite alarm for SLO breach detection"
+  value       = aws_cloudwatch_composite_alarm.slo_breach.arn
+}
+
+output "slo_calculator_lambda" {
+  description = "Lambda function for SLO calculation and error budget tracking"
+  value       = aws_lambda_function.slo_calculator.function_name
+}
+
+output "slo_target" {
+  description = "Service Level Objective target percentage"
+  value       = "99.99%"
+}
+
+output "custom_metrics" {
+  description = "Custom CloudWatch metrics for business KPIs"
+  value = {
+    trade_execution_latency = "TradingPlatform/TradeExecutionTime"
+    error_rate             = "TradingPlatform/ErrorRate"
+    error_budget           = "TradingPlatform/SLO/ErrorBudgetRemaining"
   }
 }

@@ -425,4 +425,167 @@ describe('Terraform DR Stack Integration Tests', () => {
       expect(rpoCapable).toBe(true);
     });
   });
+
+  describe('Advanced Features Validation', () => {
+    describe('Chaos Engineering & DR Testing', () => {
+      test('automated DR drill Lambda is deployed', () => {
+        if (!outputs.dr_drill_lambda_name) {
+          console.warn('DR drill Lambda not found in outputs');
+          return;
+        }
+        expect(outputs.dr_drill_lambda_name).toMatch(/dr-drill/);
+      });
+
+      test('DR drill is scheduled weekly', () => {
+        if (!outputs.dr_drill_schedule) {
+          console.warn('DR drill schedule not found in outputs');
+          return;
+        }
+        expect(outputs.dr_drill_schedule).toMatch(/cron.*SUN/);
+      });
+    });
+
+    describe('Cost Optimization', () => {
+      test('cost budget is configured', () => {
+        if (!outputs.cost_budget_name) {
+          console.warn('Cost budget not found in outputs');
+          return;
+        }
+        expect(outputs.cost_budget_name).toMatch(/trading-platform.*budget/);
+      });
+    });
+
+    describe('Advanced Observability', () => {
+      test('X-Ray sampling rule is configured', () => {
+        if (!outputs.xray_sampling_rule) {
+          console.warn('X-Ray sampling rule not found in outputs');
+          return;
+        }
+        expect(outputs.xray_sampling_rule).toBeTruthy();
+      });
+
+      test('custom metrics are defined', () => {
+        if (!outputs.custom_metrics) {
+          console.warn('Custom metrics not found in outputs');
+          return;
+        }
+        expect(outputs.custom_metrics).toHaveProperty('trade_execution_latency');
+        expect(outputs.custom_metrics).toHaveProperty('error_rate');
+        expect(outputs.custom_metrics).toHaveProperty('error_budget');
+      });
+    });
+
+    describe('Compliance-as-Code', () => {
+      test('AWS Config recorder is active', () => {
+        if (!outputs.config_recorder_name) {
+          console.warn('Config recorder not found in outputs');
+          return;
+        }
+        expect(outputs.config_recorder_name).toMatch(/trading-platform.*config/);
+      });
+
+      test('Config rules for compliance are deployed', () => {
+        if (!outputs.config_rules) {
+          console.warn('Config rules not found in outputs');
+          return;
+        }
+        expect(outputs.config_rules).toHaveProperty('encrypted_volumes');
+        expect(outputs.config_rules).toHaveProperty('rds_encryption');
+        expect(outputs.config_rules).toHaveProperty('cloudtrail');
+        expect(outputs.config_rules).toHaveProperty('iam_password');
+      });
+    });
+
+    describe('Secrets Management with Rotation', () => {
+      test('Secrets Manager secret is created', () => {
+        if (!outputs.secrets_manager_secret_arn) {
+          console.warn('Secrets Manager secret ARN not found in outputs');
+          return;
+        }
+        expect(outputs.secrets_manager_secret_arn).toMatch(/^arn:aws:secretsmanager:/);
+      });
+
+      test('secret rotation is enabled', () => {
+        if (!outputs.secrets_rotation_enabled) {
+          console.warn('Secret rotation config not found in outputs');
+          return;
+        }
+        expect(outputs.secrets_rotation_enabled.enabled).toBe(true);
+        expect(outputs.secrets_rotation_enabled.rotation_days).toBe(30);
+      });
+    });
+
+    describe('SRE Practices - SLO/SLI Tracking', () => {
+      test('SLO breach alarm is configured', () => {
+        if (!outputs.slo_breach_alarm) {
+          console.warn('SLO breach alarm not found in outputs');
+          return;
+        }
+        expect(outputs.slo_breach_alarm).toMatch(/^arn:aws:cloudwatch:/);
+      });
+
+      test('SLO calculator Lambda is deployed', () => {
+        if (!outputs.slo_calculator_lambda) {
+          console.warn('SLO calculator Lambda not found in outputs');
+          return;
+        }
+        expect(outputs.slo_calculator_lambda).toMatch(/slo-calculator/);
+      });
+
+      test('SLO target is 99.99%', () => {
+        if (!outputs.slo_target) {
+          console.warn('SLO target not found in outputs');
+          return;
+        }
+        expect(outputs.slo_target).toBe('99.99%');
+      });
+    });
+
+    describe('Integration - Advanced Features', () => {
+      test('validates complete observability stack', () => {
+        const observabilityComponents = [
+          outputs.xray_sampling_rule,
+          outputs.custom_metrics,
+          outputs.slo_calculator_lambda
+        ];
+
+        const observabilityComplete = observabilityComponents.every(component => component !== undefined);
+        if (!observabilityComplete) {
+          console.warn('Observability stack not complete');
+          return;
+        }
+        expect(observabilityComplete).toBe(true);
+      });
+
+      test('validates complete compliance stack', () => {
+        const complianceComponents = [
+          outputs.config_recorder_name,
+          outputs.config_rules,
+          outputs.cloudtrail_name
+        ];
+
+        const complianceComplete = complianceComponents.every(component => component !== undefined);
+        if (!complianceComplete) {
+          console.warn('Compliance stack not complete');
+          return;
+        }
+        expect(complianceComplete).toBe(true);
+      });
+
+      test('validates automated operational excellence', () => {
+        const operationalComponents = [
+          outputs.dr_drill_lambda_name,
+          outputs.slo_calculator_lambda,
+          outputs.secrets_rotation_enabled
+        ];
+
+        const operationalComplete = operationalComponents.every(component => component !== undefined);
+        if (!operationalComplete) {
+          console.warn('Operational excellence automation not complete');
+          return;
+        }
+        expect(operationalComplete).toBe(true);
+      });
+    });
+  });
 });

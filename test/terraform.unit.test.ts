@@ -23,7 +23,7 @@ describe("Terraform DR Stack Unit Tests - tap_stack.tf", () => {
       expect(fs.existsSync(stackPath)).toBe(true);
     });
 
-    test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
+  test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
       expect(stackContent).not.toMatch(/^provider\s+"aws"\s*{/m);
     });
 
@@ -486,6 +486,180 @@ describe("Terraform DR Stack Unit Tests - tap_stack.tf", () => {
 
     test("implements proper dependencies", () => {
       expect(stackContent).toMatch(/depends_on\s*=/);
+    });
+  });
+
+  describe("Advanced Features: Chaos Engineering & DR Testing", () => {
+    test("implements automated DR drill Lambda", () => {
+      expect(stackContent).toMatch(/aws_lambda_function.*automated_dr_drill/);
+      expect(stackContent).toMatch(/function_name\s*=\s*.*dr-drill/);
+    });
+
+    test("schedules weekly DR drills", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_event_rule.*weekly_dr_drill/);
+      expect(stackContent).toMatch(/cron\(0 2 \? \* SUN \*\)/);
+    });
+
+    test("connects DR drill Lambda to EventBridge", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_event_target.*dr_drill_target/);
+      expect(stackContent).toMatch(/aws_lambda_permission.*allow_eventbridge_dr_drill/);
+    });
+  });
+
+  describe("Advanced Features: Cost Optimization", () => {
+    test("implements AWS Budgets for cost monitoring", () => {
+      expect(stackContent).toMatch(/aws_budgets_budget.*dr_infrastructure/);
+      expect(stackContent).toMatch(/budget_type\s*=\s*"COST"/);
+    });
+
+    test("configures budget alerts at 80% and 100%", () => {
+      expect(stackContent).toMatch(/threshold\s*=\s*80/);
+      expect(stackContent).toMatch(/threshold\s*=\s*100/);
+    });
+
+    test("sets monthly budget limit", () => {
+      expect(stackContent).toMatch(/limit_amount\s*=\s*"5000"/);
+      expect(stackContent).toMatch(/time_unit\s*=\s*"MONTHLY"/);
+    });
+  });
+
+  describe("Advanced Features: Observability with X-Ray", () => {
+    test("implements X-Ray sampling rule", () => {
+      expect(stackContent).toMatch(/aws_xray_sampling_rule.*trading_platform/);
+      expect(stackContent).toMatch(/fixed_rate\s*=\s*0\.05/);
+    });
+
+    test("implements custom metric for trade execution latency", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_metric_alarm.*trade_execution_latency/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"TradeExecutionTime"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"TradingPlatform"/);
+    });
+
+    test("implements custom metric for error rate", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_metric_alarm.*error_rate_high/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"ErrorRate"/);
+    });
+
+    test("sets SLA threshold for trade execution (500ms)", () => {
+      expect(stackContent).toMatch(/threshold\s*=\s*"500"/);
+    });
+  });
+
+  describe("Advanced Features: Compliance-as-Code", () => {
+    test("implements AWS Config recorder", () => {
+      expect(stackContent).toMatch(/aws_config_configuration_recorder.*main/);
+      expect(stackContent).toMatch(/all_supported\s*=\s*true/);
+    });
+
+    test("creates S3 bucket for Config logs", () => {
+      expect(stackContent).toMatch(/aws_s3_bucket.*config/);
+      expect(stackContent).toMatch(/bucket\s*=\s*.*config-/);
+    });
+
+    test("implements Config rule for encrypted volumes", () => {
+      expect(stackContent).toMatch(/aws_config_config_rule.*encrypted_volumes/);
+      expect(stackContent).toMatch(/source_identifier\s*=\s*"ENCRYPTED_VOLUMES"/);
+    });
+
+    test("implements Config rule for RDS encryption", () => {
+      expect(stackContent).toMatch(/aws_config_config_rule.*rds_encryption/);
+      expect(stackContent).toMatch(/source_identifier\s*=\s*"RDS_STORAGE_ENCRYPTED"/);
+    });
+
+    test("implements Config rule for CloudTrail", () => {
+      expect(stackContent).toMatch(/aws_config_config_rule.*cloudtrail_enabled/);
+      expect(stackContent).toMatch(/source_identifier\s*=\s*"CLOUD_TRAIL_ENABLED"/);
+    });
+
+    test("implements Config rule for IAM password policy", () => {
+      expect(stackContent).toMatch(/aws_config_config_rule.*iam_password_policy/);
+      expect(stackContent).toMatch(/source_identifier\s*=\s*"IAM_PASSWORD_POLICY"/);
+    });
+
+    test("creates IAM role for AWS Config", () => {
+      expect(stackContent).toMatch(/aws_iam_role.*config_role/);
+      expect(stackContent).toMatch(/Service.*config\.amazonaws\.com/);
+    });
+  });
+
+  describe("Advanced Features: Secrets Management with Rotation", () => {
+    test("implements Secrets Manager secret", () => {
+      expect(stackContent).toMatch(/aws_secretsmanager_secret.*db_master_password/);
+      expect(stackContent).toMatch(/Aurora PostgreSQL master password with auto-rotation/);
+    });
+
+    test("implements Lambda for secret rotation", () => {
+      expect(stackContent).toMatch(/aws_lambda_function.*rotate_secret/);
+      expect(stackContent).toMatch(/function_name\s*=\s*.*rotate-secret/);
+    });
+
+    test("configures 30-day rotation schedule", () => {
+      expect(stackContent).toMatch(/aws_secretsmanager_secret_rotation/);
+      expect(stackContent).toMatch(/automatically_after_days\s*=\s*30/);
+    });
+
+    test("creates IAM role for rotation Lambda", () => {
+      expect(stackContent).toMatch(/aws_iam_role.*lambda_rotation_role/);
+    });
+
+    test("grants rotation Lambda permissions", () => {
+      expect(stackContent).toMatch(/aws_iam_role_policy.*lambda_rotation_policy/);
+      expect(stackContent).toMatch(/secretsmanager:PutSecretValue/);
+      expect(stackContent).toMatch(/rds:ModifyDBCluster/);
+    });
+  });
+
+  describe("Advanced Features: SRE Practices - SLO/SLI Tracking", () => {
+    test("implements composite alarm for SLO breach", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_composite_alarm.*slo_breach/);
+      expect(stackContent).toMatch(/99\.99% availability/);
+    });
+
+    test("implements error budget alarm", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_metric_alarm.*error_budget_exhausted/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"ErrorBudgetRemaining"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"TradingPlatform\/SLO"/);
+    });
+
+    test("implements SLO calculator Lambda", () => {
+      expect(stackContent).toMatch(/aws_lambda_function.*slo_calculator/);
+      expect(stackContent).toMatch(/SLO_TARGET\s*=\s*"99\.99"/);
+    });
+
+    test("schedules hourly SLO calculation", () => {
+      expect(stackContent).toMatch(/aws_cloudwatch_event_rule.*slo_calculation/);
+      expect(stackContent).toMatch(/rate\(1 hour\)/);
+    });
+
+    test("composite alarm combines multiple failure conditions", () => {
+      expect(stackContent).toMatch(/alarm_rule.*join/);
+      expect(stackContent).toMatch(/ALARM.*trade_execution_latency/);
+      expect(stackContent).toMatch(/ALARM.*error_rate_high/);
+    });
+  });
+
+  describe("Advanced Features: Outputs", () => {
+    test("outputs DR drill Lambda name", () => {
+      expect(stackContent).toMatch(/output.*dr_drill_lambda_name/);
+      expect(stackContent).toMatch(/automated_dr_drill\.function_name/);
+    });
+
+    test("outputs Config recorder name", () => {
+      expect(stackContent).toMatch(/output.*config_recorder_name/);
+    });
+
+    test("outputs Secrets Manager ARN", () => {
+      expect(stackContent).toMatch(/output.*secrets_manager_secret_arn/);
+      expect(stackContent).toMatch(/sensitive\s*=\s*true/);
+    });
+
+    test("outputs SLO breach alarm ARN", () => {
+      expect(stackContent).toMatch(/output.*slo_breach_alarm/);
+    });
+
+    test("outputs custom metrics configuration", () => {
+      expect(stackContent).toMatch(/output.*custom_metrics/);
+      expect(stackContent).toMatch(/TradingPlatform\/TradeExecutionTime/);
     });
   });
 });
