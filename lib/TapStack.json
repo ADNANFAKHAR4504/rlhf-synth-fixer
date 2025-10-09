@@ -22,7 +22,6 @@
           },
           "Parameters": [
             "InstanceType",
-            "KeyName",
             "LatestAmiId"
           ]
         },
@@ -42,9 +41,9 @@
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "Description": "Environment suffix for resource naming to avoid conflicts between deployments",
-      "AllowedPattern": "^[a-zA-Z0-9]+$",
-      "ConstraintDescription": "Must contain only alphanumeric characters"
+      "Description": "Lowercase env suffix used in names (kept lowercase for S3 bucket names)",
+      "AllowedPattern": "^[a-z0-9]+$",
+      "ConstraintDescription": "Use lowercase letters and numbers only"
     },
     "VPCCidr": {
       "Type": "String",
@@ -82,12 +81,6 @@
         "t3.large"
       ],
       "Description": "EC2 instance type"
-    },
-    "KeyName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "Default": "",
-      "Description": "EC2 Key Pair for SSH access (left unused by resources to avoid deployment failure if it does not exist)",
-      "AllowedPattern": "^$|[\\w+=,.@-]{1,255}"
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -916,6 +909,9 @@
     },
     "LogBucket": {
       "Type": "AWS::S3::Bucket",
+      "DependsOn": [
+        "LambdaS3Permission"
+      ],
       "Properties": {
         "BucketName": {
           "Fn::Sub": "tapstack${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"
@@ -1465,12 +1461,6 @@
         "Name": {
           "Fn::Sub": "TapStack${EnvironmentSuffix}-Lambda-ARN"
         }
-      }
-    },
-    "ProvidedKeyName": {
-      "Description": "KeyName parameter value provided at deploy time (not used by resources to prevent failures if it doesn't exist).",
-      "Value": {
-        "Ref": "KeyName"
       }
     }
   }
