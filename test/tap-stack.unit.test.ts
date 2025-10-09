@@ -137,21 +137,6 @@ describe('TapStack', () => {
         },
       });
     });
-
-    test('Should have Lambda Layer attached', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Layers: Match.anyValue(),
-      });
-    });
-  });
-
-  describe('Lambda Layer', () => {
-    test('Should create Lambda Layer with correct runtime', () => {
-      template.hasResourceProperties('AWS::Lambda::LayerVersion', {
-        CompatibleRuntimes: ['nodejs18.x'],
-        Description: 'Shared dependencies for Lambda functions',
-      });
-    });
   });
 
   describe('IAM Roles and Permissions', () => {
@@ -371,7 +356,7 @@ describe('TapStack', () => {
       // Lambda function count should be at least 1 (may include log retention function)
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
       expect(Object.keys(lambdaFunctions).length).toBeGreaterThanOrEqual(1);
-      template.resourceCountIs('AWS::Lambda::LayerVersion', 1);
+      // Note: No Lambda Layer when using NodejsFunction (bundles dependencies automatically)
       template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
       template.resourceCountIs('AWS::ApiGateway::ApiKey', 1);
       template.resourceCountIs('AWS::ApiGateway::UsagePlan', 1);
