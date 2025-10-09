@@ -1,0 +1,20 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "iac-cdk-py-3754",
+  "team": "5",
+  "startedAt": "2025-10-07T16:30:06.478Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "SNS, SQS, DynamboDB, Lambda, DLQ, CloudWatch",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

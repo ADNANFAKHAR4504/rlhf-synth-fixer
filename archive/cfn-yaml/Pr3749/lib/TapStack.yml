@@ -1,0 +1,639 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Serverless Image Upload Processing System with S3, Lambda, SNS, and CloudWatch'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix to append to resource names (e.g., dev, staging, prod)
+    Default: dev
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for receiving processing notifications
+    Default: admin@example.com
+
+Resources:
+  # S3 Bucket for Image Storage
+  ImageUploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ImageProcessing
+
+  # S3 Bucket for Processed Images
+  ProcessedImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'processed-images-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ImageProcessing
+
+  # SNS Topic for Notifications
+  ImageProcessingTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'image-processing-notifications-${EnvironmentSuffix}'
+      DisplayName: Image Processing Notifications
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ImageProcessing
+
+  # IAM Role for Lambda Function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub 'ImageProcessingPolicy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub 'arn:aws:s3:::image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::processed-images-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ImageProcessingTopic
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ImageProcessing
+
+  # Lambda Function for Image Processing
+  ImageProcessingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'image-processor-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          PROCESSED_BUCKET: !Ref ProcessedImageBucket
+          SNS_TOPIC_ARN: !Ref ImageProcessingTopic
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+          const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+
+          const s3Client = new S3Client();
+          const snsClient = new SNSClient();
+
+          exports.handler = async (event) => {
+            console.log('Event received:', JSON.stringify(event, null, 2));
+            
+            const processedBucket = process.env.PROCESSED_BUCKET;
+            const snsTopicArn = process.env.SNS_TOPIC_ARN;
+            const environment = process.env.ENVIRONMENT;
+            
+            const results = [];
+            
+            for (const record of event.Records) {
+              try {
+                const sourceBucket = record.s3.bucket.name;
+                const sourceKey = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+                
+                console.log(`Processing image: ${sourceKey} from bucket: ${sourceBucket}`);
+                
+                // Get the image from S3
+                const getCommand = new GetObjectCommand({
+                  Bucket: sourceBucket,
+                  Key: sourceKey
+                });
+                
+                const imageData = await s3Client.send(getCommand);
+                const imageBody = await streamToBuffer(imageData.Body);
+                
+                // Simulate image processing (resize, optimize, etc.)
+                const processedKey = sourceKey.replace('uploads/', 'processed/');
+                const metadata = {
+                  originalBucket: sourceBucket,
+                  originalKey: sourceKey,
+                  processedAt: new Date().toISOString(),
+                  environment: environment,
+                  imageSize: imageBody.length,
+                  contentType: imageData.ContentType || 'image/jpeg'
+                };
+                
+                // Save processed image
+                const putCommand = new PutObjectCommand({
+                  Bucket: processedBucket,
+                  Key: processedKey,
+                  Body: imageBody,
+                  ContentType: imageData.ContentType || 'image/jpeg',
+                  Metadata: {
+                    'original-bucket': sourceBucket,
+                    'original-key': sourceKey,
+                    'processed-at': metadata.processedAt,
+                    'environment': environment
+                  }
+                });
+                
+                await s3Client.send(putCommand);
+                
+                console.log(`Image processed successfully: ${processedKey}`);
+                
+                // Send SNS notification
+                const message = {
+                  status: 'SUCCESS',
+                  originalImage: sourceKey,
+                  processedImage: processedKey,
+                  bucket: processedBucket,
+                  timestamp: metadata.processedAt,
+                  environment: environment,
+                  imageSize: `${(metadata.imageSize / 1024).toFixed(2)} KB`
+                };
+                
+                const publishCommand = new PublishCommand({
+                  TopicArn: snsTopicArn,
+                  Subject: `[${environment.toUpperCase()}] Image Processing Complete`,
+                  Message: JSON.stringify(message, null, 2)
+                });
+                
+                await snsClient.send(publishCommand);
+                
+                results.push({
+                  sourceKey,
+                  processedKey,
+                  status: 'success'
+                });
+                
+              } catch (error) {
+                console.error('Error processing image:', error);
+                
+                // Send error notification
+                try {
+                  const errorCommand = new PublishCommand({
+                    TopicArn: snsTopicArn,
+                    Subject: `[${environment.toUpperCase()}] Image Processing Failed`,
+                    Message: JSON.stringify({
+                      status: 'ERROR',
+                      error: error.message,
+                      sourceKey: record.s3.object.key,
+                      timestamp: new Date().toISOString()
+                    }, null, 2)
+                  });
+                  
+                  await snsClient.send(errorCommand);
+                } catch (snsError) {
+                  console.error('Error sending SNS notification:', snsError);
+                }
+                
+                results.push({
+                  sourceKey: record.s3.object.key,
+                  status: 'error',
+                  error: error.message
+                });
+              }
+            }
+            
+            return {
+              statusCode: 200,
+              body: JSON.stringify({
+                message: 'Image processing completed',
+                results: results
+              })
+            };
+          };
+
+          async function streamToBuffer(stream) {
+            const chunks = [];
+            for await (const chunk of stream) {
+              chunks.push(chunk);
+            }
+            return Buffer.concat(chunks);
+          }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Application
+          Value: ImageProcessing
+
+  # Lambda Permission for S3 to Invoke
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageProcessingLambda
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  # S3 Bucket Notification Configuration (separate resource to avoid circular dependency)
+  S3BucketNotification:
+    Type: Custom::S3BucketNotification
+    Properties:
+      ServiceToken: !GetAtt S3NotificationFunction.Arn
+      BucketName: !Ref ImageUploadBucket
+      LambdaFunctionArn: !GetAtt ImageProcessingLambda.Arn
+      NotificationConfiguration:
+        LambdaFunctionConfigurations:
+          - Events:
+              - s3:ObjectCreated:*
+            LambdaFunctionArn: !GetAtt ImageProcessingLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: prefix
+                    Value: uploads/
+                  - Name: suffix
+                    Value: .jpg
+          - Events:
+              - s3:ObjectCreated:*
+            LambdaFunctionArn: !GetAtt ImageProcessingLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: prefix
+                    Value: uploads/
+                  - Name: suffix
+                    Value: .png
+          - Events:
+              - s3:ObjectCreated:*
+            LambdaFunctionArn: !GetAtt ImageProcessingLambda.Arn
+            Filter:
+              Key:
+                FilterRules:
+                  - Name: prefix
+                    Value: uploads/
+                  - Name: suffix
+                    Value: .jpeg
+
+  # Lambda function to configure S3 bucket notifications
+  S3NotificationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 's3-notification-handler-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt S3NotificationFunctionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          const { S3Client, PutBucketNotificationConfigurationCommand, GetBucketNotificationConfigurationCommand } = require('@aws-sdk/client-s3');
+          const https = require('https');
+          const url = require('url');
+
+          const s3Client = new S3Client();
+
+          exports.handler = async (event, context) => {
+            console.log('Request:', JSON.stringify(event, null, 2));
+            
+            const responseData = {};
+            let responseStatus = 'SUCCESS';
+            let reason = '';
+            
+            try {
+              const requestType = event.RequestType;
+              const bucketName = event.ResourceProperties.BucketName;
+              const notificationConfig = event.ResourceProperties.NotificationConfiguration;
+              
+              if (requestType === 'Delete') {
+                // Remove notification configuration
+                await s3Client.send(new PutBucketNotificationConfigurationCommand({
+                  Bucket: bucketName,
+                  NotificationConfiguration: {}
+                }));
+                console.log('Removed notification configuration');
+              } else if (requestType === 'Create' || requestType === 'Update') {
+                // Get existing configuration
+                let existingConfig = {};
+                try {
+                  const getResponse = await s3Client.send(new GetBucketNotificationConfigurationCommand({
+                    Bucket: bucketName
+                  }));
+                  existingConfig = {
+                    TopicConfigurations: getResponse.TopicConfigurations || [],
+                    QueueConfigurations: getResponse.QueueConfigurations || [],
+                    LambdaFunctionConfigurations: getResponse.LambdaFunctionConfigurations || []
+                  };
+                } catch (err) {
+                  console.log('No existing configuration or error getting it:', err.message);
+                }
+                
+                // Merge with new Lambda configurations
+                const newConfig = {
+                  ...existingConfig,
+                  LambdaFunctionConfigurations: notificationConfig.LambdaFunctionConfigurations || []
+                };
+                
+                await s3Client.send(new PutBucketNotificationConfigurationCommand({
+                  Bucket: bucketName,
+                  NotificationConfiguration: newConfig
+                }));
+                console.log('Applied notification configuration');
+              }
+              
+              responseData.Message = 'Success';
+            } catch (error) {
+              console.error('Error:', error);
+              responseStatus = 'FAILED';
+              reason = error.message;
+              responseData.Error = error.message;
+            }
+            
+            await sendResponse(event, context, responseStatus, responseData, reason);
+          };
+
+          async function sendResponse(event, context, responseStatus, responseData, reason) {
+            const responseBody = JSON.stringify({
+              Status: responseStatus,
+              Reason: reason || 'See CloudWatch logs for details: ' + context.logStreamName,
+              PhysicalResourceId: event.PhysicalResourceId || context.logStreamName,
+              StackId: event.StackId,
+              RequestId: event.RequestId,
+              LogicalResourceId: event.LogicalResourceId,
+              Data: responseData
+            });
+            
+            console.log('Response body:', responseBody);
+            
+            const parsedUrl = url.parse(event.ResponseURL);
+            const options = {
+              hostname: parsedUrl.hostname,
+              port: 443,
+              path: parsedUrl.path,
+              method: 'PUT',
+              headers: {
+                'content-type': '',
+                'content-length': responseBody.length
+              }
+            };
+            
+            return new Promise((resolve, reject) => {
+              const request = https.request(options, (response) => {
+                console.log('Status code:', response.statusCode);
+                resolve();
+              });
+              
+              request.on('error', (error) => {
+                console.error('Error sending response:', error);
+                reject(error);
+              });
+              
+              request.write(responseBody);
+              request.end();
+            });
+          }
+
+  # IAM Role for S3 Notification Function
+  S3NotificationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub 'S3NotificationPolicy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketNotification
+                  - s3:PutBucketNotification
+                Resource: !Sub 'arn:aws:s3:::image-upload-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+
+  # CloudWatch Log Group for Lambda
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/image-processor-${EnvironmentSuffix}'
+      RetentionInDays: 7
+
+  # CloudWatch Alarms
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'image-processor-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ImageProcessingLambda
+      AlarmActions:
+        - !Ref ImageProcessingTopic
+      TreatMissingData: notBreaching
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'image-processor-duration-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda execution duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 45000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ImageProcessingLambda
+      AlarmActions:
+        - !Ref ImageProcessingTopic
+      TreatMissingData: notBreaching
+
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'image-processor-throttles-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ImageProcessingLambda
+      AlarmActions:
+        - !Ref ImageProcessingTopic
+      TreatMissingData: notBreaching
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'image-processing-dashboard-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Throttles", {"stat": "Sum", "label": "Throttles"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Invocations & Errors",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${ImageProcessingLambda}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "Avg Duration"}],
+                  ["...", {"stat": "Maximum", "label": "Max Duration"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (ms)",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": "${ImageProcessingLambda}"
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/S3", "NumberOfObjects", {"stat": "Average", "label": "Upload Bucket"}],
+                  ["...", {"stat": "Average", "label": "Processed Bucket"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "S3 Object Count",
+                "period": 86400
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SNS", "NumberOfMessagesPublished", {"stat": "Sum", "label": "Notifications Sent"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "SNS Notifications",
+                "period": 300,
+                "dimensions": {
+                  "TopicName": "${ImageProcessingTopic.TopicName}"
+                }
+              }
+            }
+          ]
+        }
+
+Outputs:
+  UploadBucketName:
+    Description: Name of the S3 bucket for image uploads
+    Value: !Ref ImageUploadBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UploadBucket'
+
+  ProcessedBucketName:
+    Description: Name of the S3 bucket for processed images
+    Value: !Ref ProcessedImageBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessedBucket'
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt ImageProcessingLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  SNSTopicArn:
+    Description: ARN of the SNS topic for notifications
+    Value: !Ref ImageProcessingTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNSTopic'
+
+  DashboardURL:
+    Description: URL to CloudWatch Dashboard
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=image-processing-dashboard-${EnvironmentSuffix}'
+
+  UploadInstructions:
+    Description: Instructions for uploading images
+    Value: !Sub 'Upload images to s3://${ImageUploadBucket}/uploads/ with .jpg, .jpeg, or .png extensions'

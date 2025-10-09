@@ -1,0 +1,1500 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Fleet Management Platform for 15,000 Commercial Vehicles",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Description": "Environment name (e.g., dev, test, prod)",
+      "Default": "prod"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix to append to resource names for uniqueness",
+      "Default": "dev"
+    },
+    "OperationsEmail": {
+      "Type": "String",
+      "Description": "Email address for operations team to receive alerts",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "Default": "ops-team@example.com"
+    },
+    "VehicleCount": {
+      "Type": "Number",
+      "Description": "Number of vehicles in the fleet",
+      "Default": 15000,
+      "MinValue": 1
+    },
+    "TelemetryFrequencySeconds": {
+      "Type": "Number",
+      "Description": "Frequency of telemetry data emitted by each vehicle (in seconds)",
+      "Default": 60,
+      "MinValue": 1
+    }
+  },
+  "Conditions": {
+    "IsProd": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnvironmentName"
+        },
+        "prod"
+      ]
+    }
+  },
+  "Resources": {
+    "IoTPolicy": {
+      "Type": "AWS::IoT::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${EnvironmentName}-fleet-iot-policy-${EnvironmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "iot:Connect",
+                "iot:Publish",
+                "iot:Subscribe",
+                "iot:Receive"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "VehicleThingType": {
+      "Type": "AWS::IoT::ThingType",
+      "Properties": {
+        "ThingTypeName": {
+          "Fn::Sub": "Vehicle-${EnvironmentSuffix}"
+        },
+        "ThingTypeProperties": {
+          "SearchableAttributes": [
+            "vehicleId",
+            "vin",
+            "model"
+          ],
+          "ThingTypeDescription": "Commercial Vehicle Thing Type"
+        }
+      }
+    },
+    "IoTToKinesisRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "iot.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSIoTRuleActions"
+        ]
+      }
+    },
+    "TelemetryRule": {
+      "Type": "AWS::IoT::TopicRule",
+      "Properties": {
+        "RuleName": {
+          "Fn::Sub": "${EnvironmentName}VehicleTelemetry${EnvironmentSuffix}"
+        },
+        "TopicRulePayload": {
+          "Description": "Rule for processing vehicle telemetry data",
+          "RuleDisabled": false,
+          "Sql": "SELECT * FROM 'vehicles/+/telemetry'",
+          "Actions": [
+            {
+              "Kinesis": {
+                "RoleArn": {
+                  "Fn::GetAtt": [
+                    "IoTToKinesisRole",
+                    "Arn"
+                  ]
+                },
+                "StreamName": {
+                  "Ref": "TelemetryStream"
+                },
+                "PartitionKey": "${topic(3)}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TelemetryStream": {
+      "Type": "AWS::Kinesis::Stream",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-vehicle-telemetry-stream-${EnvironmentSuffix}"
+        },
+        "RetentionPeriodHours": 48,
+        "ShardCount": {
+          "Fn::If": [
+            "IsProd",
+            15,
+            1
+          ]
+        },
+        "StreamEncryption": {
+          "EncryptionType": "KMS",
+          "KeyId": "alias/aws/kinesis"
+        },
+        "StreamModeDetails": {
+          "StreamMode": "PROVISIONED"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          },
+          {
+            "Key": "VehicleCount",
+            "Value": {
+              "Ref": "VehicleCount"
+            }
+          },
+          {
+            "Key": "TelemetryFrequency",
+            "Value": {
+              "Fn::Sub": "${TelemetryFrequencySeconds}s"
+            }
+          }
+        ]
+      }
+    },
+    "RawTelemetryBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${EnvironmentName}-raw-telemetry-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 90
+                },
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 180
+                }
+              ],
+              "NoncurrentVersionTransitions": [
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 30
+                }
+              ],
+              "ExpirationInDays": 730,
+              "NoncurrentVersionExpirationInDays": 90
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "VehicleProfileTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${EnvironmentName}-vehicle-profiles-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "vehicleId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "vin",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "vehicleId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "VinIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "vin",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "MaintenanceRecordsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${EnvironmentName}-maintenance-records-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "recordId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "vehicleId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "maintenanceDate",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "recordId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "VehicleMaintenanceIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "vehicleId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "maintenanceDate",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "SageMakerExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sagemaker.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess",
+          "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+          "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "SageMakerNotebookInstanceV2": {
+      "Type": "AWS::SageMaker::NotebookInstance",
+      "Properties": {
+        "NotebookInstanceName": {
+          "Fn::Sub": "${EnvironmentName}-fleet-maintenance-model-v2-${EnvironmentSuffix}"
+        },
+        "InstanceType": "ml.t3.xlarge",
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "SageMakerExecutionRole",
+            "Arn"
+          ]
+        },
+        "VolumeSizeInGB": 50,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/AmazonKinesisReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+          "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
+          "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+        ]
+      }
+    },
+    "TelemetryProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-processor-${EnvironmentSuffix}"
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport base64\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    table_name = os.environ['TELEMETRY_TABLE']\n    table = dynamodb.Table(table_name)\n    \n    for record in event['Records']:\n        payload = json.loads(base64.b64decode(record['kinesis']['data']))\n        \n        item = {\n            'vehicleId': payload.get('vehicleId', 'unknown'),\n            'timestamp': int(datetime.now().timestamp()),\n            'speed': payload.get('speed', 0),\n            'engineTemp': payload.get('engineTemp', 0),\n            'fuelLevel': payload.get('fuelLevel', 0),\n            'ttl': int(datetime.now().timestamp()) + (30 * 24 * 60 * 60)\n        }\n        \n        try:\n            table.put_item(Item=item)\n        except Exception as e:\n            print(f'Error writing to DynamoDB: {e}')\n            raise\n    \n    return {'statusCode': 200, 'body': json.dumps('Processed successfully')}\n"
+        },
+        "Runtime": "python3.11",
+        "Timeout": 60,
+        "MemorySize": 512,
+        "ReservedConcurrentExecutions": 100,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
+            },
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
+            },
+            "VEHICLE_TABLE": {
+              "Ref": "VehicleProfileTable"
+            },
+            "MAINTENANCE_TABLE": {
+              "Ref": "MaintenanceRecordsTable"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "AlertGeneratorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-alert-generator-${EnvironmentSuffix}"
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport base64\n\nsns_client = boto3.client('sns')\n\ndef handler(event, context):\n    topic_arn = os.environ['ALERT_TOPIC_ARN']\n    \n    for record in event['Records']:\n        # Decode base64 Kinesis data\n        data = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n        payload = json.loads(data)\n        \n        if payload.get('engineTemp', 0) > 110:\n            sns_client.publish(\n                TopicArn=topic_arn,\n                Subject=f\"Critical Alert: Vehicle {payload.get('vehicleId')}\",\n                Message=f\"Engine temperature critically high: {payload.get('engineTemp')}C\"\n            )\n    \n    return {'statusCode': 200, 'body': json.dumps('Alerts processed')}\n"
+        },
+        "Runtime": "python3.11",
+        "Timeout": 60,
+        "MemorySize": 512,
+        "ReservedConcurrentExecutions": 50,
+        "Environment": {
+          "Variables": {
+            "ALERT_TOPIC_ARN": {
+              "Ref": "OperationsAlertTopic"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
+            },
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
+            },
+            "VEHICLE_TABLE": {
+              "Ref": "VehicleProfileTable"
+            },
+            "MAINTENANCE_TABLE": {
+              "Ref": "MaintenanceRecordsTable"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "MLInferenceFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-ml-inference-coordinator-${EnvironmentSuffix}"
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\nsagemaker_runtime = boto3.client('sagemaker-runtime')\n\ndef handler(event, context):\n    endpoint_name = os.environ['SAGEMAKER_ENDPOINT']\n    \n    response = sagemaker_runtime.invoke_endpoint(\n        EndpointName=endpoint_name,\n        Body=json.dumps(event),\n        ContentType='application/json'\n    )\n    \n    prediction = json.loads(response['Body'].read().decode())\n    print(f'Prediction: {prediction}')\n    \n    return {'statusCode': 200, 'body': json.dumps(prediction)}\n"
+        },
+        "Runtime": "python3.11",
+        "Timeout": 300,
+        "MemorySize": 1024,
+        "ReservedConcurrentExecutions": 25,
+        "Environment": {
+          "Variables": {
+            "SAGEMAKER_ENDPOINT": "placeholder-endpoint",
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
+            },
+            "TELEMETRY_TABLE": {
+              "Ref": "TelemetryDataTable"
+            },
+            "VEHICLE_TABLE": {
+              "Ref": "VehicleProfileTable"
+            },
+            "MAINTENANCE_TABLE": {
+              "Ref": "MaintenanceRecordsTable"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "TelemetryProcessorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "BatchSize": 100,
+        "Enabled": true,
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "TelemetryStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "TelemetryProcessorFunction",
+            "Arn"
+          ]
+        },
+        "StartingPosition": "LATEST"
+      }
+    },
+    "AlertGeneratorEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "BatchSize": 100,
+        "Enabled": true,
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "TelemetryStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AlertGeneratorFunction",
+            "Arn"
+          ]
+        },
+        "StartingPosition": "LATEST"
+      }
+    },
+    "VehicleTracker": {
+      "Type": "AWS::Location::Tracker",
+      "Properties": {
+        "TrackerName": {
+          "Fn::Sub": "${EnvironmentName}-vehicle-tracker-${EnvironmentSuffix}"
+        },
+        "PositionFiltering": "AccuracyBased",
+        "PricingPlan": "RequestBasedUsage",
+        "Description": "Tracker for fleet vehicles"
+      }
+    },
+    "RouteCalculator": {
+      "Type": "AWS::Location::RouteCalculator",
+      "Properties": {
+        "CalculatorName": {
+          "Fn::Sub": "${EnvironmentName}-route-calculator-${EnvironmentSuffix}"
+        },
+        "DataSource": "Esri",
+        "Description": "Route calculator for fleet optimization",
+        "PricingPlan": "RequestBasedUsage"
+      }
+    },
+    "ServiceAreaGeofenceCollection": {
+      "Type": "AWS::Location::GeofenceCollection",
+      "Properties": {
+        "CollectionName": {
+          "Fn::Sub": "${EnvironmentName}-service-areas-${EnvironmentSuffix}"
+        },
+        "Description": "Geofence collection for service areas",
+        "PricingPlan": "RequestBasedUsage"
+      }
+    },
+    "GlueServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "glue.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole",
+          "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+        ]
+      }
+    },
+    "FleetDatabase": {
+      "Type": "AWS::Glue::Database",
+      "Properties": {
+        "CatalogId": {
+          "Ref": "AWS::AccountId"
+        },
+        "DatabaseInput": {
+          "Name": {
+            "Fn::Sub": "${EnvironmentName}_fleet_db_${EnvironmentSuffix}"
+          },
+          "Description": "Database for fleet management data"
+        }
+      }
+    },
+    "TelemetryCrawler": {
+      "Type": "AWS::Glue::Crawler",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-crawler-${EnvironmentSuffix}"
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "GlueServiceRole",
+            "Arn"
+          ]
+        },
+        "DatabaseName": {
+          "Ref": "FleetDatabase"
+        },
+        "Targets": {
+          "S3Targets": [
+            {
+              "Path": {
+                "Fn::Sub": "s3://${RawTelemetryBucket}/telemetry-data/"
+              }
+            }
+          ]
+        },
+        "SchemaChangePolicy": {
+          "UpdateBehavior": "UPDATE_IN_DATABASE",
+          "DeleteBehavior": "LOG"
+        },
+        "Schedule": {
+          "ScheduleExpression": "cron(0 0 * * ? *)"
+        },
+        "Configuration": "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+      }
+    },
+    "AthenaResultsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${EnvironmentName}-athena-results-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldResults",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "AthenaWorkgroup": {
+      "Type": "AWS::Athena::WorkGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-fleet-analytics-${EnvironmentSuffix}"
+        },
+        "Description": "Workgroup for fleet analytics queries",
+        "State": "ENABLED",
+        "WorkGroupConfiguration": {
+          "ResultConfiguration": {
+            "OutputLocation": {
+              "Fn::Sub": "s3://${AthenaResultsBucket}/"
+            }
+          },
+          "EnforceWorkGroupConfiguration": true,
+          "PublishCloudWatchMetricsEnabled": true,
+          "BytesScannedCutoffPerQuery": 10737418240
+        }
+      }
+    },
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+          "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+        ]
+      }
+    },
+    "MaintenanceWorkflow": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "${EnvironmentName}-maintenance-workflow-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "StepFunctionsRole",
+            "Arn"
+          ]
+        },
+        "DefinitionString": {
+          "Fn::Sub": "{\"Comment\":\"State machine for vehicle maintenance workflow\",\"StartAt\":\"ScheduleInspection\",\"States\":{\"ScheduleInspection\":{\"Type\":\"Pass\",\"Next\":\"OrderParts\"},\"OrderParts\":{\"Type\":\"Pass\",\"Next\":\"AssignTechnician\"},\"AssignTechnician\":{\"Type\":\"Pass\",\"Next\":\"NotifyFleetManager\"},\"NotifyFleetManager\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::sns:publish\",\"Parameters\":{\"TopicArn\":\"${OperationsAlertTopic}\",\"Message.$\":\"$\",\"Subject\":\"Maintenance Scheduled\"},\"Retry\":[{\"ErrorEquals\":[\"States.ALL\"],\"IntervalSeconds\":60,\"MaxAttempts\":3,\"BackoffRate\":2}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"Next\":\"HandleError\"}],\"End\":true},\"HandleError\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:states:::sns:publish\",\"Parameters\":{\"TopicArn\":\"${OperationsAlertTopic}\",\"Message.$\":\"$.error\",\"Subject\":\"Maintenance Workflow Error\"},\"End\":true}}}"
+        }
+      }
+    },
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonSNSFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaRole",
+          "arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess"
+        ]
+      }
+    },
+    "MaintenanceScheduleRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-maintenance-scheduler-${EnvironmentSuffix}"
+        },
+        "Description": "Scheduled rule to trigger maintenance checks",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "MLInferenceFunction",
+                "Arn"
+              ]
+            },
+            "Id": "MLInferenceTarget",
+            "Input": "{\"action\": \"scheduledMaintenance\"}"
+          }
+        ]
+      }
+    },
+    "VehicleConditionRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-vehicle-condition-monitor-${EnvironmentSuffix}"
+        },
+        "Description": "Rule to trigger workflows based on vehicle conditions",
+        "EventPattern": {
+          "source": [
+            "aws.iot"
+          ],
+          "detail-type": [
+            "IoT Rule Trigger"
+          ],
+          "detail": {
+            "ruleName": [
+              {
+                "Fn::Sub": "${EnvironmentName}-vehicle-condition-rule-${EnvironmentSuffix}"
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "MaintenanceWorkflow"
+            },
+            "Id": "MaintenanceWorkflowTarget",
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "EventBridgeRole",
+                "Arn"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "VehicleConditionRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "MLInferenceFunction",
+            "Arn"
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "MaintenanceScheduleRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "OperationsAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${EnvironmentName}-vehicle-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Vehicle Alert Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "OperationsAlertSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "TopicArn": {
+          "Ref": "OperationsAlertTopic"
+        },
+        "Protocol": "email",
+        "Endpoint": {
+          "Ref": "OperationsEmail"
+        }
+      }
+    },
+    "EmailIdentity": {
+      "Type": "AWS::SES::EmailIdentity",
+      "Properties": {
+        "EmailIdentity": {
+          "Ref": "OperationsEmail"
+        }
+      }
+    },
+    "MaintenanceEmailTemplate": {
+      "Type": "AWS::SES::Template",
+      "Properties": {
+        "Template": {
+          "TemplateName": {
+            "Fn::Sub": "${EnvironmentName}-maintenance-notification-${EnvironmentSuffix}"
+          },
+          "SubjectPart": "Vehicle Maintenance Notification - {{vehicleId}}",
+          "HtmlPart": "<h1>Vehicle Maintenance Required</h1><p>Vehicle {{vehicleId}} requires maintenance of type {{maintenanceType}}. Scheduled for {{scheduledDate}}.</p>",
+          "TextPart": "Vehicle Maintenance Required\\n\\nVehicle {{vehicleId}} requires maintenance of type {{maintenanceType}}. Scheduled for {{scheduledDate}}."
+        }
+      }
+    },
+    "TelemetryStreamMonitoringAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-stream-throttling-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm if Kinesis stream is throttling",
+        "MetricName": "WriteProvisionedThroughputExceeded",
+        "Namespace": "AWS/Kinesis",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "StreamName",
+            "Value": {
+              "Ref": "TelemetryStream"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OperationsAlertTopic"
+          }
+        ]
+      }
+    },
+    "FleetMetricsDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "${EnvironmentName}-fleet-metrics-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"text\",\"width\":24,\"height\":2,\"properties\":{\"markdown\":\"# Fleet Configuration\\n**Fleet Size:** ${VehicleCount} vehicles\\n**Telemetry Frequency:** Every ${TelemetryFrequencySeconds} seconds\"}},{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/IoT\",\"Connected.Devices\",\"ThingTypeName\",\"Vehicle\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Connected Vehicles\",\"period\":300}},{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/Kinesis\",\"IncomingRecords\",\"StreamName\",\"${TelemetryStream}\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Incoming Telemetry Records\",\"period\":60}},{\"type\":\"metric\",\"width\":12,\"height\":6,\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${TelemetryProcessorFunction}\"]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Telemetry Processor Invocations\",\"period\":60}}]}"
+        }
+      }
+    },
+    "VehicleTemperatureAnomaly": {
+      "Type": "AWS::CloudWatch::AnomalyDetector",
+      "Properties": {
+        "MetricName": "EngineTemperature",
+        "Namespace": "FleetManagement",
+        "Stat": "Average"
+      }
+    },
+    "TelemetryProcessorErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-processor-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm if the Telemetry Processor Lambda function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TelemetryProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "OperationsAlertTopic"
+          }
+        ]
+      }
+    },
+    "ApiGatewayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaRole"
+        ]
+      }
+    },
+    "ApiGatewayCloudWatchLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    },
+    "ApiGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "ApiGatewayCloudWatchLogsRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "FleetManagementApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentName}-fleet-management-api-${EnvironmentSuffix}"
+        },
+        "Description": "API for fleet management platform",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ApiVehiclesResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "FleetManagementApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "vehicles"
+      }
+    },
+    "ApiVehicleIdResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        },
+        "ParentId": {
+          "Ref": "ApiVehiclesResource"
+        },
+        "PathPart": "{vehicleId}"
+      }
+    },
+    "GetVehicleFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${EnvironmentName}-get-vehicle-details-${EnvironmentSuffix}"
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    table_name = os.environ['VEHICLE_PROFILE_TABLE']\n    table = dynamodb.Table(table_name)\n    \n    vehicle_id = event['pathParameters']['vehicleId']\n    \n    response = table.get_item(Key={'vehicleId': vehicle_id})\n    \n    if 'Item' in response:\n        return {\n            'statusCode': 200,\n            'headers': {'Access-Control-Allow-Origin': '*'},\n            'body': json.dumps(response['Item'])\n        }\n    else:\n        return {\n            'statusCode': 404,\n            'headers': {'Access-Control-Allow-Origin': '*'},\n            'body': json.dumps({'error': 'Vehicle not found'})\n        }\n"
+        },
+        "Runtime": "python3.11",
+        "Timeout": 30,
+        "MemorySize": 256,
+        "ReservedConcurrentExecutions": 50,
+        "Environment": {
+          "Variables": {
+            "VEHICLE_PROFILE_TABLE": {
+              "Ref": "VehicleProfileTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        }
+      }
+    },
+    "ApiGetVehicleMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "AWS_IAM",
+        "HttpMethod": "GET",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetVehicleFunction.Arn}/invocations"
+          }
+        },
+        "ResourceId": {
+          "Ref": "ApiVehicleIdResource"
+        },
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        }
+      }
+    },
+    "ApiGetVehicleOptionsMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "AuthorizationType": "NONE",
+        "HttpMethod": "OPTIONS",
+        "Integration": {
+          "Type": "MOCK",
+          "IntegrationResponses": [
+            {
+              "StatusCode": "200",
+              "ResponseParameters": {
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              },
+              "ResponseTemplates": {
+                "application/json": ""
+              }
+            }
+          ],
+          "PassthroughBehavior": "WHEN_NO_TEMPLATES",
+          "RequestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          }
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": "200",
+            "ResponseParameters": {
+              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Methods": true,
+              "method.response.header.Access-Control-Allow-Origin": true
+            }
+          }
+        ],
+        "ResourceId": {
+          "Ref": "ApiVehicleIdResource"
+        },
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        }
+      }
+    },
+    "GetVehicleLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "GetVehicleFunction",
+            "Arn"
+          ]
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${FleetManagementApi}/*/GET/vehicles/{vehicleId}"
+        }
+      }
+    },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/${EnvironmentName}-fleet-management-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "ApiGetVehicleMethod",
+        "ApiGetVehicleOptionsMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        },
+        "Description": {
+          "Fn::Sub": "Deployment for ${EnvironmentName}-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ApiStageV2": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": {
+          "Ref": "EnvironmentName"
+        },
+        "RestApiId": {
+          "Ref": "FleetManagementApi"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayLogGroup",
+              "Arn"
+            ]
+          },
+          "Format": "$context.requestId $context.identity.sourceIp $context.routeKey $context.status"
+        },
+        "MethodSettings": [
+          {
+            "HttpMethod": "*",
+            "ResourcePath": "/*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": true,
+            "MetricsEnabled": true
+          }
+        ]
+      }
+    },
+    "TelemetryDataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${EnvironmentName}-telemetry-data-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "vehicleId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "vehicleId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "TimeToLiveSpecification": {
+          "Enabled": true,
+          "AttributeName": "ttl"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "Fleet Management"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "Fleet Management API Endpoint",
+      "Value": {
+        "Fn::Sub": "https://${FleetManagementApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}"
+      }
+    },
+    "TelemetryStreamName": {
+      "Description": "Kinesis Stream for Vehicle Telemetry",
+      "Value": {
+        "Ref": "TelemetryStream"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TelemetryStreamName"
+        }
+      }
+    },
+    "VehicleProfileTableName": {
+      "Description": "DynamoDB Table for Vehicle Profiles",
+      "Value": {
+        "Ref": "VehicleProfileTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VehicleProfileTableName"
+        }
+      }
+    },
+    "MaintenanceRecordsTableName": {
+      "Description": "DynamoDB Table for Maintenance Records",
+      "Value": {
+        "Ref": "MaintenanceRecordsTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MaintenanceRecordsTableName"
+        }
+      }
+    },
+    "RawTelemetryBucketName": {
+      "Description": "S3 Bucket for Raw Telemetry Data",
+      "Value": {
+        "Ref": "RawTelemetryBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RawTelemetryBucketName"
+        }
+      }
+    },
+    "OperationsAlertTopicArn": {
+      "Description": "SNS Topic ARN for Operations Alerts",
+      "Value": {
+        "Ref": "OperationsAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OperationsAlertTopicArn"
+        }
+      }
+    },
+    "VehicleTrackerName": {
+      "Description": "Amazon Location Service Tracker for Vehicles",
+      "Value": {
+        "Ref": "VehicleTracker"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VehicleTrackerName"
+        }
+      }
+    },
+    "RouteCalculatorName": {
+      "Description": "Amazon Location Service Route Calculator",
+      "Value": {
+        "Ref": "RouteCalculator"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RouteCalculatorName"
+        }
+      }
+    },
+    "MaintenanceWorkflowArn": {
+      "Description": "Step Functions State Machine ARN for Maintenance Workflow",
+      "Value": {
+        "Ref": "MaintenanceWorkflow"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MaintenanceWorkflowArn"
+        }
+      }
+    },
+    "TelemetryDataTableName": {
+      "Description": "DynamoDB Table for Vehicle Telemetry Data",
+      "Value": {
+        "Ref": "TelemetryDataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TelemetryDataTableName"
+        }
+      }
+    }
+  }
+}

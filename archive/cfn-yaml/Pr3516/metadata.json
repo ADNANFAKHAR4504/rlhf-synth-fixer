@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "82956104",
+  "team": "synth",
+  "startedAt": "2025-10-03T19:04:22+05:30",
+  "training_quality": 8.5,
+  "subtask": "Shared Storage Infrastructure",
+  "subject_labels": [
+    "Data Storage and Management",
+    "Backup and Recovery",
+    "Cross-Account Resource Sharing",
+    "Scientific Computing Infrastructure",
+    "Automated Data Lifecycle Management"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "EFS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "AWS Backup",
+    "DataSync",
+    "CloudWatch",
+    "EventBridge",
+    "Resource Access Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
