@@ -314,17 +314,13 @@ export class IaCNovaStack extends NestedStack {
         );
       });
 
-    this.sharedSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'SharedSecurityGroup',
-      {
-        vpc: this.vpc,
-        securityGroupName: formatResourceName('sg'),
-        description:
-          'Restricts ingress to HTTP and SSH as required by the architecture specification.',
-        allowAllOutbound: true,
-      }
-    );
+    this.sharedSecurityGroup = new ec2.SecurityGroup(this, 'AppSecurityGroup', {
+      vpc: this.vpc,
+      securityGroupName: formatResourceName('app-sg'),
+      description:
+        'Application security group - restricts ingress to HTTP and SSH only.',
+      allowAllOutbound: true,
+    });
     this.sharedSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
@@ -352,7 +348,7 @@ export class IaCNovaStack extends NestedStack {
       ec2.Port.tcp(22),
       'SSH access - restricted to VPC'
     );
-    applyCommonTags(this.sharedSecurityGroup, formatResourceName('sg'));
+    applyCommonTags(this.sharedSecurityGroup, formatResourceName('app-sg'));
 
     this.rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
       vpc: this.vpc,
@@ -408,14 +404,24 @@ export class IaCNovaStack extends NestedStack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          'ec2:CreateNetworkInterface',
-          'ec2:DeleteNetworkInterface',
           'ec2:DescribeNetworkInterfaces',
           'ec2:DescribeSecurityGroups',
           'ec2:DescribeSubnets',
           'ec2:DescribeVpcs',
         ],
-        resources: ['*'],
+        resources: ['*'], // Required for describe actions
+      })
+    );
+
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ec2:CreateNetworkInterface', 'ec2:DeleteNetworkInterface'],
+        resources: [
+          `arn:${cdk.Aws.PARTITION}:ec2:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:subnet/*`,
+          `arn:${cdk.Aws.PARTITION}:ec2:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:security-group/*`,
+          `arn:${cdk.Aws.PARTITION}:ec2:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:network-interface/*`,
+        ],
       })
     );
 
@@ -430,14 +436,14 @@ export class IaCNovaStack extends NestedStack {
     const rdsCredentialsSecret =
       rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
         ? secretsmanager.Secret.fromSecretCompleteArn(
-            this,
-            'ImportedRdsCredentialsSecret',
-            rdsCredentialsSecretArn
-          )
+          this,
+          'ImportedRdsCredentialsSecret',
+          rdsCredentialsSecretArn
+        )
         : this.createManagedDatabaseSecret(
-            formatResourceName('db-credentials', true),
-            dbMasterUsername
-          );
+          formatResourceName('db-credentials', true),
+          dbMasterUsername
+        );
     if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
       applyCommonTags(
         rdsCredentialsSecret,
