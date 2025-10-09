@@ -5,10 +5,10 @@
 This solution implements a scalable email notification system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing (per PROMPT.md requirements), and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
 
 **Key Architecture Changes (SQS Integration):**
-- ✅ **SNS→SQS→Lambda Pattern**: Implemented reliable message processing using SQS queues instead of direct SNS→Lambda subscription
-- ✅ **Dead Letter Queue**: Added SQS DLQ with 3 retry attempts for failed message processing
-- ✅ **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
-- ✅ **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
+-  **SNS→SQS→Lambda Pattern**: Implemented reliable message processing using SQS queues instead of direct SNS→Lambda subscription
+-  **Dead Letter Queue**: Added SQS DLQ with 3 retry attempts for failed message processing
+-  **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
+-  **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
 
 ## Implementation Files
 
