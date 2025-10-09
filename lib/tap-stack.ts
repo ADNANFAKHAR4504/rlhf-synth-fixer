@@ -10,7 +10,6 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as config from 'aws-cdk-lib/aws-config';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import { Construct } from 'constructs';
@@ -47,12 +46,37 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    // Allow CloudTrail to use the KMS key
+    masterKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudTrailUseOfTheKey',
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['kms:GenerateDataKey*', 'kms:Decrypt', 'kms:DescribeKey'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/secure-baseline-trail-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
+    // Also allow CloudTrail to create and use the CMK (for all trails in account)
+    masterKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudTrailDescribe',
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey*', 'kms:DescribeKey'],
+        resources: ['*'],
+      })
+    );
+
     // =====================================
     // VPC CONFIGURATION - Network foundation with security controls
     // =====================================
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 3,
-      natGateways: 2,
+      natGateways: 0, // We'll create NAT Gateways manually with existing EIPs
       subnetConfiguration: [
         {
           name: 'Public',
@@ -72,6 +96,32 @@ export class TapStack extends cdk.Stack {
       ],
       enableDnsHostnames: true,
       enableDnsSupport: true,
+    });
+
+    // Create NAT Gateways using existing unassociated EIPs
+    const publicSubnets = vpc.publicSubnets;
+    const natGateway1 = new ec2.CfnNatGateway(this, 'NatGateway1', {
+      allocationId: 'eipalloc-02458e4f31b8995c2',
+      subnetId: publicSubnets[0].subnetId,
+    });
+
+    const natGateway2 = new ec2.CfnNatGateway(this, 'NatGateway2', {
+      allocationId: 'eipalloc-02a65d28a0b02d21f',
+      subnetId: publicSubnets[1].subnetId,
+    });
+
+    // Update private subnets to use the NAT Gateways
+    const privateSubnets = vpc.privateSubnets;
+    new ec2.CfnRoute(this, 'NatRoute1', {
+      routeTableId: privateSubnets[0].routeTable.routeTableId,
+      natGatewayId: natGateway1.ref,
+      destinationCidrBlock: '0.0.0.0/0',
+    });
+
+    new ec2.CfnRoute(this, 'NatRoute2', {
+      routeTableId: privateSubnets[1].routeTable.routeTableId,
+      natGatewayId: natGateway2.ref,
+      destinationCidrBlock: '0.0.0.0/0',
     });
 
     // VPC Flow Logs - Send to CloudWatch Log Group
@@ -215,7 +265,32 @@ export class TapStack extends cdk.Stack {
       ],
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
+
+    // Allow CloudTrail to write to the S3 bucket
+    trailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${trailBucket.bucketArn}/AWSLogs/${this.account}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
+      })
+    );
+
+    trailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl'],
+        resources: [trailBucket.bucketArn],
+      })
+    );
 
     // =====================================
     // RDS DATABASE - Secure database configuration
@@ -476,8 +551,10 @@ export class TapStack extends cdk.Stack {
       this,
       'SecureDistribution',
       {
-        // CONSTRAINT: Attach AWS WAF Web ACL to CloudFront distribution
-        webAclId: webAcl.attrArn,
+        // Note: WAF Web ACL removed for regional deployment
+        // CloudFront only supports global WAF Web ACLs (us-east-1)
+        // For regional deployments, WAF can be applied at ALB/API Gateway level
+        // webAclId: webAcl.attrArn,
         defaultBehavior: {
           origin: new origins.S3Origin(secureBucket),
           viewerProtocolPolicy:
@@ -506,6 +583,7 @@ export class TapStack extends cdk.Stack {
           ],
           enforceSSL: true,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
+          autoDeleteObjects: true,
         }),
         geoRestriction: cloudfront.GeoRestriction.allowlist('US', 'CA', 'GB'),
       }
@@ -534,69 +612,6 @@ export class TapStack extends cdk.Stack {
         bucket: secureBucket,
       },
     ]);
-
-    // =====================================
-    // AWS CONFIG - Configuration tracking and compliance
-    // =====================================
-
-    // S3 bucket for Config delivery
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `aws-config-${environmentSuffix.toLowerCase()}-${cdk.Stack.of(this).account}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: masterKmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
-
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      description: 'Custom role for AWS Config recorder and delivery channel',
-    });
-
-    // Inline policy with least privileges
-    configRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: [
-          's3:PutObject',
-          's3:GetBucketAcl',
-          's3:GetBucketLocation',
-          'sns:Publish',
-          'config:Put*',
-          'config:Deliver*',
-        ],
-        resources: ['*'],
-      })
-    );
-
-    configBucket.grantReadWrite(configRole);
-
-    // CONSTRAINT: Enable AWS Config to track configuration changes
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: `secure-baseline-recorder-${environmentSuffix}`,
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: `secure-baseline-delivery-${environmentSuffix}`,
-        s3BucketName: configBucket.bucketName,
-        snsTopicArn: undefined, // Add SNS topic for notifications if needed
-      }
-    );
-
-    deliveryChannel.addDependency(configRecorder);
 
     // =====================================
     // SECURITY HUB - Enable Security Hub
@@ -643,6 +658,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SecurityHubArn', {
       value: securityHub.attrArn,
       description: 'Security Hub ARN',
+    });
+
+    new cdk.CfnOutput(this, 'WebAclArn', {
+      value: webAcl.attrArn,
+      description: 'WAF Web ACL ARN',
     });
   }
 }

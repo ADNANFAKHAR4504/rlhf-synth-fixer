@@ -10,5 +10,29 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "IAM, VPC, S3, CloudTrail, KMS"
+  "training_quality": 7,
+  "aws_services": [
+    "IAM",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "KMS",
+    "CloudFront",
+    "API Gateway",
+    "Lambda",
+    "RDS",
+    "EC2",
+    "CloudWatch Logs",
+    "WAFv2",
+    "Security Hub",
+    "EIP",
+    "NAT Gateway",
+    "Network ACL",
+    "Security Groups",
+    "VPC Endpoints",
+    "Route Tables",
+    "Subnets",
+    "Parameter Groups",
+    "Secrets Manager"
+  ]
 }

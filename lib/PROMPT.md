@@ -1,47 +1,81 @@
-Act as a **Principal AWS Security Architect** tasked with defining a non-negotiable, enterprise-wide security baseline for the organization's core AWS infrastructure. Your medium is a single, complete **AWS CDK Stack defined in TypeScript**. Your primary objective is to provision a diverse set of services—IAM, S3, CloudFront, API Gateway, CloudTrail, RDS, and VPC—ensuring **zero security misconfigurations** and **maximum adherence to best practices**.
+# AWS Security Baseline Implementation Task
 
-The resulting CDK code must leverage high-level constructs and security properties to **explicitly enforce every security constraint** listed below. Focus on resource interconnection (e.g., granting the Lambda access to the RDS Security Group) and explicit policy definition.
+We need to build a comprehensive security baseline for our AWS infrastructure using CDK TypeScript. This isn't just about ticking boxes - we need something that actually works in production and follows real security best practices.
 
------
+## What We're Building
 
-### **Core Infrastructure Requirements & Component Interconnections (CDK Constructs):**
+You'll be creating a CDK stack that includes:
 
-1.  **IAM & Identity:** Define a minimum of one `aws-iam.Role` (for Lambda), one `aws-iam.Policy`, and an `aws-iam.User` (placeholder).
-2.  **Network & Access:** Define a complete `aws-ec2.Vpc` with subnets. Implement a `aws-ec2.FlowLog` and a restrictive `aws-ec2.NetworkAcl`.
-3.  **Data & Content Delivery:** Define an `aws-s3.Bucket` and a `aws-cloudfront.Distribution`.
-4.  **Application Tier:** Define an `aws-apigateway.RestApi` and a `aws-lambda.Function` (Node.js 18.x) as its integration.
-5.  **Audit & Compliance:** Define an `aws-cloudtrail.Trail` and a KMS Key (`aws-kms.Key`) to encrypt the logs.
-6.  **Database:** Define an `aws-rds.DatabaseInstance` (e.g., PostgreSQL or MySQL).
+1. **IAM & Identity Management**
+   - At least one IAM role (for Lambda execution)
+   - One IAM policy 
+   - One IAM user (can be a placeholder)
 
------
+2. **Networking**
+   - A complete VPC with subnets
+   - VPC flow logs
+   - Network ACLs with proper restrictions
 
-### **Strict Security & Configuration Constraints (CDK Implementation):**
+3. **Storage & Content Delivery**
+   - S3 bucket with proper security
+   - CloudFront distribution
 
-The resulting CDK TypeScript code must utilize construct properties and methods to implement the following security measures. Add comments in the code to highlight where each constraint is enforced.
+4. **Application Layer**
+   - API Gateway REST API
+   - Lambda function (Node.js 18.x) integrated with the API
 
-| Constraint Category | Security Requirement (CDK Implementation Focus) |
-| :--- | :--- |
-| **IAM** | **Enforce MFA** requirement for all IAM users via a custom, attached `aws-iam.Policy`. |
-| | All IAM roles **must have a Trust Relationship defined** (inherent in the CDK Role construct, but ensure the right service principals). |
-| | **Restrict resource access** to specific (placeholder) IAM users and roles using the `grant*` methods or IAM Policy statements. |
-| **S3 & Data** | **Enable default server-side encryption** (e.g., SSE-S3 or KMS) on the S3 bucket. |
-| | **Block all public access** on the S3 bucket (using `blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL`). |
-| **CloudFront & WAF** | **Attach an AWS WAF Web ACL** (`aws-wafv2`) to the CloudFront distribution. Define a simple, placeholder Web ACL. |
-| **API Gateway** | **Ensure HTTPS is used** (default for `aws-apigateway.RestApi`, but confirm). |
-| | **Enforce the use of request signing (SigV4)** for API Gateway integrations. |
-| **Audit & Governance**| **Encrypt CloudTrail logs** using the provisioned **KMS Key** (passed to the `aws-cloudtrail.Trail` properties). |
-| | **Enable AWS Config** to track configuration changes across resources using `aws-config.CfnConfigurationRecorder`. |
-| | **Enable Security Hub** in the current region using the appropriate CDK construct or custom resource. |
-| **Network & VPC** | **Create VPC flow logs** and send them to a **CloudWatch Log Group** (using `vpc.addFlowLog`). |
-| | **Network ACLs should explicitly block inbound traffic** from IPs not on an allowlist (by defining `NetworkAclEntry` with `traffic: DENY`). |
-| | Ensure the Lambda's **Security Group explicitly denies ingress on port 22 from the internet** (`0.0.0.0/0`). |
-| | **Use VPC Endpoints** (e.g., S3, CloudWatch Logs) for connecting to AWS services from within the VPC. |
-| **Compute & DB** | Ensure the Lambda function uses the **latest stable Node.js runtime** (`NODEJS_18_X`). |
-| | **Enable RDS logging** (e.g., `audit` and `error`) by configuring a `ParameterGroup` and associating it with the `DatabaseInstance`. |
-| **Tagging** | **Apply the Tag `Environment: Production` globally** to all resources in the stack using `Tags.of(this).add()`. |
+5. **Audit & Compliance**
+   - CloudTrail for logging
+   - KMS key for encryption
 
------
+6. **Database**
+   - RDS instance (PostgreSQL or MySQL)
 
-### **Expected Output Format:**
+## Security Requirements
 
-Provide the entire output as a single, complete, and syntactically correct TypeScript file (`secure-baseline-stack.ts`) containing the full CDK stack definition and initialisation file (main.ts)
+Here's what needs to be implemented - these aren't suggestions, they're requirements:
+
+### IAM Security
+- **MFA Enforcement**: All IAM users must have MFA required via a custom policy
+- **Trust Relationships**: Every IAM role needs proper trust relationships defined
+- **Access Control**: Use grant methods or IAM policies to restrict resource access
+
+### S3 & Data Protection
+- **Encryption**: Enable server-side encryption (SSE-S3 or KMS) on all S3 buckets
+- **Public Access**: Block all public access using `blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL`
+
+### CloudFront & WAF
+- **WAF Integration**: Attach a WAF Web ACL to the CloudFront distribution
+- **Web ACL**: Create a basic WAF Web ACL with some standard rules
+
+### API Gateway
+- **HTTPS Only**: Ensure HTTPS is enforced (should be default, but verify)
+- **Request Signing**: Implement SigV4 request signing for API integrations
+
+### Audit & Governance
+- **CloudTrail Encryption**: Use the KMS key to encrypt CloudTrail logs
+- **AWS Config**: Enable configuration tracking using `aws-config.CfnConfigurationRecorder`
+- **Security Hub**: Enable Security Hub in the current region
+
+### Network Security
+- **VPC Flow Logs**: Create flow logs and send them to CloudWatch Logs using `vpc.addFlowLog`
+- **Network ACLs**: Block inbound traffic from IPs not on an allowlist using `NetworkAclEntry` with `traffic: DENY`
+- **Security Groups**: Ensure Lambda security group denies port 22 from internet (0.0.0.0/0)
+- **VPC Endpoints**: Use VPC endpoints for S3, CloudWatch Logs, etc.
+
+### Compute & Database
+- **Lambda Runtime**: Use the latest stable Node.js runtime (`NODEJS_18_X`)
+- **RDS Logging**: Enable audit and error logging via parameter groups
+
+### Resource Tagging
+- **Global Tags**: Apply `Environment: Production` tag to all resources using `Tags.of(this).add()`
+
+## Deliverables
+
+Provide a complete TypeScript CDK implementation with:
+- Main stack file (`secure-baseline-stack.ts`)
+- Entry point file (`main.ts`)
+- All necessary imports and dependencies
+- Comments highlighting where each security constraint is implemented
+
+Make sure the code is production-ready and follows CDK best practices. Focus on making the resources work together properly - for example, ensure the Lambda can actually connect to the RDS instance through proper security group configurations.

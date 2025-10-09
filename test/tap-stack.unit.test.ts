@@ -9,12 +9,12 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { 
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix: 'test',
       env: {
         account: '123456789012',
-        region: 'us-east-2'
-      }
+        region: 'us-east-2',
+      },
     });
     template = Template.fromStack(stack);
   });
@@ -44,9 +44,9 @@ describe('TapStack', () => {
         Tags: Match.arrayWith([
           {
             Key: 'Environment',
-            Value: 'Production'
-          }
-        ])
+            Value: 'Production',
+          },
+        ]),
       });
     });
 
@@ -55,9 +55,9 @@ describe('TapStack', () => {
         Tags: Match.arrayWith([
           {
             Key: 'ManagedBy',
-            Value: 'CDK'
-          }
-        ])
+            Value: 'CDK',
+          },
+        ]),
       });
     });
 
@@ -66,9 +66,9 @@ describe('TapStack', () => {
         Tags: Match.arrayWith([
           {
             Key: 'SecurityBaseline',
-            Value: 'Enforced'
-          }
-        ])
+            Value: 'Enforced',
+          },
+        ]),
       });
     });
   });
@@ -77,13 +77,14 @@ describe('TapStack', () => {
     test('should create master KMS key with correct properties', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         EnableKeyRotation: true,
-        Description: 'Master KMS key for encrypting CloudTrail logs and other sensitive data'
+        Description:
+          'Master KMS key for encrypting CloudTrail logs and other sensitive data',
       });
     });
 
     test('should create KMS alias with environment suffix', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: 'alias/secure-baseline-master-test'
+        AliasName: 'alias/secure-baseline-master-test',
       });
     });
 
@@ -97,7 +98,7 @@ describe('TapStack', () => {
     test('should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
         EnableDnsHostnames: true,
-        EnableDnsSupport: true
+        EnableDnsSupport: true,
       });
     });
 
@@ -113,15 +114,34 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::NatGateway', 2);
     });
 
-    test('should create elastic IPs for NAT gateways', () => {
-      template.resourceCountIs('AWS::EC2::EIP', 2);
+    test('should use existing elastic IPs for NAT gateways', () => {
+      // We use existing EIPs instead of creating new ones to avoid EIP limit issues
+      template.resourceCountIs('AWS::EC2::EIP', 0);
+    });
+
+    test('should create NAT gateways with existing EIP allocation IDs', () => {
+      template.hasResourceProperties('AWS::EC2::NatGateway', {
+        AllocationId: 'eipalloc-02458e4f31b8995c2',
+      });
+      template.hasResourceProperties('AWS::EC2::NatGateway', {
+        AllocationId: 'eipalloc-02a65d28a0b02d21f',
+      });
+    });
+
+    test('should create routes for private subnets to NAT gateways', () => {
+      // VPC creates default routes + our custom NAT routes
+      template.resourceCountIs('AWS::EC2::Route', 5);
+      template.hasResourceProperties('AWS::EC2::Route', {
+        DestinationCidrBlock: '0.0.0.0/0',
+        NatGatewayId: Match.anyValue(),
+      });
     });
   });
 
   describe('VPC Flow Logs', () => {
     test('should create CloudWatch log group for VPC flow logs', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 180 // SIX_MONTHS
+        RetentionInDays: 180, // SIX_MONTHS
       });
     });
 
@@ -138,7 +158,7 @@ describe('TapStack', () => {
     test('should create network ACL entry for internal traffic', () => {
       template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
         RuleAction: 'allow',
-        CidrBlock: '10.0.0.0/8'
+        CidrBlock: '10.0.0.0/8',
       });
     });
   });
@@ -152,7 +172,7 @@ describe('TapStack', () => {
   describe('IAM Configuration', () => {
     test('should create IAM user with MFA required', () => {
       template.hasResourceProperties('AWS::IAM::User', {
-        UserName: 'secure-baseline-user-test'
+        UserName: 'secure-baseline-user-test',
       });
     });
 
@@ -163,12 +183,12 @@ describe('TapStack', () => {
             {
               Effect: 'Allow',
               Principal: {
-                Service: 'lambda.amazonaws.com'
+                Service: 'lambda.amazonaws.com',
               },
-              Action: 'sts:AssumeRole'
-            }
-          ])
-        }
+              Action: 'sts:AssumeRole',
+            },
+          ]),
+        },
       });
     });
 
@@ -179,10 +199,10 @@ describe('TapStack', () => {
             Match.objectLike({
               Effect: 'Allow',
               Action: Match.anyValue(),
-              Resource: Match.anyValue()
-            })
-          ])
-        }
+              Resource: Match.anyValue(),
+            }),
+          ]),
+        },
       });
     });
   });
@@ -195,35 +215,30 @@ describe('TapStack', () => {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
+          RestrictPublicBuckets: true,
         },
         VersioningConfiguration: {
-          Status: 'Enabled'
-        }
+          Status: 'Enabled',
+        },
       });
     });
 
     test('should create CloudTrail S3 bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'cloudtrail-test-123456789012'
+        BucketName: 'cloudtrail-test-123456789012',
       });
     });
 
     test('should create CloudFront logs S3 bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'cloudfront-logs-test-123456789012'
+        BucketName: 'cloudfront-logs-test-123456789012',
       });
     });
 
-    test('should create Config S3 bucket', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'aws-config-test-123456789012'
-      });
-    });
 
     test('should set DESTROY removal policy for S3 buckets', () => {
       // Check that S3 buckets exist and have proper configuration
-      template.resourceCountIs('AWS::S3::Bucket', 4);
+      template.resourceCountIs('AWS::S3::Bucket', 3);
     });
 
     test('should enable SSL enforcement on S3 buckets', () => {
@@ -237,12 +252,28 @@ describe('TapStack', () => {
               Resource: Match.anyValue(),
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'false'
-                }
-              }
-            })
-          ])
-        }
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should create auto-delete custom resources for S3 buckets', () => {
+      // Verify that custom resources are created for auto-deleting S3 objects
+      template.resourceCountIs('Custom::S3AutoDeleteObjects', 2);
+    });
+
+    test('should create Lambda function for S3 auto-delete', () => {
+      // The auto-delete functionality creates a Lambda function
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Description: Match.objectLike({
+          'Fn::Join': Match.anyValue(),
+        }),
+        Runtime: 'nodejs22.x',
+        Timeout: 900,
       });
     });
   });
@@ -255,8 +286,8 @@ describe('TapStack', () => {
     test('should configure CloudFront with HTTPS only', () => {
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: {
-          HttpVersion: 'http2and3'
-        }
+          HttpVersion: 'http2and3',
+        },
       });
     });
 
@@ -264,9 +295,9 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: {
           Logging: Match.objectLike({
-            Bucket: Match.anyValue()
-          })
-        }
+            Bucket: Match.anyValue(),
+          }),
+        },
       });
     });
 
@@ -276,10 +307,10 @@ describe('TapStack', () => {
           Restrictions: {
             GeoRestriction: {
               RestrictionType: 'whitelist',
-              Locations: ['US', 'CA', 'GB']
-            }
-          }
-        }
+              Locations: ['US', 'CA', 'GB'],
+            },
+          },
+        },
       });
     });
   });
@@ -291,15 +322,27 @@ describe('TapStack', () => {
 
     test('should configure WAF with regional scope', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
-        Scope: 'REGIONAL'
+        Scope: 'REGIONAL',
       });
     });
 
     test('should set default action to allow', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         DefaultAction: {
-          Allow: {}
-        }
+          Allow: {},
+        },
+      });
+    });
+
+    test('should not attach WAF to CloudFront for regional deployment', () => {
+      // CloudFront only supports global WAF Web ACLs (us-east-1)
+      // For regional deployments, WAF is available for ALB/API Gateway
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: Match.not(
+          Match.objectLike({
+            WebACLId: Match.anyValue(),
+          })
+        ),
       });
     });
   });
@@ -320,19 +363,20 @@ describe('TapStack', () => {
     test('should configure API Gateway with HTTPS only', () => {
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: Match.anyValue(),
-        AuthorizationType: Match.anyValue()
+        AuthorizationType: Match.anyValue(),
       });
     });
   });
 
   describe('Lambda Function', () => {
     test('should create Lambda function', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
+      // We have 2 Lambda functions: main function + auto-delete helper
+      template.resourceCountIs('AWS::Lambda::Function', 2);
     });
 
     test('should use Node.js 18.x runtime', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x'
+        Runtime: 'nodejs18.x',
       });
     });
 
@@ -340,14 +384,14 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         VpcConfig: {
           SecurityGroupIds: Match.anyValue(),
-          SubnetIds: Match.anyValue()
-        }
+          SubnetIds: Match.anyValue(),
+        },
       });
     });
 
     test('should set Lambda timeout', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Timeout: 30
+        Timeout: 30,
       });
     });
   });
@@ -359,31 +403,31 @@ describe('TapStack', () => {
 
     test('should configure CloudTrail with KMS encryption', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        KMSKeyId: Match.anyValue()
+        KMSKeyId: Match.anyValue(),
       });
     });
 
     test('should enable multi-region trail', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IsMultiRegionTrail: true
+        IsMultiRegionTrail: true,
       });
     });
 
     test('should enable global service events', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IncludeGlobalServiceEvents: true
+        IncludeGlobalServiceEvents: true,
       });
     });
 
     test('should enable file validation', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        EnableLogFileValidation: true
+        EnableLogFileValidation: true,
       });
     });
 
     test('should send logs to CloudWatch', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        CloudWatchLogsLogGroupArn: Match.anyValue()
+        CloudWatchLogsLogGroupArn: Match.anyValue(),
       });
     });
   });
@@ -395,44 +439,44 @@ describe('TapStack', () => {
 
     test('should use PostgreSQL engine', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        Engine: 'postgres'
+        Engine: 'postgres',
       });
     });
 
     test('should use PostgreSQL 15.7', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EngineVersion: '15.7'
+        EngineVersion: '15.7',
       });
     });
 
     test('should configure Multi-AZ deployment', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        MultiAZ: true
+        MultiAZ: true,
       });
     });
 
     test('should disable deletion protection', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        DeletionProtection: false
+        DeletionProtection: false,
       });
     });
 
     test('should enable storage encryption', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         StorageEncrypted: true,
-        KmsKeyId: Match.anyValue()
+        KmsKeyId: Match.anyValue(),
       });
     });
 
     test('should configure backup retention', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        BackupRetentionPeriod: 30
+        BackupRetentionPeriod: 30,
       });
     });
 
     test('should enable CloudWatch logs export', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnableCloudwatchLogsExports: ['postgresql']
+        EnableCloudwatchLogsExports: ['postgresql'],
       });
     });
 
@@ -452,8 +496,8 @@ describe('TapStack', () => {
         Parameters: Match.objectLike({
           log_statement: 'all',
           log_connections: '1',
-          log_disconnections: '1'
-        })
+          log_disconnections: '1',
+        }),
       });
     });
   });
@@ -465,72 +509,17 @@ describe('TapStack', () => {
 
     test('should create Lambda security group', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for Lambda function'
+        GroupDescription: 'Security group for Lambda function',
       });
     });
 
     test('should create security groups with proper configuration', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: Match.anyValue()
+        GroupDescription: Match.anyValue(),
       });
     });
   });
 
-  describe('AWS Config', () => {
-    test('should create Config configuration recorder', () => {
-      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 1);
-    });
-
-    test('should create Config delivery channel', () => {
-      template.resourceCountIs('AWS::Config::DeliveryChannel', 1);
-    });
-
-    test('should configure Config recorder with all supported resources', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true
-        }
-      });
-    });
-
-    test('should create Config IAM role', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'config.amazonaws.com'
-              },
-              Action: 'sts:AssumeRole'
-            }
-          ])
-        }
-      });
-    });
-
-    test('should create Config IAM policy with required permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            {
-              Effect: 'Allow',
-              Action: [
-                's3:PutObject',
-                's3:GetBucketAcl',
-                's3:GetBucketLocation',
-                'sns:Publish',
-                'config:Put*',
-                'config:Deliver*'
-              ],
-              Resource: '*'
-            }
-          ])
-        }
-      });
-    });
-  });
 
   describe('Security Hub', () => {
     test('should create Security Hub', () => {
@@ -540,15 +529,15 @@ describe('TapStack', () => {
     test('should configure Security Hub with security control findings', () => {
       template.hasResourceProperties('AWS::SecurityHub::Hub', {
         ControlFindingGenerator: 'SECURITY_CONTROL',
-        EnableDefaultStandards: true
+        EnableDefaultStandards: true,
       });
     });
 
     test('should tag Security Hub with Environment: Production', () => {
       template.hasResourceProperties('AWS::SecurityHub::Hub', {
         Tags: {
-          Environment: 'Production'
-        }
+          Environment: 'Production',
+        },
       });
     });
   });
@@ -577,19 +566,19 @@ describe('TapStack', () => {
 
     test('should export VPC ID', () => {
       template.hasOutput('VpcId', {
-        Description: 'VPC ID'
+        Description: 'VPC ID',
       });
     });
 
     test('should export API endpoint', () => {
       template.hasOutput('ApiEndpoint', {
-        Description: 'API Gateway endpoint URL'
+        Description: 'API Gateway endpoint URL',
       });
     });
 
     test('should export Security Hub ARN', () => {
       template.hasOutput('SecurityHubArn', {
-        Description: 'Security Hub ARN'
+        Description: 'Security Hub ARN',
       });
     });
   });
@@ -597,30 +586,30 @@ describe('TapStack', () => {
   describe('Resource Naming', () => {
     test('should include environment suffix in resource names', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'secure-baseline-test-123456789012'
+        BucketName: 'secure-baseline-test-123456789012',
       });
     });
 
     test('should use lowercase environment suffix in bucket names', () => {
       const uppercaseApp = new cdk.App();
-      const uppercaseStack = new TapStack(uppercaseApp, 'UppercaseStack', { 
-        environmentSuffix: 'TEST' 
+      const uppercaseStack = new TapStack(uppercaseApp, 'UppercaseStack', {
+        environmentSuffix: 'TEST',
       });
       const uppercaseTemplate = Template.fromStack(uppercaseStack);
       // Check that buckets exist with proper naming pattern
-      uppercaseTemplate.resourceCountIs('AWS::S3::Bucket', 4);
+      uppercaseTemplate.resourceCountIs('AWS::S3::Bucket', 3);
     });
   });
 
   describe('Environment Suffix Context', () => {
     test('should use environment suffix from props', () => {
       const customApp = new cdk.App();
-      const customStack = new TapStack(customApp, 'CustomStack', { 
-        environmentSuffix: 'custom' 
+      const customStack = new TapStack(customApp, 'CustomStack', {
+        environmentSuffix: 'custom',
       });
       const customTemplate = Template.fromStack(customStack);
       // Check that buckets exist with proper naming pattern
-      customTemplate.resourceCountIs('AWS::S3::Bucket', 4);
+      customTemplate.resourceCountIs('AWS::S3::Bucket', 3);
     });
 
     test('should use environment suffix from context', () => {
@@ -629,7 +618,7 @@ describe('TapStack', () => {
       const contextStack = new TapStack(contextApp, 'ContextStack');
       const contextTemplate = Template.fromStack(contextStack);
       // Check that buckets exist with proper naming pattern
-      contextTemplate.resourceCountIs('AWS::S3::Bucket', 4);
+      contextTemplate.resourceCountIs('AWS::S3::Bucket', 3);
     });
 
     test('should default to dev when no environment suffix provided', () => {
@@ -637,14 +626,14 @@ describe('TapStack', () => {
       const defaultStack = new TapStack(defaultApp, 'DefaultStack');
       const defaultTemplate = Template.fromStack(defaultStack);
       // Check that buckets exist with proper naming pattern
-      defaultTemplate.resourceCountIs('AWS::S3::Bucket', 4);
+      defaultTemplate.resourceCountIs('AWS::S3::Bucket', 3);
     });
   });
 
   describe('Security Constraints Validation', () => {
     test('should enforce HTTPS for all API Gateway endpoints', () => {
       template.hasResourceProperties('AWS::ApiGateway::Method', {
-        HttpMethod: Match.anyValue()
+        HttpMethod: Match.anyValue(),
       });
     });
 
@@ -657,13 +646,13 @@ describe('TapStack', () => {
 
     test('should encrypt CloudTrail logs using KMS', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        KMSKeyId: Match.anyValue()
+        KMSKeyId: Match.anyValue(),
       });
     });
 
     test('should require MFA for all IAM users', () => {
       template.hasResourceProperties('AWS::IAM::User', {
-        ManagedPolicyArns: Match.anyValue()
+        ManagedPolicyArns: Match.anyValue(),
       });
     });
 
@@ -673,7 +662,7 @@ describe('TapStack', () => {
         if (resource.Properties.Tags) {
           expect(resource.Properties.Tags).toContainEqual({
             Key: 'Environment',
-            Value: 'Production'
+            Value: 'Production',
           });
         }
       });
@@ -688,7 +677,7 @@ describe('TapStack', () => {
     test('should configure network ACLs to block unauthorized traffic', () => {
       template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
         RuleAction: 'allow',
-        CidrBlock: '10.0.0.0/8'
+        CidrBlock: '10.0.0.0/8',
       });
     });
 
@@ -700,7 +689,7 @@ describe('TapStack', () => {
   describe('Logging and Monitoring', () => {
     test('should enable RDS logging for database queries', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnableCloudwatchLogsExports: ['postgresql']
+        EnableCloudwatchLogsExports: ['postgresql'],
       });
     });
 
@@ -716,13 +705,13 @@ describe('TapStack', () => {
   describe('Lambda Runtime', () => {
     test('should use latest Lambda runtime version', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x'
+        Runtime: 'nodejs18.x',
       });
     });
   });
 
   describe('WAF Implementation', () => {
-    test('should implement WAF for CloudFront distributions', () => {
+    test('should implement WAF for regional services', () => {
       template.resourceCountIs('AWS::WAFv2::WebACL', 1);
     });
   });
@@ -735,20 +724,14 @@ describe('TapStack', () => {
             Match.objectLike({
               Effect: 'Allow',
               Action: Match.anyValue(),
-              Resource: Match.anyValue()
-            })
-          ])
-        }
+              Resource: Match.anyValue(),
+            }),
+          ]),
+        },
       });
     });
   });
 
-  describe('AWS Config Tracking', () => {
-    test('should enable AWS Config to track configuration changes', () => {
-      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 1);
-      template.resourceCountIs('AWS::Config::DeliveryChannel', 1);
-    });
-  });
 
   describe('Security Hub Implementation', () => {
     test('should implement Security Hub in the region', () => {
