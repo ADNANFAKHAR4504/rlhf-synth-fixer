@@ -8,6 +8,14 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.0"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time

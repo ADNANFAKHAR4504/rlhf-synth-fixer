@@ -98,6 +98,44 @@ data "aws_availability_zones" "secondary" {
   state    = "available"
 }
 
+# ============================================================================
+# KMS KEYS FOR RDS ENCRYPTION
+# ============================================================================
+
+resource "aws_kms_key" "rds_primary" {
+  description             = "KMS key for RDS encryption in primary region"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  tags = {
+    Name        = "${var.project_name}-rds-kms-primary"
+    Environment = var.environment
+  }
+}
+
+resource "aws_kms_alias" "rds_primary" {
+  name          = "alias/${var.project_name}-rds-primary"
+  target_key_id = aws_kms_key.rds_primary.key_id
+}
+
+resource "aws_kms_key" "rds_secondary" {
+  provider                = aws.secondary
+  description             = "KMS key for RDS encryption in secondary region"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  tags = {
+    Name        = "${var.project_name}-rds-kms-secondary"
+    Environment = var.environment
+  }
+}
+
+resource "aws_kms_alias" "rds_secondary" {
+  provider      = aws.secondary
+  name          = "alias/${var.project_name}-rds-secondary"
+  target_key_id = aws_kms_key.rds_secondary.key_id
+}
+
 # Latest Amazon Linux 2023 AMI - Primary Region
 data "aws_ami" "amazon_linux_primary" {
   most_recent = true
@@ -634,6 +672,7 @@ resource "aws_rds_cluster" "primary" {
   preferred_backup_window   = "03:00-04:00"
   preferred_maintenance_window = "mon:04:00-mon:05:00"
   storage_encrypted         = true
+  kms_key_id                = aws_kms_key.rds_primary.arn
   skip_final_snapshot       = true
   global_cluster_identifier = aws_rds_global_cluster.main.id
 
@@ -668,6 +707,7 @@ resource "aws_rds_cluster" "secondary" {
   db_subnet_group_name      = aws_db_subnet_group.secondary.name
   vpc_security_group_ids    = [aws_security_group.secondary_db.id]
   storage_encrypted         = true
+  kms_key_id                = aws_kms_key.rds_secondary.arn
   skip_final_snapshot       = true
   global_cluster_identifier = aws_rds_global_cluster.main.id
 
@@ -988,39 +1028,10 @@ resource "aws_cloudwatch_log_group" "lambda_failover" {
   }
 }
 
-resource "aws_lambda_function" "failover" {
-  filename      = "${path.module}/failover_function.zip"
-  function_name = "${var.project_name}-failover-automation"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 300
-
-  environment {
-    variables = {
-      GLOBAL_CLUSTER_ID       = aws_rds_global_cluster.main.id
-      PRIMARY_REGION          = var.aws_region
-      SECONDARY_REGION        = var.secondary_region
-      SNS_TOPIC_ARN           = aws_sns_topic.alerts.arn
-      PRIMARY_ALB_DNS         = aws_lb.primary.dns_name
-      SECONDARY_ALB_DNS       = aws_lb.secondary.dns_name
-      ENVIRONMENT             = var.environment
-    }
-  }
-
-  tags = {
-    Name        = "${var.project_name}-lambda-failover"
-    Environment = var.environment
-  }
-
-  depends_on = [aws_cloudwatch_log_group.lambda_failover]
-}
-
-# Create a placeholder zip file for Lambda
-resource "null_resource" "lambda_zip" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      cat > /tmp/failover_index.py << 'EOF'
+# Create Lambda function code as a local file
+resource "local_file" "lambda_code" {
+  filename = "${path.module}/lambda_src/index.py"
+  content  = <<-EOF
 import json
 import boto3
 import os
@@ -1041,47 +1052,75 @@ def handler(event, context):
 
     try:
         # Initiate Aurora Global Database failover
-        print(f"Initiating failover for {global_cluster_id} to {secondary_region}")
+        print(f"Initiating failover for {{global_cluster_id}} to {{secondary_region}}")
         response = rds.failover_global_cluster(
             GlobalClusterIdentifier=global_cluster_id,
-            TargetDbClusterIdentifier=f"{os.environ['GLOBAL_CLUSTER_ID']}-secondary"
+            TargetDbClusterIdentifier=f"{{os.environ['GLOBAL_CLUSTER_ID']}}-secondary"
         )
 
-        message = f"DR Failover initiated successfully to {secondary_region}"
+        message = f"DR Failover initiated successfully to {{secondary_region}}"
         print(message)
 
         # Send SNS notification
         sns.publish(
             TopicArn=sns_topic_arn,
-            Subject=f"DR Failover Initiated - {os.environ['ENVIRONMENT']}",
+            Subject=f"DR Failover Initiated - {{os.environ['ENVIRONMENT']}}",
             Message=message
         )
 
-        return {
+        return {{
             'statusCode': 200,
-            'body': json.dumps({'message': message, 'response': str(response)})
-        }
+            'body': json.dumps({{'message': message, 'response': str(response)}})
+        }}
     except Exception as e:
-        error_msg = f"Failover failed: {str(e)}"
+        error_msg = f"Failover failed: {{str(e)}}"
         print(error_msg)
         sns.publish(
             TopicArn=sns_topic_arn,
-            Subject=f"DR Failover FAILED - {os.environ['ENVIRONMENT']}",
+            Subject=f"DR Failover FAILED - {{os.environ['ENVIRONMENT']}}",
             Message=error_msg
         )
-        return {
+        return {{
             'statusCode': 500,
-            'body': json.dumps({'error': error_msg})
-        }
+            'body': json.dumps({{'error': error_msg}})
+        }}
 EOF
-      cd /tmp && zip -q failover_function.zip failover_index.py
-      cp /tmp/failover_function.zip ${path.module}/failover_function.zip
-    EOT
+}
+
+# Create zip archive for Lambda deployment
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = local_file.lambda_code.filename
+  output_path = "${path.module}/failover_function.zip"
+}
+
+resource "aws_lambda_function" "failover" {
+  filename         = data.archive_file.lambda_zip.output_path
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  function_name    = "${var.project_name}-failover-automation"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  timeout          = 300
+
+  environment {
+    variables = {
+      GLOBAL_CLUSTER_ID       = aws_rds_global_cluster.main.id
+      PRIMARY_REGION          = var.aws_region
+      SECONDARY_REGION        = var.secondary_region
+      SNS_TOPIC_ARN           = aws_sns_topic.alerts.arn
+      PRIMARY_ALB_DNS         = aws_lb.primary.dns_name
+      SECONDARY_ALB_DNS       = aws_lb.secondary.dns_name
+      ENVIRONMENT             = var.environment
+    }
   }
 
-  triggers = {
-    always_run = timestamp()
+  tags = {
+    Name        = "${var.project_name}-lambda-failover"
+    Environment = var.environment
   }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_failover]
 }
 
 # ============================================================================
