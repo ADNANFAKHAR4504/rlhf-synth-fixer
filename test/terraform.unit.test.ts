@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
+describe('TAP Stack Terraform Unit Tests (Full Coverage)', () => {
   let tfContent: string;
 
   beforeAll(() => {
@@ -9,229 +9,257 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     tfContent = fs.readFileSync(tfPath, 'utf8');
   });
 
-  // ================= Variables =================
+  const countMatches = (regex: RegExp): number => (tfContent.match(regex) || []).length;
+
+  // ============================================================================
+  // VARIABLES
+  // ============================================================================
   describe('Variables', () => {
     test('defines expected variables', () => {
-      const expectedVars = [
+      [
         'region',
+        'project_name',
         'environment',
-        'projectname'
-      ];
-      expectedVars.forEach(v => {
-        expect(tfContent).toMatch(new RegExp(`variable\\s+"${v}"`));
-      });
-    });
-  });
-
-  // ================= Locals =================
-  describe('Locals', () => {
-    test('defines expected locals for CIDR, tags, AZs, random suffix', () => {
-      [
-        'random_suffix',
-        'common_tags',
+        'alert_email',
+        'db_instance_class',
         'vpc_cidr',
-        'public_subnet_cidrs',
+        'ssh_allowed_cidr'
+      ].forEach((v: string) =>
+        expect(tfContent).toMatch(new RegExp(`variable\\s+"${v}"`))
+      );
+    });
+  });
+
+  // ============================================================================
+  // LOCALS
+  // ============================================================================
+  describe('Locals', () => {
+    test('defines locals for naming, tagging, and AZ mapping', () => {
+      [
+        'common_tags',
+        'random_suffix',
+        'azs',
         'private_subnet_cidrs',
-        'availability_zones',
-        'rds_special_chars'
-      ].forEach(localName => {
-        expect(tfContent).toMatch(new RegExp(`${localName}\\s*=`));
-      });
+        'public_subnet_cidrs'
+      ].forEach((l: string) =>
+        expect(tfContent).toMatch(new RegExp(`${l}\\s*=`))
+      );
     });
   });
 
-  // ================= Data Sources =================
+  // ============================================================================
+  // DATA SOURCES
+  // ============================================================================
   describe('Data Sources', () => {
-    test('has availability zones, AMI, and caller identity data sources', () => {
-      [
-        /data\s+"aws_availability_zones"\s+"available"/,
-        /data\s+"aws_ami"\s+"amazon_linux_2"/,
-        /data\s+"aws_caller_identity"\s+"current"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
+    test('fetches AZs, caller identity, and partition', () => {
+      expect(tfContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
+      expect(tfContent).toMatch(/data\s+"aws_caller_identity"\s+"current"/);
+      expect(tfContent).toMatch(/data\s+"aws_partition"\s+"current"/);
     });
   });
 
-  // ================= Networking Resources =================
+  // ============================================================================
+  // RANDOM / KMS
+  // ============================================================================
+  describe('Random and KMS Resources', () => {
+    test('defines random username and password resources', () => {
+      expect(tfContent).toMatch(/resource\s+"random_string"\s+"rds_username"/);
+      expect(tfContent).toMatch(/resource\s+"random_password"\s+"rds_password"/);
+    });
+
+    test('defines KMS key with rotation enabled and alias', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(tfContent).toMatch(/enable_key_rotation\s*=\s*true/);
+      expect(tfContent).toMatch(/resource\s+"aws_kms_alias"\s+"main"/);
+    });
+  });
+
+  // ============================================================================
+  // NETWORKING
+  // ============================================================================
   describe('Networking', () => {
-    test('defines VPC, subnets, internet gateway, NAT gateway, route tables and associations', () => {
-      [
-        /resource\s+"aws_vpc"\s+"main"/,
-        /resource\s+"aws_internet_gateway"\s+"main"/,
-        /resource\s+"aws_eip"\s+"nat"/,
-        /resource\s+"aws_nat_gateway"\s+"main"/,
-        /resource\s+"aws_subnet"\s+"public"/,
-        /resource\s+"aws_subnet"\s+"private"/,
-        /resource\s+"aws_route_table"\s+"public"/,
-        /resource\s+"aws_route_table"\s+"private"/,
-        /resource\s+"aws_route_table_association"\s+"public"/,
-        /resource\s+"aws_route_table_association"\s+"private"/,
-        /resource\s+"aws_vpc_peering_connection"\s+"peer"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
+    test('VPC created with DNS support and hostnames', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+      expect(tfContent).toMatch(/enable_dns_support\s*=\s*true/);
+      expect(tfContent).toMatch(/enable_dns_hostnames\s*=\s*true/);
     });
-    test('defines network ACL with rules', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_network_acl"\s+"main"/);
+
+    test('public and private subnets are defined across AZs', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"public"/);
+      expect(tfContent).toMatch(/resource\s+"aws_subnet"\s+"private"/);
+      expect(tfContent).toMatch(/count\s*=\s*3/);
+    });
+
+    test('NAT gateways and EIPs are defined with dependencies', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_eip"\s+"nat"/);
+      expect(tfContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      expect(tfContent).toMatch(/depends_on\s*=\s*\[aws_internet_gateway.main\]/);
+    });
+
+    test('route tables and associations for public/private subnets exist', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"public"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table"\s+"private"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"public"/);
+      expect(tfContent).toMatch(/resource\s+"aws_route_table_association"\s+"private"/);
     });
   });
 
-  // ================= Security Groups =================
+  // ============================================================================
+  // SECURITY GROUPS
+  // ============================================================================
   describe('Security Groups', () => {
-    test('has security groups for EC2, RDS, and ALB', () => {
-      [
-        /resource\s+"aws_security_group"\s+"ec2"/,
-        /resource\s+"aws_security_group"\s+"rds"/,
-        /resource\s+"aws_security_group"\s+"alb"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
+    test('EC2, ALB, and RDS security groups exist with proper ports', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
+      expect(tfContent).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
+
+      expect(tfContent).toMatch(/from_port\s*=\s*22/);
+      expect(tfContent).toMatch(/from_port\s*=\s*80/);
+      expect(tfContent).toMatch(/from_port\s*=\s*443/);
+      expect(tfContent).toMatch(/from_port\s*=\s*3306/);
     });
   });
 
-  // ================= IAM Resources =================
-  describe('IAM Roles, Policies, Profiles', () => {
-    test('defines roles, policies, instance profiles for EC2, FlowLogs, CloudTrail, Config', () => {
-      [
-        /resource\s+"aws_iam_role"\s+"ec2"/,
-        /resource\s+"aws_iam_role_policy"\s+"ec2_least_privilege"/,
-        /resource\s+"aws_iam_instance_profile"\s+"ec2"/,
-        /resource\s+"aws_iam_role"\s+"flowlogs"/,
-        /resource\s+"aws_iam_role_policy"\s+"flowlogs"/,
-        /resource\s+"aws_iam_role"\s+"cloudtrail"/,
-        /resource\s+"aws_iam_role"\s+"config"/,
-        /resource\s+"aws_iam_role_policy_attachment"\s+"config"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
+  // ============================================================================
+  // IAM ROLES & POLICIES
+  // ============================================================================
+  describe('IAM Roles and Policies', () => {
+    test('EC2 IAM role, policy, and instance profile exist', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2"/);
+    });
+
+    test('Flow logs and Config IAM roles are defined with policies', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"flow_logs"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"flow_logs"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"config"/);
+      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"config"/);
     });
   });
 
-  // ================= S3 Buckets and Related =================
+  // ============================================================================
+  // S3 BUCKETS
+  // ============================================================================
   describe('S3 Buckets', () => {
-    test('main, CloudTrail, Config buckets and policies exist', () => {
-      [
-        /resource\s+"aws_s3_bucket"\s+"main"/,
-        /resource\s+"aws_s3_bucket"\s+"cloudtrail"/,
-        /resource\s+"aws_s3_bucket"\s+"config"/,
-        /resource\s+"aws_s3_bucket_policy"\s+"cloudtrail"/,
-        /resource\s+"aws_s3_bucket_policy"\s+"config"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
-    });
-    test('bucket versioning, encryption, public access block', () => {
-      [
-        /resource\s+"aws_s3_bucket_versioning"/,
-        /resource\s+"aws_s3_bucket_server_side_encryption_configuration"/,
-        /resource\s+"aws_s3_bucket_public_access_block"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
+    test('main, cloudtrail, and config buckets with encryption and versioning exist', () => {
+      ['main', 'cloudtrail', 'config'].forEach((name) => {
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_s3_bucket"\\s+"${name}"`));
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_s3_bucket_public_access_block"\\s+"${name}"`));
+        expect(tfContent).toMatch(new RegExp(`resource\\s+"aws_s3_bucket_server_side_encryption_configuration"\\s+"${name}"`));
       });
     });
   });
 
-  // ================= Secrets Manager =================
+  // ============================================================================
+  // EC2 / ASG
+  // ============================================================================
+  describe('Compute Resources', () => {
+    test('Launch template uses IMDSv2 and encrypted EBS', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_launch_template"\s+"main"/);
+      expect(tfContent).toMatch(/http_tokens\s*=\s*"required"/);
+      expect(tfContent).toMatch(/encrypted\s*=\s*true/);
+    });
+
+    test('Autoscaling group is defined and uses the launch template', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
+      expect(tfContent).toMatch(/launch_template\s*=\s*{/);
+    });
+  });
+
+  // ============================================================================
+  // RDS DATABASE
+  // ============================================================================
+  describe('RDS', () => {
+    test('RDS subnet group and instance are defined securely', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"main"/);
+      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
+      expect(tfContent).toMatch(/storage_encrypted\s*=\s*true/);
+      expect(tfContent).toMatch(/kms_key_id\s*=\s*aws_kms_key.main.arn/);
+      expect(tfContent).toMatch(/multi_az\s*=\s*true/);
+      expect(tfContent).toMatch(/publicly_accessible\s*=\s*false/);
+    });
+  });
+
+  // ============================================================================
+  // SECRETS MANAGER
+  // ============================================================================
   describe('Secrets Manager', () => {
-    test('defines secret and secret version for RDS credentials', () => {
+    test('Stores RDS credentials with KMS encryption and version', () => {
       expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"rds"/);
       expect(tfContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"rds"/);
       expect(tfContent).toMatch(/secret_string\s*=\s*jsonencode/);
+      expect(tfContent).toMatch(/kms_key_id\s*=\s*aws_kms_key.main.arn/);
     });
   });
 
-  // ================= RDS Resources =================
-  describe('RDS Resources', () => {
-    test('DB Instance and subnet group exist', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
-      expect(tfContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"main"/);
+  // ============================================================================
+  // FLOW LOGS & CLOUDTRAIL
+  // ============================================================================
+  describe('Logging and Monitoring', () => {
+    test('VPC flow logs are enabled and encrypted', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_flow_log"\s+"main"/);
+      expect(tfContent).toMatch(/log_destination_type\s*=\s*"cloud-watch-logs"/);
+      expect(tfContent).toMatch(/kms_key_id\s*=\s*aws_kms_key.main.arn/);
     });
-    test('RDS config: engine, multi-AZ, backup, encryption', () => {
-      [
-        /engine\s*=\s*"mysql"/,
-        /multi_az\s*=\s*true/,
-        /backup_retention_period\s*=\s*\d+/,
-        /storage_encrypted\s*=\s*true/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
-    });
-  });
 
-  // ================= EC2 Resources =================
-  describe('EC2 Instance', () => {
-    test('EC2 instance configuration', () => {
-      [
-        /resource\s+"aws_instance"\s+"web"/,
-        /ami\s*=\s*data\.aws_ami\.amazon_linux_2\.id/,
-        /instance_type\s*=\s*".+"/,
-        /subnet_id\s*=\s*aws_subnet\.private\[0\]\.id/,
-        /vpc_security_group_ids\s*=\s*\[aws_security_group\.web\.id\]/,
-        /iam_instance_profile\s*=\s*aws_iam_instance_profile\.ec2\.name/,
-        /volume_type\s*=\s*"gp3"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
-    });
-  });
-
-  // ================= Load Balancer =================
-  describe('Load Balancer', () => {
-    test('defines ALB, listener, target group, logs', () => {
-      [
-        /resource\s+"aws_lb"\s+"main"/,
-        /resource\s+"aws_lb_listener"\s+"main"/,
-        /resource\s+"aws_lb_target_group"\s+"main"/,
-        /access_logs\s*{/,
-        /enabled_drop_invalid_header_fields\s*=\s*true/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
-    });
-    test('WAF association for ALB exists', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_wafv2_web_acl_association"\s+"main"/);
-    });
-  });
-
-  // ================= CloudTrail & Config =================
-  describe('CloudTrail', () => {
-    test('has CloudTrail resource and logging S3 bucket', () => {
+    test('CloudTrail is enabled with log validation and CloudWatch logs', () => {
       expect(tfContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"/);
-      expect(tfContent).toMatch(/enable_logging\s*=/);
-      expect(tfContent).toMatch(/depends_on\s*=\s*\[aws_s3_bucket_policy\.cloudtrail\]/);
+      expect(tfContent).toMatch(/enable_log_file_validation\s*=\s*true/);
+      expect(tfContent).toMatch(/enable_logging\s*=\s*true/);
+      expect(tfContent).toMatch(/is_multi_region_trail\s*=\s*true/);
     });
   });
 
+  // ============================================================================
+  // AWS CONFIG
+  // ============================================================================
   describe('AWS Config', () => {
-    test('Config recorder, delivery channel, status, rule', () => {
-      [
-        /resource\s+"aws_config_configuration_recorder"\s+"main"/,
-        /resource\s+"aws_config_delivery_channel"\s+"main"/,
-        /resource\s+"aws_config_configuration_recorder_status"\s+"main"/,
-        /resource\s+"aws_config_config_rule"\s+"required_tags"/
-      ].forEach(regexp => {
-        expect(tfContent).toMatch(regexp);
-      });
+    test('Recorder, delivery channel, and status exist', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"/);
+      expect(tfContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"/);
+      expect(tfContent).toMatch(/resource\s+"aws_config_configuration_recorder_status"\s+"main"/);
     });
   });
 
-  // ================= Outputs =================
-  describe('Terraform Outputs', () => {
+  // ============================================================================
+  // SNS & CLOUDWATCH ALARMS
+  // ============================================================================
+  describe('SNS and CloudWatch Alarms', () => {
+    test('SNS topic and email subscription exist', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_sns_topic"\s+"security_alerts"/);
+      expect(tfContent).toMatch(/resource\s+"aws_sns_topic_subscription"\s+"security_email"/);
+      expect(tfContent).toMatch(/protocol\s*=\s*"email"/);
+    });
+
+    test('CloudWatch metric alarms exist for security events', () => {
+      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"unauthorized_api_calls"/);
+      expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"console_signin_failures"/);
+    });
+  });
+
+  // ============================================================================
+  // OUTPUTS
+  // ============================================================================
+  describe('Outputs', () => {
     const outputs = [
-      'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
-      'internet_gateway_id', 'nat_gateway_ids', 'elastic_ip_addresses',
-      's3_bucket_id', 's3_bucket_arn', 'cloudtrail_s3_bucket_id', 'config_s3_bucket_id',
-      'web_security_group_id', 'rds_security_group_id', 'ec2_iam_role_arn', 'ec2_instance_profile_name',
-      'config_iam_role_arn', 'rds_instance_id', 'rds_instance_endpoint', 'rds_instance_address',
-      'rds_instance_port', 'db_subnet_group_name', 'rds_credentials_secret_arn', 'rds_credentials_secret_name',
-      'ec2_instance_id', 'ec2_instance_private_ip', 'ec2_instance_availability_zone', 'ami_id', 'ami_name',
-      'cloudtrail_name', 'cloudtrail_arn', 'vpc_peering_connection_id', 'config_recorder_name',
-      'config_delivery_channel_name', 'config_rule_name', 'public_route_table_id', 'private_route_table_ids',
-      'account_id', 'region', 'random_suffix'
+      'vpc_id',
+      'public_subnet_ids',
+      'private_subnet_ids',
+      'alb_dns_name',
+      'ec2_security_group_id',
+      'rds_security_group_id',
+      's3_bucket_main_name',
+      'rds_endpoint',
+      'rds_username',
+      'rds_secret_arn',
+      'kms_key_arn',
+      'cloudtrail_bucket_name',
+      'config_bucket_name'
     ];
-    outputs.forEach(output => {
-      test(`output "${output}" exists`, () => {
+
+    outputs.forEach((output) => {
+      test(`output ${output} exists`, () => {
         expect(tfContent).toMatch(new RegExp(`output\\s+"${output}"`));
       });
     });
