@@ -233,24 +233,23 @@ export class ApiGatewayConstruct extends Construct {
     });
   }
 
-  public addCorsOptions(resource: ApiGatewayResource): ApiGatewayMethod {
-    new ApiGatewayIntegration(
-      this,
-      `${resource.pathPart}-options-integration`,
-      {
-        restApiId: this.api.id,
-        resourceId: resource.id,
-        httpMethod: 'OPTIONS',
-        type: 'MOCK',
-        requestTemplates: {
-          'application/json': '{"statusCode": 200}',
-        },
-      }
-    );
+  public addCorsOptions(
+    resource: ApiGatewayResource,
+    resourceName: string
+  ): ApiGatewayMethod {
+    new ApiGatewayIntegration(this, `${resourceName}-options-integration`, {
+      restApiId: this.api.id,
+      resourceId: resource.id,
+      httpMethod: 'OPTIONS',
+      type: 'MOCK',
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}',
+      },
+    });
 
     const optionsMethod = new ApiGatewayMethod(
       this,
-      `${resource.pathPart}-options-method`,
+      `${resourceName}-options-method`,
       {
         restApiId: this.api.id,
         resourceId: resource.id,
@@ -259,25 +258,21 @@ export class ApiGatewayConstruct extends Construct {
       }
     );
 
-    new ApiGatewayMethodResponse(
-      this,
-      `${resource.pathPart}-options-response`,
-      {
-        restApiId: this.api.id,
-        resourceId: resource.id,
-        httpMethod: optionsMethod.httpMethod,
-        statusCode: '200',
-        responseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-          'method.response.header.Access-Control-Allow-Origin': true,
-        },
-      }
-    );
+    new ApiGatewayMethodResponse(this, `${resourceName}-options-response`, {
+      restApiId: this.api.id,
+      resourceId: resource.id,
+      httpMethod: optionsMethod.httpMethod,
+      statusCode: '200',
+      responseParameters: {
+        'method.response.header.Access-Control-Allow-Headers': true,
+        'method.response.header.Access-Control-Allow-Methods': true,
+        'method.response.header.Access-Control-Allow-Origin': true,
+      },
+    });
 
     new ApiGatewayIntegrationResponse(
       this,
-      `${resource.pathPart}-options-integration-response`,
+      `${resourceName}-options-integration-response`,
       {
         restApiId: this.api.id,
         resourceId: resource.id,
@@ -302,11 +297,12 @@ export class ApiGatewayConstruct extends Construct {
   public createLambdaIntegration(
     resource: ApiGatewayResource,
     httpMethod: string,
-    lambda: LambdaFunction
+    lambda: LambdaFunction,
+    resourceName: string
   ): ApiGatewayMethod {
     new ApiGatewayIntegration(
       this,
-      `${resource.pathPart}-${httpMethod}-integration`,
+      `${resourceName}-${httpMethod}-integration`,
       {
         restApiId: this.api.id,
         resourceId: resource.id,
@@ -319,7 +315,7 @@ export class ApiGatewayConstruct extends Construct {
 
     const method = new ApiGatewayMethod(
       this,
-      `${resource.pathPart}-${httpMethod}-method`,
+      `${resourceName}-${httpMethod}-method`,
       {
         restApiId: this.api.id,
         resourceId: resource.id,
@@ -329,17 +325,13 @@ export class ApiGatewayConstruct extends Construct {
     );
 
     // Add Lambda permission
-    new LambdaPermission(
-      this,
-      `${resource.pathPart}-${httpMethod}-permission`,
-      {
-        statementId: `AllowAPIGatewayInvoke-${resource.pathPart}-${httpMethod}`,
-        action: 'lambda:InvokeFunction',
-        functionName: lambda.functionName,
-        principal: 'apigateway.amazonaws.com',
-        sourceArn: `${this.api.executionArn}/*/*`,
-      }
-    );
+    new LambdaPermission(this, `${resourceName}-${httpMethod}-permission`, {
+      statementId: `AllowAPIGatewayInvoke-${resourceName}-${httpMethod}`,
+      action: 'lambda:InvokeFunction',
+      functionName: lambda.functionName,
+      principal: 'apigateway.amazonaws.com',
+      sourceArn: `${this.api.executionArn}/*/*`,
+    });
 
     return method;
   }

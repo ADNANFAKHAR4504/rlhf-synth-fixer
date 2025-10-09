@@ -268,30 +268,34 @@ export class TapStack extends TerraformStack {
       apiGateway.createLambdaIntegration(
         productsResource,
         'GET',
-        productsLambda.lambda
+        productsLambda.lambda,
+        'products' // Static resource name
       ),
       apiGateway.createLambdaIntegration(
         productIdResource,
         'GET',
-        productsLambda.lambda
+        productsLambda.lambda,
+        'product-id' // Static resource name
       ),
-      apiGateway.addCorsOptions(productsResource),
-      apiGateway.addCorsOptions(productIdResource),
+      apiGateway.addCorsOptions(productsResource, 'products'), // Static resource name
+      apiGateway.addCorsOptions(productIdResource, 'product-id'), // Static resource name
     ];
 
     const ordersMethods = [
       apiGateway.createLambdaIntegration(
         ordersResource,
         'POST',
-        ordersLambda.lambda
+        ordersLambda.lambda,
+        'orders' // Static resource name
       ),
       apiGateway.createLambdaIntegration(
         orderIdResource,
         'GET',
-        ordersLambda.lambda
+        ordersLambda.lambda,
+        'order-id' // Static resource name
       ),
-      apiGateway.addCorsOptions(ordersResource),
-      apiGateway.addCorsOptions(orderIdResource),
+      apiGateway.addCorsOptions(ordersResource, 'orders'), // Static resource name
+      apiGateway.addCorsOptions(orderIdResource, 'order-id'), // Static resource name
     ];
 
     // Deploy API
