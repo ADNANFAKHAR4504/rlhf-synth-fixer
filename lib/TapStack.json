@@ -870,7 +870,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "HealthCheckIntervalSeconds": 30,
-                "HealthCheckPath": "/health",
+                "HealthCheckPath": "/",
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckTimeoutSeconds": 5,
                 "HealthyThresholdCount": 2,
@@ -1050,9 +1050,7 @@
                 "ContainerDefinitions": [
                     {
                         "Name": "webapp",
-                        "Image": {
-                            "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/realestate-webapp:latest"
-                        },
+                        "Image": "nginx:latest",
                         "Essential": true,
                         "PortMappings": [
                             {
@@ -1864,7 +1862,7 @@
                                 "s3:PutObjectAcl"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${CloudFrontLogsBucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudFrontLogsBucket}/CloudFront/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1879,7 +1877,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Ref": "CloudFrontLogsBucket"
+                                "Fn::Sub": "arn:aws:s3:::${CloudFrontLogsBucket}"
                             }
                         }
                     ]
