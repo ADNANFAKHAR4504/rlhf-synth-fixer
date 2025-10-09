@@ -5,23 +5,52 @@ import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { App, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
+interface GamingDatabaseStackProps {
+  environment?: string;
+  team?: string;
+  region?: string;
+  tableName?: string;
+  indexName?: string;
+  enableAutoScaling?: boolean;
+}
+
 export class GamingDatabaseStack extends TerraformStack {
-  constructor(scope: Construct, id: string, enableAutoScaling?: boolean) {
+  constructor(scope: Construct, id: string, props?: GamingDatabaseStackProps) {
     super(scope, id);
 
-    // AWS Provider configuration - version 5.0+ targeting us-west-2
+    // Extract props with defaults
+    const {
+      environment = 'production',
+      team = 'gaming-platform',
+      region = 'us-west-2',
+      tableName = 'GamingPlayerProfiles',
+      indexName = 'score-index',
+      enableAutoScaling = false,
+    } = props || {};
+
+    // Generate unique suffix for resource naming
+    const timestamp = Date.now().toString().slice(-6);
+    const uniqueSuffix = `${environment}-${timestamp}`;
+
+    // AWS Provider configuration - version 5.0+ targeting specified region
     new AwsProvider(this, 'aws', {
-      region: 'us-west-2',
+      region,
     });
 
     // Auto-scaling flag - disabled by default for on-demand tables
     // WARNING: Enabling this requires switching table billing mode to PROVISIONED
     // DynamoDB limitation: on-demand tables don't support auto scaling
-    const enableGsiAutoscaling = enableAutoScaling || process.env.ENABLE_GSI_AUTOSCALING === 'true' || false;
+    const enableGsiAutoscaling =
+      enableAutoScaling ||
+      process.env.ENABLE_GSI_AUTOSCALING === 'true' ||
+      false;
 
-    // DynamoDB Table - GamePlayerProfiles
+    // DynamoDB Table - Dynamic naming
+    const dynamicTableName = `${tableName}-${uniqueSuffix}`;
+    const dynamicIndexName = `${indexName}-${uniqueSuffix}`;
+
     const gameTable = new DynamodbTable(this, 'game-player-profiles', {
-      name: 'GamePlayerProfiles',
+      name: dynamicTableName,
       billingMode: 'PAY_PER_REQUEST', // On-demand billing
 
       // Primary keys
@@ -37,10 +66,10 @@ export class GamingDatabaseStack extends TerraformStack {
         { name: 'playerLevel', type: 'N' }, // LSI sort key
       ],
 
-      // Global Secondary Index: score-index
+      // Global Secondary Index: dynamic naming
       globalSecondaryIndex: [
         {
-          name: 'score-index',
+          name: dynamicIndexName,
           hashKey: 'gameMode', // Partition key (String)
           rangeKey: 'score', // Sort key (Number)
           projectionType: 'ALL', // Project all attributes
@@ -75,8 +104,8 @@ export class GamingDatabaseStack extends TerraformStack {
 
       // Required tags on all resources
       tags: {
-        Environment: 'production',
-        Team: 'gaming-platform',
+        Environment: environment,
+        Team: team,
         ManagedBy: 'CDKTF',
       },
     });
@@ -91,13 +120,13 @@ export class GamingDatabaseStack extends TerraformStack {
         'gsi-read-scaling-target',
         {
           serviceNamespace: 'dynamodb',
-          resourceId: `table/${gameTable.name}/index/score-index`,
+          resourceId: `table/${gameTable.name}/index/${dynamicIndexName}`,
           scalableDimension: 'dynamodb:index:ReadCapacityUnits',
           minCapacity: 5, // Min capacity: 5
           maxCapacity: 100, // Max capacity: 100
           tags: {
-            Environment: 'production',
-            Team: 'gaming-platform',
+            Environment: environment,
+            Team: team,
             ManagedBy: 'CDKTF',
           },
         }
@@ -124,13 +153,13 @@ export class GamingDatabaseStack extends TerraformStack {
         'gsi-write-scaling-target',
         {
           serviceNamespace: 'dynamodb',
-          resourceId: `table/${gameTable.name}/index/score-index`,
+          resourceId: `table/${gameTable.name}/index/${dynamicIndexName}`,
           scalableDimension: 'dynamodb:index:WriteCapacityUnits',
           minCapacity: 5, // Min capacity: 5
           maxCapacity: 100, // Max capacity: 100
           tags: {
-            Environment: 'production',
-            Team: 'gaming-platform',
+            Environment: environment,
+            Team: team,
             ManagedBy: 'CDKTF',
           },
         }
@@ -159,5 +188,12 @@ export const TapStack = GamingDatabaseStack;
 
 // App instantiation with required stack name
 const app = new App();
-new GamingDatabaseStack(app, 'gaming-database-stack');
+new GamingDatabaseStack(app, 'gaming-database-stack', {
+  environment: process.env.ENVIRONMENT || 'production',
+  team: process.env.TEAM || 'gaming-platform',
+  region: process.env.AWS_REGION || 'us-west-2',
+  tableName: process.env.TABLE_NAME || 'GamingPlayerProfiles',
+  indexName: process.env.INDEX_NAME || 'score-index',
+  enableAutoScaling: process.env.ENABLE_AUTO_SCALING === 'true',
+});
 app.synth();

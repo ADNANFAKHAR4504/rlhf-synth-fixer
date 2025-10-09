@@ -45,8 +45,8 @@ describe('Gaming Database Stack Unit Tests', () => {
       expect(tableMatches).toBe(1);
     });
 
-    test('should configure table with correct name', () => {
-      expect(synthesized).toContain('"name": "GamePlayerProfiles"');
+    test('should configure table with dynamic name', () => {
+      expect(synthesized).toMatch(/"name": "GamePlayerProfiles-production-\d{6}"/);
     });
 
     test('should use PAY_PER_REQUEST billing mode', () => {
@@ -86,8 +86,8 @@ describe('Gaming Database Stack Unit Tests', () => {
       expect(gsiMatches).toBe(1);
     });
 
-    test('should configure GSI with correct name', () => {
-      expect(synthesized).toContain('"name": "score-index"');
+    test('should configure GSI with dynamic name', () => {
+      expect(synthesized).toMatch(/"name": "score-index-production-\d{6}"/);
     });
 
     test('should configure GSI keys correctly', () => {
@@ -223,7 +223,8 @@ describe('Gaming Database Stack Unit Tests', () => {
       const path = require('path');
       const sourceFile = fs.readFileSync(path.join(__dirname, '../lib/tap-stack.ts'), 'utf8');
 
-      expect(sourceFile).toContain('const enableGsiAutoscaling = enableAutoScaling || process.env.ENABLE_GSI_AUTOSCALING === \'true\' || false');
+      expect(sourceFile).toContain('enableAutoScaling ||');
+      expect(sourceFile).toContain('process.env.ENABLE_GSI_AUTOSCALING === \'true\' ||');
     });
 
     test('should have conditional logic for auto-scaling', () => {
@@ -275,7 +276,7 @@ describe('Gaming Database Stack Unit Tests', () => {
       const path = require('path');
       const sourceFile = fs.readFileSync(path.join(__dirname, '../lib/tap-stack.ts'), 'utf8');
 
-      expect(sourceFile).toContain('table/${gameTable.name}/index/score-index');
+      expect(sourceFile).toContain('table/${gameTable.name}/index/${dynamicIndexName}');
     });
 
     test('should have warning comments about billing mode requirements', () => {
@@ -296,7 +297,7 @@ describe('Gaming Database Stack Unit Tests', () => {
 
     beforeEach(() => {
       appWithScaling = new App();
-      stackWithScaling = new GamingDatabaseStack(appWithScaling, 'test-stack-with-scaling', true);
+      stackWithScaling = new GamingDatabaseStack(appWithScaling, 'test-stack-with-scaling', { enableAutoScaling: true });
       synthesizedWithScaling = Testing.synth(stackWithScaling);
     });
 
