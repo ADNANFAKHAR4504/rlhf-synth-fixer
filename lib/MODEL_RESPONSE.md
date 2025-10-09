@@ -17,7 +17,6 @@ Let's break down what we need to build for this AWS CDK project:
    - Application Load Balancer (ALB)
 
 3. Governance:
-   - CDK Aspect to apply standard tags
    - CDK Aspect to enforce encryption on storage resources
 
 Let's structure our CDK TypeScript project accordingly. I'll start by defining the directory structure:
@@ -32,7 +31,6 @@ project-root/
   │   ├── networking-stack.ts          # VPC and transit gateway
   │   ├── database-stack.ts            # Aurora Global Database
   │   └── aspects/
-  │       ├── tagging-aspect.ts        # For applying tags
   │       └── encryption-aspect.ts     # For enforcing encryption
   ├── package.json
   └── cdk.json
@@ -50,7 +48,6 @@ import { GlobalStack } from '../lib/global-stack';
 import { RegionalStack } from '../lib/regional-stack';
 import { NetworkingStack } from '../lib/networking-stack';
 import { DatabaseStack } from '../lib/database-stack';
-import { TaggingAspect } from '../lib/aspects/tagging-aspect';
 import { EncryptionAspect } from '../lib/aspects/encryption-aspect';
 
 const app = new cdk.App();
@@ -121,7 +118,6 @@ const globalStack = new GlobalStack(app, 'TradingPlatform-Global', {
 });
 
 // Apply aspects to all stacks
-cdk.Aspects.of(app).add(new TaggingAspect({ Project: 'TradingPlatform' }));
 cdk.Aspects.of(app).add(new EncryptionAspect());
 
 app.synth();
@@ -804,54 +800,7 @@ export class GlobalStack extends cdk.Stack {
 }
 ```
 
-6. Let's implement the tagging aspect (`lib/aspects/tagging-aspect.ts`):
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { IAspect, IConstruct } from 'constructs';
-import { CfnResource, Tags } from 'aws-cdk-lib';
-
-export interface TaggingAspectProps {
-  [key: string]: string;
-}
-
-export class TaggingAspect implements IAspect {
-  private readonly tags: TaggingAspectProps;
-
-  constructor(tags: TaggingAspectProps) {
-    this.tags = tags;
-  }
-
-  public visit(node: IConstruct): void {
-    // Apply tags to all resources
-    if (node instanceof CfnResource) {
-      // Apply all the standard tags
-      for (const [key, value] of Object.entries(this.tags)) {
-        Tags.of(node).add(key, value);
-      }
-
-      // Add specific additional tags by resource type
-      if (node instanceof cdk.aws_s3.CfnBucket) {
-        Tags.of(node).add('ResourceType', 'S3Bucket');
-      } else if (node instanceof cdk.aws_dynamodb.CfnTable) {
-        Tags.of(node).add('ResourceType', 'DynamoDBTable');
-      } else if (
-        node instanceof cdk.aws_rds.CfnDBInstance ||
-        node instanceof cdk.aws_rds.CfnDBCluster
-      ) {
-        Tags.of(node).add('ResourceType', 'Database');
-      } else if (
-        node instanceof cdk.aws_ecs.CfnService ||
-        node instanceof cdk.aws_ecs.CfnTaskDefinition
-      ) {
-        Tags.of(node).add('ResourceType', 'ECSResource');
-      }
-    }
-  }
-}
-```
-
-7. Finally, let's implement the encryption aspect (`lib/aspects/encryption-aspect.ts`):
+6. Finally, let's implement the encryption aspect (`lib/aspects/encryption-aspect.ts`):
 
 ```typescript
 import { IAspect, IConstruct } from 'constructs';
@@ -993,11 +942,10 @@ This setup creates a multi-region active-active setup for a trading platform as 
 3. VPCs in both regions with Transit Gateway inter-region peering
 4. ECS Fargate services for the trading engine and order management
 5. Application Load Balancers in each region
-6. CDK Aspects to enforce tagging and encryption requirements
+6. CDK Aspect to enforce encryption requirements
 
-The aspects ensure that:
+The encryption aspect ensures that:
 
-- All resources are tagged with the standard tags (Project: TradingPlatform, etc.)
 - All storage resources (S3, DynamoDB, RDS, etc.) have encryption enabled
 
 This is a complete and structured AWS CDK TypeScript project that should meet all the requirements specified for the global trading platform.
@@ -1022,7 +970,6 @@ trading-platform/
 │   ├── networking-stack.ts              # VPC and Transit Gateway
 │   ├── database-stack.ts                # Aurora Global Database
 │   └── aspects/
-│       ├── tagging-aspect.ts            # Enforces tags
 │       └── encryption-aspect.ts         # Enforces encryption
 ├── package.json
 └── cdk.json
@@ -1040,7 +987,6 @@ import { GlobalStack } from '../lib/global-stack';
 import { RegionalStack } from '../lib/regional-stack';
 import { NetworkingStack } from '../lib/networking-stack';
 import { DatabaseStack } from '../lib/database-stack';
-import { TaggingAspect } from '../lib/aspects/tagging-aspect';
 import { EncryptionAspect } from '../lib/aspects/encryption-aspect';
 
 const app = new cdk.App();
@@ -1111,7 +1057,6 @@ const globalStack = new GlobalStack(app, 'TradingPlatform-Global', {
 });
 
 // Apply governance aspects to all stacks
-cdk.Aspects.of(app).add(new TaggingAspect({ Project: 'TradingPlatform' }));
 cdk.Aspects.of(app).add(new EncryptionAspect());
 
 app.synth();
@@ -1641,10 +1586,4 @@ export class GlobalStack extends cdk.Stack {
     });
   }
 }
-```
-
-### `lib/aspects/tagging-aspect.ts` (Tagging Governance)
-
-```typescript
-import * as
 ```

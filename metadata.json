@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "VPC",
+    "Transit Gateway",
+    "Aurora Global Database",
+    "RDS",
+    "Secrets Manager",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Global Accelerator",
+    "CloudWatch Logs",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 8
 }
