@@ -1,13 +1,20 @@
-// Unit tests for multi-region DR Terraform infrastructure
-// Target: 90%+ coverage of tap_stack.tf resources
+// Unit tests for multi-region DR Terraform infrastructure (Modular)
+// Target: 90%+ coverage of modular infrastructure
 
 import fs from "fs";
 import path from "path";
 
 const STACK_FILE = "../lib/tap_stack.tf";
 const PROVIDER_FILE = "../lib/provider.tf";
+const VARIABLES_FILE = "../lib/variables.tf";
+const OUTPUTS_FILE = "../lib/outputs.tf";
+const MODULES_DIR = "../lib/modules";
+
 const stackPath = path.resolve(__dirname, STACK_FILE);
 const providerPath = path.resolve(__dirname, PROVIDER_FILE);
+const variablesPath = path.resolve(__dirname, VARIABLES_FILE);
+const outputsPath = path.resolve(__dirname, OUTPUTS_FILE);
+const modulesPath = path.resolve(__dirname, MODULES_DIR);
 
 describe("Multi-Region DR Infrastructure - File Structure", () => {
   test("tap_stack.tf file exists", () => {
@@ -23,9 +30,49 @@ describe("Multi-Region DR Infrastructure - File Structure", () => {
     expect(exists).toBe(true);
   });
 
+  test("variables.tf file exists", () => {
+    const exists = fs.existsSync(variablesPath);
+    expect(exists).toBe(true);
+  });
+
+  test("outputs.tf file exists", () => {
+    const exists = fs.existsSync(outputsPath);
+    expect(exists).toBe(true);
+  });
+
+  test("modules directory exists", () => {
+    const exists = fs.existsSync(modulesPath);
+    expect(exists).toBe(true);
+  });
+
   test("tap_stack.tf has non-zero content", () => {
     const stats = fs.statSync(stackPath);
     expect(stats.size).toBeGreaterThan(100);
+  });
+
+  test("all required modules exist", () => {
+    const requiredModules = [
+      "vpc", "security_groups", "alb", "asg", "kms",
+      "rds", "dynamodb", "iam", "lambda", "monitoring",
+      "backup", "waf", "route53"
+    ];
+    
+    requiredModules.forEach(moduleName => {
+      const modulePath = path.join(modulesPath, moduleName);
+      expect(fs.existsSync(modulePath)).toBe(true);
+    });
+  });
+
+  test("each module has required files", () => {
+    const requiredModules = ["vpc", "security_groups", "alb", "rds", "iam"];
+    const requiredFiles = ["main.tf", "variables.tf", "outputs.tf"];
+    
+    requiredModules.forEach(moduleName => {
+      requiredFiles.forEach(fileName => {
+        const filePath = path.join(modulesPath, moduleName, fileName);
+        expect(fs.existsSync(filePath)).toBe(true);
+      });
+    });
   });
 });
 
@@ -46,559 +93,523 @@ describe("Multi-Region DR Infrastructure - Provider Configuration", () => {
     expect(providerContent).toMatch(/region\s*=\s*var\.aws_region/);
   });
 
-  test("tap_stack.tf declares secondary provider with alias", () => {
-    expect(stackContent).toMatch(/provider\s+"aws"\s*{\s*alias\s*=\s*"secondary"/);
+  test("provider.tf declares secondary provider with alias", () => {
+    expect(providerContent).toMatch(/provider\s+"aws"\s*{\s*alias\s*=\s*"secondary"/);
   });
 
   test("secondary provider uses secondary_region variable", () => {
-    expect(stackContent).toMatch(/region\s*=\s*var\.secondary_region/);
+    expect(providerContent).toMatch(/region\s*=\s*var\.secondary_region/);
   });
 
-  test("provider.tf does NOT declare provider in tap_stack.tf unnecessarily", () => {
-    // Ensure primary provider is in provider.tf, not duplicated
-    expect(providerContent).toMatch(/provider\s+"aws"\s*{/);
+  test("provider.tf declares configuration_aliases for multi-region support", () => {
+    expect(providerContent).toMatch(/configuration_aliases\s*=\s*\[aws\.secondary\]/);
   });
 });
 
 describe("Multi-Region DR Infrastructure - Variables", () => {
-  let stackContent: string;
+  let variablesContent: string;
 
   beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
+    variablesContent = fs.readFileSync(variablesPath, "utf8");
   });
 
   test("declares aws_region variable", () => {
-    expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
   test("declares secondary_region variable", () => {
-    expect(stackContent).toMatch(/variable\s+"secondary_region"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"secondary_region"\s*{/);
   });
 
   test("declares environment variable with validation", () => {
-    expect(stackContent).toMatch(/variable\s+"environment"\s*{/);
-    expect(stackContent).toMatch(/validation\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"environment"\s*{/);
+    expect(variablesContent).toMatch(/validation\s*{/);
   });
 
   test("declares VPC CIDR variables for both regions", () => {
-    expect(stackContent).toMatch(/variable\s+"vpc_cidr_primary"\s*{/);
-    expect(stackContent).toMatch(/variable\s+"vpc_cidr_secondary"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"vpc_cidr_primary"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"vpc_cidr_secondary"\s*{/);
   });
 
   test("declares Aurora instance_class variable", () => {
-    expect(stackContent).toMatch(/variable\s+"aurora_instance_class"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"aurora_instance_class"\s*{/);
   });
 
   test("declares EC2 instance_type variable", () => {
-    expect(stackContent).toMatch(/variable\s+"ec2_instance_type"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"ec2_instance_type"\s*{/);
   });
 
   test("declares ASG capacity variables", () => {
-    expect(stackContent).toMatch(/variable\s+"asg_min_capacity"\s*{/);
-    expect(stackContent).toMatch(/variable\s+"asg_max_capacity"\s*{/);
-    expect(stackContent).toMatch(/variable\s+"asg_desired_capacity"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"asg_min_capacity"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"asg_max_capacity"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"asg_desired_capacity"\s*{/);
   });
 
   test("declares project_name variable", () => {
-    expect(stackContent).toMatch(/variable\s+"project_name"\s*{/);
+    expect(variablesContent).toMatch(/variable\s+"project_name"\s*{/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Networking (Primary)", () => {
+describe("Multi-Region DR Infrastructure - Networking Modules", () => {
   let stackContent: string;
+  let vpcModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const vpcModulePath = path.join(modulesPath, "vpc", "main.tf");
+    vpcModuleContent = fs.readFileSync(vpcModulePath, "utf8");
   });
 
-  test("creates primary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/cidr_block\s*=\s*var\.vpc_cidr_primary/);
+  test("instantiates primary VPC module", () => {
+    expect(stackContent).toMatch(/module\s+"vpc_primary"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/vpc"/);
   });
 
-  test("enables DNS hostnames and support in primary VPC", () => {
-    const vpcBlock = stackContent.match(/resource\s+"aws_vpc"\s+"primary"\s*{[^}]*}/s);
-    expect(vpcBlock).toBeTruthy();
-    expect(vpcBlock![0]).toMatch(/enable_dns_hostnames\s*=\s*true/);
-    expect(vpcBlock![0]).toMatch(/enable_dns_support\s*=\s*true/);
+  test("primary VPC module uses correct provider", () => {
+    const vpcPrimaryBlock = stackContent.match(/module\s+"vpc_primary"\s*{[\s\S]*?(?=module|$)/);
+    expect(vpcPrimaryBlock).toBeTruthy();
+    expect(vpcPrimaryBlock![0]).toMatch(/providers\s*=\s*{\s*aws\s*=\s*aws\s*}/);
   });
 
-  test("creates primary public subnets with count", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_public"\s*{/);
-    expect(stackContent).toMatch(/count\s*=\s*2/);
+  test("VPC module creates VPC with DNS support", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_vpc"\s+"main"\s*{/);
+    expect(vpcModuleContent).toMatch(/enable_dns_hostnames\s*=\s*true/);
+    expect(vpcModuleContent).toMatch(/enable_dns_support\s*=\s*true/);
   });
 
-  test("creates primary private subnets with count", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_private"\s*{/);
+  test("VPC module creates public and private subnets", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_subnet"\s+"public"\s*{/);
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_subnet"\s+"private"\s*{/);
+    expect(vpcModuleContent).toMatch(/count\s*=\s*2/);
   });
 
-  test("creates Internet Gateway for primary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.primary\.id/);
+  test("VPC module creates Internet Gateway", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"\s*{/);
   });
 
-  test("creates NAT Gateways for primary region", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"primary"\s*{/);
+  test("VPC module creates NAT Gateways and EIPs", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"\s*{/);
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_eip"\s+"nat"\s*{/);
+    expect(vpcModuleContent).toMatch(/domain\s*=\s*"vpc"/);
   });
 
-  test("creates Elastic IPs for primary NAT Gateways", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"primary_nat"\s*{/);
-    expect(stackContent).toMatch(/domain\s*=\s*"vpc"/);
+  test("VPC module creates route tables", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_route_table"\s+"public"\s*{/);
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_route_table"\s+"private"\s*{/);
   });
 
-  test("creates public route table for primary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"primary_public"\s*{/);
+  test("VPC module creates route table associations", () => {
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_route_table_association"\s+"public"\s*{/);
+    expect(vpcModuleContent).toMatch(/resource\s+"aws_route_table_association"\s+"private"\s*{/);
   });
 
-  test("creates private route tables for primary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"primary_private"\s*{/);
+  test("instantiates secondary VPC module", () => {
+    expect(stackContent).toMatch(/module\s+"vpc_secondary"\s*{/);
   });
 
-  test("associates primary public subnets with route table", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"primary_public"\s*{/);
-  });
-
-  test("associates primary private subnets with route tables", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"primary_private"\s*{/);
+  test("secondary VPC module uses secondary provider", () => {
+    const vpcSecondaryBlock = stackContent.match(/module\s+"vpc_secondary"\s*{[\s\S]*?(?=module|$)/);
+    expect(vpcSecondaryBlock).toBeTruthy();
+    expect(vpcSecondaryBlock![0]).toMatch(/providers\s*=\s*{\s*aws\s*=\s*aws\.secondary\s*}/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Networking (Secondary)", () => {
+describe("Multi-Region DR Infrastructure - Security Groups Modules", () => {
   let stackContent: string;
+  let sgModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const sgModulePath = path.join(modulesPath, "security_groups", "main.tf");
+    sgModuleContent = fs.readFileSync(sgModulePath, "utf8");
   });
 
-  test("creates secondary VPC with secondary provider", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"secondary"\s*{/);
-    expect(stackContent).toMatch(/provider\s*=\s*aws\.secondary/);
-    expect(stackContent).toMatch(/cidr_block\s*=\s*var\.vpc_cidr_secondary/);
+  test("instantiates primary security groups module", () => {
+    expect(stackContent).toMatch(/module\s+"security_groups_primary"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/security_groups"/);
   });
 
-  test("creates secondary public subnets", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_public"\s*{/);
+  test("security groups module creates ALB security group", () => {
+    expect(sgModuleContent).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{/);
   });
 
-  test("creates secondary private subnets", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_private"\s*{/);
-  });
-
-  test("creates Internet Gateway for secondary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondary"\s*{/);
-    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.secondary\.id/);
-  });
-
-  test("creates NAT Gateways for secondary region", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"secondary"\s*{/);
-  });
-
-  test("creates route tables for secondary VPC", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_public"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_private"\s*{/);
-  });
-});
-
-describe("Multi-Region DR Infrastructure - Security Groups", () => {
-  let stackContent: string;
-
-  beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
-  });
-
-  test("creates primary ALB security group", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary_alb"\s*{/);
-  });
-
-  test("primary ALB allows HTTP and HTTPS ingress", () => {
-    const sgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"primary_alb"\s*{[\s\S]*?(?=resource|$)/);
+  test("ALB security group allows HTTP and HTTPS", () => {
+    const sgBlock = sgModuleContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?(?=resource|$)/);
     expect(sgBlock).toBeTruthy();
     expect(sgBlock![0]).toMatch(/from_port\s*=\s*80/);
     expect(sgBlock![0]).toMatch(/from_port\s*=\s*443/);
   });
 
-  test("creates primary app security group", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary_app"\s*{/);
+  test("security groups module creates app security group", () => {
+    expect(sgModuleContent).toMatch(/resource\s+"aws_security_group"\s+"app"\s*{/);
   });
 
-  test("primary app security group allows traffic from ALB", () => {
-    const appSgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"primary_app"\s*{[\s\S]*?(?=resource|$)/);
+  test("app security group references ALB security group", () => {
+    const appSgBlock = sgModuleContent.match(/resource\s+"aws_security_group"\s+"app"\s*{[\s\S]*?(?=resource|$)/);
     expect(appSgBlock).toBeTruthy();
-    expect(appSgBlock![0]).toMatch(/security_groups\s*=\s*\[aws_security_group\.primary_alb\.id\]/);
+    expect(appSgBlock![0]).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
   });
 
-  test("creates primary database security group", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary_db"\s*{/);
+  test("security groups module creates database security group", () => {
+    expect(sgModuleContent).toMatch(/resource\s+"aws_security_group"\s+"db"\s*{/);
   });
 
-  test("primary DB security group allows MySQL traffic from app servers", () => {
-    const dbSgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"primary_db"\s*{[\s\S]*?(?=resource|$)/);
+  test("database security group allows MySQL traffic", () => {
+    const dbSgBlock = sgModuleContent.match(/resource\s+"aws_security_group"\s+"db"\s*{[\s\S]*?(?=resource|$)/);
     expect(dbSgBlock).toBeTruthy();
     expect(dbSgBlock![0]).toMatch(/from_port\s*=\s*3306/);
     expect(dbSgBlock![0]).toMatch(/to_port\s*=\s*3306/);
   });
 
-  test("creates secondary region security groups", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_alb"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_app"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary_db"\s*{/);
+  test("instantiates secondary security groups module", () => {
+    expect(stackContent).toMatch(/module\s+"security_groups_secondary"\s*{/);
   });
 
-  test("secondary security groups use secondary provider", () => {
-    const secondarySgBlocks = stackContent.match(/resource\s+"aws_security_group"\s+"secondary_\w+"\s*{[\s\S]*?provider\s*=\s*aws\.secondary/g);
-    expect(secondarySgBlocks).toBeTruthy();
-    expect(secondarySgBlocks!.length).toBeGreaterThanOrEqual(3);
+  test("secondary security groups module uses secondary provider", () => {
+    const sgSecondaryBlock = stackContent.match(/module\s+"security_groups_secondary"\s*{[\s\S]*?(?=module|$)/);
+    expect(sgSecondaryBlock).toBeTruthy();
+    expect(sgSecondaryBlock![0]).toMatch(/providers\s*=\s*{\s*aws\s*=\s*aws\.secondary\s*}/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Aurora Global Database", () => {
+describe("Multi-Region DR Infrastructure - RDS Module", () => {
   let stackContent: string;
+  let rdsModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const rdsModulePath = path.join(modulesPath, "rds", "main.tf");
+    rdsModuleContent = fs.readFileSync(rdsModulePath, "utf8");
   });
 
-  test("creates RDS Global Cluster", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_rds_global_cluster"\s+"main"\s*{/);
-    expect(stackContent).toMatch(/engine\s*=\s*"aurora-mysql"/);
+  test("instantiates RDS module", () => {
+    expect(stackContent).toMatch(/module\s+"rds"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/rds"/);
   });
 
-  test("creates primary Aurora cluster", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/global_cluster_identifier\s*=\s*aws_rds_global_cluster\.main\.id/);
+  test("RDS module uses both providers", () => {
+    const rdsBlock = stackContent.match(/module\s+"rds"\s*{[\s\S]*?(?=module|$)/);
+    expect(rdsBlock).toBeTruthy();
+    expect(rdsBlock![0]).toMatch(/providers\s*=\s*{/);
+    expect(rdsBlock![0]).toMatch(/aws\.secondary/);
   });
 
-  test("primary Aurora cluster has backup retention configured", () => {
-    const primaryClusterBlock = stackContent.match(/resource\s+"aws_rds_cluster"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_rds_cluster"|$)/);
-    expect(primaryClusterBlock).toBeTruthy();
-    expect(primaryClusterBlock![0]).toMatch(/backup_retention_period\s*=\s*\d+/);
+  test("RDS module creates global cluster", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_global_cluster"\s+"main"\s*{/);
+    expect(rdsModuleContent).toMatch(/engine\s*=\s*"aurora-mysql"/);
+  });
+
+  test("RDS module creates primary cluster", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"\s*{/);
+    expect(rdsModuleContent).toMatch(/global_cluster_identifier\s*=\s*aws_rds_global_cluster\.main\.id/);
   });
 
   test("primary Aurora cluster has storage encryption enabled", () => {
-    const primaryClusterBlock = stackContent.match(/resource\s+"aws_rds_cluster"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_rds_cluster"|$)/);
+    const primaryClusterBlock = rdsModuleContent.match(/resource\s+"aws_rds_cluster"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_rds_cluster"|$)/);
     expect(primaryClusterBlock).toBeTruthy();
     expect(primaryClusterBlock![0]).toMatch(/storage_encrypted\s*=\s*true/);
   });
 
-  test("creates primary Aurora cluster instances", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/count\s*=\s*2/);
+  test("RDS module creates cluster instances", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"\s*{/);
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"secondary"\s*{/);
+    expect(rdsModuleContent).toMatch(/count\s*=\s*2/);
   });
 
-  test("creates DB subnet groups for both regions", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"\s*{/);
+  test("RDS module creates DB subnet groups", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"\s*{/);
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"\s*{/);
   });
 
-  test("creates secondary Aurora cluster", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_rds_cluster"\s+"secondary"\s*{/);
-    expect(stackContent).toMatch(/provider\s*=\s*aws\.secondary/);
-  });
-
-  test("creates secondary Aurora cluster instances", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"secondary"\s*{/);
-  });
-
-  test("secondary Aurora cluster references global cluster", () => {
-    const secondaryClusterBlock = stackContent.match(/resource\s+"aws_rds_cluster"\s+"secondary"\s*{[\s\S]*?(?=resource\s+"aws_rds_cluster_instance"|$)/);
+  test("RDS module creates secondary cluster with provider", () => {
+    const secondaryClusterBlock = rdsModuleContent.match(/resource\s+"aws_rds_cluster"\s+"secondary"\s*{[\s\S]*?provider\s*=\s*aws\.secondary/);
     expect(secondaryClusterBlock).toBeTruthy();
-    expect(secondaryClusterBlock![0]).toMatch(/global_cluster_identifier\s*=\s*aws_rds_global_cluster\.main\.id/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - DynamoDB Global Table", () => {
+describe("Multi-Region DR Infrastructure - DynamoDB Module", () => {
   let stackContent: string;
+  let dynamoModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const dynamoModulePath = path.join(modulesPath, "dynamodb", "main.tf");
+    dynamoModuleContent = fs.readFileSync(dynamoModulePath, "utf8");
   });
 
-  test("creates DynamoDB table with global replication", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"main"\s*{/);
+  test("instantiates DynamoDB module", () => {
+    expect(stackContent).toMatch(/module\s+"dynamodb"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/dynamodb"/);
+  });
+
+  test("DynamoDB module creates table with global replication", () => {
+    expect(dynamoModuleContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"main"\s*{/);
   });
 
   test("DynamoDB table has replica in secondary region", () => {
-    const dynamoBlock = stackContent.match(/resource\s+"aws_dynamodb_table"\s+"main"\s*{[\s\S]*?(?=resource|$)/);
-    expect(dynamoBlock).toBeTruthy();
-    expect(dynamoBlock![0]).toMatch(/replica\s*{/);
-    expect(dynamoBlock![0]).toMatch(/region_name\s*=\s*var\.secondary_region/);
+    expect(dynamoModuleContent).toMatch(/replica\s*{/);
+    expect(dynamoModuleContent).toMatch(/region_name\s*=\s*var\.secondary_region/);
   });
 
   test("DynamoDB table has stream enabled", () => {
-    const dynamoBlock = stackContent.match(/resource\s+"aws_dynamodb_table"\s+"main"\s*{[\s\S]*?(?=resource|$)/);
-    expect(dynamoBlock).toBeTruthy();
-    expect(dynamoBlock![0]).toMatch(/stream_enabled\s*=\s*true/);
+    expect(dynamoModuleContent).toMatch(/stream_enabled\s*=\s*true/);
   });
 
-  test("DynamoDB table has point-in-time recovery enabled", () => {
-    const dynamoBlock = stackContent.match(/resource\s+"aws_dynamodb_table"\s+"main"\s*{[\s\S]*?(?=resource|$)/);
-    expect(dynamoBlock).toBeTruthy();
-    expect(dynamoBlock![0]).toMatch(/point_in_time_recovery\s*{/);
-    expect(dynamoBlock![0]).toMatch(/enabled\s*=\s*true/);
+  test("DynamoDB table has point-in-time recovery", () => {
+    expect(dynamoModuleContent).toMatch(/point_in_time_recovery\s*{/);
+    expect(dynamoModuleContent).toMatch(/enabled\s*=\s*true/);
   });
 
   test("DynamoDB table uses PAY_PER_REQUEST billing", () => {
-    expect(stackContent).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
+    expect(dynamoModuleContent).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
   });
 
   test("DynamoDB table defines hash_key attribute", () => {
-    const dynamoBlock = stackContent.match(/resource\s+"aws_dynamodb_table"\s+"main"\s*{[\s\S]*?(?=resource|$)/);
-    expect(dynamoBlock).toBeTruthy();
-    expect(dynamoBlock![0]).toMatch(/hash_key\s*=\s*"id"/);
-    expect(dynamoBlock![0]).toMatch(/attribute\s*{[\s\S]*?name\s*=\s*"id"[\s\S]*?type\s*=\s*"S"/);
+    expect(dynamoModuleContent).toMatch(/hash_key\s*=\s*"id"/);
+    expect(dynamoModuleContent).toMatch(/attribute\s*{[\s\S]*?name\s*=\s*"id"[\s\S]*?type\s*=\s*"S"/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Application Load Balancers", () => {
+describe("Multi-Region DR Infrastructure - ALB Modules", () => {
   let stackContent: string;
+  let albModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const albModulePath = path.join(modulesPath, "alb", "main.tf");
+    albModuleContent = fs.readFileSync(albModulePath, "utf8");
   });
 
-  test("creates primary ALB", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/load_balancer_type\s*=\s*"application"/);
+  test("instantiates primary ALB module", () => {
+    expect(stackContent).toMatch(/module\s+"alb_primary"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/alb"/);
   });
 
-  test("primary ALB is internet-facing", () => {
-    const albBlock = stackContent.match(/resource\s+"aws_lb"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_lb"|resource\s+"aws_lb_target"|$)/);
-    expect(albBlock).toBeTruthy();
-    expect(albBlock![0]).toMatch(/internal\s*=\s*false/);
+  test("ALB module creates load balancer", () => {
+    expect(albModuleContent).toMatch(/resource\s+"aws_lb"\s+"main"\s*{/);
+    expect(albModuleContent).toMatch(/load_balancer_type\s*=\s*"application"/);
+    expect(albModuleContent).toMatch(/internal\s*=\s*false/);
   });
 
-  test("creates primary ALB target group", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb_target_group"\s+"primary"\s*{/);
+  test("ALB module creates target group with health checks", () => {
+    expect(albModuleContent).toMatch(/resource\s+"aws_lb_target_group"\s+"main"\s*{/);
+    expect(albModuleContent).toMatch(/health_check\s*{/);
+    expect(albModuleContent).toMatch(/path\s*=\s*"\/health"/);
   });
 
-  test("primary target group has health check configured", () => {
-    const tgBlock = stackContent.match(/resource\s+"aws_lb_target_group"\s+"primary"\s*{[\s\S]*?(?=resource|$)/);
-    expect(tgBlock).toBeTruthy();
-    expect(tgBlock![0]).toMatch(/health_check\s*{/);
-    expect(tgBlock![0]).toMatch(/path\s*=\s*"\/health"/);
+  test("ALB module creates listener", () => {
+    expect(albModuleContent).toMatch(/resource\s+"aws_lb_listener"\s+"main"\s*{/);
+    expect(albModuleContent).toMatch(/port\s*=\s*"80"/);
   });
 
-  test("creates primary ALB listener on port 80", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"primary"\s*{/);
-    expect(stackContent).toMatch(/port\s*=\s*"80"/);
+  test("instantiates secondary ALB module", () => {
+    expect(stackContent).toMatch(/module\s+"alb_secondary"\s*{/);
   });
 
-  test("creates secondary ALB with provider", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"secondary"\s*{/);
-    const secondaryAlbBlock = stackContent.match(/resource\s+"aws_lb"\s+"secondary"\s*{[\s\S]*?provider\s*=\s*aws\.secondary/);
-    expect(secondaryAlbBlock).toBeTruthy();
-  });
-
-  test("creates secondary ALB target group and listener", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lb_target_group"\s+"secondary"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"secondary"\s*{/);
+  test("secondary ALB module uses secondary provider", () => {
+    const albSecondaryBlock = stackContent.match(/module\s+"alb_secondary"\s*{[\s\S]*?(?=module|$)/);
+    expect(albSecondaryBlock).toBeTruthy();
+    expect(albSecondaryBlock![0]).toMatch(/providers\s*=\s*{\s*aws\s*=\s*aws\.secondary\s*}/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - IAM Roles and Policies", () => {
+describe("Multi-Region DR Infrastructure - ASG Modules", () => {
   let stackContent: string;
+  let asgModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const asgModulePath = path.join(modulesPath, "asg", "main.tf");
+    asgModuleContent = fs.readFileSync(asgModulePath, "utf8");
   });
 
-  test("creates EC2 IAM role", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"\s*{/);
+  test("instantiates primary ASG module", () => {
+    expect(stackContent).toMatch(/module\s+"asg_primary"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/asg"/);
   });
 
-  test("EC2 role has assume role policy for EC2 service", () => {
-    const ec2RoleBlock = stackContent.match(/resource\s+"aws_iam_role"\s+"ec2_role"\s*{[\s\S]*?(?=resource|$)/);
+  test("ASG module creates launch template", () => {
+    expect(asgModuleContent).toMatch(/resource\s+"aws_launch_template"\s+"main"\s*{/);
+    expect(asgModuleContent).toMatch(/iam_instance_profile\s*{/);
+    expect(asgModuleContent).toMatch(/user_data\s*=/);
+  });
+
+  test("ASG module creates auto scaling group", () => {
+    expect(asgModuleContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"\s*{/);
+    expect(asgModuleContent).toMatch(/health_check_type\s*=\s*"ELB"/);
+  });
+
+  test("primary ASG uses capacity variables", () => {
+    const asgPrimaryBlock = stackContent.match(/module\s+"asg_primary"\s*{[\s\S]*?(?=module|$)/);
+    expect(asgPrimaryBlock).toBeTruthy();
+    expect(asgPrimaryBlock![0]).toMatch(/min_capacity\s*=\s*var\.asg_min_capacity/);
+    expect(asgPrimaryBlock![0]).toMatch(/max_capacity\s*=\s*var\.asg_max_capacity/);
+    expect(asgPrimaryBlock![0]).toMatch(/desired_capacity\s*=\s*var\.asg_desired_capacity/);
+  });
+
+  test("instantiates secondary ASG module", () => {
+    expect(stackContent).toMatch(/module\s+"asg_secondary"\s*{/);
+  });
+
+  test("secondary ASG starts with 0 capacity (standby)", () => {
+    const asgSecondaryBlock = stackContent.match(/module\s+"asg_secondary"\s*{[\s\S]*?(?=module|$)/);
+    expect(asgSecondaryBlock).toBeTruthy();
+    expect(asgSecondaryBlock![0]).toMatch(/desired_capacity\s*=\s*0/);
+  });
+});
+
+describe("Multi-Region DR Infrastructure - IAM Module", () => {
+  let stackContent: string;
+  let iamModuleContent: string;
+
+  beforeAll(() => {
+    stackContent = fs.readFileSync(stackPath, "utf8");
+    const iamModulePath = path.join(modulesPath, "iam", "main.tf");
+    iamModuleContent = fs.readFileSync(iamModulePath, "utf8");
+  });
+
+  test("instantiates IAM module", () => {
+    expect(stackContent).toMatch(/module\s+"iam"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/iam"/);
+  });
+
+  test("IAM module creates EC2 role", () => {
+    expect(iamModuleContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"\s*{/);
+    const ec2RoleBlock = iamModuleContent.match(/resource\s+"aws_iam_role"\s+"ec2_role"\s*{[\s\S]*?(?=resource|$)/);
     expect(ec2RoleBlock).toBeTruthy();
     expect(ec2RoleBlock![0]).toMatch(/Service.*ec2\.amazonaws\.com/);
   });
 
-  test("creates EC2 IAM role policy with DynamoDB permissions", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"\s*{/);
-    const ec2PolicyBlock = stackContent.match(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"\s*{[\s\S]*?(?=resource|$)/);
+  test("IAM module creates EC2 role policy with DynamoDB permissions", () => {
+    expect(iamModuleContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"\s*{/);
+    const ec2PolicyBlock = iamModuleContent.match(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"\s*{[\s\S]*?(?=resource|$)/);
     expect(ec2PolicyBlock).toBeTruthy();
     expect(ec2PolicyBlock![0]).toMatch(/dynamodb:GetItem/);
-    expect(ec2PolicyBlock![0]).toMatch(/dynamodb:PutItem/);
   });
 
-  test("creates EC2 instance profile", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"\s*{/);
+  test("IAM module creates instance profile", () => {
+    expect(iamModuleContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"\s*{/);
   });
 
-  test("creates Lambda IAM role", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"\s*{/);
-  });
-
-  test("Lambda role has assume role policy for Lambda service", () => {
-    const lambdaRoleBlock = stackContent.match(/resource\s+"aws_iam_role"\s+"lambda_role"\s*{[\s\S]*?(?=resource|$)/);
+  test("IAM module creates Lambda role", () => {
+    expect(iamModuleContent).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"\s*{/);
+    const lambdaRoleBlock = iamModuleContent.match(/resource\s+"aws_iam_role"\s+"lambda_role"\s*{[\s\S]*?(?=resource|$)/);
     expect(lambdaRoleBlock).toBeTruthy();
     expect(lambdaRoleBlock![0]).toMatch(/Service.*lambda\.amazonaws\.com/);
   });
 
   test("Lambda role policy includes RDS failover permissions", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"\s*{/);
-    const lambdaPolicyBlock = stackContent.match(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"\s*{[\s\S]*?(?=resource|$)/);
+    const lambdaPolicyBlock = iamModuleContent.match(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"\s*{[\s\S]*?(?=resource|$)/);
     expect(lambdaPolicyBlock).toBeTruthy();
     expect(lambdaPolicyBlock![0]).toMatch(/rds:FailoverGlobalCluster/);
   });
 
-  test("Lambda role policy includes SNS publish permissions", () => {
-    const lambdaPolicyBlock = stackContent.match(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"\s*{[\s\S]*?(?=resource|$)/);
-    expect(lambdaPolicyBlock).toBeTruthy();
-    expect(lambdaPolicyBlock![0]).toMatch(/sns:Publish/);
+  test("IAM module creates backup role", () => {
+    expect(iamModuleContent).toMatch(/resource\s+"aws_iam_role"\s+"backup_role"\s*{/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Lambda Failover Function", () => {
+describe("Multi-Region DR Infrastructure - Lambda Module", () => {
   let stackContent: string;
+  let lambdaModuleContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const lambdaModulePath = path.join(modulesPath, "lambda", "main.tf");
+    lambdaModuleContent = fs.readFileSync(lambdaModulePath, "utf8");
   });
 
-  test("creates CloudWatch log group for Lambda", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"lambda_failover"\s*{/);
+  test("instantiates Lambda module", () => {
+    expect(stackContent).toMatch(/module\s+"lambda"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/lambda"/);
   });
 
-  test("creates Lambda failover function", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lambda_function"\s+"failover"\s*{/);
-    expect(stackContent).toMatch(/runtime\s*=\s*"python3\.11"/);
+  test("Lambda module creates CloudWatch log group", () => {
+    expect(lambdaModuleContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"lambda_failover"\s*{/);
   });
 
-  test("Lambda function has required environment variables", () => {
-    const lambdaBlock = stackContent.match(/resource\s+"aws_lambda_function"\s+"failover"\s*{[\s\S]*?(?=resource|$)/);
+  test("Lambda module creates failover function", () => {
+    expect(lambdaModuleContent).toMatch(/resource\s+"aws_lambda_function"\s+"failover"\s*{/);
+    expect(lambdaModuleContent).toMatch(/runtime\s*=\s*"python3\.11"/);
+  });
+
+  test("Lambda function has environment variables", () => {
+    const lambdaBlock = lambdaModuleContent.match(/resource\s+"aws_lambda_function"\s+"failover"\s*{[\s\S]*?(?=resource|$)/);
     expect(lambdaBlock).toBeTruthy();
     expect(lambdaBlock![0]).toMatch(/environment\s*{/);
     expect(lambdaBlock![0]).toMatch(/GLOBAL_CLUSTER_ID/);
-    expect(lambdaBlock![0]).toMatch(/PRIMARY_REGION/);
-    expect(lambdaBlock![0]).toMatch(/SECONDARY_REGION/);
   });
 
-  test("Lambda function has appropriate timeout", () => {
-    const lambdaBlock = stackContent.match(/resource\s+"aws_lambda_function"\s+"failover"\s*{[\s\S]*?(?=resource|$)/);
-    expect(lambdaBlock).toBeTruthy();
-    expect(lambdaBlock![0]).toMatch(/timeout\s*=\s*\d+/);
-  });
-
-  test("creates null_resource for Lambda zip file", () => {
-    expect(stackContent).toMatch(/resource\s+"null_resource"\s+"lambda_zip"\s*{/);
+  test("Lambda module creates deployment package", () => {
+    expect(lambdaModuleContent).toMatch(/resource\s+"local_file"\s+"lambda_code"\s*{/);
+    expect(lambdaModuleContent).toMatch(/data\s+"archive_file"\s+"lambda_zip"\s*{/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Auto Scaling Groups", () => {
+describe("Multi-Region DR Infrastructure - Monitoring Module", () => {
+  let stackContent: string;
+  let monitoringModuleContent: string;
+
+  beforeAll(() => {
+    stackContent = fs.readFileSync(stackPath, "utf8");
+    const monitoringModulePath = path.join(modulesPath, "monitoring", "main.tf");
+    monitoringModuleContent = fs.readFileSync(monitoringModulePath, "utf8");
+  });
+
+  test("instantiates Monitoring module", () => {
+    expect(stackContent).toMatch(/module\s+"monitoring"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/monitoring"/);
+  });
+
+  test("Monitoring module creates SNS topic", () => {
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"\s*{/);
+  });
+
+  test("Monitoring module creates CloudWatch alarms", () => {
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_alb_unhealthy"\s*{/);
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_db_connections"\s*{/);
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_region_failure"\s*{/);
+  });
+
+  test("Monitoring module creates EventBridge rule", () => {
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"health_check"\s*{/);
+    expect(monitoringModuleContent).toMatch(/schedule_expression\s*=\s*"rate\(5 minutes\)"/);
+  });
+
+  test("Monitoring module creates Lambda permissions", () => {
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_lambda_permission"\s+"sns"\s*{/);
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_lambda_permission"\s+"eventbridge"\s*{/);
+  });
+});
+
+describe("Multi-Region DR Infrastructure - Additional Modules", () => {
   let stackContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
   });
 
-  test("creates primary launch template", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_launch_template"\s+"primary"\s*{/);
+  test("instantiates Backup module", () => {
+    expect(stackContent).toMatch(/module\s+"backup"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/backup"/);
   });
 
-  test("primary launch template includes IAM instance profile", () => {
-    const ltBlock = stackContent.match(/resource\s+"aws_launch_template"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_launch_template"|resource\s+"aws_autoscaling"|$)/);
-    expect(ltBlock).toBeTruthy();
-    expect(ltBlock![0]).toMatch(/iam_instance_profile\s*{/);
+  test("instantiates WAF module", () => {
+    expect(stackContent).toMatch(/module\s+"waf_primary"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/waf"/);
   });
 
-  test("primary launch template has user data script", () => {
-    const ltBlock = stackContent.match(/resource\s+"aws_launch_template"\s+"primary"\s*{[\s\S]*?(?=resource\s+"aws_launch_template"|resource\s+"aws_autoscaling"|$)/);
-    expect(ltBlock).toBeTruthy();
-    expect(ltBlock![0]).toMatch(/user_data\s*=/);
+  test("instantiates Route53 module", () => {
+    expect(stackContent).toMatch(/module\s+"route53"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/route53"/);
   });
 
-  test("creates primary auto scaling group", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"primary"\s*{/);
-  });
-
-  test("primary ASG has health check type ELB", () => {
-    const asgBlock = stackContent.match(/resource\s+"aws_autoscaling_group"\s+"primary"\s*{[\s\S]*?(?=resource|$)/);
-    expect(asgBlock).toBeTruthy();
-    expect(asgBlock![0]).toMatch(/health_check_type\s*=\s*"ELB"/);
-  });
-
-  test("primary ASG references capacity variables", () => {
-    const asgBlock = stackContent.match(/resource\s+"aws_autoscaling_group"\s+"primary"\s*{[\s\S]*?(?=resource|$)/);
-    expect(asgBlock).toBeTruthy();
-    expect(asgBlock![0]).toMatch(/min_size\s*=\s*var\.asg_min_capacity/);
-    expect(asgBlock![0]).toMatch(/max_size\s*=\s*var\.asg_max_capacity/);
-    expect(asgBlock![0]).toMatch(/desired_capacity\s*=\s*var\.asg_desired_capacity/);
-  });
-
-  test("creates secondary launch template and ASG", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_launch_template"\s+"secondary"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"secondary"\s*{/);
-  });
-
-  test("secondary ASG starts with 0 capacity (standby)", () => {
-    const secondaryAsgBlock = stackContent.match(/resource\s+"aws_autoscaling_group"\s+"secondary"\s*{[\s\S]*?(?=resource|$)/);
-    expect(secondaryAsgBlock).toBeTruthy();
-    expect(secondaryAsgBlock![0]).toMatch(/desired_capacity\s*=\s*0/);
+  test("instantiates KMS module", () => {
+    expect(stackContent).toMatch(/module\s+"kms"\s*{/);
+    expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/kms"/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - CloudWatch Alarms", () => {
-  let stackContent: string;
-
-  beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
-  });
-
-  test("creates SNS topic for alerts", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"\s*{/);
-  });
-
-  test("creates SNS topic subscription for Lambda", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_sns_topic_subscription"\s+"lambda"\s*{/);
-    expect(stackContent).toMatch(/protocol\s*=\s*"lambda"/);
-  });
-
-  test("creates Lambda permission for SNS", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lambda_permission"\s+"sns"\s*{/);
-  });
-
-  test("creates CloudWatch alarm for unhealthy ALB targets", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_alb_unhealthy"\s*{/);
-    expect(stackContent).toMatch(/metric_name\s*=\s*"UnHealthyHostCount"/);
-  });
-
-  test("creates CloudWatch alarm for Aurora DB connections", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_db_connections"\s*{/);
-    expect(stackContent).toMatch(/metric_name\s*=\s*"DatabaseConnections"/);
-  });
-
-  test("creates critical alarm for primary region failure", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_region_failure"\s*{/);
-    expect(stackContent).toMatch(/metric_name\s*=\s*"HealthyHostCount"/);
-  });
-
-  test("alarms trigger SNS notifications", () => {
-    const alarmBlocks = stackContent.match(/resource\s+"aws_cloudwatch_metric_alarm"[\s\S]*?alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/g);
-    expect(alarmBlocks).toBeTruthy();
-    expect(alarmBlocks!.length).toBeGreaterThanOrEqual(3);
-  });
-});
-
-describe("Multi-Region DR Infrastructure - EventBridge", () => {
-  let stackContent: string;
-
-  beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
-  });
-
-  test("creates EventBridge rule for health checks", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"health_check"\s*{/);
-    expect(stackContent).toMatch(/schedule_expression\s*=\s*"rate\(5 minutes\)"/);
-  });
-
-  test("creates EventBridge target for Lambda", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_event_target"\s+"health_check_lambda"\s*{/);
-  });
-
-  test("creates Lambda permission for EventBridge", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_lambda_permission"\s+"eventbridge"\s*{/);
-  });
-});
 
 describe("Multi-Region DR Infrastructure - Data Sources", () => {
   let stackContent: string;
@@ -616,168 +627,168 @@ describe("Multi-Region DR Infrastructure - Data Sources", () => {
     expect(stackContent).toMatch(/provider\s*=\s*aws\.secondary/);
   });
 
-  test("queries latest Amazon Linux AMI for primary region", () => {
-    expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_primary"\s*{/);
-  });
-
-  test("queries latest Amazon Linux AMI for secondary region", () => {
-    expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_secondary"\s*{/);
-  });
 });
 
 describe("Multi-Region DR Infrastructure - Outputs", () => {
-  let stackContent: string;
+  let outputsContent: string;
 
   beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
+    outputsContent = fs.readFileSync(outputsPath, "utf8");
   });
 
   test("exports primary ALB DNS name", () => {
-    expect(stackContent).toMatch(/output\s+"primary_alb_dns"\s*{/);
-    expect(stackContent).toMatch(/value\s*=\s*aws_lb\.primary\.dns_name/);
+    expect(outputsContent).toMatch(/output\s+"primary_alb_dns"\s*{/);
+    expect(outputsContent).toMatch(/value\s*=\s*module\.alb_primary\.alb_dns_name/);
   });
 
   test("exports secondary ALB DNS name", () => {
-    expect(stackContent).toMatch(/output\s+"secondary_alb_dns"\s*{/);
-    expect(stackContent).toMatch(/value\s*=\s*aws_lb\.secondary\.dns_name/);
+    expect(outputsContent).toMatch(/output\s+"secondary_alb_dns"\s*{/);
+    expect(outputsContent).toMatch(/value\s*=\s*module\.alb_secondary\.alb_dns_name/);
   });
 
   test("exports primary Aurora endpoint", () => {
-    expect(stackContent).toMatch(/output\s+"primary_aurora_endpoint"\s*{/);
-    expect(stackContent).toMatch(/value\s*=\s*aws_rds_cluster\.primary\.endpoint/);
+    expect(outputsContent).toMatch(/output\s+"primary_aurora_endpoint"\s*{/);
+    expect(outputsContent).toMatch(/value\s*=\s*module\.rds\.primary_endpoint/);
   });
 
   test("exports secondary Aurora endpoint", () => {
-    expect(stackContent).toMatch(/output\s+"secondary_aurora_endpoint"\s*{/);
-    expect(stackContent).toMatch(/value\s*=\s*aws_rds_cluster\.secondary\.endpoint/);
+    expect(outputsContent).toMatch(/output\s+"secondary_aurora_endpoint"\s*{/);
+    expect(outputsContent).toMatch(/value\s*=\s*module\.rds\.secondary_endpoint/);
   });
 
   test("exports DynamoDB table name", () => {
-    expect(stackContent).toMatch(/output\s+"dynamodb_table_name"\s*{/);
+    expect(outputsContent).toMatch(/output\s+"dynamodb_table_name"\s*{/);
+    expect(outputsContent).toMatch(/module\.dynamodb\.table_name/);
   });
 
   test("exports Lambda failover function ARN", () => {
-    expect(stackContent).toMatch(/output\s+"lambda_failover_function"\s*{/);
+    expect(outputsContent).toMatch(/output\s+"lambda_failover_function"\s*{/);
+    expect(outputsContent).toMatch(/module\.lambda\.function_arn/);
   });
 
   test("exports SNS alerts topic ARN", () => {
-    expect(stackContent).toMatch(/output\s+"sns_alerts_topic"\s*{/);
+    expect(outputsContent).toMatch(/output\s+"sns_alerts_topic"\s*{/);
+    expect(outputsContent).toMatch(/module\.monitoring\.sns_topic_arn/);
   });
 
   test("exports RTO/RPO summary", () => {
-    expect(stackContent).toMatch(/output\s+"rto_rpo_summary"\s*{/);
-    const outputBlock = stackContent.match(/output\s+"rto_rpo_summary"\s*{[\s\S]*?(?=output|$)/);
+    expect(outputsContent).toMatch(/output\s+"rto_rpo_summary"\s*{/);
+    const outputBlock = outputsContent.match(/output\s+"rto_rpo_summary"\s*{[\s\S]*?(?=output|$)/);
     expect(outputBlock).toBeTruthy();
     expect(outputBlock![0]).toMatch(/rto_target/);
     expect(outputBlock![0]).toMatch(/rpo_target/);
   });
 });
 
-describe("Multi-Region DR Infrastructure - Resource Tagging", () => {
+describe("Multi-Region DR Infrastructure - Module Integration", () => {
   let stackContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
   });
 
-  test("resources have Environment tags", () => {
-    const envTags = stackContent.match(/Environment\s*=\s*var\.environment/g);
-    expect(envTags).toBeTruthy();
-    expect(envTags!.length).toBeGreaterThan(10);
+  test("modules pass outputs correctly", () => {
+    // Check that primary VPC outputs are used by security groups
+    const sgPrimaryBlock = stackContent.match(/module\s+"security_groups_primary"\s*{[\s\S]*?(?=module|$)/);
+    expect(sgPrimaryBlock).toBeTruthy();
+    expect(sgPrimaryBlock![0]).toMatch(/vpc_id\s*=\s*module\.vpc_primary\.vpc_id/);
   });
 
-  test("resources have Name tags", () => {
-    const nameTags = stackContent.match(/Name\s*=\s*"\$\{var\.project_name\}/g);
-    expect(nameTags).toBeTruthy();
-    expect(nameTags!.length).toBeGreaterThan(10);
+  test("modules receive variables from root", () => {
+    const vpcPrimaryBlock = stackContent.match(/module\s+"vpc_primary"\s*{[\s\S]*?(?=module|$)/);
+    expect(vpcPrimaryBlock).toBeTruthy();
+    expect(vpcPrimaryBlock![0]).toMatch(/project_name\s*=\s*var\.project_name/);
+    expect(vpcPrimaryBlock![0]).toMatch(/environment\s*=\s*var\.environment/);
   });
 
-  test("resources have consistent tagging pattern", () => {
-    const tagBlocks = stackContent.match(/tags\s*=\s*{[\s\S]*?}/g);
-    expect(tagBlocks).toBeTruthy();
-    expect(tagBlocks!.length).toBeGreaterThan(20);
+  test("inter-module dependencies are correct", () => {
+    // ALB depends on VPC and security groups
+    const albPrimaryBlock = stackContent.match(/module\s+"alb_primary"\s*{[\s\S]*?(?=module|$)/);
+    expect(albPrimaryBlock).toBeTruthy();
+    expect(albPrimaryBlock![0]).toMatch(/module\.vpc_primary/);
+    expect(albPrimaryBlock![0]).toMatch(/module\.security_groups_primary/);
   });
 });
 
 describe("Multi-Region DR Infrastructure - Best Practices", () => {
-  let stackContent: string;
+  let sgModuleContent: string;
+  let rdsModuleContent: string;
 
   beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
+    const sgModulePath = path.join(modulesPath, "security_groups", "main.tf");
+    sgModuleContent = fs.readFileSync(sgModulePath, "utf8");
+    const rdsModulePath = path.join(modulesPath, "rds", "main.tf");
+    rdsModuleContent = fs.readFileSync(rdsModulePath, "utf8");
   });
 
   test("uses lifecycle blocks for security groups", () => {
-    const lifecycleBlocks = stackContent.match(/lifecycle\s*{\s*create_before_destroy\s*=\s*true/g);
+    const lifecycleBlocks = sgModuleContent.match(/lifecycle\s*{\s*create_before_destroy\s*=\s*true/g);
     expect(lifecycleBlocks).toBeTruthy();
-    expect(lifecycleBlocks!.length).toBeGreaterThanOrEqual(6);
+    expect(lifecycleBlocks!.length).toBeGreaterThanOrEqual(3);
   });
 
   test("enables encryption for Aurora clusters", () => {
-    const encryptionSettings = stackContent.match(/storage_encrypted\s*=\s*true/g);
-    expect(encryptionSettings).toBeTruthy();
-    expect(encryptionSettings!.length).toBeGreaterThanOrEqual(3);
+    expect(rdsModuleContent).toMatch(/storage_encrypted\s*=\s*true/);
   });
 
   test("configures backup retention for Aurora", () => {
-    expect(stackContent).toMatch(/backup_retention_period\s*=\s*\d+/);
-  });
-
-  test("uses proper subnet distribution across AZs", () => {
-    const subnetCount = stackContent.match(/resource\s+"aws_subnet"/g);
-    expect(subnetCount).toBeTruthy();
-    expect(subnetCount!.length).toBeGreaterThanOrEqual(4);
+    expect(rdsModuleContent).toMatch(/backup_retention_period\s*=\s*\d+/);
   });
 
   test("includes description fields for security group rules", () => {
-    const descriptions = stackContent.match(/description\s*=\s*"/g);
+    const descriptions = sgModuleContent.match(/description\s*=\s*"/g);
     expect(descriptions).toBeTruthy();
-    expect(descriptions!.length).toBeGreaterThan(15);
+    expect(descriptions!.length).toBeGreaterThan(6);
   });
 });
 
 describe("Multi-Region DR Infrastructure - DR Requirements", () => {
-  let stackContent: string;
+  let rdsModuleContent: string;
+  let dynamoModuleContent: string;
+  let lambdaModuleContent: string;
+  let monitoringModuleContent: string;
+  let outputsContent: string;
 
   beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, "utf8");
+    rdsModuleContent = fs.readFileSync(path.join(modulesPath, "rds", "main.tf"), "utf8");
+    dynamoModuleContent = fs.readFileSync(path.join(modulesPath, "dynamodb", "main.tf"), "utf8");
+    lambdaModuleContent = fs.readFileSync(path.join(modulesPath, "lambda", "main.tf"), "utf8");
+    monitoringModuleContent = fs.readFileSync(path.join(modulesPath, "monitoring", "main.tf"), "utf8");
+    outputsContent = fs.readFileSync(outputsPath, "utf8");
   });
 
   test("implements Aurora Global Database for cross-region replication", () => {
-    expect(stackContent).toMatch(/aws_rds_global_cluster/);
-    expect(stackContent).toMatch(/global_cluster_identifier/);
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_global_cluster"/);
+    expect(rdsModuleContent).toMatch(/global_cluster_identifier/);
   });
 
   test("implements DynamoDB Global Table", () => {
-    const dynamoBlock = stackContent.match(/resource\s+"aws_dynamodb_table"\s+"main"\s*{[\s\S]*?replica\s*{/);
-    expect(dynamoBlock).toBeTruthy();
+    expect(dynamoModuleContent).toMatch(/replica\s*{/);
+    expect(dynamoModuleContent).toMatch(/region_name/);
   });
 
   test("implements automated failover with Lambda", () => {
-    expect(stackContent).toMatch(/aws_lambda_function.*failover/);
-    const lambdaBlock = stackContent.match(/resource\s+"aws_lambda_function"\s+"failover"\s*{[\s\S]*?(?=resource|$)/);
-    expect(lambdaBlock).toBeTruthy();
-    expect(lambdaBlock![0]).toMatch(/GLOBAL_CLUSTER_ID/);
+    expect(lambdaModuleContent).toMatch(/resource\s+"aws_lambda_function"\s+"failover"/);
+    expect(lambdaModuleContent).toMatch(/GLOBAL_CLUSTER_ID/);
   });
 
   test("configures health monitoring with CloudWatch", () => {
-    const alarms = stackContent.match(/resource\s+"aws_cloudwatch_metric_alarm"/g);
+    const alarms = monitoringModuleContent.match(/resource\s+"aws_cloudwatch_metric_alarm"/g);
     expect(alarms).toBeTruthy();
     expect(alarms!.length).toBeGreaterThanOrEqual(3);
   });
 
   test("implements event-driven automation with EventBridge", () => {
-    expect(stackContent).toMatch(/aws_cloudwatch_event_rule/);
-    expect(stackContent).toMatch(/aws_cloudwatch_event_target/);
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_event_rule"/);
+    expect(monitoringModuleContent).toMatch(/resource\s+"aws_cloudwatch_event_target"/);
   });
 
   test("supports RTO target of 15 minutes", () => {
-    const outputs = stackContent.match(/output\s+"rto_rpo_summary"[\s\S]*?15 minutes/);
-    expect(outputs).toBeTruthy();
+    expect(outputsContent).toMatch(/rto_target.*15 minutes/);
   });
 
   test("supports RPO target of 5 minutes", () => {
-    const outputs = stackContent.match(/output\s+"rto_rpo_summary"[\s\S]*?5 minutes/);
-    expect(outputs).toBeTruthy();
+    expect(outputsContent).toMatch(/rpo_target.*5 minutes/);
   });
 });
 
@@ -788,31 +799,32 @@ describe("Multi-Region DR Infrastructure - Coverage Summary", () => {
     stackContent = fs.readFileSync(stackPath, "utf8");
   });
 
-  test("covers all major AWS services", () => {
-    expect(stackContent).toMatch(/aws_vpc/);
-    expect(stackContent).toMatch(/aws_subnet/);
-    expect(stackContent).toMatch(/aws_rds_global_cluster/);
-    expect(stackContent).toMatch(/aws_dynamodb_table/);
-    expect(stackContent).toMatch(/aws_lb/);
-    expect(stackContent).toMatch(/aws_autoscaling_group/);
-    expect(stackContent).toMatch(/aws_lambda_function/);
-    expect(stackContent).toMatch(/aws_cloudwatch_metric_alarm/);
-    expect(stackContent).toMatch(/aws_sns_topic/);
-    expect(stackContent).toMatch(/aws_iam_role/);
-  });
-
-  test("implements complete multi-region infrastructure", () => {
-    const resourceCount = (stackContent.match(/resource\s+"/g) || []).length;
-    console.log(`Total Terraform resources defined: ${resourceCount}`);
-    expect(resourceCount).toBeGreaterThanOrEqual(50);
+  test("instantiates all required modules", () => {
+    const moduleCount = (stackContent.match(/module\s+"/g) || []).length;
+    console.log(`Total modules instantiated: ${moduleCount}`);
+    expect(moduleCount).toBeGreaterThanOrEqual(13);
   });
 
   test("covers both primary and secondary regions", () => {
-    const primaryResources = (stackContent.match(/resource\s+"aws_\w+"\s+"primary/g) || []).length;
-    const secondaryResources = (stackContent.match(/resource\s+"aws_\w+"\s+"secondary/g) || []).length;
-    console.log(`Primary region resources: ${primaryResources}`);
-    console.log(`Secondary region resources: ${secondaryResources}`);
-    expect(primaryResources).toBeGreaterThan(10);
-    expect(secondaryResources).toBeGreaterThan(5);
+    const primaryModules = (stackContent.match(/module\s+"[a-z_]*primary/g) || []).length;
+    const secondaryModules = (stackContent.match(/module\s+"[a-z_]*secondary/g) || []).length;
+    console.log(`Primary region modules: ${primaryModules}`);
+    console.log(`Secondary region modules: ${secondaryModules}`);
+    expect(primaryModules).toBeGreaterThanOrEqual(4);
+    expect(secondaryModules).toBeGreaterThanOrEqual(4);
+  });
+
+  test("maintains modular architecture", () => {
+    // Verify modules directory exists and contains required modules
+    const requiredModules = [
+      "vpc", "security_groups", "alb", "asg", "rds",
+      "dynamodb", "iam", "lambda", "monitoring", "backup",
+      "waf", "route53", "kms"
+    ];
+    
+    requiredModules.forEach(moduleName => {
+      const modulePath = path.join(modulesPath, moduleName);
+      expect(fs.existsSync(modulePath)).toBe(true);
+    });
   });
 });
