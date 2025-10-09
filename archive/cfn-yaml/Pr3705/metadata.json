@@ -10,5 +10,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3, Sns, Lambda, CloudWatch, IAM"
+  "aws_services": "S3, Sns, Lambda, CloudWatch, IAM",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
