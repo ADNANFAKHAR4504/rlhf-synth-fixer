@@ -757,6 +757,7 @@ describe('TapStack Integration Tests', () => {
 
       const dbEndpoint = outputs.DatabaseEndpoint;
       const asgName = outputs.AutoScalingGroupName;
+      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
 
       // Get ASG subnet configuration
       const asgResponse = await asgClient.send(
@@ -766,7 +767,7 @@ describe('TapStack Integration Tests', () => {
       );
 
       const asg = asgResponse.AutoScalingGroups?.[0];
-      const asgSubnets = asg?.VPCZoneIdentifier?.split(',') || [];
+      const asgSubnets = asg?.VPCZoneIdentifier?.split(',').map(s => s.trim()) || [];
       expect(asgSubnets.length).toBeGreaterThan(0);
 
       // Get RDS subnet configuration
@@ -780,9 +781,20 @@ describe('TapStack Integration Tests', () => {
 
       const dbSubnetIds = db?.DBSubnetGroup?.Subnets?.map(s => s.SubnetIdentifier) || [];
 
-      // Both should be in the same VPC (private subnets)
+      // Both RDS and ASG should be in the same VPC
       expect(db?.DBSubnetGroup?.VpcId).toBe(outputs.VPCId);
-      expect(asg?.VPCZoneIdentifier).toContain(outputs.VPCId.substring(0, 8));
+
+      // Verify ASG subnets are private subnets (they should overlap with our expected private subnets)
+      const asgUsesPrivateSubnets = asgSubnets.some(subnet =>
+        privateSubnetIds.includes(subnet)
+      );
+      expect(asgUsesPrivateSubnets).toBe(true);
+
+      // Verify RDS is also in private subnets
+      const rdsUsesPrivateSubnets = dbSubnetIds.some(subnet =>
+        privateSubnetIds.includes(subnet)
+      );
+      expect(rdsUsesPrivateSubnets).toBe(true);
     }, 20000);
 
     test('Security groups should allow ALB to communicate with ASG instances', async () => {
