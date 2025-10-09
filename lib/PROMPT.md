@@ -5,7 +5,7 @@ A retail app needs to handle 2,000 daily order update notifications efficiently.
 Create a notification system using CloudFormation with:
 
     •	SNS for publishing and managing notifications
-    •	Lambda (Node.js 18) for message processing
+    •	Lambda (Node.js) for message processing
     •	DynamoDB for logging notification events
     •	CloudWatch for performance metrics and monitoring
     •	SES for email fallback when push delivery fails
