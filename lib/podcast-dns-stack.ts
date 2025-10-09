@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { Construct } from 'constructs';
 
 interface PodcastDnsStackProps {
