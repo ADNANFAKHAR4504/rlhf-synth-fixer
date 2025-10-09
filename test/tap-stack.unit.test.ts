@@ -1,9 +1,9 @@
 import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import { GamingDatabaseStack } from '../lib/tap-stack';
 
-describe('Stack Structure', () => {
+describe('Gaming Database Stack Structure', () => {
   let app: App;
-  let stack: TapStack;
+  let stack: GamingDatabaseStack;
   let synthesized: string;
 
   beforeEach(() => {
@@ -11,29 +11,24 @@ describe('Stack Structure', () => {
     jest.clearAllMocks();
   });
 
-  test('TapStack instantiates successfully via props', () => {
+  test('GamingDatabaseStack instantiates successfully', () => {
     app = new App();
-    stack = new TapStack(app, 'TestTapStackWithProps', {
-      environmentSuffix: 'prod',
-      stateBucket: 'custom-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-    });
+    stack = new GamingDatabaseStack(app, 'gaming-database-stack');
     synthesized = Testing.synth(stack);
 
-    // Verify that TapStack instantiates without errors via props
+    // Verify that GamingDatabaseStack instantiates without errors
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
 
-  test('TapStack uses default values when no props provided', () => {
+  test('GamingDatabaseStack contains DynamoDB table', () => {
     app = new App();
-    stack = new TapStack(app, 'TestTapStackDefault');
+    stack = new GamingDatabaseStack(app, 'gaming-database-stack');
     synthesized = Testing.synth(stack);
 
-    // Verify that TapStack instantiates without errors when no props are provided
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+    // Verify that the synthesized stack contains a DynamoDB table
+    expect(synthesized).toContain('aws_dynamodb_table');
+    expect(synthesized).toContain('GamePlayerProfiles');
   });
 });
 

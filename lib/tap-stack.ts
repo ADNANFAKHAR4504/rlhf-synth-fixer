@@ -141,6 +141,9 @@ export class GamingDatabaseStack extends TerraformStack {
   }
 }
 
+// Export alias for backward compatibility
+export const TapStack = GamingDatabaseStack;
+
 // App instantiation with required stack name
 const app = new App();
 new GamingDatabaseStack(app, "gaming-database-stack");
