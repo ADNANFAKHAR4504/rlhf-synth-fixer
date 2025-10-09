@@ -5,6 +5,7 @@ I'll create a complete serverless API using AWS CloudFormation with YAML. This s
 ## Architecture Overview
 
 The solution includes:
+
 - **API Gateway**: RESTful endpoints with proper HTTP methods
 - **Lambda Function**: Python 3.10 runtime for request processing
 - **DynamoDB**: NoSQL database for user data storage
@@ -416,7 +417,7 @@ Resources:
   ApiDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'serverless-api-dashboard-${EnvironmentSuffix}'
+      DashboardName: !Sub 'serverlessapi-dashboard-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -520,7 +521,7 @@ Outputs:
 
   DashboardURL:
     Description: 'CloudWatch Dashboard URL'
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverless-api-dashboard-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverlessapi-dashboard-${EnvironmentSuffix}'
 
   ParameterStorePrefix:
     Description: 'SSM Parameter Store prefix'

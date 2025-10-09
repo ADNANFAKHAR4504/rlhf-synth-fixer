@@ -288,7 +288,7 @@ duration_alarm = aws.cloudwatch.MetricAlarm(
 
 # Create CloudWatch dashboard for monitoring
 dashboard = aws.cloudwatch.Dashboard(
-    "serverless-api-dashboard",
+    "serverlessapi-dashboard",
     dashboard_name="ServerlessAPI-Production",
     dashboard_body=pulumi.Output.all(lambda_function.name).apply(
         lambda args: json.dumps({

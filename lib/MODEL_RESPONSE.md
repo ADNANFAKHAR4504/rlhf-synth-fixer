@@ -391,7 +391,7 @@ Resources:
   ApiDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'serverless-api-dashboard-${EnvironmentSuffix}'
+      DashboardName: !Sub 'serverlessapi-dashboard-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -494,7 +494,7 @@ Outputs:
 
   DashboardURL:
     Description: 'CloudWatch Dashboard URL'
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverless-api-dashboard-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverlessapi-dashboard-${EnvironmentSuffix}'
 
   ParameterStorePrefix:
     Description: 'SSM Parameter Store prefix'
@@ -504,6 +504,7 @@ Outputs:
 ```
 
 This implementation creates a complete serverless API with:
+
 - DynamoDB table for user data storage
 - Lambda function with Python 3.10 runtime
 - API Gateway with proper endpoints
