@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "45142738",
+  "team": "3",
+  "startedAt": "2025-10-03T03:36:56.181Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "KMS",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "Secrets Manager",
+    "Systems Manager",
+    "AWS Backup",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "IAM"
+  ],
+  "training_quality": 7,
+  "training_quality_justification": "This task provides high-quality training data for disaster recovery infrastructure implementation. The PROMPT is comprehensive and clearly defines enterprise-grade DR requirements for financial services with specific RTO/RPO targets. The MODEL_RESPONSE provides a detailed CloudFormation template, though it had significant gaps (missing Aurora Global Database, Auto Scaling, Route 53 health checks). The IDEAL_RESPONSE addresses many of these issues with proper implementations. The MODEL_FAILURES.md document thoroughly analyzes 10 major categories of issues with detailed explanations, making this excellent training material for understanding common DR infrastructure mistakes and their resolutions. The task demonstrates complex multi-region architecture, security best practices, and compliance requirements, making it valuable for teaching IaC patterns for highly available and disaster-resilient systems. The training value is reduced slightly (7/10 instead of 9-10) because the IDEAL_RESPONSE still uses simplified RDS instead of full Aurora Global Database implementation, showing the complete solution wasn't achieved.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}

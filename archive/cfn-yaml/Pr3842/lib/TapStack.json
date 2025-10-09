@@ -1,0 +1,539 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless API with API Gateway, Lambda, DynamoDB, CloudWatch, and Parameter Store",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+      "Default": "dev"
+    }
+  },
+  "Resources": {
+    "UserDataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "user-data-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "userId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "ServerlessAPI"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "lambda-dynamodb-policy-${EnvironmentSuffix}"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "UserDataTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/serverless-api/${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ApiLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "api-handler-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.10",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "UserDataTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "PARAMETER_PREFIX": {
+              "Fn::Sub": "/serverless-api/${EnvironmentSuffix}"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\nssm = boto3.client('ssm')\ncloudwatch = boto3.client('cloudwatch')\n\ntable = dynamodb.Table(os.environ['TABLE_NAME'])\nenvironment = os.environ['ENVIRONMENT']\n\nclass DecimalEncoder(json.JSONEncoder):\n    def default(self, obj):\n        if isinstance(obj, Decimal):\n            return float(obj)\n        return super(DecimalEncoder, self).default(obj)\n\ndef publish_metric(metric_name, value, unit='Count'):\n    \"\"\"Publish custom metrics to CloudWatch\"\"\"\n    try:\n        cloudwatch.put_metric_data(\n            Namespace=f'ServerlessAPI/{environment}',\n            MetricData=[\n                {\n                    'MetricName': metric_name,\n                    'Value': value,\n                    'Unit': unit,\n                    'Timestamp': datetime.utcnow()\n                }\n            ]\n        )\n    except Exception as e:\n        print(f\"Error publishing metric: {str(e)}\")\n\ndef lambda_handler(event, context):\n    \"\"\"Main Lambda handler for API requests\"\"\"\n    try:\n        # Extract HTTP method and path\n        http_method = event.get('httpMethod', 'GET')\n        path = event.get('path', '/')\n        \n        # Route handling\n        if http_method == 'POST' and path == '/users':\n            return create_user(event)\n        elif http_method == 'GET' and path.startswith('/users/'):\n            return get_user(event)\n        elif http_method == 'GET' and path == '/health':\n            return health_check()\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'Endpoint not found'})\n            }\n    \n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        publish_metric('APIErrors', 1)\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n\ndef create_user(event):\n    \"\"\"Create a new user record\"\"\"\n    try:\n        body = json.loads(event.get('body', '{}'))\n        user_id = body.get('userId')\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'userId is required'})\n            }\n        \n        timestamp = int(datetime.utcnow().timestamp())\n        \n        item = {\n            'userId': user_id,\n            'timestamp': timestamp,\n            'data': body.get('data', {}),\n            'createdAt': datetime.utcnow().isoformat()\n        }\n        \n        table.put_item(Item=item)\n        publish_metric('UserCreated', 1)\n        \n        return {\n            'statusCode': 201,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'message': 'User created successfully', 'userId': user_id}, cls=DecimalEncoder)\n        }\n    \n    except Exception as e:\n        print(f\"Error creating user: {str(e)}\")\n        raise\n\ndef get_user(event):\n    \"\"\"Retrieve user data\"\"\"\n    try:\n        path_parts = event['path'].split('/')\n        user_id = path_parts[-1] if len(path_parts) > 2 else None\n        \n        if not user_id:\n            return {\n                'statusCode': 400,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'userId is required'})\n            }\n        \n        response = table.query(\n            KeyConditionExpression='userId = :uid',\n            ExpressionAttributeValues={':uid': user_id},\n            Limit=10,\n            ScanIndexForward=False\n        )\n        \n        publish_metric('UserQueried', 1)\n        \n        return {\n            'statusCode': 200,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'items': response.get('Items', [])}, cls=DecimalEncoder)\n        }\n    \n    except Exception as e:\n        print(f\"Error getting user: {str(e)}\")\n        raise\n\ndef health_check():\n    \"\"\"Health check endpoint\"\"\"\n    return {\n        'statusCode': 200,\n        'headers': {'Content-Type': 'application/json'},\n        'body': json.dumps({\n            'status': 'healthy',\n            'environment': environment,\n            'timestamp': datetime.utcnow().isoformat()\n        })\n    }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ApiLambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/api-handler-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "serverless-api-${EnvironmentSuffix}"
+        },
+        "Description": "Serverless API for user data management",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "UsersResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "users"
+      }
+    },
+    "UserIdResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Ref": "UsersResource"
+        },
+        "PathPart": "{userId}"
+      }
+    },
+    "HealthResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "health"
+      }
+    },
+    "UsersPostMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "UsersResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "UserIdGetMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "UserIdResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "RequestParameters": {
+          "method.request.path.userId": true
+        },
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "HealthGetMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "HealthResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "UsersPostMethod",
+        "UserIdGetMethod",
+        "HealthGetMethod"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "DeploymentId": {
+          "Ref": "ApiDeployment"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        },
+        "Description": {
+          "Fn::Sub": "API Stage for ${EnvironmentSuffix} environment"
+        },
+        "TracingEnabled": true,
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "MetricsEnabled": true,
+            "DataTraceEnabled": true,
+            "LoggingLevel": "INFO"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaApiGatewayPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ApiLambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+        }
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "ApiLambdaFunction"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ApiGateway5XXAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "api-5xx-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when API Gateway 5XX errors exceed threshold",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiName",
+            "Value": {
+              "Fn::Sub": "serverless-api-${EnvironmentSuffix}"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ApiDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "serverlessapi-dashboard-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration (ms)\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApiGateway\", \"Count\", {\"stat\": \"Sum\", \"label\": \"API Requests\"}],\n          [\".\", \"4XXError\", {\"stat\": \"Sum\", \"label\": \"4XX Errors\"}],\n          [\".\", \"5XXError\", {\"stat\": \"Sum\", \"label\": \"5XX Errors\"}],\n          [\".\", \"Latency\", {\"stat\": \"Average\", \"label\": \"Avg Latency (ms)\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Gateway Metrics\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity\",\n        \"yAxis\": {\"left\": {\"min\": 0}}\n      }\n    }\n  ]\n}\n"
+        }
+      }
+    },
+    "ApiConfigMaxRetries": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/serverless-api/${EnvironmentSuffix}/config/max-retries"
+        },
+        "Type": "String",
+        "Value": "3",
+        "Description": "Maximum number of retry attempts",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "ApiConfigTimeout": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/serverless-api/${EnvironmentSuffix}/config/timeout"
+        },
+        "Type": "String",
+        "Value": "30",
+        "Description": "API timeout in seconds",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    },
+    "ApiConfigRateLimit": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/serverless-api/${EnvironmentSuffix}/config/rate-limit"
+        },
+        "Type": "String",
+        "Value": "1000",
+        "Description": "Rate limit per user per day",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiUrl"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiLambdaFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaArn"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "DynamoDB table name",
+      "Value": {
+        "Ref": "UserDataTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TableName"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=serverlessapi-dashboard-${EnvironmentSuffix}"
+      }
+    },
+    "ParameterStorePrefix": {
+      "Description": "SSM Parameter Store prefix",
+      "Value": {
+        "Fn::Sub": "/serverless-api/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ParameterPrefix"
+        }
+      }
+    }
+  }
+}
