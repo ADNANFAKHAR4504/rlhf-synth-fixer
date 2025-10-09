@@ -18,5 +18,9 @@
     "IAM",
     "Rekognition",
     "Comprehend"
+  ],
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
   ]
 }
