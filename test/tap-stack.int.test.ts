@@ -2,7 +2,6 @@ import fs from 'fs';
 import http from 'http';
 import { EC2Client, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
 let outputs: any = {};
 try {
   if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
