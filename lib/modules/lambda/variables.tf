@@ -14,8 +14,9 @@ variable "lambda_role_arn" {
 }
 
 variable "global_cluster_id" {
-  description = "RDS Global Cluster ID"
+  description = "RDS Global Cluster ID (optional, not used in simplified config)"
   type        = string
+  default     = null
 }
 
 variable "primary_region" {

@@ -39,7 +39,7 @@ variable "vpc_cidr_secondary" {
 variable "aurora_instance_class" {
   description = "Aurora instance size"
   type        = string
-  default     = "db.r5.large"
+  default     = "db.t3.medium"
 }
 
 variable "ec2_instance_type" {

@@ -13,13 +13,13 @@ output "secondary_alb_dns" {
 }
 
 output "primary_aurora_endpoint" {
-  description = "Primary Aurora cluster endpoint"
+  description = "Primary Aurora cluster writer endpoint"
   value       = module.rds.primary_endpoint
 }
 
-output "secondary_aurora_endpoint" {
-  description = "Secondary Aurora cluster endpoint"
-  value       = module.rds.secondary_endpoint
+output "primary_aurora_reader_endpoint" {
+  description = "Primary Aurora cluster reader endpoint (Multi-AZ)"
+  value       = module.rds.primary_reader_endpoint
 }
 
 output "dynamodb_table_name" {
@@ -44,7 +44,7 @@ output "rto_rpo_summary" {
     rpo_target           = "5 minutes"
     primary_region       = var.aws_region
     secondary_region     = var.secondary_region
-    aurora_replication   = "Continuous (< 1 second lag)"
+    aurora_configuration = "Multi-AZ deployment with 2 instances across availability zones"
     dynamodb_replication = "Sub-second global replication"
     failover_automation  = "Lambda-based automated failover"
   }
@@ -63,7 +63,7 @@ output "monitoring_alarms" {
 output "cost_optimization_notes" {
   description = "Cost optimization recommendations"
   value = {
-    aurora_standby_note  = "Secondary Aurora cluster uses read replicas only in standby mode"
+    aurora_note          = "Using db.t3.medium instances for cost-effective Multi-AZ deployment"
     asg_standby_note     = "Secondary ASG starts with 0 capacity (warm standby pattern)"
     dynamodb_billing     = "PAY_PER_REQUEST billing mode - scales automatically"
     nat_gateway_note     = "Consider single NAT Gateway per region for cost savings in non-prod"

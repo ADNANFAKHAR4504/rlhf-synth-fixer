@@ -95,23 +95,20 @@ module "security_groups_secondary" {
 module "rds" {
   source = "./modules/rds"
 
-  project_name           = var.project_name
-  environment            = var.environment
-  primary_region         = var.aws_region
-  secondary_region       = var.secondary_region
-  primary_subnet_ids     = module.vpc_primary.private_subnet_ids
-  secondary_subnet_ids   = module.vpc_secondary.private_subnet_ids
-  primary_db_sg_id       = module.security_groups_primary.db_sg_id
-  secondary_db_sg_id     = module.security_groups_secondary.db_sg_id
-  primary_kms_key_arn    = module.kms.rds_primary_key_arn
-  secondary_kms_key_arn  = module.kms.rds_secondary_key_arn
-  instance_class         = var.aurora_instance_class
-  resource_suffix        = var.resource_suffix
+  project_name        = var.project_name
+  environment         = var.environment
+  primary_region      = var.aws_region
+  primary_subnet_ids  = module.vpc_primary.private_subnet_ids
+  primary_db_sg_id    = module.security_groups_primary.db_sg_id
+  primary_kms_key_arn = module.kms.rds_primary_key_arn
+  instance_class      = var.aurora_instance_class
+  resource_suffix     = var.resource_suffix
 
-  providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
-  }
+  # Secondary region parameters kept for compatibility but not used
+  secondary_region      = var.secondary_region
+  secondary_subnet_ids  = module.vpc_secondary.private_subnet_ids
+  secondary_db_sg_id    = module.security_groups_secondary.db_sg_id
+  secondary_kms_key_arn = module.kms.rds_secondary_key_arn
 }
 
 # ============================================================================
