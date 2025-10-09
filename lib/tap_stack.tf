@@ -34,32 +34,28 @@ module "kms" {
 module "vpc_primary" {
   source = "./modules/vpc"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_cidr                = var.vpc_cidr_primary
-  region                  = var.aws_region
-  region_name             = "primary"
-  use_secondary_provider  = false
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_cidr     = var.vpc_cidr_primary
+  region       = var.aws_region
+  region_name  = "primary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws
   }
 }
 
 module "vpc_secondary" {
   source = "./modules/vpc"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_cidr                = var.vpc_cidr_secondary
-  region                  = var.secondary_region
-  region_name             = "secondary"
-  use_secondary_provider  = true
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_cidr     = var.vpc_cidr_secondary
+  region       = var.secondary_region
+  region_name  = "secondary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws.secondary
   }
 }
 
@@ -70,30 +66,26 @@ module "vpc_secondary" {
 module "security_groups_primary" {
   source = "./modules/security_groups"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.vpc_primary.vpc_id
-  region_name             = "primary"
-  use_secondary_provider  = false
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id       = module.vpc_primary.vpc_id
+  region_name  = "primary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws
   }
 }
 
 module "security_groups_secondary" {
   source = "./modules/security_groups"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.vpc_secondary.vpc_id
-  region_name             = "secondary"
-  use_secondary_provider  = true
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id       = module.vpc_secondary.vpc_id
+  region_name  = "secondary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws.secondary
   }
 }
 
@@ -141,34 +133,30 @@ module "dynamodb" {
 module "alb_primary" {
   source = "./modules/alb"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.vpc_primary.vpc_id
-  public_subnet_ids       = module.vpc_primary.public_subnet_ids
-  alb_sg_id               = module.security_groups_primary.alb_sg_id
-  region_name             = "primary"
-  use_secondary_provider  = false
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc_primary.vpc_id
+  public_subnet_ids = module.vpc_primary.public_subnet_ids
+  alb_sg_id         = module.security_groups_primary.alb_sg_id
+  region_name       = "primary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws
   }
 }
 
 module "alb_secondary" {
   source = "./modules/alb"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.vpc_secondary.vpc_id
-  public_subnet_ids       = module.vpc_secondary.public_subnet_ids
-  alb_sg_id               = module.security_groups_secondary.alb_sg_id
-  region_name             = "secondary"
-  use_secondary_provider  = true
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc_secondary.vpc_id
+  public_subnet_ids = module.vpc_secondary.public_subnet_ids
+  alb_sg_id         = module.security_groups_secondary.alb_sg_id
+  region_name       = "secondary"
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws.secondary
   }
 }
 
@@ -228,46 +216,42 @@ module "lambda" {
 module "asg_primary" {
   source = "./modules/asg"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  region                  = var.aws_region
-  region_name             = "primary"
-  instance_type           = var.ec2_instance_type
-  instance_profile_name   = module.iam.ec2_instance_profile_name
-  app_sg_id               = module.security_groups_primary.app_sg_id
-  private_subnet_ids      = module.vpc_primary.private_subnet_ids
-  target_group_arn        = module.alb_primary.target_group_arn
-  min_capacity            = var.asg_min_capacity
-  max_capacity            = var.asg_max_capacity
-  desired_capacity        = var.asg_desired_capacity
-  use_secondary_provider  = false
+  project_name          = var.project_name
+  environment           = var.environment
+  region                = var.aws_region
+  region_name           = "primary"
+  instance_type         = var.ec2_instance_type
+  instance_profile_name = module.iam.ec2_instance_profile_name
+  app_sg_id             = module.security_groups_primary.app_sg_id
+  private_subnet_ids    = module.vpc_primary.private_subnet_ids
+  target_group_arn      = module.alb_primary.target_group_arn
+  min_capacity          = var.asg_min_capacity
+  max_capacity          = var.asg_max_capacity
+  desired_capacity      = var.asg_desired_capacity
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws
   }
 }
 
 module "asg_secondary" {
   source = "./modules/asg"
 
-  project_name            = var.project_name
-  environment             = var.environment
-  region                  = var.secondary_region
-  region_name             = "secondary"
-  instance_type           = var.ec2_instance_type
-  instance_profile_name   = module.iam.ec2_instance_profile_name
-  app_sg_id               = module.security_groups_secondary.app_sg_id
-  private_subnet_ids      = module.vpc_secondary.private_subnet_ids
-  target_group_arn        = module.alb_secondary.target_group_arn
-  min_capacity            = 0
-  max_capacity            = var.asg_max_capacity
-  desired_capacity        = 0
-  use_secondary_provider  = true
+  project_name          = var.project_name
+  environment           = var.environment
+  region                = var.secondary_region
+  region_name           = "secondary"
+  instance_type         = var.ec2_instance_type
+  instance_profile_name = module.iam.ec2_instance_profile_name
+  app_sg_id             = module.security_groups_secondary.app_sg_id
+  private_subnet_ids    = module.vpc_secondary.private_subnet_ids
+  target_group_arn      = module.alb_secondary.target_group_arn
+  min_capacity          = 0
+  max_capacity          = var.asg_max_capacity
+  desired_capacity      = 0
 
   providers = {
-    aws           = aws
-    aws.secondary = aws.secondary
+    aws = aws.secondary
   }
 }
 

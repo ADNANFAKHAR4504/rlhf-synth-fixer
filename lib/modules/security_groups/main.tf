@@ -1,7 +1,6 @@
 # Security Groups
 
 resource "aws_security_group" "alb" {
-  provider    = var.use_secondary_provider ? aws.secondary : null
   name_prefix = "${var.project_name}-alb-${var.region_name}-"
   description = "Security group for ${var.region_name} ALB"
   vpc_id      = var.vpc_id
@@ -41,7 +40,6 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "app" {
-  provider    = var.use_secondary_provider ? aws.secondary : null
   name_prefix = "${var.project_name}-app-${var.region_name}-"
   description = "Security group for ${var.region_name} application servers"
   vpc_id      = var.vpc_id
@@ -73,7 +71,6 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_security_group" "db" {
-  provider    = var.use_secondary_provider ? aws.secondary : null
   name_prefix = "${var.project_name}-db-${var.region_name}-"
   description = "Security group for ${var.region_name} Aurora database"
   vpc_id      = var.vpc_id

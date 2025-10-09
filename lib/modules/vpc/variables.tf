@@ -23,9 +23,3 @@ variable "region_name" {
   type        = string
 }
 
-variable "use_secondary_provider" {
-  description = "Whether to use the secondary provider"
-  type        = bool
-  default     = false
-}
-

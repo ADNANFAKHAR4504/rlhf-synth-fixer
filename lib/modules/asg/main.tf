@@ -1,7 +1,6 @@
 # Auto Scaling Group and Launch Template
 
 data "aws_ami" "amazon_linux" {
-  provider    = var.use_secondary_provider ? aws.secondary : null
   most_recent = true
   owners      = ["amazon"]
 
@@ -17,7 +16,6 @@ data "aws_ami" "amazon_linux" {
 }
 
 resource "aws_launch_template" "main" {
-  provider      = var.use_secondary_provider ? aws.secondary : null
   name_prefix   = "${var.project_name}-lt-${var.region_name}-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
@@ -54,7 +52,6 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  provider                  = var.use_secondary_provider ? aws.secondary : null
   name                      = "${var.project_name}-asg-${var.region_name}"
   vpc_zone_identifier       = var.private_subnet_ids
   target_group_arns         = [var.target_group_arn]
