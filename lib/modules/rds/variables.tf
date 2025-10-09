@@ -37,7 +37,7 @@ variable "master_password" {
 variable "engine_version" {
   description = "Aurora MySQL engine version"
   type        = string
-  default     = "8.0.mysql_aurora.3.02.0"
+  default     = "8.0.mysql_aurora.3.04.0"
 }
 
 variable "instance_class" {

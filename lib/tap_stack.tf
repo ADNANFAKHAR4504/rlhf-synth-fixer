@@ -155,7 +155,7 @@ module "rds" {
   database_name               = "financialdb"
   master_username             = var.db_master_username
   master_password             = var.db_master_password
-  engine_version              = "8.0.mysql_aurora.3.02.0"
+  engine_version              = "8.0.mysql_aurora.3.04.0"
   instance_class              = "db.t3.medium"
   instance_count              = 2 # Multi-AZ deployment
   availability_zones          = slice(data.aws_availability_zones.available.names, 0, 2)
