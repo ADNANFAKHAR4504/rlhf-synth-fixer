@@ -68,60 +68,27 @@ export class MonitoringStack extends cdk.NestedStack {
 
     configBucket.grantWrite(configRole);
 
-    const recorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: `${props.environmentSuffix}-recorder`,
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
+    // NOTE: ConfigRecorder and DeliveryChannel are not created here because
+    // AWS Config allows only ONE Configuration Recorder per region.
+    // This stack assumes an existing Config Recorder is already set up in the region.
+    // The Config Rules below will use the existing recorder.
 
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: `${props.environmentSuffix}-delivery-channel`,
-        s3BucketName: configBucket.bucketName,
-        s3KmsKeyArn: props.kmsKey.keyArn,
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      }
-    );
-
-    deliveryChannel.addDependency(recorder);
-
-    // Config Rules - must depend on recorder and delivery channel
-    const requiredTagsRule = new config.ManagedRule(this, 'RequiredTagsRule', {
+    // Config Rules - will use existing Config Recorder in the region
+    new config.ManagedRule(this, 'RequiredTagsRule', {
       identifier: config.ManagedRuleIdentifiers.REQUIRED_TAGS,
       inputParameters: {
         tag1Key: 'iac-rlhf-amazon',
       },
     });
-    requiredTagsRule.node.addDependency(recorder);
-    requiredTagsRule.node.addDependency(deliveryChannel);
 
-    const encryptedVolumesRule = new config.ManagedRule(
-      this,
-      'EncryptedVolumesRule',
-      {
-        identifier: config.ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT,
-      }
-    );
-    encryptedVolumesRule.node.addDependency(recorder);
-    encryptedVolumesRule.node.addDependency(deliveryChannel);
+    new config.ManagedRule(this, 'EncryptedVolumesRule', {
+      identifier: config.ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT,
+    });
 
-    const s3EncryptionRule = new config.ManagedRule(this, 'S3EncryptionRule', {
+    new config.ManagedRule(this, 'S3EncryptionRule', {
       identifier:
         config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
     });
-    s3EncryptionRule.node.addDependency(recorder);
-    s3EncryptionRule.node.addDependency(deliveryChannel);
 
     // Inspector V2 - Enable scanning
     new inspector.CfnFilter(this, 'InspectorFilter', {
