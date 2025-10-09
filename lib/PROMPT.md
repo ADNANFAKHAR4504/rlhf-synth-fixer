@@ -2,7 +2,15 @@
 
 ## Role
 
-You are an expe⚠️ **Important**: DynamoDB on-demand tables don't apply auto scaling. Still define the autoscaling resources for the GSI and guard their creation behind a boolean variable (e.g., `enableGsiAutoscaling`, default `false`). Include comments explaining that enabling it requires switching the table billing mode to `PROVISIONED` (DynamoDB limitation). When enabled, wire policies to the GSI correctly.t in **Terraform CDK (CDKTF)** with **TypeScript** and **AWS DynamoDB**.
+You are an## Auto Scaling (GSI)
+
+Create Application Auto Scaling resources for the GSI (read and write) with:
+
+- **Min capacity**: 5
+- **Max capacity**: 100
+- **Target utilization**: 70%
+
+⚠️ **Important**: DynamoDB on-demand tables don't apply auto scaling. Still define the autoscaling resources for the GSI and guard their creation behind a boolean variable (e.g., `enableGsiAutoscaling`, default `false`). Include comments explaining that enabling it requires switching the table billing mode to `PROVISIONED` (DynamoDB limitation). When enabled, wire policies to the GSI correctly.n **Terraform CDK (CDKTF)** with **TypeScript** and **AWS DynamoDB**.
 
 ## Goal
 
@@ -12,7 +20,7 @@ Produce a complete **CDKTF TypeScript application** (stack name `gaming-database
 
 A self-contained CDKTF TS project:
 
-- `main.ts` (or `index.ts`), stack named `gaming-database-stack`
+- `main.ts` (or `index.ts`) with stack name `gaming-database-stack`
 - CDKTF `cdktf.json` and `package.json` as needed
 - Uses AWS provider v5.0+
 - Output only code (no prose), with concise comments
