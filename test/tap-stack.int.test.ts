@@ -234,7 +234,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
       expect(internetGateways).toHaveLength(1);
 
       const igw = internetGateways[0];
-      const attachment = igw.Attachments?.find(a => a.VpcId === vpcId);
+      const attachment = igw.Attachments?.find((a: { VpcId: string; State: string }) => a.VpcId === vpcId);
       expect(attachment).toBeDefined();
       expect(attachment?.State).toBe('available');
     });
@@ -244,13 +244,15 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
 
       // Check for public route to IGW
       const publicRt = routeTables.find(rt =>
-        rt.Routes?.some(r => r.GatewayId?.startsWith('igw-') && r.DestinationCidrBlock === '0.0.0.0/0')
+        rt.Routes?.some((r: { GatewayId?: string; DestinationCidrBlock?: string }) => 
+          r.GatewayId?.startsWith('igw-') && r.DestinationCidrBlock === '0.0.0.0/0')
       );
       expect(publicRt).toBeDefined();
 
       // Check for private routes to NAT
       const privateRts = routeTables.filter(rt =>
-        rt.Routes?.some(r => r.NatGatewayId?.startsWith('nat-') && r.DestinationCidrBlock === '0.0.0.0/0')
+        rt.Routes?.some((r: { NatGatewayId?: string; DestinationCidrBlock?: string }) => 
+          r.NatGatewayId?.startsWith('nat-') && r.DestinationCidrBlock === '0.0.0.0/0')
       );
       expect(privateRts.length).toBeGreaterThanOrEqual(2);
     });
@@ -809,7 +811,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
       expect(alb?.Scheme).toBe('internet-facing');
 
       // Check subnets are public
-      const albSubnetIds = alb?.AvailabilityZones.map(az => az.SubnetId) || [];
+      const albSubnetIds = alb?.AvailabilityZones?.map(az => az.SubnetId).filter((id): id is string => id !== undefined) || [];
       const subnetResponse = await ec2Client.send(
         new DescribeSubnetsCommand({
           SubnetIds: albSubnetIds,
@@ -1175,7 +1177,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         // Get database security group rules
         const sgResponse = await ec2Client.send(
           new DescribeSecurityGroupsCommand({
-            GroupIds: dbSecurityGroups,
+            GroupIds: dbSecurityGroups.filter((id): id is string => id !== undefined),
           })
         );
 
@@ -1306,7 +1308,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         expect(alb!.Scheme).toBe('internet-facing');
 
         // 2. ALB should be in public subnets
-        const albSubnetIds = alb!.AvailabilityZones.map(az => az.SubnetId!);
+        const albSubnetIds = alb!.AvailabilityZones?.map(az => az.SubnetId!).filter((id): id is string => id !== undefined) || [];
         const subnetResponse = await ec2Client.send(
           new DescribeSubnetsCommand({ SubnetIds: albSubnetIds })
         );
@@ -1533,7 +1535,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         const alb = lbResponse.LoadBalancers?.find(
           lb => lb.DNSName === outputs.LoadBalancerDNS
         );
-        expect(alb!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+        expect(alb!.AvailabilityZones?.length ?? 0).toBeGreaterThanOrEqual(2);
 
         // 3. ASG spans multiple AZs
         const asgResponse = await asgClient.send(
@@ -1542,7 +1544,7 @@ describe('TAP Stack Integration Tests - Real AWS Resources', () => {
         const asg = asgResponse.AutoScalingGroups?.find(group =>
           group.Tags?.some((t: any) => t.Key === 'Project' && t.Value === 'ha-webapp')
         );
-        expect(asg!.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+        expect(asg!.AvailabilityZones?.length ?? 0).toBeGreaterThanOrEqual(2);
 
         // 4. NAT Gateways in multiple AZs
         const sgResponse = await ec2Client.send(
