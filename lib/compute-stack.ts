@@ -8,7 +8,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
+
 import { Construct } from 'constructs';
 
 interface ComputeStackProps {
@@ -19,7 +19,6 @@ interface ComputeStackProps {
   openSearchDomain: opensearch.Domain;
   openSearchSecurityGroup: ec2.SecurityGroup;
   mediaBucket: s3.Bucket;
-  serviceNetwork: vpclattice.CfnServiceNetwork;
   environmentSuffix: string;
 }
 
@@ -180,61 +179,6 @@ export class ComputeStack extends Construct {
     this.autoScalingGroup.scaleOnRequestCount('RequestCountScaling', {
       targetRequestsPerMinute: 1000,
     });
-
-    // VPC Lattice Service
-    const latticeTargetGroup = new vpclattice.CfnTargetGroup(
-      this,
-      'LatticeTargetGroup',
-      {
-        type: 'ALB',
-        targets: [
-          {
-            id: this.alb.loadBalancerArn,
-            port: 80,
-          },
-        ],
-        config: {
-          port: 80,
-          protocol: 'HTTP',
-          protocolVersion: 'HTTP1',
-          vpcIdentifier: props.vpc.vpcId,
-        },
-      }
-    );
-
-    const latticeService = new vpclattice.CfnService(
-      this,
-      'WikiLatticeService',
-      {
-        name: `wiki-service-${props.environmentSuffix}`,
-        authType: 'AWS_IAM',
-      }
-    );
-
-    new vpclattice.CfnListener(this, 'LatticeListener', {
-      serviceIdentifier: latticeService.attrArn,
-      protocol: 'HTTP',
-      port: 80,
-      defaultAction: {
-        forward: {
-          targetGroups: [
-            {
-              targetGroupIdentifier: latticeTargetGroup.attrArn,
-              weight: 100,
-            },
-          ],
-        },
-      },
-    });
-
-    new vpclattice.CfnServiceNetworkServiceAssociation(
-      this,
-      'ServiceAssociation',
-      {
-        serviceIdentifier: latticeService.attrArn,
-        serviceNetworkIdentifier: props.serviceNetwork.attrArn,
-      }
-    );
 
     // Configure Security Group Rules for Database Access
     const dbSecurityGroup = props.database.connections.securityGroups[0];
