@@ -1,0 +1,494 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Notification System for Order Updates with SNS, Lambda, DynamoDB, CloudWatch, and SES",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix to append to resource names (e.g., dev, staging, prod)",
+            "Default": "dev"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for SNS notifications and SES fallback",
+            "Default": "notifications@example.com",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "ConstraintDescription": "Must be a valid email address"
+        }
+    },
+    "Resources": {
+        "OrderNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "order-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Order Update Notifications",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Fn::GetAtt": [
+                                "NotificationProcessorFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Protocol": "lambda"
+                    },
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "NotificationSystem"
+                    }
+                ]
+            }
+        },
+        "OrderNotificationTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "OrderNotificationTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowPublishFromAccount",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "SNS:Publish"
+                            ],
+                            "Resource": {
+                                "Ref": "OrderNotificationTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "NotificationLogTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "notification-logs-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "notificationId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "status",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "notificationId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "StatusIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "status",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "NotificationSystem"
+                    }
+                ]
+            }
+        },
+        "NotificationProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "NotificationProcessorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "NotificationLogTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${NotificationLogTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ses:SendEmail",
+                                        "ses:SendRawEmail"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "NotificationSystem"
+                    }
+                ]
+            }
+        },
+        "NotificationProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "notification-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "nodejs22.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "NotificationProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE": {
+                            "Ref": "NotificationLogTable"
+                        },
+                        "SES_SOURCE_EMAIL": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');\nconst { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');\n\nconst dynamodb = new DynamoDBClient();\nconst ses = new SESClient();\nconst cloudwatch = new CloudWatchClient();\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  \n  const promises = event.Records.map(async (record) => {\n    const notificationId = record.Sns.MessageId;\n    const timestamp = Date.now();\n    let status = 'SUCCESS';\n    let errorMessage = null;\n    \n    try {\n      const message = JSON.parse(record.Sns.Message);\n      console.log('Processing notification:', message);\n      \n      // Simulate processing logic\n      // In production, this would handle push notification delivery\n      \n      // Log to DynamoDB\n      await dynamodb.send(new PutItemCommand({\n        TableName: process.env.DYNAMODB_TABLE,\n        Item: {\n          notificationId: { S: notificationId },\n          timestamp: { N: timestamp.toString() },\n          status: { S: status },\n          messageType: { S: message.orderType || 'UNKNOWN' },\n          orderId: { S: message.orderId || 'N/A' },\n          processedAt: { S: new Date(timestamp).toISOString() },\n          snsTimestamp: { S: record.Sns.Timestamp }\n        }\n      }));\n      \n      // Send CloudWatch metrics\n      await cloudwatch.send(new PutMetricDataCommand({\n        Namespace: 'NotificationSystem',\n        MetricData: [{\n          MetricName: 'NotificationsProcessed',\n          Value: 1,\n          Unit: 'Count',\n          Timestamp: new Date(),\n          Dimensions: [\n            { Name: 'Environment', Value: process.env.ENVIRONMENT },\n            { Name: 'Status', Value: status }\n          ]\n        }]\n      }));\n      \n    } catch (error) {\n      console.error('Processing error:', error);\n      status = 'FAILED';\n      errorMessage = error.message;\n      \n      // Send failure metric\n      await cloudwatch.send(new PutMetricDataCommand({\n        Namespace: 'NotificationSystem',\n        MetricData: [{\n          MetricName: 'NotificationFailures',\n          Value: 1,\n          Unit: 'Count',\n          Timestamp: new Date(),\n          Dimensions: [\n            { Name: 'Environment', Value: process.env.ENVIRONMENT }\n          ]\n        }]\n      }));\n      \n      // Send email fallback via SES\n      try {\n        await ses.send(new SendEmailCommand({\n          Source: process.env.SES_SOURCE_EMAIL,\n          Destination: {\n            ToAddresses: [process.env.SES_SOURCE_EMAIL]\n          },\n          Message: {\n            Subject: {\n              Data: `Notification Delivery Failed - ${notificationId}`\n            },\n            Body: {\n              Text: {\n                Data: `Notification delivery failed.\\n\\nNotification ID: ${notificationId}\\nError: ${errorMessage}\\nTimestamp: ${new Date(timestamp).toISOString()}\\n\\nOriginal Message:\\n${JSON.stringify(record.Sns.Message, null, 2)}`\n              }\n            }\n          }\n        }));\n        console.log('Fallback email sent via SES');\n      } catch (sesError) {\n        console.error('SES fallback failed:', sesError);\n      }\n      \n      // Log failure to DynamoDB\n      await dynamodb.send(new PutItemCommand({\n        TableName: process.env.DYNAMODB_TABLE,\n        Item: {\n          notificationId: { S: notificationId },\n          timestamp: { N: timestamp.toString() },\n          status: { S: status },\n          errorMessage: { S: errorMessage },\n          processedAt: { S: new Date(timestamp).toISOString() }\n        }\n      }));\n    }\n  });\n  \n  await Promise.all(promises);\n  return { statusCode: 200, body: 'Notifications processed' };\n};\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "NotificationSystem"
+                    }
+                ]
+            }
+        },
+        "NotificationProcessorInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "NotificationProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "sns.amazonaws.com",
+                "SourceArn": {
+                    "Ref": "OrderNotificationTopic"
+                }
+            }
+        },
+        "NotificationFailureAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "notification-failures-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when notification failures exceed threshold",
+                "MetricName": "NotificationFailures",
+                "Namespace": "NotificationSystem",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "OrderNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function errors occur",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "NotificationProcessorFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "OrderNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "lambda-throttles-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when Lambda function is throttled",
+                "MetricName": "Throttles",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "NotificationProcessorFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "OrderNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "NotificationSystemDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "notification-system-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"NotificationSystem\", \"NotificationsProcessed\", {\"stat\": \"Sum\", \"label\": \"Total Processed\"}],\n          [\".\", \"NotificationFailures\", {\"stat\": \"Sum\", \"label\": \"Total Failures\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Notification Processing\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}],\n          [\".\", \"Throttles\", {\"stat\": \"Sum\", \"label\": \"Lambda Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Duration\", {\"stat\": \"Average\", \"label\": \"Avg Duration\"}],\n          [\"...\", {\"stat\": \"Maximum\", \"label\": \"Max Duration\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Duration (ms)\",\n        \"period\": 300\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/SNS\", \"NumberOfMessagesPublished\", {\"stat\": \"Sum\"}],\n          [\".\", \"NumberOfNotificationsDelivered\", {\"stat\": \"Sum\"}],\n          [\".\", \"NumberOfNotificationsFailed\", {\"stat\": \"Sum\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"SNS Metrics\",\n        \"period\": 300\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "SNSTopicArn": {
+            "Description": "ARN of the SNS topic for order notifications",
+            "Value": {
+                "Ref": "OrderNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+                }
+            }
+        },
+        "SNSTopicName": {
+            "Description": "Name of the SNS topic",
+            "Value": {
+                "Fn::GetAtt": [
+                    "OrderNotificationTopic",
+                    "TopicName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SNSTopicName"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "ARN of the notification processor Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NotificationProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function",
+            "Value": {
+                "Ref": "NotificationProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "Name of the DynamoDB table for notification logs",
+            "Value": {
+                "Ref": "NotificationLogTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NotificationLogTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableArn"
+                }
+            }
+        },
+        "DashboardURL": {
+            "Description": "URL to the CloudWatch Dashboard",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=notification-system-${EnvironmentSuffix}"
+            }
+        },
+        "NotificationEmail": {
+            "Description": "Email address configured for notifications",
+            "Value": {
+                "Ref": "NotificationEmail"
+            }
+        }
+    }
+}
