@@ -33,7 +33,7 @@ variable "private_subnet_cidrs" {
 variable "allowed_ssh_ips" {
   description = "IP addresses allowed to SSH to bastion"
   type        = list(string)
-  default     = ["203.0.113.0/24"] # Replace with your actual IP ranges
+  default     = [] # Replace with your actual IP ranges
 }
 
 variable "ec2_instance_type" {
@@ -140,10 +140,56 @@ resource "aws_kms_key" "ebs_encryption" {
         Resource = "*"
       },
       {
-        Sid    = "Allow EC2 to use the key"
+        Sid    = "Allow EC2 and AutoScaling to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "ec2.amazonaws.com"
+          Service = [
+            "ec2.amazonaws.com",
+            "autoscaling.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow attachment of persistent resources"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "ec2.amazonaws.com",
+            "autoscaling.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling service-linked role to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
         }
         Action = [
           "kms:Encrypt",
@@ -507,6 +553,33 @@ resource "aws_iam_role" "ec2_instance_role" {
   tags = local.common_tags
 }
 
+# IAM Policy for EC2 to access KMS for EBS encryption
+resource "aws_iam_policy" "ec2_kms_access" {
+  name        = "${var.project_prefix}-ec2-kms-policy-prd"
+  description = "Allow EC2 instances to use KMS keys for EBS encryption"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.ebs_encryption.arn,
+          aws_kms_key.s3_encryption.arn
+        ]
+      }
+    ]
+  })
+}
+
 # IAM Policy for EC2 to access SNS
 resource "aws_iam_policy" "ec2_sns_access" {
   name        = "${var.project_prefix}-ec2-sns-policy-prd"
@@ -575,6 +648,11 @@ resource "aws_iam_policy" "ec2_ssm_access" {
 }
 
 # Attach policies to EC2 role
+resource "aws_iam_role_policy_attachment" "ec2_kms" {
+  role       = aws_iam_role.ec2_instance_role.name
+  policy_arn = aws_iam_policy.ec2_kms_access.arn
+}
+
 resource "aws_iam_role_policy_attachment" "ec2_sns" {
   role       = aws_iam_role.ec2_instance_role.name
   policy_arn = aws_iam_policy.ec2_sns_access.arn
@@ -611,7 +689,7 @@ resource "aws_launch_template" "app_servers" {
   vpc_security_group_ids = [aws_security_group.ec2_instances.id]
 
   iam_instance_profile {
-    arn = aws_iam_instance_profile.ec2_profile.arn
+    name = aws_iam_instance_profile.ec2_profile.name
   }
 
   # Encrypted root volume
@@ -619,10 +697,10 @@ resource "aws_launch_template" "app_servers" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size = 20
-      volume_type = "gp3"
-      encrypted   = true
-      # kms_key_id            = aws_kms_key.ebs_encryption.arn  # Temporarily disabled for testing
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.ebs_encryption.arn
       delete_on_termination = true
     }
   }
@@ -642,53 +720,131 @@ resource "aws_launch_template" "app_servers" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    set -e
+    # Don't exit on errors - handle them gracefully
+    set +e
     
     # Log everything
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
     
-    echo "Starting user data script at $(date)"
+    echo "=========================================="
+    echo "User Data Script Starting at $(date)"
+    echo "=========================================="
+    INSTANCE_ID=$(ec2-metadata --instance-id 2>/dev/null | cut -d ' ' -f 2 || echo "unknown")
+    echo "Instance ID: $INSTANCE_ID"
     
-    # Update system
-    echo "Updating system packages..."
-    yum update -y
+    # Wait for network connectivity (critical for NAT gateway)
+    echo "Checking network connectivity..."
+    RETRY_COUNT=0
+    MAX_RETRIES=30
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+      if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+        echo "Network connectivity confirmed after $RETRY_COUNT attempts"
+        break
+      fi
+      echo "Waiting for network... attempt $((RETRY_COUNT+1))/$MAX_RETRIES"
+      sleep 2
+      RETRY_COUNT=$((RETRY_COUNT+1))
+    done
     
-    # Install CloudWatch agent
-    echo "Installing CloudWatch agent..."
-    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-    rpm -U ./amazon-cloudwatch-agent.rpm || echo "CloudWatch agent installation failed, continuing..."
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+      echo "ERROR: Network connectivity not established after $MAX_RETRIES attempts"
+      echo "Continuing anyway, but installations may fail..."
+    fi
     
-    # Install SSM agent (usually pre-installed on Amazon Linux 2)
-    echo "Installing SSM agent..."
-    yum install -y amazon-ssm-agent || echo "SSM agent installation failed, continuing..."
-    systemctl enable amazon-ssm-agent
-    systemctl start amazon-ssm-agent || echo "SSM agent start failed, continuing..."
+    # SKIP yum update for faster launch - schedule it for later instead
+    echo "Scheduling system update for background execution..."
+    cat > /usr/local/bin/delayed-update.sh << 'UPDATE_SCRIPT'
+    #!/bin/bash
+    sleep 300  # Wait 5 minutes after boot
+    yum update -y >> /var/log/delayed-update.log 2>&1
+    UPDATE_SCRIPT
+    chmod +x /usr/local/bin/delayed-update.sh
+    nohup /usr/local/bin/delayed-update.sh &
     
-    # Basic hardening
-    echo "Applying basic hardening..."
-    echo "AllowUsers ec2-user" >> /etc/ssh/sshd_config
-    echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-    systemctl restart sshd || echo "SSH restart failed, continuing..."
+    # Install packages in parallel for speed
+    echo "Installing required packages..."
+    yum install -y httpd amazon-ssm-agent &
+    INSTALL_PID=$!
     
-    # Signal completion
-    echo "User data script completed at $(date)"
+    # While packages install, prepare configuration
+    echo "Preparing configuration files..."
+    mkdir -p /var/www/html
     
-    # Create a simple health check endpoint
-    echo "Creating health check endpoint..."
+    # Create health check endpoint
     cat > /var/www/html/health.html << 'HEALTH_EOF'
     <!DOCTYPE html>
     <html>
     <head><title>Health Check</title></head>
-    <body><h1>Instance is healthy</h1></body>
+    <body>
+      <h1>Instance is healthy</h1>
+      <p>Status: Running</p>
+      <p>Time: $(date)</p>
+    </body>
     </html>
     HEALTH_EOF
     
-    # Install and start Apache
-    yum install -y httpd
-    systemctl enable httpd
-    systemctl start httpd
+    # Create index page
+    cat > /var/www/html/index.html << 'INDEX_EOF'
+    <!DOCTYPE html>
+    <html>
+    <head><title>Application Server</title></head>
+    <body>
+      <h1>Application Server Ready</h1>
+      <p>This server is operational.</p>
+    </body>
+    </html>
+    INDEX_EOF
     
-    echo "Instance setup completed successfully at $(date)"
+    # Wait for package installation to complete
+    wait $INSTALL_PID
+    echo "Package installation completed with exit code: $?"
+    
+    # Start services immediately
+    echo "Starting Apache HTTP Server..."
+    systemctl enable httpd 2>&1
+    systemctl start httpd 2>&1
+    APACHE_STATUS=$?
+    echo "Apache start result: $APACHE_STATUS"
+    
+    echo "Starting SSM agent..."
+    systemctl enable amazon-ssm-agent 2>&1
+    systemctl start amazon-ssm-agent 2>&1
+    SSM_STATUS=$?
+    echo "SSM agent start result: $SSM_STATUS"
+    
+    # Install CloudWatch agent in background (non-critical)
+    echo "Installing CloudWatch agent in background..."
+    (
+      cd /tmp
+      wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm 2>&1
+      if [ -f amazon-cloudwatch-agent.rpm ]; then
+        rpm -U amazon-cloudwatch-agent.rpm 2>&1
+        echo "CloudWatch agent installed"
+      else
+        echo "CloudWatch agent download failed"
+      fi
+      rm -f amazon-cloudwatch-agent.rpm
+    ) >> /var/log/cloudwatch-install.log 2>&1 &
+    
+    # Basic SSH hardening
+    echo "Applying SSH hardening..."
+    if ! grep -q "^AllowUsers ec2-user" /etc/ssh/sshd_config; then
+      echo "AllowUsers ec2-user" >> /etc/ssh/sshd_config
+    fi
+    if ! grep -q "^PermitRootLogin no" /etc/ssh/sshd_config; then
+      sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+    fi
+    systemctl restart sshd 2>&1 || echo "WARNING: SSH restart failed"
+    
+    # Final status report
+    echo "=========================================="
+    echo "User Data Script Completed at $(date)"
+    echo "=========================================="
+    echo "Apache HTTP Server: $(systemctl is-active httpd 2>/dev/null || echo 'unknown')"
+    echo "SSM Agent: $(systemctl is-active amazon-ssm-agent 2>/dev/null || echo 'unknown')"
+    echo "HTTP Port 80: $(ss -tlnp | grep :80 | wc -l) listeners"
+    echo "Instance is ready for service!"
+    echo "=========================================="
   EOF
   )
 
@@ -705,6 +861,11 @@ resource "aws_launch_template" "app_servers" {
       Name = "${var.project_prefix}-app-volume-prd"
     })
   }
+
+  depends_on = [
+    aws_kms_key.ebs_encryption,
+    aws_iam_instance_profile.ec2_profile
+  ]
 }
 
 # Auto Scaling Group
@@ -715,8 +876,9 @@ resource "aws_autoscaling_group" "app_servers" {
   max_size                  = 3
   desired_capacity          = 2
   health_check_type         = "EC2"
-  health_check_grace_period = 600
-  wait_for_capacity_timeout = "15m"
+  health_check_grace_period = 300
+  wait_for_capacity_timeout = "10m"
+  force_delete              = true
 
   launch_template {
     id      = aws_launch_template.app_servers.id
@@ -737,6 +899,12 @@ resource "aws_autoscaling_group" "app_servers" {
       propagate_at_launch = true
     }
   }
+
+  depends_on = [
+    aws_nat_gateway.main,
+    aws_iam_instance_profile.ec2_profile,
+    aws_kms_key.ebs_encryption
+  ]
 }
 
 # ============================================================================
@@ -792,17 +960,6 @@ resource "aws_s3_bucket_ownership_controls" "logging" {
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-}
-
-# S3 Bucket ACL for logging bucket
-resource "aws_s3_bucket_acl" "logging" {
-  bucket = aws_s3_bucket.logging.id
-  acl    = "private"
-
-  depends_on = [
-    aws_s3_bucket_ownership_controls.logging,
-    aws_s3_bucket_public_access_block.logging
-  ]
 }
 
 # S3 Bucket lifecycle for logging bucket
@@ -1035,6 +1192,46 @@ resource "aws_s3_bucket_public_access_block" "application" {
 # CLOUDTRAIL
 # ============================================================================
 
+# IAM Role for CloudTrail to write to CloudWatch Logs
+resource "aws_iam_role" "cloudtrail_cloudwatch" {
+  name = "${var.project_prefix}-cloudtrail-cloudwatch-role-prd"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# IAM Policy for CloudTrail CloudWatch Logs
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
+  name = "${var.project_prefix}-cloudtrail-cloudwatch-policy-prd"
+  role = aws_iam_role.cloudtrail_cloudwatch.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+      }
+    ]
+  })
+}
+
 # CloudTrail
 resource "aws_cloudtrail" "main" {
   name                          = local.cloudtrail_name
@@ -1044,10 +1241,23 @@ resource "aws_cloudtrail" "main" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
 
-  # Management events only. Data events can be enabled later with valid ARNs.
+  # CloudWatch Logs integration
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch.arn
+
+  # Management events and S3 data events
   event_selector {
     include_management_events = true
     read_write_type           = "All"
+
+    data_resource {
+      type = "AWS::S3::Object"
+      values = [
+        "${aws_s3_bucket.application.arn}/*",
+        "${aws_s3_bucket.logging.arn}/*",
+        "${aws_s3_bucket.cloudfront_logs.arn}/*"
+      ]
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -1133,8 +1343,6 @@ resource "aws_config_delivery_channel" "main" {
   name           = "${var.project_prefix}-config-delivery-prd"
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "config"
-  # Temporarily removing KMS key requirement to allow delivery channel creation
-  # s3_kms_key_arn = aws_kms_key.s3_encryption.arn
 
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"

@@ -564,7 +564,7 @@ describe("Terraform Configuration Files", () => {
     });
 
     test("Auto Scaling Group has health check grace period", () => {
-      expect(stackContent).toMatch(/health_check_grace_period\s*=\s*600/);
+      expect(stackContent).toMatch(/health_check_grace_period\s*=\s*300/);
     });
 
     test("Launch template has detailed monitoring", () => {
