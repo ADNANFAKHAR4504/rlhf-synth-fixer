@@ -87,7 +87,7 @@
       "Type": "AWS::EC2::KeyPair::KeyName",
       "Default": "",
       "Description": "EC2 Key Pair for SSH access (leave blank to skip setting KeyName)",
-      "ConstraintDescription": "Must be an existing EC2 KeyPair in the target region when provided"
+      "AllowedPattern": "^$|[\\w+=,.@-]{1,255}"
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
