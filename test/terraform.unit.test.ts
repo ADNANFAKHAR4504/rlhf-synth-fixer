@@ -269,30 +269,18 @@ describe("Multi-Region DR Infrastructure - RDS Module", () => {
     expect(stackContent).toMatch(/source\s*=\s*"\.\/modules\/rds"/);
   });
 
-  test("RDS module creates global cluster", () => {
-    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_global_cluster"\s+"main"\s*{/);
+  test("RDS module creates primary cluster with Multi-AZ configuration", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"\s*{/);
     expect(rdsModuleContent).toMatch(/engine\s*=\s*"aurora-mysql"/);
   });
 
-  test("RDS module creates primary cluster", () => {
-    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"\s*{/);
-    expect(rdsModuleContent).toMatch(/global_cluster_identifier\s*=\s*aws_rds_global_cluster\.main\.id/);
-  });
-
-  test("RDS module creates cluster instances", () => {
+  test("RDS module creates cluster instances with Multi-AZ", () => {
     expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"\s*{/);
-    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"secondary"\s*{/);
     expect(rdsModuleContent).toMatch(/count\s*=\s*2/);
   });
 
-  test("RDS module creates DB subnet groups", () => {
+  test("RDS module creates DB subnet group", () => {
     expect(rdsModuleContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"\s*{/);
-    expect(rdsModuleContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"\s*{/);
-  });
-
-  test("RDS module creates secondary cluster with provider", () => {
-    const secondaryClusterBlock = rdsModuleContent.match(/resource\s+"aws_rds_cluster"\s+"secondary"\s*{[\s\S]*?provider\s*=\s*aws\.secondary/);
-    expect(secondaryClusterBlock).toBeTruthy();
   });
 });
 
@@ -579,9 +567,9 @@ describe("Multi-Region DR Infrastructure - Outputs", () => {
     expect(outputsContent).toMatch(/module\.rds\.primary_endpoint/);
   });
 
-  test("exports secondary Aurora endpoint", () => {
-    expect(outputsContent).toMatch(/output\s+"secondary_aurora_endpoint"/);
-    expect(outputsContent).toMatch(/module\.rds\.secondary_endpoint/);
+  test("exports primary Aurora reader endpoint", () => {
+    expect(outputsContent).toMatch(/output\s+"primary_aurora_reader_endpoint"/);
+    expect(outputsContent).toMatch(/module\.rds\.primary_reader_endpoint/);
   });
 
   test("exports DynamoDB table name", () => {
@@ -656,9 +644,10 @@ describe("Multi-Region DR Infrastructure - DR Requirements", () => {
     outputsContent = fs.readFileSync(outputsPath, "utf8");
   });
 
-  test("implements Aurora Global Database for cross-region replication", () => {
-    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_global_cluster"/);
-    expect(rdsModuleContent).toMatch(/global_cluster_identifier/);
+  test("implements Aurora Multi-AZ for high availability", () => {
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"/);
+    expect(rdsModuleContent).toMatch(/resource\s+"aws_rds_cluster_instance"\s+"primary"/);
+    expect(rdsModuleContent).toMatch(/count\s*=\s*2/);
   });
 
   test("implements DynamoDB Global Table", () => {
