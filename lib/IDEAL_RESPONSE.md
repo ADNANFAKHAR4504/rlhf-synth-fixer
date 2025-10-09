@@ -507,57 +507,6 @@ public class IngestionComponent {
 }
 ```
 
-**Lambda Function Code: lambda/index.py**
-
-```python
-import json
-import boto3
-import os
-from datetime import datetime
-import base64
-
-s3_client = boto3.client('s3')
-# Note: Timestream client disabled due to AWS account quota limits
-
-def handler(event, context):
-    """
-    Process market data from Kinesis and write to S3 data lake.
-    Timestream writes are disabled due to account requirements.
-    """
-    s3_bucket = os.environ['S3_BUCKET']
-
-    records_processed = 0
-
-    for record in event['Records']:
-        # Decode Kinesis data
-        payload = base64.b64decode(record['kinesis']['data'])
-        data = json.loads(payload)
-
-        # Extract timestamp and symbol for partitioning
-        timestamp = data.get('timestamp', datetime.utcnow().isoformat())
-        symbol = data.get('symbol', 'UNKNOWN')
-        date = timestamp.split('T')[0]
-
-        # Write to S3 data lake with partitioning
-        s3_key = f"data/symbol={symbol}/date={date}/{record['kinesis']['sequenceNumber']}.json"
-
-        s3_client.put_object(
-            Bucket=s3_bucket,
-            Key=s3_key,
-            Body=json.dumps(data),
-            ContentType='application/json'
-        )
-
-        records_processed += 1
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'records_processed': records_processed
-        })
-    }
-```
-
 ## Component 5: Query Infrastructure
 
 **File: lib/src/main/java/app/components/QueryComponent.java**
@@ -852,21 +801,6 @@ When deployed, the infrastructure exports:
 - `timestreamDatabaseName`: "timestream-disabled"
 - `timestreamTableName`: "timestream-disabled"
 - `quickSightDataSourceId`: "quicksight-disabled"
-
-## Testing Strategy
-
-### Unit Tests
-- Validate component instantiation
-- Test resource configuration
-- Verify IAM policy structure
-- Ensure proper Output type handling
-
-### Integration Tests
-- Verify all resources are created
-- Test Lambda function can write to S3
-- Validate Glue catalog structure
-- Check CloudWatch dashboard creation
-- Confirm IAM permissions are correct
 
 ## Conclusion
 
