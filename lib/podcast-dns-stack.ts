@@ -17,7 +17,7 @@ export class PodcastDnsStack extends Construct {
 
     // Create Route 53 hosted zone
     this.hostedZone = new route53.HostedZone(this, 'PodcastHostedZone', {
-      zoneName: `podcast-${props.environmentSuffix}.example.com`,
+      zoneName: `${props.environmentSuffix}.podcast-platform.cloud`,
       comment: `Hosted zone for podcast platform ${props.environmentSuffix}`,
     });
 
