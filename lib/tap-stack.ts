@@ -94,10 +94,63 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Create KMS key for encryption
+    // Create KMS key for encryption with proper policy
     const kmsKey = new aws.kmsKey.KmsKey(this, 'master-kms-key', {
       description: 'Master KMS key for encryption',
       enableKeyRotation: true,
       tags: commonTags,
+
+      // Add key policy to allow CloudTrail to use the key
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${current.accountId}:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudTrail to encrypt logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
+            Resource: '*',
+            Condition: {
+              StringLike: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': [
+                  `arn:aws:cloudtrail:*:${current.accountId}:trail/*`,
+                ],
+              },
+            },
+          },
+          {
+            Sid: 'Allow CloudTrail to decrypt logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 'kms:CreateGrant',
+            Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:GrantOperations': [
+                  'Decrypt',
+                  'GenerateDataKey',
+                  'CreateGrant',
+                  'DescribeKey',
+                  'RetireGrant',
+                ],
+              },
+            },
+          },
+        ],
+      }),
     });
 
     new aws.kmsAlias.KmsAlias(this, 'master-kms-alias', {
