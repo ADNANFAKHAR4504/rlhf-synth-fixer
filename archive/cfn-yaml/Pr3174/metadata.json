@@ -10,5 +10,21 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "Dynamo, Lambda, ApiGateway, CLoudwatch"
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "Systems Manager",
+    "X-Ray",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
