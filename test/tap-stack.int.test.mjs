@@ -22,7 +22,6 @@ describe('Fitness Tracking API Integration Tests', () => {
   let tableName;
 
   beforeAll(async () => {
-    // CloudFormation outputs use logical IDs as keys in flat-outputs.json
     apiEndpoint = outputs['ApiEndpoint'];
     const apiKeyId = outputs['ApiKeyId'];
     tableName = outputs['TableName'];
