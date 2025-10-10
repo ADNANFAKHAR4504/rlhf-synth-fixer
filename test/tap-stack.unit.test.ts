@@ -18,18 +18,18 @@ describe('TapStack', () => {
     primaryStack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
       isPrimary: true,
-      primaryRegion: 'us-east-2',
+      primaryRegion: 'us-west-2',
       secondaryRegion: 'eu-west-1',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
       enableSecurityHub: true,
-      env: { account: '123456789012', region: 'us-east-1' },
+      env: { account: '123456789012', region: 'us-west-2' },
       crossRegionReferences: true,
     });
     secondaryStack = new TapStack(app, 'TestTapStackSecondary', {
       environmentSuffix,
       isPrimary: false,
-      primaryRegion: 'us-east-1',
+      primaryRegion: 'us-west-2',
       secondaryRegion: 'eu-west-1',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
@@ -444,10 +444,10 @@ describe('TapStack', () => {
       const noSecHubStack = new TapStack(noSecHubApp, 'NoSecurityHubStack', {
         environmentSuffix: 'test',
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         enableSecurityHub: false,
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const noSecHubTemplate = Template.fromStack(noSecHubStack);
       
@@ -592,11 +592,11 @@ describe('TapStack', () => {
       const testStack = new TapStack(testApp, 'TestStackWithProps', {
         environmentSuffix: 'test123',
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         globalClusterId: 'global-test123',
         globalTableName: 'metadata-table-test123',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const testTemplate = Template.fromStack(testStack);
       
@@ -607,11 +607,11 @@ describe('TapStack', () => {
       const testApp = new cdk.App({ context: { environmentSuffix: 'ctx456' } });
       const testStack = new TapStack(testApp, 'TestStackWithContext', {
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         globalClusterId: 'global-ctx456',
         globalTableName: 'metadata-table-ctx456',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const testTemplate = Template.fromStack(testStack);
       
@@ -622,11 +622,11 @@ describe('TapStack', () => {
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStackDefault', {
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         globalClusterId: 'global-dev',
         globalTableName: 'metadata-table-dev',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const testTemplate = Template.fromStack(testStack);
       
@@ -654,9 +654,9 @@ describe('TapStack', () => {
       const singleStack = new TapStack(singleApp, 'SingleRegionStack', {
         environmentSuffix: 'single',
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: undefined, // No secondary region
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const singleTemplate = Template.fromStack(singleStack);
       
@@ -722,14 +722,14 @@ describe('TapStack', () => {
 
     test('both regions should have database DNS records', () => {
       primaryTemplate.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: Match.stringLikeRegexp('database-us-east-1'),
+        Name: Match.stringLikeRegexp('database-us-west-2'),
         Type: 'CNAME',
       });
     });
 
     test('both regions should have region-specific cluster identifiers', () => {
       primaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
-        DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-east-1'),
+        DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-west-2'),
       });
       secondaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
         DBClusterIdentifier: Match.stringLikeRegexp('aurora-eu-west-1'),
@@ -741,10 +741,10 @@ describe('TapStack', () => {
       const defaultStack = new TapStack(defaultApp, 'DefaultGlobalStack', {
         environmentSuffix: 'test',
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         // No globalClusterId provided - should use default
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
       
@@ -758,10 +758,10 @@ describe('TapStack', () => {
       const defaultStack = new TapStack(defaultApp, 'DefaultTableStack', {
         environmentSuffix: 'test',
         isPrimary: true,
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         // No globalTableName provided - should use default
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: '123456789012', region: 'us-west-2' },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
       
@@ -775,7 +775,7 @@ describe('TapStack', () => {
       const singleStack2 = new TapStack(singleApp2, 'SingleRegionNoReplication', {
         environmentSuffix: 'test',
         isPrimary: false, // Secondary stack without replication
-        primaryRegion: 'us-east-1',
+        primaryRegion: 'us-west-2',
         secondaryRegion: 'eu-west-1',
         globalClusterId: 'global-test',
         env: { account: '123456789012', region: 'eu-west-1' },
