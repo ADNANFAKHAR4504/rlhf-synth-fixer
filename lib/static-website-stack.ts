@@ -40,7 +40,7 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
   public readonly websiteUrl: pulumi.Output<string>;
   public readonly cloudfrontDomain: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
-  public readonly logsBucketName: pulumi.Output<string>;
+  // public readonly logsBucketName: pulumi.Output<string>; // Commented out - logs bucket disabled
   public readonly certificateArn: pulumi.Output<string>;
   public readonly hostedZoneId: pulumi.Output<string>;
   public readonly customDomainUrl: pulumi.Output<string>;
@@ -81,11 +81,14 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create S3 bucket for CloudFront logs with proper ACL configuration
+    // S3 bucket for CloudFront logs - TEMPORARILY DISABLED due to ACL complexity
+    // Uncomment when you need logging and can manage ACL configuration properly
+    /*
     const logsBucket = new aws.s3.Bucket(
       `${stackName}-logs`,
       {
-        acl: 'private', // Set explicit ACL for CloudFront logging compatibility
+        // Enable ACL access for CloudFront logging compatibility
+        objectLockEnabled: false,
         lifecycleRules: [
           {
             enabled: true,
@@ -117,8 +120,30 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Enable ACL for CloudFront logging
+    const logsBucketOwnershipControls = new aws.s3.BucketOwnershipControls(
+      `${stackName}-logs-ownership`,
+      {
+        bucket: logsBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      },
+      { parent: this }
+    );
+
+    // Set bucket ACL to allow CloudFront logging
+    const logsBucketAcl = new aws.s3.BucketAclV2(
+      `${stackName}-logs-acl`,
+      {
+        bucket: logsBucket.id,
+        acl: 'private',
+        dependsOn: [logsBucketOwnershipControls],
+      },
+      { parent: this }
+    );
+
     // Grant CloudFront logs delivery permissions
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const logsBucketPolicy = new aws.s3.BucketPolicy(
       `${stackName}-logs-policy`,
       {
@@ -156,6 +181,7 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+    */
 
     // Block public access for content bucket except through CloudFront
     const contentBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
@@ -300,12 +326,15 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
         // Custom domain aliases commented out - requires validated ACM certificate
         // aliases: [mockDomainName, `www.${mockDomainName}`],
 
-        // CloudFront logging with proper S3 bucket configuration (ACL compatible)
+        // CloudFront logging - TEMPORARILY DISABLED due to ACL configuration complexity
+        // Uncomment when you need logging and have proper ACL setup
+        /*
         loggingConfig: {
           bucket: logsBucket.bucketDomainName,
           prefix: 'cloudfront/',
           includeCookies: false,
         },
+        */
 
         tags: args.tags,
       },
@@ -475,7 +504,7 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
     this.websiteUrl = pulumi.interpolate`https://${distribution.domainName}`;
     this.cloudfrontDomain = distribution.domainName;
     this.s3BucketName = contentBucket.id;
-    this.logsBucketName = logsBucket.id;
+    // this.logsBucketName = logsBucket.id; // Commented out - logs bucket disabled
     // Note: These outputs are placeholders since ACM and Route53 resources are commented out
     this.certificateArn = pulumi.output(
       'arn:aws:acm:us-east-1:123456789012:certificate/example-placeholder'
@@ -489,7 +518,7 @@ export class StaticWebsiteStack extends pulumi.ComponentResource {
       websiteUrl: this.websiteUrl,
       cloudfrontDomain: this.cloudfrontDomain,
       s3BucketName: this.s3BucketName,
-      logsBucketName: this.logsBucketName,
+      // logsBucketName: this.logsBucketName, // Commented out - logs bucket disabled
       certificateArn: this.certificateArn,
       hostedZoneId: this.hostedZoneId,
       customDomainUrl: this.customDomainUrl,
