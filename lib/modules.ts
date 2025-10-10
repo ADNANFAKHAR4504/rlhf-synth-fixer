@@ -1350,20 +1350,6 @@ export class CloudTrailModule extends BaseModule {
       cloudWatchLogsGroupArn: `${this.logGroup.arn}:*`,
       cloudWatchLogsRoleArn: this.cloudTrailRole.arn,
 
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/'],
-            },
-          ],
-        },
-      ],
-
       kmsKeyId: kmsKeyArn,
 
       tags: this.tags,
