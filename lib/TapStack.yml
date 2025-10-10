@@ -60,11 +60,11 @@ Mappings:
   
   RegionAMI:
     us-east-1:
-      AMI: ami-0c02fb55731490381
+      AMI: ami-0c7217cdde317cfec
     us-west-2:
-      AMI: ami-0a54c984b9f908c81
+      AMI: ami-0efcece6bed30fd98
     eu-west-1:
-      AMI: ami-0d729a60
+      AMI: ami-0905a3c97561e0b69
 
 Conditions:
   HasSSLCertificate: !Not [!Equals [!Ref CertificateArn, '']]
