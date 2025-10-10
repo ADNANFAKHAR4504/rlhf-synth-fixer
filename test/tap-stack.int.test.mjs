@@ -7,10 +7,10 @@ const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
-const apiEndpoint = outputs[`${stackName}-ApiEndpoint`];
-const apiKeyId = outputs[`${stackName}-ApiKeyId`];
-const tableName = outputs[`${stackName}-TableName`];
-const eventBusName = outputs[`${stackName}-EventBusName`];
+const apiEndpoint = outputs.ApiEndpoint;
+const apiKeyId = outputs.ApiKeyId;
+const tableName = outputs.TableName;
+const eventBusName = outputs.EventBusName;
 
 const makeRequest = (url, method, headers, body) => {
   return new Promise((resolve, reject) => {
