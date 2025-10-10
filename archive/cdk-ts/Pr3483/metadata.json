@@ -10,7 +10,7 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Web Application Deployment"
-  ],  
+  ],
   "aws_services": [
     "VPC",
     "Application Load Balancer",
@@ -25,5 +25,11 @@
     "SNS",
     "CloudWatch Alarms",
     "CloudWatch Dashboard"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
