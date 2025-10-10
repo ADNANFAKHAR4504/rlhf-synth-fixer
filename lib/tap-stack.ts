@@ -59,10 +59,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // SNS Topic for Order Notifications
-    const orderNotificationTopic = new sns.Topic(this, 'OrderNotificationTopic', {
-      topicName: `order-notifications-${environmentSuffix}`,
-      displayName: 'Order Notification Distribution Topic',
-    });
+    const orderNotificationTopic = new sns.Topic(
+      this,
+      'OrderNotificationTopic',
+      {
+        topicName: `order-notifications-${environmentSuffix}`,
+        displayName: 'Order Notification Distribution Topic',
+      }
+    );
 
     // Add email subscription to SNS topic
     orderNotificationTopic.addSubscription(
@@ -70,11 +74,14 @@ export class TapStack extends cdk.Stack {
     );
 
     // Lambda Function for Email Formatting
-    const emailFormatterFunction = new lambda.Function(this, 'EmailFormatterFunction', {
-      functionName: `email-formatter-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const emailFormatterFunction = new lambda.Function(
+      this,
+      'EmailFormatterFunction',
+      {
+        functionName: `email-formatter-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 
@@ -163,21 +170,25 @@ Retail Platform Team
   };
 };
       `),
-      environment: {
-        TABLE_NAME: notificationTable.tableName,
-        SENDER_EMAIL: notificationEmail,
-      },
-      timeout: cdk.Duration.seconds(60),
-      memorySize: 512,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+        environment: {
+          TABLE_NAME: notificationTable.tableName,
+          SENDER_EMAIL: notificationEmail,
+        },
+        timeout: cdk.Duration.seconds(60),
+        memorySize: 512,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
 
     // Lambda Function for SMS Formatting
-    const smsFormatterFunction = new lambda.Function(this, 'SmsFormatterFunction', {
-      functionName: `sms-formatter-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const smsFormatterFunction = new lambda.Function(
+      this,
+      'SmsFormatterFunction',
+      {
+        functionName: `sms-formatter-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 
@@ -254,13 +265,14 @@ exports.handler = async (event) => {
   };
 };
       `),
-      environment: {
-        TABLE_NAME: notificationTable.tableName,
-      },
-      timeout: cdk.Duration.seconds(60),
-      memorySize: 512,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+        environment: {
+          TABLE_NAME: notificationTable.tableName,
+        },
+        timeout: cdk.Duration.seconds(60),
+        memorySize: 512,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
 
     // Grant permissions to Lambda functions
     notificationTable.grantWriteData(emailFormatterFunction);
@@ -306,9 +318,13 @@ exports.handler = async (event) => {
     );
 
     // CloudWatch Dashboard for monitoring
-    const dashboard = new cdk.aws_cloudwatch.Dashboard(this, 'NotificationDashboard', {
-      dashboardName: `notification-metrics-${environmentSuffix}`,
-    });
+    const dashboard = new cdk.aws_cloudwatch.Dashboard(
+      this,
+      'NotificationDashboard',
+      {
+        dashboardName: `notification-metrics-${environmentSuffix}`,
+      }
+    );
 
     // Add widgets to dashboard
     dashboard.addWidgets(
@@ -343,20 +359,26 @@ exports.handler = async (event) => {
     );
 
     // CloudWatch Alarms
-    const emailErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'EmailErrorAlarm', {
-      alarmName: `email-formatter-errors-${environmentSuffix}`,
-      metric: emailFormatterFunction.metricErrors(),
-      threshold: 10,
-      evaluationPeriods: 1,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    const emailErrorAlarm = new cdk.aws_cloudwatch.Alarm(
+      this,
+      'EmailErrorAlarm',
+      {
+        alarmName: `email-formatter-errors-${environmentSuffix}`,
+        metric: emailFormatterFunction.metricErrors(),
+        threshold: 10,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
 
     const smsErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'SmsErrorAlarm', {
       alarmName: `sms-formatter-errors-${environmentSuffix}`,
       metric: smsFormatterFunction.metricErrors(),
       threshold: 10,
       evaluationPeriods: 1,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      comparisonOperator:
+        cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     // Create SNS topic for alarms
@@ -365,12 +387,14 @@ exports.handler = async (event) => {
       displayName: 'Notification System Alarms',
     });
 
-    alarmTopic.addSubscription(
-      new subs.EmailSubscription(notificationEmail)
-    );
+    alarmTopic.addSubscription(new subs.EmailSubscription(notificationEmail));
 
-    emailErrorAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic));
-    smsErrorAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic));
+    emailErrorAlarm.addAlarmAction(
+      new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic)
+    );
+    smsErrorAlarm.addAlarmAction(
+      new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic)
+    );
 
     // Outputs
     new cdk.CfnOutput(this, 'NotificationTopicArn', {
