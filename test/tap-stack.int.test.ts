@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 
 // Check for CDKTF outputs from successful deployment
@@ -5,7 +6,22 @@ const cdktfOutputsPath = 'cdktf.out/stacks/trading-platform/cdk.tf.json';
 let outputs: Record<string, any> = {};
 let hasDeployedInfrastructure = false;
 
+// Function to ensure CDKTF synthesis is run
+function ensureCdktfSynthesis() {
+  if (!fs.existsSync(cdktfOutputsPath)) {
+    console.log('CDKTF output file not found. Running synthesis...');
+    try {
+      execSync('npm run cdktf:synth', { stdio: 'inherit' });
+    } catch (error) {
+      console.error('Failed to run CDKTF synthesis:', error);
+      throw error;
+    }
+  }
+}
+
 try {
+  ensureCdktfSynthesis();
+
   if (fs.existsSync(cdktfOutputsPath)) {
     const outputsContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
     const cdktfOutput = JSON.parse(outputsContent);
@@ -62,10 +78,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper VPC configuration', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -89,10 +102,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper DynamoDB configuration', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -128,10 +138,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper S3 bucket configuration', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -145,10 +152,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper KMS key configuration', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -172,10 +176,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper security group configuration', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -209,10 +210,7 @@ describe('Trading Platform Integration Tests', () => {
 
   describe('Resource Naming and Tagging', () => {
     test('should have consistent resource naming', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
@@ -228,10 +226,7 @@ describe('Trading Platform Integration Tests', () => {
     });
 
     test('should have proper resource tags', () => {
-      if (!fs.existsSync(cdktfOutputsPath)) {
-        console.warn('CDKTF output file not found. Run cdktf synth first.');
-        return;
-      }
+      ensureCdktfSynthesis();
 
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
