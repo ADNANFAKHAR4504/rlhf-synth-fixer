@@ -11,6 +11,7 @@ import {
   IAMClient,
   GetRoleCommand,
   GetInstanceProfileCommand,
+  ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
   LambdaClient,
@@ -248,7 +249,7 @@ describe('Lambda and EventBridge Integration Tests', () => {
     expect(roleArn).toBeDefined();
     expect(roleArn).toContain(`LambdaEC2ControlRole-${environmentSuffix}`);
 
-    // Verify role has EC2 permissions
+    // Verify role has attached policies
     const roleName = `LambdaEC2ControlRole-${environmentSuffix}`;
     const roleResponse = await iamClient.send(
       new GetRoleCommand({
@@ -257,11 +258,19 @@ describe('Lambda and EventBridge Integration Tests', () => {
     );
 
     expect(roleResponse.Role).toBeDefined();
-    expect(roleResponse.Role?.ManagedPolicyArns).toContainEqual(
-      expect.objectContaining({
-        PolicyName: 'AWSLambdaBasicExecutionRole',
+
+    // List attached managed policies
+    const attachedPoliciesResponse = await iamClient.send(
+      new ListAttachedRolePoliciesCommand({
+        RoleName: roleName,
       })
     );
+
+    const attachedPolicies = attachedPoliciesResponse.AttachedPolicies || [];
+    const hasLambdaBasicExecution = attachedPolicies.some(
+      policy => policy.PolicyName === 'AWSLambdaBasicExecutionRole'
+    );
+    expect(hasLambdaBasicExecution).toBe(true);
   });
 
   test('EventBridge rules should target Lambda functions with correct schedule', async () => {
