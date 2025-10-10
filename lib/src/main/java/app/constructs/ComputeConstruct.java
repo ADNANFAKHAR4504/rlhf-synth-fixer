@@ -145,7 +145,6 @@ public class ComputeConstruct extends BaseConstruct {
                             .deviceName("/dev/xvda")
                             .ebs(LaunchTemplateBlockDeviceMappingsEbs.builder()
                                     .encrypted("true")
-                                    .kmsKeyId(kmsKeyArn)
                                     .volumeSize(30)
                                     .volumeType("gp3")
                                     .deleteOnTermination("true")
