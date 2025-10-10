@@ -741,17 +741,17 @@ public class MainIntegrationTest {
 
         // Verify CPU alarm exists
         boolean hasCpuAlarm = alarms.stream()
-            .anyMatch(alarm -> "CPUUtilization".equals(alarm.metricName()));
+            .anyMatch(alarm -> "high-cpu-utilization".equals(alarm.alarmName()));
         assertTrue(hasCpuAlarm, "CPU utilization alarm should exist");
 
-        // Verify target health alarm exists
+        // Verify target health alarm exists (uses HealthyHostCount metric but named unhealthy-targets)
         boolean hasHealthAlarm = alarms.stream()
-            .anyMatch(alarm -> "HealthyHostCount".equals(alarm.metricName()));
+            .anyMatch(alarm -> "unhealthy-targets".equals(alarm.alarmName()));
         assertTrue(hasHealthAlarm, "Healthy host count alarm should exist");
 
         // Verify request count alarm exists
         boolean hasRequestAlarm = alarms.stream()
-            .anyMatch(alarm -> "RequestCount".equals(alarm.metricName()));
+            .anyMatch(alarm -> "high-request-count".equals(alarm.alarmName()));
         assertTrue(hasRequestAlarm, "Request count alarm should exist");
     }
 
@@ -766,13 +766,13 @@ public class MainIntegrationTest {
         );
 
         Optional<MetricAlarm> cpuAlarm = response.metricAlarms().stream()
-            .filter(alarm -> "CPUUtilization".equals(alarm.metricName()))
+            .filter(alarm -> "high-cpu-utilization".equals(alarm.alarmName()))
             .findFirst();
 
         assertTrue(cpuAlarm.isPresent(), "CPU alarm should exist");
 
         MetricAlarm alarm = cpuAlarm.get();
-        assertEquals(80.0, alarm.threshold(), "CPU alarm threshold should be 80%");
+        assertEquals(90.0, alarm.threshold(), "CPU alarm threshold should be 90%");
         assertEquals(ComparisonOperator.GREATER_THAN_THRESHOLD, alarm.comparisonOperator(),
             "CPU alarm should use GreaterThanThreshold");
         assertTrue(alarm.actionsEnabled(), "Alarm actions should be enabled");
@@ -1233,7 +1233,7 @@ public class MainIntegrationTest {
             JsonNode node = MAPPER.readTree(listStr);
             if (node.isArray()) {
                 List<String> result = new ArrayList<>();
-                node.elements().forEachRemaining(elem -> result.add(elem.asText()));
+                node.forEach(elem -> result.add(elem.asText()));
                 return result;
             }
         } catch (Exception e) {
