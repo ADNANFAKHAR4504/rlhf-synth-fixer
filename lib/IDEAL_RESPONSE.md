@@ -1,21 +1,6 @@
-# Pulumi Java Infrastructure Code for News Portal - IDEAL IMPLEMENTATION
+# Ideal Response
 
-## Overview
-
-This document contains the corrected, production-ready Pulumi Java infrastructure code for a news portal serving 7,200 daily readers. All compilation errors have been fixed, and the code follows AWS and Pulumi best practice.
-
-## Key Improvements from MODEL_RESPONSE.md
-
-1. **Fixed Lambda Asset Type**: Changed from `StringAsset` to `AssetArchive` with proper file structure
-2. **Fixed S3 Bucket Policy**: Added `Either.ofLeft()` wrapper for policy JSON string
-3. **Fixed Route53 Records**: Changed from Map-based to strongly-typed `RecordAliasArgs` builder pattern
-4. **Fixed CloudWatch Alarms**: Added `.applyValue()` transformation for Output<String> to List<String>
-5. **Added Missing Imports**: `Either`, `AssetArchive`, `RecordAliasArgs`
-6. **Added final Modifiers**: All method parameters now use `final` keyword
-
----
-
-## File: lib/src/main/java/app/Main.java
+## lib/src/main/java/app/Main.java
 
 ```java
 package app;
@@ -43,11 +28,11 @@ public final class Main {
         // Create Lambda@Edge function for A/B testing
         EdgeFunctionStack edgeFunction = new EdgeFunctionStack(ctx);
 
-        // Create CloudFront distribution
-        CdnStack cdn = new CdnStack(ctx, storage, edgeFunction);
+        // Create WAF rules first
+        SecurityStack security = new SecurityStack(ctx);
 
-        // Create WAF rules
-        SecurityStack security = new SecurityStack(ctx, cdn);
+        // Create CloudFront distribution with WAF
+        CdnStack cdn = new CdnStack(ctx, storage, edgeFunction, security);
 
         // Create Route53 DNS with geolocation routing
         DnsStack dns = new DnsStack(ctx, cdn);
@@ -64,16 +49,7 @@ public final class Main {
 }
 ```
 
-**Key Features**:
-
-- ✅ Proper final class with private constructor
-- ✅ final modifiers on all method parameters
-- ✅ Clear orchestration of all infrastructure stacks
-- ✅ Comprehensive output exports for integration
-
----
-
-## File: lib/src/main/java/app/StorageStack.java
+## lib/src/main/java/app/StorageStack.java
 
 ```java
 package app;
@@ -142,16 +118,7 @@ public class StorageStack {
 }
 ```
 
-**Key Features**:
-
-- ✅ S3 bucket with comprehensive security (all public access blocked)
-- ✅ Lifecycle policy for 120-day GLACIER archival (as required)
-- ✅ Proper resource tagging for management
-- ✅ final parameter on constructor
-
----
-
-## File: lib/src/main/java/app/EdgeFunctionStack.java
+## lib/src/main/java/app/EdgeFunctionStack.java
 
 ```java
 package app;
@@ -224,7 +191,6 @@ public class EdgeFunctionStack {
             };
             """;
 
-        // FIXED: Use AssetArchive instead of StringAsset for Lambda code
         this.edgeFunction = new Function("ab-testing-edge-function",
             FunctionArgs.builder()
                 .runtime("nodejs20.x")
@@ -249,19 +215,7 @@ public class EdgeFunctionStack {
 }
 ```
 
-**Key Features**:
-
-- ✅ **FIXED**: Lambda code wrapped in AssetArchive with proper file structure
-- ✅ IAM role supports both lambda.amazonaws.com and edgelambda.amazonaws.com
-- ✅ A/B testing logic at viewer-request stage (50/50 split)
-- ✅ Published version for Lambda@Edge compatibility
-- ✅ Proper resource tagging
-
-**Critical Fix**: Changed `.code(new StringAsset(functionCode))` to `.code(new AssetArchive(Map.of("index.js", new StringAsset(functionCode))))`
-
----
-
-## File: lib/src/main/java/app/CdnStack.java
+## lib/src/main/java/app/CdnStack.java
 
 ```java
 package app;
@@ -296,7 +250,7 @@ import java.util.Map;
 public class CdnStack {
     private final Distribution distribution;
 
-    public CdnStack(final Context ctx, final StorageStack storage, final EdgeFunctionStack edgeFunction) {
+    public CdnStack(final Context ctx, final StorageStack storage, final EdgeFunctionStack edgeFunction, final SecurityStack security) {
         // Create Origin Access Control for S3
         var oac = new OriginAccessControl("s3-oac",
             OriginAccessControlArgs.builder()
@@ -411,13 +365,14 @@ public class CdnStack {
                         .cloudfrontDefaultCertificate(true)
                         .build()
                 )
+                .webAclId(security.getWebAcl().arn())
                 .tags(Map.of(
                     "Name", "NewsPortalCDN",
                     "Environment", "production"
                 ))
                 .build());
 
-        // FIXED: Update bucket policy with proper Either type wrapper
+        // Update bucket policy to allow CloudFront OAC access
         Output<Either<String, com.pulumi.aws.s3.inputs.PolicyDocumentArgs>> policyDocument =
             Output.tuple(storage.getBucket().arn(), distribution.arn()).applyValue(tuple -> {
                 String bucketArn = tuple.t1;
@@ -458,25 +413,7 @@ public class CdnStack {
 }
 ```
 
-**Key Features**:
-
-- ✅ **FIXED**: Bucket policy uses `Either.ofLeft()` for proper type handling
-- ✅ **FIXED**: Added import for `com.pulumi.core.Either`
-- ✅ Origin Access Control (OAC) - modern replacement for deprecated OAI
-- ✅ Multiple cache behaviors for different content types (/static/_, /api/_)
-- ✅ Lambda@Edge integration at viewer-request stage
-- ✅ HTTPS enforcement via redirect-to-https policy
-- ✅ Proper S3 bucket policy with CloudFront condition
-
-**Critical Fixes**:
-
-1. Added `import com.pulumi.core.Either;`
-2. Wrapped policy JSON string in `Either.ofLeft()`
-3. Declared proper type: `Output<Either<String, com.pulumi.aws.s3.inputs.PolicyDocumentArgs>>`
-
----
-
-## File: lib/src/main/java/app/SecurityStack.java
+## lib/src/main/java/app/SecurityStack.java
 
 ```java
 package app;
@@ -484,8 +421,6 @@ package app;
 import com.pulumi.Context;
 import com.pulumi.aws.wafv2.WebAcl;
 import com.pulumi.aws.wafv2.WebAclArgs;
-import com.pulumi.aws.wafv2.WebAclAssociation;
-import com.pulumi.aws.wafv2.WebAclAssociationArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionAllowArgs;
 import com.pulumi.aws.wafv2.inputs.WebAclRuleArgs;
@@ -507,7 +442,7 @@ import java.util.Map;
 public class SecurityStack {
     private final WebAcl webAcl;
 
-    public SecurityStack(final Context ctx, final CdnStack cdn) {
+    public SecurityStack(final Context ctx) {
         // Create WAF Web ACL with rate limiting
         this.webAcl = new WebAcl("news-portal-waf",
             WebAclArgs.builder()
@@ -588,12 +523,7 @@ public class SecurityStack {
                 ))
                 .build());
 
-        // Associate WAF with CloudFront distribution
-        var wafAssociation = new WebAclAssociation("waf-cloudfront-association",
-            WebAclAssociationArgs.builder()
-                .resourceArn(cdn.getDistribution().arn())
-                .webAclArn(webAcl.arn())
-                .build());
+        // Note: WAF association with CloudFront is handled in the distribution configuration
     }
 
     public WebAcl getWebAcl() {
@@ -602,21 +532,12 @@ public class SecurityStack {
 }
 ```
 
-**Key Features**:
-
-- ✅ Rate limiting at 2000 requests per 5 minutes (as required)
-- ✅ IP-based rate limiting aggregation
-- ✅ AWS Managed Rules for common threats
-- ✅ CloudWatch metrics enabled for monitoring
-- ✅ WAF associated with CloudFront distribution
-- ✅ final parameter on constructor
-
----
-
-## File: lib/src/main/java/app/DnsStack.java
+## lib/src/main/java/app/DnsStack.java
 
 ```java
 package app;
+
+import java.util.Map;
 
 import com.pulumi.Context;
 import com.pulumi.aws.route53.Record;
@@ -625,8 +546,6 @@ import com.pulumi.aws.route53.Zone;
 import com.pulumi.aws.route53.ZoneArgs;
 import com.pulumi.aws.route53.inputs.RecordAliasArgs;
 import com.pulumi.aws.route53.inputs.RecordGeolocationRoutingPolicyArgs;
-
-import java.util.Map;
 
 /**
  * DNS stack for Route 53 with geolocation routing.
@@ -642,11 +561,10 @@ public class DnsStack {
                 .comment("Hosted zone for news portal")
                 .tags(Map.of(
                     "Name", "NewsPortalZone",
-                    "Environment", "production"
-                ))
+                    "Environment", "production"))
                 .build());
 
-        // FIXED: Default record for all locations using RecordAliasArgs builder
+        // Default record for all locations (with default geolocation)
         var defaultRecord = new Record("news-portal-default",
             RecordArgs.builder()
                 .zoneId(hostedZone.zoneId())
@@ -658,16 +576,15 @@ public class DnsStack {
                         .name(cdn.getDistribution().domainName())
                         .zoneId(cdn.getDistribution().hostedZoneId())
                         .evaluateTargetHealth(false)
-                        .build()
-                )
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
-                        .continent("*")
-                        .build()
-                )
+                        // Route53 default geolocation catch-all
+                        .country("*")
+                        .build())
                 .build());
 
-        // FIXED: North America geolocation record using RecordAliasArgs builder
+        // North America geolocation record
         var northAmericaRecord = new Record("news-portal-na",
             RecordArgs.builder()
                 .zoneId(hostedZone.zoneId())
@@ -679,16 +596,14 @@ public class DnsStack {
                         .name(cdn.getDistribution().domainName())
                         .zoneId(cdn.getDistribution().hostedZoneId())
                         .evaluateTargetHealth(true)
-                        .build()
-                )
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("NA")
-                        .build()
-                )
+                        .build())
                 .build());
 
-        // FIXED: Europe geolocation record using RecordAliasArgs builder
+        // Europe geolocation record
         var europeRecord = new Record("news-portal-eu",
             RecordArgs.builder()
                 .zoneId(hostedZone.zoneId())
@@ -700,16 +615,14 @@ public class DnsStack {
                         .name(cdn.getDistribution().domainName())
                         .zoneId(cdn.getDistribution().hostedZoneId())
                         .evaluateTargetHealth(true)
-                        .build()
-                )
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("EU")
-                        .build()
-                )
+                        .build())
                 .build());
 
-        // FIXED: Asia geolocation record using RecordAliasArgs builder
+        // Asia geolocation record
         var asiaRecord = new Record("news-portal-as",
             RecordArgs.builder()
                 .zoneId(hostedZone.zoneId())
@@ -721,13 +634,11 @@ public class DnsStack {
                         .name(cdn.getDistribution().domainName())
                         .zoneId(cdn.getDistribution().hostedZoneId())
                         .evaluateTargetHealth(true)
-                        .build()
-                )
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("AS")
-                        .build()
-                )
+                        .build())
                 .build());
     }
 
@@ -737,20 +648,7 @@ public class DnsStack {
 }
 ```
 
-**Key Features**:
-
-- ✅ **FIXED**: All Route53 records use strongly-typed `RecordAliasArgs` builder pattern
-- ✅ **FIXED**: Added import for `com.pulumi.aws.route53.inputs.RecordAliasArgs`
-- ✅ Geolocation routing for multiple continents (NA, EU, AS)
-- ✅ Default wildcard record for unmatched locations
-- ✅ Health checks enabled for regional records
-- ✅ final parameter on constructor
-
-**Critical Fix**: Changed from `List<Map<String, Object>>` to `RecordAliasArgs.builder()` pattern for all alias configurations.
-
----
-
-## File: lib/src/main/java/app/MonitoringStack.java
+## lib/src/main/java/app/MonitoringStack.java
 
 ```java
 package app;
@@ -870,7 +768,7 @@ public class MonitoringStack {
                 .dashboardBody(dashboardBody)
                 .build());
 
-        // FIXED: Create alarm for high error rate with applyValue transformation
+        // Create alarm for high error rate
         var errorRateAlarm = new MetricAlarm("high-error-rate-alarm",
             MetricAlarmArgs.builder()
                 .name("news-portal-high-error-rate")
@@ -890,7 +788,7 @@ public class MonitoringStack {
                 ))
                 .build());
 
-        // FIXED: Create alarm for low cache hit rate with applyValue transformation
+        // Create alarm for low cache hit rate
         var cacheHitAlarm = new MetricAlarm("low-cache-hit-alarm",
             MetricAlarmArgs.builder()
                 .name("news-portal-low-cache-hit")
@@ -916,196 +814,3 @@ public class MonitoringStack {
     }
 }
 ```
-
-**Key Features**:
-
-- ✅ **FIXED**: Alarm actions use `.applyValue(arn -> List.of(arn))` for proper type conversion
-- ✅ CloudWatch dashboard with comprehensive viewer metrics
-- ✅ Alarms for high error rates (>5%) and low cache hit rates (<70%)
-- ✅ SNS topic for alarm notifications
-- ✅ Proper resource tagging
-- ✅ final parameter on constructor
-
-**Critical Fix**: Changed `.alarmActions(alarmTopic.arn())` to `.alarmActions(alarmTopic.arn().applyValue(arn -> List.of(arn)))` to convert Output<String> to Output<List<String>>.
-
----
-
-## Compliance Summary
-
-### AWS Services Implemented (100% Compliance)
-
-1. **S3** ✅
-   - Bucket for article storage
-   - Public access blocking (all 4 settings enabled)
-   - Lifecycle policy: 120-day GLACIER archival
-   - Bucket policy for CloudFront OAC access
-
-2. **CloudFront** ✅
-   - Distribution with Origin Access Control (OAC, not deprecated OAI)
-   - Multiple cache behaviors (/static/_, /api/_)
-   - Lambda@Edge integration at viewer-request
-   - HTTPS enforcement
-   - Default root object configured
-
-3. **Lambda@Edge** ✅
-   - A/B testing function (50/50 split)
-   - Runs at viewer-request stage
-   - IAM role with edge lambda permissions
-   - Published version for CloudFront
-
-4. **Route 53** ✅
-   - Hosted zone created
-   - Geolocation routing for NA, EU, AS
-   - Default wildcard record
-   - Alias records to CloudFront
-
-5. **WAF** ✅
-   - Web ACL with CLOUDFRONT scope
-   - Rate limiting: 2000 req/5min per IP
-   - AWS Managed Rules (Common Rule Set)
-   - Associated with CloudFront distribution
-
-6. **CloudWatch** ✅
-   - Dashboard with viewer metrics
-   - High error rate alarm (>5%)
-   - Low cache hit rate alarm (<70%)
-   - SNS topic for notifications
-
-7. **IAM** ✅
-   - Lambda@Edge execution role
-   - Proper trust policies
-   - Least privilege access
-
-### Requirements Met (100% Compliance)
-
-- ✅ S3 bucket for storing article content
-- ✅ CloudFront distribution with multiple origin configurations
-- ✅ Lambda@Edge for request routing and A/B testing
-- ✅ Route 53 hosted zone with geolocation routing
-- ✅ WAF web ACL with rate limiting (2000 requests per 5 minutes)
-- ✅ CloudWatch dashboard and alarms for monitoring
-- ✅ S3 lifecycle policy to archive content after 120 days to Glacier
-- ✅ Origin Access Control (OAC) for S3 bucket access
-- ✅ Multiple cache behaviors for different content types
-- ✅ Lambda@Edge at viewer-request stage for A/B testing
-
-### Code Quality Assessment
-
-**Strengths**:
-
-- Modular design with separate stack classes
-- Comprehensive resource tagging
-- Proper security configurations
-- Type-safe API usage
-- Clear documentation
-
-**Improvements Made by QA Trainer**:
-
-- Fixed all 9 compilation errors
-- Added missing imports
-- Corrected type mismatches
-- Added final modifiers
-- Ensured checkstyle compliance
-
-### Test Coverage
-
-- 6 unit tests for Main.java (all passing)
-- Integration tests present
-- Test structure follows best practices
-
-### Production Readiness: ✅ READY
-
-The code is production-ready after QA trainer fixes:
-
-- ✅ Compiles successfully
-- ✅ All tests pass
-- ✅ Follows AWS best practices
-- ✅ Security properly configured
-- ✅ Monitoring and alerting in place
-- ✅ Code style compliant
-
----
-
-## Best Practices Followed
-
-1. **Security**:
-   - S3 bucket fully blocked from public access
-   - OAC instead of deprecated OAI
-   - HTTPS enforcement on CloudFront
-   - WAF rate limiting and managed rules
-   - IAM least privilege principles
-
-2. **Performance**:
-   - Multiple cache behaviors optimized per content type
-   - Static assets cached for 1 year
-   - API requests not cached
-   - Compression enabled
-
-3. **Reliability**:
-   - Geolocation routing for regional redundancy
-   - CloudWatch alarms for proactive monitoring
-   - Lambda@Edge published versions
-
-4. **Cost Optimization**:
-   - S3 lifecycle policy for Glacier archival
-   - PriceClass_100 for CloudFront (US/Europe)
-   - Pay-per-use WAF rules
-
-5. **Maintainability**:
-   - Modular stack design
-   - Clear separation of concerns
-   - Comprehensive tagging
-   - Type-safe code
-
----
-
-## Deployment Instructions
-
-1. **Prerequisites**:
-
-   ```bash
-   # Install Pulumi CLI
-   curl -fsSL https://get.pulumi.com | sh
-
-   # Configure AWS credentials
-   aws configure
-
-   # Set Pulumi configuration
-   pulumi config set aws:region us-east-1
-   ```
-
-2. **Deploy**:
-
-   ```bash
-   cd lib
-   pulumi up
-   ```
-
-3. **Verify Outputs**:
-
-   ```bash
-   pulumi stack output bucketName
-   pulumi stack output distributionDomainName
-   pulumi stack output distributionId
-   pulumi stack output hostedZoneId
-   ```
-
-4. **Test A/B Logic**:
-   ```bash
-   curl -I https://<distribution-domain>
-   # Check for X-Experiment-Variant header
-   ```
-
----
-
-## Conclusion
-
-This infrastructure code provides a robust, secure, and scalable news portal platform with:
-
-- Comprehensive content delivery via CloudFront + S3
-- Intelligent A/B testing via Lambda@Edge
-- Geographic content routing via Route 53
-- DDoS and rate limiting protection via WAF
-- Proactive monitoring via CloudWatch
-
-All 9 compilation errors from the original MODEL_RESPONSE have been fixed, and the code now compiles cleanly, passes all tests, and follows AWS and Pulumi best practices.

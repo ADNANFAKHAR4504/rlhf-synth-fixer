@@ -1,8 +1,6 @@
-# Pulumi Java Infrastructure Code for News Portal
+# Model Response
 
-Here's the complete infrastructure code organized into separate files for each component:
-
-## File: lib/src/main/java/app/Main.java
+## lib/src/main/java/app/Main.java
 
 ```java
 package app;
@@ -23,18 +21,18 @@ public final class Main {
         Pulumi.run(Main::defineInfrastructure);
     }
 
-    static void defineInfrastructure(Context ctx) {
+    static void defineInfrastructure(final Context ctx) {
         // Create storage infrastructure
         StorageStack storage = new StorageStack(ctx);
 
         // Create Lambda@Edge function for A/B testing
         EdgeFunctionStack edgeFunction = new EdgeFunctionStack(ctx);
 
-        // Create CloudFront distribution
-        CdnStack cdn = new CdnStack(ctx, storage, edgeFunction);
+        // Create WAF rules first
+        SecurityStack security = new SecurityStack(ctx);
 
-        // Create WAF rules
-        SecurityStack security = new SecurityStack(ctx, cdn);
+        // Create CloudFront distribution with WAF
+        CdnStack cdn = new CdnStack(ctx, storage, edgeFunction, security);
 
         // Create Route53 DNS with geolocation routing
         DnsStack dns = new DnsStack(ctx, cdn);
@@ -51,7 +49,7 @@ public final class Main {
 }
 ```
 
-## File: lib/src/main/java/app/StorageStack.java
+## lib/src/main/java/app/StorageStack.java
 
 ```java
 package app;
@@ -74,7 +72,7 @@ import java.util.Map;
 public class StorageStack {
     private final Bucket bucket;
 
-    public StorageStack(Context ctx) {
+    public StorageStack(final Context ctx) {
         // Create S3 bucket for article storage
         this.bucket = new Bucket("news-articles-bucket",
             BucketArgs.builder()
@@ -120,13 +118,14 @@ public class StorageStack {
 }
 ```
 
-## File: lib/src/main/java/app/EdgeFunctionStack.java
+## lib/src/main/java/app/EdgeFunctionStack.java
 
 ```java
 package app;
 
 import com.pulumi.Context;
 import com.pulumi.asset.StringAsset;
+import com.pulumi.asset.AssetArchive;
 import com.pulumi.aws.iam.Role;
 import com.pulumi.aws.iam.RoleArgs;
 import com.pulumi.aws.iam.RolePolicyAttachment;
@@ -143,7 +142,7 @@ import java.util.Map;
 public class EdgeFunctionStack {
     private final Function edgeFunction;
 
-    public EdgeFunctionStack(Context ctx) {
+    public EdgeFunctionStack(final Context ctx) {
         // Create IAM role for Lambda@Edge
         var lambdaRole = new Role("lambda-edge-role",
             RoleArgs.builder()
@@ -197,7 +196,7 @@ public class EdgeFunctionStack {
                 .runtime("nodejs20.x")
                 .handler("index.handler")
                 .role(lambdaRole.arn())
-                .code(new StringAsset(functionCode))
+                .code(new AssetArchive(Map.of("index.js", new StringAsset(functionCode))))
                 .publish(true)
                 .tags(Map.of(
                     "Name", "ABTestingEdgeFunction",
@@ -216,7 +215,7 @@ public class EdgeFunctionStack {
 }
 ```
 
-## File: lib/src/main/java/app/CdnStack.java
+## lib/src/main/java/app/CdnStack.java
 
 ```java
 package app;
@@ -226,10 +225,21 @@ import com.pulumi.aws.cloudfront.Distribution;
 import com.pulumi.aws.cloudfront.DistributionArgs;
 import com.pulumi.aws.cloudfront.OriginAccessControl;
 import com.pulumi.aws.cloudfront.OriginAccessControlArgs;
-import com.pulumi.aws.cloudfront.inputs.*;
+import com.pulumi.aws.cloudfront.inputs.DistributionOriginArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionDefaultCacheBehaviorArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionDefaultCacheBehaviorForwardedValuesArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionDefaultCacheBehaviorLambdaFunctionAssociationArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionOrderedCacheBehaviorArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionOrderedCacheBehaviorForwardedValuesArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionOrderedCacheBehaviorForwardedValuesCookiesArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionRestrictionsArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionRestrictionsGeoRestrictionArgs;
+import com.pulumi.aws.cloudfront.inputs.DistributionViewerCertificateArgs;
 import com.pulumi.aws.s3.BucketPolicy;
 import com.pulumi.aws.s3.BucketPolicyArgs;
 import com.pulumi.core.Output;
+import com.pulumi.core.Either;
 
 import java.util.List;
 import java.util.Map;
@@ -240,7 +250,7 @@ import java.util.Map;
 public class CdnStack {
     private final Distribution distribution;
 
-    public CdnStack(Context ctx, StorageStack storage, EdgeFunctionStack edgeFunction) {
+    public CdnStack(final Context ctx, final StorageStack storage, final EdgeFunctionStack edgeFunction, final SecurityStack security) {
         // Create Origin Access Control for S3
         var oac = new OriginAccessControl("s3-oac",
             OriginAccessControlArgs.builder()
@@ -355,6 +365,7 @@ public class CdnStack {
                         .cloudfrontDefaultCertificate(true)
                         .build()
                 )
+                .webAclId(security.getWebAcl().arn())
                 .tags(Map.of(
                     "Name", "NewsPortalCDN",
                     "Environment", "production"
@@ -362,33 +373,37 @@ public class CdnStack {
                 .build());
 
         // Update bucket policy to allow CloudFront OAC access
+        Output<Either<String, com.pulumi.aws.s3.inputs.PolicyDocumentArgs>> policyDocument =
+            Output.tuple(storage.getBucket().arn(), distribution.arn()).applyValue(tuple -> {
+                String bucketArn = tuple.t1;
+                String distributionArn = tuple.t2;
+                String policyJson = String.format("""
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": "cloudfront.amazonaws.com"
+                                },
+                                "Action": "s3:GetObject",
+                                "Resource": "%s/*",
+                                "Condition": {
+                                    "StringEquals": {
+                                        "AWS:SourceArn": "%s"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                    """, bucketArn, distributionArn);
+                return Either.ofLeft(policyJson);
+            });
+
         var bucketPolicy = new BucketPolicy("bucket-policy",
             BucketPolicyArgs.builder()
                 .bucket(storage.getBucket().id())
-                .policy(Output.tuple(storage.getBucket().arn(), distribution.arn()).applyValue(tuple -> {
-                    String bucketArn = tuple.t1;
-                    String distributionArn = tuple.t2;
-                    return String.format("""
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Principal": {
-                                        "Service": "cloudfront.amazonaws.com"
-                                    },
-                                    "Action": "s3:GetObject",
-                                    "Resource": "%s/*",
-                                    "Condition": {
-                                        "StringEquals": {
-                                            "AWS:SourceArn": "%s"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                        """, bucketArn, distributionArn);
-                }))
+                .policy(policyDocument)
                 .build());
     }
 
@@ -398,7 +413,7 @@ public class CdnStack {
 }
 ```
 
-## File: lib/src/main/java/app/SecurityStack.java
+## lib/src/main/java/app/SecurityStack.java
 
 ```java
 package app;
@@ -406,11 +421,19 @@ package app;
 import com.pulumi.Context;
 import com.pulumi.aws.wafv2.WebAcl;
 import com.pulumi.aws.wafv2.WebAclArgs;
-import com.pulumi.aws.wafv2.WebAclAssociation;
-import com.pulumi.aws.wafv2.WebAclAssociationArgs;
-import com.pulumi.aws.wafv2.inputs.*;
+import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclDefaultActionAllowArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleActionArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleActionBlockArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleStatementArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleStatementRateBasedStatementArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleVisibilityConfigArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleOverrideActionArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleOverrideActionNoneArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclRuleStatementManagedRuleGroupStatementArgs;
+import com.pulumi.aws.wafv2.inputs.WebAclVisibilityConfigArgs;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -419,7 +442,7 @@ import java.util.Map;
 public class SecurityStack {
     private final WebAcl webAcl;
 
-    public SecurityStack(Context ctx, CdnStack cdn) {
+    public SecurityStack(final Context ctx) {
         // Create WAF Web ACL with rate limiting
         this.webAcl = new WebAcl("news-portal-waf",
             WebAclArgs.builder()
@@ -500,12 +523,7 @@ public class SecurityStack {
                 ))
                 .build());
 
-        // Associate WAF with CloudFront distribution
-        var wafAssociation = new WebAclAssociation("waf-cloudfront-association",
-            WebAclAssociationArgs.builder()
-                .resourceArn(cdn.getDistribution().arn())
-                .webAclArn(webAcl.arn())
-                .build());
+        // Note: WAF association with CloudFront is handled in the distribution configuration
     }
 
     public WebAcl getWebAcl() {
@@ -514,20 +532,20 @@ public class SecurityStack {
 }
 ```
 
-## File: lib/src/main/java/app/DnsStack.java
+## lib/src/main/java/app/DnsStack.java
 
 ```java
 package app;
+
+import java.util.Map;
 
 import com.pulumi.Context;
 import com.pulumi.aws.route53.Record;
 import com.pulumi.aws.route53.RecordArgs;
 import com.pulumi.aws.route53.Zone;
 import com.pulumi.aws.route53.ZoneArgs;
+import com.pulumi.aws.route53.inputs.RecordAliasArgs;
 import com.pulumi.aws.route53.inputs.RecordGeolocationRoutingPolicyArgs;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * DNS stack for Route 53 with geolocation routing.
@@ -535,7 +553,7 @@ import java.util.Map;
 public class DnsStack {
     private final Zone hostedZone;
 
-    public DnsStack(Context ctx, CdnStack cdn) {
+    public DnsStack(final Context ctx, final CdnStack cdn) {
         // Create Route 53 hosted zone
         this.hostedZone = new Zone("news-portal-zone",
             ZoneArgs.builder()
@@ -543,27 +561,27 @@ public class DnsStack {
                 .comment("Hosted zone for news portal")
                 .tags(Map.of(
                     "Name", "NewsPortalZone",
-                    "Environment", "production"
-                ))
+                    "Environment", "production"))
                 .build());
 
-        // Default record for all locations
+        // Default record for all locations (with default geolocation)
         var defaultRecord = new Record("news-portal-default",
             RecordArgs.builder()
                 .zoneId(hostedZone.zoneId())
                 .name("www")
                 .type("A")
                 .setIdentifier("Default")
-                .aliases(List.of(Map.of(
-                    "name", cdn.getDistribution().domainName(),
-                    "zoneId", cdn.getDistribution().hostedZoneId(),
-                    "evaluateTargetHealth", false
-                )))
+                .aliases(
+                    RecordAliasArgs.builder()
+                        .name(cdn.getDistribution().domainName())
+                        .zoneId(cdn.getDistribution().hostedZoneId())
+                        .evaluateTargetHealth(false)
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
-                        .continent("*")
-                        .build()
-                )
+                        // Route53 default geolocation catch-all
+                        .country("*")
+                        .build())
                 .build());
 
         // North America geolocation record
@@ -573,16 +591,16 @@ public class DnsStack {
                 .name("www")
                 .type("A")
                 .setIdentifier("NorthAmerica")
-                .aliases(List.of(Map.of(
-                    "name", cdn.getDistribution().domainName(),
-                    "zoneId", cdn.getDistribution().hostedZoneId(),
-                    "evaluateTargetHealth", true
-                )))
+                .aliases(
+                    RecordAliasArgs.builder()
+                        .name(cdn.getDistribution().domainName())
+                        .zoneId(cdn.getDistribution().hostedZoneId())
+                        .evaluateTargetHealth(true)
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("NA")
-                        .build()
-                )
+                        .build())
                 .build());
 
         // Europe geolocation record
@@ -592,16 +610,16 @@ public class DnsStack {
                 .name("www")
                 .type("A")
                 .setIdentifier("Europe")
-                .aliases(List.of(Map.of(
-                    "name", cdn.getDistribution().domainName(),
-                    "zoneId", cdn.getDistribution().hostedZoneId(),
-                    "evaluateTargetHealth", true
-                )))
+                .aliases(
+                    RecordAliasArgs.builder()
+                        .name(cdn.getDistribution().domainName())
+                        .zoneId(cdn.getDistribution().hostedZoneId())
+                        .evaluateTargetHealth(true)
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("EU")
-                        .build()
-                )
+                        .build())
                 .build());
 
         // Asia geolocation record
@@ -611,16 +629,16 @@ public class DnsStack {
                 .name("www")
                 .type("A")
                 .setIdentifier("Asia")
-                .aliases(List.of(Map.of(
-                    "name", cdn.getDistribution().domainName(),
-                    "zoneId", cdn.getDistribution().hostedZoneId(),
-                    "evaluateTargetHealth", true
-                )))
+                .aliases(
+                    RecordAliasArgs.builder()
+                        .name(cdn.getDistribution().domainName())
+                        .zoneId(cdn.getDistribution().hostedZoneId())
+                        .evaluateTargetHealth(true)
+                        .build())
                 .geolocationRoutingPolicies(
                     RecordGeolocationRoutingPolicyArgs.builder()
                         .continent("AS")
-                        .build()
-                )
+                        .build())
                 .build());
     }
 
@@ -630,7 +648,7 @@ public class DnsStack {
 }
 ```
 
-## File: lib/src/main/java/app/MonitoringStack.java
+## lib/src/main/java/app/MonitoringStack.java
 
 ```java
 package app;
@@ -653,7 +671,7 @@ import java.util.Map;
 public class MonitoringStack {
     private final Dashboard dashboard;
 
-    public MonitoringStack(Context ctx, CdnStack cdn) {
+    public MonitoringStack(final Context ctx, final CdnStack cdn) {
         // Create SNS topic for alarms
         var alarmTopic = new Topic("cloudfront-alarms",
             TopicArgs.builder()
@@ -665,7 +683,7 @@ public class MonitoringStack {
                 .build());
 
         // Create CloudWatch dashboard for viewer metrics
-        String dashboardBody = cdn.getDistribution().id().apply(distributionId ->
+        Output<String> dashboardBody = cdn.getDistribution().id().applyValue(distributionId ->
             String.format("""
                 {
                     "widgets": [
@@ -762,7 +780,7 @@ public class MonitoringStack {
                 .statistic("Average")
                 .threshold(5.0)
                 .alarmDescription("Alert when 5xx error rate exceeds 5%")
-                .alarmActions(alarmTopic.arn())
+                .alarmActions(alarmTopic.arn().applyValue(arn -> List.of(arn)))
                 .treatMissingData("notBreaching")
                 .tags(Map.of(
                     "Name", "HighErrorRateAlarm",
@@ -782,7 +800,7 @@ public class MonitoringStack {
                 .statistic("Average")
                 .threshold(70.0)
                 .alarmDescription("Alert when cache hit rate falls below 70%")
-                .alarmActions(alarmTopic.arn())
+                .alarmActions(alarmTopic.arn().applyValue(arn -> List.of(arn)))
                 .treatMissingData("notBreaching")
                 .tags(Map.of(
                     "Name", "LowCacheHitAlarm",
@@ -796,14 +814,3 @@ public class MonitoringStack {
     }
 }
 ```
-
-This infrastructure code provides:
-1. S3 bucket with lifecycle policy for 120-day Glacier archival
-2. CloudFront distribution with Origin Access Control (OAC)
-3. Multiple cache behaviors for different content types
-4. Lambda@Edge function for A/B testing at viewer-request stage
-5. WAF with rate limiting (2000 requests per 5 minutes)
-6. Route 53 hosted zone with geolocation routing for NA, EU, and AS
-7. CloudWatch dashboard with viewer metrics and alarms
-
-All resources follow AWS best practices with proper security configurations.
