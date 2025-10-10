@@ -64,6 +64,8 @@ describe("Terraform lib/ .tf unit tests", () => {
   describe("variables.tf validation", () => {
     test("should declare all required variables", () => {
       contains(variablesTf, "variable \"resource_suffix\" {");
+      contains(variablesTf, "variable \"ssh_cidr_blocks\" {");
+      contains(variablesTf, "variable \"ssh_public_key\" {");
       contains(variablesTf, "variable \"db_username\" {");
       contains(variablesTf, "variable \"db_password\" {");
       contains(variablesTf, "variable \"db_name\" {");
@@ -73,7 +75,9 @@ describe("Terraform lib/ .tf unit tests", () => {
 
     test("should have proper variable types", () => {
       contains(variablesTf, "type        = string");
-      expect(variablesTf.match(/type\s+=\s+string/g)?.length).toBeGreaterThanOrEqual(5);
+      contains(variablesTf, "type        = list(string)");
+      expect(variablesTf.match(/type\s+=\s+string/g)?.length).toBeGreaterThanOrEqual(6);
+      expect(variablesTf.match(/type\s+=\s+list\(string\)/g)?.length).toBeGreaterThanOrEqual(1);
     });
 
     test("should mark sensitive variables as sensitive", () => {
@@ -125,10 +129,20 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(ec2Tf, "amzn2-ami-hvm-*-x86_64-gp2");
     });
 
-    test("should create security group without SSH access", () => {
+    test("should create security group with SSH access", () => {
       contains(ec2Tf, "resource \"aws_security_group\" \"ec2_sg\" {");
-      expect(ec2Tf).not.toContain("from_port   = 22");
-      expect(ec2Tf).not.toContain("to_port     = 22");
+      expect(ec2Tf).toContain("from_port   = 22");
+      expect(ec2Tf).toContain("to_port     = 22");
+      expect(ec2Tf).toContain("protocol    = \"tcp\"");
+      expect(ec2Tf).toContain("cidr_blocks = var.ssh_cidr_blocks");
+      expect(ec2Tf).toContain("SSH access from configurable IP addresses");
+    });
+
+    test("should create conditional SSH key pair", () => {
+      contains(ec2Tf, "resource \"aws_key_pair\" \"deployer\" {");
+      expect(ec2Tf).toContain("count      = var.ssh_public_key != \"\" ? 1 : 0");
+      expect(ec2Tf).toContain("public_key = var.ssh_public_key");
+      expect(ec2Tf).toContain("key_name   = \"deployer-key-${var.resource_suffix}\"");
     });
 
     test("should create IAM role for SSM access", () => {
@@ -145,6 +159,7 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should create EC2 instance with SSM profile", () => {
       contains(ec2Tf, "resource \"aws_instance\" \"web\" {");
       contains(ec2Tf, "iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name");
+      expect(ec2Tf).toContain("key_name               = var.ssh_public_key != \"\" ? aws_key_pair.deployer[0].key_name : null");
     });
   });
 
@@ -208,6 +223,7 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(outputsTf, "output \"ec2_instance_id\" {");
       contains(outputsTf, "output \"ec2_instance_public_ip\" {");
       contains(outputsTf, "output \"rds_endpoint\" {");
+      contains(outputsTf, "output \"rds_password_secret_arn\" {");
       contains(outputsTf, "output \"s3_bucket_name\" {");
     });
 
