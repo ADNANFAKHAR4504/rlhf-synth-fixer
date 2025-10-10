@@ -10,5 +10,12 @@
   "subject_labels": [
     "Environment Migration"
   ],
-  "aws_services": "EC2, VPC, NAT Gateway, KMS, CloudWatch, Elastic Load Balancer"
+  "aws_services": "EC2, VPC, NAT Gateway, KMS, CloudWatch, Elastic Load Balancer",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "antny-turing",
+  "dockerS3Location": ""
 }
