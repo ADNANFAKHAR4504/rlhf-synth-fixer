@@ -49,7 +49,9 @@ describe('Trading Platform Integration Tests', () => {
 
       // Validate default tags
       expect(config.provider.aws[0].default_tags).toBeDefined();
-      expect(config.provider.aws[0].default_tags[0].tags.Project).toBe('TradingPlatform');
+      expect(config.provider.aws[0].default_tags[0].tags.Project).toBe(
+        'TradingPlatform'
+      );
 
       // Validate resources
       expect(config.resource).toBeDefined();
@@ -95,7 +97,9 @@ describe('Trading Platform Integration Tests', () => {
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
 
-      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+      const dynamoTable = Object.values(
+        config.resource.aws_dynamodb_table
+      )[0] as any;
 
       expect(dynamoTable.billing_mode).toBe('PAY_PER_REQUEST');
       expect(dynamoTable.hash_key).toBe('tradingId');
@@ -111,7 +115,9 @@ describe('Trading Platform Integration Tests', () => {
 
       // Check attributes
       expect(dynamoTable.attribute).toHaveLength(3);
-      const attributeNames = dynamoTable.attribute.map((attr: any) => attr.name);
+      const attributeNames = dynamoTable.attribute.map(
+        (attr: any) => attr.name
+      );
       expect(attributeNames).toContain('tradingId');
       expect(attributeNames).toContain('timestamp');
       expect(attributeNames).toContain('userId');
@@ -174,14 +180,20 @@ describe('Trading Platform Integration Tests', () => {
       const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
       const config = JSON.parse(configContent);
 
-      const securityGroup = Object.values(config.resource.aws_security_group)[0] as any;
+      const securityGroup = Object.values(
+        config.resource.aws_security_group
+      )[0] as any;
 
       // Check ingress rules
       expect(securityGroup.ingress).toBeDefined();
       expect(securityGroup.ingress.length).toBe(2);
 
-      const httpRule = securityGroup.ingress.find((rule: any) => rule.from_port === 80);
-      const httpsRule = securityGroup.ingress.find((rule: any) => rule.from_port === 443);
+      const httpRule = securityGroup.ingress.find(
+        (rule: any) => rule.from_port === 80
+      );
+      const httpsRule = securityGroup.ingress.find(
+        (rule: any) => rule.from_port === 443
+      );
 
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
@@ -207,7 +219,9 @@ describe('Trading Platform Integration Tests', () => {
 
       // Check that all resources follow the naming convention
       const s3Bucket = Object.values(config.resource.aws_s3_bucket)[0] as any;
-      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+      const dynamoTable = Object.values(
+        config.resource.aws_dynamodb_table
+      )[0] as any;
 
       expect(s3Bucket.bucket).toMatch(/trading-platform-data-pri-\d+-\w+/);
       expect(dynamoTable.name).toMatch(/trading-platform-pri-\d+-\w+/);
@@ -236,7 +250,9 @@ describe('Trading Platform Integration Tests', () => {
       const s3Bucket = Object.values(config.resource.aws_s3_bucket)[0] as any;
       expect(s3Bucket.tags.Purpose).toBe('Trading data storage');
 
-      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+      const dynamoTable = Object.values(
+        config.resource.aws_dynamodb_table
+      )[0] as any;
       expect(dynamoTable.tags.Purpose).toBe('Trading transactions storage');
     });
   });

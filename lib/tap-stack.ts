@@ -33,7 +33,9 @@ export class TradingPlatformStack extends TerraformStack {
     super(scope, id);
 
     const regionSuffix = props.isPrimary ? 'pri' : 'sec';
-    const currentRegion = props.isPrimary ? props.primaryRegion : props.secondaryRegion;
+    const currentRegion = props.isPrimary
+      ? props.primaryRegion
+      : props.secondaryRegion;
 
     // Generate unique suffix for resource naming to avoid conflicts
     const timestamp = Date.now().toString().slice(-6);
@@ -53,10 +55,10 @@ export class TradingPlatformStack extends TerraformStack {
             CostCenter: 'FinanceOps',
             Timestamp: new Date().toISOString(),
             'DR-RTO': '15-minutes',
-            'DR-RPO': '5-minutes'
-          }
-        }
-      ]
+            'DR-RPO': '5-minutes',
+          },
+        },
+      ],
     });
 
     // KMS Keys for encryption
@@ -69,7 +71,10 @@ export class TradingPlatformStack extends TerraformStack {
     const s3Bucket = this.createS3Bucket(regionSuffix, kmsKeys.storageKey);
 
     // DynamoDB Table for trading data
-    const dynamoTable = this.createDynamoTable(regionSuffix, kmsKeys.databaseKey);
+    const dynamoTable = this.createDynamoTable(
+      regionSuffix,
+      kmsKeys.databaseKey
+    );
 
     // Store outputs
     this.vpcId = vpc.id;
@@ -79,17 +84,17 @@ export class TradingPlatformStack extends TerraformStack {
     // CloudFormation Outputs
     new TerraformOutput(this, 'VpcId', {
       value: vpc.id,
-      description: 'ID of the VPC'
+      description: 'ID of the VPC',
     });
 
     new TerraformOutput(this, 'S3BucketArn', {
       value: s3Bucket.arn,
-      description: 'ARN of the S3 bucket'
+      description: 'ARN of the S3 bucket',
     });
 
     new TerraformOutput(this, 'DynamoTableArn', {
       value: dynamoTable.arn,
-      description: 'ARN of the DynamoDB table'
+      description: 'ARN of the DynamoDB table',
     });
   }
 
@@ -101,13 +106,13 @@ export class TradingPlatformStack extends TerraformStack {
       deletionWindowInDays: 30,
       tags: {
         Name: `trading-platform-database-key-${regionSuffix}-${this.uniqueSuffix}`,
-        Purpose: 'Database encryption'
-      }
+        Purpose: 'Database encryption',
+      },
     });
 
     new KmsAlias(this, 'DatabaseKeyAlias', {
       name: `alias/trading-platform-database-${regionSuffix}-${this.uniqueSuffix}`,
-      targetKeyId: databaseKey.keyId
+      targetKeyId: databaseKey.keyId,
     });
 
     const storageKey = new KmsKey(this, 'StorageKey', {
@@ -117,18 +122,18 @@ export class TradingPlatformStack extends TerraformStack {
       deletionWindowInDays: 30,
       tags: {
         Name: `trading-platform-storage-key-${regionSuffix}-${this.uniqueSuffix}`,
-        Purpose: 'S3 encryption'
-      }
+        Purpose: 'S3 encryption',
+      },
     });
 
     new KmsAlias(this, 'StorageKeyAlias', {
       name: `alias/trading-platform-storage-${regionSuffix}-${this.uniqueSuffix}`,
-      targetKeyId: storageKey.keyId
+      targetKeyId: storageKey.keyId,
     });
 
     return {
       databaseKey,
-      storageKey
+      storageKey,
     };
   }
 
@@ -139,16 +144,16 @@ export class TradingPlatformStack extends TerraformStack {
       enableDnsSupport: true,
       tags: {
         Name: `trading-platform-vpc-${regionSuffix}-${this.uniqueSuffix}`,
-        Purpose: 'Trading Platform VPC'
-      }
+        Purpose: 'Trading Platform VPC',
+      },
     });
 
     // Internet Gateway
     const igw = new InternetGateway(this, 'InternetGateway', {
       vpcId: vpc.id,
       tags: {
-        Name: `trading-platform-igw-${regionSuffix}-${this.uniqueSuffix}`
-      }
+        Name: `trading-platform-igw-${regionSuffix}-${this.uniqueSuffix}`,
+      },
     });
 
     // Public Subnet
@@ -159,38 +164,38 @@ export class TradingPlatformStack extends TerraformStack {
       mapPublicIpOnLaunch: true,
       tags: {
         Name: `trading-platform-public-subnet-${regionSuffix}-${this.uniqueSuffix}`,
-        Type: 'Public'
-      }
+        Type: 'Public',
+      },
     });
 
     // Private Subnet
-    const privateSubnet = new Subnet(this, 'PrivateSubnet', {
+    new Subnet(this, 'PrivateSubnet', {
       vpcId: vpc.id,
       cidrBlock: '10.0.2.0/24',
       availabilityZone: 'us-east-1b',
       tags: {
         Name: `trading-platform-private-subnet-${regionSuffix}-${this.uniqueSuffix}`,
-        Type: 'Private'
-      }
+        Type: 'Private',
+      },
     });
 
     // Route Table for public subnet
     const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
       vpcId: vpc.id,
       tags: {
-        Name: `trading-platform-public-rt-${regionSuffix}-${this.uniqueSuffix}`
-      }
+        Name: `trading-platform-public-rt-${regionSuffix}-${this.uniqueSuffix}`,
+      },
     });
 
     new Route(this, 'PublicRoute', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: igw.id
+      gatewayId: igw.id,
     });
 
     new RouteTableAssociation(this, 'PublicRouteTableAssociation', {
       subnetId: publicSubnet.id,
-      routeTableId: publicRouteTable.id
+      routeTableId: publicRouteTable.id,
     });
 
     // Security Group
@@ -204,15 +209,15 @@ export class TradingPlatformStack extends TerraformStack {
           toPort: 443,
           protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'HTTPS inbound'
+          description: 'HTTPS inbound',
         },
         {
           fromPort: 80,
           toPort: 80,
           protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'HTTP inbound'
-        }
+          description: 'HTTP inbound',
+        },
       ],
       egress: [
         {
@@ -220,29 +225,32 @@ export class TradingPlatformStack extends TerraformStack {
           toPort: 0,
           protocol: '-1',
           cidrBlocks: ['0.0.0.0/0'],
-          description: 'All outbound traffic'
-        }
+          description: 'All outbound traffic',
+        },
       ],
       tags: {
-        Name: `trading-platform-sg-${regionSuffix}-${this.uniqueSuffix}`
-      }
+        Name: `trading-platform-sg-${regionSuffix}-${this.uniqueSuffix}`,
+      },
     });
 
     return vpc;
   }
 
-  private createS3Bucket(regionSuffix: string, kmsKey: KmsKey): S3Bucket {
+  private createS3Bucket(regionSuffix: string, _kmsKey: KmsKey): S3Bucket {
     return new S3Bucket(this, 'TradingDataBucket', {
       bucket: `trading-platform-data-${regionSuffix}-${this.uniqueSuffix}`,
       tags: {
         Name: `trading-platform-data-${regionSuffix}-${this.uniqueSuffix}`,
         Purpose: 'Trading data storage',
-        Environment: 'Production'
-      }
+        Environment: 'Production',
+      },
     });
   }
 
-  private createDynamoTable(regionSuffix: string, kmsKey: KmsKey): DynamodbTable {
+  private createDynamoTable(
+    regionSuffix: string,
+    kmsKey: KmsKey
+  ): DynamodbTable {
     return new DynamodbTable(this, 'TradingTable', {
       name: `trading-platform-${regionSuffix}-${this.uniqueSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
@@ -251,37 +259,37 @@ export class TradingPlatformStack extends TerraformStack {
       attribute: [
         {
           name: 'tradingId',
-          type: 'S'
+          type: 'S',
         },
         {
           name: 'timestamp',
-          type: 'S'
+          type: 'S',
         },
         {
           name: 'userId',
-          type: 'S'
-        }
+          type: 'S',
+        },
       ],
       globalSecondaryIndex: [
         {
           name: 'UserIndex',
           hashKey: 'userId',
           rangeKey: 'timestamp',
-          projectionType: 'ALL'
-        }
+          projectionType: 'ALL',
+        },
       ],
       serverSideEncryption: {
         enabled: true,
-        kmsKeyArn: kmsKey.arn
+        kmsKeyArn: kmsKey.arn,
       },
       pointInTimeRecovery: {
-        enabled: true
+        enabled: true,
       },
       tags: {
         Name: `trading-platform-${regionSuffix}-${this.uniqueSuffix}`,
         Purpose: 'Trading transactions storage',
-        Environment: 'Production'
-      }
+        Environment: 'Production',
+      },
     });
   }
 }
@@ -294,6 +302,8 @@ export class TradingPlatformApp {
 
   synth() {
     // This method is kept for backward compatibility but not used in CDKTF
-    console.log('Note: synth() method is not needed in CDKTF - use app.synth() instead');
+    console.log(
+      'Note: synth() method is not needed in CDKTF - use app.synth() instead'
+    );
   }
 }

@@ -18,7 +18,7 @@ new TradingPlatformStack(app, 'trading-platform', {
   isPrimary: true,
   primaryRegion: 'us-east-1',
   secondaryRegion: 'us-west-2',
-  domainName: 'trading.example.com'
+  domainName: 'trading.example.com',
 });
 
 // Synthesize the app

@@ -109,7 +109,9 @@ describe('Trading Platform Stack Unit Tests', () => {
     const synthesized = Testing.synth(stack);
     const stackSynthesis = JSON.parse(synthesized);
 
-    const dynamoTable = Object.values(stackSynthesis.resource.aws_dynamodb_table)[0] as any;
+    const dynamoTable = Object.values(
+      stackSynthesis.resource.aws_dynamodb_table
+    )[0] as any;
 
     expect(dynamoTable.billing_mode).toBe('PAY_PER_REQUEST');
     expect(dynamoTable.hash_key).toBe('tradingId');
@@ -122,9 +124,15 @@ describe('Trading Platform Stack Unit Tests', () => {
     // Check attributes
     const attributes = dynamoTable.attribute;
     expect(attributes).toHaveLength(3);
-    expect(attributes.find((attr: any) => attr.name === 'tradingId')).toBeDefined();
-    expect(attributes.find((attr: any) => attr.name === 'timestamp')).toBeDefined();
-    expect(attributes.find((attr: any) => attr.name === 'userId')).toBeDefined();
+    expect(
+      attributes.find((attr: any) => attr.name === 'tradingId')
+    ).toBeDefined();
+    expect(
+      attributes.find((attr: any) => attr.name === 'timestamp')
+    ).toBeDefined();
+    expect(
+      attributes.find((attr: any) => attr.name === 'userId')
+    ).toBeDefined();
 
     // Check GSI
     expect(dynamoTable.global_secondary_index).toHaveLength(1);
