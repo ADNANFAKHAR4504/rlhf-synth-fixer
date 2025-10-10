@@ -1,5 +1,3 @@
-I'll create a comprehensive Terraform infrastructure for your production VPC in us-east-1. Here's the complete solution:
-
 ```hcl
 terraform {
   required_version = ">= 1.0"
