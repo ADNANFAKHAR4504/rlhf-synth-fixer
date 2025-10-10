@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348977",
+  "team": "3",
+  "startedAt": "2025-10-08T13:20:25.454Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudFront",
+    "Lambda",
+    "KMS",
+    "RDS",
+    "CloudWatch",
+    "Secrets Manager",
+    "Auto Scaling",
+    "Elastic Load Balancing"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This task provides high-quality training data (8/10) for several reasons: (1) It covers a comprehensive, production-ready AWS infrastructure with 12+ services requiring proper integration, (2) The MODEL_FAILURES.md identifies 8 critical issues including database engine mismatch (MySQL vs PostgreSQL), LaunchTemplate version handling, Secrets Manager implementation, and S3 logging configuration - all common real-world errors, (3) The IDEAL_RESPONSE demonstrates proper CloudFormation patterns including KMS key rotation, S3 event notifications to Lambda, proper OAI configuration with CanonicalUser, and environment-based naming conventions, (4) Security best practices are extensively covered (encryption at rest/in transit, least privilege IAM, private subnets, security groups), and (5) The fixes address both blocker-level infrastructure failures and architectural improvements. The task complexity and the substantial corrections needed make this valuable for training on secure, scalable infrastructure patterns.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}
