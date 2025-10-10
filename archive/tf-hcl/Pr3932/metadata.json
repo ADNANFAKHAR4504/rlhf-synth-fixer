@@ -13,7 +13,7 @@
   "training_quality": 9,
   "aws_services": [
     "VPC",
-    "Subnets", 
+    "Subnets",
     "Internet Gateway",
     "NAT Gateway",
     "Route Tables",
@@ -31,7 +31,7 @@
   ],
   "testDependencies": [
     "@aws-sdk/client-ec2@^3.883.0",
-    "@aws-sdk/client-rds@^3.883.0", 
+    "@aws-sdk/client-rds@^3.883.0",
     "@aws-sdk/client-s3@^3.883.0",
     "@aws-sdk/client-cloudwatch@^3.883.0",
     "@aws-sdk/client-cloudtrail@^3.901.0",
@@ -40,5 +40,11 @@
     "jest@^29.0.0",
     "hcl2-parser@^1.0.3",
     "typescript@^5.0.0"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
