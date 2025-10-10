@@ -1,6 +1,14 @@
-I'll help you create a translation API service infrastructure using Pulumi with Python. This solution will handle your 3,700 daily translation requests efficiently.
+# Ideal Response
 
-Here's the complete infrastructure code:
+## lib/AWS_REGION
+
+```text
+us-west-2
+```
+
+## lib/__init__.py
+
+*(empty file)*
 
 ## lib/tap_stack.py
 
@@ -22,12 +30,13 @@ import pulumi
 from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
 
-class TapStackArgs:
+class TapStackArgs:  # pylint: disable=too-few-public-methods
     """
     TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
     Args:
-        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+        environment_suffix (Optional[str]): An optional suffix for identifying
+            the deployment environment (e.g., 'dev', 'prod').
         tags (Optional[dict]): Optional default tags to apply to resources.
     """
 
@@ -36,7 +45,7 @@ class TapStackArgs:
         self.tags = tags
 
 
-class TapStack(pulumi.ComponentResource):
+class TapStack(pulumi.ComponentResource):  # pylint: disable=too-many-instance-attributes
     """
     Represents the main Pulumi component resource for the Translation API service.
 
@@ -89,16 +98,23 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create S3 bucket for document translations
+        # S3 bucket names must be lowercase; sanitize the stack suffix.
+        stack_suffix = pulumi.get_stack().lower()
         self.documents_bucket = aws.s3.Bucket(
             f"translation-documents-{self.environment_suffix}",
-            bucket=f"translation-documents-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=f"translation-documents-{self.environment_suffix}-{stack_suffix}",
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=True
             ),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
+            server_side_encryption_configuration=(
+                aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                    rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                        apply_server_side_encryption_by_default=(
+                            # pylint: disable=line-too-long
+                            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                                sse_algorithm="AES256"
+                            )
+                        )
                     )
                 )
             ),
@@ -234,7 +250,7 @@ class TapStack(pulumi.ComponentResource):
                             "ssm:GetParameter",
                             "ssm:GetParameters"
                         ],
-                        "Resource": f"arn:aws:ssm:us-west-2:*:parameter/translation/*"
+                        "Resource": "arn:aws:ssm:us-west-2:*:parameter/translation/*"
                     }
                 ]
             })),
@@ -263,7 +279,10 @@ class TapStack(pulumi.ComponentResource):
                 }
             ),
             tags=self.tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.lambda_policy, self.lambda_log_group])
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.lambda_policy, self.lambda_log_group]
+            )
         )
 
         # Create API Gateway REST API
@@ -617,18 +636,3 @@ def lambda_handler(event, context):
         }
 """
 ```
-
-This infrastructure provides:
-
-1. **API Gateway** - REST API endpoint for translation requests
-2. **Lambda Function** - Python 3.10 runtime with concurrent execution limit of 100
-3. **DynamoDB** - Translation cache with TTL enabled (7 days)
-4. **S3 Bucket** - Encrypted storage for document translations with versioning
-5. **SQS Queue** - Batch processing for texts over 5000 characters with a DLQ
-6. **CloudWatch** - Log groups and metric alarms for monitoring
-7. **IAM** - Least privilege roles and policies
-8. **Parameter Store** - Configuration management for all resource names
-9. **EventBridge** - Event-driven monitoring of translation workflows
-10. **AppSync** - Real-time GraphQL API for translation status updates
-
-The Lambda function includes caching logic to reduce costs by checking DynamoDB before calling AWS Translate, and automatically routes large texts to SQS for async processing.
