@@ -91,7 +91,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('CloudFormation Stack', () => {
-    test('Stack should exist and be in CREATE_COMPLETE state', async () => {
+    test('Stack should exist', async () => {
       const command = new DescribeStacksCommand({ StackName: stackName });
       const response = await cfnClient.send(command);
 
