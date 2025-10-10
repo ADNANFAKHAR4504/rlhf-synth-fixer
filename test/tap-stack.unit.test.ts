@@ -82,7 +82,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         'PrivateSubnet1Cidr',
         'PrivateSubnet2Cidr',
         'InstanceType',
-        'SSHLocation',
         'EmailAddress',
         'EnableDetailedMonitoring',
         'EnvironmentTag',
@@ -153,18 +152,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       });
     });
 
-    describe('SSHLocation Parameter', () => {
-      test('should have correct pattern and constraints', () => {
-        const param = template.Parameters.SSHLocation;
-        expect(param.Type).toBe('String');
-        expect(param.Default).toBe('0.0.0.0/0');
-        expect(param.MinLength).toBe('9');
-        expect(param.MaxLength).toBe('18');
-        expect(param.AllowedPattern).toBeDefined();
-        expect(param.ConstraintDescription).toContain('valid IP CIDR');
-      });
-    });
-
     describe('EmailAddress Parameter', () => {
       test('should have email pattern validation', () => {
         const param = template.Parameters.EmailAddress;
@@ -202,7 +189,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const param = template.Parameters.EnvironmentSuffix;
         expect(param.Type).toBe('String');
         expect(param.Default).toBe('');
-        expect(param.AllowedPattern).toBe('^$|^-[a-zA-Z0-9-]*$');
+        expect(param.AllowedPattern).toBe('^$|^[a-zA-Z0-9-]*$');
         expect(param.Description).toContain('Optional suffix');
       });
     });
@@ -618,7 +605,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const lt = template.Resources.LaunchTemplate;
         expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
         expect(lt.Properties.LaunchTemplateName).toEqual({
-          'Fn::Sub': '${AWS::StackName}-LaunchTemplate',
+          'Fn::Sub': '${AWS::StackName}-LaunchTemplate${EnvironmentSuffix}',
         });
       });
 
@@ -681,10 +668,8 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const lt = template.Resources.LaunchTemplate;
         const userData = lt.Properties.LaunchTemplateData.UserData;
         expect(userData).toEqual({
-          'Fn::Base64': {
-            'Fn::Sub':
-              "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Instance launched successfully' > /var/log/startup.log",
-          },
+          'Fn::Base64':
+            "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Instance launched successfully' > /var/log/startup.log",
         });
       });
 
@@ -737,7 +722,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
           (t: any) => t.Key === 'Name'
         );
         expect(nameTag.Value).toEqual({
-          'Fn::Sub': '${AWS::StackName}-PrivateInstance1',
+          'Fn::Sub': '${AWS::StackName}-PrivateInstance1${EnvironmentSuffix}',
         });
       });
     });
@@ -776,7 +761,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const topic = template.Resources.SNSTopic;
         expect(topic.Type).toBe('AWS::SNS::Topic');
         expect(topic.Properties.TopicName).toEqual({
-          'Fn::Sub': '${AWS::StackName}-Notifications',
+          'Fn::Sub': '${AWS::StackName}-Notifications${EnvironmentSuffix}',
         });
         expect(topic.Properties.DisplayName).toBe('Stack Event Notifications');
       });
@@ -806,7 +791,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const alarm = template.Resources.CPUAlarmInstance1;
         expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
         expect(alarm.Properties.AlarmName).toEqual({
-          'Fn::Sub': '${AWS::StackName}-Instance1-CPUAlarm',
+          'Fn::Sub': '${AWS::StackName}-Instance1-CPUAlarm${EnvironmentSuffix}',
         });
         expect(alarm.Properties.MetricName).toBe('CPUUtilization');
         expect(alarm.Properties.Namespace).toBe('AWS/EC2');
@@ -899,7 +884,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const rule = template.Resources.StackEventRule;
         expect(rule.Type).toBe('AWS::Events::Rule');
         expect(rule.Properties.Name).toEqual({
-          'Fn::Sub': '${AWS::StackName}-StackEventRule',
+          'Fn::Sub': '${AWS::StackName}-StackEventRule${EnvironmentSuffix}',
         });
         expect(rule.Properties.State).toBe('ENABLED');
       });
@@ -934,7 +919,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const logGroup = template.Resources.LogGroup;
         expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
         expect(logGroup.Properties.LogGroupName).toEqual({
-          'Fn::Sub': '/aws/ec2/${AWS::StackName}',
+          'Fn::Sub': '/aws/ec2/${AWS::StackName}${EnvironmentSuffix}',
         });
         expect(logGroup.Properties.RetentionInDays).toBe(30);
       });
@@ -945,7 +930,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const bucket = template.Resources.S3Bucket;
         expect(bucket.Type).toBe('AWS::S3::Bucket');
         expect(bucket.Properties.BucketName).toEqual({
-          'Fn::Sub': '${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-data',
+          'Fn::Sub': '${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-data${EnvironmentSuffix}',
         });
       });
 
@@ -1141,7 +1126,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
   describe('Intrinsic Functions & Advanced Validations', () => {
     test('should use Fn::Sub for dynamic naming', () => {
       const vpcName = template.Resources.VPC.Properties.Tags[0].Value;
-      expect(vpcName).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC' });
+      expect(vpcName).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC${EnvironmentSuffix}' });
     });
 
     test('should use Fn::GetAtt for resource attributes', () => {
@@ -1296,7 +1281,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
     test('Name tags should use Fn::Sub for dynamic naming', () => {
       const vpc = template.Resources.VPC;
       const nameTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC' });
+      expect(nameTag.Value).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPC${EnvironmentSuffix}' });
     });
 
     test('Environment tags should reference EnvironmentTag parameter', () => {
