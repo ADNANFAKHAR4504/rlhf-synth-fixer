@@ -91,14 +91,11 @@
 
   "Mappings": {
     "RegionAMIMap": {
-      "us-east-1": {"AmiId": "ami-0c02fb55731490381"},
-      "us-east-2": {"AmiId": "ami-0443305dabd4be2bc"},
-      "us-west-1": {"AmiId": "ami-04b6c97b14c54de18"},
-      "us-west-2": {"AmiId": "ami-0b28dfc7adc325ef4"},
-      "eu-west-1": {"AmiId": "ami-0d1bf5b68307103c2"},
-      "eu-central-1": {"AmiId": "ami-0a1ee2fb28fe05df3"},
-      "ap-southeast-1": {"AmiId": "ami-0d058fe428540cd89"},
-      "ap-northeast-1": {"AmiId": "ami-0ab0bbbd329f565e6"}
+      "us-east-1": {"AmiId": "ami-052064a798f08f0d3"},
+      "us-east-2": {"AmiId": "ami-0f393ad09b0767896"},
+      "us-west-1": {"AmiId": "ami-0b967c22fe917319b"},
+      "us-west-2": {"AmiId": "ami-0caa91d6b7bee0ed0"},
+      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"}
     }
   },
 
@@ -498,7 +495,7 @@
       "Properties": {
         "LaunchTemplate": {
           "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": "$Latest"
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
         },
         "SubnetId": {"Ref": "PrivateSubnet1"},
         "Tags": [
@@ -513,7 +510,7 @@
       "Properties": {
         "LaunchTemplate": {
           "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": "$Latest"
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
         },
         "SubnetId": {"Ref": "PrivateSubnet2"},
         "Tags": [
