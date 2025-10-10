@@ -20,10 +20,6 @@ import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
-import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
-import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
-import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
-import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
 import software.amazon.awscdk.services.ec2.FlowLog;
 import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
@@ -252,7 +248,6 @@ class SecurityStack extends Stack {
     private final Trail cloudTrail;
     private final CfnWebACL webAcl;
     private final LogGroup securityLogGroup;
-    private final Topic securityAlertTopic;
 
     SecurityStack(final Construct scope, final String id, final String environmentSuffix,
             final List<String> allowedIpAddresses, final StackProps props) {
@@ -311,13 +306,6 @@ class SecurityStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Create SNS topic for security alerts in Security stack to avoid circular dependency
-        this.securityAlertTopic = Topic.Builder.create(this, "SecurityAlertTopic")
-                .topicName("tap-" + environmentSuffix + "-security-alerts")
-                .displayName("Security Alert Notifications")
-                .masterKey(kmsKey)
-                .build();
-
         // Enable GuardDuty
         this.guardDutyDetector = CfnDetector.Builder.create(this, "GuardDutyDetector")
                 .enable(true)
@@ -333,9 +321,6 @@ class SecurityStack extends Stack {
                                 .build())
                         .build())
                 .build();
-
-        // Setup GuardDuty alerts to route to security topic
-        setupGuardDutyAlerts(environmentSuffix);
 
         // Create S3 bucket for CloudTrail logs
         Bucket cloudTrailBucket = Bucket.Builder.create(this, "CloudTrailBucket")
@@ -438,18 +423,11 @@ class SecurityStack extends Stack {
         // Setup AWS Config
         setupAwsConfig(environmentSuffix);
 
-        // Output security alert topic ARN
-        CfnOutput.Builder.create(this, "SecurityAlertTopicArn")
-                .value(securityAlertTopic.getTopicArn())
-                .description("SNS Topic ARN for Security Alerts")
-                .exportName("tap-" + environmentSuffix + "-security-alert-topic-arn")
-                .build();
-
         Tags.of(this).add("Environment", environmentSuffix);
         Tags.of(this).add("Component", "Security");
     }
 
-    private void setupGuardDutyAlerts(final String environmentSuffix) {
+    public void setupGuardDutyAlerts(final String environmentSuffix, final Topic securityAlertTopic) {
         // Create EventBridge rule for GuardDuty findings
         Rule guardDutyRule = Rule.Builder.create(this, "GuardDutyFindingsRule")
                 .ruleName("tap-" + environmentSuffix + "-guardduty-findings")
@@ -528,10 +506,6 @@ class SecurityStack extends Stack {
     public Trail getCloudTrail() {
         return cloudTrail;
     }
-
-    public Topic getSecurityAlertTopic() {
-        return securityAlertTopic;
-    }
 }
 
 /**
@@ -540,6 +514,7 @@ class SecurityStack extends Stack {
  * Creates SNS topics for alerts and SQS queues for asynchronous processing
  */
 class MessagingStack extends Stack {
+    private final Topic securityAlertTopic;
     private final Topic applicationEventTopic;
     private final Queue processingQueue;
     private final Queue deadLetterQueue;
@@ -568,6 +543,13 @@ class MessagingStack extends Stack {
                         .build())
                 .build();
 
+        // Create SNS topic for security alerts - moved here to avoid circular dependency
+        this.securityAlertTopic = Topic.Builder.create(this, "SecurityAlertTopic")
+                .topicName("tap-" + environmentSuffix + "-security-alerts")
+                .displayName("Security Alert Notifications")
+                .masterKey(kmsKey)
+                .build();
+
         // Create SNS topic for application events
         this.applicationEventTopic = Topic.Builder.create(this, "ApplicationEventTopic")
                 .topicName("tap-" + environmentSuffix + "-app-events")
@@ -592,6 +574,12 @@ class MessagingStack extends Stack {
                 .build());
 
         // Output SNS and SQS ARNs
+        CfnOutput.Builder.create(this, "SecurityAlertTopicArn")
+                .value(securityAlertTopic.getTopicArn())
+                .description("SNS Topic ARN for Security Alerts")
+                .exportName("tap-" + environmentSuffix + "-security-alert-topic-arn")
+                .build();
+
         CfnOutput.Builder.create(this, "ApplicationEventTopicArn")
                 .value(applicationEventTopic.getTopicArn())
                 .description("SNS Topic ARN for Application Events")
@@ -606,6 +594,10 @@ class MessagingStack extends Stack {
 
         Tags.of(this).add("Environment", environmentSuffix);
         Tags.of(this).add("Component", "Messaging");
+    }
+
+    public Topic getSecurityAlertTopic() {
+        return securityAlertTopic;
     }
 
     public Topic getApplicationEventTopic() {
@@ -1159,7 +1151,7 @@ class TapStack extends Stack {
                         .description("Security Stack for environment: " + environmentSuffix)
                         .build());
 
-        // Create messaging stack
+        // Create messaging stack with security alert topic
         this.messagingStack = new MessagingStack(
                 this,
                 "Messaging",
@@ -1169,6 +1161,9 @@ class TapStack extends Stack {
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Messaging Stack for environment: " + environmentSuffix)
                         .build());
+
+        // Setup GuardDuty alerts now that messaging stack exists
+        securityStack.setupGuardDutyAlerts(environmentSuffix, messagingStack.getSecurityAlertTopic());
 
         // Create infrastructure stack
         this.infrastructureStack = new InfrastructureStack(
@@ -1190,7 +1185,7 @@ class TapStack extends Stack {
                         .environmentSuffix(environmentSuffix)
                         .allowedIpAddresses(allowedIpAddresses)
                         .kmsKey(securityStack.getKmsKey())
-                        .securityAlertTopic(securityStack.getSecurityAlertTopic())
+                        .securityAlertTopic(messagingStack.getSecurityAlertTopic())
                         .applicationEventTopic(messagingStack.getApplicationEventTopic())
                         .processingQueue(messagingStack.getProcessingQueue())
                         .stackProps(StackProps.builder()
