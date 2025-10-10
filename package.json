@@ -2,6 +2,10 @@
   "name": "tap",
   "version": "0.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TuringGpt/iac-test-automations.git"
+  },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
@@ -75,7 +79,8 @@
     "localstack:tf:deploy": "./scripts/localstack-terraform-deploy.sh",
     "localstack:tf:test": "./scripts/localstack-terraform-test.sh",
     "localstack:tf:cleanup": "./scripts/localstack-terraform-cleanup.sh",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.855.0",
@@ -176,8 +181,11 @@
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
+    "yaml-cfn": "^0.3.2",
     "uuid": "^11.1.0",
-    "yaml-cfn": "^0.3.2"
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "husky": "^9.0.0"
   },
   "dependencies": {
     "@aws-cdk/aws-pipes-alpha": "^2.204.0-alpha.0",
@@ -195,11 +203,13 @@
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/client-efs": "^3.798.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.873.0",
+    "@aws-sdk/client-opensearch": "^3.906.0",
     "@aws-sdk/client-s3": "^3.884.0",
     "@aws-sdk/client-secrets-manager": "^3.863.0",
     "@aws-sdk/client-sns": "^3.855.0",
     "@aws-sdk/client-sqs": "^3.879.0",
     "@aws-sdk/client-ssm": "^3.879.0",
+    "@cdktf/provider-archive": "^11.0.0",
     "@aws-sdk/lib-dynamodb": "^3.901.0",
     "@aws-sdk/util-dynamodb": "^3.902.0",
     "@cdktf/provider-archive": "^11.0.0",
