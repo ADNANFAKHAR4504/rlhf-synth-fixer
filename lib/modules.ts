@@ -1285,7 +1285,7 @@ export class CloudTrailModule extends BaseModule {
               Resource: `arn:aws:s3:::${this.trailBucket.bucket}/AWSLogs/${current.accountId}/*`,
               Condition: {
                 StringEquals: {
-                  's3:x-acl': 'bucket-owner-full-control',
+                  's3:x-amz-acl': 'bucket-owner-full-control',
                 },
               },
             },
