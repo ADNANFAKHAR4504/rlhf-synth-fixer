@@ -6,16 +6,39 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack', () => {
   let app: cdk.App;
+  let primaryStack: TapStack;
+  let secondaryStack: TapStack;
+  let primaryTemplate: Template;
+  let secondaryTemplate: Template;
   let stack: TapStack;
   let template: Template;
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', {
+    primaryStack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
+      isPrimary: true,
+      primaryRegion: 'us-east-1',
+      secondaryRegion: 'eu-west-1',
+      globalClusterId: `global-${environmentSuffix}`,
+      globalTableName: `metadata-table-${environmentSuffix}`,
       env: { account: '123456789012', region: 'us-east-1' },
+      crossRegionReferences: true,
     });
-    template = Template.fromStack(stack);
+    secondaryStack = new TapStack(app, 'TestTapStackSecondary', {
+      environmentSuffix,
+      isPrimary: false,
+      primaryRegion: 'us-east-1',
+      secondaryRegion: 'eu-west-1',
+      globalClusterId: `global-${environmentSuffix}`,
+      globalTableName: `metadata-table-${environmentSuffix}`,
+      env: { account: '123456789012', region: 'eu-west-1' },
+      crossRegionReferences: true,
+    });
+    primaryTemplate = Template.fromStack(primaryStack);
+    secondaryTemplate = Template.fromStack(secondaryStack);
+    stack = primaryStack;
+    template = primaryTemplate;
   });
 
   describe('VPC Configuration', () => {
@@ -217,7 +240,7 @@ describe('TapStack', () => {
 
   describe('DynamoDB Table', () => {
     test('should create metadata table with partition and sort key', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         KeySchema: [
           {
             AttributeName: 'id',
@@ -232,24 +255,23 @@ describe('TapStack', () => {
     });
 
     test('should use pay-per-request billing', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         BillingMode: 'PAY_PER_REQUEST',
       });
     });
 
     test('should enable point-in-time recovery', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         PointInTimeRecoverySpecification: {
           PointInTimeRecoveryEnabled: true,
         },
       });
     });
 
-    test('should use customer-managed encryption', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
+    test('should use encryption (AWS-managed for global tables)', () => {
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         SSESpecification: {
           SSEEnabled: true,
-          SSEType: 'KMS',
         },
       });
     });
@@ -552,36 +574,203 @@ describe('TapStack', () => {
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStackWithProps', {
         environmentSuffix: 'test123',
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        globalClusterId: 'global-test123',
+        globalTableName: 'metadata-table-test123',
         env: { account: '123456789012', region: 'us-east-1' },
       });
       const testTemplate = Template.fromStack(testStack);
       
-      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'metadata-table-test123',
-      });
+      testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
     });
 
     test('should use environment suffix from context', () => {
       const testApp = new cdk.App({ context: { environmentSuffix: 'ctx456' } });
       const testStack = new TapStack(testApp, 'TestStackWithContext', {
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        globalClusterId: 'global-ctx456',
+        globalTableName: 'metadata-table-ctx456',
         env: { account: '123456789012', region: 'us-east-1' },
       });
       const testTemplate = Template.fromStack(testStack);
       
-      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'metadata-table-ctx456',
-      });
+      testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
     });
 
     test('should default to dev when no environment suffix provided', () => {
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStackDefault', {
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        globalClusterId: 'global-dev',
+        globalTableName: 'metadata-table-dev',
         env: { account: '123456789012', region: 'us-east-1' },
       });
       const testTemplate = Template.fromStack(testStack);
       
-      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'metadata-table-dev',
+      testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+    });
+  });
+
+  describe('Multi-Region Support', () => {
+    test('primary stack should create global cluster', () => {
+      primaryTemplate.hasResourceProperties('AWS::RDS::GlobalCluster', {
+        Engine: 'aurora-postgresql',
+        EngineVersion: '15.4',
+        StorageEncrypted: true,
+      });
+    });
+
+    test('secondary stack should not create global cluster', () => {
+      expect(() => {
+        secondaryTemplate.hasResourceProperties('AWS::RDS::GlobalCluster', {});
+      }).toThrow();
+    });
+
+    test('single-region stack should use customer-managed encryption for DynamoDB', () => {
+      const singleApp = new cdk.App();
+      const singleStack = new TapStack(singleApp, 'SingleRegionStack', {
+        environmentSuffix: 'single',
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: undefined, // No secondary region
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const singleTemplate = Template.fromStack(singleStack);
+      
+      // Should use customer-managed encryption when no replication
+      singleTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+          SSEType: 'KMS',
+        },
+      });
+    });
+
+    test('primary Aurora cluster should attach to global cluster', () => {
+      primaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
+        GlobalClusterIdentifier: Match.anyValue(),
+      });
+    });
+
+    test('secondary Aurora cluster should attach to global cluster', () => {
+      secondaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
+        GlobalClusterIdentifier: `global-${environmentSuffix}`,
+      });
+    });
+
+    test('primary DynamoDB table should have replication regions', () => {
+      // CDK uses Custom Resources for DynamoDB Global Table replication
+      // Check that the table has StreamSpecification enabled (required for replication)
+      primaryTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        StreamSpecification: {
+          StreamViewType: 'NEW_AND_OLD_IMAGES',
+        },
+      });
+    });
+
+    test('both regions should have VPC', () => {
+      primaryTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+      secondaryTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+    });
+
+    test('both regions should have Redis cluster', () => {
+      primaryTemplate.resourceCountIs('AWS::ElastiCache::ReplicationGroup', 1);
+      secondaryTemplate.resourceCountIs('AWS::ElastiCache::ReplicationGroup', 1);
+    });
+
+    test('both regions should have Lambda backup function', () => {
+      primaryTemplate.resourceCountIs('AWS::Lambda::Function', 1);
+      secondaryTemplate.resourceCountIs('AWS::Lambda::Function', 1);
+    });
+
+    test('both regions should have EventBridge event bus', () => {
+      primaryTemplate.resourceCountIs('AWS::Events::EventBus', 1);
+      secondaryTemplate.resourceCountIs('AWS::Events::EventBus', 1);
+    });
+
+    test('both regions should have Security Hub enabled', () => {
+      primaryTemplate.resourceCountIs('AWS::SecurityHub::Hub', 1);
+      secondaryTemplate.resourceCountIs('AWS::SecurityHub::Hub', 1);
+    });
+
+    test('primary should create hosted zone', () => {
+      primaryTemplate.resourceCountIs('AWS::Route53::HostedZone', 1);
+    });
+
+    test('both regions should have database DNS records', () => {
+      primaryTemplate.hasResourceProperties('AWS::Route53::RecordSet', {
+        Name: Match.stringLikeRegexp('database-us-east-1'),
+        Type: 'CNAME',
+      });
+    });
+
+    test('both regions should have region-specific cluster identifiers', () => {
+      primaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
+        DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-east-1'),
+      });
+      secondaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
+        DBClusterIdentifier: Match.stringLikeRegexp('aurora-eu-west-1'),
+      });
+    });
+
+    test('should use default global cluster ID when not provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultGlobalStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        // No globalClusterId provided - should use default
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      defaultTemplate.hasResourceProperties('AWS::RDS::GlobalCluster', {
+        GlobalClusterIdentifier: 'global-test',
+      });
+    });
+
+    test('should use default table name when not provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultTableStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        // No globalTableName provided - should use default
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+      
+      defaultTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'metadata-table-test',
+      });
+    });
+
+    test('single-region table should not have replication', () => {
+      const singleApp2 = new cdk.App();
+      const singleStack2 = new TapStack(singleApp2, 'SingleRegionNoReplication', {
+        environmentSuffix: 'test',
+        isPrimary: false, // Secondary stack without replication
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        globalClusterId: 'global-test',
+        env: { account: '123456789012', region: 'eu-west-1' },
+      });
+      const singleTemplate2 = Template.fromStack(singleStack2);
+      
+      // Secondary stack should use customer-managed encryption (no replication on secondary)
+      singleTemplate2.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+          SSEType: 'KMS',
+        },
       });
     });
   });

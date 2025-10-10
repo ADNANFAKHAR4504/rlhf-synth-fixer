@@ -4,31 +4,39 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as securityhub from 'aws-cdk-lib/aws-securityhub';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 
-interface TapStackProps extends cdk.StackProps {
+export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  isPrimary: boolean;
+  primaryRegion?: string;
+  secondaryRegion?: string;
+  globalClusterId?: string;
+  globalTableName?: string;
 }
 
 export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
-  public readonly auroraCluster: rds.DatabaseCluster;
+  public readonly auroraCluster?: rds.DatabaseCluster;
+  public readonly globalCluster?: rds.CfnGlobalCluster;
   public readonly metadataTable: dynamodb.Table;
   public readonly redisCluster: elasticache.CfnReplicationGroup;
   public readonly backupLambda: lambda.Function;
   public readonly eventBus: events.EventBus;
   public readonly databaseCredentialsSecret: secretsmanager.Secret;
   public readonly redisCredentialsSecret: secretsmanager.Secret;
+  public readonly hostedZone?: route53.PrivateHostedZone;
+  public readonly clusterEndpoint: string;
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
     const environmentSuffix =
@@ -157,38 +165,106 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    const auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
-      }),
-      credentials: rds.Credentials.fromSecret(databaseCredentialsSecret),
-      instanceProps: {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T4G,
-          ec2.InstanceSize.MEDIUM
-        ),
+    let auroraCluster: rds.DatabaseCluster;
+    let globalClusterEndpoint: string;
+
+    if (props.isPrimary) {
+      const globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
+        globalClusterIdentifier:
+          props.globalClusterId || `global-${environmentSuffix}`,
+        engine: 'aurora-postgresql',
+        engineVersion: '15.4',
+        storageEncrypted: true,
+        deletionProtection: false,
+      });
+      this.globalCluster = globalCluster;
+
+      auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        }),
+        credentials: rds.Credentials.fromSecret(databaseCredentialsSecret),
+        writer: rds.ClusterInstance.provisioned('writer', {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T4G,
+            ec2.InstanceSize.MEDIUM
+          ),
+        }),
+        readers: [
+          rds.ClusterInstance.provisioned('reader', {
+            instanceType: ec2.InstanceType.of(
+              ec2.InstanceClass.T4G,
+              ec2.InstanceSize.MEDIUM
+            ),
+          }),
+        ],
+        vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
-        vpc,
         securityGroups: [auroraSecurityGroup],
-      },
-      instances: 2,
-      parameterGroup,
-      backup: {
-        retention: cdk.Duration.days(7),
-        preferredWindow: '02:00-04:00',
-      },
-      storageEncrypted: true,
-      storageEncryptionKey: databaseKmsKey,
-      cloudwatchLogsExports: ['postgresql'],
-      cloudwatchLogsRetention: 7,
-      monitoringInterval: cdk.Duration.seconds(60),
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      clusterIdentifier: `aurora-cluster-${environmentSuffix}`,
-    });
+        parameterGroup,
+        backup: {
+          retention: cdk.Duration.days(7),
+          preferredWindow: '02:00-04:00',
+        },
+        storageEncrypted: true,
+        storageEncryptionKey: databaseKmsKey,
+        cloudwatchLogsExports: ['postgresql'],
+        monitoringInterval: cdk.Duration.seconds(60),
+        deletionProtection: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        clusterIdentifier: `aurora-${props.primaryRegion}-${environmentSuffix}`,
+      });
+
+      const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
+      cfnCluster.globalClusterIdentifier = globalCluster.ref;
+      cfnCluster.addDependency(globalCluster);
+
+      globalClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
+    } else {
+      auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        }),
+        writer: rds.ClusterInstance.provisioned('writer', {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T4G,
+            ec2.InstanceSize.MEDIUM
+          ),
+        }),
+        readers: [
+          rds.ClusterInstance.provisioned('reader', {
+            instanceType: ec2.InstanceType.of(
+              ec2.InstanceClass.T4G,
+              ec2.InstanceSize.MEDIUM
+            ),
+          }),
+        ],
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+        securityGroups: [auroraSecurityGroup],
+        parameterGroup,
+        storageEncrypted: true,
+        storageEncryptionKey: databaseKmsKey,
+        cloudwatchLogsExports: ['postgresql'],
+        monitoringInterval: cdk.Duration.seconds(60),
+        deletionProtection: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        clusterIdentifier: `aurora-${props.secondaryRegion}-${environmentSuffix}`,
+      });
+
+      const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
+      cfnCluster.globalClusterIdentifier =
+        props.globalClusterId || `global-${environmentSuffix}`;
+
+      globalClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
+    }
+
     this.auroraCluster = auroraCluster;
+    this.clusterEndpoint = globalClusterEndpoint;
 
     new cloudwatch.Alarm(this, 'AuroraCPUUtilizationAlarm', {
       metric: auroraCluster.metricCPUUtilization(),
@@ -206,15 +282,20 @@ export class TapStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
+    const hasReplication = props.isPrimary && props.secondaryRegion;
     const metadataTable = new dynamodb.Table(this, 'MetadataTable', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: dynamoDbKmsKey,
+      encryption: hasReplication
+        ? dynamodb.TableEncryption.AWS_MANAGED
+        : dynamodb.TableEncryption.CUSTOMER_MANAGED,
+      encryptionKey: hasReplication ? undefined : dynamoDbKmsKey,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      tableName: `metadata-table-${environmentSuffix}`,
+      tableName: props.globalTableName || `metadata-table-${environmentSuffix}`,
+      replicationRegions: hasReplication ? [props.secondaryRegion!] : undefined,
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
     this.metadataTable = metadataTable;
 
@@ -382,21 +463,59 @@ export class TapStack extends cdk.Stack {
       enableDefaultStandards: false,
     });
 
-    const hostedZone = new route53.PrivateHostedZone(
-      this,
-      'PrivateHostedZone',
-      {
-        zoneName: `financial-${environmentSuffix}.internal`,
-        vpc,
-      }
-    );
+    if (props.isPrimary) {
+      const hostedZone = new route53.PrivateHostedZone(
+        this,
+        'PrivateHostedZone',
+        {
+          zoneName: `financial-${environmentSuffix}.internal`,
+          vpc,
+        }
+      );
+      this.hostedZone = hostedZone;
 
-    new route53.CnameRecord(this, 'DatabaseRecord', {
-      zone: hostedZone,
-      recordName: 'database',
-      domainName: auroraCluster.clusterEndpoint.hostname,
-      ttl: cdk.Duration.minutes(5),
-    });
+      new route53.CnameRecord(this, 'DatabaseRecordPrimary', {
+        zone: hostedZone,
+        recordName: `database-${props.primaryRegion}`,
+        domainName: auroraCluster.clusterEndpoint.hostname,
+        ttl: cdk.Duration.seconds(60),
+      });
+
+      new route53.CnameRecord(this, 'RedisRecordPrimary', {
+        zone: hostedZone,
+        recordName: `redis-${props.primaryRegion}`,
+        domainName: redisCluster.attrConfigurationEndPointAddress,
+        ttl: cdk.Duration.seconds(60),
+      });
+    } else {
+      new route53.CnameRecord(this, 'DatabaseRecordSecondary', {
+        zone: route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          'ImportedZone',
+          {
+            hostedZoneId: 'PLACEHOLDER',
+            zoneName: `financial-${environmentSuffix}.internal`,
+          }
+        ),
+        recordName: `database-${props.secondaryRegion}`,
+        domainName: auroraCluster.clusterEndpoint.hostname,
+        ttl: cdk.Duration.seconds(60),
+      });
+
+      new route53.CnameRecord(this, 'RedisRecordSecondary', {
+        zone: route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          'ImportedZoneRedis',
+          {
+            hostedZoneId: 'PLACEHOLDER',
+            zoneName: `financial-${environmentSuffix}.internal`,
+          }
+        ),
+        recordName: `redis-${props.secondaryRegion}`,
+        domainName: redisCluster.attrConfigurationEndPointAddress,
+        ttl: cdk.Duration.seconds(60),
+      });
+    }
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,

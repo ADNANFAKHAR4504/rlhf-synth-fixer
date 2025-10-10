@@ -123,3 +123,36 @@ Add CfnOutput declarations for VpcId, AuroraClusterEndpoint, AuroraClusterIdenti
 The model did not include a DynamoDB alarm, but if using metricThrottledRequestsForOperations(), this creates a math expression that aggregates metrics for all operations and exceeds CloudWatch's 10-metric limit for alarms on math expressions.
 
 Use a simpler metric like metricUserErrors() which monitors a single metric instead of aggregating multiple operation-level metrics.
+
+## 22. Missing Multi-Region Architecture
+
+The model implemented a single-region stack, failing to meet the PROMPT requirement for Aurora Global Database spanning us-east-1 and eu-west-1 with DynamoDB Global Tables.
+
+Implement multi-region architecture with:
+- Stack props including isPrimary, primaryRegion, secondaryRegion, globalClusterId, globalTableName
+- Primary region creates CfnGlobalCluster and attaches DatabaseCluster to it
+- Secondary region creates DatabaseCluster that references existing global cluster
+- DynamoDB table in primary with replicationRegions array for global tables
+- Both regions deploy independent VPC, Redis, Lambda, EventBridge, Security Hub, and KMS keys
+- Route53 DNS records with region-specific names for service discovery
+- bin/tap.ts deploys two stacks with cross-region references enabled
+- Unit tests validate both primary and secondary stacks
+- Integration tests verify cross-region replication and failover scenarios
+
+## 23. Deprecated Aurora Properties
+
+The model used deprecated properties instances and instanceProps which will be removed in future CDK versions.
+
+Use writer and readers pattern with ClusterInstance.provisioned() for explicit writer and reader instance configuration.
+
+## 24. Missing Route53 Health Checks and Failover
+
+The model did not implement Route53 health checks or DNS failover policies for automatic routing during regional incidents.
+
+Add Route53 health checks monitoring Aurora and Redis endpoints, configure failover or weighted routing policies, and implement automated DNS updates during failures.
+
+## 25. DynamoDB Global Tables Encryption Limitation
+
+DynamoDB Global Tables do not support CUSTOMER_MANAGED encryption with custom KMS keys. Attempting to use TableEncryption.CUSTOMER_MANAGED with replicationRegions will cause a validation error.
+
+Use AWS_MANAGED encryption for global tables, or use CUSTOMER_MANAGED encryption only for single-region tables. Conditional logic based on isPrimary and secondaryRegion props determines the encryption type.
