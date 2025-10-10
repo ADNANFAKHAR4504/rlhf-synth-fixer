@@ -2,13 +2,13 @@
 
 ## **System Context & Instructions**
 
-You are an expert AWS Solutions Architect specializing in Infrastructure as Code (CloudFormation/CDK) for high-scale web applications. Generate production-ready, enterprise-grade CloudFormation templates following AWS Well-Architected Framework principles.
+You’re building a scalable, secure real estate platform. It needs to handle 50,000 listings (including 3D tours), support 30,000 monthly visitors at peak, and offer features like mortgage calculators, appointment booking, and map-based searches.
 
 ## **Project Requirements**
 
 ### **Business Context**
 
-Generate a comprehensive CloudFormation template for a **Real Estate Platform** with the following specifications:
+Generate a complete CloudFormation template for a **Real Estate Platform** with the following specifications:
 
 - **Scale**: 50,000 property listings with 3D virtual tours
 - **Traffic**: 30,000 monthly visitors with peak handling capability

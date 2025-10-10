@@ -1,28 +1,3 @@
-### Reasoning Trace
----
-
-This is a comprehensive request for generating a CloudFormation template for a real estate platform with quite detailed requirements. Let me organize my thoughts on how to approach this:
-
-1. I need to create a complete CloudFormation template that includes:
-   - Network layer (VPC, subnets, security groups, etc.)
-   - Compute layer (ECS Fargate)
-   - Database layer (Aurora MySQL, DynamoDB, ElastiCache Redis, OpenSearch)
-   - Storage layer (S3 buckets)
-   - CDN (CloudFront)
-   - Serverless components (Lambda functions, API Gateway)
-   - Authentication (Cognito)
-   - Monitoring (CloudWatch)
-   - Security components (WAF, IAM roles, encryption)
-
-2. The template should follow AWS best practices:
-   - Multi-AZ deployment for high availability
-   - Proper security configurations
-   - Performance optimization
-   - Cost-efficiency considerations
-   - Operational monitoring
-
-Let me start structuring the CloudFormation template:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Real Estate Platform Infrastructure - Production Environment'
@@ -33,29 +8,29 @@ Parameters:
     Description: Environment name (e.g., prod, staging)
     Type: String
     Default: prod
-  
+
   # VPC parameters
   VpcCIDR:
     Description: CIDR block for the VPC
     Type: String
     Default: 10.45.0.0/16
-  
+
   # Database parameters
   DBInstanceClass:
     Description: Database instance class
     Type: String
     Default: db.r5.large
-  
+
   DBName:
     Description: Aurora database name
     Type: String
     Default: realestate
-  
+
   DBUsername:
     Description: Aurora database admin username
     Type: String
     NoEcho: true
-  
+
   DBPassword:
     Description: Aurora database admin password
     Type: String
@@ -63,24 +38,24 @@ Parameters:
     MinLength: 8
     MaxLength: 41
     AllowedPattern: "[a-zA-Z0-9]*"
-  
+
   # ECS parameters
   ECSServiceDesiredCount:
     Type: Number
     Default: 2
     Description: Desired number of ECS tasks
-  
+
   # Certificate ARN for ALB
   CertificateArn:
     Type: String
     Description: ARN of the SSL certificate for the ALB
-  
+
   # DynamoDB parameters
   DynamoDBReadCapacity:
     Type: Number
     Default: 5
     Description: Read capacity units for DynamoDB tables
-  
+
   DynamoDBWriteCapacity:
     Type: Number
     Default: 5
@@ -1056,7 +1031,7 @@ Resources:
             const payments = years * 12;
             const x = Math.pow(1 + monthlyRate, payments);
             const monthly = (principal * x * monthlyRate) / (x - 1);
-            
+
             return {
               statusCode: 200,
               headers: {
@@ -1092,12 +1067,12 @@ Resources:
           const s3 = new AWS.S3();
           const rekognition = new AWS.Rekognition();
           const dynamodb = new AWS.DynamoDB.DocumentClient();
-          
+
           exports.handler = async (event) => {
             for (const record of event.Records) {
               const bucket = record.s3.bucket.name;
               const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
-              
+
               // Call Rekognition to analyze image
               const rekognitionParams = {
                 Image: {
@@ -1108,10 +1083,10 @@ Resources:
                 },
                 MaxLabels: 10
               };
-              
+
               try {
                 const rekognitionResponse = await rekognition.detectLabels(rekognitionParams).promise();
-                
+
                 // Process and store metadata
                 const metadata = {
                   imageKey: key,
@@ -1121,13 +1096,13 @@ Resources:
                   })),
                   processedAt: new Date().toISOString()
                 };
-                
+
                 // Store metadata in DynamoDB
                 await dynamodb.put({
                   TableName: process.env.METADATA_TABLE,
                   Item: metadata
                 }).promise();
-                
+
                 console.log(`Successfully processed ${key}`);
               } catch (error) {
                 console.error(`Error processing ${key}: ${error.message}`);
@@ -1685,23 +1660,6 @@ Resources:
 
   ConfigBucket:
     Type
-### Answer 
----
-### Reasoning Trace
----
-
-The user wants me to continue generating the CloudFormation template from where it was cut off. Looking at the last response, it ended at:
-
-```yaml
-  ConfigBucket:
-    Type
-```
-
-So I need to continue from that point and complete the template. I should only output YAML without any additional text or explanations.
-### Answer 
----
-
-```yaml
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${EnvironmentName}-config-${AWS::AccountId}-${AWS::Region}
@@ -1762,14 +1720,14 @@ So I need to continue from that point and complete the template. I should only o
           const AWS = require('aws-sdk');
           const opensearch = new AWS.OpenSearchService();
           const dynamodb = new AWS.DynamoDB.DocumentClient();
-          
+
           exports.handler = async (event) => {
             console.log('Processing DynamoDB stream records:', JSON.stringify(event));
-            
+
             for (const record of event.Records) {
               if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
                 const newImage = AWS.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);
-                
+
                 // Index to OpenSearch
                 const document = {
                   id: newImage.propertyId,
@@ -1784,11 +1742,11 @@ So I need to continue from that point and complete the template. I should only o
                   description: newImage.description,
                   timestamp: new Date().toISOString()
                 };
-                
+
                 console.log('Indexed document:', document);
               }
             }
-            
+
             return { statusCode: 200 };
           };
       Runtime: nodejs18.x
@@ -1908,12 +1866,12 @@ So I need to continue from that point and complete the template. I should only o
           const AWS = require('aws-sdk');
           const dynamodb = new AWS.DynamoDB.DocumentClient();
           const ses = new AWS.SES();
-          
+
           exports.handler = async (event) => {
             const { userId, propertyId, appointmentDate, appointmentTime } = JSON.parse(event.body);
-            
+
             const appointmentId = `${userId}-${propertyId}-${Date.now()}`;
-            
+
             // Store appointment in DynamoDB
             await dynamodb.put({
               TableName: process.env.APPOINTMENTS_TABLE,
@@ -1927,7 +1885,7 @@ So I need to continue from that point and complete the template. I should only o
                 createdAt: new Date().toISOString()
               }
             }).promise();
-            
+
             // Send confirmation email
             const emailParams = {
               Source: 'noreply@example.com',
@@ -1945,9 +1903,9 @@ So I need to continue from that point and complete the template. I should only o
                 }
               }
             };
-            
+
             await ses.sendEmail(emailParams).promise();
-            
+
             return {
               statusCode: 200,
               headers: {
@@ -2064,12 +2022,12 @@ So I need to continue from that point and complete the template. I should only o
           const AWS = require('aws-sdk');
           const dynamodb = new AWS.DynamoDB.DocumentClient();
           const sns = new AWS.SNS();
-          
+
           exports.handler = async (event) => {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const tomorrowDate = tomorrow.toISOString().split('T')[0];
-            
+
             // Query appointments for tomorrow
             const params = {
               TableName: process.env.APPOINTMENTS_TABLE,
@@ -2079,20 +2037,20 @@ So I need to continue from that point and complete the template. I should only o
                 ':date': tomorrowDate
               }
             };
-            
+
             const result = await dynamodb.query(params).promise();
-            
+
             // Send reminders for each appointment
             for (const appointment of result.Items) {
               const message = `Reminder: You have an appointment scheduled for ${appointment.appointmentDate} at ${appointment.appointmentTime}`;
-              
+
               await sns.publish({
                 TopicArn: process.env.NOTIFICATION_TOPIC_ARN,
                 Message: message,
                 Subject: 'Appointment Reminder'
               }).promise();
             }
-            
+
             return {
               statusCode: 200,
               body: `Sent ${result.Items.length} reminders`
