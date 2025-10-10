@@ -739,55 +739,49 @@ public class MainIntegrationTest {
     @Order(23)
     @DisplayName("CloudWatch alarms are configured")
     void testCloudWatchAlarmsConfiguration() {
-        DescribeAlarmsResponse response = cloudWatchClient.describeAlarms(
+        // Search for specific alarms by name instead of listing all alarms
+        DescribeAlarmsResponse cpuResponse = cloudWatchClient.describeAlarms(
             DescribeAlarmsRequest.builder()
-                .maxRecords(100)
+                .alarmNames("high-cpu-utilization")
                 .build()
         );
 
-        List<MetricAlarm> alarms = response.metricAlarms();
+        DescribeAlarmsResponse healthResponse = cloudWatchClient.describeAlarms(
+            DescribeAlarmsRequest.builder()
+                .alarmNames("unhealthy-targets")
+                .build()
+        );
 
-        // Debug: Print all alarm names
-        System.out.println("Found " + alarms.size() + " alarms:");
-        alarms.forEach(alarm -> System.out.println("  - " + alarm.alarmName()));
+        DescribeAlarmsResponse requestResponse = cloudWatchClient.describeAlarms(
+            DescribeAlarmsRequest.builder()
+                .alarmNames("high-request-count")
+                .build()
+        );
 
         // Verify CPU alarm exists
-        boolean hasCpuAlarm = alarms.stream()
-            .anyMatch(alarm -> "high-cpu-utilization".equals(alarm.alarmName()));
-        assertTrue(hasCpuAlarm, "CPU utilization alarm should exist");
+        assertFalse(cpuResponse.metricAlarms().isEmpty(), "CPU utilization alarm should exist");
 
-        // Verify target health alarm exists (uses HealthyHostCount metric but named unhealthy-targets)
-        boolean hasHealthAlarm = alarms.stream()
-            .anyMatch(alarm -> "unhealthy-targets".equals(alarm.alarmName()));
-        assertTrue(hasHealthAlarm, "Healthy host count alarm should exist");
+        // Verify target health alarm exists
+        assertFalse(healthResponse.metricAlarms().isEmpty(), "Healthy host count alarm should exist");
 
         // Verify request count alarm exists
-        boolean hasRequestAlarm = alarms.stream()
-            .anyMatch(alarm -> "high-request-count".equals(alarm.alarmName()));
-        assertTrue(hasRequestAlarm, "Request count alarm should exist");
+        assertFalse(requestResponse.metricAlarms().isEmpty(), "Request count alarm should exist");
     }
 
     @Test
     @Order(24)
     @DisplayName("CPU alarm is configured with correct threshold")
     void testCpuAlarmConfiguration() {
+        // Search for specific alarm by name
         DescribeAlarmsResponse response = cloudWatchClient.describeAlarms(
             DescribeAlarmsRequest.builder()
-                .maxRecords(100)
+                .alarmNames("high-cpu-utilization")
                 .build()
         );
 
-        // Debug: Print all alarm names
-        System.out.println("Looking for CPU alarm among " + response.metricAlarms().size() + " alarms:");
-        response.metricAlarms().forEach(alarm -> System.out.println("  - " + alarm.alarmName()));
+        assertFalse(response.metricAlarms().isEmpty(), "CPU alarm should exist");
 
-        Optional<MetricAlarm> cpuAlarm = response.metricAlarms().stream()
-            .filter(alarm -> "high-cpu-utilization".equals(alarm.alarmName()))
-            .findFirst();
-
-        assertTrue(cpuAlarm.isPresent(), "CPU alarm should exist");
-
-        MetricAlarm alarm = cpuAlarm.get();
+        MetricAlarm alarm = response.metricAlarms().get(0);
         assertEquals(90.0, alarm.threshold(), "CPU alarm threshold should be 90%");
         assertEquals(ComparisonOperator.GREATER_THAN_THRESHOLD, alarm.comparisonOperator(),
             "CPU alarm should use GreaterThanThreshold");
