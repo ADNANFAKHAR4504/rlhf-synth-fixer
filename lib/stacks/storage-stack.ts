@@ -21,7 +21,7 @@ export class StorageStack extends cdk.NestedStack {
 
     // Create S3 bucket for ALB logs (ALB doesn't support KMS encryption)
     this.logBucket = new s3.Bucket(this, 'ALBLogBucket', {
-      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-alb-logs-v2`,
+      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-alb-logs-v4`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: true,
@@ -54,7 +54,7 @@ export class StorageStack extends cdk.NestedStack {
 
     // Create S3 bucket for CloudTrail logs
     this.cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
-      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-cloudtrail-v2`,
+      bucketName: `${cdk.Stack.of(this).account}-${props.environmentSuffix}-cloudtrail-v4`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: props.kmsKey,
       enforceSSL: true,

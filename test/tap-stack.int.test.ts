@@ -1,49 +1,44 @@
-import * as fs from 'fs';
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
 import {
   CloudFormationClient,
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-} from '@aws-sdk/client-auto-scaling';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
   CloudTrailClient,
-  GetTrailStatusCommand,
   DescribeTrailsCommand,
+  GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
-  ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeDeliveryChannelsCommand,
-} from '@aws-sdk/client-config-service';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
-import { WAFV2Client, GetWebACLCommand } from '@aws-sdk/client-wafv2';
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
+import * as fs from 'fs';
 
 const region = process.env.AWS_REGION || 'ap-northeast-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -64,9 +59,8 @@ describe('TapStack Integration Tests', () => {
   const kmsClient = new KMSClient({ region });
   const secretsClient = new SecretsManagerClient({ region });
   const cloudTrailClient = new CloudTrailClient({ region });
-  const configClient = new ConfigServiceClient({ region });
   const iamClient = new IAMClient({ region });
-  const wafClient = new WAFV2Client({ region: 'us-east-1' }); // WAF is global
+  const wafClient = new WAFV2Client({ region }); // WAF is regional
 
   let vpcId: string;
   let albArn: string;
@@ -218,7 +212,7 @@ describe('TapStack Integration Tests', () => {
       expect(
         response.ServerSideEncryptionConfiguration!.Rules![0]
           .ApplyServerSideEncryptionByDefault!.SSEAlgorithm
-      ).toBe('aws:kms');
+      ).toBe('AES256'); // ALB doesn't support KMS, uses S3-managed encryption
     });
 
     test('ALB log bucket should have versioning enabled', async () => {
@@ -425,7 +419,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Monitoring (CloudTrail)', () => {
     test('CloudTrail should be logging', async () => {
-      const trailName = `${environmentSuffix}-trail-v2`;
+      const trailName = `${environmentSuffix}-trail-v4`;
       const command = new GetTrailStatusCommand({ Name: trailName });
       const response = await cloudTrailClient.send(command);
 
@@ -433,7 +427,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('CloudTrail should have log file validation enabled', async () => {
-      const trailName = `${environmentSuffix}-trail-v2`;
+      const trailName = `${environmentSuffix}-trail-v4`;
       const command = new DescribeTrailsCommand({ trailNameList: [trailName] });
       const response = await cloudTrailClient.send(command);
 
@@ -443,36 +437,17 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('Config Service (Optional)', () => {
-    test.skip('Config recorder should exist in the region if Config is enabled', async () => {
-      // NOTE: We don't create ConfigRecorder in our stack (only 1 per region allowed)
-      // This test is skipped because Config Service may not be set up in the region
-      // To enable: Set up Config Recorder manually in the region, then unskip this test
-      const command = new DescribeConfigurationRecordersCommand({});
-      const response = await configClient.send(command);
-
-      expect(response.ConfigurationRecorders).toBeDefined();
-      expect(response.ConfigurationRecorders!.length).toBeGreaterThan(0);
-    });
-
-    test.skip('Config delivery channel should exist in the region if Config is enabled', async () => {
-      // NOTE: We don't create DeliveryChannel in our stack (only 1 per region allowed)
-      // This test is skipped because Config Service may not be set up in the region
-      // To enable: Set up Config Recorder manually in the region, then unskip this test
-      const command = new DescribeDeliveryChannelsCommand({});
-      const response = await configClient.send(command);
-
-      expect(response.DeliveryChannels).toBeDefined();
-      expect(response.DeliveryChannels!.length).toBeGreaterThan(0);
-    });
-  });
-
   describe('WAF', () => {
-    test('Web ACL should exist', async () => {
-      const webAclId = webAclArn.split('/').pop()!;
+    test('Web ACL should exist and be accessible by ARN', async () => {
+      // Parse ARN to get name and ID
+      // ARN format: arn:aws:wafv2:region:account:regional/webacl/NAME/ID
+      const arnParts = webAclArn.split('/');
+      const webAclName = arnParts[arnParts.length - 2];
+      const webAclId = arnParts[arnParts.length - 1];
+
       const command = new GetWebACLCommand({
         Id: webAclId,
-        Name: `${environmentSuffix}-web-acl`,
+        Name: webAclName,
         Scope: 'REGIONAL',
       });
       const response = await wafClient.send(command);
@@ -482,10 +457,14 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Web ACL should have rules configured', async () => {
-      const webAclId = webAclArn.split('/').pop()!;
+      // Parse ARN to get name and ID
+      const arnParts = webAclArn.split('/');
+      const webAclName = arnParts[arnParts.length - 2];
+      const webAclId = arnParts[arnParts.length - 1];
+
       const command = new GetWebACLCommand({
         Id: webAclId,
-        Name: `${environmentSuffix}-web-acl`,
+        Name: webAclName,
         Scope: 'REGIONAL',
       });
       const response = await wafClient.send(command);

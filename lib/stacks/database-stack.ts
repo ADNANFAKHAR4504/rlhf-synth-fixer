@@ -25,7 +25,7 @@ export class DatabaseStack extends cdk.NestedStack {
 
     // Create database credentials in Secrets Manager
     this.databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `${props.environmentSuffix}/rds/credentials-v2`,
+      secretName: `${props.environmentSuffix}/rds/credentials-v4`,
       description: `RDS database credentials for ${props.environmentSuffix} environment`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),

@@ -22,7 +22,7 @@ export class SecurityStack extends cdk.NestedStack {
     this.kmsKey = new kms.Key(this, 'MasterKMSKey', {
       description: `Master KMS key for ${props.environmentSuffix} environment`,
       enableKeyRotation: true,
-      alias: `alias/${props.environmentSuffix}-master-key-v2`,
+      alias: `alias/${props.environmentSuffix}-master-key-v4`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -67,7 +67,7 @@ export class SecurityStack extends cdk.NestedStack {
                 'secretsmanager:DescribeSecret',
               ],
               resources: [
-                `arn:aws:secretsmanager:*:*:secret:${props.environmentSuffix}/rds/credentials-v2*`,
+                `arn:aws:secretsmanager:*:*:secret:${props.environmentSuffix}/rds/credentials-v4*`,
               ],
             }),
           ],
@@ -77,7 +77,7 @@ export class SecurityStack extends cdk.NestedStack {
 
     // Create IAM policy for MFA requirement
     new iam.ManagedPolicy(this, 'RequireMFAPolicy', {
-      managedPolicyName: `${props.environmentSuffix}-require-mfa-v2`,
+      managedPolicyName: `${props.environmentSuffix}-require-mfa-v4`,
       description: 'Requires MFA for console access',
       document: new iam.PolicyDocument({
         statements: [
