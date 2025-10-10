@@ -20,9 +20,6 @@ CloudFront and WAF:
 API Gateway:
  Include an API Gateway with logging enabled for all stages.
 
-Networking:
- Ensure all resources are deployed within a specific VPC. Use a template parameter to get the VpcId.
-
 Tagging:
  Apply the following tags to all created resources: Environment, Project, and Owner.
 
