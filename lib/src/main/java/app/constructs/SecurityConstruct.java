@@ -4,6 +4,7 @@ import app.config.SecurityConfig;
 import com.hashicorp.cdktf.providers.aws.iam_instance_profile.IamInstanceProfile;
 import com.hashicorp.cdktf.providers.aws.iam_role.IamRole;
 import com.hashicorp.cdktf.providers.aws.iam_role_policy_attachment.IamRolePolicyAttachment;
+import com.hashicorp.cdktf.providers.aws.data_aws_caller_identity.DataAwsCallerIdentity;
 import com.hashicorp.cdktf.providers.aws.kms_alias.KmsAlias;
 import com.hashicorp.cdktf.providers.aws.kms_alias.KmsAliasConfig;
 import com.hashicorp.cdktf.providers.aws.kms_key.KmsKey;
@@ -32,10 +33,63 @@ public class SecurityConstruct extends BaseConstruct {
 
         SecurityConfig securityConfig = getSecurityConfig();
 
-        // Create KMS Key for encryption
+        // Get current AWS account ID for KMS policy
+        DataAwsCallerIdentity currentIdentity = new DataAwsCallerIdentity(this, "current");
+
+        // Create KMS Key for encryption with proper policy for Auto Scaling
+        String kmsPolicy = String.format("""
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::%s:root"
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Auto Scaling to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "autoscaling.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2 service to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+                """, currentIdentity.getAccountId());
+
         this.kmsKey = new KmsKey(this, "kms-key", KmsKeyConfig.builder()
                 .description("KMS key for VPC migration encryption")
                 .enableKeyRotation(true)
+                .policy(kmsPolicy)
                 .tags(mergeTags(Map.of("Name", id + "-kms-key")))
                 .build());
 
