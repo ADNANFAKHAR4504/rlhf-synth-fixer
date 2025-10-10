@@ -10,5 +10,12 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "s3, Cloudfront, Route53, Cloudwatch, KMS, IAM"
+  "aws_services": "s3, Cloudfront, Route53, Cloudwatch, KMS, IAM",
+  "training_quality": "poor",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
