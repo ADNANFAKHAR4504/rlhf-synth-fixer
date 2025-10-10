@@ -336,6 +336,146 @@ class LambdaHandlerTests(unittest.TestCase):
         }
         assert handler.validate_tracking_data(invalid_location) is False
 
+    @patch('handler.ssm')
+    def test_get_parameter_exception(self, mock_ssm):
+        """Test exception handling in get_parameter function."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        mock_ssm.get_parameter.side_effect = Exception("SSM Error")
+
+        with self.assertRaises(Exception):
+            handler.get_parameter('/test/param')
+
+    @patch('handler.dynamodb')
+    @patch('handler.ssm')
+    def test_tracking_update_with_metadata(self, mock_ssm, mock_dynamodb):
+        """Test tracking update with metadata field."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        mock_ssm.get_parameter.return_value = {
+            'Parameter': {'Value': '{"enhanced_tracking": true}'}
+        }
+
+        mock_table = Mock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_table.put_item.return_value = {}
+
+        event = {
+            'httpMethod': 'POST',
+            'path': '/track',
+            'body': json.dumps({
+                'tracking_id': 'TEST123',
+                'status': 'in_transit',
+                'location': {'lat': 40.7128, 'lng': -74.0060},
+                'metadata': {'driver': 'John Doe', 'vehicle': 'ABC123'}
+            })
+        }
+
+        context = Mock()
+        response = handler.main(event, context)
+
+        assert response['statusCode'] == 200
+        mock_table.put_item.assert_called_once()
+        put_item_call = mock_table.put_item.call_args[1]['Item']
+        assert 'metadata' in put_item_call
+
+    @patch('handler.dynamodb')
+    @patch('handler.ssm')
+    def test_tracking_update_database_exception(self, mock_ssm, mock_dynamodb):
+        """Test tracking update with database exception."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        mock_ssm.get_parameter.return_value = {
+            'Parameter': {'Value': '{"enhanced_tracking": true}'}
+        }
+
+        mock_table = Mock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_table.put_item.side_effect = Exception("DynamoDB Error")
+
+        event = {
+            'httpMethod': 'POST',
+            'path': '/track',
+            'body': json.dumps({
+                'tracking_id': 'TEST123',
+                'status': 'in_transit',
+                'location': {'lat': 40.7128, 'lng': -74.0060}
+            })
+        }
+
+        context = Mock()
+        response = handler.main(event, context)
+
+        assert response['statusCode'] == 500
+
+    @patch('handler.dynamodb')
+    @patch('handler.ssm')
+    def test_status_query_database_exception(self, mock_ssm, mock_dynamodb):
+        """Test status query with database exception."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        mock_ssm.get_parameter.return_value = {
+            'Parameter': {'Value': '{"enhanced_tracking": true}'}
+        }
+
+        mock_table = Mock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_table.query.side_effect = Exception("DynamoDB Query Error")
+
+        event = {
+            'httpMethod': 'GET',
+            'path': '/status',
+            'queryStringParameters': {'tracking_id': 'TEST123'}
+        }
+
+        context = Mock()
+        response = handler.main(event, context)
+
+        assert response['statusCode'] == 500
+
+    @patch('handler.ssm')
+    def test_unknown_route(self, mock_ssm):
+        """Test handling of unknown routes."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        mock_ssm.get_parameter.return_value = {
+            'Parameter': {'Value': '{"enhanced_tracking": true}'}
+        }
+
+        event = {
+            'httpMethod': 'DELETE',
+            'path': '/unknown',
+            'queryStringParameters': {}
+        }
+
+        context = Mock()
+        response = handler.main(event, context)
+
+        assert response['statusCode'] == 404
+        body = json.loads(response['body'])
+        assert 'Not found' in body['error']
+
+    @patch('handler.ssm')
+    def test_main_exception_handling(self, mock_ssm):
+        """Test main function exception handling."""
+        import handler  # pylint: disable=import-error,import-outside-toplevel
+
+        # Mock SSM to raise an exception
+        mock_ssm.get_parameter.side_effect = Exception("Critical error")
+
+        event = {
+            'httpMethod': 'GET',
+            'path': '/status',
+            'queryStringParameters': {'tracking_id': 'TEST123'}
+        }
+
+        context = Mock()
+        response = handler.main(event, context)
+
+        assert response['statusCode'] == 500
+        body = json.loads(response['body'])
+        assert 'Internal server error' in body['error']
+
 
 if __name__ == '__main__':
     unittest.main()
