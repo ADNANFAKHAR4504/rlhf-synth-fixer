@@ -19,7 +19,9 @@ describe('Trading Platform Integration Tests', () => {
   describe('Infrastructure Deployment Validation', () => {
     test('should have deployment outputs available', () => {
       if (!hasDeployedInfrastructure) {
-        console.warn('No deployed infrastructure found. Deploy stack first with: npm run deploy');
+        console.warn(
+          'No deployed infrastructure found. Deploy stack first with: npm run deploy'
+        );
         expect(hasDeployedInfrastructure).toBe(false);
       } else {
         expect(outputs).toBeDefined();
@@ -38,7 +40,7 @@ describe('Trading Platform Integration Tests', () => {
         'ALBUrl',
         'DatabaseEndpoint',
         'S3BucketName',
-        'VpcId'
+        'VpcId',
       ];
 
       expectedOutputs.forEach(outputKey => {
@@ -90,7 +92,9 @@ describe('Trading Platform Integration Tests', () => {
       console.info('Integration tests require deployed infrastructure.');
       console.info('To run full integration tests:');
       console.info('1. Deploy the stack: npm run deploy');
-      console.info('2. Ensure outputs are available in cfn-outputs/flat-outputs.json');
+      console.info(
+        '2. Ensure outputs are available in cfn-outputs/flat-outputs.json'
+      );
       console.info('3. Run integration tests: npm run test:integration');
 
       expect(true).toBe(true); // This test always passes, it's just informational
@@ -101,11 +105,15 @@ describe('Trading Platform Integration Tests', () => {
         console.info('💡 To enable full integration testing:');
         console.info('   1. Configure AWS credentials');
         console.info('   2. Run: npx cdk deploy --all');
-        console.info('   3. Outputs will be written to cfn-outputs/flat-outputs.json');
+        console.info(
+          '   3. Outputs will be written to cfn-outputs/flat-outputs.json'
+        );
         console.info('   4. Re-run tests to validate deployed infrastructure');
       } else {
         console.info('✅ Infrastructure deployment detected');
-        console.info(`📊 Found ${Object.keys(outputs).length} deployment outputs`);
+        console.info(
+          `📊 Found ${Object.keys(outputs).length} deployment outputs`
+        );
       }
 
       expect(true).toBe(true); // Informational test

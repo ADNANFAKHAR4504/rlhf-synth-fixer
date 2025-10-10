@@ -86,10 +86,13 @@ describe('Trading Platform Stack Unit Tests', () => {
 
     template.hasResourceProperties('AWS::ECS::Cluster', Match.anyValue());
 
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      Type: 'application',
-      Scheme: 'internet-facing',
-    });
+    template.hasResourceProperties(
+      'AWS::ElasticLoadBalancingV2::LoadBalancer',
+      {
+        Type: 'application',
+        Scheme: 'internet-facing',
+      }
+    );
   });
 
   test('Stack applies consistent resource tagging', () => {
@@ -119,21 +122,25 @@ describe('Trading Platform Stack Unit Tests', () => {
 
   test('Stack with hosted zone creates Route53 resources', () => {
     // Create a stack with hosted zone ID to test that branch
-    const stackWithHostedZone = new TradingPlatformStack(app, 'TestStackWithHostedZone', {
-      env: { account: '123456789012', region: 'eu-central-1' },
-      isPrimary: true,
-      primaryRegion: 'eu-central-1',
-      secondaryRegion: 'eu-west-1',
-      domainName: 'test.example.com',
-      hostedZoneId: 'Z1234567890ABC'
-    });
+    const stackWithHostedZone = new TradingPlatformStack(
+      app,
+      'TestStackWithHostedZone',
+      {
+        env: { account: '123456789012', region: 'eu-central-1' },
+        isPrimary: true,
+        primaryRegion: 'eu-central-1',
+        secondaryRegion: 'eu-west-1',
+        domainName: 'test.example.com',
+        hostedZoneId: 'Z1234567890ABC',
+      }
+    );
 
     const template = Template.fromStack(stackWithHostedZone);
 
     // Should reference existing hosted zone
     template.hasResourceProperties('AWS::Route53::RecordSet', {
       Type: 'A',
-      HostedZoneId: 'Z1234567890ABC'
+      HostedZoneId: 'Z1234567890ABC',
     });
   });
 
@@ -144,12 +151,12 @@ describe('Trading Platform Stack Unit Tests', () => {
     // Check that CloudWatch alarms are created
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       MetricName: 'UnHealthyHostCount',
-      Namespace: 'AWS/ApplicationELB'
+      Namespace: 'AWS/ApplicationELB',
     });
 
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       MetricName: 'TargetResponseTime',
-      Namespace: 'AWS/ApplicationELB'
+      Namespace: 'AWS/ApplicationELB',
     });
   });
 });
@@ -164,7 +171,9 @@ describe('TradingPlatformApp', () => {
     const testApp = new TradingPlatformApp();
 
     // The app should create two stacks
-    const stacks = testApp.node.children.filter((child: any) => child instanceof TradingPlatformStack);
+    const stacks = testApp.node.children.filter(
+      (child: any) => child instanceof TradingPlatformStack
+    );
     expect(stacks).toHaveLength(2);
 
     // Check stack names
@@ -179,7 +188,9 @@ describe('TradingPlatformApp', () => {
 
     expect(() => {
       new TradingPlatformApp();
-    }).toThrow('Account ID is required. Set CDK_DEFAULT_ACCOUNT or use --context account=123456789012');
+    }).toThrow(
+      'Account ID is required. Set CDK_DEFAULT_ACCOUNT or use --context account=123456789012'
+    );
   });
 
   test('App applies global tags', () => {

@@ -36,7 +36,9 @@ export class TradingPlatformStack extends cdk.Stack {
     super(scope, id, props);
 
     const regionSuffix = props.isPrimary ? 'pri' : 'sec';
-    const currentRegion = props.isPrimary ? props.primaryRegion : props.secondaryRegion;
+    const currentRegion = props.isPrimary
+      ? props.primaryRegion
+      : props.secondaryRegion;
 
     // Generate unique suffix for resource naming to avoid conflicts
     const timestamp = Date.now().toString().slice(-6);
@@ -53,7 +55,11 @@ export class TradingPlatformStack extends cdk.Stack {
     const vpc = this.createVpc(regionSuffix);
 
     // S3 Bucket with Cross-Region Replication
-    const s3Bucket = this.createS3Bucket(regionSuffix, kmsKeys.storageKey, props);
+    const s3Bucket = this.createS3Bucket(
+      regionSuffix,
+      kmsKeys.storageKey,
+      props
+    );
 
     // Aurora PostgreSQL Cluster or Read Replica
     const auroraCluster = this.createAuroraCluster(
@@ -67,7 +73,7 @@ export class TradingPlatformStack extends cdk.Stack {
     const alb = this.createLoadBalancer(vpc, regionSuffix);
 
     // ECS Cluster and Service
-    const { cluster, service, targetGroup } = this.createEcsService(
+    const { service, targetGroup } = this.createEcsService(
       vpc,
       alb,
       regionSuffix,
@@ -136,12 +142,14 @@ export class TradingPlatformStack extends cdk.Stack {
     });
 
     // Grant ECS service access to decrypt secrets
-    secretsKey.addToResourcePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('ecs-tasks.amazonaws.com')],
-      actions: ['kms:Decrypt', 'kms:DescribeKey'],
-      resources: ['*'],
-    }));
+    secretsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('ecs-tasks.amazonaws.com')],
+        actions: ['kms:Decrypt', 'kms:DescribeKey'],
+        resources: ['*'],
+      })
+    );
 
     return { databaseKey, storageKey, secretsKey };
   }
@@ -181,7 +189,8 @@ export class TradingPlatformStack extends cdk.Stack {
     kmsKey: kms.Key,
     props: TradingPlatformStackProps
   ): s3.Bucket {
-    const bucketName = props.globalBucketName ||
+    const bucketName =
+      props.globalBucketName ||
       `tap-${regionSuffix}-${this.account}-${this.region}-${this.uniqueSuffix}`;
 
     const bucket = new s3.Bucket(this, 'TradingDataBucket', {
@@ -197,8 +206,8 @@ export class TradingPlatformStack extends cdk.Stack {
           id: 'delete-old-versions',
           noncurrentVersionExpiration: cdk.Duration.days(90),
           enabled: true,
-        }
-      ]
+        },
+      ],
     });
 
     // Cross-Region Replication (only for primary)
@@ -224,7 +233,9 @@ export class TradingPlatformStack extends cdk.Stack {
                   's3:ReplicateDelete',
                   's3:ReplicateTags',
                 ],
-                resources: [`arn:aws:s3:::tap-sec-${this.account}-${props.secondaryRegion}/*`],
+                resources: [
+                  `arn:aws:s3:::tap-sec-${this.account}-${props.secondaryRegion}/*`,
+                ],
               }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -344,7 +355,10 @@ export class TradingPlatformStack extends cdk.Stack {
     }
   }
 
-  private createLoadBalancer(vpc: ec2.Vpc, regionSuffix: string): elbv2.ApplicationLoadBalancer {
+  private createLoadBalancer(
+    vpc: ec2.Vpc,
+    regionSuffix: string
+  ): elbv2.ApplicationLoadBalancer {
     return new elbv2.ApplicationLoadBalancer(this, 'TradingAlb', {
       vpc,
       internetFacing: true,
@@ -372,15 +386,21 @@ export class TradingPlatformStack extends cdk.Stack {
     });
 
     // Task Definition
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'TradingTaskDef', {
-      family: `tap-${regionSuffix}-task-${this.uniqueSuffix}`,
-      cpu: 1024,
-      memoryLimitMiB: 2048,
-    });
+    const taskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      'TradingTaskDef',
+      {
+        family: `tap-${regionSuffix}-task-${this.uniqueSuffix}`,
+        cpu: 1024,
+        memoryLimitMiB: 2048,
+      }
+    );
 
     // Container Definition
     const container = taskDefinition.addContainer('trading-app', {
-      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/amazonlinux/amazonlinux:latest'),
+      image: ecs.ContainerImage.fromRegistry(
+        'public.ecr.aws/amazonlinux/amazonlinux:latest'
+      ),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: `tap-${regionSuffix}`,
         logRetention: logs.RetentionDays.ONE_MONTH,
@@ -392,12 +412,24 @@ export class TradingPlatformStack extends cdk.Stack {
         ENVIRONMENT: 'production',
       },
       secrets: {
-        DB_ENDPOINT: ecs.Secret.fromSecretsManager(auroraCluster.secret!, 'host'),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(auroraCluster.secret!, 'password'),
-        DB_USERNAME: ecs.Secret.fromSecretsManager(auroraCluster.secret!, 'username'),
+        DB_ENDPOINT: ecs.Secret.fromSecretsManager(
+          auroraCluster.secret!,
+          'host'
+        ),
+        DB_PASSWORD: ecs.Secret.fromSecretsManager(
+          auroraCluster.secret!,
+          'password'
+        ),
+        DB_USERNAME: ecs.Secret.fromSecretsManager(
+          auroraCluster.secret!,
+          'username'
+        ),
       },
       healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
+        command: [
+          'CMD-SHELL',
+          'curl -f http://localhost:8080/health || exit 1',
+        ],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(10),
         retries: 3,
@@ -430,22 +462,26 @@ export class TradingPlatformStack extends cdk.Stack {
     auroraCluster.secret?.grantRead(taskDefinition.taskRole);
 
     // Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TradingTargetGroup', {
-      vpc,
-      port: 8080,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targetType: elbv2.TargetType.IP,
-      healthCheck: {
-        path: '/health',
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(10),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-        port: '8080',
-      },
-      deregistrationDelay: cdk.Duration.seconds(30),
-      targets: [service],
-    });
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'TradingTargetGroup',
+      {
+        vpc,
+        port: 8080,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.IP,
+        healthCheck: {
+          path: '/health',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(10),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+          port: '8080',
+        },
+        deregistrationDelay: cdk.Duration.seconds(30),
+        targets: [service],
+      }
+    );
 
     // ALB Listener
     alb.addListener('HttpListener', {
@@ -465,10 +501,14 @@ export class TradingPlatformStack extends cdk.Stack {
     let hostedZone: route53.IHostedZone;
 
     if (hostedZoneId) {
-      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-        hostedZoneId,
-        zoneName: domainName,
-      });
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+        this,
+        'HostedZone',
+        {
+          hostedZoneId,
+          zoneName: domainName,
+        }
+      );
     } else {
       hostedZone = new route53.HostedZone(this, 'TradingHostedZone', {
         zoneName: domainName,
@@ -586,41 +626,57 @@ export class TradingPlatformApp extends cdk.App {
     super();
 
     // Make it cross-account executable - allow account override
-    const account = process.env.CDK_DEFAULT_ACCOUNT || this.node.tryGetContext('account');
-    const domainName = process.env.DOMAIN_NAME || this.node.tryGetContext('domainName') || 'trading-platform.internal';
+    const account =
+      process.env.CDK_DEFAULT_ACCOUNT || this.node.tryGetContext('account');
+    const domainName =
+      process.env.DOMAIN_NAME ||
+      this.node.tryGetContext('domainName') ||
+      'trading-platform.internal';
 
     if (!account) {
-      throw new Error('Account ID is required. Set CDK_DEFAULT_ACCOUNT or use --context account=123456789012');
+      throw new Error(
+        'Account ID is required. Set CDK_DEFAULT_ACCOUNT or use --context account=123456789012'
+      );
     }
 
     // Primary Region Stack (eu-central-1)
-    const primaryStack = new TradingPlatformStack(this, 'TradingPlatformPrimary', {
-      env: {
-        account,
-        region: 'eu-central-1',
-      },
-      isPrimary: true,
-      primaryRegion: 'eu-central-1',
-      secondaryRegion: 'eu-west-1',
-      domainName,
-      description: 'Trading Platform Primary Region (eu-central-1) - RTO 15min, RPO 5min',
-    });
+    const primaryStack = new TradingPlatformStack(
+      this,
+      'TradingPlatformPrimary',
+      {
+        env: {
+          account,
+          region: 'eu-central-1',
+        },
+        isPrimary: true,
+        primaryRegion: 'eu-central-1',
+        secondaryRegion: 'eu-west-1',
+        domainName,
+        description:
+          'Trading Platform Primary Region (eu-central-1) - RTO 15min, RPO 5min',
+      }
+    );
 
-    // Secondary Region Stack (eu-west-1)  
-    const secondaryStack = new TradingPlatformStack(this, 'TradingPlatformSecondary', {
-      env: {
-        account,
-        region: 'eu-west-1',
-      },
-      isPrimary: false,
-      primaryRegion: 'eu-central-1',
-      secondaryRegion: 'eu-west-1',
-      domainName,
-      hostedZoneId: primaryStack.hostedZone?.hostedZoneId,
-      globalBucketName: `tap-sec-${account}-eu-west-1`,
-      primaryDbClusterArn: primaryStack.auroraClusterArn,
-      description: 'Trading Platform Secondary Region (eu-west-1) - Disaster Recovery',
-    });
+    // Secondary Region Stack (eu-west-1)
+    const secondaryStack = new TradingPlatformStack(
+      this,
+      'TradingPlatformSecondary',
+      {
+        env: {
+          account,
+          region: 'eu-west-1',
+        },
+        isPrimary: false,
+        primaryRegion: 'eu-central-1',
+        secondaryRegion: 'eu-west-1',
+        domainName,
+        hostedZoneId: primaryStack.hostedZone?.hostedZoneId,
+        globalBucketName: `tap-sec-${account}-eu-west-1`,
+        primaryDbClusterArn: primaryStack.auroraClusterArn,
+        description:
+          'Trading Platform Secondary Region (eu-west-1) - Disaster Recovery',
+      }
+    );
 
     // Add dependency
     secondaryStack.addDependency(primaryStack);
