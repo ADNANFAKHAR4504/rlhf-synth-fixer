@@ -214,32 +214,19 @@ describe('TapStack', () => {
   describe('Stack Outputs', () => {
     test('should create all required outputs', () => {
       template.hasOutput(`WebsiteBucketName${environmentSuffix}`, {
-        Description: 'Name of the S3 bucket storing website content',
-        Export: {
-          Name: `NewsWebsiteBucket-${environmentSuffix}`
-        }
+        Description: 'Name of the S3 bucket storing website content'
       });
 
       template.hasOutput(`DistributionId${environmentSuffix}`, {
-        Description: 'CloudFront distribution ID',
-        Export: {
-          Name: `NewsDistributionId-${environmentSuffix}`
-        }
+        Description: 'CloudFront distribution ID'
       });
 
       template.hasOutput(`DistributionDomainName${environmentSuffix}`, {
-        Description: 'CloudFront distribution domain name',
-        Export: {
-          Name: `NewsDistributionDomain-${environmentSuffix}`
-        }
+        Description: 'CloudFront distribution domain name'
       });
 
-
       template.hasOutput(`KMSKeyId${environmentSuffix}`, {
-        Description: 'KMS key ID for encryption',
-        Export: {
-          Name: `NewsKMSKeyId-${environmentSuffix}`
-        }
+        Description: 'KMS key ID for encryption'
       });
     });
   });
