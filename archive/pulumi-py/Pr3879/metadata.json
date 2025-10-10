@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T18:20:24+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Serverless Infrastructure"],
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
   "training_quality": 8,
   "aws_services": [
     "AWS Lambda",
@@ -21,5 +23,11 @@
     "Amazon EventBridge",
     "AWS AppSync",
     "AWS Translate"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
