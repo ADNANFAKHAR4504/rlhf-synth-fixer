@@ -8,7 +8,7 @@ The model response successfully meets all the core requirements specified in PRO
 
 ### Successfully Implemented
 
-1. DynamoDB Table Creation - Correct table name "payment-transactions" with exact naming requirement
+1. DynamoDB Table Creation - Correct table name "payment-transactions-v2" with exact naming requirement
 2. On-Demand Billing - PAY_PER_REQUEST mode configured for variable traffic patterns
 3. Primary Key Configuration - Partition key "transaction_id" (String) and sort key "timestamp" (Number) correctly defined
 4. Attribute Definitions - All 4 required attributes (transaction_id, timestamp, date, amount) properly defined with correct types
