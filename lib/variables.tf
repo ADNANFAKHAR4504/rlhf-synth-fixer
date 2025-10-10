@@ -10,9 +10,15 @@ variable "ssh_allowed_ip" {
   default     = "203.0.113.0/32"
 }
 
+variable "use_secrets_manager" {
+  description = "Whether to use AWS Secrets Manager for RDS password (recommended for production)"
+  type        = bool
+  default     = true
+}
+
 variable "db_password" {
-  description = "RDS database master password (use AWS Secrets Manager in production)"
+  description = "RDS database master password (only used if use_secrets_manager is false)"
   type        = string
-  default     = "ChangeMe123!"
+  default     = null
   sensitive   = true
 }

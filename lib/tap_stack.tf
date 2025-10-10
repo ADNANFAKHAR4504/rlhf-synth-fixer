@@ -361,6 +361,33 @@ resource "aws_db_subnet_group" "prod_db_subnet_group" {
   }
 }
 
+# Generate random password for RDS
+resource "random_password" "rds_password" {
+  count   = var.use_secrets_manager ? 1 : 0
+  length  = 16
+  special = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+# Store RDS password in AWS Secrets Manager
+resource "aws_secretsmanager_secret" "rds_password" {
+  count       = var.use_secrets_manager ? 1 : 0
+  name        = "prod-rds-master-password"
+  description = "Master password for Production RDS MySQL instance"
+
+  tags = {
+    Name        = "ProdRDSPassword"
+    Environment = "Production"
+    Project     = "BusinessCriticalVPC"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "rds_password" {
+  count         = var.use_secrets_manager ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.rds_password[0].id
+  secret_string = random_password.rds_password[0].result
+}
+
 resource "aws_db_instance" "prod_rds" {
   identifier     = "prod-rds-instance"
   engine         = "mysql"
@@ -373,7 +400,7 @@ resource "aws_db_instance" "prod_rds" {
 
   db_name  = "proddb"
   username = "admin"
-  password = var.db_password # TODO: Use AWS Secrets Manager in production
+  password = var.use_secrets_manager ? random_password.rds_password[0].result : var.db_password
 
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.prod_db_subnet_group.name
@@ -460,4 +487,10 @@ output "sns_topic_arn" {
 output "cloudwatch_alarm_name" {
   description = "Name of the CloudWatch alarm"
   value       = aws_cloudwatch_metric_alarm.high_cpu.alarm_name
+}
+
+output "rds_password_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing RDS password"
+  value       = var.use_secrets_manager ? aws_secretsmanager_secret.rds_password[0].arn : null
+  sensitive   = true
 }
