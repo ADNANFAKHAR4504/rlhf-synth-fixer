@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3, Clouffront, Route53, ACM, Cloudwatch, KMS"
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
