@@ -364,9 +364,7 @@ This CloudFormation template creates a production-ready cloud infrastructure in 
     "EC2Instance1": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-        },
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
         "InstanceType": {
           "Ref": "InstanceType"
         },
@@ -425,9 +423,7 @@ This CloudFormation template creates a production-ready cloud infrastructure in 
     "EC2Instance2": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": {
-          "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-        },
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
         "InstanceType": {
           "Ref": "InstanceType"
         },

@@ -171,14 +171,14 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
   describe('EC2 Instance Configuration', () => {
     test('EC2Instance1 should use latest Amazon Linux 2 AMI via SSM parameter', () => {
       const instance = template.Resources.EC2Instance1;
-      expect(instance.Properties.ImageId['Fn::Sub']).toBe(
+      expect(instance.Properties.ImageId).toBe(
         '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       );
     });
 
     test('EC2Instance2 should use latest Amazon Linux 2 AMI via SSM parameter', () => {
       const instance = template.Resources.EC2Instance2;
-      expect(instance.Properties.ImageId['Fn::Sub']).toBe(
+      expect(instance.Properties.ImageId).toBe(
         '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       );
     });
