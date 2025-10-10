@@ -782,7 +782,7 @@ public class MainIntegrationTest {
         assertFalse(response.metricAlarms().isEmpty(), "CPU alarm should exist");
 
         MetricAlarm alarm = response.metricAlarms().get(0);
-        assertEquals(90.0, alarm.threshold(), "CPU alarm threshold should be 90%");
+        assertEquals(80.0, alarm.threshold(), "CPU alarm threshold should be 80%");
         assertEquals(ComparisonOperator.GREATER_THAN_THRESHOLD, alarm.comparisonOperator(),
             "CPU alarm should use GreaterThanThreshold");
         assertTrue(alarm.actionsEnabled(), "Alarm actions should be enabled");
