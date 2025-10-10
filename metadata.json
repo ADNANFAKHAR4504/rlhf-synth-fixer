@@ -10,5 +10,13 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "ECS Fargate, Aurora PostgreSQL, S3, Route 53, KMS"
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "SecurityGroups",
+    "Organizations"
+  ],
+  "training_quality": 9
 }
