@@ -6,6 +6,10 @@
   "po_id": "89614205",
   "team": "synth",
   "startedAt": "2025-10-02T11:21:53+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "training_quality": 8.5,
   "aws_services": [
     "VPC",
