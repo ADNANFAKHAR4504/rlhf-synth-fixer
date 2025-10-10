@@ -187,15 +187,15 @@ export class TapStack extends cdk.Stack {
         credentials: rds.Credentials.fromSecret(databaseCredentialsSecret),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T4G,
-            ec2.InstanceSize.MEDIUM
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.LARGE
           ),
         }),
         readers: [
           rds.ClusterInstance.provisioned('reader', {
             instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.T4G,
-              ec2.InstanceSize.MEDIUM
+              ec2.InstanceClass.R6G,
+              ec2.InstanceSize.LARGE
             ),
           }),
         ],
@@ -230,15 +230,15 @@ export class TapStack extends cdk.Stack {
         }),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T4G,
-            ec2.InstanceSize.MEDIUM
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.LARGE
           ),
         }),
         readers: [
           rds.ClusterInstance.provisioned('reader', {
             instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.T4G,
-              ec2.InstanceSize.MEDIUM
+              ec2.InstanceClass.R6G,
+              ec2.InstanceSize.LARGE
             ),
           }),
         ],

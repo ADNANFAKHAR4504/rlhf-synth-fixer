@@ -162,3 +162,9 @@ Use AWS_MANAGED encryption for global tables, or use CUSTOMER_MANAGED encryption
 Attempting to create CfnHub resource when Security Hub is already enabled in the AWS account causes a CREATE_FAILED error with status code 409 (AlreadyExists).
 
 Add an optional `enableSecurityHub` prop to TapStackProps (default: false). Only create the Security Hub resource when explicitly enabled via context parameter: `cdk deploy -c enableSecurityHub=true`. This prevents conflicts in accounts where Security Hub is already enabled manually or by other stacks.
+
+## 27. Aurora Global Database Instance Class Restriction
+
+Aurora Global Database does not support T3, T4G, or other burstable instance classes. Using `db.t4g.medium` causes CREATE_FAILED error: "The requested instance class is not supported by global databases: db.t4g.medium (Service: Rds, Status Code: 400)".
+
+Aurora Global Database requires production-grade instance classes like R5 or R6G. Use `ec2.InstanceClass.R6G` with `ec2.InstanceSize.LARGE` or larger for both writer and reader instances. R6G instances provide ARM-based Graviton2 processors with better price-performance for production workloads.
