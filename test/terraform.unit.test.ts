@@ -363,7 +363,7 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
     });
 
     test('Lambda has environment variables', () => {
-      expect(tfContent).toMatch(/DB_INSTANCE_IDENTIFIER\s*=\s*aws_db_instance\.main\.id/);
+      expect(tfContent).toMatch(/DB_INSTANCE_IDENTIFIER\s*=\s*aws_db_instance\.main\.identifier/);
       expect(tfContent).toMatch(/RETENTION_DAYS\s*=\s*var\.snapshot_retention_days/);
     });
 
@@ -404,6 +404,7 @@ describe('RDS MySQL Healthcare Stack Unit Tests', () => {
       'db_instance_endpoint',
       'db_instance_port',
       'db_instance_id',
+      'db_instance_resource_id',
       'db_security_group_id',
       'db_subnet_group_name',
       'kms_key_arn',

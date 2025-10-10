@@ -533,7 +533,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
   alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
+    DBInstanceIdentifier = aws_db_instance.main.identifier
   }
 
   tags = local.tags
@@ -552,7 +552,7 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
   alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
+    DBInstanceIdentifier = aws_db_instance.main.identifier
   }
 
   tags = local.tags
@@ -571,7 +571,7 @@ resource "aws_cloudwatch_metric_alarm" "free_storage_space" {
   alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
+    DBInstanceIdentifier = aws_db_instance.main.identifier
   }
 
   tags = local.tags
@@ -590,7 +590,7 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
   alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
+    DBInstanceIdentifier = aws_db_instance.main.identifier
   }
 
   tags = local.tags
@@ -679,7 +679,7 @@ resource "aws_lambda_function" "snapshot" {
 
   environment {
     variables = {
-      DB_INSTANCE_IDENTIFIER = aws_db_instance.main.id
+      DB_INSTANCE_IDENTIFIER = aws_db_instance.main.identifier
       RETENTION_DAYS         = var.snapshot_retention_days
     }
   }
@@ -756,7 +756,12 @@ output "db_instance_port" {
 }
 
 output "db_instance_id" {
-  description = "The RDS instance ID"
+  description = "The RDS instance identifier"
+  value       = aws_db_instance.main.identifier
+}
+
+output "db_instance_resource_id" {
+  description = "The RDS instance resource ID"
   value       = aws_db_instance.main.id
 }
 

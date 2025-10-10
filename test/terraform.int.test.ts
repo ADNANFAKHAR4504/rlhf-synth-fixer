@@ -277,10 +277,12 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
       expect(paramGroups.DBParameterGroups?.length).toBe(1);
 
       const params = await rds.describeDBParameters({
-        DBParameterGroupName: outputs.db_parameter_group_name
+        DBParameterGroupName: outputs.db_parameter_group_name,
+        Source: 'user'
       }).promise();
 
       const sslParam = params.Parameters?.find(p => p.ParameterName === 'require_secure_transport');
+      expect(sslParam).toBeDefined();
       expect(sslParam?.ParameterValue).toBe('ON');
     });
   });
@@ -343,12 +345,12 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
     it('CPU utilization alarm exists', async () => {
       if (!outputs.db_instance_id) return;
 
-      const alarms = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: outputs.db_instance_id
-      }).promise();
+      const alarms = await cloudwatch.describeAlarms().promise();
 
       const cpuAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'CPUUtilization' && a.Namespace === 'AWS/RDS'
+        a.MetricName === 'CPUUtilization' &&
+        a.Namespace === 'AWS/RDS' &&
+        a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id)
       );
       expect(cpuAlarm).toBeDefined();
       expect(cpuAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
@@ -357,12 +359,12 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
     it('Memory alarm exists', async () => {
       if (!outputs.db_instance_id) return;
 
-      const alarms = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: outputs.db_instance_id
-      }).promise();
+      const alarms = await cloudwatch.describeAlarms().promise();
 
       const memoryAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'FreeableMemory' && a.Namespace === 'AWS/RDS'
+        a.MetricName === 'FreeableMemory' &&
+        a.Namespace === 'AWS/RDS' &&
+        a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id)
       );
       expect(memoryAlarm).toBeDefined();
       expect(memoryAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
@@ -371,12 +373,12 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
     it('Storage alarm exists', async () => {
       if (!outputs.db_instance_id) return;
 
-      const alarms = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: outputs.db_instance_id
-      }).promise();
+      const alarms = await cloudwatch.describeAlarms().promise();
 
       const storageAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'FreeStorageSpace' && a.Namespace === 'AWS/RDS'
+        a.MetricName === 'FreeStorageSpace' &&
+        a.Namespace === 'AWS/RDS' &&
+        a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id)
       );
       expect(storageAlarm).toBeDefined();
       expect(storageAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
@@ -385,12 +387,12 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
     it('Database connections alarm exists', async () => {
       if (!outputs.db_instance_id) return;
 
-      const alarms = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: outputs.db_instance_id
-      }).promise();
+      const alarms = await cloudwatch.describeAlarms().promise();
 
       const connectionsAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'DatabaseConnections' && a.Namespace === 'AWS/RDS'
+        a.MetricName === 'DatabaseConnections' &&
+        a.Namespace === 'AWS/RDS' &&
+        a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id)
       );
       expect(connectionsAlarm).toBeDefined();
       expect(connectionsAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
