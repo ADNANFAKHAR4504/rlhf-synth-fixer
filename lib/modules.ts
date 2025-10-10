@@ -302,9 +302,8 @@ export class S3Module extends BaseModule {
       );
     }
 
-    // Add bucket policy for ALB access logs if this is the logging bucket
+    // Fixed bucket policy for ALB access logs
     if (isLoggingBucket && accountId) {
-      // Get the ELB service account ID for the region
       const elbAccountId = this.getElbServiceAccountId(
         tags.Region || 'eu-north-1'
       );
@@ -321,19 +320,20 @@ export class S3Module extends BaseModule {
                 AWS: `arn:aws:iam::${elbAccountId}:root`,
               },
               Action: 's3:PutObject',
-              Resource: `${this.bucket.arn}/alb/*`,
+              Resource: `arn:aws:s3:::${bucketName}/alb/*`,
             },
             {
-              Sid: 'ALBAccessLogsPolicyCheck',
+              Sid: 'ALBAccessLogsPolicyAcl',
               Effect: 'Allow',
               Principal: {
                 Service: 'elasticloadbalancing.amazonaws.com',
               },
               Action: 's3:GetBucketAcl',
-              Resource: this.bucket.arn,
+              Resource: `arn:aws:s3:::${bucketName}`,
             },
           ],
         }),
+        dependsOn: [this.bucketPublicAccessBlock], // Ensure proper ordering
       });
     }
   }
@@ -656,7 +656,7 @@ export class DynamoDbModule extends BaseModule {
 // Redshift Module - Fixed node type for eu-north-1
 export class RedshiftModule extends BaseModule {
   public readonly cluster: aws.redshiftCluster.RedshiftCluster;
-  public readonly loggingBucket: aws.s3Bucket.S3Bucket;
+  public readonly subnetGroup: aws.redshiftSubnetGroup.RedshiftSubnetGroup;
 
   constructor(
     scope: Construct,
@@ -664,29 +664,37 @@ export class RedshiftModule extends BaseModule {
     clusterIdentifier: string,
     nodeType: string,
     numberOfNodes: number,
-    availabilityZone: string,
+    subnetIds: string[], // Add subnet IDs parameter
     tags: CommonTags
   ) {
     super(scope, id, tags);
 
-    // Create logging bucket
-    this.loggingBucket = new aws.s3Bucket.S3Bucket(this, `${id}-logs-bucket`, {
-      bucket: `${clusterIdentifier}-audit-logs`,
-      tags: this.tags,
-    });
+    // Create Redshift subnet group
+    this.subnetGroup = new aws.redshiftSubnetGroup.RedshiftSubnetGroup(
+      this,
+      `${id}-subnet-group`,
+      {
+        name: `${clusterIdentifier}-subnet-group`,
+        subnetIds: subnetIds,
+        tags: this.tags,
+      }
+    );
 
-    // Create Redshift cluster with valid node type
+    // Create Redshift cluster with subnet group
     this.cluster = new aws.redshiftCluster.RedshiftCluster(
       this,
       `${id}-cluster`,
       {
         clusterIdentifier,
-        nodeType: 'ra3.xlplus', // Changed from 'dc2.large' to 'ra3.xlplus'
+        nodeType: 'ra3.xlplus',
         numberOfNodes,
-        availabilityZone,
+
+        clusterSubnetGroupName: this.subnetGroup.name, // Use subnet group
 
         masterUsername: 'dbadmin',
         masterPassword: 'ChangeMePlease123!',
+
+        skipFinalSnapshot: true,
 
         tags: this.tags,
       }
@@ -777,6 +785,7 @@ export class ApiGatewayModule extends BaseModule {
   public readonly deployment: aws.apiGatewayDeployment.ApiGatewayDeployment;
   public readonly stage: aws.apiGatewayStage.ApiGatewayStage;
   public readonly logGroup: aws.cloudwatchLogGroup.CloudwatchLogGroup;
+  public readonly apiGatewayAccount: aws.apiGatewayAccount.ApiGatewayAccount;
 
   constructor(
     scope: Construct,
@@ -786,6 +795,48 @@ export class ApiGatewayModule extends BaseModule {
     tags: CommonTags
   ) {
     super(scope, id, tags);
+
+    // Create IAM role for API Gateway CloudWatch logging
+    const cloudwatchRole = new aws.iamRole.IamRole(
+      this,
+      `${id}-cloudwatch-role`,
+      {
+        name: 'api-gateway-cloudwatch-global',
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'apigateway.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: this.tags,
+      }
+    );
+
+    // Attach CloudWatch Logs policy
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      `${id}-cloudwatch-policy`,
+      {
+        role: cloudwatchRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
+      }
+    );
+
+    // Configure API Gateway account-level settings
+    this.apiGatewayAccount = new aws.apiGatewayAccount.ApiGatewayAccount(
+      this,
+      `${id}-account`,
+      {
+        cloudwatchRoleArn: cloudwatchRole.arn,
+      }
+    );
 
     // Create CloudWatch Log Group without KMS
     this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
@@ -886,6 +937,7 @@ export class ApiGatewayModule extends BaseModule {
       xrayTracingEnabled: true,
 
       tags: this.tags,
+      dependsOn: [this.apiGatewayAccount],
     });
 
     // Configure method settings for logging

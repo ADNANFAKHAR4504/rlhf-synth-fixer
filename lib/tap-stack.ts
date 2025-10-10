@@ -177,9 +177,9 @@ export class TapStack extends TerraformStack {
       'api-processor',
       'tap-api-processor',
       'index.handler',
-      'nodejs18.x',
-      applicationBucket.bucket.id,
-      'lambda/api-processor.zip',
+      'nodejs20.x',
+      'test12345-ts',
+      'lambda/lambda-function.zip',
       kmsKey.arn,
       commonTags
     );
@@ -208,9 +208,9 @@ export class TapStack extends TerraformStack {
       this,
       'analytics',
       'tap-analytics-cluster',
-      'ra3.xlplus', // Changed from dc2.large
+      'ra3.xlplus',
       2,
-      availabilityZones[0],
+      subnetIds, // Pass the subnet IDs from VPC
       commonTags
     );
 
