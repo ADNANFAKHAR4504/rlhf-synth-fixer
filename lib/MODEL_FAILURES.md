@@ -5,7 +5,7 @@
 ### 1. API Gateway Method and Integration Response Creation Order
 
 **Model Response (Failed):**
-Created integration responses before method responses existed, causing deployment failure: `"No method response exists for method."`
+Created integration responses before the method responses existed, causing deployment failure: `"No method response exists for method."`
 
 ```typescript
 // modules.ts - MODEL_RESPONSE
