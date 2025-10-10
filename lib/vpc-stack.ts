@@ -4,7 +4,8 @@ import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface VpcStackArgs {
   environmentSuffix: string;
-  vpcCidr: string;
+  vpcCidr?: string;
+  enableFlowLogs?: boolean;
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -16,6 +17,9 @@ export class VpcStack extends pulumi.ComponentResource {
   constructor(name: string, args: VpcStackArgs, opts?: ResourceOptions) {
     super('tap:vpc:VpcStack', name, args, opts);
 
+    const vpcCidr = args.vpcCidr || '10.5.0.0/16';
+    const enableFlowLogs = args.enableFlowLogs !== false;
+
     const availabilityZones = aws.getAvailabilityZones({
       state: 'available',
     });
@@ -24,7 +28,7 @@ export class VpcStack extends pulumi.ComponentResource {
     const vpc = new aws.ec2.Vpc(
       `${name}-vpc-${args.environmentSuffix}`,
       {
-        cidrBlock: args.vpcCidr,
+        cidrBlock: vpcCidr,
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
@@ -186,60 +190,62 @@ export class VpcStack extends pulumi.ComponentResource {
       );
     });
 
-    // Enable VPC Flow Logs
-    const flowLogRole = new aws.iam.Role(
-      `${name}-flow-log-role-${args.environmentSuffix}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
+    // Enable VPC Flow Logs (conditionally)
+    if (enableFlowLogs) {
+      const flowLogRole = new aws.iam.Role(
+        `${name}-flow-log-role-${args.environmentSuffix}`,
+        {
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'vpc-flow-logs.amazonaws.com',
+                },
               },
-            },
-          ],
-        }),
-        tags: args.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `${name}-flow-log-policy-${args.environmentSuffix}`,
-      {
-        role: flowLogRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess',
-      },
-      { parent: this }
-    );
-
-    const flowLogGroup = new aws.cloudwatch.LogGroup(
-      `${name}-flow-logs-${args.environmentSuffix}`,
-      {
-        retentionInDays: 7,
-        tags: args.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.ec2.FlowLog(
-      `${name}-flow-log-${args.environmentSuffix}`,
-      {
-        iamRoleArn: flowLogRole.arn,
-        logDestinationType: 'cloud-watch-logs',
-        logDestination: flowLogGroup.arn,
-        trafficType: 'ALL',
-        vpcId: vpc.id,
-        tags: {
-          Name: `${name}-flow-log-${args.environmentSuffix}`,
-          ...args.tags,
+            ],
+          }),
+          tags: args.tags,
         },
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
+
+      new aws.iam.RolePolicyAttachment(
+        `${name}-flow-log-policy-${args.environmentSuffix}`,
+        {
+          role: flowLogRole.name,
+          policyArn: 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess',
+        },
+        { parent: this }
+      );
+
+      const flowLogGroup = new aws.cloudwatch.LogGroup(
+        `${name}-flow-logs-${args.environmentSuffix}`,
+        {
+          retentionInDays: 7,
+          tags: args.tags,
+        },
+        { parent: this }
+      );
+
+      new aws.ec2.FlowLog(
+        `${name}-flow-log-${args.environmentSuffix}`,
+        {
+          iamRoleArn: flowLogRole.arn,
+          logDestinationType: 'cloud-watch-logs',
+          logDestination: flowLogGroup.arn,
+          trafficType: 'ALL',
+          vpcId: vpc.id,
+          tags: {
+            Name: `${name}-flow-log-${args.environmentSuffix}`,
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+    }
 
     this.vpcId = vpc.id;
     this.publicSubnetIds = pulumi.output(publicSubnets.map(s => s.id));

@@ -130,5 +130,12 @@ describe('TapStack Unit Tests', () => {
       expect(stack.albDns).toBeDefined();
       expect(stack.bucketName).toBeDefined();
     });
+
+    it('should use default environmentSuffix when not provided', () => {
+      const stack = new TapStack('test-tap-default', {});
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+    });
   });
 });

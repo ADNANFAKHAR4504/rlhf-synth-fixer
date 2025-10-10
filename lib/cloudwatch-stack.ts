@@ -2,6 +2,28 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
 
+/**
+ * Extract target group name from ARN
+ * @param arn - Target group ARN
+ * @returns Target group name or empty string
+ */
+export function extractTargetGroupName(arn: string): string {
+  if (!arn) return '';
+  const parts = arn.split(':').pop();
+  return parts ? parts.split('/')[1] || '' : '';
+}
+
+/**
+ * Extract load balancer name from ARN
+ * @param arn - Load balancer ARN
+ * @returns Load balancer name or empty string
+ */
+export function extractLoadBalancerName(arn: string): string {
+  if (!arn) return '';
+  const parts = arn.split(':').pop();
+  return parts ? parts.split('/').slice(1, 4).join('/') : '';
+}
+
 export interface CloudWatchStackArgs {
   environmentSuffix: string;
   autoScalingGroupName: pulumi.Output<string>;
@@ -65,16 +87,8 @@ export class CloudWatchStack extends pulumi.ComponentResource {
         alarmDescription: 'Alert when targets become unhealthy',
         alarmActions: [alarmTopic.arn],
         dimensions: {
-          TargetGroup: args.targetGroupArn.apply(arn => {
-            if (!arn) return '';
-            const parts = arn.split(':').pop();
-            return parts ? parts.split('/')[1] || '' : '';
-          }),
-          LoadBalancer: args.albArn.apply(arn => {
-            if (!arn) return '';
-            const parts = arn.split(':').pop();
-            return parts ? parts.split('/').slice(1, 4).join('/') : '';
-          }),
+          TargetGroup: args.targetGroupArn.apply(extractTargetGroupName),
+          LoadBalancer: args.albArn.apply(extractLoadBalancerName),
         },
         treatMissingData: 'notBreaching',
         tags: args.tags,
@@ -97,11 +111,7 @@ export class CloudWatchStack extends pulumi.ComponentResource {
         alarmDescription: 'Alert on high request count',
         alarmActions: [alarmTopic.arn],
         dimensions: {
-          LoadBalancer: args.albArn.apply(arn => {
-            if (!arn) return '';
-            const parts = arn.split(':').pop();
-            return parts ? parts.split('/').slice(1, 4).join('/') : '';
-          }),
+          LoadBalancer: args.albArn.apply(extractLoadBalancerName),
         },
         treatMissingData: 'notBreaching',
         tags: args.tags,
@@ -124,11 +134,7 @@ export class CloudWatchStack extends pulumi.ComponentResource {
         alarmDescription: 'Alert on high response time',
         alarmActions: [alarmTopic.arn],
         dimensions: {
-          LoadBalancer: args.albArn.apply(arn => {
-            if (!arn) return '';
-            const parts = arn.split(':').pop();
-            return parts ? parts.split('/').slice(1, 4).join('/') : '';
-          }),
+          LoadBalancer: args.albArn.apply(extractLoadBalancerName),
         },
         treatMissingData: 'notBreaching',
         tags: args.tags,
