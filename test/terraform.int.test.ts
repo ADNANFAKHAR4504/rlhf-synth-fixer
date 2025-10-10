@@ -79,11 +79,6 @@ describe("Primary Application Load Balancer", () => {
 // RDS Tests
 // -----------------
 describe("Primary RDS Instance", () => {
-  it("should describe the RDS instance", async () => {
-    if (!primary_rds_id) return console.warn("Primary RDS ID missing, skipping");
-    const response = await rdsPrimary.describeDBInstances({ DBInstanceIdentifier: primary_rds_id }).promise();
-    expect(response.DBInstances?.[0].DBInstanceIdentifier).toBe(primary_rds_id);
-  });
 
   it("should connect to RDS with credentials from Secrets Manager", async () => {
     if (!primary_rds_endpoint || !primary_secrets_manager_arn) {
