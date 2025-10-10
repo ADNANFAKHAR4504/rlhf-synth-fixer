@@ -739,12 +739,13 @@ jobs:
             echo "No changes to commit - no folders found to archive"
           else
             # Extract metadata for commit message
-            METADATA_PLATFORM=$(jq -r '.platform' metadata.json)
-            METADATA_PO_ID=$(jq -r '.po_id' metadata.json)
-            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' metadata.json)
-            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' metadata.json)
+            METADATA_FILE="$ARCHIVE_DIR/metadata.json"
+            METADATA_PLATFORM=$(jq -r '.platform' "$METADATA_FILE")
+            METADATA_PO_ID=$(jq -r '.po_id' "$METADATA_FILE")
+            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' "$METADATA_FILE")
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' "$METADATA_FILE")
 
-            METADATA_AUTHOR=$(jq -r '.author' metadata.json)
+            METADATA_AUTHOR=$(jq -r '.author' "$METADATA_FILE")
 
             # Truncate subject_labels to 100 characters if needed
             if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
@@ -892,6 +893,12 @@ jobs:
       cancel-in-progress: true
 
     steps:
+      - name: Validate PAT usage context
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "ERROR: PAT should only be used for semantic-release on main branch"
+            exit 1
+          fi
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -907,4 +914,4 @@ jobs:
       - name: Run semantic-release
         run: npm run release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_PAT }}
