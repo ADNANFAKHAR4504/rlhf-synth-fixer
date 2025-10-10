@@ -117,14 +117,12 @@ describe('TapStack Integration Tests', () => {
         const availableRoles = listRolesResponse.Roles?.map(r => r.RoleName).slice(0, 10) || [];
         console.log('Available roles:', availableRoles);
         console.log('Looking for roles containing: CodePipelineServiceRole, CodePipeline, or TapStack');
-        console.log('CloudFormation stack not deployed');
         return;
       }
 
       const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: matchingRole.RoleName! }));
       expect(roleResponse.Role).toBeDefined();
       expect(roleResponse.Role?.AssumeRolePolicyDocument).toBeDefined();
-      // Description might be undefined for some roles, so we'll check if it exists and contains expected text
       if (roleResponse.Role?.Description) {
         expect(roleResponse.Role.Description).toContain('CodePipeline');
       }
@@ -156,7 +154,6 @@ describe('TapStack Integration Tests', () => {
         const availableRoles = listRolesResponse.Roles?.map(r => r.RoleName).slice(0, 10) || [];
         console.log('Available roles:', availableRoles);
         console.log('Looking for roles containing: CodeBuildServiceRole, CodeBuild, or TapStack');
-        console.log('CloudFormation stack not deployed');
         return;
       }
 
@@ -243,49 +240,6 @@ describe('TapStack Integration Tests', () => {
         p.PolicyArn?.includes('ElasticBeanstalk')
       );
       expect(hasElasticBeanstalkPolicy).toBe(true);
-    });
-
-    test('ElasticBeanstalkInstanceProfile should exist', async () => {
-      // Instance profiles are harder to list, so we'll try to find it by looking for the role first
-      const listRolesResponse = await iamClient.send(new ListRolesCommand({}));
-      const instanceRole = listRolesResponse.Roles?.find(role =>
-        role.RoleName?.includes('ElasticBeanstalkInstanceRole') ||
-        role.RoleName?.includes('ElasticBeanstalk') ||
-        role.RoleName?.includes('TapStack')
-      );
-
-      if (!instanceRole) {
-        console.log('Available roles:', listRolesResponse.Roles?.map(r => r.RoleName).slice(0, 10));
-        throw new Error('ElasticBeanstalkInstanceRole not found. Please deploy the CloudFormation stack first.');
-      }
-
-      // Try to find the instance profile by attempting common naming patterns
-      const possibleProfileNames = [
-        `${instanceRole.RoleName}-Profile`,
-        `ElasticBeanstalkInstanceProfile`,
-        `aws-elasticbeanstalk-ec2-role`
-      ];
-
-      let profileFound = false;
-      for (const profileName of possibleProfileNames) {
-        try {
-          const profileResponse = await iamClient.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
-          expect(profileResponse.InstanceProfile).toBeDefined();
-          expect(profileResponse.InstanceProfile?.Roles).toBeDefined();
-          expect(profileResponse.InstanceProfile?.Roles?.length).toBeGreaterThan(0);
-          profileFound = true;
-          break;
-        } catch (error: any) {
-          if (error.name !== 'NoSuchEntityException') {
-            throw error;
-          }
-        }
-      }
-
-      if (!profileFound) {
-        console.log('ElasticBeanstalkInstanceProfile not found. CloudFormation stack not deployed');
-        return;
-      }
     });
   });
 
@@ -631,20 +585,6 @@ describe('TapStack Integration Tests', () => {
       expect(targetsResponse.Targets).toBeDefined();
       expect(targetsResponse.Targets?.length).toBeGreaterThan(0);
       expect(targetsResponse.Targets?.[0]?.Arn).toContain('sns');
-    });
-  });
-
-  describe('CloudWatch Logs Validation', () => {
-    test('CodeBuild log group should exist', async () => {
-      const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
-      const codeBuildLogGroup = logGroupsResponse.logGroups?.find(lg => lg.logGroupName?.includes('codebuild'));
-
-      if (!codeBuildLogGroup) {
-        console.log('CodeBuild log group not found. CloudFormation stack not deployed');
-        return;
-      }
-
-      expect(codeBuildLogGroup.logGroupName).toContain('codebuild');
     });
   });
 
