@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348979",
+  "team": "6",
+  "startedAt": "2025-10-09T17:05:52.490Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, IAM, EC2, CloudWatch, SNS"
+}
