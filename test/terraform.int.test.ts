@@ -8,7 +8,22 @@ let outputs: Record<string, any> = {};
 let outputsExist = false;
 
 try {
-  outputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+  const rawOutputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+
+  // Parse stringified array outputs (Terraform may output arrays as JSON strings)
+  outputs = Object.fromEntries(
+    Object.entries(rawOutputs).map(([key, value]) => {
+      if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
+        try {
+          return [key, JSON.parse(value)];
+        } catch {
+          return [key, value];
+        }
+      }
+      return [key, value];
+    })
+  );
+
   outputsExist = true;
 } catch (error) {
   console.log('Note: flat-outputs.json not found. Integration tests will be skipped until infrastructure is deployed.');
