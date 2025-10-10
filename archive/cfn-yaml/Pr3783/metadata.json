@@ -21,5 +21,11 @@
     "CodeBuild",
     "CodePipeline",
     "CloudWatch Events"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
