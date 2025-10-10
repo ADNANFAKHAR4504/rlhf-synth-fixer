@@ -6,7 +6,7 @@ import { TapStack } from '../lib/tap-stack';
 jest.mock('../lib/ddb-stack');
 jest.mock('../lib/rest-api-stack');
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environment = (process.env.ENVIRONMENT_SUFFIX || 'dev') as 'dev' | 'staging' | 'prod';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -18,7 +18,10 @@ describe('TapStack', () => {
     jest.clearAllMocks();
 
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, 'TestTapStack', {
+      environment: environment,
+      allowedSshIpRange: '10.0.0.0/8',
+    });
     template = Template.fromStack(stack);
   });
 
