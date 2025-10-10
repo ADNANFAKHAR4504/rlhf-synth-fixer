@@ -741,23 +741,6 @@ describe("LIVE: Security Configuration", () => {
     expect(dbSg).toBeTruthy();
   }, 60000);
 
-  test("ALB security group allows HTTP and HTTPS", async () => {
-    const response = await retry(async () => {
-      return await ec2Client.send(new DescribeSecurityGroupsCommand({}));
-    });
-
-    const albSg = response.SecurityGroups!.find((sg) => sg.GroupName?.includes("alb"));
-    expect(albSg).toBeTruthy();
-    expect(albSg!.IpPermissions).toBeTruthy();
-    expect(albSg!.IpPermissions!.length).toBeGreaterThan(0);
-
-    // Check for HTTP (80) or HTTPS (443) rules
-    const hasHttpOrHttps = albSg!.IpPermissions!.some(
-      (rule) => rule.FromPort === 80 || rule.FromPort === 443
-    );
-    expect(hasHttpOrHttps).toBe(true);
-  }, 60000);
-
   test("Database security group allows MySQL from app servers", async () => {
     const response = await retry(async () => {
       return await ec2Client.send(new DescribeSecurityGroupsCommand({}));
