@@ -747,6 +747,10 @@ public class MainIntegrationTest {
 
         List<MetricAlarm> alarms = response.metricAlarms();
 
+        // Debug: Print all alarm names
+        System.out.println("Found " + alarms.size() + " alarms:");
+        alarms.forEach(alarm -> System.out.println("  - " + alarm.alarmName()));
+
         // Verify CPU alarm exists
         boolean hasCpuAlarm = alarms.stream()
             .anyMatch(alarm -> "high-cpu-utilization".equals(alarm.alarmName()));
@@ -772,6 +776,10 @@ public class MainIntegrationTest {
                 .maxRecords(100)
                 .build()
         );
+
+        // Debug: Print all alarm names
+        System.out.println("Looking for CPU alarm among " + response.metricAlarms().size() + " alarms:");
+        response.metricAlarms().forEach(alarm -> System.out.println("  - " + alarm.alarmName()));
 
         Optional<MetricAlarm> cpuAlarm = response.metricAlarms().stream()
             .filter(alarm -> "high-cpu-utilization".equals(alarm.alarmName()))
