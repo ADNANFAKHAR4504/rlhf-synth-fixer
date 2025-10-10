@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "(Lambda, API Gateway, DynamoDB, CloudWatch Log Group, IAM Roles)"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "CloudWatch Logs",
+    "IAM",
+    "SSM Parameter Store"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
