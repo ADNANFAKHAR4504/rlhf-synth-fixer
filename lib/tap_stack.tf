@@ -345,7 +345,7 @@ resource "aws_route_table_association" "primary_private" {
 # Security Group for ALB in Primary Region
 resource "aws_security_group" "primary_alb" {
   provider    = aws.us_east_1
-  name_prefix = "sg-alb-primary-"
+  name_prefix = "alb-primary-"
   description = "Security group for ALB in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -373,7 +373,7 @@ resource "aws_security_group" "primary_alb" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-alb-primary-${random_string.suffix.result}"
+      Name = "alb-primary-${random_string.suffix.result}"
     }
   )
 }
@@ -381,7 +381,7 @@ resource "aws_security_group" "primary_alb" {
 # Security Group for EC2 Instances in Primary Region
 resource "aws_security_group" "primary_ec2" {
   provider    = aws.us_east_1
-  name_prefix = "sg-ec2-primary-"
+  name_prefix = "ec2-primary-"
   description = "Security group for EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -402,7 +402,7 @@ resource "aws_security_group" "primary_ec2" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-ec2-primary-${random_string.suffix.result}"
+      Name = "ec2-primary-${random_string.suffix.result}"
     }
   )
 }
@@ -410,7 +410,7 @@ resource "aws_security_group" "primary_ec2" {
 # Security Group for RDS in Primary Region
 resource "aws_security_group" "primary_rds" {
   provider    = aws.us_east_1
-  name_prefix = "sg-rds-primary-"
+  name_prefix = "rds-primary-"
   description = "Security group for RDS in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -431,7 +431,7 @@ resource "aws_security_group" "primary_rds" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-rds-primary-${random_string.suffix.result}"
+      Name = "rds-primary-${random_string.suffix.result}"
     }
   )
 }
@@ -859,7 +859,7 @@ resource "aws_route_table_association" "secondary_private" {
 # Security Group for ALB in Secondary Region
 resource "aws_security_group" "secondary_alb" {
   provider    = aws.us_west_2
-  name_prefix = "sg-alb-secondary-"
+  name_prefix = "alb-secondary-"
   description = "Security group for ALB in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -887,7 +887,7 @@ resource "aws_security_group" "secondary_alb" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-alb-secondary-${random_string.suffix.result}"
+      Name = "alb-secondary-${random_string.suffix.result}"
     }
   )
 }
@@ -895,7 +895,7 @@ resource "aws_security_group" "secondary_alb" {
 # Security Group for EC2 Instances in Secondary Region
 resource "aws_security_group" "secondary_ec2" {
   provider    = aws.us_west_2
-  name_prefix = "sg-ec2-secondary-"
+  name_prefix = "ec2-secondary-"
   description = "Security group for EC2 instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -916,7 +916,7 @@ resource "aws_security_group" "secondary_ec2" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-ec2-secondary-${random_string.suffix.result}"
+      Name = "ec2-secondary-${random_string.suffix.result}"
     }
   )
 }
@@ -924,7 +924,7 @@ resource "aws_security_group" "secondary_ec2" {
 # Security Group for RDS in Secondary Region
 resource "aws_security_group" "secondary_rds" {
   provider    = aws.us_west_2
-  name_prefix = "sg-rds-secondary-"
+  name_prefix = "rds-secondary-"
   description = "Security group for RDS in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -945,7 +945,7 @@ resource "aws_security_group" "secondary_rds" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-rds-secondary-${random_string.suffix.result}"
+      Name = "rds-secondary-${random_string.suffix.result}"
     }
   )
 }
@@ -1373,7 +1373,7 @@ resource "aws_route_table_association" "third_private" {
 # Security Group for ALB in Third Region
 resource "aws_security_group" "third_alb" {
   provider    = aws.eu_central_1
-  name_prefix = "sg-alb-third-"
+  name_prefix = "alb-third-"
   description = "Security group for ALB in third region"
   vpc_id      = aws_vpc.third.id
 
@@ -1401,7 +1401,7 @@ resource "aws_security_group" "third_alb" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-alb-third-${random_string.suffix.result}"
+      Name = "alb-third-${random_string.suffix.result}"
     }
   )
 }
@@ -1409,7 +1409,7 @@ resource "aws_security_group" "third_alb" {
 # Security Group for EC2 Instances in Third Region
 resource "aws_security_group" "third_ec2" {
   provider    = aws.eu_central_1
-  name_prefix = "sg-ec2-third-"
+  name_prefix = "ec2-third-"
   description = "Security group for EC2 instances in third region"
   vpc_id      = aws_vpc.third.id
 
@@ -1430,7 +1430,7 @@ resource "aws_security_group" "third_ec2" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-ec2-third-${random_string.suffix.result}"
+      Name = "ec2-third-${random_string.suffix.result}"
     }
   )
 }
@@ -1438,7 +1438,7 @@ resource "aws_security_group" "third_ec2" {
 # Security Group for RDS in Third Region
 resource "aws_security_group" "third_rds" {
   provider    = aws.eu_central_1
-  name_prefix = "sg-rds-third-"
+  name_prefix = "rds-third-"
   description = "Security group for RDS in third region"
   vpc_id      = aws_vpc.third.id
 
@@ -1459,7 +1459,7 @@ resource "aws_security_group" "third_rds" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-rds-third-${random_string.suffix.result}"
+      Name = "rds-third-${random_string.suffix.result}"
     }
   )
 }
