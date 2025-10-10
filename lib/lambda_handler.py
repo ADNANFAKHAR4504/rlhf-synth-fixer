@@ -94,11 +94,12 @@ class TrafficDataProcessor:
             if field not in data:
                 raise ValueError(f"Missing required field: {field}")
         
-        # Generate unique ID for deduplication
-        unique_id = self._generate_unique_id(data)
-        
-        # Process timestamp
+        # Process timestamp first (needed for unique ID)
         timestamp = data.get('timestamp', datetime.utcnow().isoformat())
+        data_with_timestamp = {**data, 'timestamp': timestamp}
+        
+        # Generate unique ID for deduplication
+        unique_id = self._generate_unique_id(data_with_timestamp)
         
         # Calculate additional metrics
         traffic_flow_score = self._calculate_traffic_flow_score(

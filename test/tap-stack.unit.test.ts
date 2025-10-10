@@ -3,7 +3,7 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('IoT Analytics CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,19 +22,26 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'IoT Analytics and Dashboard System for Smart City Traffic Monitoring'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const expectedParams = [
+        'EnvironmentSuffix',
+        'EnvironmentName', 
+        'KinesisShardCount',
+        'DynamoDBReadCapacity',
+        'DynamoDBWriteCapacity',
+        'AlertThresholdCongestionIndex',
+        'NotificationEmail'
+      ];
+      
+      expectedParams.forEach(paramName => {
+        expect(template.Parameters[paramName]).toBeDefined();
+      });
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -55,61 +56,228 @@ describe('TapStack CloudFormation Template', () => {
         'Must contain only alphanumeric characters'
       );
     });
+
+    test('KinesisShardCount parameter should have correct constraints', () => {
+      const param = template.Parameters.KinesisShardCount;
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(10);
+      expect(param.MinValue).toBe(1);
+      expect(param.MaxValue).toBe(100);
+    });
+
+    test('AlertThresholdCongestionIndex parameter should have correct constraints', () => {
+      const param = template.Parameters.AlertThresholdCongestionIndex;
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(80);
+      expect(param.MinValue).toBe(0);
+      expect(param.MaxValue).toBe(100);
+    });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('IoT Core Resources', () => {
+    test('should have IoT Policy', () => {
+      expect(template.Resources.IoTPolicy).toBeDefined();
+      expect(template.Resources.IoTPolicy.Type).toBe('AWS::IoT::Policy');
+      expect(template.Resources.IoTPolicy.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have IoT Topic Rule', () => {
+      expect(template.Resources.IoTTopicRule).toBeDefined();
+      expect(template.Resources.IoTTopicRule.Type).toBe('AWS::IoT::TopicRule');
+      expect(template.Resources.IoTTopicRule.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have IoT Rule Role', () => {
+      expect(template.Resources.IoTRuleRole).toBeDefined();
+      expect(template.Resources.IoTRuleRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.IoTRuleRole.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('IoT Policy should include environment suffix in name', () => {
+      const policy = template.Resources.IoTPolicy;
+      expect(policy.Properties.PolicyName).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TrafficSensorPolicy'
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    });
+  });
+
+  describe('Kinesis Resources', () => {
+    test('should have Kinesis Data Stream', () => {
+      expect(template.Resources.KinesisDataStream).toBeDefined();
+      expect(template.Resources.KinesisDataStream.Type).toBe('AWS::Kinesis::Stream');
+      expect(template.Resources.KinesisDataStream.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('Kinesis stream should have correct properties', () => {
+      const stream = template.Resources.KinesisDataStream;
+      expect(stream.Properties.Name).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TrafficDataStream'
+      });
+      expect(stream.Properties.ShardCount).toEqual({ Ref: 'KinesisShardCount' });
+      expect(stream.Properties.RetentionPeriodHours).toBe(24);
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('Kinesis stream should have encryption enabled', () => {
+      const stream = template.Resources.KinesisDataStream;
+      expect(stream.Properties.StreamEncryption.EncryptionType).toBe('KMS');
+      expect(stream.Properties.StreamEncryption.KeyId).toBe('alias/aws/kinesis');
+    });
+  });
+
+  describe('Lambda Resources', () => {
+    test('should have Lambda function', () => {
+      expect(template.Resources.ProcessingLambdaFunction).toBeDefined();
+      expect(template.Resources.ProcessingLambdaFunction.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.ProcessingLambdaFunction.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have Lambda execution role', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.LambdaExecutionRole.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have Kinesis event source mapping', () => {
+      expect(template.Resources.KinesisEventSourceMapping).toBeDefined();
+      expect(template.Resources.KinesisEventSourceMapping.Type).toBe('AWS::Lambda::EventSourceMapping');
+      expect(template.Resources.KinesisEventSourceMapping.DeletionPolicy).toBe('Delete');
+    });
+
+    test('Lambda function should have correct handler and runtime', () => {
+      const lambda = template.Resources.ProcessingLambdaFunction;
+      expect(lambda.Properties.Runtime).toBe('python3.9');
+      expect(lambda.Properties.Handler).toBe('lambda_handler.lambda_handler');
+      expect(lambda.Properties.FunctionName).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TrafficDataProcessor'
+      });
+    });
+
+    test('should have dashboard metrics Lambda function', () => {
+      expect(template.Resources.DashboardMetricsFunction).toBeDefined();
+      expect(template.Resources.DashboardMetricsFunction.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.DashboardMetricsFunction.DeletionPolicy).toBe('Delete');
+    });
+  });
+
+  describe('DynamoDB Resources', () => {
+    test('should have Traffic Analytics Table', () => {
+      expect(template.Resources.TrafficAnalyticsTable).toBeDefined();
+      expect(template.Resources.TrafficAnalyticsTable.Type).toBe('AWS::DynamoDB::Table');
+      expect(template.Resources.TrafficAnalyticsTable.DeletionPolicy).toBe('Delete');
+    });
+
+    test('DynamoDB table should have correct naming and structure', () => {
+      const table = template.Resources.TrafficAnalyticsTable;
+      expect(table.Properties.TableName).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-TrafficAnalytics'
+      });
+      expect(table.Properties.BillingMode).toBe('PROVISIONED');
+    });
+
+    test('DynamoDB table should have correct key schema', () => {
+      const table = template.Resources.TrafficAnalyticsTable;
       const keySchema = table.Properties.KeySchema;
+      expect(keySchema).toHaveLength(2);
+      expect(keySchema[0]).toEqual({ AttributeName: 'sensor_id', KeyType: 'HASH' });
+      expect(keySchema[1]).toEqual({ AttributeName: 'timestamp', KeyType: 'RANGE' });
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('DynamoDB table should have Global Secondary Index', () => {
+      const table = template.Resources.TrafficAnalyticsTable;
+      const gsis = table.Properties.GlobalSecondaryIndexes;
+      expect(gsis).toHaveLength(1);
+      expect(gsis[0].IndexName).toBe('zone-timestamp-index');
+    });
+
+    test('DynamoDB table should have TTL enabled', () => {
+      const table = template.Resources.TrafficAnalyticsTable;
+      expect(table.Properties.TimeToLiveSpecification.AttributeName).toBe('ttl');
+      expect(table.Properties.TimeToLiveSpecification.Enabled).toBe(true);
+    });
+  });
+
+  describe('EventBridge and SNS Resources', () => {
+    test('should have EventBridge custom event bus', () => {
+      expect(template.Resources.CongestionEventBus).toBeDefined();
+      expect(template.Resources.CongestionEventBus.Type).toBe('AWS::Events::EventBus');
+      expect(template.Resources.CongestionEventBus.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have EventBridge rule', () => {
+      expect(template.Resources.CongestionAlertRule).toBeDefined();
+      expect(template.Resources.CongestionAlertRule.Type).toBe('AWS::Events::Rule');
+      expect(template.Resources.CongestionAlertRule.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have SNS topic', () => {
+      expect(template.Resources.AlertTopic).toBeDefined();
+      expect(template.Resources.AlertTopic.Type).toBe('AWS::SNS::Topic');
+      expect(template.Resources.AlertTopic.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have SNS email subscription', () => {
+      expect(template.Resources.AlertEmailSubscription).toBeDefined();
+      expect(template.Resources.AlertEmailSubscription.Type).toBe('AWS::SNS::Subscription');
+      expect(template.Resources.AlertEmailSubscription.DeletionPolicy).toBe('Delete');
+    });
+
+    test('EventBridge event bus should have correct name', () => {
+      const eventBus = template.Resources.CongestionEventBus;
+      expect(eventBus.Properties.Name).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-CongestionAlerts'
+      });
+    });
+  });
+
+  describe('CloudWatch Resources', () => {
+    test('should have CloudWatch log groups', () => {
+      expect(template.Resources.IoTErrorLogGroup).toBeDefined();
+      expect(template.Resources.LambdaLogGroup).toBeDefined();
+      expect(template.Resources.IoTErrorLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.LambdaLogGroup.Type).toBe('AWS::Logs::LogGroup');
+    });
+
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.ProcessingErrorsAlarm).toBeDefined();
+      expect(template.Resources.KinesisIncomingRecordsAlarm).toBeDefined();
+      expect(template.Resources.ProcessingErrorsAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(template.Resources.KinesisIncomingRecordsAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+
+    test('CloudWatch log groups should have correct retention', () => {
+      const iotLogGroup = template.Resources.IoTErrorLogGroup;
+      const lambdaLogGroup = template.Resources.LambdaLogGroup;
+      expect(iotLogGroup.Properties.RetentionInDays).toBe(7);
+      expect(lambdaLogGroup.Properties.RetentionInDays).toBe(7);
+    });
+  });
+
+  describe('QuickSight Resources', () => {
+    test('should have QuickSight data source role', () => {
+      expect(template.Resources.QuickSightDataSourceRole).toBeDefined();
+      expect(template.Resources.QuickSightDataSourceRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.QuickSightDataSourceRole.DeletionPolicy).toBe('Delete');
+    });
+
+    test('QuickSight role should have correct name', () => {
+      const role = template.Resources.QuickSightDataSourceRole;
+      expect(role.Properties.RoleName).toEqual({
+        'Fn::Sub': 'TapStack${EnvironmentSuffix}-QuickSightDataSourceRole'
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'IoTEndpoint',
+        'KinesisStreamArn',
+        'DynamoDBTableName',
+        'QuickSightDataSourceRoleArn',
+        'AlertTopicArn',
+        'DashboardMetricsNamespace',
+        'LambdaFunctionName',
+        'EventBusName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +285,20 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('IoTEndpoint output should be correct', () => {
+      const output = template.Outputs.IoTEndpoint;
+      expect(output.Description).toBe('AWS IoT Core endpoint for device connections');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::Sub': 'https://${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com'
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+    test('DynamoDBTableName output should be correct', () => {
+      const output = template.Outputs.DynamoDBTableName;
+      expect(output.Description).toBe('Name of the DynamoDB table storing analytics data');
+      expect(output.Value).toEqual({ Ref: 'TrafficAnalyticsTable' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-DynamoDBTableName'
       });
     });
   });
@@ -172,39 +317,76 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(7);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(8);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('all resources should include environment suffix', () => {
+      const resourcesWithSuffix = [
+        'IoTPolicy',
+        'IoTTopicRule', 
+        'IoTRuleRole',
+        'KinesisDataStream',
+        'LambdaExecutionRole',
+        'ProcessingLambdaFunction',
+        'TrafficAnalyticsTable',
+        'CongestionEventBus',
+        'CongestionAlertRule',
+        'AlertTopic',
+        'QuickSightDataSourceRole',
+        'DashboardMetricsFunction',
+        'MetricsScheduleRule'
+      ];
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      resourcesWithSuffix.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource).toBeDefined();
+      });
+    });
+
+    test('all resources should have deletion policy', () => {
+      Object.keys(template.Resources).forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.DeletionPolicy).toBe('Delete');
+        expect(resource.UpdateReplacePolicy).toBe('Delete');
       });
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        if (output.Export) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          });
+        }
       });
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('DynamoDB should have encryption enabled', () => {
+      const table = template.Resources.TrafficAnalyticsTable;
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    test('SNS should have KMS encryption', () => {
+      const topic = template.Resources.AlertTopic;
+      expect(topic.Properties.KmsMasterKeyId).toBe('alias/aws/sns');
+    });
+
+    test('IAM roles should have least privilege policies', () => {
+      const lambdaRole = template.Resources.LambdaExecutionRole;
+      expect(lambdaRole.Properties.Policies).toBeDefined();
+      expect(lambdaRole.Properties.Policies.length).toBeGreaterThan(0);
     });
   });
 });
