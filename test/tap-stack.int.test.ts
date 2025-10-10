@@ -489,7 +489,7 @@ describe('TapStack Production Integration Tests', () => {
       expect(albs.LoadBalancers?.[0]?.State?.Code).toBe('active');
       
       // Validate target group exists and is configured
-      const tgs = await elbv2.send(new DescribeTargetGroupsCommand({ Names: [`${stackName}-SecureEnvTargetGroup`] }));
+      const tgs = await elbv2.send(new DescribeTargetGroupsCommand({ Names: [`${stackName}-TG`] }));
       expect(tgs.TargetGroups).toHaveLength(1);
       expect(tgs.TargetGroups?.[0]?.TargetType).toBe('instance');
       
