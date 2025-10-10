@@ -41,7 +41,7 @@ describe('TapStack CloudFormation Template', () => {
       const pubAlarm = template.Resources.PublicEC2CPUAlarm;
       const pvtAlarm = template.Resources.PrivateEC2CPUAlarm;
 
-      [pubAlarm, pvtAlarm].forEach(a => {
+      [pubAlarm, pvtAlarm].forEach((a: any) => {
         expect(a).toBeDefined();
         expect(a.Type).toBe('AWS::CloudWatch::Alarm');
         const p = a.Properties;
@@ -212,7 +212,7 @@ describe('TapStack CloudFormation Template', () => {
       const pvt = template.Resources.PrivateEC2Instance;
       const profile = template.Resources.EC2InstanceProfile;
 
-      [pub, pvt].forEach(i => {
+      [pub, pvt].forEach((i: any) => {
         expect(i).toBeDefined();
         const p = i.Properties;
         expect(p.ImageId).toEqual({ Ref: 'LatestAmiId' });
@@ -289,7 +289,7 @@ describe('TapStack CloudFormation Template', () => {
         'BackupS3Bucket'
       ];
 
-      mustHaveTags.forEach((id) => {
+      mustHaveTags.forEach((id: string) => {
         const res = template.Resources[id];
         expect(res).toBeDefined();
         const tags = res.Properties && res.Properties.Tags ? res.Properties.Tags : [];
@@ -383,11 +383,29 @@ describe('TapStack CloudFormation Template', () => {
       expect(nameTag.Value).toEqual({ 'Fn::Sub': '${EnvironmentName}-alb' });
     });
 
+    // UPDATED TEST
     test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
+      // Map each OutputKey to the exact Export suffix used in the template
+      const expectedSuffixByOutputKey: Record<string, string> = {
+        VPCId: 'VPC-ID',
+        PublicSubnetAId: 'PublicSubnetA-ID',
+        PublicSubnetBId: 'PublicSubnetB-ID',
+        PrivateSubnetAId: 'PrivateSubnetA-ID',
+        ALBDNSName: 'ALB-DNS',
+        PublicEC2InstanceId: 'PublicEC2-ID',
+        PrivateEC2InstanceId: 'PrivateEC2-ID',
+        DatabaseEndpoint: 'DB-Endpoint',
+        BackupS3BucketName: 'BackupBucket',
+        VPNGatewayId: 'VPNGateway-ID',
+        DBSecretArn: 'DBSecretArn'
+      };
+
+      Object.keys(template.Outputs).forEach((outputKey: string) => {
         const output = template.Outputs[outputKey];
+        const expectedSuffix = expectedSuffixByOutputKey[outputKey];
+        expect(expectedSuffix).toBeDefined();
         expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          'Fn::Sub': `\${AWS::StackName}-${expectedSuffix}`,
         });
       });
     });

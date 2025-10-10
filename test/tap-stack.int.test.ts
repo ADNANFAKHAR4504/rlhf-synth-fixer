@@ -1,22 +1,26 @@
+// test/tap-stack.int.test.ts
+
 import dns from 'dns';
 import fs from 'fs';
 import http from 'http';
 
+type FlatOutputs = Record<string, string>;
+
 const dnsPromises = dns.promises;
 
 // Load flat outputs produced by deploy (same pattern as your snippet)
-let outputs = {};
+let outputs: FlatOutputs = {};
 try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')) as FlatOutputs;
 } catch (error) {
   console.warn('cfn-outputs/flat-outputs.json not found. Some integration tests may be skipped.');
 }
 
 // CI-provided env suffix (not strictly needed here, kept for format continuity)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix: string = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Resolve region from outputs (prefer ALB DNS; fallback to env; then us-east-1)
-function inferRegion() {
+function inferRegion(): string {
   const fallback = process.env.AWS_REGION || 'us-east-1';
   if (outputs && outputs.ALBDNSName) {
     // e.g., production-alb-123.eu-central-1.elb.amazonaws.com -> eu-central-1
@@ -37,7 +41,7 @@ function inferRegion() {
   return fallback;
 }
 
-function skipIfNoOutputs() {
+function skipIfNoOutputs(): boolean {
   if (!outputs || Object.keys(outputs).length === 0) {
     console.warn('No CloudFormation outputs found. Skipping tests in this block.');
     return true;
@@ -45,7 +49,7 @@ function skipIfNoOutputs() {
   return false;
 }
 
-function isCredsError(err) {
+function isCredsError(err: any): boolean {
   const name = err && (err.name || err.Code || err.code);
   return (
     name === 'CredentialsProviderError' ||
@@ -55,7 +59,10 @@ function isCredsError(err) {
   );
 }
 
-function httpGet(url, timeoutMs = 15000) {
+function httpGet(
+  url: string,
+  timeoutMs = 15000
+): Promise<{ statusCode: number | undefined; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.get(url, (res) => {
       let data = '';
@@ -63,14 +70,14 @@ function httpGet(url, timeoutMs = 15000) {
       res.on('data', (chunk) => (data += chunk));
       res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
     });
-    req.on('error', reject);
+    req.on('error', reject as (err: Error) => void);
     req.setTimeout(timeoutMs, () => {
       req.destroy(new Error('HTTP request timeout'));
     });
   });
 }
 
-async function getAwsModule(mod) {
+async function getAwsModule(mod: string): Promise<any | null> {
   try {
     return await import(mod);
   } catch (e) {
@@ -79,18 +86,20 @@ async function getAwsModule(mod) {
   }
 }
 
-async function streamToString(stream) {
+async function streamToString(stream: NodeJS.ReadableStream): Promise<string> {
   // AWS SDK v3 GetObject Body is a stream in Node
   return new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    stream.on('error', reject);
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk: Buffer | string) =>
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    );
+    stream.on('error', (err: Error) => reject(err));
     stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   });
 }
 
 describe('Turn Around Prompt API Integration Tests', () => {
-  const region = inferRegion();
+  const region: string = inferRegion();
 
   // ------------------------------
   // CloudFormation Outputs Integration
@@ -101,7 +110,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
         expect(true).toBe(true);
         return;
       }
-      const expected = [
+      const expected: string[] = [
         'ALBDNSName',
         'BackupS3BucketName',
         'VPNGatewayId',
@@ -114,11 +123,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
         'PrivateSubnetAId',
         'DatabaseEndpoint'
       ];
-      expected.forEach((k) => expect(outputs[k]).toBeDefined());
+      expected.forEach((k: string) => expect(outputs[k]).toBeDefined());
     });
 
     test('ALBDNSName and DatabaseEndpoint should look like valid hostnames', () => {
-      if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+      if (skipIfNoOutputs()) {
+        expect(true).toBe(true);
+        return;
+      }
       expect(outputs.ALBDNSName).toMatch(/elb\.amazonaws\.com$/);
       expect(outputs.DatabaseEndpoint).toMatch(/rds\.amazonaws\.com$/);
     });
@@ -131,15 +143,21 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test(
       'GET / on ALB should return 200 and include Public EC2 marker text',
       async () => {
-        if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+        if (skipIfNoOutputs()) {
+          expect(true).toBe(true);
+          return;
+        }
         const url = `http://${outputs.ALBDNSName}/`;
         try {
           const res = await httpGet(url, 20000);
           expect(res.statusCode).toBe(200);
           // UserData on the public instance writes this content
           expect(res.body).toContain('Public EC2 Instance');
-        } catch (err) {
-          console.warn(`ALB HTTP check failed for ${url}:`, err && err.message ? err.message : err);
+        } catch (err: any) {
+          console.warn(
+            `ALB HTTP check failed for ${url}:`,
+            err && (err as any).message ? (err as any).message : err
+          );
           // If the ALB is still stabilizing, don’t hard fail CI runs
           expect(true).toBe(true);
         }
@@ -155,11 +173,23 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test(
       'can PUT with AES256 and GET object; unencrypted PUT should be denied by bucket policy',
       async () => {
-        if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+        if (skipIfNoOutputs()) {
+          expect(true).toBe(true);
+          return;
+        }
 
         const mod = await getAwsModule('@aws-sdk/client-s3');
-        if (!mod) { expect(true).toBe(true); return; }
-        const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand } = mod;
+        if (!mod) {
+          expect(true).toBe(true);
+          return;
+        }
+        const {
+          S3Client,
+          PutObjectCommand,
+          GetObjectCommand,
+          DeleteObjectCommand,
+          HeadBucketCommand
+        } = mod as any;
 
         const s3 = new S3Client({ region });
         const bucket = outputs.BackupS3BucketName;
@@ -172,24 +202,30 @@ describe('Turn Around Prompt API Integration Tests', () => {
           await s3.send(new HeadBucketCommand({ Bucket: bucket }));
 
           // 1) encrypted PUT + GET
-          await s3.send(new PutObjectCommand({
-            Bucket: bucket,
-            Key: keyOk,
-            Body: body,
-            ServerSideEncryption: 'AES256'
-          }));
-          const getResp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: keyOk }));
-          const got = await streamToString(getResp.Body);
+          await s3.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: keyOk,
+              Body: body,
+              ServerSideEncryption: 'AES256'
+            })
+          );
+          const getResp: any = await s3.send(
+            new GetObjectCommand({ Bucket: bucket, Key: keyOk })
+          );
+          const got = await streamToString(getResp.Body as NodeJS.ReadableStream);
           expect(got).toBe(body);
 
           // 2) unencrypted PUT should be denied by bucket policy
           let denied = false;
           try {
-            await s3.send(new PutObjectCommand({
-              Bucket: bucket,
-              Key: keyNoEnc,
-              Body: body
-            }));
+            await s3.send(
+              new PutObjectCommand({
+                Bucket: bucket,
+                Key: keyNoEnc,
+                Body: body
+              })
+            );
           } catch (e) {
             denied = true;
           }
@@ -197,9 +233,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
           // Cleanup happy-path object
           await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: keyOk }));
-        } catch (err) {
+        } catch (err: any) {
           if (isCredsError(err)) {
-            console.warn('AWS credentials not available or insufficient. Skipping S3 integration test.');
+            console.warn(
+              'AWS credentials not available or insufficient. Skipping S3 integration test.'
+            );
             expect(true).toBe(true);
           } else {
             throw err;
@@ -217,36 +255,58 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test(
       'instances/subnets/vpc/vpn should exist and be wired as expected',
       async () => {
-        if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+        if (skipIfNoOutputs()) {
+          expect(true).toBe(true);
+          return;
+        }
 
         const ec2Mod = await getAwsModule('@aws-sdk/client-ec2');
-        if (!ec2Mod) { expect(true).toBe(true); return; }
-        const { EC2Client, DescribeInstancesCommand, DescribeSubnetsCommand, DescribeVpcsCommand, DescribeVpnGatewaysCommand } = ec2Mod;
+        if (!ec2Mod) {
+          expect(true).toBe(true);
+          return;
+        }
+        const {
+          EC2Client,
+          DescribeInstancesCommand,
+          DescribeSubnetsCommand,
+          DescribeVpcsCommand,
+          DescribeVpnGatewaysCommand
+        } = ec2Mod as any;
 
         const ec2 = new EC2Client({ region });
 
         try {
           // Describe VPC
-          const vpcResp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
+          const vpcResp: any = await ec2.send(
+            new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] })
+          );
           expect(vpcResp.Vpcs && vpcResp.Vpcs.length).toBe(1);
 
           // Describe subnets
-          const subnetResp = await ec2.send(new DescribeSubnetsCommand({
-            SubnetIds: [outputs.PublicSubnetAId, outputs.PublicSubnetBId, outputs.PrivateSubnetAId]
-          }));
+          const subnetResp: any = await ec2.send(
+            new DescribeSubnetsCommand({
+              SubnetIds: [
+                outputs.PublicSubnetAId,
+                outputs.PublicSubnetBId,
+                outputs.PrivateSubnetAId
+              ]
+            })
+          );
           expect(subnetResp.Subnets && subnetResp.Subnets.length).toBe(3);
-          subnetResp.Subnets.forEach(s => expect(s.VpcId).toBe(outputs.VPCId));
+          subnetResp.Subnets.forEach((s: any) => expect(s.VpcId).toBe(outputs.VPCId));
 
           // Describe instances
-          const instResp = await ec2.send(new DescribeInstancesCommand({
-            InstanceIds: [outputs.PublicEC2InstanceId, outputs.PrivateEC2InstanceId]
-          }));
-          const reservations = instResp.Reservations || [];
-          const found = reservations.flatMap(r => r.Instances || []);
+          const instResp: any = await ec2.send(
+            new DescribeInstancesCommand({
+              InstanceIds: [outputs.PublicEC2InstanceId, outputs.PrivateEC2InstanceId]
+            })
+          );
+          const reservations: any[] = instResp.Reservations || [];
+          const found: any[] = reservations.flatMap((r: any) => r.Instances || []);
           expect(found.length).toBe(2);
 
-          const pub = found.find(i => i.InstanceId === outputs.PublicEC2InstanceId);
-          const pvt = found.find(i => i.InstanceId === outputs.PrivateEC2InstanceId);
+          const pub = found.find((i: any) => i.InstanceId === outputs.PublicEC2InstanceId);
+          const pvt = found.find((i: any) => i.InstanceId === outputs.PrivateEC2InstanceId);
 
           expect(pub).toBeDefined();
           expect(pvt).toBeDefined();
@@ -256,12 +316,18 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(pvt.SubnetId).toBe(outputs.PrivateSubnetAId);
 
           // VPN Gateway exists and is attached to the VPC
-          const vgwResp = await ec2.send(new DescribeVpnGatewaysCommand({ VpnGatewayIds: [outputs.VPNGatewayId] }));
+          const vgwResp: any = await ec2.send(
+            new DescribeVpnGatewaysCommand({ VpnGatewayIds: [outputs.VPNGatewayId] })
+          );
           expect(vgwResp.VpnGateways && vgwResp.VpnGateways.length).toBe(1);
           const vgw = vgwResp.VpnGateways[0];
-          const attached = (vgw.VpcAttachments || []).some(att => att.VpcId === outputs.VPCId && (att.State === 'attached' || att.State === 'attaching'));
+          const attached = (vgw.VpcAttachments || []).some(
+            (att: any) =>
+              att.VpcId === outputs.VPCId &&
+              (att.State === 'attached' || att.State === 'attaching')
+          );
           expect(attached).toBe(true);
-        } catch (err) {
+        } catch (err: any) {
           if (isCredsError(err)) {
             console.warn('AWS credentials not available. Skipping EC2/networking integration test.');
             expect(true).toBe(true);
@@ -281,35 +347,49 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test(
       'DB endpoint should resolve in DNS and secret should be retrievable',
       async () => {
-        if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+        if (skipIfNoOutputs()) {
+          expect(true).toBe(true);
+          return;
+        }
 
         // DNS resolve the (private) RDS endpoint — we just verify it resolves
         try {
           const addr = await dnsPromises.lookup(outputs.DatabaseEndpoint);
-          expect(addr && addr.address).toBeDefined();
+          expect(addr && (addr as any).address).toBeDefined();
         } catch (e) {
           // Some CI networks may block VPC DNS; don’t hard-fail in that case
-          console.warn('DNS resolution for DB endpoint failed (may be private). Skipping DNS assertion.');
+          console.warn(
+            'DNS resolution for DB endpoint failed (may be private). Skipping DNS assertion.'
+          );
           expect(true).toBe(true);
         }
 
         // Retrieve DB secret (username/password); we do not attempt DB login from CI
         const secMod = await getAwsModule('@aws-sdk/client-secrets-manager');
-        if (!secMod) { expect(true).toBe(true); return; }
-        const { SecretsManagerClient, GetSecretValueCommand } = secMod;
+        if (!secMod) {
+          expect(true).toBe(true);
+          return;
+        }
+        const { SecretsManagerClient, GetSecretValueCommand } = secMod as any;
 
         const sm = new SecretsManagerClient({ region });
         try {
-          const res = await sm.send(new GetSecretValueCommand({ SecretId: outputs.DBSecretArn }));
+          const res: any = await sm.send(
+            new GetSecretValueCommand({ SecretId: outputs.DBSecretArn })
+          );
           expect(res).toBeDefined();
-          const secretStr = res.SecretString || (res.SecretBinary ? Buffer.from(res.SecretBinary, 'base64').toString('utf8') : null);
+          const secretStr =
+            res.SecretString ||
+            (res.SecretBinary ? Buffer.from(res.SecretBinary, 'base64').toString('utf8') : null);
           expect(secretStr).toBeTruthy();
-          const parsed = JSON.parse(secretStr);
+          const parsed = JSON.parse(secretStr as string);
           expect(parsed.username).toBeDefined();
           expect(parsed.password).toBeDefined();
-        } catch (err) {
+        } catch (err: any) {
           if (isCredsError(err)) {
-            console.warn('Credentials/permissions insufficient to read secret. Skipping secret retrieval test.');
+            console.warn(
+              'Credentials/permissions insufficient to read secret. Skipping secret retrieval test.'
+            );
             expect(true).toBe(true);
           } else {
             throw err;
@@ -327,20 +407,30 @@ describe('Turn Around Prompt API Integration Tests', () => {
     test(
       'VPC Flow Logs log group should exist',
       async () => {
-        if (skipIfNoOutputs()) { expect(true).toBe(true); return; }
+        if (skipIfNoOutputs()) {
+          expect(true).toBe(true);
+          return;
+        }
 
         const logsMod = await getAwsModule('@aws-sdk/client-cloudwatch-logs');
-        if (!logsMod) { expect(true).toBe(true); return; }
-        const { CloudWatchLogsClient, DescribeLogGroupsCommand } = logsMod;
+        if (!logsMod) {
+          expect(true).toBe(true);
+          return;
+        }
+        const { CloudWatchLogsClient, DescribeLogGroupsCommand } = logsMod as any;
 
         const logs = new CloudWatchLogsClient({ region });
         const logGroupName = '/aws/vpc/production'; // From template: /aws/vpc/${EnvironmentName} with default 'production'
 
         try {
-          const resp = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
-          const exists = (resp.logGroups || []).some(lg => lg.logGroupName === logGroupName);
+          const resp: any = await logs.send(
+            new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
+          );
+          const exists = ((resp.logGroups || []) as any[]).some(
+            (lg: any) => lg.logGroupName === logGroupName
+          );
           expect(exists).toBe(true);
-        } catch (err) {
+        } catch (err: any) {
           if (isCredsError(err)) {
             console.warn('AWS credentials not available. Skipping CloudWatch Logs test.');
             expect(true).toBe(true);
