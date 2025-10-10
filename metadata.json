@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "410117",
+  "team": "4",
+  "startedAt": "2025-10-10T11:39:29.042Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [ 
+    "IoT Core",
+    "Kinesis Data Stream",
+    "Lambda Functions",
+    "DynamoDB",
+    "QuickSight",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ]
+}
