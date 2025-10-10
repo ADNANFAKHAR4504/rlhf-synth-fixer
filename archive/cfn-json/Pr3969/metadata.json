@@ -10,5 +10,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "CloudFront, WAF, S3, VPC"
+  "aws_services": "CloudFront, WAF, S3, VPC",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
