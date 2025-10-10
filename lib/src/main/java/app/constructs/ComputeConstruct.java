@@ -40,6 +40,7 @@ public class ComputeConstruct extends BaseConstruct {
 
         String securityGroupId = security.getInstanceSecurityGroupId();
         String instanceProfileArn = security.getInstanceProfileArn();
+        String instanceProfileName = security.getInstanceProfileName();
         String kmsKeyId = security.getKmsKeyId();
         String kmsKeyArn = security.getKmsKeyArn();
 
@@ -50,7 +51,7 @@ public class ComputeConstruct extends BaseConstruct {
         this.autoScalingGroup = createAutoScalingGroup(subnetIds, targetGroupArn, id);
 
         // Create initial instances for migration
-        createMigrationInstances(securityConfig, subnetIds, securityGroupId, instanceProfileArn, kmsKeyId);
+        createMigrationInstances(securityConfig, subnetIds, securityGroupId, instanceProfileName, kmsKeyId);
     }
 
     private LaunchTemplate createLaunchTemplate(final SecurityConfig config, final String securityGroupId,
@@ -170,15 +171,11 @@ public class ComputeConstruct extends BaseConstruct {
     }
 
     private void createMigrationInstances(final SecurityConfig config, final List<String> subnetIds,
-                                          final String securityGroupId, final String instanceProfileArn,
+                                          final String securityGroupId, final String instanceProfileName,
                                           final String kmsKeyId) {
 
         // Create instances for immediate migration (blue-green approach)
         for (int i = 0; i < Math.min(2, subnetIds.size()); i++) {
-            String instanceProfileName = instanceProfileArn.contains("/")
-                ? instanceProfileArn.substring(instanceProfileArn.lastIndexOf("/") + 1)
-                : instanceProfileArn;
-
             Instance instance = Instance.Builder.create(this, "migration-instance-" + i)
                     .ami(config.amiId())
                     .instanceType(config.instanceType())

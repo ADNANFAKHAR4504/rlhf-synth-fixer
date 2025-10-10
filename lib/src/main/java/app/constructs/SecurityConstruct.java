@@ -206,6 +206,10 @@ public class SecurityConstruct extends BaseConstruct {
         return instanceProfile.getArn();
     }
 
+    public String getInstanceProfileName() {
+        return instanceProfile.getName();
+    }
+
     public String getKmsKeyId() {
         return kmsKey.getId();
     }
