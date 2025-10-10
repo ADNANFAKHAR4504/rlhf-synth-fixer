@@ -219,7 +219,6 @@ export class VpcModule extends BaseModule {
 }
 
 // S3 Module with proper ALB permissions
-// S3 Module with proper ALB permissions
 export class S3Module extends BaseModule {
   public readonly bucket: aws.s3Bucket.S3Bucket;
   public readonly bucketVersioning: aws.s3BucketVersioning.S3BucketVersioningA;
