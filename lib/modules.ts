@@ -225,6 +225,7 @@ export class S3Module extends BaseModule {
   public readonly bucketEncryption: aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA;
   public readonly bucketPublicAccessBlock: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
   public readonly bucketLogging: aws.s3BucketLogging.S3BucketLoggingA;
+  public readonly bucketAcl: aws.s3BucketAcl.S3BucketAcl;
 
   constructor(
     scope: Construct,
@@ -234,7 +235,8 @@ export class S3Module extends BaseModule {
     logBucketId: string,
     tags: CommonTags,
     isLoggingBucket: boolean = false,
-    accountId?: string
+    accountId?: string,
+    region?: string
   ) {
     super(scope, id, tags);
 
@@ -243,6 +245,14 @@ export class S3Module extends BaseModule {
       bucket: bucketName,
       tags: this.tags,
     });
+
+    // Set bucket ACL for ALB logging
+    if (isLoggingBucket) {
+      this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, `${id}-acl`, {
+        bucket: this.bucket.id,
+        acl: 'log-delivery-write',
+      });
+    }
 
     // Enable versioning
     this.bucketVersioning = new aws.s3BucketVersioning.S3BucketVersioningA(
@@ -256,35 +266,54 @@ export class S3Module extends BaseModule {
       }
     );
 
-    // Enable encryption with KMS
-    this.bucketEncryption =
-      new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
-        this,
-        `${id}-encryption`,
-        {
-          bucket: this.bucket.id,
-          rule: [
-            {
-              applyServerSideEncryptionByDefault: {
-                sseAlgorithm: 'aws:kms',
-                kmsMasterKeyId: kmsKeyId,
+    // Enable encryption with KMS (but not for logging bucket)
+    if (!isLoggingBucket) {
+      this.bucketEncryption =
+        new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+          this,
+          `${id}-encryption`,
+          {
+            bucket: this.bucket.id,
+            rule: [
+              {
+                applyServerSideEncryptionByDefault: {
+                  sseAlgorithm: 'aws:kms',
+                  kmsMasterKeyId: kmsKeyId,
+                },
+                bucketKeyEnabled: true,
               },
-              bucketKeyEnabled: true,
-            },
-          ],
-        }
-      );
+            ],
+          }
+        );
+    } else {
+      // For logging bucket, use AES256 encryption
+      this.bucketEncryption =
+        new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+          this,
+          `${id}-encryption`,
+          {
+            bucket: this.bucket.id,
+            rule: [
+              {
+                applyServerSideEncryptionByDefault: {
+                  sseAlgorithm: 'AES256',
+                },
+              },
+            ],
+          }
+        );
+    }
 
-    // Block public access
+    // Block public access (conditionally for logging bucket)
     this.bucketPublicAccessBlock =
       new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
         this,
         `${id}-public-access-block`,
         {
           bucket: this.bucket.id,
-          blockPublicAcls: true,
+          blockPublicAcls: !isLoggingBucket, // Allow ACLs for logging bucket
           blockPublicPolicy: true,
-          ignorePublicAcls: true,
+          ignorePublicAcls: !isLoggingBucket,
           restrictPublicBuckets: true,
         }
       );
@@ -304,9 +333,8 @@ export class S3Module extends BaseModule {
 
     // Fixed bucket policy for ALB access logs
     if (isLoggingBucket && accountId) {
-      const elbAccountId = this.getElbServiceAccountId(
-        tags.Region || 'eu-north-1'
-      );
+      const currentRegion = region || tags.Region || 'eu-north-1';
+      const elbAccountId = this.getElbServiceAccountId(currentRegion);
 
       new aws.s3BucketPolicy.S3BucketPolicy(this, `${id}-bucket-policy`, {
         bucket: this.bucket.id,
@@ -314,7 +342,30 @@ export class S3Module extends BaseModule {
           Version: '2012-10-17',
           Statement: [
             {
-              Sid: 'ALBAccessLogsPolicy',
+              Sid: 'AWSLogDeliveryAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'logging.s3.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: `arn:aws:s3:::${bucketName}`,
+            },
+            {
+              Sid: 'AWSLogDeliveryWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'logging.s3.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `arn:aws:s3:::${bucketName}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+            {
+              Sid: 'ELBAccessLogsPolicy',
               Effect: 'Allow',
               Principal: {
                 AWS: `arn:aws:iam::${elbAccountId}:root`,
@@ -323,7 +374,7 @@ export class S3Module extends BaseModule {
               Resource: `arn:aws:s3:::${bucketName}/alb/*`,
             },
             {
-              Sid: 'ALBAccessLogsPolicyAcl',
+              Sid: 'AWSLogDeliveryAclCheckForELB',
               Effect: 'Allow',
               Principal: {
                 Service: 'elasticloadbalancing.amazonaws.com',
@@ -333,7 +384,6 @@ export class S3Module extends BaseModule {
             },
           ],
         }),
-        dependsOn: [this.bucketPublicAccessBlock], // Ensure proper ordering
       });
     }
   }
@@ -357,7 +407,7 @@ export class S3Module extends BaseModule {
       'ap-south-1': '718504428378',
     };
 
-    return elbServiceAccounts[region] || '797873946194'; // Default to us-west-2
+    return elbServiceAccounts[region] || '897822967062'; // Default to eu-north-1
   }
 }
 

@@ -105,15 +105,17 @@ export class TapStack extends TerraformStack {
     });
 
     // Create centralized logging bucket with ALB permissions
+
     const loggingBucket = new S3Module(
       this,
       'central-logging',
-      `tap-central-logging-${current.accountId}`, // Make bucket name unique
-      kmsKey.arn,
-      `tap-central-logging-${current.accountId}`, // Self-logging
+      'tap-central-logging-unique-name',
+      kmsKey.id,
+      '', // No log bucket for the logging bucket itself
       commonTags,
-      true, // isLoggingBucket
-      current.accountId // Pass account ID for ALB permissions
+      true, // This IS the logging bucket
+      current.accountId, // Pass account ID
+      'eu-north-1' // Pass region
     );
 
     // CloudTrail and Config - COMMENTED OUT AS REQUESTED
@@ -178,7 +180,7 @@ export class TapStack extends TerraformStack {
       'tap-api-processor',
       'index.handler',
       'nodejs20.x',
-      'test12345-ts',
+      'my-lambda-bucket777',
       'lambda/lambda-function.zip',
       kmsKey.arn,
       commonTags
