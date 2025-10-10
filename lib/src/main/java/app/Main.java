@@ -17,16 +17,15 @@ import software.amazon.awscdk.services.apigateway.LambdaRestApi;
 import software.amazon.awscdk.services.apigateway.RestApi;
 import software.amazon.awscdk.services.cloudfront.Distribution;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
-import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
 import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
 import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
 import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
-import software.amazon.awscdk.services.ec2.AmazonLinuxImageSsmParameterProps;
 import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
 import software.amazon.awscdk.services.ec2.FlowLog;
+import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogResourceType;
 import software.amazon.awscdk.services.ec2.IMachineImage;
@@ -766,12 +765,7 @@ class InfrastructureStack extends Stack {
     }
 
     private IMachineImage getAmazonLinuxAmi() {
-        return MachineImage.latestAmazonLinux2(
-                AmazonLinuxImageSsmParameterProps.builder()
-                        .edition(AmazonLinuxEdition.STANDARD)
-                        .virtualization(AmazonLinuxVirt.HVM)
-                        .cpuType(AmazonLinuxCpuType.X86_64)
-                        .build());
+        return MachineImage.latestAmazonLinux2();
     }
 
     private Instance createBastionHost(final String environmentSuffix, final Role ec2Role,
@@ -1091,7 +1085,7 @@ class ApplicationStack extends Stack {
     private Distribution createCloudFrontDistribution() {
         return Distribution.Builder.create(this, "AppDistribution")
                 .defaultBehavior(software.amazon.awscdk.services.cloudfront.BehaviorOptions.builder()
-                        .origin(S3BucketOrigin.Builder.create(s3Bucket).build())
+                        .origin(S3BucketOrigin.withOriginAccessControl(s3Bucket))
                         .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
                         .allowedMethods(software.amazon.awscdk.services.cloudfront.AllowedMethods.ALLOW_ALL)
                         .cachedMethods(software.amazon.awscdk.services.cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS)
