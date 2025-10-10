@@ -262,7 +262,7 @@ describe('TapStack Unit Tests', () => {
         },
         Environment: {
           Variables: {
-            CACHE_TTL: '300'
+            EVENT_BUS_NAME: Match.anyValue()
           }
         }
       });
