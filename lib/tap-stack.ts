@@ -21,9 +21,9 @@ import {
   SnsModule,
   MonitoringModule,
   CloudFrontWafModule,
+  VpcModule, // Add VPC module import
   CommonTags,
 } from './modules';
-// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -32,9 +32,6 @@ interface TapStackProps {
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 }
-
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
 
 const AWS_REGION_OVERRIDE = '';
 
@@ -51,7 +48,7 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
     const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -88,11 +85,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
-
-    // ? Add your stack instantiations here
 
     // Create KMS key for encryption
     const kmsKey = new aws.kmsKey.KmsKey(this, 'master-kms-key', {
@@ -143,43 +136,26 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    // VPC data source (using existing VPC)
-    const vpcData = new aws.dataAwsVpc.DataAwsVpc(this, 'existing-vpc', {
-      id: 'vpc-abc123',
-    });
+    // Create NEW VPC instead of using existing one
+    const vpc = new VpcModule(
+      this,
+      'main-vpc',
+      '10.0.0.0/16',
+      availabilityZones,
+      commonTags
+    );
 
-    // Get subnets in specific availability zones
-    const subnetA = new aws.dataAwsSubnet.DataAwsSubnet(this, 'subnet-a', {
-      vpcId: 'vpc-abc123',
-      availabilityZone: availabilityZones[0],
-      filter: [
-        {
-          name: 'tag:Name',
-          values: ['*private*'],
-        },
-      ],
-    });
+    // Use the private subnet IDs from our new VPC
+    const subnetIds = vpc.privateSubnets.map(subnet => subnet.id);
 
-    const subnetB = new aws.dataAwsSubnet.DataAwsSubnet(this, 'subnet-b', {
-      vpcId: 'vpc-abc123',
-      availabilityZone: availabilityZones[1],
-      filter: [
-        {
-          name: 'tag:Name',
-          values: ['*private*'],
-        },
-      ],
-    });
-
-    const subnetIds = [subnetA.id, subnetB.id];
-
-    // EC2 Instance
+    // Create EC2 Instance with new VPC
     const ec2Instance = new Ec2Module(
       this,
       'web-server',
       't3.medium',
       ami.id,
-      subnetA.id,
+      vpc.privateSubnets[0].id,
+      vpc.vpc.id, // Pass the VPC ID to the EC2 module
       availabilityZones[0],
       kmsKey.arn,
       commonTags
@@ -198,13 +174,13 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    // RDS Database
+    // RDS Database with new subnets
     const rdsDatabase = new RdsModule(
       this,
       'main-db',
       'db.t3.medium',
       'postgres',
-      subnetIds,
+      subnetIds, // Use our new subnet IDs
       availabilityZones[0],
       commonTags
     );
@@ -228,12 +204,12 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    // Application Load Balancer
+    // Application Load Balancer with new VPC
     const alb = new ElbModule(
       this,
       'main-alb',
-      vpcData.id,
-      subnetIds,
+      vpc.vpc.id, // Use new VPC ID
+      vpc.publicSubnets.map(subnet => subnet.id), // Use public subnets for ALB
       loggingBucket.bucket.bucket!,
       commonTags
     );
@@ -273,15 +249,31 @@ export class TapStack extends TerraformStack {
     );
 
     // CloudFront with WAF
-    // const cloudFront = new CloudFrontWafModule(
-    //   this,
-    //   'cdn',
-    //   alb.alb.dnsName,
-    //   loggingBucket.bucket.bucketDomainName!,
-    //   commonTags
-    // );
+    const cloudFront = new CloudFrontWafModule(
+      this,
+      'cdn',
+      alb.alb.dnsName,
+      loggingBucket.bucket.bucketDomainName!,
+      commonTags
+    );
 
-    // Outputs for compliance verification
+    // Add new outputs for VPC information
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpc.vpc.id,
+      description: 'VPC ID',
+    });
+
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: vpc.privateSubnets.map(subnet => subnet.id),
+      description: 'Private subnet IDs',
+    });
+
+    new TerraformOutput(this, 'public-subnet-ids', {
+      value: vpc.publicSubnets.map(subnet => subnet.id),
+      description: 'Public subnet IDs',
+    });
+
+    // Keep existing outputs
     new TerraformOutput(this, 'aws-region', {
       value: awsRegion,
       description: 'AWS Region',
@@ -312,10 +304,10 @@ export class TapStack extends TerraformStack {
       description: 'CloudTrail name',
     });
 
-    // new TerraformOutput(this, 'waf-enabled', {
-    //   value: cloudFront.waf.name,
-    //   description: 'WAF Web ACL name',
-    // });
+    new TerraformOutput(this, 'waf-enabled', {
+      value: cloudFront.waf.name,
+      description: 'WAF Web ACL name',
+    });
 
     new TerraformOutput(this, 'api-gateway-logging', {
       value: apiGateway.stage.accessLogSettings?.destinationArn,
@@ -332,10 +324,10 @@ export class TapStack extends TerraformStack {
       description: 'Application Load Balancer DNS name',
     });
 
-    // new TerraformOutput(this, 'cloudfront-distribution-id', {
-    //   value: cloudFront.distribution.id,
-    //   description: 'CloudFront distribution ID',
-    // });
+    new TerraformOutput(this, 'cloudfront-distribution-id', {
+      value: cloudFront.distribution.id,
+      description: 'CloudFront distribution ID',
+    });
 
     new TerraformOutput(this, 'ecr-repository-url', {
       value: ecrRepo.repository.repositoryUrl,
@@ -351,7 +343,5 @@ export class TapStack extends TerraformStack {
       value: kmsKey.id,
       description: 'Master KMS key ID',
     });
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
   }
 }

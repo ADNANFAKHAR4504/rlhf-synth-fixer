@@ -19,6 +19,205 @@ export abstract class BaseModule extends Construct {
   }
 }
 
+// VPC Module
+export class VpcModule extends BaseModule {
+  public readonly vpc: aws.vpc.Vpc;
+  public readonly publicSubnets: aws.subnet.Subnet[];
+  public readonly privateSubnets: aws.subnet.Subnet[];
+  public readonly igw: aws.internetGateway.InternetGateway;
+  public readonly natGw: aws.natGateway.NatGateway;
+  public readonly publicRouteTable: aws.routeTable.RouteTable;
+  public readonly privateRouteTable: aws.routeTable.RouteTable;
+  public readonly elasticIp: aws.eip.Eip;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    cidrBlock: string,
+    availabilityZones: string[],
+    tags: CommonTags
+  ) {
+    super(scope, id, tags);
+
+    // Create VPC
+    this.vpc = new aws.vpc.Vpc(this, `${id}-vpc`, {
+      cidrBlock,
+      enableDnsSupport: true,
+      enableDnsHostnames: true,
+      tags: { ...this.tags, Name: `${id}-vpc` },
+    });
+
+    // Create Internet Gateway
+    this.igw = new aws.internetGateway.InternetGateway(this, `${id}-igw`, {
+      vpcId: this.vpc.id,
+      tags: { ...this.tags, Name: `${id}-igw` },
+    });
+
+    // Create Elastic IP for NAT Gateway
+    this.elasticIp = new aws.eip.Eip(this, `${id}-eip`, {
+      domain: 'vpc',
+      tags: { ...this.tags, Name: `${id}-eip` },
+    });
+
+    // Initialize subnet arrays
+    this.publicSubnets = [];
+    this.privateSubnets = [];
+
+    // Create public and private subnets in each AZ
+    for (let i = 0; i < availabilityZones.length; i++) {
+      // Public subnet (for internet-facing resources)
+      const publicSubnet = new aws.subnet.Subnet(
+        this,
+        `${id}-public-subnet-${i}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `${cidrBlock.split('/')[0].slice(0, -2)}${i}.0/24`,
+          availabilityZone: availabilityZones[i],
+          mapPublicIpOnLaunch: true,
+          tags: { ...this.tags, Name: `${id}-public-subnet-${i}` },
+        }
+      );
+      this.publicSubnets.push(publicSubnet);
+
+      // Private subnet (for internal resources)
+      const privateSubnet = new aws.subnet.Subnet(
+        this,
+        `${id}-private-subnet-${i}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `${cidrBlock.split('/')[0].slice(0, -2)}${i + 100}.0/24`,
+          availabilityZone: availabilityZones[i],
+          tags: { ...this.tags, Name: `${id}-private-subnet-${i}` },
+        }
+      );
+      this.privateSubnets.push(privateSubnet);
+    }
+
+    // Create public route table
+    this.publicRouteTable = new aws.routeTable.RouteTable(
+      this,
+      `${id}-public-rt`,
+      {
+        vpcId: this.vpc.id,
+        tags: { ...this.tags, Name: `${id}-public-rt` },
+      }
+    );
+
+    // Add route to Internet Gateway
+    new aws.route.Route(this, `${id}-public-route`, {
+      routeTableId: this.publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.igw.id,
+    });
+
+    // Associate public subnets with public route table
+    this.publicSubnets.forEach((subnet, i) => {
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `${id}-public-rta-${i}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: this.publicRouteTable.id,
+        }
+      );
+    });
+
+    // Create NAT Gateway in the first public subnet
+    this.natGw = new aws.natGateway.NatGateway(this, `${id}-nat-gw`, {
+      allocationId: this.elasticIp.id,
+      subnetId: this.publicSubnets[0].id,
+      tags: { ...this.tags, Name: `${id}-nat-gw` },
+    });
+
+    // Create private route table
+    this.privateRouteTable = new aws.routeTable.RouteTable(
+      this,
+      `${id}-private-rt`,
+      {
+        vpcId: this.vpc.id,
+        tags: { ...this.tags, Name: `${id}-private-rt` },
+      }
+    );
+
+    // Add route to NAT Gateway for internet access from private subnets
+    new aws.route.Route(this, `${id}-private-route`, {
+      routeTableId: this.privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: this.natGw.id,
+    });
+
+    // Associate private subnets with private route table
+    this.privateSubnets.forEach((subnet, i) => {
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `${id}-private-rta-${i}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: this.privateRouteTable.id,
+        }
+      );
+    });
+
+    // Enable VPC Flow Logs for security monitoring
+    const flowLogsRole = new aws.iamRole.IamRole(this, `${id}-flow-logs-role`, {
+      name: `${id}-flow-logs-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: this.tags,
+    });
+
+    new aws.iamRolePolicy.IamRolePolicy(this, `${id}-flow-logs-policy`, {
+      name: `${id}-flow-logs-policy`,
+      role: flowLogsRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Effect: 'Allow',
+            Resource: '*',
+          },
+        ],
+      }),
+    });
+
+    const flowLogsGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      `${id}-flow-logs-group`,
+      {
+        name: `/aws/vpc-flow-logs/${id}`,
+        retentionInDays: 30,
+        tags: this.tags,
+      }
+    );
+
+    new aws.flowLog.FlowLog(this, `${id}-flow-log`, {
+      logDestination: flowLogsGroup.arn,
+      logDestinationType: 'cloud-watch-logs',
+      trafficType: 'ALL',
+      vpcId: this.vpc.id,
+      iamRoleArn: flowLogsRole.arn,
+      tags: this.tags,
+    });
+  }
+}
+
 // S3 Module
 export class S3Module extends BaseModule {
   public readonly bucket: aws.s3Bucket.S3Bucket;
@@ -102,6 +301,7 @@ export class S3Module extends BaseModule {
 }
 
 // EC2 Module
+// EC2 Module
 export class Ec2Module extends BaseModule {
   public readonly instance: aws.instance.Instance;
   public readonly role: aws.iamRole.IamRole;
@@ -113,6 +313,7 @@ export class Ec2Module extends BaseModule {
     instanceType: string,
     amiId: string,
     subnetId: string,
+    vpcId: string, // Add VPC ID parameter
     availabilityZone: string,
     kmsKeyId: string,
     tags: CommonTags
@@ -174,7 +375,7 @@ export class Ec2Module extends BaseModule {
       {
         name: `${id}-security-group`,
         description: 'Security group with no SSH access',
-        vpcId: 'vpc-abc123',
+        vpcId: vpcId, // Use the provided VPC ID
 
         egress: [
           {
@@ -1011,7 +1212,7 @@ export class CloudFrontWafModule extends BaseModule {
             // Changed from rateBasedStatement to rate_based_statement
             rate_based_statement: {
               limit: 2000,
-              aggregate_key_type: 'IP',  // Also changed to snake_case
+              aggregate_key_type: 'IP', // Also changed to snake_case
             },
           },
 
