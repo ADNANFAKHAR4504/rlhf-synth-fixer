@@ -59,10 +59,25 @@ public class ComputeConstruct extends BaseConstruct {
 
         String userData = Base64.getEncoder().encodeToString("""
                 #!/bin/bash
+                # Update system
+                yum update -y
+
+                # Install and start web server
+                yum install -y httpd
+                systemctl start httpd
+                systemctl enable httpd
+
+                # Create health check endpoint
+                echo "OK" > /var/www/html/health
+
+                # Create index page
+                echo "<h1>VPC Migration Instance</h1>" > /var/www/html/index.html
+                echo "<p>Instance is running successfully</p>" >> /var/www/html/index.html
+
                 # Install CloudWatch agent
                 wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
                 rpm -U ./amazon-cloudwatch-agent.rpm
-                            
+
                 # Configure CloudWatch agent
                 cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << EOF
                 {
@@ -93,7 +108,7 @@ public class ComputeConstruct extends BaseConstruct {
                     }
                 }
                 EOF
-                            
+
                 # Start CloudWatch agent
                 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
                     -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
