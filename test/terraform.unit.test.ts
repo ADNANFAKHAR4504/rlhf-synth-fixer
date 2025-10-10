@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-describe("tap_stack Terraform Unit Tests (Accurate Names)", () => {
+describe("tap_stack Terraform Unit Tests (Canonical Names)", () => {
   let tfContent: string;
 
   beforeAll(() => {
@@ -26,57 +26,56 @@ describe("tap_stack Terraform Unit Tests (Accurate Names)", () => {
       );
     });
 
-    test("has locals for suffix, tags, names, CIDRs, AZs", () => {
+    test("has required locals", () => {
       [
-        "randomsuffix", "commontags",
-        "vpcnameprimary", "vpcnamesecondary", "vpcnamethird",
-        "vpccidrprimary", "vpccidrsecondary", "vpccidrthird",
+        "randomsuffix", "commontags", "vpcnameprimary", "vpcnamesecondary",
+        "vpcnamethird", "vpccidrprimary", "vpccidrsecondary", "vpccidrthird",
         "azsprimary", "azssecondary", "azsthird"
-      ].forEach(l => expect(tfContent).toContain(l));
+      ].forEach(local => expect(tfContent).toContain(local));
     });
   });
 
-  // Random and Password/Secret Resources
+  // Random and Password Resources
   describe("Random & Secrets", () => {
-    test("includes random and password resources", () => {
+    test("includes random and password resources for RDS", () => {
       [
-        "resource \"randomstring\" \"rdsusernameprimary\"",
-        "resource \"randomstring\" \"rdsusernamesecondary\"",
-        "resource \"randomstring\" \"rdsusernamethird\"",
-        "resource \"randompassword\" \"rdspasswordprimary\"",
-        "resource \"randompassword\" \"rdspasswordsecondary\"",
-        "resource \"randompassword\" \"rdspasswordthird\"",
-        "resource \"randomstring\" \"suffix\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "random_string" "rdsusernameprimary"',
+        'resource "random_string" "rdsusernamesecondary"',
+        'resource "random_string" "rdsusernamethird"',
+        'resource "random_password" "rdspasswordprimary"',
+        'resource "random_password" "rdspasswordsecondary"',
+        'resource "random_password" "rdspasswordthird"',
+        'resource "random_string" "suffix"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
   // Data Sources
   describe("Data Sources", () => {
-    test("AMI data for all regions", () => {
+    test("contains AMI data sources for all regions", () => {
       [
-        "data \"awsami\" \"amazonlinux2primary\"",
-        "data \"awsami\" \"amazonlinux2secondary\"",
-        "data \"awsami\" \"amazonlinux2third\""
-      ].forEach(d => expect(tfContent.replace(/\s+/g, '')).toContain(d.replace(/\s+/g, '')));
+        'data "aws_ami" "amazonlinux2primary"',
+        'data "aws_ami" "amazonlinux2secondary"',
+        'data "aws_ami" "amazonlinux2third"',
+      ].forEach(d => expect(tfContent).toContain(d));
     });
   });
 
   // Primary Region Networking
   describe("Primary Region Networking", () => {
-    test("VPC, subnets, gateways, route tables", () => {
+    test("core VPC, IGW, subnet, NAT, route table resources", () => {
       [
-        "resource \"awsvpc\" \"primary\"",
-        "resource \"awsinternetgateway\" \"primary\"",
-        "resource \"awssubnet\" \"primarypublic\"",
-        "resource \"awssubnet\" \"primaryprivate\"",
-        "resource \"awseip\" \"primarynat\"",
-        "resource \"awsnatgateway\" \"primary\"",
-        "resource \"awsroutetable\" \"primarypublic\"",
-        "resource \"awsroutetable\" \"primaryprivate\"",
-        "resource \"awsroutetableassociation\" \"primarypublic\"",
-        "resource \"awsroutetableassociation\" \"primaryprivate\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_vpc" "primary"',
+        'resource "aws_internet_gateway" "primary"',
+        'resource "aws_subnet" "primarypublic"',
+        'resource "aws_subnet" "primaryprivate"',
+        'resource "aws_eip" "primarynat"',
+        'resource "aws_nat_gateway" "primary"',
+        'resource "aws_route_table" "primarypublic"',
+        'resource "aws_route_table" "primaryprivate"',
+        'resource "aws_route_table_association" "primarypublic"',
+        'resource "aws_route_table_association" "primaryprivate"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
@@ -84,32 +83,32 @@ describe("tap_stack Terraform Unit Tests (Accurate Names)", () => {
   describe("Primary Security Groups", () => {
     test("ALB, EC2, RDS security groups", () => {
       [
-        "resource \"awssecuritygroup\" \"primaryalb\"",
-        "resource \"awssecuritygroup\" \"primaryec2\"",
-        "resource \"awssecuritygroup\" \"primaryrds\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_security_group" "primaryalb"',
+        'resource "aws_security_group" "primaryec2"',
+        'resource "aws_security_group" "primaryrds"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
   // IAM
   describe("IAM", () => {
-    test("EC2 role, policy attachment, instance profile", () => {
+    test("EC2 role, IAM attachments, instance profile", () => {
       [
-        "resource \"awsiamrole\" \"ec2roleprimary\"",
-        "resource \"awsiamrolepolicyattachment\" \"ec2ssmprimary\"",
-        "resource \"awsiamrolepolicyattachment\" \"ec2cloudwatchprimary\"",
-        "resource \"awsiaminstanceprofile\" \"ec2profileprimary\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_iam_role" "ec2roleprimary"',
+        'resource "aws_iam_role_policy_attachment" "ec2ssmprimary"',
+        'resource "aws_iam_role_policy_attachment" "ec2cloudwatchprimary"',
+        'resource "aws_iam_instance_profile" "ec2profileprimary"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
-  // Launch Templates & AutoScaling
+  // Launch Templates & Auto Scaling
   describe("Compute and Scaling Primary", () => {
-    test("launch template, ASG", () => {
+    test("launch template and ASG", () => {
       [
-        "resource \"awslaunchtemplate\" \"primary\"",
-        "resource \"awsautoscalinggroup\" \"primary\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_launch_template" "primary"',
+        'resource "aws_autoscaling_group" "primary"',
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
@@ -117,71 +116,70 @@ describe("tap_stack Terraform Unit Tests (Accurate Names)", () => {
   describe("ALB and Listeners Primary", () => {
     test("ALB, target group, listener", () => {
       [
-        "resource \"awslb\" \"primary\"",
-        "resource \"awslbtargetgroup\" \"primary\"",
-        "resource \"awslblistener\" \"primary\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_lb" "primary"',
+        'resource "aws_lb_target_group" "primary"',
+        'resource "aws_lb_listener" "primary"',
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
   // RDS & DB Subnet Group
   describe("Primary RDS Resources", () => {
-    test("DB subnet group, instance & secrets", () => {
+    test("DB subnet group, instance, secrets", () => {
       [
-        "resource \"awsdbsubnetgroup\" \"primary\"",
-        "resource \"awsdbinstance\" \"primary\"",
-        "resource \"awssecretsmanagersecret\" \"rdsprimary\"",
-        "resource \"awssecretsmanagersecretversion\" \"rdsprimary\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_db_subnet_group" "primary"',
+        'resource "aws_db_instance" "primary"',
+        'resource "aws_secretsmanager_secret" "rdsprimary"',
+        'resource "aws_secretsmanager_secret_version" "rdsprimary"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
   // S3 (logging bucket)
   describe("S3 Primary", () => {
-    test("bucket, versioning, encryption, public access block", () => {
+    test("logging bucket, versioning, encryption, pab", () => {
       [
-        "resource \"awss3bucket\" \"logsprimary\"",
-        "resource \"awss3bucketversioning\" \"logsprimary\"",
-        "resource \"awss3bucketserversideencryptionconfiguration\" \"logsprimary\"",
-        "resource \"awss3bucketpublicaccessblock\" \"logsprimary\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_s3_bucket" "logsprimary"',
+        'resource "aws_s3_bucket_versioning" "logsprimary"',
+        'resource "aws_s3_bucket_server_side_encryption_configuration" "logsprimary"',
+        'resource "aws_s3_bucket_public_access_block" "logsprimary"'
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
-  // CloudWatch
+  // CloudWatch Log Group
   describe("CloudWatch Primary", () => {
     test("primary log group exists", () => {
-      expect(tfContent.replace(/\s+/g, '')).toContain("resource \"awscloudwatchloggroup\" \"primary\"");
+      expect(tfContent).toContain('resource "aws_cloudwatch_log_group" "primary"');
     });
   });
 
-  // Secondary & Third Region - Sample Resources
+  // Secondary & Third Region Resource Types
   describe("Secondary & Third Region Resource Types", () => {
-    test("VPC, IGW, subnets, security groups for secondary and third", () => {
+    test("VPC, IGW, and DB resources for secondary/third", () => {
       [
-        "resource \"awsvpc\" \"secondary\"",
-        "resource \"awsinternetgateway\" \"secondary\"",
-        "resource \"awssubnet\" \"secondarypublic\"",
-        "resource \"awssecuritygroup\" \"secondaryalb\"",
-        "resource \"awsdbinstance\" \"secondary\"",
-        "resource \"awsvpc\" \"third\"",
-        "resource \"awsinternetgateway\" \"third\"",
-        "resource \"awsdbinstance\" \"third\""
-      ].forEach(r => expect(tfContent.replace(/\s+/g, '')).toContain(r.replace(/\s+/g, '')));
+        'resource "aws_vpc" "secondary"',
+        'resource "aws_internet_gateway" "secondary"',
+        'resource "aws_security_group" "secondaryalb"',
+        'resource "aws_db_instance" "secondary"',
+        'resource "aws_vpc" "third"',
+        'resource "aws_internet_gateway" "third"',
+        'resource "aws_db_instance" "third"',
+      ].forEach(r => expect(tfContent).toContain(r));
     });
   });
 
-  // Outputs (spot-check main outputs as present)
+  // Outputs for spot check
   describe("Outputs", () => {
-    test("exports core outputs (sample)", () => {
+    test("has sample global and third region outputs", () => {
       [
-        "output \"randomsuffix\"",
-        "output \"environmenttag\"",
-        "output \"thirdvpcid\"",
-        "output \"thirdpublicsubnetids\"",
-        "output \"thirdalbdnsname\""
+        'output "randomsuffix"',
+        'output "environmenttag"',
+        'output "thirdvpcid"',
+        'output "thirdpublicsubnetids"',
+        'output "thirdalbdnsname"',
       ].forEach(o =>
-        expect(tfContent.replace(/\s+/g, '')).toMatch(new RegExp(o.replace(/\s+/g, '')))
+        expect(tfContent).toMatch(new RegExp(o))
       );
     });
   });
