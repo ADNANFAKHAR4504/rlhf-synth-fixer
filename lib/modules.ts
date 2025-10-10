@@ -71,7 +71,8 @@ export class VpcModule extends BaseModule {
         `${id}-public-subnet-${i}`,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `${cidrBlock.split('/')[0].slice(0, -2)}${i}.0/24`,
+          // Fixed: Use proper octet calculation
+          cidrBlock: `10.0.${i}.0/24`, // Results in 10.0.0.0/24, 10.0.1.0/24
           availabilityZone: availabilityZones[i],
           mapPublicIpOnLaunch: true,
           tags: { ...this.tags, Name: `${id}-public-subnet-${i}` },
@@ -85,7 +86,8 @@ export class VpcModule extends BaseModule {
         `${id}-private-subnet-${i}`,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `${cidrBlock.split('/')[0].slice(0, -2)}${i + 100}.0/24`,
+          // Fixed: Use proper octet calculation
+          cidrBlock: `10.0.${i + 100}.0/24`, // Results in 10.0.100.0/24, 10.0.101.0/24
           availabilityZone: availabilityZones[i],
           tags: { ...this.tags, Name: `${id}-private-subnet-${i}` },
         }
