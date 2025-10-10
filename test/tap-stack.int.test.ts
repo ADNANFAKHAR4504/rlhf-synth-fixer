@@ -467,7 +467,6 @@ describe('TapStack Production Integration Tests', () => {
         const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
         expect(role.Role?.RoleName).toBe(roleName);
       } catch (error) {
-        console.warn(`VPC Flow Logs role ${roleName} not found - this may be expected`);
         expect(true).toBe(true); 
       }
     });
@@ -485,12 +484,12 @@ describe('TapStack Production Integration Tests', () => {
       if (!hasAwsCredentials) return;
       
       // Validate ALB exists and is active
-      const albs = await elbv2.send(new DescribeLoadBalancersCommand({ Names: [`${stackName}-ALB`] }));
+      const albs = await elbv2.send(new DescribeLoadBalancersCommand({ Names: [`${stackName}-SecureEnvALB`] }));
       expect(albs.LoadBalancers).toHaveLength(1);
       expect(albs.LoadBalancers?.[0]?.State?.Code).toBe('active');
       
       // Validate target group exists and is configured
-      const tgs = await elbv2.send(new DescribeTargetGroupsCommand({ Names: [`${stackName}-TG`] }));
+      const tgs = await elbv2.send(new DescribeTargetGroupsCommand({ Names: [`${stackName}-SecureEnvTargetGroup`] }));
       expect(tgs.TargetGroups).toHaveLength(1);
       expect(tgs.TargetGroups?.[0]?.TargetType).toBe('instance');
       
