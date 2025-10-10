@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { TradingPlatformApp } from '../lib/tap-stack';
+import { App } from 'cdktf';
+import { TradingPlatformStack } from '../lib/tap-stack';
 
 // Set environment variables if not already set
 if (!process.env.CDK_DEFAULT_ACCOUNT) {
@@ -9,6 +10,16 @@ if (!process.env.CDK_DEFAULT_ACCOUNT) {
   process.env.CDK_DEFAULT_ACCOUNT = '123456789012';
 }
 
-// Create and synthesize the trading platform app
-const app = new TradingPlatformApp();
+// Create CDKTF app
+const app = new App();
+
+// Create stack instance
+new TradingPlatformStack(app, 'trading-platform', {
+  isPrimary: true,
+  primaryRegion: 'us-east-1',
+  secondaryRegion: 'us-west-2',
+  domainName: 'trading.example.com'
+});
+
+// Synthesize the app
 app.synth();

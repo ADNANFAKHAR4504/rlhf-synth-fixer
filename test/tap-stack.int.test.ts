@@ -1,122 +1,243 @@
 import * as fs from 'fs';
 
-// Check for outputs file from successful deployment
-const outputsPath = 'cfn-outputs/flat-outputs.json';
-let outputs: Record<string, string> = {};
+// Check for CDKTF outputs from successful deployment
+const cdktfOutputsPath = 'cdktf.out/stacks/trading-platform/cdk.tf.json';
+let outputs: Record<string, any> = {};
 let hasDeployedInfrastructure = false;
 
 try {
-  if (fs.existsSync(outputsPath)) {
-    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    outputs = JSON.parse(outputsContent);
+  if (fs.existsSync(cdktfOutputsPath)) {
+    const outputsContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+    const cdktfOutput = JSON.parse(outputsContent);
+    outputs = cdktfOutput.output || {};
     hasDeployedInfrastructure = Object.keys(outputs).length > 0;
   }
 } catch (error) {
-  console.warn('Could not read deployment outputs:', error);
+  console.warn('Could not read CDKTF deployment outputs:', error);
 }
 
 describe('Trading Platform Integration Tests', () => {
   describe('Infrastructure Deployment Validation', () => {
-    test('should have deployment outputs available', () => {
-      if (!hasDeployedInfrastructure) {
-        console.warn(
-          'No deployed infrastructure found. Deploy stack first with: npm run deploy'
-        );
-        expect(hasDeployedInfrastructure).toBe(false);
-      } else {
+    test('should have CDKTF synthesis outputs available', () => {
+      expect(fs.existsSync(cdktfOutputsPath)).toBe(true);
+
+      if (hasDeployedInfrastructure) {
         expect(outputs).toBeDefined();
         expect(Object.keys(outputs).length).toBeGreaterThan(0);
+
+        // Check for expected outputs
+        expect(outputs.VpcId).toBeDefined();
+        expect(outputs.S3BucketArn).toBeDefined();
+        expect(outputs.DynamoTableArn).toBeDefined();
+      } else {
+        console.warn(
+          'No deployed infrastructure found. Deploy stack first with: npm run cdktf:deploy'
+        );
       }
     });
 
-    test('should have expected output keys', () => {
-      if (!hasDeployedInfrastructure) {
-        console.warn('Skipping output validation - no deployed infrastructure');
+    test('should have valid Terraform configuration', () => {
+      expect(fs.existsSync(cdktfOutputsPath)).toBe(true);
+
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      // Validate provider configuration
+      expect(config.provider).toBeDefined();
+      expect(config.provider.aws).toBeDefined();
+      expect(config.provider.aws[0].region).toBe('us-east-1');
+
+      // Validate default tags
+      expect(config.provider.aws[0].default_tags).toBeDefined();
+      expect(config.provider.aws[0].default_tags[0].tags.Project).toBe('TradingPlatform');
+
+      // Validate resources
+      expect(config.resource).toBeDefined();
+      expect(config.resource.aws_vpc).toBeDefined();
+      expect(config.resource.aws_s3_bucket).toBeDefined();
+      expect(config.resource.aws_dynamodb_table).toBeDefined();
+      expect(config.resource.aws_kms_key).toBeDefined();
+    });
+
+    test('should have proper VPC configuration', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
         return;
       }
 
-      // Expected outputs from the trading platform stack
-      const expectedOutputs = [
-        'ALBUrl',
-        'DatabaseEndpoint',
-        'S3BucketName',
-        'VpcId',
-      ];
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
 
-      expectedOutputs.forEach(outputKey => {
-        if (outputs[outputKey]) {
-          expect(outputs[outputKey]).toBeDefined();
-          expect(typeof outputs[outputKey]).toBe('string');
-          expect(outputs[outputKey].length).toBeGreaterThan(0);
-        } else {
-          console.warn(`Expected output ${outputKey} not found in deployment`);
-        }
+      const vpc = Object.values(config.resource.aws_vpc)[0] as any;
+      expect(vpc.cidr_block).toBe('10.0.0.0/16');
+      expect(vpc.enable_dns_hostnames).toBe(true);
+      expect(vpc.enable_dns_support).toBe(true);
+
+      // Check subnets
+      const subnets = config.resource.aws_subnet;
+      expect(Object.keys(subnets).length).toBe(2);
+
+      // Check internet gateway
+      expect(config.resource.aws_internet_gateway).toBeDefined();
+
+      // Check route tables
+      expect(config.resource.aws_route_table).toBeDefined();
+      expect(config.resource.aws_route).toBeDefined();
+      expect(config.resource.aws_route_table_association).toBeDefined();
+    });
+
+    test('should have proper DynamoDB configuration', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
+        return;
+      }
+
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+
+      expect(dynamoTable.billing_mode).toBe('PAY_PER_REQUEST');
+      expect(dynamoTable.hash_key).toBe('tradingId');
+      expect(dynamoTable.range_key).toBe('timestamp');
+
+      // Check encryption
+      expect(dynamoTable.server_side_encryption).toBeDefined();
+      expect(dynamoTable.server_side_encryption.enabled).toBe(true);
+
+      // Check point-in-time recovery
+      expect(dynamoTable.point_in_time_recovery).toBeDefined();
+      expect(dynamoTable.point_in_time_recovery.enabled).toBe(true);
+
+      // Check attributes
+      expect(dynamoTable.attribute).toHaveLength(3);
+      const attributeNames = dynamoTable.attribute.map((attr: any) => attr.name);
+      expect(attributeNames).toContain('tradingId');
+      expect(attributeNames).toContain('timestamp');
+      expect(attributeNames).toContain('userId');
+
+      // Check GSI
+      expect(dynamoTable.global_secondary_index).toBeDefined();
+      expect(dynamoTable.global_secondary_index[0].name).toBe('UserIndex');
+    });
+
+    test('should have proper S3 bucket configuration', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
+        return;
+      }
+
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      const s3Bucket = Object.values(config.resource.aws_s3_bucket)[0] as any;
+
+      expect(s3Bucket.bucket).toMatch(/^trading-platform-data-pri-/);
+      expect(s3Bucket.tags).toBeDefined();
+      expect(s3Bucket.tags.Purpose).toBe('Trading data storage');
+      expect(s3Bucket.tags.Environment).toBe('Production');
+    });
+
+    test('should have proper KMS key configuration', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
+        return;
+      }
+
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      const kmsKeys = config.resource.aws_kms_key;
+      expect(Object.keys(kmsKeys).length).toBe(2);
+
+      Object.values(kmsKeys).forEach((key: any) => {
+        expect(key.key_usage).toBe('ENCRYPT_DECRYPT');
+        expect(key.customer_master_key_spec).toBe('SYMMETRIC_DEFAULT');
+        expect(key.deletion_window_in_days).toBe(30);
+      });
+
+      // Check KMS aliases
+      const kmsAliases = config.resource.aws_kms_alias;
+      expect(Object.keys(kmsAliases).length).toBe(2);
+
+      Object.values(kmsAliases).forEach((alias: any) => {
+        expect(alias.name).toMatch(/^alias\/trading-platform-/);
       });
     });
 
-    test('should validate ALB URL format if available', () => {
-      if (!hasDeployedInfrastructure || !outputs.ALBUrl) {
-        console.warn('Skipping ALB URL validation - not available');
+    test('should have proper security group configuration', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
         return;
       }
 
-      // ALB URL should be a valid HTTPS URL
-      expect(outputs.ALBUrl).toMatch(/^https?:\/\/.+\.elb\.amazonaws\.com$/);
-    });
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
 
-    test('should validate S3 bucket name format if available', () => {
-      if (!hasDeployedInfrastructure || !outputs.S3BucketName) {
-        console.warn('Skipping S3 bucket validation - not available');
-        return;
-      }
+      const securityGroup = Object.values(config.resource.aws_security_group)[0] as any;
 
-      // S3 bucket names should follow AWS naming conventions
-      expect(outputs.S3BucketName).toMatch(/^[a-z0-9.-]+$/);
-      expect(outputs.S3BucketName.length).toBeGreaterThanOrEqual(3);
-      expect(outputs.S3BucketName.length).toBeLessThanOrEqual(63);
-    });
+      // Check ingress rules
+      expect(securityGroup.ingress).toBeDefined();
+      expect(securityGroup.ingress.length).toBe(2);
 
-    test('should validate VPC ID format if available', () => {
-      if (!hasDeployedInfrastructure || !outputs.VpcId) {
-        console.warn('Skipping VPC validation - not available');
-        return;
-      }
+      const httpRule = securityGroup.ingress.find((rule: any) => rule.from_port === 80);
+      const httpsRule = securityGroup.ingress.find((rule: any) => rule.from_port === 443);
 
-      // VPC IDs should follow AWS format
-      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+
+      // Check egress rules
+      expect(securityGroup.egress).toBeDefined();
+      expect(securityGroup.egress.length).toBe(1);
+      expect(securityGroup.egress[0].from_port).toBe(0);
+      expect(securityGroup.egress[0].to_port).toBe(0);
+      expect(securityGroup.egress[0].protocol).toBe('-1');
     });
   });
 
-  describe('Deployment Health Checks', () => {
-    test('should note integration test requirements', () => {
-      console.info('Integration tests require deployed infrastructure.');
-      console.info('To run full integration tests:');
-      console.info('1. Deploy the stack: npm run deploy');
-      console.info(
-        '2. Ensure outputs are available in cfn-outputs/flat-outputs.json'
-      );
-      console.info('3. Run integration tests: npm run test:integration');
-
-      expect(true).toBe(true); // This test always passes, it's just informational
-    });
-
-    test('should provide deployment guidance', () => {
-      if (!hasDeployedInfrastructure) {
-        console.info('💡 To enable full integration testing:');
-        console.info('   1. Configure AWS credentials');
-        console.info('   2. Run: npx cdk deploy --all');
-        console.info(
-          '   3. Outputs will be written to cfn-outputs/flat-outputs.json'
-        );
-        console.info('   4. Re-run tests to validate deployed infrastructure');
-      } else {
-        console.info('✅ Infrastructure deployment detected');
-        console.info(
-          `📊 Found ${Object.keys(outputs).length} deployment outputs`
-        );
+  describe('Resource Naming and Tagging', () => {
+    test('should have consistent resource naming', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
+        return;
       }
 
-      expect(true).toBe(true); // Informational test
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      // Check that all resources follow the naming convention
+      const s3Bucket = Object.values(config.resource.aws_s3_bucket)[0] as any;
+      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+
+      expect(s3Bucket.bucket).toMatch(/trading-platform-data-pri-\d+-\w+/);
+      expect(dynamoTable.name).toMatch(/trading-platform-pri-\d+-\w+/);
+    });
+
+    test('should have proper resource tags', () => {
+      if (!fs.existsSync(cdktfOutputsPath)) {
+        console.warn('CDKTF output file not found. Run cdktf synth first.');
+        return;
+      }
+
+      const configContent = fs.readFileSync(cdktfOutputsPath, 'utf8');
+      const config = JSON.parse(configContent);
+
+      // Check default tags at provider level
+      const defaultTags = config.provider.aws[0].default_tags[0].tags;
+      expect(defaultTags.Project).toBe('TradingPlatform');
+      expect(defaultTags.Environment).toBe('Production');
+      expect(defaultTags.ManagedBy).toBe('CDKTF');
+      expect(defaultTags.Owner).toBe('FinanceOps');
+      expect(defaultTags.CostCenter).toBe('FinanceOps');
+      expect(defaultTags['DR-RTO']).toBe('15-minutes');
+      expect(defaultTags['DR-RPO']).toBe('5-minutes');
+
+      // Check individual resource tags
+      const s3Bucket = Object.values(config.resource.aws_s3_bucket)[0] as any;
+      expect(s3Bucket.tags.Purpose).toBe('Trading data storage');
+
+      const dynamoTable = Object.values(config.resource.aws_dynamodb_table)[0] as any;
+      expect(dynamoTable.tags.Purpose).toBe('Trading transactions storage');
     });
   });
 });
