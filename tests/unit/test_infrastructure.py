@@ -26,7 +26,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
         """Test DLQ is created with correct configuration"""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        mock_queue.return_value = Mock(arn='arn:aws:sqs:us-west-2:123456789012:test-queue')
+        mock_queue.return_value = Mock(arn='arn:aws:sqs:us-east-1:123456789012:test-queue')
 
         args = TapStackArgs(environment_suffix=self.environment_suffix, tags=self.tags)
         stack = TapStack('test-stack', args)
@@ -42,7 +42,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
         """Test DynamoDB table has correct configuration"""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        mock_table.return_value = Mock(name='test-table', arn='arn:aws:dynamodb:us-west-2:123456789012:table/test')
+        mock_table.return_value = Mock(name='test-table', arn='arn:aws:dynamodb:us-east-1:123456789012:table/test')
 
         args = TapStackArgs(environment_suffix=self.environment_suffix)
         stack = TapStack('test-stack', args)
@@ -105,7 +105,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
         mock_role.return_value = Mock(arn='arn:aws:iam::123456789012:role/test-role')
         mock_lambda.return_value = Mock(
             name='test-function',
-            invoke_arn='arn:aws:lambda:us-west-2:123456789012:function:test')
+            invoke_arn='arn:aws:lambda:us-east-1:123456789012:function:test')
 
         args = TapStackArgs(environment_suffix=self.environment_suffix)
         stack = TapStack('test-stack', args)

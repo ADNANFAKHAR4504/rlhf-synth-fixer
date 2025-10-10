@@ -22,7 +22,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         self.project_name = os.getenv('PULUMI_PROJECT_NAME', 'TapStack')
         self.stack_name = os.getenv('PULUMI_STACK_NAME', f'TapStack{self.environment_suffix}')
-        self.aws_region = os.getenv('AWS_REGION', 'us-west-2')
+        self.aws_region = os.getenv('AWS_REGION', 'us-east-1')
         self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
         
         # Initialize AWS clients
@@ -151,6 +151,21 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 tracking_alarms.append(alarm['AlarmName'])
         
         self.assertGreater(len(tracking_alarms), 0, f"No tracking alarms found for environment '{self.environment_suffix}'")
+
+    def test_ssm_parameters_exist(self):
+        """Test that SSM parameters are created."""
+        params_to_check = [
+            f"/logistics/api/{self.environment_suffix}/config",
+            f"/logistics/db/{self.environment_suffix}/endpoint",
+            f"/logistics/features/{self.environment_suffix}/flags"
+        ]
+        
+        for param_name in params_to_check:
+            try:
+                response = self.ssm.get_parameter(Name=param_name, WithDecryption=True)
+                self.assertIsNotNone(response, f"Parameter '{param_name}' not found")
+            except self.ssm.exceptions.ParameterNotFound:
+                self.fail(f"Required SSM parameter not found: {param_name}")
 
 
 if __name__ == '__main__':

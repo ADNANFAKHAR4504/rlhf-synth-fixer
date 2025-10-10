@@ -18,6 +18,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import os
 import sys
+import boto3
 
 # Add the lib directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lib'))
@@ -170,7 +171,6 @@ class TapStackTests(unittest.TestCase):
         pulumi.runtime.run_in_stack(check_alarms)
 
 
-@unittest.skipUnless(POWERTOOLS_AVAILABLE, "aws-lambda-powertools dependency not available")
 class LambdaHandlerTests(unittest.TestCase):
     """Unit tests for Lambda handler."""
 
@@ -181,8 +181,8 @@ class LambdaHandlerTests(unittest.TestCase):
         os.environ['CONFIG_PARAM'] = '/test/config'
         os.environ['DB_PARAM'] = '/test/db'
         os.environ['FEATURE_FLAGS_PARAM'] = '/test/flags'
-        os.environ['AWS_REGION'] = 'us-west-2'
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
         os.environ['POWERTOOLS_METRICS_NAMESPACE'] = 'LogisticsTracking'
         os.environ['POWERTOOLS_SERVICE_NAME'] = 'tracking-api'
         # Add lambda directory to path

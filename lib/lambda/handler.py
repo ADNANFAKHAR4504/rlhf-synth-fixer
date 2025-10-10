@@ -157,7 +157,8 @@ def main(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
 
         if http_method == 'GET' and path == '/status':
             # Handle status query
-            tracking_id = event.get('queryStringParameters', {}).get('tracking_id')
+            query_params = event.get('queryStringParameters') or {}
+            tracking_id = query_params.get('tracking_id')
 
             if not tracking_id:
                 return {

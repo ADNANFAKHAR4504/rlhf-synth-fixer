@@ -10,6 +10,7 @@ and manages environment-specific configurations.
 
 from typing import Optional
 import json
+import os
 import pulumi
 from pulumi import ResourceOptions, Output
 from pulumi_aws import (
@@ -54,7 +55,8 @@ class TapStack(pulumi.ComponentResource):
         }
 
         # Get current AWS region and account ID
-        aws_region = config.region or 'us-west-2'
+        # Use us-east-1 as default for CI/CD deployment, fallback to environment variable
+        aws_region = config.region or os.environ.get('AWS_REGION', 'us-east-1')
         aws_account_id = '342597974367'  # Hardcoded for this deployment
 
         # Create DLQ for Lambda

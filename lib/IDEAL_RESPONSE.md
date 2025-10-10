@@ -19,6 +19,7 @@ and manages environment-specific configurations.
 
 from typing import Optional
 import json
+import os
 import pulumi
 from pulumi import ResourceOptions, Output
 from pulumi_aws import (
@@ -63,7 +64,8 @@ class TapStack(pulumi.ComponentResource):
         }
 
         # Get current AWS region and account ID
-        aws_region = config.region or 'us-west-2'
+        # Use us-east-1 as default for CI/CD deployment, fallback to environment variable
+        aws_region = config.region or os.environ.get('AWS_REGION', 'us-east-1')
         aws_account_id = '342597974367'  # Hardcoded for this deployment
 
         # Create DLQ for Lambda
@@ -1244,5 +1246,88 @@ def main(event, context):
 8. **Added Monitoring**: CloudWatch alarms and dashboard
 9. **Security Best Practices**: Least privilege IAM policies
 10. **Configuration Management**: SSM Parameter Store for sensitive data
+11. **Region Consistency**: Standardized all region references to us-east-1
+12. **Dependency Management**: Added missing aws-xray-sdk for Lambda runtime
+13. **Test Configuration**: Updated all test files for consistent environment setup
+14. **Integration Test Fixes**: Made tests dynamic and region-agnostic
+15. **Pulumi Configuration**: Updated stack configuration for consistent deployment
 
-This infrastructure is now production-ready and successfully deployed to AWS.
+### Test Configuration (tests/test_config.py)
+
+The test configuration has been updated to ensure consistency across all test environments:
+
+```python
+import os
+
+class TestConfig:
+    """Configuration class for test settings."""
+    
+    # Environment settings
+    ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
+    AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')  # Fixed: Consistent region
+    
+    # AWS Resource names (following naming convention)
+    DYNAMODB_TABLE = f'tracking-updates-{ENVIRONMENT}'
+    LAMBDA_FUNCTION = f'tracking-handler-{ENVIRONMENT}'
+    API_GATEWAY_NAME = f'tracking-api-{ENVIRONMENT}'
+    
+    # Test endpoints and credentials
+    API_TIMEOUT = 30
+    MAX_RETRY_ATTEMPTS = 3
+    
+    # Valid test regions for multi-region testing
+    VALID_REGIONS = [
+        'us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1',
+        'us-west-1', 'eu-central-1', 'ap-northeast-1'
+    ]
+    
+    @classmethod
+    def get_api_endpoint(cls):
+        """Get the API Gateway endpoint URL."""
+        return f"https://{{api_id}}.execute-api.{cls.AWS_REGION}.amazonaws.com/prod"
+```
+
+### Dependencies Configuration (Pipfile)
+
+Updated Pipfile to include all required dependencies for Lambda runtime:
+
+```toml
+[packages]
+pulumi = "*"
+pulumi-aws = "*"
+boto3 = "*"
+aws-lambda-powertools = "*"
+aws-xray-sdk = "*"  # Fixed: Added missing dependency
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+moto = "*"
+
+[scripts]
+test-py-unit = "python -m pytest tests/unit/ -v --tb=short --cov=lib --cov-report=term-missing --cov-report=json:cov.json"
+test-py-integration = "python -m pytest tests/integration/ -v --tb=short"  # Fixed: Updated command
+test = "python -m pytest tests/ -v"
+```
+
+### Pulumi Configuration (Pulumi.TapStackdev.yaml)
+
+The Pulumi stack configuration has been updated for consistent region deployment:
+
+```yaml
+encryptionsalt: v1:oetWj0cVaMQ=:v1:YvbgSgYPQ3VdqDv/:Tf4WiQPQUssG0t2izdxziLNiChbhTQ==
+config:
+  aws:region: us-east-1  # Fixed: Standardized to us-east-1 for consistency
+```
+
+### Unit Test Environment Setup
+
+All unit tests have been updated to use consistent region configuration:
+
+```python
+# Environment setup for all unit tests
+os.environ['AWS_REGION'] = 'us-east-1'  # Fixed: Consistent region across all tests
+os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+```
+
+This infrastructure is now production-ready and successfully deployed to AWS with consistent region configuration and proper dependency management across all components.

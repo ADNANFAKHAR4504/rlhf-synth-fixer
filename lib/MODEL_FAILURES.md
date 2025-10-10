@@ -51,5 +51,21 @@
 **Issue**: Pulumi automatically adds random suffixes to resource names, making them unpredictable for integration testing.
 **Solution**: Updated integration tests to use pattern matching and AWS API calls to discover resources by name patterns rather than exact names.
 
+### 12. Region Configuration Consistency Issues
+**Issue**: Multiple files had inconsistent region configurations (us-west-2, us-east-2, us-east-1) causing integration tests to fail when infrastructure was deployed in different regions.
+**Solution**: Standardized all region references to us-east-1 across infrastructure code, integration tests, unit tests, and configuration files.
+
+### 13. Missing Dependencies for Lambda Runtime
+**Issue**: Lambda functions were missing required dependencies (aws-xray-sdk) causing unit tests to be skipped and runtime errors.
+**Solution**: Added aws-xray-sdk to Pipfile dependencies and ensured proper dependency management for Lambda runtime environment.
+
+### 14. Lambda Deployment Package vs Source Directory
+**Issue**: Initial attempts to create deployment packages for Lambda functions created complexity and path resolution issues.
+**Solution**: Reverted to using source directory deployment with Pulumi AssetArchive, which handles dependency packaging automatically for simple Lambda functions.
+
+### 15. Integration Test Environment Variable Dependencies
+**Issue**: Integration tests failed due to reliance on environment variables and hardcoded region expectations.
+**Solution**: Updated integration tests to use dynamic region detection and fallback to standard defaults consistently across all test files.
+
 ## Summary
-The original infrastructure code had multiple configuration and dependency issues that prevented successful deployment to AWS. Additional issues were discovered during integration testing and redeployment scenarios. All issues were resolved through iterative fixes during the deployment process, resulting in a fully functional serverless logistics tracking API with comprehensive integration testing.
+The original infrastructure code had multiple configuration and dependency issues that prevented successful deployment to AWS. Additional issues were discovered during integration testing, redeployment scenarios, and region consistency requirements. All issues were resolved through iterative fixes during the deployment process, including dependency management, region standardization, and test environment configuration, resulting in a fully functional serverless logistics tracking API with comprehensive integration testing.
