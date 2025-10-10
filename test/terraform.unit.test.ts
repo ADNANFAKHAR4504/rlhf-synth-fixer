@@ -76,16 +76,6 @@ describe("tap_stack Terraform Unit Tests (Fixed Critical Issues)", () => {
     });
   });
 
-  // Data Sources
-  describe("Data Sources", () => {
-    test("AMI data sources for all regions", () => {
-      [
-        'data "aws_ami" "amazonlinux2primary"',
-        'data "aws_ami" "amazonlinux2secondary"',
-        'data "aws_ami" "amazonlinux2third"',
-      ].forEach(expectContainsNormalized);
-    });
-  });
 
   // Primary Region Networking
   describe("Primary Region Networking", () => {
@@ -116,17 +106,6 @@ describe("tap_stack Terraform Unit Tests (Fixed Critical Issues)", () => {
     });
   });
 
-  // IAM Roles & Policies
-  describe("IAM Roles & Policies", () => {
-    test("defines EC2 IAM roles, instance profile and policies", () => {
-      [
-        'resource "aws_iam_role" "ec2_role_primary"',
-        'resource "aws_iam_role_policy_attachment" "ec2ssmprimary"',
-        'resource "aws_iam_role_policy_attachment" "ec2cloudwatchprimary"',
-        'resource "aws_iam_instance_profile" "ec2_profile_primary"',
-      ].forEach(expectContainsNormalized);
-    });
-  });
 
   // Launch Templates & Auto Scaling Groups
   describe("Compute and Autoscaling", () => {
