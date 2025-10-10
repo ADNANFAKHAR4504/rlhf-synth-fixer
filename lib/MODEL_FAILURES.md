@@ -168,3 +168,9 @@ Add an optional `enableSecurityHub` prop to TapStackProps (default: false). Only
 Aurora Global Database does not support T3, T4G, or other burstable instance classes. Using `db.t4g.medium` causes CREATE_FAILED error: "The requested instance class is not supported by global databases: db.t4g.medium (Service: Rds, Status Code: 400)".
 
 Aurora Global Database requires production-grade instance classes like R5 or R6G. Use `ec2.InstanceClass.R6G` with `ec2.InstanceSize.LARGE` or larger for both writer and reader instances. R6G instances provide ARM-based Graviton2 processors with better price-performance for production workloads.
+
+## 28. ElastiCache Redis Configuration Endpoint vs Primary Endpoint
+
+Using `attrConfigurationEndPointAddress` for a standard Redis replication group causes CREATE_FAILED error: "Template error: Configuration endpoint was not found for replication group". The ConfigurationEndPointAddress attribute only exists when cluster mode is enabled (numNodeGroups > 1).
+
+For standard replication groups (numNodeGroups: 1 with replicas), use `attrPrimaryEndPointAddress` instead. This provides the primary node endpoint for read/write operations. Update Route53 records and CloudFormation outputs to reference the correct endpoint attribute.

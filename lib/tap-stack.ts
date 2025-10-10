@@ -487,7 +487,7 @@ export class TapStack extends cdk.Stack {
       new route53.CnameRecord(this, 'RedisRecordPrimary', {
         zone: hostedZone,
         recordName: `redis-${props.primaryRegion}`,
-        domainName: redisCluster.attrConfigurationEndPointAddress,
+        domainName: redisCluster.attrPrimaryEndPointAddress,
         ttl: cdk.Duration.seconds(60),
       });
     } else {
@@ -515,7 +515,7 @@ export class TapStack extends cdk.Stack {
           }
         ),
         recordName: `redis-${props.secondaryRegion}`,
-        domainName: redisCluster.attrConfigurationEndPointAddress,
+        domainName: redisCluster.attrPrimaryEndPointAddress,
         ttl: cdk.Duration.seconds(60),
       });
     }
@@ -541,7 +541,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'RedisClusterEndpoint', {
-      value: redisCluster.attrConfigurationEndPointAddress,
+      value: redisCluster.attrPrimaryEndPointAddress,
       exportName: `${environmentSuffix}-RedisClusterEndpoint`,
     });
 
