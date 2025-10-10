@@ -48,45 +48,7 @@ export class AlbStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create Application Load Balancer
-    const alb = new aws.lb.LoadBalancer(
-      `${name}-alb-${args.environmentSuffix}`,
-      {
-        name: `${name}-alb-${args.environmentSuffix}`.substring(0, 32), // ALB name limited to 32 chars
-        internal: false,
-        loadBalancerType: 'application',
-        securityGroups: [albSecurityGroup.id],
-        subnets: args.publicSubnetIds,
-        enableDeletionProtection: false,
-        enableHttp2: true,
-        enableCrossZoneLoadBalancing: true,
-        tags: {
-          Name: `${name}-alb-${args.environmentSuffix}`,
-          ...args.tags,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create ALB listener
-    new aws.lb.Listener(
-      `${name}-listener-${args.environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: args.targetGroupArn,
-          },
-        ],
-        tags: args.tags,
-      },
-      { parent: this }
-    );
-
-    // Enable ALB access logs
+    // Create S3 bucket for ALB access logs
     const albLogBucket = new aws.s3.Bucket(
       `${name}-alb-logs-${args.environmentSuffix}`,
       {
@@ -135,11 +97,11 @@ export class AlbStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Update ALB to enable access logs
-    new aws.lb.LoadBalancer(
-      `${name}-alb-with-logs-${args.environmentSuffix}`,
+    // Create Application Load Balancer with access logs
+    const alb = new aws.lb.LoadBalancer(
+      `${name}-alb-${args.environmentSuffix}`,
       {
-        name: alb.name,
+        name: `${name}-alb-${args.environmentSuffix}`.substring(0, 32), // ALB name limited to 32 chars
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [albSecurityGroup.id],
@@ -158,6 +120,24 @@ export class AlbStack extends pulumi.ComponentResource {
         },
       },
       { parent: this, dependsOn: [albLogBucket] }
+    );
+
+    // Create ALB listener
+    new aws.lb.Listener(
+      `${name}-listener-${args.environmentSuffix}`,
+      {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: args.targetGroupArn,
+          },
+        ],
+        tags: args.tags,
+      },
+      { parent: this }
     );
 
     this.albArn = alb.arn;
