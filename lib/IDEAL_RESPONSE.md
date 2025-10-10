@@ -1201,37 +1201,6 @@ Comprehensive outputs for:
 - Consider spot instances for non-critical workloads
 - Review and right-size resources based on actual usage
 
-## Testing
-
-The infrastructure includes comprehensive unit tests in `test/terraform.unit.test.ts`:
-
-```bash
-npm run test:unit
-```
-
-Tests verify:
-
-- File structure and syntax
-- Provider configuration (multi-region setup)
-- Resource existence and configuration
-- Security group rules
-- Tagging compliance
-- Output definitions
-
-All 21 tests pass successfully:
-
-- ✓ File existence
-- ✓ Provider setup (us-east-1, us-west-2)
-- ✓ VPC configuration
-- ✓ EC2 instances
-- ✓ RDS databases
-- ✓ Application Load Balancers
-- ✓ S3 buckets with security features
-- ✓ SSM parameters
-- ✓ HTTPS configuration
-- ✓ Production tags
-- ✓ Outputs
-
 ## Cleanup
 
 To destroy all resources:
