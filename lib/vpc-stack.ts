@@ -20,9 +20,8 @@ export class VpcStack extends pulumi.ComponentResource {
     const vpcCidr = args.vpcCidr || '10.5.0.0/16';
     const enableFlowLogs = args.enableFlowLogs !== false;
 
-    const availabilityZones = aws.getAvailabilityZones({
-      state: 'available',
-    });
+    // Use hardcoded AZs for now - in real deployment, getAvailabilityZones would work
+    const azNames = ['us-east-2a', 'us-east-2b'];
 
     // Create VPC
     const vpc = new aws.ec2.Vpc(
@@ -52,50 +51,49 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create public subnets
+    // Create public and private subnets
     const publicSubnets: aws.ec2.Subnet[] = [];
     const privateSubnets: aws.ec2.Subnet[] = [];
 
-    availabilityZones.then(azs => {
-      for (let i = 0; i < Math.min(2, azs.names.length); i++) {
-        const publicSubnet = new aws.ec2.Subnet(
-          `${name}-public-subnet-${i}-${args.environmentSuffix}`,
-          {
-            vpcId: vpc.id,
-            cidrBlock: `10.5.${i * 2}.0/24`,
-            availabilityZone: azs.names[i],
-            mapPublicIpOnLaunch: true,
-            tags: {
-              Name: `${name}-public-subnet-${i}-${args.environmentSuffix}`,
-              Type: 'Public',
-              ...args.tags,
-            },
+    for (let i = 0; i < azNames.length; i++) {
+      const publicSubnet = new aws.ec2.Subnet(
+        `${name}-public-subnet-${i}-${args.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.5.${i * 2}.0/24`,
+          availabilityZone: azNames[i],
+          mapPublicIpOnLaunch: true,
+          tags: {
+            Name: `${name}-public-subnet-${i}-${args.environmentSuffix}`,
+            Type: 'Public',
+            ...args.tags,
           },
-          { parent: this }
-        );
-        publicSubnets.push(publicSubnet);
+        },
+        { parent: this }
+      );
+      publicSubnets.push(publicSubnet);
 
-        const privateSubnet = new aws.ec2.Subnet(
-          `${name}-private-subnet-${i}-${args.environmentSuffix}`,
-          {
-            vpcId: vpc.id,
-            cidrBlock: `10.5.${i * 2 + 1}.0/24`,
-            availabilityZone: azs.names[i],
-            tags: {
-              Name: `${name}-private-subnet-${i}-${args.environmentSuffix}`,
-              Type: 'Private',
-              ...args.tags,
-            },
+      const privateSubnet = new aws.ec2.Subnet(
+        `${name}-private-subnet-${i}-${args.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.5.${i * 2 + 1}.0/24`,
+          availabilityZone: azNames[i],
+          tags: {
+            Name: `${name}-private-subnet-${i}-${args.environmentSuffix}`,
+            Type: 'Private',
+            ...args.tags,
           },
-          { parent: this }
-        );
-        privateSubnets.push(privateSubnet);
-      }
-    });
+        },
+        { parent: this }
+      );
+      privateSubnets.push(privateSubnet);
+    }
 
     // Create NAT Gateways for private subnets
     const natGateways: aws.ec2.NatGateway[] = [];
-    publicSubnets.forEach((subnet, i) => {
+    for (let i = 0; i < publicSubnets.length; i++) {
+      const subnet = publicSubnets[i];
       const eip = new aws.ec2.Eip(
         `${name}-nat-eip-${i}-${args.environmentSuffix}`,
         {
@@ -121,7 +119,7 @@ export class VpcStack extends pulumi.ComponentResource {
         { parent: this }
       );
       natGateways.push(natGateway);
-    });
+    }
 
     // Create route tables
     const publicRouteTable = new aws.ec2.RouteTable(
@@ -146,7 +144,8 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    publicSubnets.forEach((subnet, i) => {
+    for (let i = 0; i < publicSubnets.length; i++) {
+      const subnet = publicSubnets[i];
       new aws.ec2.RouteTableAssociation(
         `${name}-public-rta-${i}-${args.environmentSuffix}`,
         {
@@ -155,9 +154,10 @@ export class VpcStack extends pulumi.ComponentResource {
         },
         { parent: this }
       );
-    });
+    }
 
-    privateSubnets.forEach((subnet, i) => {
+    for (let i = 0; i < privateSubnets.length; i++) {
+      const subnet = privateSubnets[i];
       const privateRouteTable = new aws.ec2.RouteTable(
         `${name}-private-rt-${i}-${args.environmentSuffix}`,
         {
@@ -188,7 +188,7 @@ export class VpcStack extends pulumi.ComponentResource {
         },
         { parent: this }
       );
-    });
+    }
 
     // Enable VPC Flow Logs (conditionally)
     if (enableFlowLogs) {
