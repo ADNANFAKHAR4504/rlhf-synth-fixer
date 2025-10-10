@@ -5,7 +5,6 @@ import {
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
 import * as aws from '@cdktf/provider-aws';
 import {
   S3Module,
@@ -14,14 +13,13 @@ import {
   RdsModule,
   DynamoDbModule,
   RedshiftModule,
-  CloudTrailConfigModule,
   ElbModule,
   ApiGatewayModule,
   EcrModule,
   SnsModule,
   MonitoringModule,
   CloudFrontWafModule,
-  VpcModule, // Add VPC module import
+  VpcModule,
   CommonTags,
 } from './modules';
 
@@ -54,12 +52,19 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
+    // Get current AWS account ID
+    const current = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current-account'
+    );
+
     // Common tags for all resources
     const commonTags: CommonTags = {
       Environment: 'Production',
       Security: 'Enabled',
       Compliance: 'True',
       Owner: 'DevOps Team',
+      Region: awsRegion, // Add region to tags
     };
 
     // Get latest Amazon Linux 2 AMI
@@ -99,29 +104,34 @@ export class TapStack extends TerraformStack {
       targetKeyId: kmsKey.id,
     });
 
-    // Create centralized logging bucket first
+    // Create centralized logging bucket with ALB permissions
     const loggingBucket = new S3Module(
       this,
       'central-logging',
-      'tap-central-logging-bucket',
+      `tap-central-logging-${current.accountId}`, // Make bucket name unique
       kmsKey.arn,
-      'tap-central-logging-bucket', // Self-logging
-      commonTags
+      `tap-central-logging-${current.accountId}`, // Self-logging
+      commonTags,
+      true, // isLoggingBucket
+      current.accountId // Pass account ID for ALB permissions
     );
 
-    // CloudTrail and Config
+    // CloudTrail and Config - COMMENTED OUT AS REQUESTED
+    // Uncomment this block when you've cleaned up existing trails
+    /*
     const cloudTrailConfig = new CloudTrailConfigModule(
       this,
       'cloudtrail-config',
       kmsKey.arn,
       commonTags
     );
+    */
 
     // S3 Buckets
     const applicationBucket = new S3Module(
       this,
       'app-bucket',
-      'tap-application-data',
+      `tap-application-data-${current.accountId}`, // Make unique
       kmsKey.arn,
       loggingBucket.bucket.id,
       commonTags
@@ -130,7 +140,7 @@ export class TapStack extends TerraformStack {
     new S3Module(
       this,
       'backup-bucket',
-      'tap-backup-data',
+      `tap-backup-data-${current.accountId}`, // Make unique
       kmsKey.arn,
       loggingBucket.bucket.id,
       commonTags
@@ -155,7 +165,7 @@ export class TapStack extends TerraformStack {
       't3.medium',
       ami.id,
       vpc.privateSubnets[0].id,
-      vpc.vpc.id, // Pass the VPC ID to the EC2 module
+      vpc.vpc.id,
       availabilityZones[0],
       kmsKey.arn,
       commonTags
@@ -180,7 +190,7 @@ export class TapStack extends TerraformStack {
       'main-db',
       'db.t3.medium',
       'postgres',
-      subnetIds, // Use our new subnet IDs
+      subnetIds,
       availabilityZones[0],
       commonTags
     );
@@ -193,12 +203,12 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    // Redshift Cluster
+    // Redshift Cluster - with corrected node type
     new RedshiftModule(
       this,
       'analytics',
       'tap-analytics-cluster',
-      'dc2.large',
+      'ra3.xlplus', // Changed from dc2.large
       2,
       availabilityZones[0],
       commonTags
@@ -208,13 +218,13 @@ export class TapStack extends TerraformStack {
     const alb = new ElbModule(
       this,
       'main-alb',
-      vpc.vpc.id, // Use new VPC ID
-      vpc.publicSubnets.map(subnet => subnet.id), // Use public subnets for ALB
+      vpc.vpc.id,
+      vpc.publicSubnets.map(subnet => subnet.id),
       loggingBucket.bucket.bucket!,
       commonTags
     );
 
-    // API Gateway
+    // API Gateway with fixed implementation
     const apiGateway = new ApiGatewayModule(
       this,
       'rest-api',
@@ -248,16 +258,17 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    // CloudFront with WAF
+    // CloudFront without WAF (WAF requires us-east-1)
     const cloudFront = new CloudFrontWafModule(
       this,
       'cdn',
       alb.alb.dnsName,
       loggingBucket.bucket.bucketDomainName!,
-      commonTags
+      commonTags,
+      false // Don't create WAF in non-us-east-1 regions
     );
 
-    // Add new outputs for VPC information
+    // Outputs
     new TerraformOutput(this, 'vpc-id', {
       value: vpc.vpc.id,
       description: 'VPC ID',
@@ -273,7 +284,6 @@ export class TapStack extends TerraformStack {
       description: 'Public subnet IDs',
     });
 
-    // Keep existing outputs
     new TerraformOutput(this, 'aws-region', {
       value: awsRegion,
       description: 'AWS Region',
@@ -299,15 +309,21 @@ export class TapStack extends TerraformStack {
       description: 'RDS encryption status',
     });
 
+    // CloudTrail output - COMMENTED OUT
+    /*
     new TerraformOutput(this, 'cloudtrail-enabled', {
       value: cloudTrailConfig.trail.name,
       description: 'CloudTrail name',
     });
+    */
 
-    new TerraformOutput(this, 'waf-enabled', {
-      value: cloudFront.waf.name,
-      description: 'WAF Web ACL name',
-    });
+    // WAF output - only if WAF was created
+    if (cloudFront.waf) {
+      new TerraformOutput(this, 'waf-enabled', {
+        value: cloudFront.waf.name,
+        description: 'WAF Web ACL name',
+      });
+    }
 
     new TerraformOutput(this, 'api-gateway-logging', {
       value: apiGateway.stage.accessLogSettings?.destinationArn,
@@ -342,6 +358,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'kms-key-id', {
       value: kmsKey.id,
       description: 'Master KMS key ID',
+    });
+
+    new TerraformOutput(this, 'account-id', {
+      value: current.accountId,
+      description: 'AWS Account ID',
     });
   }
 }
