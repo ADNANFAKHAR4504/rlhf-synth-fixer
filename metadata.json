@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4090",
+  "team": "5",
+  "startedAt": "2025-10-10T10:58:44.773Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "Aurora DB, DynamoDB, Elasticache, Secrets Manager, Cloudwatch, Eventbridge, Lambda, Route53, Security Hub"
+}
