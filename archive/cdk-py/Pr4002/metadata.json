@@ -10,5 +10,20 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "lambda, s3, cloudwathch, api-gateway"
+  "aws_services": [
+    "lambda",
+    "s3",
+    "dynamodb",
+    "apigateway",
+    "cloudwatch",
+    "iam",
+    "logs"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
