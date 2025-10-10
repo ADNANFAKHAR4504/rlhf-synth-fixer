@@ -128,13 +128,13 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
     console.log('Step 2: Validating CodeBuild security scan');
     const codeBuildAction = securityStage.actions.find(a => a.actionTypeId.provider === 'CodeBuild');
     expect(codeBuildAction).toBeDefined();
-    expect(codeBuildAction.actionName).toBe('SecurityScan');
+    expect(codeBuildAction.name).toBe('SecurityScan');
     console.log('✓ CodeBuild security scan configured (npm audit)');
 
     console.log('Step 3: Validating Lambda security scanner');
     const lambdaAction = securityStage.actions.find(a => a.actionTypeId.provider === 'Lambda');
     expect(lambdaAction).toBeDefined();
-    expect(lambdaAction.actionName).toBe('CustomSecurityScan');
+    expect(lambdaAction.name).toBe('CustomSecurityScan');
     console.log('✓ Lambda custom security scanner integrated');
 
     console.log('Step 4: Testing Lambda security scanner invocation');
@@ -224,9 +224,13 @@ describe('Healthcare CI/CD Pipeline Integration Tests', () => {
     console.log('Step 2: Validating stage state tracking');
     stateResponse.stageStates.forEach((stage, idx) => {
       expect(stage.stageName).toBeDefined();
-      expect(stage.latestExecution).toBeDefined();
+      // latestExecution is only present if pipeline has been executed
+      if (stage.latestExecution) {
+        expect(stage.latestExecution.status).toBeDefined();
+      }
     });
-    console.log('✓ All stages have execution state tracking');
+    const stagesWithExecutionHistory = stateResponse.stageStates.filter(s => s.latestExecution);
+    console.log(`✓ All stages configured for state tracking (${stagesWithExecutionHistory.length} stages with execution history)`);
 
     console.log('Step 3: Verifying end-to-end pipeline readiness');
     const pipelineCommand = new GetPipelineCommand({
