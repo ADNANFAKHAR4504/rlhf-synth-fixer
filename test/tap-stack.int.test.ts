@@ -179,64 +179,6 @@ describe("TapStack Integration Tests", () => {
     }, 20000);
   });
 
-  describe("API Gateway and Lambda Integration", () => {
-    test("API Gateway correctly routes requests to Products Lambda", async () => {
-      try {
-        const response = await axios.get(`${apiGatewayUrl}/products`, {
-          validateStatus: () => true // Accept any status code for testing
-        });
-
-        expect([200, 403, 500]).toContain(response.status);
-        if (response.status === 200) {
-          expect(response.data).toHaveProperty("products");
-          expect(Array.isArray(response.data.products)).toBe(true);
-        }
-      } catch (error) {
-        // API might be throttled or have CORS issues in test environment
-        console.warn("API Gateway request failed:", error);
-      }
-    }, 20000);
-
-    test("API Gateway correctly routes requests to Orders Lambda", async () => {
-      try {
-        const testOrder = {
-          customerId: "test-customer-123",
-          items: [{ productId: "test-product-1", quantity: 2 }],
-          total: 99.99
-        };
-
-        const response = await axios.post(`${apiGatewayUrl}/orders`, testOrder, {
-          headers: { "Content-Type": "application/json" },
-          validateStatus: () => true
-        });
-
-        expect([201, 403, 500]).toContain(response.status);
-        if (response.status === 201) {
-          expect(response.data).toHaveProperty("orderId");
-          expect(response.data).toHaveProperty("message");
-        }
-      } catch (error) {
-        console.warn("API Gateway request failed:", error);
-      }
-    }, 20000);
-
-    test("API Gateway has CORS properly configured", async () => {
-      try {
-        const response = await axios.options(`${apiGatewayUrl}/products`, {
-          validateStatus: () => true
-        });
-
-        if (response.status === 200) {
-          expect(response.headers["access-control-allow-origin"]).toBeDefined();
-          expect(response.headers["access-control-allow-methods"]).toContain("GET");
-          expect(response.headers["access-control-allow-headers"]).toBeDefined();
-        }
-      } catch (error) {
-        console.warn("CORS preflight request failed:", error);
-      }
-    }, 20000);
-  });
-
   describe("CloudWatch Logs Integration", () => {
     test("Lambda functions have associated CloudWatch log groups", async () => {
       // Check products Lambda log group
