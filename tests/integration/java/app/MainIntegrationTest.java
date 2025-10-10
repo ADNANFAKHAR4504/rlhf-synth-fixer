@@ -149,8 +149,16 @@ public class MainIntegrationTest {
                 JsonNode value = entry.getValue();
                 if (value.isObject()) {
                     value.fields().forEachRemaining(nestedEntry -> {
-                        result.put(nestedEntry.getKey(), nestedEntry.getValue().asText());
+                        JsonNode nestedValue = nestedEntry.getValue();
+                        // Store arrays and objects as JSON strings, primitives as text
+                        if (nestedValue.isArray() || nestedValue.isObject()) {
+                            result.put(nestedEntry.getKey(), nestedValue.toString());
+                        } else {
+                            result.put(nestedEntry.getKey(), nestedValue.asText());
+                        }
                     });
+                } else if (value.isArray()) {
+                    result.put(entry.getKey(), value.toString());
                 } else {
                     result.put(entry.getKey(), value.asText());
                 }
