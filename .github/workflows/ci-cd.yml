@@ -55,6 +55,24 @@ jobs:
         id: metadata
         run: ./scripts/detect-metadata.sh
 
+  validate-commit-message:
+    name: Validate Commit Message
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch all history for commitlint
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
+
+      - name: Validate commit message
+        run: npx commitlint --from=HEAD~1 --to=HEAD
+
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -720,8 +738,24 @@ jobs:
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
+            # Extract metadata for commit message
+            METADATA_PLATFORM=$(jq -r '.platform' metadata.json)
+            METADATA_PO_ID=$(jq -r '.po_id' metadata.json)
+            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' metadata.json)
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' metadata.json)
+
+            METADATA_AUTHOR=$(jq -r '.author' metadata.json)
+
+            # Truncate subject_labels to 100 characters if needed
+            if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
+              METADATA_SUBJECT_LABELS="${METADATA_SUBJECT_LABELS:0:97}..." # 97 chars + "..." = 100
+            fi
+
+            COMMIT_SUBJECT="feat(${METADATA_PLATFORM}): ${METADATA_PO_ID} ${METADATA_SUBTASK}"
+            COMMIT_BODY="${METADATA_SUBJECT_LABELS}\nAuthor: ${METADATA_AUTHOR}"
+
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
+            git commit -m "${COMMIT_SUBJECT}" -m "${COMMIT_BODY}" -m "[skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -845,31 +879,32 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  # TODO: For future use
-  # ? Need fine-grained Personal Access Token from repo owner
-  # semantic-release:
-  #   name: Semantic Release
-  #   runs-on: ubuntu-24.04
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   permissions:
-  #     contents: write
-  #     issues: write
-  #     pull-requests: write
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: semantic_release_pipeline
+      cancel-in-progress: true
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         fetch-depth: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: 'false'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
 
-  #     - name: Run semantic-release
-  #       run: npm run release
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+      - name: Run semantic-release
+        run: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
