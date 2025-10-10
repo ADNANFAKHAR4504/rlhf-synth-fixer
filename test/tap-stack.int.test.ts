@@ -554,7 +554,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const allResults = networkTests.flat();
       const analysis = trafficSim.analyzeTrafficResults(allResults);
       
-      console.log('🛡️ Network Security Analysis:');
+      console.log(' Network Security Analysis:');
       console.log(`   Network Access Requests: ${analysis.totalRequests}`);
       console.log(`   Traffic Routing:`, analysis.statusCodes);
       console.log(`   Security Group Enforcement: Active (port 80/443 allowed)`);
@@ -577,7 +577,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
     });
 
     test('HTTPS traffic should demonstrate encryption in transit capability', async () => {
-      console.log('🔐 Testing HTTPS encryption enforcement...');
+      console.log(' Testing HTTPS encryption enforcement...');
       
       const httpUrl = `http://${stackOutputs.ALBDnsName}`;
       const httpsUrl = `https://${stackOutputs.ALBDnsName}`;
@@ -608,7 +608,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const httpAnalysis = trafficSim.analyzeTrafficResults(httpResults);
       const httpsAnalysis = trafficSim.analyzeTrafficResults(httpsResults);
       
-      console.log('🌐 Encryption Traffic Analysis:');
+      console.log(' Encryption Traffic Analysis:');
       console.log(`   HTTP Requests: ${httpAnalysis.totalRequests}`);
       console.log(`   HTTP Responses:`, httpAnalysis.statusCodes);
       console.log(`   HTTPS Requests: ${httpsAnalysis.totalRequests}`);
@@ -625,7 +625,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
 
   describe('PROMPT.md Objective: Database Security & High Availability Validation', () => {
     test('Database security should be validated through application traffic patterns', async () => {
-      console.log('💾 Testing database security through simulated application traffic...');
+      console.log(' Testing database security through simulated application traffic...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -701,7 +701,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
 
   describe('PROMPT.md Objective: Cost Allocation & Compliance Traffic Validation', () => {
     test('Traffic patterns should demonstrate cost allocation and compliance monitoring', async () => {
-      console.log('💰 Generating traffic to validate cost allocation and compliance tracking...');
+      console.log(' Generating traffic to validate cost allocation and compliance tracking...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -745,7 +745,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const allResults = costTrackingTraffic.flat();
       const analysis = trafficSim.analyzeTrafficResults(allResults);
       
-      console.log('📊 Cost Allocation & Compliance Analysis:');
+      console.log(' Cost Allocation & Compliance Analysis:');
       console.log(`   Tagged Traffic Requests: ${analysis.totalRequests}`);
       console.log(`   Cost Center Categories: Engineering, Product, Analytics, Compliance`);
       console.log(`   Resource Tagging: cost-center and project-id tags active`);
@@ -770,7 +770,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
 
   describe('PROMPT.md Objective: Multi-Region Failover & Resilience Validation', () => {
     test('Infrastructure should maintain availability during continuous traffic stress', async () => {
-      console.log('🔄 Testing infrastructure resilience with continuous traffic load...');
+      console.log(' Testing infrastructure resilience with continuous traffic load...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -803,7 +803,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       
       const analysis = trafficSim.analyzeTrafficResults(continuousTraffic);
       
-      console.log('🏋️ Infrastructure Resilience Analysis:');
+      console.log(' Infrastructure Resilience Analysis:');
       console.log(`   Continuous Requests Generated: ${analysis.totalRequests}`);
       console.log(`   Infrastructure Response Rate: ${((analysis.successfulRequests / Math.max(analysis.totalRequests, 1)) * 100).toFixed(2)}%`);
       console.log(`   Average Response Time: ${analysis.avgResponseTime.toFixed(2)}ms`);
