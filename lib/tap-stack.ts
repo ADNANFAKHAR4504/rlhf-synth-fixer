@@ -293,17 +293,3 @@ export class TradingPlatformStack extends TerraformStack {
     });
   }
 }
-
-// App class for backward compatibility if needed
-export class TradingPlatformApp {
-  constructor() {
-    // This is kept for backward compatibility but not used in CDKTF
-  }
-
-  synth() {
-    // This method is kept for backward compatibility but not used in CDKTF
-    console.log(
-      'Note: synth() method is not needed in CDKTF - use app.synth() instead'
-    );
-  }
-}
