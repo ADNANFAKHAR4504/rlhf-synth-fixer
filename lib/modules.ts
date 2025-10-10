@@ -219,12 +219,14 @@ export class VpcModule extends BaseModule {
 }
 
 // S3 Module with proper ALB permissions
+// S3 Module with proper ALB permissions
 export class S3Module extends BaseModule {
   public readonly bucket: aws.s3Bucket.S3Bucket;
   public readonly bucketVersioning: aws.s3BucketVersioning.S3BucketVersioningA;
   public readonly bucketEncryption: aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA;
   public readonly bucketPublicAccessBlock: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
   public readonly bucketLogging: aws.s3BucketLogging.S3BucketLoggingA;
+  public readonly bucketOwnershipControls: aws.s3BucketOwnershipControls.S3BucketOwnershipControls;
   public readonly bucketAcl: aws.s3BucketAcl.S3BucketAcl;
 
   constructor(
@@ -246,11 +248,25 @@ export class S3Module extends BaseModule {
       tags: this.tags,
     });
 
-    // Set bucket ACL for ALB logging
+    // Configure bucket ownership controls BEFORE setting ACLs
     if (isLoggingBucket) {
+      this.bucketOwnershipControls =
+        new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+          this,
+          `${id}-ownership`,
+          {
+            bucket: this.bucket.id,
+            rule: {
+              objectOwnership: 'BucketOwnerPreferred',
+            },
+          }
+        );
+
+      // Now set bucket ACL (after ownership controls)
       this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, `${id}-acl`, {
         bucket: this.bucket.id,
         acl: 'log-delivery-write',
+        dependsOn: [this.bucketOwnershipControls],
       });
     }
 
@@ -266,7 +282,7 @@ export class S3Module extends BaseModule {
       }
     );
 
-    // Enable encryption with KMS (but not for logging bucket)
+    // Enable encryption
     if (!isLoggingBucket) {
       this.bucketEncryption =
         new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
@@ -304,22 +320,22 @@ export class S3Module extends BaseModule {
         );
     }
 
-    // Block public access (conditionally for logging bucket)
+    // Block public access (allow ACLs for logging bucket)
     this.bucketPublicAccessBlock =
       new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
         this,
         `${id}-public-access-block`,
         {
           bucket: this.bucket.id,
-          blockPublicAcls: !isLoggingBucket, // Allow ACLs for logging bucket
+          blockPublicAcls: false, // Must be false for logging bucket
           blockPublicPolicy: true,
-          ignorePublicAcls: !isLoggingBucket,
+          ignorePublicAcls: false, // Must be false for logging bucket
           restrictPublicBuckets: true,
         }
       );
 
     // Enable access logging (skip if this is the logging bucket itself)
-    if (!isLoggingBucket) {
+    if (!isLoggingBucket && logBucketId) {
       this.bucketLogging = new aws.s3BucketLogging.S3BucketLoggingA(
         this,
         `${id}-logging`,
@@ -332,9 +348,8 @@ export class S3Module extends BaseModule {
     }
 
     // Fixed bucket policy for ALB access logs
-    if (isLoggingBucket && accountId) {
-      const currentRegion = region || tags.Region || 'eu-north-1';
-      const elbAccountId = this.getElbServiceAccountId(currentRegion);
+    if (isLoggingBucket && accountId && region) {
+      const elbAccountId = this.getElbServiceAccountId(region);
 
       new aws.s3BucketPolicy.S3BucketPolicy(this, `${id}-bucket-policy`, {
         bucket: this.bucket.id,
@@ -360,12 +375,12 @@ export class S3Module extends BaseModule {
               Resource: `arn:aws:s3:::${bucketName}/*`,
               Condition: {
                 StringEquals: {
-                  's3:x-acl': 'bucket-owner-full-control',
+                  's3:x-amz-acl': 'bucket-owner-full-control', // Fixed: was 's3:x-acl'
                 },
               },
             },
             {
-              Sid: 'ELBAccessLogsPolicy',
+              Sid: 'ELBAccessLogsPutObject',
               Effect: 'Allow',
               Principal: {
                 AWS: `arn:aws:iam::${elbAccountId}:root`,
@@ -374,10 +389,10 @@ export class S3Module extends BaseModule {
               Resource: `arn:aws:s3:::${bucketName}/alb/*`,
             },
             {
-              Sid: 'AWSLogDeliveryAclCheckForELB',
+              Sid: 'ELBAccessLogsGetBucketAcl',
               Effect: 'Allow',
               Principal: {
-                Service: 'elasticloadbalancing.amazonaws.com',
+                AWS: `arn:aws:iam::${elbAccountId}:root`,
               },
               Action: 's3:GetBucketAcl',
               Resource: `arn:aws:s3:::${bucketName}`,
@@ -1163,6 +1178,212 @@ export class MonitoringModule extends BaseModule {
         tags: this.tags,
       }
     );
+  }
+}
+
+// CloudTrail Module
+export class CloudTrailModule extends BaseModule {
+  public readonly trail: aws.cloudtrail.Cloudtrail;
+  public readonly trailBucket: aws.s3Bucket.S3Bucket;
+  public readonly bucketPolicy: aws.s3BucketPolicy.S3BucketPolicy;
+  public readonly logGroup: aws.cloudwatchLogGroup.CloudwatchLogGroup;
+  public readonly cloudTrailRole: aws.iamRole.IamRole;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    kmsKeyArn: string,
+    tags: CommonTags
+  ) {
+    super(scope, id, tags);
+
+    // Get current AWS account details
+    const current = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'current'
+    );
+
+    // const currentRegion = new aws.dataAwsRegion.DataAwsRegion(
+    //   this,
+    //   'current-region'
+    // );
+
+    // Create S3 bucket for CloudTrail logs
+    this.trailBucket = new aws.s3Bucket.S3Bucket(this, `${id}-bucket`, {
+      bucket: `cloudtrail-logs-${current.accountId}-${id}`,
+      tags: this.tags,
+    });
+
+    // Enable versioning on CloudTrail bucket
+    new aws.s3BucketVersioning.S3BucketVersioningA(
+      this,
+      `${id}-bucket-versioning`,
+      {
+        bucket: this.trailBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
+
+    // Enable encryption on CloudTrail bucket
+    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+      this,
+      `${id}-bucket-encryption`,
+      {
+        bucket: this.trailBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKeyArn,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      }
+    );
+
+    // Block public access
+    new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
+      this,
+      `${id}-bucket-pab`,
+      {
+        bucket: this.trailBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      }
+    );
+
+    // Create bucket policy for CloudTrail
+    this.bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
+      this,
+      `${id}-bucket-policy`,
+      {
+        bucket: this.trailBucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: `arn:aws:s3:::${this.trailBucket.bucket}`,
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `arn:aws:s3:::${this.trailBucket.bucket}/AWSLogs/${current.accountId}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+          ],
+        }),
+      }
+    );
+
+    // Create CloudWatch Log Group for CloudTrail
+    this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      `${id}-log-group`,
+      {
+        name: `/aws/cloudtrail/${id}`,
+        retentionInDays: 90,
+        tags: this.tags,
+      }
+    );
+
+    // Create IAM role for CloudTrail to write to CloudWatch Logs
+    this.cloudTrailRole = new aws.iamRole.IamRole(this, `${id}-role`, {
+      name: `${id}-cloudtrail-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: this.tags,
+    });
+
+    // Attach policy to allow CloudTrail to write to CloudWatch Logs
+    new aws.iamRolePolicy.IamRolePolicy(this, `${id}-role-policy`, {
+      name: `${id}-cloudtrail-policy`,
+      role: this.cloudTrailRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+            Resource: `${this.logGroup.arn}:*`,
+          },
+        ],
+      }),
+    });
+
+    // Create CloudTrail
+    this.trail = new aws.cloudtrail.Cloudtrail(this, `${id}-trail`, {
+      name: `${id}-trail`,
+      s3BucketName: this.trailBucket.id,
+      includeGlobalServiceEvents: true,
+      // isMultiRegionTrail: true,
+      enableLogFileValidation: true,
+
+      cloudWatchLogsGroupArn: `${this.logGroup.arn}:*`,
+      cloudWatchLogsRoleArn: this.cloudTrailRole.arn,
+
+      eventSelector: [
+        {
+          readWriteType: 'All',
+          includeManagementEvents: true,
+
+          dataResource: [
+            {
+              type: 'AWS::S3::Object',
+              values: ['arn:aws:s3:::*/'],
+            },
+          ],
+        },
+      ],
+
+      kmsKeyId: kmsKeyArn,
+
+      tags: this.tags,
+
+      dependsOn: [this.bucketPolicy],
+    });
+
+    // Add additional event selectors for other services
+    new aws.cloudtrail.Cloudtrail(this, `${id}-insight`, {
+      name: `${id}-insight-trail`,
+      s3BucketName: this.trailBucket.id,
+
+      insightSelector: [
+        {
+          insightType: 'ApiCallRateInsight',
+        },
+      ],
+
+      dependsOn: [this.trail],
+    });
   }
 }
 

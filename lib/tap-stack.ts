@@ -20,6 +20,7 @@ import {
   MonitoringModule,
   CloudFrontWafModule,
   VpcModule,
+  CloudTrailModule,
   CommonTags,
 } from './modules';
 
@@ -115,19 +116,16 @@ export class TapStack extends TerraformStack {
       commonTags,
       true, // This IS the logging bucket
       current.accountId, // Pass account ID
-      'eu-north-1' // Pass region
+      awsRegion // Use the actual region variable instead of hardcoded 'eu-north-1'
     );
 
-    // CloudTrail and Config - COMMENTED OUT AS REQUESTED
-    // Uncomment this block when you've cleaned up existing trails
-    /*
-    const cloudTrailConfig = new CloudTrailConfigModule(
+    // Add CloudTrail
+    const cloudTrail = new CloudTrailModule(
       this,
-      'cloudtrail-config',
+      'cloudtrail',
       kmsKey.arn,
       commonTags
     );
-    */
 
     // S3 Buckets
     const applicationBucket = new S3Module(
@@ -311,13 +309,21 @@ export class TapStack extends TerraformStack {
       description: 'RDS encryption status',
     });
 
-    // CloudTrail output - COMMENTED OUT
-    /*
+    // Add CloudTrail output
     new TerraformOutput(this, 'cloudtrail-enabled', {
-      value: cloudTrailConfig.trail.name,
+      value: cloudTrail.trail.name,
       description: 'CloudTrail name',
     });
-    */
+
+    new TerraformOutput(this, 'cloudtrail-bucket', {
+      value: cloudTrail.trailBucket.bucket,
+      description: 'CloudTrail S3 bucket name',
+    });
+
+    new TerraformOutput(this, 'cloudtrail-log-group', {
+      value: cloudTrail.logGroup.name,
+      description: 'CloudTrail CloudWatch Log Group',
+    });
 
     // WAF output - only if WAF was created
     if (cloudFront.waf) {
