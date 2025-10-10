@@ -178,7 +178,7 @@ class TrafficSimulator {
     const results: TrafficResult[] = [];
     
     for (const payload of securityPayloads) {
-      console.log(`🔒 Testing security payload: ${payload.description}`);
+      console.log(`Testing security payload: ${payload.description}`);
       const attackResults = await this.generateHttpTraffic(
         `${url}${payload.path}`,
         2,
@@ -256,13 +256,13 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
     }
     
     trafficSim = new TrafficSimulator();
-    console.log('🚀 Initializing real-time traffic simulation tests...');
+    console.log('Initializing real-time traffic simulation tests...');
     console.log('Target ALB DNS:', stackOutputs.ALBDnsName);
   });
 
   describe('PROMPT.md Objective: Scalable Architecture Traffic Validation', () => {
     test('Infrastructure should handle concurrent traffic loads without manual intervention', async () => {
-      console.log('🔄 Testing scalable architecture with concurrent traffic...');
+      console.log('Testing scalable architecture with concurrent traffic...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -272,7 +272,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       });
       const analysis = trafficSim.analyzeTrafficResults(results);
       
-      console.log('📊 Scalability Traffic Analysis:');
+      console.log('Scalability Traffic Analysis:');
       console.log(`   Total Requests: ${analysis.totalRequests}`);
       console.log(`   Infrastructure Response: ${analysis.successfulRequests}/${analysis.totalRequests}`);
       console.log(`   Average Response Time: ${analysis.avgResponseTime.toFixed(2)}ms`);
@@ -294,11 +294,11 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       // Either getting ALB responses OR connection attempts (indicates DNS resolution working)
       expect(infraResponses.length > 0 || connectionAttempts.length > 0).toBeTruthy();
       
-      console.log('✅ Scalable architecture successfully handled concurrent traffic');
+      console.log(' Scalable architecture successfully handled concurrent traffic');
     });
 
     test('Traffic spikes should not overwhelm infrastructure', async () => {
-      console.log('🌊 Simulating traffic spikes to validate infrastructure resilience...');
+      console.log('Simulating traffic spikes to validate infrastructure resilience...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -316,7 +316,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const allResults = [...spike1, ...spike2];
       const analysis = trafficSim.analyzeTrafficResults(allResults);
       
-      console.log('🌊 Traffic Spike Analysis:');
+      console.log('Traffic Spike Analysis:');
       console.log(`   Total Spike Requests: ${analysis.totalRequests}`);
       console.log(`   Infrastructure Stability: ${analysis.avgResponseTime.toFixed(2)}ms avg response`);
       console.log(`   Response Pattern:`, analysis.statusCodes);
@@ -330,13 +330,13 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       expect(infrastructureResponse).toBeTruthy();
       expect(analysis.avgResponseTime).toBeLessThan(15000); // Should remain responsive
       
-      console.log('✅ Infrastructure successfully handled traffic spikes');
+      console.log(' Infrastructure successfully handled traffic spikes');
     });
   });
 
   describe('PROMPT.md Objective: WAF & Shield DDoS Protection Validation', () => {
     test('WAF should filter malicious traffic like SQL injection and XSS attacks', async () => {
-      console.log('🛡️ Testing WAF protection with malicious traffic simulation...');
+      console.log('Testing WAF protection with malicious traffic simulation...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -344,7 +344,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const maliciousResults = await trafficSim.generateSecurityTestTraffic(albUrl);
       const analysis = trafficSim.analyzeTrafficResults(maliciousResults);
       
-      console.log('🔒 Security Traffic Analysis:');
+      console.log('Security Traffic Analysis:');
       console.log(`   Malicious Requests Sent: ${analysis.totalRequests}`);
       console.log(`   Blocked Requests (403/429): ${analysis.securityBlocked}`);
       console.log(`   Status Code Distribution:`, analysis.statusCodes);
@@ -360,11 +360,11 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
                                Object.keys(analysis.statusCodes).length > 0;
       expect(securityResponse).toBeTruthy();
       
-      console.log('✅ WAF/Security layer is actively processing malicious traffic');
+      console.log(' WAF/Security layer is actively processing malicious traffic');
     });
 
     test('Shield DDoS protection should maintain infrastructure stability under attack', async () => {
-      console.log('⚡ Simulating DDoS attack pattern to test Shield protection...');
+      console.log('Simulating DDoS attack pattern to test Shield protection...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -383,7 +383,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const flatResults = ddosResults.flat();
       const analysis = trafficSim.analyzeTrafficResults(flatResults);
       
-      console.log('🛡️ DDoS Protection Analysis:');
+      console.log('DDoS Protection Analysis:');
       console.log(`   Attack Requests Sent: ${analysis.totalRequests}`);
       console.log(`   Infrastructure Response: ${analysis.successfulRequests}/${analysis.totalRequests}`);
       console.log(`   Rate Limited/Protected: ${analysis.totalRequests - analysis.successfulRequests}`);
@@ -400,13 +400,13 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
                               Object.keys(analysis.statusCodes).length > 0; // Any response indicates functioning
       expect(protectionActive).toBeTruthy();
       
-      console.log('✅ Shield DDoS protection maintained infrastructure stability');
+      console.log(' Shield DDoS protection maintained infrastructure stability');
     });
   });
 
   describe('PROMPT.md Objective: Centralized Logging & Threat Detection Validation', () => {
     test('Traffic should generate centralized logs and trigger monitoring systems', async () => {
-      console.log('📊 Generating diverse traffic to trigger centralized logging...');
+      console.log('Generating diverse traffic to trigger centralized logging...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -444,7 +444,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const flatResults = allResults.flat();
       const analysis = trafficSim.analyzeTrafficResults(flatResults);
       
-      console.log('📈 Centralized Logging Traffic Analysis:');
+      console.log('Centralized Logging Traffic Analysis:');
       console.log(`   Total Logged Requests: ${analysis.totalRequests}`);
       console.log(`   Traffic Categories: API, Data Operations, Health Checks, Admin Attempts`);
       console.log(`   Average Response Time: ${analysis.avgResponseTime.toFixed(2)}ms`);
@@ -455,7 +455,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       expect(analysis.totalRequests).toBe(13);
       
       // Wait for potential log propagation
-      console.log('⏳ Allowing time for log propagation to centralized systems...');
+      console.log('Allowing time for log propagation to centralized systems...');
       await new Promise(resolve => setTimeout(resolve, 20000));
       
       // Try to validate CloudTrail is capturing activity (if permissions allow)
@@ -464,17 +464,17 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
           StartTime: new Date(Date.now() - 600000) // Last 10 minutes
         }).promise();
         
-        console.log(`📋 Recent CloudTrail Events: ${recentEvents.Events?.length || 0}`);
+        console.log(`Recent CloudTrail Events: ${recentEvents.Events?.length || 0}`);
         expect(recentEvents.Events).toBeDefined();
       } catch (error) {
-        console.log('📋 CloudTrail lookup completed (permissions may be limited)');
+        console.log('CloudTrail lookup completed (permissions may be limited)');
       }
       
-      console.log('✅ Traffic successfully generated for centralized logging validation');
+      console.log(' Traffic successfully generated for centralized logging validation');
     });
 
     test('Suspicious activity patterns should trigger threat detection systems', async () => {
-      console.log('🚨 Generating suspicious traffic patterns to trigger threat detection...');
+      console.log('Generating suspicious traffic patterns to trigger threat detection...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -507,7 +507,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       const flatResults = suspiciousTraffic.flat();
       const analysis = trafficSim.analyzeTrafficResults(flatResults);
       
-      console.log('🔍 Threat Detection Traffic Analysis:');
+      console.log('Threat Detection Traffic Analysis:');
       console.log(`   Suspicious Requests: ${analysis.totalRequests}`);
       console.log(`   Response Patterns:`, analysis.statusCodes);
       console.log(`   Detection Indicators: Rapid requests, Admin scans, Bot traffic`);
@@ -517,16 +517,16 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       expect(analysis.totalRequests).toBe(18);
       
       // Wait for potential alarm triggers
-      console.log('⏰ Allowing time for CloudWatch alarm evaluation...');
+      console.log('Allowing time for CloudWatch alarm evaluation...');
       await new Promise(resolve => setTimeout(resolve, 15000));
       
-      console.log('✅ Suspicious traffic patterns generated for threat detection validation');
+      console.log(' Suspicious traffic patterns generated for threat detection validation');
     });
   });
 
   describe('PROMPT.md Objective: Network Security & Data Encryption Validation', () => {
     test('Network security should enforce proper access controls through traffic patterns', async () => {
-      console.log('🔒 Testing network security controls with diverse traffic patterns...');
+      console.log('Testing network security controls with diverse traffic patterns...');
       
       const albUrl = `http://${stackOutputs.ALBDnsName}`;
       
@@ -573,7 +573,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
         .reduce((sum: number, count) => sum + (count as number), 0);
       expect(totalResponses).toBe(13);
       
-      console.log('✅ Network security groups properly enforcing access controls');
+      console.log(' Network security groups properly enforcing access controls');
     });
 
     test('HTTPS traffic should demonstrate encryption in transit capability', async () => {
@@ -619,7 +619,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       expect(httpAnalysis.totalRequests).toBe(4);
       expect(httpsAnalysis.totalRequests).toBeGreaterThan(0);
       
-      console.log('✅ Encryption in transit capability validated');
+      console.log(' Encryption in transit capability validated');
     });
   });
 
@@ -695,7 +695,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       // PROMPT.md: RDS in VPC, automated backups, encryption
       expect(analysis.totalRequests).toBe(12);
       
-      console.log('✅ Database security validation through application traffic completed');
+      console.log(' Database security validation through application traffic completed');
     });
   });
 
@@ -764,7 +764,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
         .reduce((sum: number, count) => sum + (count as number), 0);
       expect(processedRequests).toBe(15);
       
-      console.log('✅ Cost allocation and compliance traffic validation completed');
+      console.log(' Cost allocation and compliance traffic validation completed');
     });
   });
 
@@ -816,7 +816,7 @@ describe('TapStack Real-Time Traffic Integration Tests', () => {
       // PROMPT.md: High availability, failover support, resilience
       expect(analysis.totalRequests).toBeGreaterThan(0);
       
-      console.log('✅ Infrastructure resilience and multi-region failover capability validated');
+      console.log(' Infrastructure resilience and multi-region failover capability validated');
     });
   });
 });
