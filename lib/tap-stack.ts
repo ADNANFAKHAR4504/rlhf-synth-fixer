@@ -273,13 +273,13 @@ export class TapStack extends TerraformStack {
     );
 
     // CloudFront with WAF
-    const cloudFront = new CloudFrontWafModule(
-      this,
-      'cdn',
-      alb.alb.dnsName,
-      loggingBucket.bucket.bucketDomainName!,
-      commonTags
-    );
+    // const cloudFront = new CloudFrontWafModule(
+    //   this,
+    //   'cdn',
+    //   alb.alb.dnsName,
+    //   loggingBucket.bucket.bucketDomainName!,
+    //   commonTags
+    // );
 
     // Outputs for compliance verification
     new TerraformOutput(this, 'aws-region', {
@@ -312,10 +312,10 @@ export class TapStack extends TerraformStack {
       description: 'CloudTrail name',
     });
 
-    new TerraformOutput(this, 'waf-enabled', {
-      value: cloudFront.waf.name,
-      description: 'WAF Web ACL name',
-    });
+    // new TerraformOutput(this, 'waf-enabled', {
+    //   value: cloudFront.waf.name,
+    //   description: 'WAF Web ACL name',
+    // });
 
     new TerraformOutput(this, 'api-gateway-logging', {
       value: apiGateway.stage.accessLogSettings?.destinationArn,
@@ -332,10 +332,10 @@ export class TapStack extends TerraformStack {
       description: 'Application Load Balancer DNS name',
     });
 
-    new TerraformOutput(this, 'cloudfront-distribution-id', {
-      value: cloudFront.distribution.id,
-      description: 'CloudFront distribution ID',
-    });
+    // new TerraformOutput(this, 'cloudfront-distribution-id', {
+    //   value: cloudFront.distribution.id,
+    //   description: 'CloudFront distribution ID',
+    // });
 
     new TerraformOutput(this, 'ecr-repository-url', {
       value: ecrRepo.repository.repositoryUrl,

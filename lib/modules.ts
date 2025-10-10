@@ -1008,11 +1008,11 @@ export class CloudFrontWafModule extends BaseModule {
           },
 
           statement: {
-            // // Changed from rateBasedStatement to rate_based_statement
-            // rate_based_statement: {
-            //   limit: 2000,
-            //   aggregate_key_type: 'IP', // Also changed to snake_case
-            // },
+            // Changed from rateBasedStatement to rate_based_statement
+            rate_based_statement: {
+              limit: 2000,
+              aggregate_key_type: 'IP',  // Also changed to snake_case
+            },
           },
 
           visibilityConfig: {
