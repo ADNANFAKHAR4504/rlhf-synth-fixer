@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-We need to## Deliverables
+We need a robust da## Deliverables
 
 Provide a complete CDKTF TypeScript implementation that includes:
 
@@ -12,7 +12,13 @@ Provide a complete CDKTF TypeScript implementation that includes:
 4. **Error Handling** - Proper validation and error management
 5. **Documentation** - Inline comments explaining DynamoDB limitations and usage patterns
 
-The implementation should be production-ready and deployable with standard CDKTF commands.sed database system for a mobile gaming platform that handles player profiles, game sessions, and leaderboard data. The system must support high-throughput gaming workloads with real-time data access patterns.
+The implementation should be production-ready and deployable with standard CDKTF commands:
+
+````bash
+npm install
+cdktf get
+cdktf deploy
+```mobile gaming platform that handles player profiles, game sessions, and leaderboard data. The system must support high-throughput gaming workloads with real-time data access patterns.
 
 ## Technical Requirements
 
@@ -118,4 +124,4 @@ Return only the full CDKTF TypeScript app code (multiple files allowed), ready t
 npm install
 cdktf get
 cdktf deploy
-```
+````

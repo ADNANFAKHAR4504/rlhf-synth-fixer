@@ -208,6 +208,100 @@ new GamingDatabaseStack(app, 'gaming-database-stack', {
 app.synth();
 ```
 
+## Key Features
+
+### 1. **Dynamic Resource Naming**
+
+- Generates unique suffixes using timestamps to prevent deployment conflicts
+- Table name: `GamingPlayerProfiles-production-{timestamp}`
+- GSI name: `score-index-production-{timestamp}`
+- LSI maintains static name: `level-index`
+
+### 2. **Production-Ready Configuration**
+
+- **Billing Mode**: PAY_PER_REQUEST for automatic scaling
+- **Encryption**: AWS managed server-side encryption
+- **Backup**: Point-in-time recovery enabled
+- **Monitoring**: DynamoDB Streams with NEW_AND_OLD_IMAGES
+- **Compliance**: All required tags applied
+
+### 3. **Gaming-Optimized Index Design**
+
+- **Primary Access**: Player lookup by `playerId` + `timestamp`
+- **Leaderboards**: Query by `gameMode` + `score` via GSI
+- **Player Progression**: Query by `playerId` + `playerLevel` via LSI
+- **All Projections**: Full attribute projection for query flexibility
+
+### 4. **Conditional Auto-Scaling Support**
+
+- Auto-scaling resources guarded behind `enableGsiAutoscaling` flag
+- Default: disabled (compatible with on-demand billing)
+- When enabled: requires switching to PROVISIONED billing mode
+- Configurable capacity: 5-100 units with 70% target utilization
+
+### 5. **Configuration Interface**
+
+```typescript interface GamingDatabaseStackProps {
+  environment?: string;        // Default: 'production'
+  team?: string;              // Default: 'gaming-platform'
+  region?: string;            // Default: 'us-west-2'
+  tableName?: string;         // Default: 'GamingPlayerProfiles'
+  indexName?: string;         // Default: 'score-index'
+  enableAutoScaling?: boolean; // Default: false
+}
+```
+
+### 6. **Environment Variable Support**
+
+- `ENVIRONMENT`: Override environment tag
+- `TEAM`: Override team tag
+- `AWS_REGION`: Override deployment region
+- `TABLE_NAME`: Override table name
+- `INDEX_NAME`: Override GSI name
+- `ENABLE_AUTO_SCALING`: Enable auto-scaling resources
+
+## Gaming Use Cases Supported
+
+1. **Player Profile Queries**: Direct access via `playerId`
+2. **Session History**: Time-based queries using `timestamp` range
+3. **Live Leaderboards**: Real-time ranking via `gameMode` + `score` GSI
+4. **Level Progression**: Player advancement tracking via LSI
+5. **Stream Processing**: Real-time analytics via DynamoDB Streams
+
+## Deployment
+
+```bash
+npm install
+cdktf get
+cdktf synth
+cdktf deploy
+        targetTrackingScalingPolicyConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'DynamoDBWriteCapacityUtilization',
+          },
+          targetValue: 70, // Target utilization: 70%
+        },
+      });
+    }
+  }
+}
+
+// Export alias for backward compatibility
+export const TapStack = GamingDatabaseStack;
+
+// App instantiation with required stack name
+const app = new App();
+new GamingDatabaseStack(app, 'gaming-database-stack', {
+  environment: process.env.ENVIRONMENT || 'production',
+  team: process.env.TEAM || 'gaming-platform',
+  region: process.env.AWS_REGION || 'us-west-2',
+  tableName: process.env.TABLE_NAME || 'GamingPlayerProfiles',
+  indexName: process.env.INDEX_NAME || 'score-index',
+  enableAutoScaling: process.env.ENABLE_AUTO_SCALING === 'true',
+});
+app.synth();
+```
+
 ## Key Implementation Features
 
 ### 1. Production-Ready Architecture
@@ -259,33 +353,26 @@ interface GamingDatabaseStackProps {
 1. **Player Profile**: Direct lookup by playerId
 2. **Session History**: Time-range queries using timestamp
 3. **Leaderboards**: Score ranking by gameMode using GSI
-4. **Level Progression**: Player advancement tracking using LSI
+4. **Level Progression**: Player advancement tracking via LSI
+5. **Stream Processing**: Real-time analytics via DynamoDB Streams
 
-### Real-time Capabilities
+## Testing Coverage
 
-- **Streams**: Enable event-driven architectures
-- **Analytics**: Foundation for real-time game analytics
-- **Audit**: Complete change tracking with NEW_AND_OLD_IMAGES
+This implementation includes comprehensive test coverage:
 
-## Production Features
+- **49 Unit Tests**: Complete functionality coverage including conditional auto-scaling
+- **21 Integration Tests**: End-to-end gaming use case validation
+- **100% Coverage**: All code paths, branches, and edge cases tested
+- **Dynamic Naming Tests**: Regex validation for timestamp-based uniqueness
 
-### Security & Compliance
+## Export Compatibility
 
-- **Encryption**: AWS managed server-side encryption
-- **Tagging**: Consistent Environment/Team/ManagedBy tags
-- **Access**: Proper IAM integration points
+```typescript
+// Primary export
+export class GamingDatabaseStack extends TerraformStack { ... }
 
-### Operational Excellence
-
-- **Monitoring**: DynamoDB streams for observability
-- **Backup**: Point-in-time recovery enabled
-- **Scaling**: Conditional auto-scaling for growth
-
-### Development Quality
-
-- **TypeScript**: Full type safety with interfaces
-- **Testing**: 100% coverage with 49 unit + 21 integration tests
-- **Documentation**: Comprehensive inline comments
-- **Exports**: Both GamingDatabaseStack and TapStack alias
+// Backward compatibility alias
+export const TapStack = GamingDatabaseStack;
+```
 
 This implementation provides a production-ready, fully-tested gaming database solution that exceeds the basic requirements while maintaining complete compliance with all specified constraints.
