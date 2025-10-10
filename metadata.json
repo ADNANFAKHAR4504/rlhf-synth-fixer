@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350087",
+  "team": "3",
+  "startedAt": "2025-10-09T14:10:58.619Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "AWS KMS, VPC, IAM, Load Balancers, AWS Shield, AWS Lambda, Config"
+}
