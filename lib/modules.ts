@@ -975,6 +975,7 @@ export class MonitoringModule extends BaseModule {
 }
 
 // CloudFront with WAF Module
+// CloudFront with WAF Module
 export class CloudFrontWafModule extends BaseModule {
   public readonly distribution: aws.cloudfrontDistribution.CloudfrontDistribution;
   public readonly waf: aws.wafv2WebAcl.Wafv2WebAcl;
@@ -1007,9 +1008,10 @@ export class CloudFrontWafModule extends BaseModule {
           },
 
           statement: {
-            rateBasedStatement: {
+            // Changed from rateBasedStatement to rate_based_statement
+            rate_based_statement: {
               limit: 2000,
-              aggregateKeyType: 'IP',
+              aggregate_key_type: 'IP', // Also changed to snake_case
             },
           },
 
