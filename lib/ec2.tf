@@ -81,6 +81,30 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Inline policy granting S3 access to the instance role for the terraform state bucket
+resource "aws_iam_role_policy" "ec2_s3_access" {
+  name = "ec2-ssm-s3-access-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.terraform_state.arn,
+          "${aws_s3_bucket.terraform_state.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2-profile-${var.resource_suffix}"
   role = aws_iam_role.ec2_ssm_role.name
@@ -103,4 +127,26 @@ resource "aws_instance" "web" {
     Name                = "web-instance-${var.resource_suffix}"
     iac-rlhf-amazon    = "true"
   }
+}
+
+# Inline policy granting Secrets Manager read access for the instance to fetch RDS credentials
+resource "aws_iam_role_policy" "ec2_secrets_access" {
+  name = "ec2-ssm-secrets-access-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:*"
+        ]
+      }
+    ]
+  })
 }

@@ -16,6 +16,10 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from "@aws-sdk/client-secrets-manager";
+import {
   GetCommandInvocationCommand,
   SendCommandCommand,
   SSMClient,
@@ -32,6 +36,13 @@ interface DeploymentOutputs {
 }
 
 const outputsPath = "terraform-outputs.json";
+const alternateOutputPaths = [
+  "flat-outputs.json",
+  "cfn-outputs/flat-outputs.json",
+  "terraform-flat-outputs.json",
+  "terraform-outputs-flat.json",
+  "terraform-outputs.json",
+];
 const LONG_TIMEOUT = 300000;
 
 let outputs: DeploymentOutputs;
@@ -40,28 +51,135 @@ let ec2Client: EC2Client;
 let rdsClient: RDSClient;
 let ssmClient: SSMClient;
 let s3Client: S3Client;
+let secretsClient: SecretsManagerClient | undefined;
+let rdsUser = "";
+let rdsPassword = "";
+let rdsDbName = "testdb";
+let rdsHost = "";
 let appServerPort = "3000";
 
 describe("Foundational Infrastructure - Live Traffic Tests", () => {
   beforeAll(async () => {
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error("terraform-outputs.json not found. Run 'terraform output -json > terraform-outputs.json' first.");
+    // Flexible outputs loading:
+    // - Accept JSON via env var INTEGRATION_OUTPUTS (JSON string)
+    // - Accept a file path via env var INTEGRATION_OUTPUTS_PATH
+    // - Accept Terraform "output -json" shape where each key maps to { value: ... }
+    // - Accept a flat JSON file containing the keys directly (ec2_instance_id, rds_endpoint, etc.)
+    let loaded: any | undefined;
+
+    // 1) Env JSON string
+    if (process.env.INTEGRATION_OUTPUTS) {
+      try {
+        loaded = JSON.parse(process.env.INTEGRATION_OUTPUTS);
+        console.log('Loaded outputs from INTEGRATION_OUTPUTS env var');
+      } catch (err) {
+        console.warn('Failed to parse INTEGRATION_OUTPUTS env var:', err);
+      }
     }
 
-    outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+    // 2) Env path
+    if (!loaded && process.env.INTEGRATION_OUTPUTS_PATH) {
+      const p = process.env.INTEGRATION_OUTPUTS_PATH;
+      if (fs.existsSync(p)) {
+        try {
+          loaded = JSON.parse(fs.readFileSync(p, 'utf8'));
+          console.log(`Loaded outputs from INTEGRATION_OUTPUTS_PATH: ${p}`);
+        } catch (err) {
+          console.warn(`Failed to parse JSON from INTEGRATION_OUTPUTS_PATH ${p}: ${err}`);
+        }
+      }
+    }
+
+    // 3) Files in repo
+    if (!loaded) {
+      for (const p of alternateOutputPaths) {
+        if (fs.existsSync(p)) {
+          try {
+            loaded = JSON.parse(fs.readFileSync(p, 'utf8'));
+            console.log(`Loaded outputs from ${p}`);
+            break;
+          } catch (err) {
+            // continue to next candidate
+            console.warn(`Failed to parse JSON from ${p}: ${err}`);
+          }
+        }
+      }
+    }
+
+    if (!loaded) {
+      throw new Error(
+        "No outputs file found. Please run 'terraform output -json > terraform-outputs.json' or provide a flat outputs file named flat-outputs.json"
+      );
+    }
+
+    // If Terraform's output -json format was used, convert to flat shape
+    const hasTerraformShape = Object.values(loaded).some(
+      (v: any) => v && typeof v === "object" && Object.prototype.hasOwnProperty.call(v, "value")
+    );
+
+    if (hasTerraformShape) {
+      // Map keys -> value
+      const flat: any = {};
+      for (const [k, v] of Object.entries(loaded)) {
+        flat[k] = (v as any).value;
+      }
+      outputs = flat as DeploymentOutputs;
+    } else {
+      // Assume already flat
+      outputs = loaded as DeploymentOutputs;
+    }
     region = process.env.AWS_REGION || "us-east-1";
 
     ec2Client = new EC2Client({ region });
     rdsClient = new RDSClient({ region });
     ssmClient = new SSMClient({ region });
     s3Client = new S3Client({ region });
+    // Initialize Secrets Manager client (used to fetch RDS credentials)
+    secretsClient = new SecretsManagerClient({ region });
+
+    // Resolve DB host and credentials
+    rdsHost = (outputs as any).rds_endpoint ? (outputs as any).rds_endpoint.split(":")[0] : "";
+
+    const secretArn = (outputs as any).rds_password_secret_arn || (outputs as any).rds_secret_arn || (outputs as any).rds_password_secret;
+    if (secretArn) {
+      try {
+        const secretResp = await secretsClient.send(
+          new GetSecretValueCommand({ SecretId: secretArn })
+        );
+        if (secretResp.SecretString) {
+          const secretObj = JSON.parse(secretResp.SecretString);
+          rdsUser = secretObj.username || secretObj.user || rdsUser;
+          rdsPassword = secretObj.password || secretObj.pass || rdsPassword;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch RDS secret from Secrets Manager:", err);
+      }
+    }
+
+    // Allow db name to come from outputs when available
+    rdsDbName = (outputs as any).db_name || (outputs as any).rds_db_name || rdsDbName;
 
     console.log("Testing infrastructure:", {
       ec2: outputs.ec2_instance_id,
       rds: outputs.rds_endpoint,
       s3: outputs.s3_bucket_name,
-      vpc: outputs.vpc_id
+      vpc: outputs.vpc_id,
     });
+
+    // Basic validation with a clearer error message when keys are missing
+    const requiredKeys = [
+      "ec2_instance_id",
+      "ec2_instance_public_ip",
+      "rds_endpoint",
+      "s3_bucket_name",
+      "vpc_id",
+      "public_subnet_id",
+    ];
+    const missing = requiredKeys.filter((k) => !(outputs as any)[k]);
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required output keys: ${missing.join(", ")}. Please provide a flat outputs JSON with these keys (see README or example).`);
+    }
   }, LONG_TIMEOUT);
 
   test("Should load deployment outputs correctly", () => {
@@ -112,20 +230,19 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
     }, LONG_TIMEOUT);
 
     test("RDS MySQL instance should be available", async () => {
-      const dbInstanceId = outputs.rds_endpoint.split('.')[0];
+      // Find DB instance by matching its endpoint address to avoid brittle identifier parsing
+      const host = (outputs as any).rds_endpoint.split(":")[0];
 
-      const describeResponse = await rdsClient.send(
-        new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbInstanceId,
-        })
+      const describeResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const dbInstance = describeResponse.DBInstances?.find(
+        (di) => di.Endpoint?.Address === host
       );
 
-      const dbInstance = describeResponse.DBInstances?.[0];
       expect(dbInstance).toBeDefined();
       expect(dbInstance?.DBInstanceStatus).toBe("available");
       expect(dbInstance?.Engine).toBe("mysql");
       expect(dbInstance?.EngineVersion).toContain("8.0");
-      expect(dbInstance?.Endpoint?.Address).toBe(outputs.rds_endpoint.split(':')[0]);
+      expect(dbInstance?.Endpoint?.Address).toBe(host);
     }, LONG_TIMEOUT);
   });
 
@@ -133,11 +250,14 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
     let deploymentCommandId: string;
 
     test("Should deploy Node.js application with database connectivity", async () => {
+      const secretArnForInstance = (outputs as any).rds_password_secret_arn || (outputs as any).rds_secret_arn || (outputs as any).rds_password_secret || "";
+
       const deployScript = `
 #!/bin/bash
+
 # Install Node.js and dependencies
 curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-sudo yum install -y nodejs mysql git
+sudo yum install -y nodejs mysql git awscli python3
 
 # Create application directory
 mkdir -p /opt/test-app
@@ -164,17 +284,17 @@ cat > server.js << 'EOF'
 const express = require('express');
 const mysql = require('mysql2/promise');
 const app = express();
-const port = ${appServerPort};
+const port = process.env.PORT || ${appServerPort};
 
 app.use(express.json());
 
-// Database connection configuration
+// Database connection configuration - read from environment variables
 const dbConfig = {
-  host: '${outputs.rds_endpoint.split(':')[0]}',
-  port: 3306,
-  user: 'admin',
-  password: 'password123',
-  database: 'testdb'
+  host: process.env.RDS_HOST || '${(outputs as any).rds_endpoint.split(':')[0]}',
+  port: parseInt(process.env.RDS_PORT || '3306', 10),
+  user: process.env.RDS_USER || process.env.DB_USER || 'admin',
+  password: process.env.RDS_PASSWORD || process.env.DB_PASSWORD || 'password123',
+  database: process.env.RDS_DB || process.env.DB_NAME || 'testdb'
 };
 
 // Health check endpoint
@@ -278,6 +398,17 @@ EOF
 
 # Install dependencies and start application
 npm install
+# If a Secrets Manager secret ARN is provided via environment, fetch it and export variables
+if [ ! -z "$RDS_SECRET_ARN" ]; then
+  secret_json=$(aws secretsmanager get-secret-value --secret-id "$RDS_SECRET_ARN" --query SecretString --output text || echo "")
+  if [ ! -z "$secret_json" ]; then
+    RDS_USER=$(echo "$secret_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('username',''))")
+    RDS_PASSWORD=$(echo "$secret_json" | python3 -c "import sys, json; print(json.load(sys.stdin).get('password',''))")
+    export RDS_USER
+    export RDS_PASSWORD
+  fi
+fi
+
 nohup npm start > app.log 2>&1 &
 
 # Wait for app to start
@@ -294,7 +425,11 @@ echo "Application deployment successful"
           InstanceIds: [outputs.ec2_instance_id],
           DocumentName: "AWS-RunShellScript",
           Parameters: {
-            commands: [deployScript],
+            // Pass the secret ARN as its own command so the instance receives it explicitly
+            commands: [
+              `export RDS_SECRET_ARN='${secretArnForInstance}'`,
+              deployScript,
+            ],
           },
           TimeoutSeconds: 300,
         })

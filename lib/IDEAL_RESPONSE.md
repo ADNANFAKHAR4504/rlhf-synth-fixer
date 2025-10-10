@@ -439,6 +439,20 @@ output "s3_bucket_name" {
   description = "Name of the S3 bucket for Terraform state"
   value       = aws_s3_bucket.terraform_state.bucket
 }
+
+## Recent changes
+
+The following minimal updates were applied to support the live integration test harness:
+
+- `ec2.tf`: added two inline IAM policies attached to the EC2 instance role used for SSM-managed instances:
+  - S3 policy granting `s3:PutObject`, `s3:GetObject`, and `s3:ListBucket` on the Terraform state bucket so in-instance `aws s3 cp` operations succeed during testing.
+  - Secrets Manager policy granting `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret` scoped to the account, enabling the EC2 instance to retrieve RDS credentials from Secrets Manager.
+
+- `test/terraform.int.test.ts`: added a live-traffic integration test that deploys a small Node.js app to the EC2 instance via SSM, runs database and S3 exercises, and validates end-to-end behavior. The test supports reading outputs from environment variables (CI-friendly) and expects a Secrets Manager ARN for RDS credentials (provided via outputs or env).
+
+Note on CI usage: the test intentionally does NOT include a committed preflight script. Instead, CI should provide the required integration outputs at runtime by setting either the `INTEGRATION_OUTPUTS` environment variable (JSON string containing the outputs, including `rds_password_secret_arn`) or `INTEGRATION_OUTPUTS_PATH` pointing to a JSON file. Alternatively, set `RDS_SECRET_ARN` in the environment when invoking the test. This keeps secrets and deployment-specific outputs out of source control.
+
+These changes are intentionally minimal and targeted at enabling the integration harness; they do not change resource topology beyond granting necessary runtime permissions to the EC2 instance role.
 ```
 
 ## Key Features
