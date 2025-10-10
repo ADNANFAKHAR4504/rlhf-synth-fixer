@@ -48,7 +48,7 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
   let secondaryClusterIdentifier: string;
 
   beforeAll(() => {
-    const primaryRegion = 'us-east-1';
+    const primaryRegion = 'us-east-2';
     const secondaryRegion = 'eu-west-1';
 
     primaryDynamoClient = new DynamoDBClient({ region: primaryRegion });

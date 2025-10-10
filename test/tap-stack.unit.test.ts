@@ -18,7 +18,7 @@ describe('TapStack', () => {
     primaryStack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
       isPrimary: true,
-      primaryRegion: 'us-east-1',
+      primaryRegion: 'us-east-2',
       secondaryRegion: 'eu-west-1',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
