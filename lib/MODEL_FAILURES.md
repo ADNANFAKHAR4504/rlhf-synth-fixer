@@ -156,3 +156,9 @@ Add Route53 health checks monitoring Aurora and Redis endpoints, configure failo
 DynamoDB Global Tables do not support CUSTOMER_MANAGED encryption with custom KMS keys. Attempting to use TableEncryption.CUSTOMER_MANAGED with replicationRegions will cause a validation error.
 
 Use AWS_MANAGED encryption for global tables, or use CUSTOMER_MANAGED encryption only for single-region tables. Conditional logic based on isPrimary and secondaryRegion props determines the encryption type.
+
+## 26. Security Hub Already Enabled Conflict
+
+Attempting to create CfnHub resource when Security Hub is already enabled in the AWS account causes a CREATE_FAILED error with status code 409 (AlreadyExists).
+
+Add an optional `enableSecurityHub` prop to TapStackProps (default: false). Only create the Security Hub resource when explicitly enabled via context parameter: `cdk deploy -c enableSecurityHub=true`. This prevents conflicts in accounts where Security Hub is already enabled manually or by other stacks.

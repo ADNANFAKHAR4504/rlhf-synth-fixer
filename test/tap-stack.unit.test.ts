@@ -22,6 +22,7 @@ describe('TapStack', () => {
       secondaryRegion: 'eu-west-1',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
+      enableSecurityHub: true,
       env: { account: '123456789012', region: 'us-east-1' },
       crossRegionReferences: true,
     });
@@ -32,6 +33,7 @@ describe('TapStack', () => {
       secondaryRegion: 'eu-west-1',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
+      enableSecurityHub: true,
       env: { account: '123456789012', region: 'eu-west-1' },
       crossRegionReferences: true,
     });
@@ -431,10 +433,25 @@ describe('TapStack', () => {
   });
 
   describe('Security Hub', () => {
-    test('should enable Security Hub', () => {
+    test('should enable Security Hub when flag is true', () => {
       template.hasResourceProperties('AWS::SecurityHub::Hub', {
         EnableDefaultStandards: false,
       });
+    });
+
+    test('should not create Security Hub when flag is false', () => {
+      const noSecHubApp = new cdk.App();
+      const noSecHubStack = new TapStack(noSecHubApp, 'NoSecurityHubStack', {
+        environmentSuffix: 'test',
+        isPrimary: true,
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'eu-west-1',
+        enableSecurityHub: false,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const noSecHubTemplate = Template.fromStack(noSecHubStack);
+      
+      noSecHubTemplate.resourceCountIs('AWS::SecurityHub::Hub', 0);
     });
   });
 

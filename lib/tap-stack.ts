@@ -21,6 +21,7 @@ export interface TapStackProps extends cdk.StackProps {
   secondaryRegion?: string;
   globalClusterId?: string;
   globalTableName?: string;
+  enableSecurityHub?: boolean; // Set to true to enable Security Hub (skip if already enabled in account)
 }
 
 export class TapStack extends cdk.Stack {
@@ -459,9 +460,11 @@ export class TapStack extends cdk.Stack {
       targets: [new targets.LambdaFunction(backupLambda)],
     });
 
-    new securityhub.CfnHub(this, 'SecurityHub', {
-      enableDefaultStandards: false,
-    });
+    if (props.enableSecurityHub) {
+      new securityhub.CfnHub(this, 'SecurityHub', {
+        enableDefaultStandards: false,
+      });
+    }
 
     if (props.isPrimary) {
       const hostedZone = new route53.PrivateHostedZone(
