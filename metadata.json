@@ -10,5 +10,5 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "vpc, natgatewway, ec2, RDS,, s3, cloudwatch, VPN"
+  "aws_services": "vpc, natgatewway, ec2, RDS, s3, cloudwatch, VPN, ALB, Secrets Manager, DBSubnetGroup, Internetgateway, VPNGateway"
 }
