@@ -1,4 +1,4 @@
-
+1. Model wrongly used the wrong naming convetion for the resources creation of security group for ec2, rds and other resoruces.
 
 ```
 
