@@ -348,13 +348,24 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
 
       const alarms = await cloudwatch.describeAlarms().promise();
 
-      // Check for alarm with either the identifier or by alarm name pattern (backward compatible)
-      const cpuAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'CPUUtilization' &&
-        a.Namespace === 'AWS/RDS' &&
-        (a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id) ||
-         a.AlarmName?.includes('healthcare-db') && a.AlarmName?.includes('cpu'))
-      );
+      // Debug: Log available RDS alarms to help diagnose
+      const rdsAlarms = alarms.MetricAlarms?.filter(a => a.Namespace === 'AWS/RDS');
+      if (rdsAlarms?.length === 0) {
+        console.log('No RDS alarms found in CloudWatch');
+      }
+
+      // Check for alarm with correct metric and namespace
+      // The alarm name pattern is: healthcare-db-cpu-utilization-{env_suffix}
+      const cpuAlarm = alarms.MetricAlarms?.find(a => {
+        const matchesMetric = a.MetricName === 'CPUUtilization' && a.Namespace === 'AWS/RDS';
+        const matchesDimension = a.Dimensions?.some(d =>
+          d.Name === 'DBInstanceIdentifier' &&
+          (d.Value === outputs.db_instance_id || d.Value?.includes('healthcare-db'))
+        );
+        const matchesName = a.AlarmName?.includes('healthcare-db') && a.AlarmName?.includes('cpu');
+        return matchesMetric && (matchesDimension || matchesName);
+      });
+
       expect(cpuAlarm).toBeDefined();
       expect(cpuAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
     });
@@ -364,13 +375,18 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
 
       const alarms = await cloudwatch.describeAlarms().promise();
 
-      // Check for alarm with either the identifier or by alarm name pattern (backward compatible)
-      const memoryAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'FreeableMemory' &&
-        a.Namespace === 'AWS/RDS' &&
-        (a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id) ||
-         a.AlarmName?.includes('healthcare-db') && a.AlarmName?.includes('memory'))
-      );
+      // Check for alarm with correct metric and namespace
+      // The alarm name pattern is: healthcare-db-low-memory-{env_suffix}
+      const memoryAlarm = alarms.MetricAlarms?.find(a => {
+        const matchesMetric = a.MetricName === 'FreeableMemory' && a.Namespace === 'AWS/RDS';
+        const matchesDimension = a.Dimensions?.some(d =>
+          d.Name === 'DBInstanceIdentifier' &&
+          (d.Value === outputs.db_instance_id || d.Value?.includes('healthcare-db'))
+        );
+        const matchesName = a.AlarmName?.includes('healthcare-db') && a.AlarmName?.toLowerCase().includes('memory');
+        return matchesMetric && (matchesDimension || matchesName);
+      });
+
       expect(memoryAlarm).toBeDefined();
       expect(memoryAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
     });
@@ -380,13 +396,18 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
 
       const alarms = await cloudwatch.describeAlarms().promise();
 
-      // Check for alarm with either the identifier or by alarm name pattern (backward compatible)
-      const storageAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'FreeStorageSpace' &&
-        a.Namespace === 'AWS/RDS' &&
-        (a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id) ||
-         a.AlarmName?.includes('healthcare-db') && a.AlarmName?.includes('storage'))
-      );
+      // Check for alarm with correct metric and namespace
+      // The alarm name pattern is: healthcare-db-low-storage-{env_suffix}
+      const storageAlarm = alarms.MetricAlarms?.find(a => {
+        const matchesMetric = a.MetricName === 'FreeStorageSpace' && a.Namespace === 'AWS/RDS';
+        const matchesDimension = a.Dimensions?.some(d =>
+          d.Name === 'DBInstanceIdentifier' &&
+          (d.Value === outputs.db_instance_id || d.Value?.includes('healthcare-db'))
+        );
+        const matchesName = a.AlarmName?.includes('healthcare-db') && a.AlarmName?.toLowerCase().includes('storage');
+        return matchesMetric && (matchesDimension || matchesName);
+      });
+
       expect(storageAlarm).toBeDefined();
       expect(storageAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
     });
@@ -396,13 +417,18 @@ describe('RDS MySQL Healthcare Stack Integration Tests', () => {
 
       const alarms = await cloudwatch.describeAlarms().promise();
 
-      // Check for alarm with either the identifier or by alarm name pattern (backward compatible)
-      const connectionsAlarm = alarms.MetricAlarms?.find(a =>
-        a.MetricName === 'DatabaseConnections' &&
-        a.Namespace === 'AWS/RDS' &&
-        (a.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier' && d.Value === outputs.db_instance_id) ||
-         a.AlarmName?.includes('healthcare-db') && a.AlarmName?.includes('connection'))
-      );
+      // Check for alarm with correct metric and namespace
+      // The alarm name pattern is: healthcare-db-high-connections-{env_suffix}
+      const connectionsAlarm = alarms.MetricAlarms?.find(a => {
+        const matchesMetric = a.MetricName === 'DatabaseConnections' && a.Namespace === 'AWS/RDS';
+        const matchesDimension = a.Dimensions?.some(d =>
+          d.Name === 'DBInstanceIdentifier' &&
+          (d.Value === outputs.db_instance_id || d.Value?.includes('healthcare-db'))
+        );
+        const matchesName = a.AlarmName?.includes('healthcare-db') && a.AlarmName?.toLowerCase().includes('connection');
+        return matchesMetric && (matchesDimension || matchesName);
+      });
+
       expect(connectionsAlarm).toBeDefined();
       expect(connectionsAlarm?.AlarmActions).toContain(outputs.sns_topic_arn);
     });
