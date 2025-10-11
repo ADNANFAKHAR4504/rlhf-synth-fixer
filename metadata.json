@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "DEA2FD",
+  "team": "6",
+  "startedAt": "2025-10-11T15:04:26.899Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "ECS, CloudMap, CloudWatch, AWS Application Load Balancer"
+}
