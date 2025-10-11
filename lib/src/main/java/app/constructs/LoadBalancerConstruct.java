@@ -95,6 +95,9 @@ public class LoadBalancerConstruct extends BaseConstruct {
 
         if (name.length() > 32) {
             name = name.substring(0, 32);
+            while (name.endsWith("-")) {
+                name = name.substring(0, name.length() - 1);
+            }
         }
 
         return AlbTargetGroup.Builder.create(this, service.serviceName() + "-tg")

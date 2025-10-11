@@ -15,13 +15,13 @@ public record ServiceConfig(String serviceName, String imageUri, int containerPo
     }
 
     public static ServiceConfig paymentService(final DeploymentConfig config) {
-        return new ServiceConfig("payment-service", "ecr-repo/payment-service:latest",
+        return new ServiceConfig("payment-service", "nginx:latest",
                 8080, 512, 1024, 3, 2, 10, 70, 80, 60, config
         );
     }
 
     public static ServiceConfig authService(final DeploymentConfig config) {
-        return new ServiceConfig("auth-service", "ecr-repo/auth-service:latest", 8081, 256,
+        return new ServiceConfig("auth-service", "nginx:latest", 8081, 256,
                 512, 2, 1, 5, 70, 80, 60, config
         );
     }
