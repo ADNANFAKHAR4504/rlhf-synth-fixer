@@ -1202,8 +1202,7 @@ class TapStack extends Stack {
                                 .build())
                         .build());
 
-        // Add stack dependencies - MessagingStack depends on SecurityStack for KMS key
-        messagingStack.addDependency(securityStack);
+        // Add stack dependencies
         infrastructureStack.addDependency(securityStack);
         applicationStack.addDependency(securityStack);
         applicationStack.addDependency(messagingStack);
