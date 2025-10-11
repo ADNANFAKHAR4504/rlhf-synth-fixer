@@ -279,7 +279,11 @@ func TestTapStackIntegration(t *testing.T) {
 func loadStackOutputs(t *testing.T) *StackOutputs {
 	outputsPath := filepath.Join("..", "..", "cfn-outputs", "flat-outputs.json")
 	data, err := os.ReadFile(outputsPath)
-	require.NoError(t, err, "Failed to read stack outputs file")
+	if err != nil {
+		require.NoError(t, err,
+			"Failed to read stack outputs file. Please deploy the stack first using: ./scripts/deploy.sh\n"+
+				"Original error")
+	}
 
 	var outputs StackOutputs
 	err = json.Unmarshal(data, &outputs)
