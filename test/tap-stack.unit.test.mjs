@@ -284,12 +284,13 @@ describe('TapStack Unit Tests', () => {
       template.resourceCountIs('AWS::Lambda::Function', 2);
     });
 
-    test('Lambda functions have inline code', () => {
+    test('Lambda functions use asset-based code', () => {
       const functions = template.findResources('AWS::Lambda::Function');
       const functionKeys = Object.keys(functions);
       
       functionKeys.forEach(key => {
-        expect(functions[key].Properties.Code.ZipFile).toBeDefined();
+        const code = functions[key].Properties.Code;
+        expect(code.S3Bucket || code.S3Key).toBeDefined();
       });
     });
   });
