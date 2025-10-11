@@ -287,6 +287,14 @@ class SecurityStack extends Stack {
                                         .build(),
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
+                                        .principals(Arrays.asList(new ServicePrincipal("events.amazonaws.com")))
+                                        .actions(Arrays.asList(
+                                                "kms:Decrypt",
+                                                "kms:GenerateDataKey"))
+                                        .resources(Arrays.asList("*"))
+                                        .build(),
+                                PolicyStatement.Builder.create()
+                                        .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
                                         .actions(Arrays.asList("kms:*"))
                                         .resources(Arrays.asList("*"))
@@ -427,20 +435,6 @@ class SecurityStack extends Stack {
         Tags.of(this).add("Component", "Security");
     }
 
-    public void setupGuardDutyAlerts(final String environmentSuffix, final Topic securityAlertTopic) {
-        // Create EventBridge rule for GuardDuty findings
-        Rule guardDutyRule = Rule.Builder.create(this, "GuardDutyFindingsRule")
-                .ruleName("tap-" + environmentSuffix + "-guardduty-findings")
-                .description("Route GuardDuty findings to SNS")
-                .eventPattern(EventPattern.builder()
-                        .source(Arrays.asList("aws.guardduty"))
-                        .detailType(Arrays.asList("GuardDuty Finding"))
-                        .build())
-                .build();
-
-        guardDutyRule.addTarget(SnsTopic.Builder.create(securityAlertTopic).build());
-    }
-
     private void setupAwsConfig(final String environmentSuffix) {
         // Create S3 bucket for Config
         Bucket configBucket = Bucket.Builder.create(this, "ConfigBucket")
@@ -573,6 +567,9 @@ class MessagingStack extends Stack {
                         "aws:SourceArn", applicationEventTopic.getTopicArn())))
                 .build());
 
+        // Setup GuardDuty alerts HERE to avoid cyclic dependency
+        setupGuardDutyAlerts(environmentSuffix);
+
         // Output SNS and SQS ARNs
         CfnOutput.Builder.create(this, "SecurityAlertTopicArn")
                 .value(securityAlertTopic.getTopicArn())
@@ -594,6 +591,20 @@ class MessagingStack extends Stack {
 
         Tags.of(this).add("Environment", environmentSuffix);
         Tags.of(this).add("Component", "Messaging");
+    }
+
+    private void setupGuardDutyAlerts(final String environmentSuffix) {
+        // Create EventBridge rule for GuardDuty findings in MessagingStack
+        Rule guardDutyRule = Rule.Builder.create(this, "GuardDutyFindingsRule")
+                .ruleName("tap-" + environmentSuffix + "-guardduty-findings")
+                .description("Route GuardDuty findings to SNS")
+                .eventPattern(EventPattern.builder()
+                        .source(Arrays.asList("aws.guardduty"))
+                        .detailType(Arrays.asList("GuardDuty Finding"))
+                        .build())
+                .build();
+
+        guardDutyRule.addTarget(SnsTopic.Builder.create(securityAlertTopic).build());
     }
 
     public Topic getSecurityAlertTopic() {
@@ -1151,7 +1162,7 @@ class TapStack extends Stack {
                         .description("Security Stack for environment: " + environmentSuffix)
                         .build());
 
-        // Create messaging stack with security alert topic
+        // Create messaging stack - GuardDuty alerts setup moved inside MessagingStack
         this.messagingStack = new MessagingStack(
                 this,
                 "Messaging",
@@ -1161,9 +1172,6 @@ class TapStack extends Stack {
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Messaging Stack for environment: " + environmentSuffix)
                         .build());
-
-        // Setup GuardDuty alerts now that messaging stack exists
-        securityStack.setupGuardDutyAlerts(environmentSuffix, messagingStack.getSecurityAlertTopic());
 
         // Create infrastructure stack
         this.infrastructureStack = new InfrastructureStack(
