@@ -45,14 +45,14 @@ describe('TAP Stack Email Notification System - Live Traffic Integration Tests',
         "EmailProcessorFunctionName": "email-processor-pr3876",
         "DeliveryTrackingTableName": "email-delivery-tracking-pr3876",
         "SystemSetupInstructions": "{\"integration\":{\"orderEventsTopic\":\"arn:aws:sns:us-east-1:***:email-order-events-pr3876\",\"messageFormat\":{\"orderId\":\"string - unique order identifier\",\"customerEmail\":\"string - customer email address\",\"customerName\":\"string - customer full name\",\"orderItems\":\"array - list of order items with name, quantity, price\",\"orderTotal\":\"string - total order amount\",\"orderTimestamp\":\"string - ISO 8601 timestamp\"}},\"monitoring\":{\"deliveryTracking\":\"email-delivery-tracking-pr3876\",\"costDashboard\":\"email-costs-pr3876\",\"emailDashboard\":\"email-notifications-pr3876\"},\"configuration\":{\"verifiedDomain\":\"orders@yourcompany.com\",\"costThreshold\":100,\"alertEmails\":[]}}",
-        "OrderEventsTopicArn": "arn:aws:sns:us-east-1:***:email-order-events-pr3876"
+        "OrderEventsTopicArn": "arn:aws:sns:us-east-2:***:email-order-events-pr3876"
       };
     } else {
       outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
     }
 
     // Get AWS region
-    region = process.env.AWS_REGION || 'us-east-1';
+    region = process.env.AWS_REGION || 'us-east-2';
 
     // Initialize AWS clients
     snsClient = new SNSClient({ region });
