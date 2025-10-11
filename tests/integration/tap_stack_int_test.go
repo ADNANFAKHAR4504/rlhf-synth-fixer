@@ -280,30 +280,30 @@ func TestTapStackIntegration(t *testing.T) {
 // loadStackOutputs loads outputs from CloudFormation stack or falls back to file
 func loadStackOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *StackOutputs {
 	cfnClient := cloudformation.NewFromConfig(cfg)
-	
+
 	// Determine stack name from environment or use default pattern
 	stackName := os.Getenv("STACK_NAME")
 	if stackName == "" {
 		// Try to find stack by tag or naming pattern
 		stackName = findTapStack(t, ctx, cfnClient)
 	}
-	
+
 	t.Logf("Loading outputs from CloudFormation stack: %s", stackName)
-	
+
 	// Get stack outputs from CloudFormation
 	describeOutput, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	
+
 	if err != nil {
 		// Fall back to file-based approach if CloudFormation query fails
 		t.Logf("Failed to query CloudFormation: %v. Trying file-based approach...", err)
 		return loadStackOutputsFromFile(t)
 	}
-	
+
 	require.NotEmpty(t, describeOutput.Stacks, "No stacks found")
 	stack := describeOutput.Stacks[0]
-	
+
 	outputs := &StackOutputs{}
 	for _, output := range stack.Outputs {
 		switch *output.OutputKey {
@@ -317,15 +317,15 @@ func loadStackOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *StackO
 			outputs.MetadataTableName = *output.OutputValue
 		}
 	}
-	
+
 	require.NotEmpty(t, outputs.SourceBucketName, "SourceBucketName should not be empty")
 	require.NotEmpty(t, outputs.ProcessedBucketName, "ProcessedBucketName should not be empty")
 	require.NotEmpty(t, outputs.LambdaFunctionName, "LambdaFunctionName should not be empty")
 	require.NotEmpty(t, outputs.MetadataTableName, "MetadataTableName should not be empty")
-	
+
 	t.Logf("✅ Loaded stack outputs: SourceBucket=%s, ProcessedBucket=%s, Lambda=%s, Table=%s",
 		outputs.SourceBucketName, outputs.ProcessedBucketName, outputs.LambdaFunctionName, outputs.MetadataTableName)
-	
+
 	return outputs
 }
 
@@ -338,7 +338,7 @@ func findTapStack(t *testing.T, ctx context.Context, cfnClient *cloudformation.C
 			cloudformationtypes.StackStatusUpdateComplete,
 		},
 	})
-	
+
 	if err == nil {
 		for _, stack := range listOutput.StackSummaries {
 			stackName := *stack.StackName
@@ -349,15 +349,15 @@ func findTapStack(t *testing.T, ctx context.Context, cfnClient *cloudformation.C
 			}
 		}
 	}
-	
+
 	// Default fallback
 	return "TapStack"
 }
 
 // contains checks if string contains substring (case-insensitive helper)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || len(s) > len(substr) && 
+	return len(s) >= len(substr) &&
+		(s == substr || len(s) > len(substr) &&
 			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
 				findSubstring(s, substr)))
 }
@@ -379,11 +379,11 @@ func loadStackOutputsFromFile(t *testing.T) *StackOutputs {
 		filepath.Join("..", "cfn-outputs", "flat-outputs.json"),
 		filepath.Join("..", "..", "cfn-outputs", "flat-outputs.json"),
 	}
-	
+
 	var data []byte
 	var err error
 	var foundPath string
-	
+
 	for _, path := range possiblePaths {
 		data, err = os.ReadFile(path)
 		if err == nil {
@@ -391,12 +391,12 @@ func loadStackOutputsFromFile(t *testing.T) *StackOutputs {
 			break
 		}
 	}
-	
+
 	if err != nil {
-		require.NoError(t, err, 
+		require.NoError(t, err,
 			"Failed to read stack outputs file from any location. Please deploy the stack first using: ./scripts/deploy.sh")
 	}
-	
+
 	t.Logf("Loading outputs from file: %s", foundPath)
 
 	var outputs StackOutputs
