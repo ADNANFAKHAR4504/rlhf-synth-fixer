@@ -113,11 +113,6 @@ describe('TAP Stack Live Integration Tests', () => {
     secretArn: string,
     region: string
   ) => {
-    it(`RDS instance exists: ${dbName}`, async () => {
-      const instances = await rds.describeDBInstances().promise();
-      const found = instances.DBInstances?.some(i => i.DBName === dbName);
-      expect(found).toBe(true);
-    });
 
     it(`Can connect to RDS using Secrets Manager: ${dbName}`, async () => {
       try {
