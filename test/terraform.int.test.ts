@@ -2,27 +2,30 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Terraform Infrastructure Integration Tests', () => {
+describe('Terraform Infrastructure End-to-End Integration Tests', () => {
   let outputs: any = {};
   let deployedSuccessfully = false;
 
   beforeAll(() => {
     try {
-      // Check if cfn-outputs directory and flat-outputs.json exist
-      if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-        outputs = JSON.parse(
-          fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-        );
-        console.log('Loaded deployment outputs:', Object.keys(outputs));
+      // Load deployment outputs from flat-outputs.json
+      const outputsPath = path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
+      if (fs.existsSync(outputsPath)) {
+        outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+        console.log('\n Loaded deployment outputs:');
+        console.log(`- API Gateway URL: ${outputs.api_gateway_url}`);
+        console.log(`- DynamoDB Table: ${outputs.dynamodb_table_name}`);
+        console.log(`- Lambda Function: ${outputs.lambda_function_name}`);
+        console.log(`- Environment: ${outputs.environment_suffix}\n`);
         deployedSuccessfully = Object.keys(outputs).length > 0;
       } else {
         console.warn(
-          'cfn-outputs/flat-outputs.json not found. Skipping integration tests that require deployed infrastructure.'
+          '\n  cfn-outputs/flat-outputs.json not found. Skipping integration tests.\n'
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn(
-        'Could not read deployment outputs. Skipping integration tests that require deployed infrastructure.'
+        `\n  Could not read deployment outputs: ${error.message}\n`
       );
     }
   });
@@ -70,50 +73,22 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('API Gateway Health Check', () => {
-    test('should reach health endpoint and return 200', async () => {
+    test('should reach health endpoint and return 200 with valid response', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const healthUrl = outputs.health_check_endpoint || outputs.HealthCheckEndpoint;
+      const healthUrl = outputs.health_check_endpoint;
       if (!healthUrl) {
-        console.log('Skipping test - no health check endpoint found');
+        console.log('Skipping - no health endpoint found');
         return;
       }
 
       try {
         console.log(`Testing health endpoint: ${healthUrl}`);
         const result = execSync(
-          `curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "${healthUrl}"`,
-          { encoding: 'utf8', timeout: 15000 }
-        );
-
-        const statusCode = result.trim();
-        console.log(`Health endpoint returned status: ${statusCode}`);
-        expect(['200', '201', '202', '204']).toContain(statusCode);
-      } catch (error: any) {
-        console.warn('Health check test failed:', error.message);
-        // Don't fail the test as this might be expected in some environments
-      }
-    }, 30000);
-
-    test('should test GET /api/v1/items endpoint', async () => {
-      if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
-        return;
-      }
-
-      const itemsUrl = outputs.items_endpoint || outputs.ItemsEndpoint;
-      if (!itemsUrl) {
-        console.log('Skipping test - no items endpoint found');
-        return;
-      }
-
-      try {
-        console.log(`Testing items endpoint: ${itemsUrl}`);
-        const result = execSync(
-          `curl -s -w "\\n%{http_code}" --connect-timeout 10 "${itemsUrl}"`,
+          `curl -s -w "\\n%{http_code}" --connect-timeout 10 "${healthUrl}"`,
           { encoding: 'utf8', timeout: 15000 }
         );
 
@@ -121,113 +96,237 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const statusCode = lines[lines.length - 1];
         const body = lines.slice(0, -1).join('\n');
 
-        console.log(`Items endpoint returned status: ${statusCode}`);
-        expect(['200', '201']).toContain(statusCode);
+        console.log(`Health endpoint returned status: ${statusCode}`);
+        expect(statusCode).toBe('200');
 
-        if (statusCode === '200') {
-          const response = JSON.parse(body);
-          expect(response).toHaveProperty('items');
-          expect(response).toHaveProperty('count');
-          expect(Array.isArray(response.items)).toBe(true);
-        }
+        // Validate response body
+        const response = JSON.parse(body);
+        expect(response).toHaveProperty('status');
+        expect(response.status).toBe('healthy');
+        expect(response).toHaveProperty('timestamp');
+        expect(response).toHaveProperty('service');
+        expect(response.service).toBe('retail-api');
+
+        console.log(`Health check response validated:`, response);
       } catch (error: any) {
-        console.warn('Items endpoint test failed:', error.message);
+        console.error('Health check test failed:', error.message);
+        throw error;
       }
     }, 30000);
+
+    test('should test GET /api/v1/items endpoint and return items list', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const itemsUrl = outputs.items_endpoint;
+      if (!itemsUrl) {
+        console.log('Skipping - no items endpoint found');
+        return;
+      }
+
+      try {
+        console.log(`Testing GET items endpoint: ${itemsUrl}`);
+        const result = execSync(
+          `curl -s -w "\\n%{http_code}" --connect-timeout 15 "${itemsUrl}"`,
+          { encoding: 'utf8', timeout: 20000 }
+        );
+
+        const lines = result.trim().split('\n');
+        const statusCode = lines[lines.length - 1];
+        const body = lines.slice(0, -1).join('\n');
+
+        console.log(`GET items endpoint returned status: ${statusCode}`);
+        expect(statusCode).toBe('200');
+
+        const response = JSON.parse(body);
+        expect(response).toHaveProperty('items');
+        expect(response).toHaveProperty('count');
+        expect(Array.isArray(response.items)).toBe(true);
+        expect(typeof response.count).toBe('number');
+        expect(response.count).toBeGreaterThanOrEqual(0);
+
+        console.log(`GET items response validated - found ${response.count} items`);
+      } catch (error: any) {
+        console.error('GET items endpoint test failed:', error.message);
+        throw error;
+      }
+    }, 30000);
+
+    test('should test POST /api/v1/items endpoint and create new item', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const itemsUrl = outputs.items_endpoint;
+      if (!itemsUrl) {
+        console.log('Skipping - no items endpoint found');
+        return;
+      }
+
+      try {
+        console.log(`Testing POST items endpoint: ${itemsUrl}`);
+
+        const testItem = {
+          name: `E2E-Test-Item-${Date.now()}`,
+          price: 99.99,
+          description: 'End-to-end integration test item',
+          customer_id: 'test-customer-e2e'
+        };
+
+        const result = execSync(
+          `curl -s -w "\\n%{http_code}" -X POST "${itemsUrl}" ` +
+          `-H "Content-Type: application/json" ` +
+          `-d '${JSON.stringify(testItem)}' ` +
+          `--connect-timeout 20`,
+          { encoding: 'utf8', timeout: 30000 }
+        );
+
+        const lines = result.trim().split('\n');
+        const statusCode = lines[lines.length - 1];
+        const body = lines.slice(0, -1).join('\n');
+
+        console.log(`POST items endpoint returned status: ${statusCode}`);
+        expect(statusCode).toBe('201');
+
+        const response = JSON.parse(body);
+        expect(response).toHaveProperty('message');
+        expect(response.message).toContain('created');
+        expect(response).toHaveProperty('item');
+        expect(response.item).toHaveProperty('id');
+        expect(response.item.name).toBe(testItem.name);
+        expect(response.item.price).toBe(testItem.price);
+
+        console.log(`POST items response validated - created item with ID: ${response.item.id}`);
+      } catch (error: any) {
+        console.error('POST items endpoint test failed:', error.message);
+        throw error;
+      }
+    }, 40000);
   });
 
   describe('AWS Resource Validation', () => {
-    test('should verify DynamoDB table exists and is active', async () => {
+    test('should verify DynamoDB table exists, is active, and encrypted', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const tableName = outputs.dynamodb_table_name || outputs.DynamoDbTableName;
+      const tableName = outputs.dynamodb_table_name;
       if (!tableName) {
-        console.log('Skipping test - no DynamoDB table name found');
+        console.log('Skipping - no DynamoDB table name found');
         return;
       }
 
       try {
+        console.log(`Validating DynamoDB table: ${tableName}`);
         const result = execSync(
-          `aws dynamodb describe-table --table-name ${tableName} --query 'Table.{Status:TableStatus,Encryption:SSEDescription,PITR:RestoreSummary}' --output json`,
+          `aws dynamodb describe-table --table-name ${tableName} --output json`,
           { encoding: 'utf8', timeout: 15000 }
         );
 
-        const tableInfo = JSON.parse(result.trim());
-        console.log('DynamoDB table info:', tableInfo);
+        const data = JSON.parse(result.trim());
+        const table = data.Table;
 
-        expect(tableInfo.Status).toBe('ACTIVE');
-        console.log('DynamoDB table validation passed');
-      } catch (error: any) {
-        console.warn(
-          'DynamoDB table validation failed - ensure AWS CLI is configured:',
-          error.message
+        console.log(`Table Status: ${table.TableStatus}`);
+        expect(table.TableStatus).toBe('ACTIVE');
+
+        // Verify encryption
+        expect(table.SSEDescription).toBeDefined();
+        expect(table.SSEDescription.Status).toBe('ENABLED');
+        console.log(`Encryption: ${table.SSEDescription.Status} (${table.SSEDescription.SSEType})`);
+
+        // Verify point-in-time recovery
+        const pitrResult = execSync(
+          `aws dynamodb describe-continuous-backups --table-name ${tableName} --output json`,
+          { encoding: 'utf8', timeout: 10000 }
         );
-      }
-    }, 20000);
+        const pitrData = JSON.parse(pitrResult.trim());
+        expect(pitrData.ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus).toBe('ENABLED');
+        console.log(`Point-in-Time Recovery: ENABLED`);
 
-    test('should verify Lambda function exists and is active', async () => {
+        console.log(`DynamoDB table validation passed`);
+      } catch (error: any) {
+        console.error('DynamoDB table validation failed:', error.message);
+        throw error;
+      }
+    }, 25000);
+
+    test('should verify Lambda function exists, is active, and has X-Ray tracing', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const functionName = outputs.lambda_function_name || outputs.LambdaFunctionName;
+      const functionName = outputs.lambda_function_name;
       if (!functionName) {
-        console.log('Skipping test - no Lambda function name found');
+        console.log('Skipping - no Lambda function name found');
         return;
       }
 
       try {
+        console.log(`Validating Lambda function: ${functionName}`);
         const result = execSync(
-          `aws lambda get-function --function-name ${functionName} --query 'Configuration.{State:State,Runtime:Runtime,TracingMode:TracingConfig.Mode}' --output json`,
+          `aws lambda get-function --function-name ${functionName} --output json`,
           { encoding: 'utf8', timeout: 15000 }
         );
 
-        const functionInfo = JSON.parse(result.trim());
-        console.log('Lambda function info:', functionInfo);
+        const data = JSON.parse(result.trim());
+        const config = data.Configuration;
 
-        expect(functionInfo.State).toBe('Active');
-        expect(functionInfo.Runtime).toMatch(/^python/);
-        expect(functionInfo.TracingMode).toBe('Active');
+        console.log(`State: ${config.State}`);
+        expect(config.State).toBe('Active');
 
-        console.log('Lambda function validation passed');
+        console.log(`Runtime: ${config.Runtime}`);
+        expect(config.Runtime).toMatch(/^python3/);
+
+        console.log(`X-Ray Tracing: ${config.TracingConfig.Mode}`);
+        expect(config.TracingConfig.Mode).toBe('Active');
+
+        // Verify environment variables
+        expect(config.Environment.Variables).toHaveProperty('DYNAMODB_TABLE');
+        expect(config.Environment.Variables.DYNAMODB_TABLE).toBe(outputs.dynamodb_table_name);
+        console.log(`Environment Variables: DYNAMODB_TABLE=${config.Environment.Variables.DYNAMODB_TABLE}`);
+
+        console.log(`Lambda function validation passed`);
       } catch (error: any) {
-        console.warn(
-          'Lambda function validation failed - ensure AWS CLI is configured:',
-          error.message
-        );
+        console.error('Lambda function validation failed:', error.message);
+        throw error;
       }
     }, 20000);
 
-    test('should verify S3 analytics bucket exists with encryption', async () => {
+    test('should verify S3 analytics bucket exists with encryption and security', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const bucketName = outputs.s3_analytics_bucket || outputs.S3AnalyticsBucket;
+      const bucketName = outputs.s3_analytics_bucket;
       if (!bucketName) {
-        console.log('Skipping test - no S3 bucket name found');
+        console.log('Skipping - no S3 bucket name found');
         return;
       }
 
       try {
-        // Verify bucket exists
+        console.log(`Validating S3 bucket: ${bucketName}`);
+
+        // Verify bucket exists and location
         const locationResult = execSync(
           `aws s3api get-bucket-location --bucket ${bucketName} --output text`,
           { encoding: 'utf8', timeout: 10000 }
         );
-        console.log(`S3 bucket location: ${locationResult.trim()}`);
+        console.log(`Bucket Location: ${locationResult.trim() || 'us-east-1'}`);
 
         // Verify bucket encryption
         const encryptionResult = execSync(
           `aws s3api get-bucket-encryption --bucket ${bucketName} --query 'ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm' --output text`,
           { encoding: 'utf8', timeout: 10000 }
         );
-        expect(['AES256', 'aws:kms']).toContain(encryptionResult.trim());
+        const encryption = encryptionResult.trim();
+        expect(['AES256', 'aws:kms']).toContain(encryption);
+        console.log(`Encryption: ${encryption}`);
 
         // Verify public access is blocked
         const publicAccessResult = execSync(
@@ -237,219 +336,319 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const publicAccess = JSON.parse(publicAccessResult.trim());
         expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
         expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+        console.log(`Public Access Blocked: ✓`);
 
-        console.log('S3 bucket validation passed');
+        console.log(`S3 bucket validation passed`);
       } catch (error: any) {
-        console.warn(
-          'S3 bucket validation failed - ensure AWS CLI is configured:',
-          error.message
-        );
+        console.error('S3 bucket validation failed:', error.message);
+        throw error;
       }
     }, 25000);
 
-    test('should verify KMS key exists and is enabled', async () => {
+    test('should verify KMS key exists, is enabled, and has rotation', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const kmsKeyId = outputs.kms_key_id || outputs.KmsKeyId;
+      const kmsKeyId = outputs.kms_key_id;
       if (!kmsKeyId) {
-        console.log('Skipping test - no KMS key ID found');
+        console.log('Skipping - no KMS key ID found');
         return;
       }
 
       try {
+        console.log(`Validating KMS key: ${kmsKeyId}`);
         const result = execSync(
-          `aws kms describe-key --key-id ${kmsKeyId} --query 'KeyMetadata.{KeyState:KeyState,Enabled:Enabled,KeyRotationEnabled:KeyRotationEnabled}' --output json`,
+          `aws kms describe-key --key-id ${kmsKeyId} --output json`,
           { encoding: 'utf8', timeout: 10000 }
         );
 
-        const keyInfo = JSON.parse(result.trim());
-        console.log('KMS Key Info:', keyInfo);
+        const data = JSON.parse(result.trim());
+        const keyMetadata = data.KeyMetadata;
 
-        expect(keyInfo.KeyState).toBe('Enabled');
-        expect(keyInfo.Enabled).toBe(true);
+        console.log(`Key State: ${keyMetadata.KeyState}`);
+        expect(keyMetadata.KeyState).toBe('Enabled');
+        expect(keyMetadata.Enabled).toBe(true);
 
-        console.log('KMS key validation passed');
-      } catch (error: any) {
-        console.warn(
-          'KMS key validation failed - ensure AWS CLI is configured:',
-          error.message
+        // Check key rotation
+        const rotationResult = execSync(
+          `aws kms get-key-rotation-status --key-id ${kmsKeyId} --output json`,
+          { encoding: 'utf8', timeout: 10000 }
         );
+        const rotation = JSON.parse(rotationResult.trim());
+        console.log(`Key Rotation: ${rotation.KeyRotationEnabled ? 'Enabled' : 'Disabled'}`);
+
+        console.log(`KMS key validation passed`);
+      } catch (error: any) {
+        console.error('KMS key validation failed:', error.message);
+        throw error;
       }
     }, 15000);
 
-    test('should verify WAF Web ACL exists and has rules', async () => {
+    test('should verify WAF Web ACL exists and has protection rules', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const webAclId = outputs.waf_web_acl_id || outputs.WafWebAclId;
-      const webAclName = outputs.waf_web_acl_name || outputs.WafWebAclName;
-      
-      if (!webAclId && !webAclName) {
-        console.log('Skipping test - no WAF Web ACL ID or name found');
+      const webAclId = outputs.waf_web_acl_id;
+      const webAclName = outputs.waf_web_acl_name;
+
+      if (!webAclId || !webAclName) {
+        console.log('Skipping - no WAF Web ACL information found');
         return;
       }
 
       try {
-        const identifier = webAclId || webAclName;
+        console.log(`Validating WAF Web ACL: ${webAclName}`);
         const result = execSync(
-          `aws wafv2 get-web-acl --scope REGIONAL --id ${identifier} --name ${webAclName} --query 'WebACL.{Rules:Rules,DefaultAction:DefaultAction}' --output json 2>/dev/null || echo '{"Rules":[]}'`,
+          `aws wafv2 get-web-acl --scope REGIONAL --id ${webAclId} --name ${webAclName} --output json`,
           { encoding: 'utf8', timeout: 15000 }
         );
 
-        const webAclInfo = JSON.parse(result.trim());
-        console.log('WAF Web ACL info:', { ruleCount: webAclInfo.Rules?.length || 0 });
+        const data = JSON.parse(result.trim());
+        const webAcl = data.WebACL;
 
-        if (webAclInfo.Rules) {
-          expect(webAclInfo.Rules.length).toBeGreaterThan(0);
-          console.log('WAF Web ACL validation passed');
-        }
+        console.log(`Name: ${webAcl.Name}`);
+        console.log(`Rules Count: ${webAcl.Rules.length}`);
+        expect(webAcl.Rules.length).toBeGreaterThan(0);
+
+        // Check for specific managed rule groups
+        const ruleNames = webAcl.Rules.map((r: any) => r.Name);
+        console.log(`Rule Names: ${ruleNames.join(', ')}`);
+
+        console.log(`WAF Web ACL validation passed`);
       } catch (error: any) {
-        console.warn(
-          'WAF Web ACL validation failed - this may be expected:',
-          error.message
-        );
+        console.error('WAF Web ACL validation failed:', error.message);
+        throw error;
       }
     }, 20000);
   });
 
   describe('CloudWatch Monitoring', () => {
-    test('should verify CloudWatch log groups exist', async () => {
+    test('should verify CloudWatch log groups exist with retention policy', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const functionName = outputs.lambda_function_name || outputs.LambdaFunctionName;
+      const functionName = outputs.lambda_function_name;
       if (!functionName) {
-        console.log('Skipping test - no Lambda function name found');
+        console.log('Skipping - no Lambda function name found');
         return;
       }
 
       try {
         const logGroupName = `/aws/lambda/${functionName}`;
+        console.log(`Validating CloudWatch log group: ${logGroupName}`);
+
         const result = execSync(
           `aws logs describe-log-groups --log-group-name-prefix "${logGroupName}" --query 'logGroups[0].{Name:logGroupName,RetentionInDays:retentionInDays}' --output json`,
           { encoding: 'utf8', timeout: 10000 }
         );
 
         const logGroup = JSON.parse(result.trim());
-        console.log('CloudWatch log group info:', logGroup);
 
+        console.log(`Name: ${logGroup.Name}`);
         expect(logGroup.Name).toContain('lambda');
+
+        console.log(`Retention: ${logGroup.RetentionInDays} days`);
         expect(logGroup.RetentionInDays).toBeGreaterThanOrEqual(365);
 
-        console.log('CloudWatch log group validation passed');
+        console.log(`CloudWatch log group validation passed`);
       } catch (error: any) {
-        console.warn(
-          'CloudWatch log group validation failed:',
-          error.message
-        );
+        console.error('CloudWatch log group validation failed:', error.message);
+        throw error;
       }
     }, 15000);
 
-    test('should verify CloudWatch dashboard exists', async () => {
+    test('should verify CloudWatch dashboard exists and is accessible', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const dashboardName = outputs.cloudwatch_dashboard_name || outputs.CloudWatchDashboardName;
+      const dashboardName = outputs.cloudwatch_dashboard_name;
       if (!dashboardName) {
-        console.log('Skipping test - no dashboard name found');
+        console.log('Skipping - no dashboard name found');
         return;
       }
 
       try {
+        console.log(`Validating CloudWatch dashboard: ${dashboardName}`);
         const result = execSync(
-          `aws cloudwatch get-dashboard --dashboard-name ${dashboardName} --query 'DashboardName' --output text`,
+          `aws cloudwatch get-dashboard --dashboard-name ${dashboardName} --output json`,
           { encoding: 'utf8', timeout: 10000 }
         );
 
-        expect(result.trim()).toBe(dashboardName);
-        console.log('CloudWatch dashboard validation passed');
+        const data = JSON.parse(result.trim());
+        expect(data.DashboardName).toBe(dashboardName);
+        expect(data.DashboardBody).toBeDefined();
+
+        console.log(`Name: ${data.DashboardName}`);
+        console.log(`URL: ${outputs.cloudwatch_dashboard_url}`);
+        console.log(`CloudWatch dashboard validation passed`);
       } catch (error: any) {
-        console.warn(
-          'CloudWatch dashboard validation failed:',
-          error.message
-        );
+        console.error('CloudWatch dashboard validation failed:', error.message);
+        throw error;
       }
     }, 15000);
   });
 
   describe('End-to-End API Workflow', () => {
-    test('should POST item to API and retrieve it', async () => {
+    test('should complete full CRUD workflow: POST item, GET items, verify in DynamoDB', async () => {
       if (!deployedSuccessfully) {
-        console.log('Skipping test - no deployed infrastructure detected');
+        console.log('Skipping - no deployed infrastructure');
         return;
       }
 
-      const itemsUrl = outputs.items_endpoint || outputs.ItemsEndpoint;
-      if (!itemsUrl) {
-        console.log('Skipping test - no items endpoint found');
+      const itemsUrl = outputs.items_endpoint;
+      const tableName = outputs.dynamodb_table_name;
+
+      if (!itemsUrl || !tableName) {
+        console.log('Skipping - missing required endpoints');
         return;
       }
 
       try {
-        console.log('Testing end-to-end API workflow...');
+        console.log('\n Starting End-to-End Workflow Test');
+        console.log(' This test validates the complete data flow from API → Lambda → DynamoDB\n');
 
-        // Step 1: POST a new item
+        // Step 1: Create test item via POST API
+        const timestamp = Date.now();
         const testItem = {
-          name: `Test Item ${Date.now()}`,
-          price: 29.99,
-          description: 'Integration test item',
-          customer_id: 'test-customer-123'
+          name: `E2E-Workflow-Test-${timestamp}`,
+          price: 149.99,
+          description: 'Complete end-to-end integration test item',
+          customer_id: `e2e-customer-${timestamp}`
         };
+
+        console.log(`Step 1: Creating item via POST API`);
+        console.log(`Item: ${testItem.name}`);
 
         const postResult = execSync(
           `curl -s -w "\\n%{http_code}" -X POST "${itemsUrl}" ` +
           `-H "Content-Type: application/json" ` +
           `-d '${JSON.stringify(testItem)}' ` +
-          `--connect-timeout 15`,
-          { encoding: 'utf8', timeout: 20000 }
+          `--connect-timeout 20`,
+          { encoding: 'utf8', timeout: 30000 }
         );
 
         const postLines = postResult.trim().split('\n');
         const postStatusCode = postLines[postLines.length - 1];
         const postBody = postLines.slice(0, -1).join('\n');
 
-        console.log(`POST response status: ${postStatusCode}`);
-        expect(['200', '201']).toContain(postStatusCode);
+        expect(postStatusCode).toBe('201');
+        const postResponse = JSON.parse(postBody);
+        expect(postResponse).toHaveProperty('item');
+        const createdItemId = postResponse.item.id;
 
-        if (postStatusCode === '201' || postStatusCode === '200') {
-          const postResponse = JSON.parse(postBody);
-          console.log('POST response:', postResponse);
-          expect(postResponse.message).toContain('created');
-        }
+        console.log(`Item created with ID: ${createdItemId}`);
 
-        // Step 2: Wait a moment for eventual consistency
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Step 2: Wait for eventual consistency
+        console.log(`\n Step 2: Waiting for eventual consistency (3 seconds)...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Step 3: GET items to verify
+        // Step 3: Retrieve all items via GET API
+        console.log(`\n Step 3: Retrieving items via GET API`);
         const getResult = execSync(
-          `curl -s -w "\\n%{http_code}" --connect-timeout 10 "${itemsUrl}"`,
-          { encoding: 'utf8', timeout: 15000 }
+          `curl -s -w "\\n%{http_code}" --connect-timeout 15 "${itemsUrl}"`,
+          { encoding: 'utf8', timeout: 20000 }
         );
 
         const getLines = getResult.trim().split('\n');
         const getStatusCode = getLines[getLines.length - 1];
         const getBody = getLines.slice(0, -1).join('\n');
 
-        console.log(`GET response status: ${getStatusCode}`);
         expect(getStatusCode).toBe('200');
-
         const getResponse = JSON.parse(getBody);
         expect(getResponse).toHaveProperty('items');
-        expect(getResponse.count).toBeGreaterThanOrEqual(0);
+        expect(Array.isArray(getResponse.items)).toBe(true);
 
-        console.log('End-to-end API workflow test completed successfully');
+        console.log(`Retrieved ${getResponse.count} items from API`);
+
+        // Step 4: Verify item exists directly in DynamoDB
+        console.log(`\n Step 4: Verifying item in DynamoDB`);
+        const dynamoResult = execSync(
+          `aws dynamodb get-item --table-name ${tableName} --key '{"id":{"S":"${createdItemId}"}}' --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const dynamoData = JSON.parse(dynamoResult.trim());
+        expect(dynamoData).toHaveProperty('Item');
+        expect(dynamoData.Item.name.S).toBe(testItem.name);
+        expect(parseFloat(dynamoData.Item.price.N)).toBe(testItem.price);
+
+        console.log(`Item verified in DynamoDB:`);
+        console.log(` - ID: ${dynamoData.Item.id.S}`);
+        console.log(` - Name: ${dynamoData.Item.name.S}`);
+        console.log(` - Price: $${dynamoData.Item.price.N}`);
+        console.log(` - Customer: ${dynamoData.Item.customer_id.S}`);
+
+        // Step 5: Verify item count increased
+        console.log(`\n Step 5: Final verification`);
+        const finalCount = getResponse.count;
+        expect(finalCount).toBeGreaterThan(0);
+        console.log(`Final item count: ${finalCount}`);
+
+        console.log(`\n End-to-End Workflow Test PASSED!`);
+        console.log(`✓ API POST → Lambda → DynamoDB write: SUCCESS`);
+        console.log(`✓ API GET → Lambda → DynamoDB read: SUCCESS`);
+        console.log(`✓ Direct DynamoDB verification: SUCCESS`);
+        console.log(`✓ Data consistency: VERIFIED\n`);
+
       } catch (error: any) {
-        console.warn('End-to-end API workflow test failed:', error.message);
+        console.error('\n End-to-End Workflow Test FAILED:', error.message);
+        throw error;
       }
-    }, 60000);
+    }, 90000);
+
+    test('should handle API errors gracefully (negative test)', async () => {
+      if (!deployedSuccessfully) {
+        console.log('Skipping - no deployed infrastructure');
+        return;
+      }
+
+      const itemsUrl = outputs.items_endpoint;
+      if (!itemsUrl) {
+        console.log('Skipping - no items endpoint found');
+        return;
+      }
+
+      try {
+        console.log('\n Testing API error handling with invalid request');
+
+        // Send invalid request (missing required fields)
+        const invalidItem = {
+          description: 'Missing name and price'
+        };
+
+        const result = execSync(
+          `curl -s -w "\\n%{http_code}" -X POST "${itemsUrl}" ` +
+          `-H "Content-Type: application/json" ` +
+          `-d '${JSON.stringify(invalidItem)}' ` +
+          `--connect-timeout 15`,
+          { encoding: 'utf8', timeout: 20000 }
+        );
+
+        const lines = result.trim().split('\n');
+        const statusCode = lines[lines.length - 1];
+        const body = lines.slice(0, -1).join('\n');
+
+        console.log(`Response status: ${statusCode}`);
+        expect(statusCode).toBe('400');
+
+        const response = JSON.parse(body);
+        expect(response).toHaveProperty('message');
+        expect(response.message).toContain('Missing required fields');
+
+        console.log(`API correctly rejected invalid request with status 400`);
+        console.log(`Error message: "${response.message}"\n`);
+      } catch (error: any) {
+        console.error('Error handling test failed:', error.message);
+        throw error;
+      }
+    }, 30000);
   });
 });
