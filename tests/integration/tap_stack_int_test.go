@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -277,72 +276,44 @@ func TestTapStackIntegration(t *testing.T) {
 	})
 }
 
-// loadStackOutputs loads outputs from CloudFormation stack or falls back to file
+// loadStackOutputs tries file-based loading first, then CloudFormation as fallback
 func loadStackOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *StackOutputs {
-	cfnClient := cloudformation.NewFromConfig(cfg)
+	t.Helper()
 
-	// Determine stack name from environment or use default pattern
-	stackName := os.Getenv("STACK_NAME")
-	if stackName == "" {
-		// Try to find stack by tag or naming pattern
-		stackName = findTapStack(t, ctx, cfnClient)
+	// Try file-based approach first (faster and works in CI)
+	candidatePaths := []string{
+		os.Getenv("CFN_FLAT_OUTPUTS"),
+		"cfn-outputs/flat-outputs.json",
+		"./cfn-outputs/flat-outputs.json",
+		"../cfn-outputs/flat-outputs.json",
+		"../../cfn-outputs/flat-outputs.json",
 	}
 
-	t.Logf("Loading outputs from CloudFormation stack: %s", stackName)
-
-	// Get stack outputs from CloudFormation
-	describeOutput, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(stackName),
-	})
-
-	if err != nil {
-		// Fall back to file-based approach if CloudFormation query fails
-		t.Logf("Failed to query CloudFormation: %v. Trying file-based approach...", err)
-		return loadStackOutputsFromFile(t)
-	}
-
-	require.NotEmpty(t, describeOutput.Stacks, "No stacks found")
-	stack := describeOutput.Stacks[0]
-
-	// Log all available outputs for debugging
-	t.Logf("Found %d outputs in stack:", len(stack.Outputs))
-	for _, output := range stack.Outputs {
-		if output.OutputKey != nil && output.OutputValue != nil {
-			t.Logf("  - %s = %s", *output.OutputKey, *output.OutputValue)
-		}
-	}
-
-	outputs := &StackOutputs{}
-	for _, output := range stack.Outputs {
-		if output.OutputKey == nil || output.OutputValue == nil {
+	for _, path := range candidatePaths {
+		if path == "" {
 			continue
 		}
+		data, err := os.ReadFile(path)
+		if err == nil {
+			t.Logf("Loading outputs from file: %s", path)
+			var outputs StackOutputs
+			err = json.Unmarshal(data, &outputs)
+			require.NoError(t, err, "Failed to parse stack outputs JSON")
 
-		key := *output.OutputKey
-		value := *output.OutputValue
+			require.NotEmpty(t, outputs.SourceBucketName, "SourceBucketName should not be empty")
+			require.NotEmpty(t, outputs.ProcessedBucketName, "ProcessedBucketName should not be empty")
+			require.NotEmpty(t, outputs.LambdaFunctionName, "LambdaFunctionName should not be empty")
+			require.NotEmpty(t, outputs.MetadataTableName, "MetadataTableName should not be empty")
 
-		// Match output keys with or without stack name prefix
-		// CDK may generate keys like "TapStackpr4128SourceBucketName"
-		if containsIgnoreCase(key, "SourceBucket") {
-			outputs.SourceBucketName = value
-		} else if containsIgnoreCase(key, "ProcessedBucket") {
-			outputs.ProcessedBucketName = value
-		} else if containsIgnoreCase(key, "LambdaFunction") || containsIgnoreCase(key, "FunctionName") {
-			outputs.LambdaFunctionName = value
-		} else if containsIgnoreCase(key, "MetadataTable") || containsIgnoreCase(key, "TableName") {
-			outputs.MetadataTableName = value
+			t.Logf("✅ Loaded from file: SourceBucket=%s, ProcessedBucket=%s, Lambda=%s, Table=%s",
+				outputs.SourceBucketName, outputs.ProcessedBucketName, outputs.LambdaFunctionName, outputs.MetadataTableName)
+			return &outputs
 		}
 	}
 
-	require.NotEmpty(t, outputs.SourceBucketName, "SourceBucketName should not be empty")
-	require.NotEmpty(t, outputs.ProcessedBucketName, "ProcessedBucketName should not be empty")
-	require.NotEmpty(t, outputs.LambdaFunctionName, "LambdaFunctionName should not be empty")
-	require.NotEmpty(t, outputs.MetadataTableName, "MetadataTableName should not be empty")
-
-	t.Logf("✅ Loaded stack outputs: SourceBucket=%s, ProcessedBucket=%s, Lambda=%s, Table=%s",
-		outputs.SourceBucketName, outputs.ProcessedBucketName, outputs.LambdaFunctionName, outputs.MetadataTableName)
-
-	return outputs
+	// Fall back to CloudFormation query
+	t.Logf("File-based loading failed, trying CloudFormation query...")
+	return loadStackOutputsFromCloudFormation(t, ctx, cfg)
 }
 
 // findTapStack attempts to find the TapStack by listing stacks
@@ -406,44 +377,69 @@ func toLower(s string) string {
 	return string(result)
 }
 
-// loadStackOutputsFromFile reads the cfn-outputs/flat-outputs.json file as fallback
-func loadStackOutputsFromFile(t *testing.T) *StackOutputs {
-	// Try multiple possible paths
-	possiblePaths := []string{
-		filepath.Join("cfn-outputs", "flat-outputs.json"),
-		filepath.Join("..", "cfn-outputs", "flat-outputs.json"),
-		filepath.Join("..", "..", "cfn-outputs", "flat-outputs.json"),
+// loadStackOutputsFromCloudFormation queries CloudFormation for stack outputs
+func loadStackOutputsFromCloudFormation(t *testing.T, ctx context.Context, cfg aws.Config) *StackOutputs {
+	t.Helper()
+	cfnClient := cloudformation.NewFromConfig(cfg)
+
+	// Determine stack name from environment or use default pattern
+	stackName := os.Getenv("STACK_NAME")
+	if stackName == "" {
+		// Try to find stack by tag or naming pattern
+		stackName = findTapStack(t, ctx, cfnClient)
 	}
 
-	var data []byte
-	var err error
-	var foundPath string
+	t.Logf("Loading outputs from CloudFormation stack: %s", stackName)
 
-	for _, path := range possiblePaths {
-		data, err = os.ReadFile(path)
-		if err == nil {
-			foundPath = path
-			break
+	// Get stack outputs from CloudFormation
+	describeOutput, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+		StackName: aws.String(stackName),
+	})
+
+	require.NoError(t, err, "Failed to describe CloudFormation stack. Please deploy the stack first using: ./scripts/deploy.sh")
+	require.NotEmpty(t, describeOutput.Stacks, "No stacks found")
+
+	stack := describeOutput.Stacks[0]
+
+	// Log all available outputs for debugging
+	t.Logf("Found %d outputs in stack:", len(stack.Outputs))
+	for _, output := range stack.Outputs {
+		if output.OutputKey != nil && output.OutputValue != nil {
+			t.Logf("  - %s = %s", *output.OutputKey, *output.OutputValue)
 		}
 	}
 
-	if err != nil {
-		require.NoError(t, err,
-			"Failed to read stack outputs file from any location. Please deploy the stack first using: ./scripts/deploy.sh")
+	outputs := &StackOutputs{}
+	for _, output := range stack.Outputs {
+		if output.OutputKey == nil || output.OutputValue == nil {
+			continue
+		}
+
+		key := *output.OutputKey
+		value := *output.OutputValue
+
+		// Match output keys with or without stack name prefix
+		// CDK may generate keys like "TapStackpr4128SourceBucketName"
+		if containsIgnoreCase(key, "SourceBucket") {
+			outputs.SourceBucketName = value
+		} else if containsIgnoreCase(key, "ProcessedBucket") {
+			outputs.ProcessedBucketName = value
+		} else if containsIgnoreCase(key, "LambdaFunction") || containsIgnoreCase(key, "FunctionName") {
+			outputs.LambdaFunctionName = value
+		} else if containsIgnoreCase(key, "MetadataTable") || containsIgnoreCase(key, "TableName") {
+			outputs.MetadataTableName = value
+		}
 	}
 
-	t.Logf("Loading outputs from file: %s", foundPath)
+	require.NotEmpty(t, outputs.SourceBucketName, "SourceBucketName should not be empty in CloudFormation outputs")
+	require.NotEmpty(t, outputs.ProcessedBucketName, "ProcessedBucketName should not be empty in CloudFormation outputs")
+	require.NotEmpty(t, outputs.LambdaFunctionName, "LambdaFunctionName should not be empty in CloudFormation outputs")
+	require.NotEmpty(t, outputs.MetadataTableName, "MetadataTableName should not be empty in CloudFormation outputs")
 
-	var outputs StackOutputs
-	err = json.Unmarshal(data, &outputs)
-	require.NoError(t, err, "Failed to parse stack outputs")
+	t.Logf("✅ Loaded from CloudFormation: SourceBucket=%s, ProcessedBucket=%s, Lambda=%s, Table=%s",
+		outputs.SourceBucketName, outputs.ProcessedBucketName, outputs.LambdaFunctionName, outputs.MetadataTableName)
 
-	require.NotEmpty(t, outputs.SourceBucketName, "SourceBucketName should not be empty")
-	require.NotEmpty(t, outputs.ProcessedBucketName, "ProcessedBucketName should not be empty")
-	require.NotEmpty(t, outputs.LambdaFunctionName, "LambdaFunctionName should not be empty")
-	require.NotEmpty(t, outputs.MetadataTableName, "MetadataTableName should not be empty")
-
-	return &outputs
+	return outputs
 }
 
 // StackOutputs holds the deployed stack resource names
