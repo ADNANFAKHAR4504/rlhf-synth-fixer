@@ -304,17 +304,33 @@ func loadStackOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *StackO
 	require.NotEmpty(t, describeOutput.Stacks, "No stacks found")
 	stack := describeOutput.Stacks[0]
 
+	// Log all available outputs for debugging
+	t.Logf("Found %d outputs in stack:", len(stack.Outputs))
+	for _, output := range stack.Outputs {
+		if output.OutputKey != nil && output.OutputValue != nil {
+			t.Logf("  - %s = %s", *output.OutputKey, *output.OutputValue)
+		}
+	}
+
 	outputs := &StackOutputs{}
 	for _, output := range stack.Outputs {
-		switch *output.OutputKey {
-		case "SourceBucketName":
-			outputs.SourceBucketName = *output.OutputValue
-		case "ProcessedBucketName":
-			outputs.ProcessedBucketName = *output.OutputValue
-		case "LambdaFunctionName":
-			outputs.LambdaFunctionName = *output.OutputValue
-		case "MetadataTableName":
-			outputs.MetadataTableName = *output.OutputValue
+		if output.OutputKey == nil || output.OutputValue == nil {
+			continue
+		}
+
+		key := *output.OutputKey
+		value := *output.OutputValue
+
+		// Match output keys with or without stack name prefix
+		// CDK may generate keys like "TapStackpr4128SourceBucketName"
+		if containsIgnoreCase(key, "SourceBucket") {
+			outputs.SourceBucketName = value
+		} else if containsIgnoreCase(key, "ProcessedBucket") {
+			outputs.ProcessedBucketName = value
+		} else if containsIgnoreCase(key, "LambdaFunction") || containsIgnoreCase(key, "FunctionName") {
+			outputs.LambdaFunctionName = value
+		} else if containsIgnoreCase(key, "MetadataTable") || containsIgnoreCase(key, "TableName") {
+			outputs.MetadataTableName = value
 		}
 	}
 
@@ -354,7 +370,7 @@ func findTapStack(t *testing.T, ctx context.Context, cfnClient *cloudformation.C
 	return "TapStack"
 }
 
-// contains checks if string contains substring (case-insensitive helper)
+// contains checks if string contains substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr || len(s) > len(substr) &&
@@ -369,6 +385,25 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// containsIgnoreCase checks if string contains substring (case-insensitive)
+func containsIgnoreCase(s, substr string) bool {
+	s = toLower(s)
+	substr = toLower(substr)
+	return findSubstring(s, substr)
+}
+
+func toLower(s string) string {
+	result := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			result[i] = s[i] + ('a' - 'A')
+		} else {
+			result[i] = s[i]
+		}
+	}
+	return string(result)
 }
 
 // loadStackOutputsFromFile reads the cfn-outputs/flat-outputs.json file as fallback
