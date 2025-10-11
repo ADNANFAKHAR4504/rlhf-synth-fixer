@@ -1,4 +1,6 @@
+1. Model used wrong s3 resource which is not as per AWS and deployment failed.
 
+2. Model used wrong encryption which failed the deployment.
 ```
 │ Error: Invalid resource type
 │ 
