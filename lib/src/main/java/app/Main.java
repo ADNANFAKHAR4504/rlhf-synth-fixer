@@ -537,7 +537,7 @@ class MessagingStack extends Stack {
                         .build())
                 .build();
 
-        // Create SNS topic for security alerts - moved here to avoid circular dependency
+        // Create SNS topic for security alerts
         this.securityAlertTopic = Topic.Builder.create(this, "SecurityAlertTopic")
                 .topicName("tap-" + environmentSuffix + "-security-alerts")
                 .displayName("Security Alert Notifications")
@@ -567,7 +567,7 @@ class MessagingStack extends Stack {
                         "aws:SourceArn", applicationEventTopic.getTopicArn())))
                 .build());
 
-        // Setup GuardDuty alerts HERE to avoid cyclic dependency
+        // Setup GuardDuty alerts in MessagingStack to avoid circular dependency
         setupGuardDutyAlerts(environmentSuffix);
 
         // Output SNS and SQS ARNs
@@ -594,7 +594,7 @@ class MessagingStack extends Stack {
     }
 
     private void setupGuardDutyAlerts(final String environmentSuffix) {
-        // Create EventBridge rule for GuardDuty findings in MessagingStack
+        // Create EventBridge rule for GuardDuty findings
         Rule guardDutyRule = Rule.Builder.create(this, "GuardDutyFindingsRule")
                 .ruleName("tap-" + environmentSuffix + "-guardduty-findings")
                 .description("Route GuardDuty findings to SNS")
@@ -1162,7 +1162,7 @@ class TapStack extends Stack {
                         .description("Security Stack for environment: " + environmentSuffix)
                         .build());
 
-        // Create messaging stack - GuardDuty alerts setup moved inside MessagingStack
+        // Create messaging stack - NO DEPENDENCY on SecurityStack added here
         this.messagingStack = new MessagingStack(
                 this,
                 "Messaging",
@@ -1202,7 +1202,7 @@ class TapStack extends Stack {
                                 .build())
                         .build());
 
-        // Add stack dependencies
+        // Add stack dependencies - MessagingStack depends on SecurityStack for KMS key
         messagingStack.addDependency(securityStack);
         infrastructureStack.addDependency(securityStack);
         applicationStack.addDependency(securityStack);
