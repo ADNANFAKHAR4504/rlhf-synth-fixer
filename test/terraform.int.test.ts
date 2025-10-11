@@ -39,7 +39,15 @@ describe('TAP Stack Live Integration Tests', () => {
   // -------------------------
   // VPC & Networking
   // -------------------------
-  const testVPC = async (ec2: AWS.EC2, vpcId: string, cidr: string, publicSubnets: string[], privateSubnets: string[], natGatewayIds?: string[], igwId?: string) => {
+  const testVPC = (
+    ec2: AWS.EC2,
+    vpcId: string,
+    cidr: string,
+    publicSubnets: string[],
+    privateSubnets: string[],
+    natGatewayIds?: string[],
+    igwId?: string
+  ) => {
     it(`VPC exists: ${vpcId}`, async () => {
       const vpcs = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
       expect(vpcs.Vpcs?.[0].VpcId).toBe(vpcId);
@@ -71,30 +79,40 @@ describe('TAP Stack Live Integration Tests', () => {
     }
   };
 
-  describe('Primary VPC', () => testVPC(
-    ec2Primary,
-    terraformOutput.primary_vpc_id,
-    terraformOutput.primary_vpc_cidr,
-    parseJsonArray(terraformOutput.primary_public_subnet_ids),
-    parseJsonArray(terraformOutput.primary_private_subnet_ids),
-    parseJsonArray(terraformOutput.primary_nat_gateway_ids),
-    terraformOutput.primary_internet_gateway_id
-  ));
+  describe('Primary VPC', () => {
+    testVPC(
+      ec2Primary,
+      terraformOutput.primary_vpc_id,
+      terraformOutput.primary_vpc_cidr,
+      parseJsonArray(terraformOutput.primary_public_subnet_ids),
+      parseJsonArray(terraformOutput.primary_private_subnet_ids),
+      parseJsonArray(terraformOutput.primary_nat_gateway_ids),
+      terraformOutput.primary_internet_gateway_id
+    );
+  });
 
-  describe('Secondary VPC', () => testVPC(
-    ec2Secondary,
-    terraformOutput.secondary_vpc_id,
-    terraformOutput.secondary_vpc_cidr,
-    parseJsonArray(terraformOutput.secondary_public_subnet_ids),
-    parseJsonArray(terraformOutput.secondary_private_subnet_ids),
-    parseJsonArray(terraformOutput.secondary_nat_gateway_ids),
-    terraformOutput.secondary_internet_gateway_id
-  ));
+  describe('Secondary VPC', () => {
+    testVPC(
+      ec2Secondary,
+      terraformOutput.secondary_vpc_id,
+      terraformOutput.secondary_vpc_cidr,
+      parseJsonArray(terraformOutput.secondary_public_subnet_ids),
+      parseJsonArray(terraformOutput.secondary_private_subnet_ids),
+      parseJsonArray(terraformOutput.secondary_nat_gateway_ids),
+      terraformOutput.secondary_internet_gateway_id
+    );
+  });
 
   // -------------------------
   // RDS Tests
   // -------------------------
-  const testRDS = async (rds: AWS.RDS, secrets: AWS.SecretsManager, dbName: string, username: string, secretArn: string, region: string) => {
+  const testRDS = (
+    rds: AWS.RDS,
+    secrets: AWS.SecretsManager,
+    dbName: string,
+    secretArn: string,
+    region: string
+  ) => {
     it(`RDS instance exists: ${dbName}`, async () => {
       const instances = await rds.describeDBInstances().promise();
       const found = instances.DBInstances?.some(i => i.DBName === dbName);
@@ -123,28 +141,30 @@ describe('TAP Stack Live Integration Tests', () => {
     });
   };
 
-  describe('Primary RDS', () => testRDS(
-    rdsPrimary,
-    secretsPrimary,
-    terraformOutput.db_name,
-    terraformOutput.db_username,
-    terraformOutput.primary_secrets_manager_arn,
-    'us-west-2'
-  ));
+  describe('Primary RDS', () => {
+    testRDS(
+      rdsPrimary,
+      secretsPrimary,
+      terraformOutput.db_name,
+      terraformOutput.primary_secrets_manager_arn,
+      'us-west-2'
+    );
+  });
 
-  describe('Secondary RDS', () => testRDS(
-    rdsSecondary,
-    secretsSecondary,
-    terraformOutput.db_name,
-    terraformOutput.db_username,
-    terraformOutput.secondary_secrets_manager_arn,
-    'eu-west-1'
-  ));
+  describe('Secondary RDS', () => {
+    testRDS(
+      rdsSecondary,
+      secretsSecondary,
+      terraformOutput.db_name,
+      terraformOutput.secondary_secrets_manager_arn,
+      'eu-west-1'
+    );
+  });
 
   // -------------------------
   // S3 Buckets
   // -------------------------
-  const testS3 = async (s3: AWS.S3, bucketName: string) => {
+  const testS3 = (s3: AWS.S3, bucketName: string) => {
     it(`S3 Bucket exists: ${bucketName}`, async () => {
       await checkBucketExists(s3, bucketName).catch(err => console.warn(`Bucket ${bucketName} missing: ${err.message}`));
     });
@@ -162,7 +182,7 @@ describe('TAP Stack Live Integration Tests', () => {
   // -------------------------
   // IAM Roles & Instance Profiles
   // -------------------------
-  const testIAM = async (iam: AWS.IAM, roleArn: string, profileName: string) => {
+  const testIAM = (iam: AWS.IAM, roleArn: string, profileName: string) => {
     it(`IAM Role exists: ${roleArn}`, async () => {
       const roleName = roleArn.split('/').pop();
       if (!roleName) return console.warn('Role name parse failed');
