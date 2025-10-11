@@ -50,6 +50,7 @@ public class ServiceDiscoveryConstruct extends BaseConstruct {
                     .healthCheckCustomConfig(ServiceDiscoveryServiceHealthCheckCustomConfig.builder()
                             .failureThreshold(3)
                             .build())
+                    .forceDelete(true)
                     .tags(appConfig.tags())
                     .build();
 

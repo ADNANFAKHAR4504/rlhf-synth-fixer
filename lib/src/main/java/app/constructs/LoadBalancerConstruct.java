@@ -38,10 +38,10 @@ public class LoadBalancerConstruct extends BaseConstruct {
     private final List<ServiceConfig> services;
 
     public LoadBalancerConstruct(final Construct scope, final String id, final String vpcId,
-                                 final List<String> subnetIds, final List<ServiceConfig> services) {
+                                 final List<String> subnetIds, final List<ServiceConfig> serviceConfigs) {
         super(scope, id);
 
-        this.services = services;
+        this.services = serviceConfigs;
 
         AppConfig appConfig = getAppConfig();
 
