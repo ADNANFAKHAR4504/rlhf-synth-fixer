@@ -19,13 +19,14 @@ import software.amazon.awscdk.services.cloudfront.Distribution;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
 import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
 import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.cloudwatch.Dashboard;
+import software.amazon.awscdk.services.cloudwatch.GraphWidget;
 import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
-import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
-import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
-import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
-import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
-import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
+import software.amazon.awscdk.services.dynamodb.Attribute;
+import software.amazon.awscdk.services.dynamodb.AttributeType;
+import software.amazon.awscdk.services.dynamodb.BillingMode;
+import software.amazon.awscdk.services.dynamodb.Table;
 import software.amazon.awscdk.services.ec2.FlowLog;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogResourceType;
@@ -130,9 +131,6 @@ final class TapStackProps {
 
 /**
  * Security Infrastructure Stack
- * 
- * Creates comprehensive security infrastructure including KMS, IAM, GuardDuty,
- * CloudTrail, Config, and WAF components.
  */
 class SecurityStack extends Stack {
     private final Key kmsKey;
@@ -145,14 +143,12 @@ class SecurityStack extends Stack {
             final List<String> allowedIpAddresses, final StackProps props) {
         super(scope, id, props);
 
-        // Create KMS Key for encryption at rest
         this.kmsKey = Key.Builder.create(this, "SecurityKmsKey")
                 .description("KMS key for encryption at rest - " + environmentSuffix)
                 .enableKeyRotation(true)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .policy(PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
-                                // Allow CloudTrail to use the KMS key
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
@@ -161,7 +157,6 @@ class SecurityStack extends Stack {
                                                 "kms:GenerateDataKey"))
                                         .resources(Arrays.asList("*"))
                                         .build(),
-                                // Allow root account full access
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
@@ -176,14 +171,12 @@ class SecurityStack extends Stack {
                 .targetKey(kmsKey)
                 .build();
 
-        // Create Security Log Group with 365 days retention
         this.securityLogGroup = LogGroup.Builder.create(this, "SecurityLogGroup")
                 .logGroupName("/aws/security/tap-" + environmentSuffix)
                 .retention(RetentionDays.ONE_YEAR)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Enable GuardDuty
         this.guardDutyDetector = CfnDetector.Builder.create(this, "GuardDutyDetector")
                 .enable(true)
                 .findingPublishingFrequency("FIFTEEN_MINUTES")
@@ -199,7 +192,6 @@ class SecurityStack extends Stack {
                         .build())
                 .build();
 
-        // Create S3 bucket for CloudTrail logs
         Bucket cloudTrailBucket = Bucket.Builder.create(this, "CloudTrailBucket")
                 .bucketName("tap-" + environmentSuffix + "-cloudtrail-logs-" + this.getAccount())
                 .encryption(BucketEncryption.KMS)
@@ -209,7 +201,6 @@ class SecurityStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Add CloudTrail bucket policy
         cloudTrailBucket.addToResourcePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
@@ -226,7 +217,6 @@ class SecurityStack extends Stack {
                     Map.of("s3:x-amz-acl", "bucket-owner-full-control")))
                 .build());
 
-        // Create CloudTrail
         this.cloudTrail = Trail.Builder.create(this, "SecurityCloudTrail")
                 .trailName("tap-" + environmentSuffix + "-security-trail")
                 .bucket(cloudTrailBucket)
@@ -239,7 +229,6 @@ class SecurityStack extends Stack {
                 .cloudWatchLogsRetention(RetentionDays.ONE_YEAR)
                 .build();
 
-        // Create IP Set for WAF
         CfnIPSet ipSet = CfnIPSet.Builder.create(this, "AllowedIPSet")
                 .name("tap-" + environmentSuffix + "-allowed-ips")
                 .scope("REGIONAL")
@@ -248,7 +237,6 @@ class SecurityStack extends Stack {
                 .description("Allowed IP addresses for API access")
                 .build();
 
-        // Create WAF Web ACL
         this.webAcl = CfnWebACL.Builder.create(this, "ApiWebACL")
                 .name("tap-" + environmentSuffix + "-api-waf")
                 .scope("REGIONAL")
@@ -298,7 +286,6 @@ class SecurityStack extends Stack {
                         .build())
                 .build();
 
-        // Setup AWS Config
         setupAwsConfig(environmentSuffix);
 
         Tags.of(this).add("Environment", environmentSuffix);
@@ -306,7 +293,6 @@ class SecurityStack extends Stack {
     }
 
     private void setupAwsConfig(final String environmentSuffix) {
-        // Create S3 bucket for Config
         Bucket configBucket = Bucket.Builder.create(this, "ConfigBucket")
                 .bucketName("tap-" + environmentSuffix + "-config-" + this.getAccount())
                 .encryption(BucketEncryption.KMS)
@@ -315,7 +301,6 @@ class SecurityStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Create IAM role for Config
         Role configRole = Role.Builder.create(this, "ConfigRole")
                 .assumedBy(ServicePrincipal.Builder.create("config.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
@@ -335,12 +320,10 @@ class SecurityStack extends Stack {
                         .build()))
                 .build();
 
-        // Config delivery channel
         CfnDeliveryChannel.Builder.create(this, "ConfigDeliveryChannel")
                 .s3BucketName(configBucket.getBucketName())
                 .build();
 
-        // Config recorder
         CfnConfigurationRecorder.Builder.create(this, "ConfigRecorder")
                 .roleArn(configRole.getRoleArn())
                 .recordingGroup(CfnConfigurationRecorder.RecordingGroupProperty.builder()
@@ -349,6 +332,7 @@ class SecurityStack extends Stack {
                         .build())
                 .build();
     }
+
     public void associateWafWithApi(final RestApi apiGateway) {
         software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
             software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
@@ -357,7 +341,6 @@ class SecurityStack extends Stack {
                     .build();
         wafAssociation.addDependsOn(webAcl);
     }
-
 
     public Key getKmsKey() {
         return kmsKey;
@@ -370,7 +353,6 @@ class SecurityStack extends Stack {
     public Trail getCloudTrail() {
         return cloudTrail;
     }
-
 }
 
 /**
@@ -457,7 +439,6 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(true)
                 .build();
 
-        // Add SSH access only from specific IP addresses
         for (String ipAddress : allowedIpAddresses) {
             securityGroup.addIngressRule(
                     Peer.ipv4(ipAddress),
@@ -476,7 +457,6 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(true)
                 .build();
 
-        // Allow SSH only from bastion host
         securityGroup.addIngressRule(
                 Peer.securityGroupId(bastionSecurityGroup.getSecurityGroupId()),
                 Port.tcp(22),
@@ -493,7 +473,6 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(false)
                 .build();
 
-        // Allow database access only from EC2 security group
         securityGroup.addIngressRule(
                 Peer.securityGroupId(sshSecurityGroup.getSecurityGroupId()),
                 Port.tcp(3306),
@@ -519,13 +498,7 @@ class InfrastructureStack extends Stack {
     }
 
     private IMachineImage getAmazonLinuxAmi() {
-        return MachineImage.latestAmazonLinux(
-                AmazonLinuxImageProps.builder()
-                        .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
-                        .edition(AmazonLinuxEdition.STANDARD)
-                        .virtualization(AmazonLinuxVirt.HVM)
-                        .cpuType(AmazonLinuxCpuType.X86_64)
-                        .build());
+        return MachineImage.latestAmazonLinux2();
     }
 
     private Instance createBastionHost(final String environmentSuffix, final Role ec2Role,
@@ -602,7 +575,7 @@ class InfrastructureStack extends Stack {
                 .storageEncrypted(true)
                 .storageEncryptionKey(kmsKey)
                 .backupRetention(Duration.days(7))
-                .deletionProtection(false) // For demo purposes
+                .deletionProtection(false)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
@@ -625,6 +598,183 @@ class InfrastructureStack extends Stack {
 }
 
 /**
+ * Data Storage Stack - DynamoDB Tables (NEW SERVICE #1)
+ */
+class DataStack extends Stack {
+    private final Table applicationDataTable;
+
+    DataStack(final Construct scope, final String id, final String environmentSuffix,
+            final Key kmsKey, final StackProps props) {
+        super(scope, id, props);
+
+        this.applicationDataTable = Table.Builder.create(this, "ApplicationDataTable")
+                .tableName("tap-" + environmentSuffix + "-app-data")
+                .partitionKey(Attribute.builder()
+                        .name("userId")
+                        .type(AttributeType.STRING)
+                        .build())
+                .sortKey(Attribute.builder()
+                        .name("timestamp")
+                        .type(AttributeType.NUMBER)
+                        .build())
+                .billingMode(BillingMode.PAY_PER_REQUEST)
+                .encryption(software.amazon.awscdk.services.dynamodb.TableEncryption.CUSTOMER_MANAGED)
+                .encryptionKey(kmsKey)
+                .pointInTimeRecovery(true)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+
+        CfnOutput.Builder.create(this, "DynamoDBTableName")
+                .value(applicationDataTable.getTableName())
+                .description("DynamoDB Table Name for Application Data")
+                .exportName("tap-" + environmentSuffix + "-dynamodb-table-name")
+                .build();
+
+        Tags.of(this).add("Environment", environmentSuffix);
+        Tags.of(this).add("Component", "DataStorage");
+    }
+
+    public Table getApplicationDataTable() {
+        return applicationDataTable;
+    }
+}
+
+/**
+ * Monitoring Stack - CloudWatch Dashboard (NEW SERVICE #2)
+ */
+class MonitoringStack extends Stack {
+    private final Dashboard mainDashboard;
+
+    MonitoringStack(final Construct scope, final String id, final String environmentSuffix,
+            final Function lambdaFunction, final RestApi apiGateway, final DatabaseInstance rdsInstance,
+            final StackProps props) {
+        super(scope, id, props);
+
+        this.mainDashboard = Dashboard.Builder.create(this, "MainDashboard")
+                .dashboardName("tap-" + environmentSuffix + "-dashboard")
+                .build();
+
+        mainDashboard.addWidgets(
+                GraphWidget.Builder.create()
+                        .title("Lambda Invocations")
+                        .left(Arrays.asList(
+                                lambdaFunction.metricInvocations(),
+                                lambdaFunction.metricErrors(),
+                                lambdaFunction.metricThrottles()))
+                        .width(12)
+                        .build(),
+                GraphWidget.Builder.create()
+                        .title("API Gateway Metrics")
+                        .left(Arrays.asList(
+                                apiGateway.metricCount(),
+                                apiGateway.metricClientError(),
+                                apiGateway.metricServerError()))
+                        .width(12)
+                        .build(),
+                GraphWidget.Builder.create()
+                        .title("RDS Database Metrics")
+                        .left(Arrays.asList(
+                                rdsInstance.metricCPUUtilization(),
+                                rdsInstance.metricDatabaseConnections(),
+                                rdsInstance.metricFreeStorageSpace()))
+                        .width(24)
+                        .build());
+
+        CfnOutput.Builder.create(this, "DashboardURL")
+                .value("https://console.aws.amazon.com/cloudwatch/home?region=" + this.getRegion() + "#dashboards:name=" + mainDashboard.getDashboardName())
+                .description("CloudWatch Dashboard URL")
+                .build();
+
+        Tags.of(this).add("Environment", environmentSuffix);
+        Tags.of(this).add("Component", "Monitoring");
+    }
+
+    public Dashboard getDashboard() {
+        return mainDashboard;
+    }
+}
+
+/**
+ * ApplicationStackProps holds configuration for ApplicationStack to avoid too many parameters.
+ */
+final class ApplicationStackProps {
+    private final String environmentSuffix;
+    private final List<String> allowedIpAddresses;
+    private final Key kmsKey;
+    private final Table dynamoDbTable;
+    private final StackProps stackProps;
+
+    private ApplicationStackProps(final Builder builder) {
+        this.environmentSuffix = builder.environmentSuffix;
+        this.allowedIpAddresses = builder.allowedIpAddresses;
+        this.kmsKey = builder.kmsKey;
+        this.dynamoDbTable = builder.dynamoDbTable;
+        this.stackProps = builder.stackProps;
+    }
+
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
+
+    public List<String> getAllowedIpAddresses() {
+        return allowedIpAddresses;
+    }
+
+    public Key getKmsKey() {
+        return kmsKey;
+    }
+
+    public Table getDynamoDbTable() {
+        return dynamoDbTable;
+    }
+
+    public StackProps getStackProps() {
+        return stackProps;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private String environmentSuffix;
+        private List<String> allowedIpAddresses;
+        private Key kmsKey;
+        private Table dynamoDbTable;
+        private StackProps stackProps;
+
+        public Builder environmentSuffix(final String suffix) {
+            this.environmentSuffix = suffix;
+            return this;
+        }
+
+        public Builder allowedIpAddresses(final List<String> ips) {
+            this.allowedIpAddresses = ips;
+            return this;
+        }
+
+        public Builder kmsKey(final Key key) {
+            this.kmsKey = key;
+            return this;
+        }
+
+        public Builder dynamoDbTable(final Table table) {
+            this.dynamoDbTable = table;
+            return this;
+        }
+
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
+            return this;
+        }
+
+        public ApplicationStackProps build() {
+            return new ApplicationStackProps(this);
+        }
+    }
+}
+
+/**
  * Application Stack with Lambda, S3, and API Gateway
  */
 class ApplicationStack extends Stack {
@@ -633,20 +783,21 @@ class ApplicationStack extends Stack {
     private final RestApi apiGateway;
     private final Distribution cloudFrontDistribution;
 
-    ApplicationStack(final Construct scope, final String id, final String environmentSuffix,
-            final List<String> allowedIpAddresses, final Key kmsKey, final CfnWebACL webAcl,
-            final StackProps props) {
-        super(scope, id, props);
+    ApplicationStack(final Construct scope, final String id, final ApplicationStackProps appProps) {
+        super(scope, id, appProps.getStackProps());
 
-        this.s3Bucket = createS3Bucket(environmentSuffix, kmsKey, allowedIpAddresses);
-        Role lambdaRole = createLambdaRole(environmentSuffix, kmsKey);
-        this.lambdaFunction = createLambdaFunction(environmentSuffix, lambdaRole);
-        this.apiGateway = createApiGateway(environmentSuffix);
+        this.s3Bucket = createS3Bucket(appProps.getEnvironmentSuffix(), appProps.getKmsKey(), 
+                appProps.getAllowedIpAddresses());
+        Role lambdaRole = createLambdaRole(appProps.getEnvironmentSuffix(), appProps.getKmsKey(), 
+                appProps.getDynamoDbTable());
+        this.lambdaFunction = createLambdaFunction(appProps.getEnvironmentSuffix(), lambdaRole, 
+                appProps.getDynamoDbTable());
+        this.apiGateway = createApiGateway(appProps.getEnvironmentSuffix());
         this.cloudFrontDistribution = createCloudFrontDistribution();
         createOutputs();
         
         Tags.of(this).add("aws-shield-advanced", "false");
-        Tags.of(this).add("Environment", environmentSuffix);
+        Tags.of(this).add("Environment", appProps.getEnvironmentSuffix());
         Tags.of(this).add("Component", "Application");
     }
 
@@ -661,7 +812,6 @@ class ApplicationStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        // Create bucket policy to restrict access to specific IPs
         bucket.addToResourcePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.DENY)
                 .principals(Arrays.asList(new AccountRootPrincipal()))
@@ -676,7 +826,7 @@ class ApplicationStack extends Stack {
         return bucket;
     }
 
-    private Role createLambdaRole(final String environmentSuffix, final Key kmsKey) {
+    private Role createLambdaRole(final String environmentSuffix, final Key kmsKey, final Table dynamoDbTable) {
         return Role.Builder.create(this, "LambdaRole")
                 .assumedBy(ServicePrincipal.Builder.create("lambda.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
@@ -692,22 +842,33 @@ class ApplicationStack extends Stack {
                                         .effect(Effect.ALLOW)
                                         .actions(Arrays.asList("kms:Decrypt", "kms:GenerateDataKey"))
                                         .resources(Arrays.asList(kmsKey.getKeyArn()))
+                                        .build(),
+                                PolicyStatement.Builder.create()
+                                        .effect(Effect.ALLOW)
+                                        .actions(Arrays.asList(
+                                                "dynamodb:PutItem",
+                                                "dynamodb:GetItem",
+                                                "dynamodb:Query",
+                                                "dynamodb:UpdateItem"))
+                                        .resources(Arrays.asList(dynamoDbTable.getTableArn()))
                                         .build()))
                         .build()))
                 .build();
     }
 
-    private Function createLambdaFunction(final String environmentSuffix, final Role lambdaRole) {
+    private Function createLambdaFunction(final String environmentSuffix, final Role lambdaRole, final Table dynamoDbTable) {
         String lambdaCode = "import json\n"
                 + "import boto3\n" 
                 + "import os\n" 
                 + "from datetime import datetime\n" 
+                + "import time\n"
                 + "\n" 
                 + "def handler(event, context):\n" 
-                + "    s3_client = boto3.client('s3')\n" 
+                + "    s3_client = boto3.client('s3')\n"
+                + "    dynamodb = boto3.resource('dynamodb')\n"
+                + "    table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n"
                 + "    bucket_name = os.environ['BUCKET_NAME']\n" 
                 + "    \n" 
-                + "    # Log request details for security monitoring\n" 
                 + "    log_entry = {\n" 
                 + "        'timestamp': datetime.utcnow().isoformat(),\n" 
                 + "        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n" 
@@ -719,6 +880,17 @@ class ApplicationStack extends Stack {
                 + "    }\n" 
                 + "    \n" 
                 + "    try:\n" 
+                + "        # Store in DynamoDB\n"
+                + "        table.put_item(\n"
+                + "            Item={\n"
+                + "                'userId': log_entry.get('source_ip', 'unknown'),\n"
+                + "                'timestamp': int(time.time()),\n"
+                + "                'requestId': context.aws_request_id,\n"
+                + "                'path': log_entry['path'],\n"
+                + "                'method': log_entry['method']\n"
+                + "            }\n"
+                + "        )\n"
+                + "        \n"
                 + "        # Store security log in S3\n" 
                 + "        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n" 
                 + "        s3_client.put_object(\n" 
@@ -728,7 +900,6 @@ class ApplicationStack extends Stack {
                 + "            ContentType='application/json'\n" 
                 + "        )\n" 
                 + "        \n" 
-                + "        # Return API response with security headers\n" 
                 + "        return {\n" 
                 + "            'statusCode': 200,\n" 
                 + "            'headers': {\n" 
@@ -757,7 +928,9 @@ class ApplicationStack extends Stack {
                 .handler("index.handler")
                 .code(Code.fromInline(lambdaCode))
                 .role(lambdaRole)
-                .environment(Map.of("BUCKET_NAME", s3Bucket.getBucketName()))
+                .environment(Map.of(
+                        "BUCKET_NAME", s3Bucket.getBucketName(),
+                        "DYNAMODB_TABLE", dynamoDbTable.getTableName()))
                 .timeout(Duration.seconds(30))
                 .memorySize(256)
                 .build();
@@ -778,7 +951,6 @@ class ApplicationStack extends Stack {
                         .build())
                 .build();
 
-        // Add resource and method
         api.getRoot().addResource("hello").addMethod("GET");
         return api;
     }
@@ -833,12 +1005,13 @@ class TapStack extends Stack {
     private final String environmentSuffix;
     private final SecurityStack securityStack;
     private final InfrastructureStack infrastructureStack;
+    private final DataStack dataStack;
     private final ApplicationStack applicationStack;
+    private final MonitoringStack monitoringStack;
 
     TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
-        // Get environment suffix and allowed IPs
         this.environmentSuffix = Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
                 .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
@@ -860,6 +1033,17 @@ class TapStack extends Stack {
                         .description("Security Stack for environment: " + environmentSuffix)
                         .build());
 
+        // Create data stack (NEW - DynamoDB)
+        this.dataStack = new DataStack(
+                this,
+                "Data",
+                environmentSuffix,
+                securityStack.getKmsKey(),
+                StackProps.builder()
+                        .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
+                        .description("Data Storage Stack for environment: " + environmentSuffix)
+                        .build());
+
         // Create infrastructure stack
         this.infrastructureStack = new InfrastructureStack(
                 this,
@@ -876,19 +1060,38 @@ class TapStack extends Stack {
         this.applicationStack = new ApplicationStack(
                 this,
                 "Application",
+                ApplicationStackProps.builder()
+                        .environmentSuffix(environmentSuffix)
+                        .allowedIpAddresses(allowedIpAddresses)
+                        .kmsKey(securityStack.getKmsKey())
+                        .dynamoDbTable(dataStack.getApplicationDataTable())
+                        .stackProps(StackProps.builder()
+                                .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
+                                .description("Application Stack for environment: " + environmentSuffix)
+                                .build())
+                        .build());
+
+        // Create monitoring stack (NEW - CloudWatch Dashboard)
+        this.monitoringStack = new MonitoringStack(
+                this,
+                "Monitoring",
                 environmentSuffix,
-                allowedIpAddresses,
-                securityStack.getKmsKey(),
-                securityStack.getWebAcl(),
+                applicationStack.getLambdaFunction(),
+                applicationStack.getApiGateway(),
+                infrastructureStack.getRdsInstance(),
                 StackProps.builder()
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-                        .description("Application Stack for environment: " + environmentSuffix)
+                        .description("Monitoring Stack for environment: " + environmentSuffix)
                         .build());
 
         // Add stack dependencies
+        dataStack.addDependency(securityStack);
         infrastructureStack.addDependency(securityStack);
         applicationStack.addDependency(securityStack);
+        applicationStack.addDependency(dataStack);
         applicationStack.addDependency(infrastructureStack);
+        monitoringStack.addDependency(applicationStack);
+        monitoringStack.addDependency(infrastructureStack);
 
         Tags.of(this).add("Environment", environmentSuffix);
         Tags.of(this).add("Project", "SecureCloudInfrastructure");
@@ -911,6 +1114,15 @@ class TapStack extends Stack {
     public ApplicationStack getApplicationStack() {
         return applicationStack;
     }
+
+    public DataStack getDataStack() {
+        return dataStack;
+    }
+
+    public MonitoringStack getMonitoringStack() {
+        return monitoringStack;
+    }
+
     public InfrastructureStack getVpcStack() {
         return infrastructureStack;
     }
@@ -922,13 +1134,11 @@ class TapStack extends Stack {
 public final class Main {
 
     private Main() {
-        // Utility class should not be instantiated
     }
 
     public static void main(final String[] args) {
         App app = new App();
 
-        // Get environment suffix from environment variable, context, or default
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
             environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
@@ -937,17 +1147,14 @@ public final class Main {
             environmentSuffix = "pr2253";
         }
 
-        // Get allowed IP addresses from environment or use defaults
         String allowedIpsEnv = System.getenv("ALLOWED_IP_ADDRESSES");
         List<String> allowedIpAddresses;
         if (allowedIpsEnv != null && !allowedIpsEnv.isEmpty()) {
             allowedIpAddresses = Arrays.asList(allowedIpsEnv.split(","));
         } else {
-            // Default to example IP - replace with your actual IPs
             allowedIpAddresses = Arrays.asList("203.0.113.0/32", "198.51.100.0/32");
         }
 
-        // Create the main TAP stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .allowedIpAddresses(allowedIpAddresses)

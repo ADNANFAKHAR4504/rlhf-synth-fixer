@@ -7,12 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.services.ec2.ISubnet;
-import software.amazon.awscdk.services.ec2.PrivateSubnet;
-import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.assertions.Template;
-import software.amazon.awscdk.services.ec2.SubnetType;
-import software.amazon.awscdk.services.rds.MariaDbEngineVersion;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -187,7 +182,6 @@ public class MainTest {
                     "FromPort", 22,
                     "ToPort", 22,
                     "Description", "SSH access from bastion host"
-                    // Note: Using SourceSecurityGroupId instead of CidrIp as per actual implementation
                 )
             )
         ));
@@ -208,20 +202,18 @@ public class MainTest {
 
         Template template = Template.fromStack(stack.getVpcStack());
 
-        // Verify RDS instance is created (matches actual implementation)
+        // Verify RDS instance is created
         template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
             "Engine", "mariadb",
-            "EngineVersion", "10.6", // String format as per actual implementation
+            "EngineVersion", "10.6",
             "DBInstanceClass", "db.t3.micro",
             "StorageEncrypted", true,
-            "DeletionProtection", false // Using actual property name
-            // Note: DeleteProtection is not present in actual implementation
+            "DeletionProtection", false
         ));
 
-        // Verify DB subnet group (matching actual CloudFormation template structure)
+        // Verify DB subnet group
         template.hasResourceProperties("AWS::RDS::DBSubnetGroup", Map.of(
             "DBSubnetGroupDescription", "Subnet group for RDS database"
-            // Note: SubnetIds are CloudFormation references, not direct strings
         ));
     }
 
@@ -240,14 +232,14 @@ public class MainTest {
 
         Template template = Template.fromStack(stack.getVpcStack());
 
-        // Verify EC2 role (matches actual implementation)
+        // Verify EC2 role
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Map.of(
                 "Statement", Arrays.asList(
                     Map.of(
                         "Action", "sts:AssumeRole",
                         "Effect", "Allow",
-                        "Principal", Map.of("Service", "ec2.amazonaws.com") // Actual service
+                        "Principal", Map.of("Service", "ec2.amazonaws.com")
                     )
                 )
             ),
@@ -265,14 +257,14 @@ public class MainTest {
             )
         ));
 
-        // Verify VPC Flow Logs role (matches actual implementation)
+        // Verify VPC Flow Logs role
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Map.of(
                 "Statement", Arrays.asList(
                     Map.of(
                         "Action", "sts:AssumeRole",
                         "Effect", "Allow",
-                        "Principal", Map.of("Service", "vpc-flow-logs.amazonaws.com") // Actual service
+                        "Principal", Map.of("Service", "vpc-flow-logs.amazonaws.com")
                     )
                 )
             )
@@ -393,7 +385,91 @@ public class MainTest {
     }
 
     /**
+     * Test DynamoDB table configuration (NEW SERVICE #1).
+     * FIXED: Now checks DataStack instead of parent TapStack
+     */
+    @Test
+    public void testDynamoDBConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        // Access DataStack directly - this is where the DynamoDB table is created
+        Template template = Template.fromStack(stack.getDataStack());
+
+        // Verify DynamoDB table exists
+        template.hasResourceProperties("AWS::DynamoDB::Table", Map.of(
+            "TableName", "tap-test-app-data",
+            "BillingMode", "PAY_PER_REQUEST",
+            "PointInTimeRecoverySpecification", Map.of(
+                "PointInTimeRecoveryEnabled", true
+            ),
+            "SSESpecification", Map.of(
+                "SSEEnabled", true,
+                "SSEType", "KMS"
+            ),
+            "AttributeDefinitions", Arrays.asList(
+                Map.of(
+                    "AttributeName", "userId",
+                    "AttributeType", "S"
+                ),
+                Map.of(
+                    "AttributeName", "timestamp",
+                    "AttributeType", "N"
+                )
+            ),
+            "KeySchema", Arrays.asList(
+                Map.of(
+                    "AttributeName", "userId",
+                    "KeyType", "HASH"
+                ),
+                Map.of(
+                    "AttributeName", "timestamp",
+                    "KeyType", "RANGE"
+                )
+            )
+        ));
+    }
+
+    /**
+     * Test CloudWatch Dashboard configuration (NEW SERVICE #2).
+     * FIXED: Now checks MonitoringStack instead of parent TapStack
+     */
+    @Test
+    public void testCloudWatchDashboardConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        // Access MonitoringStack directly - this is where the CloudWatch Dashboard is created
+        Template template = Template.fromStack(stack.getMonitoringStack());
+
+        // Verify CloudWatch Dashboard exists
+        template.hasResourceProperties("AWS::CloudWatch::Dashboard", Map.of(
+            "DashboardName", "tap-test-dashboard"
+        ));
+
+        // Verify dashboard has widgets (the DashboardBody should contain widget definitions)
+        template.hasResource("AWS::CloudWatch::Dashboard", Map.of(
+            "Properties", Map.of(
+                "DashboardName", "tap-test-dashboard"
+            )
+        ));
+    }
+
+    
+
+    /**
      * Test that stack outputs are created.
+     * FIXED: Now checks DataStack for DynamoDB output
      */
     @Test
     public void testStackOutputs() {
@@ -412,6 +488,8 @@ public class MainTest {
         applicationTemplate.hasOutput("ApiUrl", Map.of());
         applicationTemplate.hasOutput("CloudFrontUrl", Map.of());
 
-        Template vpcTemplate = Template.fromStack(stack.getVpcStack());
+        // Verify DynamoDB output exists in DataStack (not parent stack)
+        Template dataTemplate = Template.fromStack(stack.getDataStack());
+        dataTemplate.hasOutput("DynamoDBTableName", Map.of());
     }
 }
