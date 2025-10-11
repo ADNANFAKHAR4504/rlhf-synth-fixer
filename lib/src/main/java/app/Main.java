@@ -17,11 +17,16 @@ import software.amazon.awscdk.services.apigateway.LambdaRestApi;
 import software.amazon.awscdk.services.apigateway.RestApi;
 import software.amazon.awscdk.services.cloudfront.Distribution;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
+import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
+import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
+import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
+import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
+import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
+import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
 import software.amazon.awscdk.services.ec2.FlowLog;
-import software.amazon.awscdk.services.cloudfront.origins.S3BucketOrigin;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogResourceType;
 import software.amazon.awscdk.services.ec2.IMachineImage;
@@ -39,9 +44,6 @@ import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.events.Rule;
-import software.amazon.awscdk.services.events.EventPattern;
-import software.amazon.awscdk.services.events.targets.SnsTopic;
 import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.amazon.awscdk.services.iam.AccountRootPrincipal;
 import software.amazon.awscdk.services.iam.Effect;
@@ -55,7 +57,6 @@ import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
-import software.amazon.awscdk.services.lambda.eventsources.SqsEventSource;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.rds.Credentials;
@@ -67,11 +68,6 @@ import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.sns.Topic;
-import software.amazon.awscdk.services.sns.subscriptions.SqsSubscription;
-import software.amazon.awscdk.services.sqs.DeadLetterQueue;
-import software.amazon.awscdk.services.sqs.Queue;
-import software.amazon.awscdk.services.sqs.QueueEncryption;
 import software.amazon.awscdk.services.wafv2.CfnIPSet;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
 import software.constructs.Construct;
@@ -133,110 +129,6 @@ final class TapStackProps {
 }
 
 /**
- * ApplicationStackProps holds configuration for ApplicationStack to avoid too many parameters.
- */
-final class ApplicationStackProps {
-    private final String environmentSuffix;
-    private final List<String> allowedIpAddresses;
-    private final Key kmsKey;
-    private final Topic securityAlertTopic;
-    private final Topic applicationEventTopic;
-    private final Queue processingQueue;
-    private final StackProps stackProps;
-
-    private ApplicationStackProps(final Builder builder) {
-        this.environmentSuffix = builder.environmentSuffix;
-        this.allowedIpAddresses = builder.allowedIpAddresses;
-        this.kmsKey = builder.kmsKey;
-        this.securityAlertTopic = builder.securityAlertTopic;
-        this.applicationEventTopic = builder.applicationEventTopic;
-        this.processingQueue = builder.processingQueue;
-        this.stackProps = builder.stackProps;
-    }
-
-    public String getEnvironmentSuffix() {
-        return environmentSuffix;
-    }
-
-    public List<String> getAllowedIpAddresses() {
-        return allowedIpAddresses;
-    }
-
-    public Key getKmsKey() {
-        return kmsKey;
-    }
-
-    public Topic getSecurityAlertTopic() {
-        return securityAlertTopic;
-    }
-
-    public Topic getApplicationEventTopic() {
-        return applicationEventTopic;
-    }
-
-    public Queue getProcessingQueue() {
-        return processingQueue;
-    }
-
-    public StackProps getStackProps() {
-        return stackProps;
-    }
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-        private String environmentSuffix;
-        private List<String> allowedIpAddresses;
-        private Key kmsKey;
-        private Topic securityAlertTopic;
-        private Topic applicationEventTopic;
-        private Queue processingQueue;
-        private StackProps stackProps;
-
-        public Builder environmentSuffix(final String suffix) {
-            this.environmentSuffix = suffix;
-            return this;
-        }
-
-        public Builder allowedIpAddresses(final List<String> ips) {
-            this.allowedIpAddresses = ips;
-            return this;
-        }
-
-        public Builder kmsKey(final Key key) {
-            this.kmsKey = key;
-            return this;
-        }
-
-        public Builder securityAlertTopic(final Topic topic) {
-            this.securityAlertTopic = topic;
-            return this;
-        }
-
-        public Builder applicationEventTopic(final Topic topic) {
-            this.applicationEventTopic = topic;
-            return this;
-        }
-
-        public Builder processingQueue(final Queue queue) {
-            this.processingQueue = queue;
-            return this;
-        }
-
-        public Builder stackProps(final StackProps props) {
-            this.stackProps = props;
-            return this;
-        }
-
-        public ApplicationStackProps build() {
-            return new ApplicationStackProps(this);
-        }
-    }
-}
-
-/**
  * Security Infrastructure Stack
  * 
  * Creates comprehensive security infrastructure including KMS, IAM, GuardDuty,
@@ -260,6 +152,7 @@ class SecurityStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .policy(PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
+                                // Allow CloudTrail to use the KMS key
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
@@ -268,31 +161,7 @@ class SecurityStack extends Stack {
                                                 "kms:GenerateDataKey"))
                                         .resources(Arrays.asList("*"))
                                         .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .principals(Arrays.asList(new ServicePrincipal("sns.amazonaws.com")))
-                                        .actions(Arrays.asList(
-                                                "kms:Decrypt",
-                                                "kms:GenerateDataKey"))
-                                        .resources(Arrays.asList("*"))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .principals(Arrays.asList(new ServicePrincipal("logs.amazonaws.com")))
-                                        .actions(Arrays.asList(
-                                                "kms:Decrypt",
-                                                "kms:GenerateDataKey",
-                                                "kms:CreateGrant"))
-                                        .resources(Arrays.asList("*"))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .principals(Arrays.asList(new ServicePrincipal("events.amazonaws.com")))
-                                        .actions(Arrays.asList(
-                                                "kms:Decrypt",
-                                                "kms:GenerateDataKey"))
-                                        .resources(Arrays.asList("*"))
-                                        .build(),
+                                // Allow root account full access
                                 PolicyStatement.Builder.create()
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
@@ -340,6 +209,7 @@ class SecurityStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
+        // Add CloudTrail bucket policy
         cloudTrailBucket.addToResourcePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
@@ -479,7 +349,6 @@ class SecurityStack extends Stack {
                         .build())
                 .build();
     }
-
     public void associateWafWithApi(final RestApi apiGateway) {
         software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
             software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
@@ -488,6 +357,7 @@ class SecurityStack extends Stack {
                     .build();
         wafAssociation.addDependsOn(webAcl);
     }
+
 
     public Key getKmsKey() {
         return kmsKey;
@@ -500,128 +370,7 @@ class SecurityStack extends Stack {
     public Trail getCloudTrail() {
         return cloudTrail;
     }
-}
 
-/**
- * Messaging and Notification Stack
- * 
- * Creates SNS topics for alerts and SQS queues for asynchronous processing
- */
-class MessagingStack extends Stack {
-    private final Topic securityAlertTopic;
-    private final Topic applicationEventTopic;
-    private final Queue processingQueue;
-    private final Queue deadLetterQueue;
-
-    MessagingStack(final Construct scope, final String id, final String environmentSuffix,
-            final Key kmsKey, final StackProps props) {
-        super(scope, id, props);
-
-        // Create Dead Letter Queue for failed messages
-        this.deadLetterQueue = Queue.Builder.create(this, "DeadLetterQueue")
-                .queueName("tap-" + environmentSuffix + "-dlq")
-                .encryption(QueueEncryption.KMS)
-                .encryptionMasterKey(kmsKey)
-                .retentionPeriod(Duration.days(14))
-                .build();
-
-        // Create main processing queue with DLQ
-        this.processingQueue = Queue.Builder.create(this, "ProcessingQueue")
-                .queueName("tap-" + environmentSuffix + "-processing-queue")
-                .encryption(QueueEncryption.KMS)
-                .encryptionMasterKey(kmsKey)
-                .visibilityTimeout(Duration.seconds(300))
-                .deadLetterQueue(DeadLetterQueue.builder()
-                        .queue(deadLetterQueue)
-                        .maxReceiveCount(3)
-                        .build())
-                .build();
-
-        // Create SNS topic for security alerts
-        this.securityAlertTopic = Topic.Builder.create(this, "SecurityAlertTopic")
-                .topicName("tap-" + environmentSuffix + "-security-alerts")
-                .displayName("Security Alert Notifications")
-                .masterKey(kmsKey)
-                .build();
-
-        // Create SNS topic for application events
-        this.applicationEventTopic = Topic.Builder.create(this, "ApplicationEventTopic")
-                .topicName("tap-" + environmentSuffix + "-app-events")
-                .displayName("Application Event Notifications")
-                .masterKey(kmsKey)
-                .build();
-
-        // Subscribe SQS queue to application events topic
-        this.applicationEventTopic.addSubscription(
-                SqsSubscription.Builder.create(processingQueue)
-                        .rawMessageDelivery(true)
-                        .build());
-
-        // Add access policies for SQS to receive messages from SNS
-        processingQueue.addToResourcePolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .principals(Arrays.asList(new ServicePrincipal("sns.amazonaws.com")))
-                .actions(Arrays.asList("sqs:SendMessage"))
-                .resources(Arrays.asList(processingQueue.getQueueArn()))
-                .conditions(Map.of("ArnEquals", Map.of(
-                        "aws:SourceArn", applicationEventTopic.getTopicArn())))
-                .build());
-
-        // Setup GuardDuty alerts in MessagingStack to avoid circular dependency
-        setupGuardDutyAlerts(environmentSuffix);
-
-        // Output SNS and SQS ARNs
-        CfnOutput.Builder.create(this, "SecurityAlertTopicArn")
-                .value(securityAlertTopic.getTopicArn())
-                .description("SNS Topic ARN for Security Alerts")
-                .exportName("tap-" + environmentSuffix + "-security-alert-topic-arn")
-                .build();
-
-        CfnOutput.Builder.create(this, "ApplicationEventTopicArn")
-                .value(applicationEventTopic.getTopicArn())
-                .description("SNS Topic ARN for Application Events")
-                .exportName("tap-" + environmentSuffix + "-app-event-topic-arn")
-                .build();
-
-        CfnOutput.Builder.create(this, "ProcessingQueueUrl")
-                .value(processingQueue.getQueueUrl())
-                .description("SQS Queue URL for Processing")
-                .exportName("tap-" + environmentSuffix + "-processing-queue-url")
-                .build();
-
-        Tags.of(this).add("Environment", environmentSuffix);
-        Tags.of(this).add("Component", "Messaging");
-    }
-
-    private void setupGuardDutyAlerts(final String environmentSuffix) {
-        // Create EventBridge rule for GuardDuty findings
-        Rule guardDutyRule = Rule.Builder.create(this, "GuardDutyFindingsRule")
-                .ruleName("tap-" + environmentSuffix + "-guardduty-findings")
-                .description("Route GuardDuty findings to SNS")
-                .eventPattern(EventPattern.builder()
-                        .source(Arrays.asList("aws.guardduty"))
-                        .detailType(Arrays.asList("GuardDuty Finding"))
-                        .build())
-                .build();
-
-        guardDutyRule.addTarget(SnsTopic.Builder.create(securityAlertTopic).build());
-    }
-
-    public Topic getSecurityAlertTopic() {
-        return securityAlertTopic;
-    }
-
-    public Topic getApplicationEventTopic() {
-        return applicationEventTopic;
-    }
-
-    public Queue getProcessingQueue() {
-        return processingQueue;
-    }
-
-    public Queue getDeadLetterQueue() {
-        return deadLetterQueue;
-    }
 }
 
 /**
@@ -642,7 +391,7 @@ class InfrastructureStack extends Stack {
         super(scope, id, props);
 
         this.vpc = createVpcWithSubnets(environmentSuffix);
-        setupVpcFlowLogs(environmentSuffix, kmsKey);
+        setupVpcFlowLogs(environmentSuffix);
         this.bastionSecurityGroup = createBastionSecurityGroup(environmentSuffix, allowedIpAddresses);
         this.sshSecurityGroup = createSshSecurityGroup(environmentSuffix);
         this.rdsSecurityGroup = createRdsSecurityGroup(environmentSuffix);
@@ -686,11 +435,10 @@ class InfrastructureStack extends Stack {
                 .build();
     }
 
-    private void setupVpcFlowLogs(final String environmentSuffix, final Key kmsKey) {
+    private void setupVpcFlowLogs(final String environmentSuffix) {
         LogGroup vpcFlowLogGroup = LogGroup.Builder.create(this, "VpcFlowLogGroup")
                 .logGroupName("/aws/vpc/flowlogs-" + environmentSuffix)
                 .retention(RetentionDays.ONE_YEAR)
-                .encryptionKey(kmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
@@ -709,6 +457,7 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(true)
                 .build();
 
+        // Add SSH access only from specific IP addresses
         for (String ipAddress : allowedIpAddresses) {
             securityGroup.addIngressRule(
                     Peer.ipv4(ipAddress),
@@ -727,6 +476,7 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(true)
                 .build();
 
+        // Allow SSH only from bastion host
         securityGroup.addIngressRule(
                 Peer.securityGroupId(bastionSecurityGroup.getSecurityGroupId()),
                 Port.tcp(22),
@@ -743,6 +493,7 @@ class InfrastructureStack extends Stack {
                 .allowAllOutbound(false)
                 .build();
 
+        // Allow database access only from EC2 security group
         securityGroup.addIngressRule(
                 Peer.securityGroupId(sshSecurityGroup.getSecurityGroupId()),
                 Port.tcp(3306),
@@ -768,7 +519,13 @@ class InfrastructureStack extends Stack {
     }
 
     private IMachineImage getAmazonLinuxAmi() {
-        return MachineImage.latestAmazonLinux2();
+        return MachineImage.latestAmazonLinux(
+                AmazonLinuxImageProps.builder()
+                        .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
+                        .edition(AmazonLinuxEdition.STANDARD)
+                        .virtualization(AmazonLinuxVirt.HVM)
+                        .cpuType(AmazonLinuxCpuType.X86_64)
+                        .build());
     }
 
     private Instance createBastionHost(final String environmentSuffix, final Role ec2Role,
@@ -845,7 +602,7 @@ class InfrastructureStack extends Stack {
                 .storageEncrypted(true)
                 .storageEncryptionKey(kmsKey)
                 .backupRetention(Duration.days(7))
-                .deletionProtection(false)
+                .deletionProtection(false) // For demo purposes
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
@@ -868,7 +625,7 @@ class InfrastructureStack extends Stack {
 }
 
 /**
- * Application Stack with Lambda, S3, API Gateway, and messaging integration
+ * Application Stack with Lambda, S3, and API Gateway
  */
 class ApplicationStack extends Stack {
     private final Function lambdaFunction;
@@ -876,23 +633,20 @@ class ApplicationStack extends Stack {
     private final RestApi apiGateway;
     private final Distribution cloudFrontDistribution;
 
-    ApplicationStack(final Construct scope, final String id, final ApplicationStackProps appProps) {
-        super(scope, id, appProps.getStackProps());
+    ApplicationStack(final Construct scope, final String id, final String environmentSuffix,
+            final List<String> allowedIpAddresses, final Key kmsKey, final CfnWebACL webAcl,
+            final StackProps props) {
+        super(scope, id, props);
 
-        this.s3Bucket = createS3Bucket(appProps.getEnvironmentSuffix(), appProps.getKmsKey(), 
-                appProps.getAllowedIpAddresses());
-        Role lambdaRole = createLambdaRole(appProps.getEnvironmentSuffix(), appProps.getKmsKey(), 
-                appProps.getSecurityAlertTopic(), appProps.getApplicationEventTopic(), 
-                appProps.getProcessingQueue());
-        this.lambdaFunction = createLambdaFunction(appProps.getEnvironmentSuffix(), lambdaRole, 
-                appProps.getSecurityAlertTopic(), appProps.getApplicationEventTopic(), 
-                appProps.getProcessingQueue());
-        this.apiGateway = createApiGateway(appProps.getEnvironmentSuffix());
+        this.s3Bucket = createS3Bucket(environmentSuffix, kmsKey, allowedIpAddresses);
+        Role lambdaRole = createLambdaRole(environmentSuffix, kmsKey);
+        this.lambdaFunction = createLambdaFunction(environmentSuffix, lambdaRole);
+        this.apiGateway = createApiGateway(environmentSuffix);
         this.cloudFrontDistribution = createCloudFrontDistribution();
         createOutputs();
         
         Tags.of(this).add("aws-shield-advanced", "false");
-        Tags.of(this).add("Environment", appProps.getEnvironmentSuffix());
+        Tags.of(this).add("Environment", environmentSuffix);
         Tags.of(this).add("Component", "Application");
     }
 
@@ -907,6 +661,7 @@ class ApplicationStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
+        // Create bucket policy to restrict access to specific IPs
         bucket.addToResourcePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.DENY)
                 .principals(Arrays.asList(new AccountRootPrincipal()))
@@ -921,9 +676,7 @@ class ApplicationStack extends Stack {
         return bucket;
     }
 
-    private Role createLambdaRole(final String environmentSuffix, final Key kmsKey,
-            final Topic securityAlertTopic, final Topic applicationEventTopic,
-            final Queue processingQueue) {
+    private Role createLambdaRole(final String environmentSuffix, final Key kmsKey) {
         return Role.Builder.create(this, "LambdaRole")
                 .assumedBy(ServicePrincipal.Builder.create("lambda.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
@@ -939,45 +692,22 @@ class ApplicationStack extends Stack {
                                         .effect(Effect.ALLOW)
                                         .actions(Arrays.asList("kms:Decrypt", "kms:GenerateDataKey"))
                                         .resources(Arrays.asList(kmsKey.getKeyArn()))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .actions(Arrays.asList("sns:Publish"))
-                                        .resources(Arrays.asList(
-                                                applicationEventTopic.getTopicArn(),
-                                                securityAlertTopic.getTopicArn()))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .actions(Arrays.asList(
-                                                "sqs:SendMessage",
-                                                "sqs:ReceiveMessage",
-                                                "sqs:DeleteMessage",
-                                                "sqs:GetQueueAttributes"))
-                                        .resources(Arrays.asList(processingQueue.getQueueArn()))
                                         .build()))
                         .build()))
                 .build();
     }
 
-    private Function createLambdaFunction(final String environmentSuffix, final Role lambdaRole,
-            final Topic securityAlertTopic, final Topic applicationEventTopic,
-            final Queue processingQueue) {
+    private Function createLambdaFunction(final String environmentSuffix, final Role lambdaRole) {
         String lambdaCode = "import json\n"
                 + "import boto3\n" 
                 + "import os\n" 
                 + "from datetime import datetime\n" 
-                + "\n"
-                + "s3_client = boto3.client('s3')\n"
-                + "sns_client = boto3.client('sns')\n"
-                + "sqs_client = boto3.client('sqs')\n"
                 + "\n" 
                 + "def handler(event, context):\n" 
-                + "    bucket_name = os.environ['BUCKET_NAME']\n"
-                + "    app_event_topic_arn = os.environ['APP_EVENT_TOPIC_ARN']\n"
-                + "    security_alert_topic_arn = os.environ['SECURITY_ALERT_TOPIC_ARN']\n"
-                + "    processing_queue_url = os.environ['PROCESSING_QUEUE_URL']\n"
+                + "    s3_client = boto3.client('s3')\n" 
+                + "    bucket_name = os.environ['BUCKET_NAME']\n" 
                 + "    \n" 
+                + "    # Log request details for security monitoring\n" 
                 + "    log_entry = {\n" 
                 + "        'timestamp': datetime.utcnow().isoformat(),\n" 
                 + "        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n" 
@@ -989,25 +719,16 @@ class ApplicationStack extends Stack {
                 + "    }\n" 
                 + "    \n" 
                 + "    try:\n" 
+                + "        # Store security log in S3\n" 
                 + "        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n" 
                 + "        s3_client.put_object(\n" 
                 + "            Bucket=bucket_name,\n" 
                 + "            Key=log_key,\n" 
                 + "            Body=json.dumps(log_entry),\n" 
                 + "            ContentType='application/json'\n" 
-                + "        )\n"
-                + "        \n"
-                + "        sns_client.publish(\n"
-                + "            TopicArn=app_event_topic_arn,\n"
-                + "            Subject='API Request Processed',\n"
-                + "            Message=json.dumps({\n"
-                + "                'event_type': 'api_request',\n"
-                + "                'request_id': context.aws_request_id,\n"
-                + "                'timestamp': log_entry['timestamp'],\n"
-                + "                'status': 'success'\n"
-                + "            })\n"
-                + "        )\n"
+                + "        )\n" 
                 + "        \n" 
+                + "        # Return API response with security headers\n" 
                 + "        return {\n" 
                 + "            'statusCode': 200,\n" 
                 + "            'headers': {\n" 
@@ -1023,47 +744,23 @@ class ApplicationStack extends Stack {
                 + "                'request_id': context.aws_request_id\n" 
                 + "            })\n" 
                 + "        }\n" 
-                + "    except Exception as e:\n"
-                + "        try:\n"
-                + "            sns_client.publish(\n"
-                + "                TopicArn=security_alert_topic_arn,\n"
-                + "                Subject='Lambda Function Error',\n"
-                + "                Message=json.dumps({\n"
-                + "                    'error': str(e),\n"
-                + "                    'request_id': context.aws_request_id,\n"
-                + "                    'function_name': context.function_name\n"
-                + "                })\n"
-                + "            )\n"
-                + "        except:\n"
-                + "            pass\n"
-                + "        \n" 
+                + "    except Exception as e:\n" 
                 + "        return {\n" 
                 + "            'statusCode': 500,\n" 
                 + "            'headers': {'Content-Type': 'application/json'},\n" 
                 + "            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n" 
                 + "        }\n";
 
-        Function function = Function.Builder.create(this, "AppFunction")
+        return Function.Builder.create(this, "AppFunction")
                 .functionName("tap-" + environmentSuffix + "-function")
                 .runtime(Runtime.PYTHON_3_9)
                 .handler("index.handler")
                 .code(Code.fromInline(lambdaCode))
                 .role(lambdaRole)
-                .environment(Map.of(
-                        "BUCKET_NAME", s3Bucket.getBucketName(),
-                        "APP_EVENT_TOPIC_ARN", applicationEventTopic.getTopicArn(),
-                        "SECURITY_ALERT_TOPIC_ARN", securityAlertTopic.getTopicArn(),
-                        "PROCESSING_QUEUE_URL", processingQueue.getQueueUrl()))
+                .environment(Map.of("BUCKET_NAME", s3Bucket.getBucketName()))
                 .timeout(Duration.seconds(30))
                 .memorySize(256)
                 .build();
-
-        function.addEventSource(SqsEventSource.Builder.create(processingQueue)
-                .batchSize(10)
-                .maxBatchingWindow(Duration.seconds(5))
-                .build());
-
-        return function;
     }
 
     private RestApi createApiGateway(final String environmentSuffix) {
@@ -1081,6 +778,7 @@ class ApplicationStack extends Stack {
                         .build())
                 .build();
 
+        // Add resource and method
         api.getRoot().addResource("hello").addMethod("GET");
         return api;
     }
@@ -1088,7 +786,7 @@ class ApplicationStack extends Stack {
     private Distribution createCloudFrontDistribution() {
         return Distribution.Builder.create(this, "AppDistribution")
                 .defaultBehavior(software.amazon.awscdk.services.cloudfront.BehaviorOptions.builder()
-                        .origin(S3BucketOrigin.withOriginAccessControl(s3Bucket))
+                        .origin(S3Origin.Builder.create(s3Bucket).build())
                         .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
                         .allowedMethods(software.amazon.awscdk.services.cloudfront.AllowedMethods.ALLOW_ALL)
                         .cachedMethods(software.amazon.awscdk.services.cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS)
@@ -1134,13 +832,13 @@ class ApplicationStack extends Stack {
 class TapStack extends Stack {
     private final String environmentSuffix;
     private final SecurityStack securityStack;
-    private final MessagingStack messagingStack;
     private final InfrastructureStack infrastructureStack;
     private final ApplicationStack applicationStack;
 
     TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
+        // Get environment suffix and allowed IPs
         this.environmentSuffix = Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
                 .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
@@ -1162,17 +860,6 @@ class TapStack extends Stack {
                         .description("Security Stack for environment: " + environmentSuffix)
                         .build());
 
-        // Create messaging stack - NO DEPENDENCY on SecurityStack added here
-        this.messagingStack = new MessagingStack(
-                this,
-                "Messaging",
-                environmentSuffix,
-                securityStack.getKmsKey(),
-                StackProps.builder()
-                        .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-                        .description("Messaging Stack for environment: " + environmentSuffix)
-                        .build());
-
         // Create infrastructure stack
         this.infrastructureStack = new InfrastructureStack(
                 this,
@@ -1185,27 +872,22 @@ class TapStack extends Stack {
                         .description("Infrastructure Stack for environment: " + environmentSuffix)
                         .build());
 
-        // Create application stack with messaging integration
+        // Create application stack
         this.applicationStack = new ApplicationStack(
                 this,
                 "Application",
-                ApplicationStackProps.builder()
-                        .environmentSuffix(environmentSuffix)
-                        .allowedIpAddresses(allowedIpAddresses)
-                        .kmsKey(securityStack.getKmsKey())
-                        .securityAlertTopic(messagingStack.getSecurityAlertTopic())
-                        .applicationEventTopic(messagingStack.getApplicationEventTopic())
-                        .processingQueue(messagingStack.getProcessingQueue())
-                        .stackProps(StackProps.builder()
-                                .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-                                .description("Application Stack for environment: " + environmentSuffix)
-                                .build())
+                environmentSuffix,
+                allowedIpAddresses,
+                securityStack.getKmsKey(),
+                securityStack.getWebAcl(),
+                StackProps.builder()
+                        .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
+                        .description("Application Stack for environment: " + environmentSuffix)
                         .build());
 
         // Add stack dependencies
         infrastructureStack.addDependency(securityStack);
         applicationStack.addDependency(securityStack);
-        applicationStack.addDependency(messagingStack);
         applicationStack.addDependency(infrastructureStack);
 
         Tags.of(this).add("Environment", environmentSuffix);
@@ -1222,10 +904,6 @@ class TapStack extends Stack {
         return securityStack;
     }
 
-    public MessagingStack getMessagingStack() {
-        return messagingStack;
-    }
-
     public InfrastructureStack getInfrastructureStack() {
         return infrastructureStack;
     }
@@ -1233,7 +911,6 @@ class TapStack extends Stack {
     public ApplicationStack getApplicationStack() {
         return applicationStack;
     }
-
     public InfrastructureStack getVpcStack() {
         return infrastructureStack;
     }
@@ -1245,27 +922,32 @@ class TapStack extends Stack {
 public final class Main {
 
     private Main() {
+        // Utility class should not be instantiated
     }
 
     public static void main(final String[] args) {
         App app = new App();
 
+        // Get environment suffix from environment variable, context, or default
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
             environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         }
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-            environmentSuffix = "dev";
+            environmentSuffix = "pr2253";
         }
 
+        // Get allowed IP addresses from environment or use defaults
         String allowedIpsEnv = System.getenv("ALLOWED_IP_ADDRESSES");
         List<String> allowedIpAddresses;
         if (allowedIpsEnv != null && !allowedIpsEnv.isEmpty()) {
             allowedIpAddresses = Arrays.asList(allowedIpsEnv.split(","));
         } else {
+            // Default to example IP - replace with your actual IPs
             allowedIpAddresses = Arrays.asList("203.0.113.0/32", "198.51.100.0/32");
         }
 
+        // Create the main TAP stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .allowedIpAddresses(allowedIpAddresses)
