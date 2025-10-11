@@ -332,11 +332,10 @@ def publish_results(results: Dict[str, Any]) -> None:
 
     try:
         # Format the message
-        status_emoji = "✅" if results['overall_status'] == 'PASS' else "❌"
         subject = f"[{ENVIRONMENT}] Compliance Check {results['overall_status']}"
 
         message_lines = [
-            f"{status_emoji} HIPAA Compliance Check Results",
+            f"HIPAA Compliance Check Results",
             f"",
             f"Environment: {ENVIRONMENT}",
             f"Application: {APPLICATION}",

@@ -1964,11 +1964,10 @@ def publish_results(results: Dict[str, Any]) -> None:
 
     try:
         # Format the message
-        status_emoji = "✅" if results['overall_status'] == 'PASS' else "❌"
         subject = f"[{ENVIRONMENT}] Compliance Check {results['overall_status']}"
 
         message_lines = [
-            f"{status_emoji} HIPAA Compliance Check Results",
+            f"HIPAA Compliance Check Results",
             f"",
             f"Environment: {ENVIRONMENT}",
             f"Application: {APPLICATION}",
@@ -2173,43 +2172,43 @@ npm run test:integration
 
 ### Implemented
 
-✅ Customer-managed KMS encryption with auto-rotation
-✅ Multi-region CloudTrail with log file validation
-✅ VPC Flow Logs for network monitoring
-✅ Three-tier security architecture with network isolation
-✅ No dangerous ports open to internet (0.0.0.0/0)
-✅ S3 buckets with versioning, encryption, and public access blocking
-✅ HTTPS/TLS enforcement for all S3 access
-✅ Comprehensive CloudWatch monitoring and alerting
-✅ Automated compliance validation
-✅ Complete tagging for resource management
-✅ IAM roles following least privilege principle
-✅ Multi-AZ architecture for high availability
+- Customer-managed KMS encryption with auto-rotation
+- Multi-region CloudTrail with log file validation
+- VPC Flow Logs for network monitoring
+- Three-tier security architecture with network isolation
+- No dangerous ports open to internet (0.0.0.0/0)
+- S3 buckets with versioning, encryption, and public access blocking
+- HTTPS/TLS enforcement for all S3 access
+- Comprehensive CloudWatch monitoring and alerting
+- Automated compliance validation
+- Complete tagging for resource management
+- IAM roles following least privilege principle
+- Multi-AZ architecture for high availability
 
 ### Recommendations
 
-⚠️ Enable MFA for root account
-⚠️ Rotate IAM access keys regularly
-⚠️ Review CloudTrail logs periodically
-⚠️ Set up AWS GuardDuty for threat detection
-⚠️ Enable AWS Config for compliance monitoring
-⚠️ Implement AWS WAF for web application firewall
-⚠️ Use AWS Shield for DDoS protection
+- Enable MFA for root account
+- Rotate IAM access keys regularly
+- Review CloudTrail logs periodically
+- Set up AWS GuardDuty for threat detection
+- Enable AWS Config for compliance monitoring
+- Implement AWS WAF for web application firewall
+- Use AWS Shield for DDoS protection
 
 ## Compliance Matrix
 
 | Requirement | Implementation | Status |
 |-------------|----------------|--------|
-| Encryption at Rest | KMS for all storage | ✅ |
-| Encryption in Transit | HTTPS/TLS enforcement | ✅ |
-| Audit Trail | CloudTrail + VPC Flow Logs | ✅ |
-| Access Controls | Three-tier security groups + IAM | ✅ |
-| Network Isolation | Private subnets + NAT GW | ✅ |
-| Monitoring | CloudWatch metrics + alarms | ✅ |
-| Automated Compliance | Lambda validation | ✅ |
-| Multi-AZ | Subnets + NAT GW in 2 AZs | ✅ |
-| Backup and Retention | S3 lifecycle + log retention | ✅ |
-| Incident Response | Real-time EventBridge alerts | ✅ |
+| Encryption at Rest | KMS for all storage | Implemented |
+| Encryption in Transit | HTTPS/TLS enforcement | Implemented |
+| Audit Trail | CloudTrail + VPC Flow Logs | Implemented |
+| Access Controls | Three-tier security groups + IAM | Implemented |
+| Network Isolation | Private subnets + NAT GW | Implemented |
+| Monitoring | CloudWatch metrics + alarms | Implemented |
+| Automated Compliance | Lambda validation | Implemented |
+| Multi-AZ | Subnets + NAT GW in 2 AZs | Implemented |
+| Backup and Retention | S3 lifecycle + log retention | Implemented |
+| Incident Response | Real-time EventBridge alerts | Implemented |
 
 ## Cost Optimization
 
@@ -2325,13 +2324,13 @@ The infrastructure provides 24 outputs for integration:
 
 ## Success Metrics
 
-✅ **183 unit tests passing** - Comprehensive code validation
-✅ **40+ integration tests** - Deployed infrastructure validation
-✅ **Zero unauthorized access** - Security groups properly configured
-✅ **100% encryption** - All data encrypted at rest and in transit
-✅ **Complete audit trail** - CloudTrail + VPC Flow Logs enabled
-✅ **All compliance checks passing** - Lambda validation successful
-✅ **Real-time alerting** - EventBridge rules triggering within seconds
+- **183 unit tests passing** - Comprehensive code validation
+- **40+ integration tests** - Deployed infrastructure validation
+- **Zero unauthorized access** - Security groups properly configured
+- **100% encryption** - All data encrypted at rest and in transit
+- **Complete audit trail** - CloudTrail + VPC Flow Logs enabled
+- **All compliance checks passing** - Lambda validation successful
+- **Real-time alerting** - EventBridge rules triggering within seconds
 
 ## Conclusion
 
