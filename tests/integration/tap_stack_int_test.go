@@ -103,7 +103,7 @@ func TestTapStackIntegration(t *testing.T) {
 		require.NoError(t, err, "Lambda function should exist")
 		assert.NotNil(t, getOutput.Configuration)
 		assert.Equal(t, outputs.LambdaFunctionName, *getOutput.Configuration.FunctionName)
-		assert.Equal(t, "provided.al2023", *getOutput.Configuration.Runtime)
+		assert.Equal(t, "provided.al2023", string(getOutput.Configuration.Runtime))
 		assert.Equal(t, int32(1024), *getOutput.Configuration.MemorySize)
 		assert.Equal(t, int32(30), *getOutput.Configuration.Timeout)
 		t.Logf("✅ Lambda function exists: %s", outputs.LambdaFunctionName)
@@ -268,9 +268,9 @@ func TestTapStackIntegration(t *testing.T) {
 		}
 
 		// Verify reserved concurrency
-		if getOutput.Configuration.ReservedConcurrentExecutions != nil {
-			assert.Equal(t, int32(10), *getOutput.Configuration.ReservedConcurrentExecutions)
-			t.Logf("✅ Lambda reserved concurrency: %d", *getOutput.Configuration.ReservedConcurrentExecutions)
+		if getOutput.Concurrency != nil && getOutput.Concurrency.ReservedConcurrentExecutions != nil {
+			assert.Equal(t, int32(10), *getOutput.Concurrency.ReservedConcurrentExecutions)
+			t.Logf("✅ Lambda reserved concurrency: %d", *getOutput.Concurrency.ReservedConcurrentExecutions)
 		}
 	})
 }
