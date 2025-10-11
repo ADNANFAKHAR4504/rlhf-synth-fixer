@@ -81,8 +81,8 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
     test('should create nested stacks with dependencies', () => {
       const stack = new TapStack(app, 'TestTapStack');
 
-      // Main stack should have 6 outputs (added SQS queue outputs)
-      expect(stack.node.children).toHaveLength(6); // 6 outputs only (nested stacks are siblings in the app)
+      // Main stack should have 8 outputs (added SQS queue outputs and CPU alarm outputs)
+      expect(stack.node.children).toHaveLength(8); // 8 outputs only (nested stacks are siblings in the app)
     });
 
     test('should export all required outputs', () => {
@@ -99,6 +99,22 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
 
       template.hasOutput('EmailProcessorFunctionName', {
         Description: 'Lambda function name for email processing'
+      });
+
+      template.hasOutput('EmailQueueUrl', {
+        Description: 'SQS queue URL for email processing'
+      });
+
+      template.hasOutput('EmailDeadLetterQueueUrl', {
+        Description: 'SQS dead letter queue URL for failed email processing'
+      });
+
+      template.hasOutput('EmailProcessorCpuAlarmName', {
+        Description: 'CloudWatch alarm name for email processor CPU utilization'
+      });
+
+      template.hasOutput('FeedbackProcessorCpuAlarmName', {
+        Description: 'CloudWatch alarm name for SES feedback processor CPU utilization'
       });
 
       template.hasOutput('SystemSetupInstructions', {
@@ -595,6 +611,8 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
       template.hasOutput('EmailProcessorFunctionName', {});
       template.hasOutput('EmailQueueUrl', {}); // SQS queue output
       template.hasOutput('EmailDeadLetterQueueUrl', {}); // SQS DLQ output
+      template.hasOutput('EmailProcessorCpuAlarmName', {}); // CPU alarm output
+      template.hasOutput('FeedbackProcessorCpuAlarmName', {}); // CPU alarm output
       template.hasOutput('SystemSetupInstructions', {});
     });
 
