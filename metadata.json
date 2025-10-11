@@ -10,5 +10,5 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "VPC, Subnet, RDS, S3, CloudWatch"
+  "aws_services": "VPC, Subnet, RDS, S3, CloudWatch, IAM"
 }
