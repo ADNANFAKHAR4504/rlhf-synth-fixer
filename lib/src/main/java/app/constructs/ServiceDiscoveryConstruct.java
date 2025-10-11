@@ -2,6 +2,7 @@ package app.constructs;
 
 import app.config.AppConfig;
 import app.config.ServiceConfig;
+import com.hashicorp.cdktf.TerraformResourceLifecycle;
 import com.hashicorp.cdktf.providers.aws.service_discovery_private_dns_namespace.ServiceDiscoveryPrivateDnsNamespace;
 import com.hashicorp.cdktf.providers.aws.service_discovery_service.ServiceDiscoveryService;
 import com.hashicorp.cdktf.providers.aws.service_discovery_service.ServiceDiscoveryServiceDnsConfig;
@@ -50,8 +51,10 @@ public class ServiceDiscoveryConstruct extends BaseConstruct {
                     .healthCheckCustomConfig(ServiceDiscoveryServiceHealthCheckCustomConfig.builder()
                             .failureThreshold(3)
                             .build())
-                    .forceDelete(true)
                     .tags(appConfig.tags())
+                    .lifecycle(TerraformResourceLifecycle.builder()
+                            .preventDestroy(true)
+                            .build())
                     .build();
 
             services.put(config.serviceName(), service);
