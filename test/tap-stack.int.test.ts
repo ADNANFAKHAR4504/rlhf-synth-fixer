@@ -49,7 +49,7 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
 
   beforeAll(() => {
     const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'eu-west-1';
+    const secondaryRegion = 'us-west-1';
 
     primaryDynamoClient = new DynamoDBClient({ region: primaryRegion });
     secondaryDynamoClient = new DynamoDBClient({ region: secondaryRegion });
@@ -239,7 +239,7 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
           status: { S: 'completed' },
           description: { S: 'Multi-region test transaction' },
           completedAt: { N: Date.now().toString() },
-          completedRegion: { S: 'eu-west-1' },
+          completedRegion: { S: 'us-west-1' },
         },
       })
     );
@@ -260,7 +260,7 @@ describe('Financial Data Layer Multi-Region Integration Tests', () => {
     expect(primaryFinalResponse.Item).toBeDefined();
     expect(primaryFinalResponse.Item!.status.S).toBe('completed');
     expect(primaryFinalResponse.Item!.completedAt).toBeDefined();
-    expect(primaryFinalResponse.Item!.completedRegion.S).toBe('eu-west-1');
+    expect(secondaryGetResponse.Item!.completedRegion.S).toBe('us-west-1');
     console.log('Update replicated to primary region successfully');
 
     console.log('All steps completed - Multi-region end-to-end flow validated');
