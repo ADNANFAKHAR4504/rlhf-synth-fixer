@@ -356,7 +356,13 @@ resource "aws_secretsmanager_secret_version" "primary_rds" {
 resource "aws_s3_bucket" "primary" {
   provider = aws.us_west_2
   bucket   = "${local.name_prefix}-bucket-primary-${random_string.suffix.result}"
-  
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  } 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-bucket-primary-${random_string.suffix.result}"
   })
@@ -371,16 +377,6 @@ resource "aws_s3_bucket_versioning" "primary" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "primary" {
-  provider = aws.us_west_2
-  bucket   = aws_s3_bucket.primary.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
 
 resource "aws_s3_bucket_public_access_block" "primary" {
   provider                = aws.us_west_2
@@ -662,7 +658,13 @@ resource "aws_secretsmanager_secret_version" "secondary_rds" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.eu_west_1
   bucket   = "${local.name_prefix}-bucket-secondary-${random_string.suffix.result}"
-  
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  } 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-bucket-secondary-${random_string.suffix.result}"
   })
@@ -677,16 +679,6 @@ resource "aws_s3_bucket_versioning" "secondary" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "secondary" {
-  provider = aws.eu_west_1
-  bucket   = aws_s3_bucket.secondary.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
 
 resource "aws_s3_bucket_public_access_block" "secondary" {
   provider                = aws.eu_west_1
