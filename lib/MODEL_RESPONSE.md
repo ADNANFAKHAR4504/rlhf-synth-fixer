@@ -448,7 +448,7 @@ const mainStack = new RecoverySystemStack(app, 'IaCNovaRecoveryStack', {
 });
 
 // Cross-region backup stack for redundancy
-const backupRegions = ['us-west-2', 'eu-west-1'];
+const backupRegions = ['us-east-2', 'eu-west-1'];
 backupRegions.forEach((region) => {
   new CrossRegionBackupStack(app, `IaCNovaBackupStack-${region}`, {
     env: {
