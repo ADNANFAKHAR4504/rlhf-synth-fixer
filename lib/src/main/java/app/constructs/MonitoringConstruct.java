@@ -125,10 +125,10 @@ public class MonitoringConstruct extends BaseConstruct {
         // Cluster overview
         widgets.add(createTextWidget("ECS Cluster Overview", 0));
         widgets.add(createMetricWidget("Cluster CPU Utilization", List.of(List.of("AWS/ECS", "CPUUtilization",
-                Map.of("ClusterName", clusterName))), 0, 1)
+                "ClusterName", clusterName)), 0, 1)
         );
         widgets.add(createMetricWidget("Cluster Memory Utilization", List.of(List.of("AWS/ECS", "MemoryUtilization",
-                Map.of("ClusterName", clusterName))), 12, 1)
+                "ClusterName", clusterName)), 12, 1)
         );
 
         // Service metrics
@@ -138,18 +138,18 @@ public class MonitoringConstruct extends BaseConstruct {
             yPosition++;
 
             widgets.add(createMetricWidget(service.serviceName() + " CPU",
-                    List.of(List.of("AWS/ECS", "CPUUtilization", Map.of(
+                    List.of(List.of("AWS/ECS", "CPUUtilization",
                             "ClusterName", clusterName,
                             "ServiceName", service.serviceName()
-                    ))),
+                    )),
                     0, yPosition
             ));
 
             widgets.add(createMetricWidget(service.serviceName() + " Memory",
-                    List.of(List.of("AWS/ECS", "MemoryUtilization", Map.of(
+                    List.of(List.of("AWS/ECS", "MemoryUtilization",
                             "ClusterName", clusterName,
                             "ServiceName", service.serviceName()
-                    ))),
+                    )),
                     12, yPosition
             ));
 

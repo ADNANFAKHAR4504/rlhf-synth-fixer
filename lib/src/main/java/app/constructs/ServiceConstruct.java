@@ -219,6 +219,7 @@ public class ServiceConstruct extends BaseConstruct {
                 .resourceId(resourceId)
                 .scalableDimension("ecs:service:DesiredCount")
                 .serviceNamespace("ecs")
+                .dependsOn(List.of(service))
                 .build();
 
         // CPU scaling policy

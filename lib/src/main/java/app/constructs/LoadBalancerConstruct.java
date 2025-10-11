@@ -7,7 +7,12 @@ import com.hashicorp.cdktf.providers.aws.acm_certificate.AcmCertificateConfig;
 import com.hashicorp.cdktf.providers.aws.alb.Alb;
 import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListener;
 import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListenerDefaultAction;
+import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListenerDefaultActionFixedResponse;
 import com.hashicorp.cdktf.providers.aws.alb_listener.AlbListenerDefaultActionRedirect;
+import com.hashicorp.cdktf.providers.aws.alb_listener_rule.AlbListenerRule;
+import com.hashicorp.cdktf.providers.aws.alb_listener_rule.AlbListenerRuleAction;
+import com.hashicorp.cdktf.providers.aws.alb_listener_rule.AlbListenerRuleCondition;
+import com.hashicorp.cdktf.providers.aws.alb_listener_rule.AlbListenerRuleConditionPathPattern;
 import com.hashicorp.cdktf.providers.aws.alb_target_group.AlbTargetGroup;
 import com.hashicorp.cdktf.providers.aws.alb_target_group.AlbTargetGroupHealthCheck;
 import com.hashicorp.cdktf.providers.aws.security_group.SecurityGroup;
@@ -30,9 +35,13 @@ public class LoadBalancerConstruct extends BaseConstruct {
 
     private final Map<String, AlbTargetGroup> targetGroups = new HashMap<>();
 
+    private final List<ServiceConfig> services;
+
     public LoadBalancerConstruct(final Construct scope, final String id, final String vpcId,
                                  final List<String> subnetIds, final List<ServiceConfig> services) {
         super(scope, id);
+
+        this.services = services;
 
         AppConfig appConfig = getAppConfig();
 
@@ -140,18 +149,43 @@ public class LoadBalancerConstruct extends BaseConstruct {
                 .build();
 
         if (!targetGroups.isEmpty()) {
-            // Create HTTPS Listener
-            AlbListener.Builder.create(this, "alb-https-listener")
+            // Create HTTPS Listener with fixed response as default
+            AlbListener httpsListener = AlbListener.Builder.create(this, "alb-https-listener")
                     .loadBalancerArn(alb.getArn())
                     .port(443)
                     .protocol("HTTPS")
                     .sslPolicy("ELBSecurityPolicy-TLS-1-2-2017-01")
                     .certificateArn(sslCert.getArn())
                     .defaultAction(List.of(AlbListenerDefaultAction.builder()
-                            .type("forward")
-                            .targetGroupArn(targetGroups.values().iterator().next().getArn())
+                            .type("fixed-response")
+                            .fixedResponse(AlbListenerDefaultActionFixedResponse.builder()
+                                    .contentType("text/plain")
+                                    .messageBody("Service not found")
+                                    .statusCode("404")
+                                    .build())
                             .build()))
                     .build();
+
+            // Create listener rules for each service
+            int priority = 1;
+            for (ServiceConfig service : services) {
+                AlbTargetGroup tg = targetGroups.get(service.serviceName());
+                if (tg != null) {
+                    AlbListenerRule.Builder.create(this, service.serviceName() + "-rule")
+                            .listenerArn(httpsListener.getArn())
+                            .priority(priority++)
+                            .action(List.of(AlbListenerRuleAction.builder()
+                                    .type("forward")
+                                    .targetGroupArn(tg.getArn())
+                                    .build()))
+                            .condition(List.of(AlbListenerRuleCondition.builder()
+                                    .pathPattern(AlbListenerRuleConditionPathPattern.builder()
+                                            .values(List.of("/" + service.serviceName() + "/*", "/" + service.serviceName()))
+                                            .build())
+                                    .build()))
+                            .build();
+                }
+            }
         }
     }
 
