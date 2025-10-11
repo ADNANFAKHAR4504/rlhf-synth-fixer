@@ -10,5 +10,18 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3, Cloudfront, Route53, Iam, Cloudwatch, KMS"
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
