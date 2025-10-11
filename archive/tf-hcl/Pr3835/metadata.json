@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "B93231",
+  "team": "1",
+  "startedAt": "2025-10-08T08:32:24.202Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "SNS",
+    "IAM",
+    "RDS Aurora",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Target Group"
+  ],
+  "training_quality": 5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
+}

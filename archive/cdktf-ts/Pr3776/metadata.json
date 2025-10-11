@@ -1,0 +1,46 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "A7B9B2",
+  "team": "1",
+  "startedAt": "2025-10-07T17:44:44.701Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "DynamoDB",
+    "DynamoDB Global Tables",
+    "S3",
+    "S3 Cross-Region Replication",
+    "KMS",
+    "IAM Role",
+    "IAM Policy",
+    "Route 53",
+    "Route 53 Health Check",
+    "Route 53 Hosted Zone",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
