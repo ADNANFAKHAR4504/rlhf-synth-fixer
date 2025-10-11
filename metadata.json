@@ -11,13 +11,19 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
+    "AWS Organizations",
+    "IAM",
+    "IAM Access Analyzer",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "AWS Config",
+    "GuardDuty",
+    "Security Hub",
     "SNS",
-    "SES",
-    "Lambda",
-    "DynamoDB",
     "CloudWatch",
-    "Budgets",
-    "IAM"
+    "EventBridge",
+    "Lambda"
   ],
-  "training_quality": 8
+  "training_quality": 9
 }

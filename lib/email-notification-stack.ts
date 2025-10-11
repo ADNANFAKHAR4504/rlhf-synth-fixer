@@ -21,6 +21,7 @@ export class EmailNotificationStack extends cdk.Stack {
   public readonly orderEventsTopic: sns.Topic;
   public readonly deliveryTrackingTable: dynamodb.Table;
   public readonly emailProcessorFunction: lambda.Function;
+  public readonly feedbackProcessorFunction: lambda.Function;
   public readonly emailQueue: sqs.Queue;
   public readonly emailDeadLetterQueue: sqs.Queue;
 
@@ -409,7 +410,7 @@ def publish_metrics(metric_name, value):
 
     this.deliveryTrackingTable.grantReadWriteData(feedbackProcessorRole);
 
-    const feedbackProcessorFunction = new lambda.Function(
+    this.feedbackProcessorFunction = new lambda.Function(
       this,
       'FeedbackProcessorFunction',
       {
@@ -573,13 +574,13 @@ def publish_metrics(metric_name, value):
 
     // Subscribe feedback processor to SES feedback topics
     sesBouncesTopic.addSubscription(
-      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+      new snsSubscriptions.LambdaSubscription(this.feedbackProcessorFunction)
     );
     sesComplaintsTopic.addSubscription(
-      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+      new snsSubscriptions.LambdaSubscription(this.feedbackProcessorFunction)
     );
     sesDeliveryTopic.addSubscription(
-      new snsSubscriptions.LambdaSubscription(feedbackProcessorFunction)
+      new snsSubscriptions.LambdaSubscription(this.feedbackProcessorFunction)
     );
 
     // CloudWatch Monitoring and Alerting
@@ -614,6 +615,19 @@ def publish_metrics(metric_name, value):
       value: this.emailDeadLetterQueue.queueUrl,
       description: 'SQS Dead Letter Queue URL for failed email processing',
       exportName: `email-processing-dlq-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
+      value: `email-processor-cpu-${environmentSuffix}`,
+      description: 'CloudWatch alarm name for email processor CPU utilization',
+      exportName: `email-processor-cpu-alarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
+      value: `ses-feedback-processor-cpu-${environmentSuffix}`,
+      description:
+        'CloudWatch alarm name for SES feedback processor CPU utilization',
+      exportName: `ses-feedback-processor-cpu-alarm-${environmentSuffix}`,
     });
   }
 
@@ -667,6 +681,17 @@ def publish_metrics(metric_name, value):
       statistic: 'Average',
     });
 
+    // Cost monitoring
+    const costMetric = new cloudwatch.Metric({
+      namespace: 'AWS/Billing',
+      metricName: 'EstimatedCharges',
+      dimensionsMap: {
+        Currency: 'USD',
+        ServiceName: 'AmazonSES',
+      },
+      statistic: 'Maximum',
+    });
+
     // Add widgets to dashboard
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
@@ -714,6 +739,34 @@ def publish_metrics(metric_name, value):
       alarmDescription: 'Email processor Lambda is experiencing errors',
     });
 
+    // Lambda CPU utilization alarms
+    const emailProcessorCpuAlarm = new cloudwatch.Alarm(
+      this,
+      'EmailProcessorCpuAlarm',
+      {
+        alarmName: `email-processor-cpu-${environmentSuffix}`,
+        metric: this.emailProcessorFunction.metric('CPUUtilization'),
+        threshold: 80, // 80% CPU utilization threshold
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Email processor Lambda CPU utilization is above 80%',
+      }
+    );
+
+    const feedbackProcessorCpuAlarm = new cloudwatch.Alarm(
+      this,
+      'FeedbackProcessorCpuAlarm',
+      {
+        alarmName: `ses-feedback-processor-cpu-${environmentSuffix}`,
+        metric: this.feedbackProcessorFunction.metric('CPUUtilization'),
+        threshold: 80, // 80% CPU utilization threshold
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription:
+          'SES feedback processor Lambda CPU utilization is above 80%',
+      }
+    );
+
     // Notification topic for alerts
     if (notificationEmails.length > 0) {
       const alertTopic = new sns.Topic(this, 'AlertTopic', {
@@ -735,18 +788,13 @@ def publish_metrics(metric_name, value):
       lambdaErrorAlarm.addAlarmAction(
         new cloudwatchActions.SnsAction(alertTopic)
       );
+      emailProcessorCpuAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alertTopic)
+      );
+      feedbackProcessorCpuAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alertTopic)
+      );
     }
-
-    // Cost monitoring
-    const costMetric = new cloudwatch.Metric({
-      namespace: 'AWS/Billing',
-      metricName: 'EstimatedCharges',
-      dimensionsMap: {
-        Currency: 'USD',
-        ServiceName: 'AmazonSES',
-      },
-      statistic: 'Maximum',
-    });
 
     const costAlarm = new cloudwatch.Alarm(this, 'CostAlarm', {
       alarmName: `email-cost-alert-${environmentSuffix}`,

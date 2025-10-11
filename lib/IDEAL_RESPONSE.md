@@ -2,11 +2,30 @@
 
 ## Architecture Overview
 
-This solution implements a scalable email notification system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing (per PROMPT.md requirements), and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
+This solution implements a scalable email no    new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
+      value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
+      description: 'SQS dead letter queue URL for failed email processing',
+      exportName: `TapStack-EmailDeadLetterQueueUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
+      value: `email-processor-cpu-${environmentSuffix}`,
+      description: 'CloudWatch alarm name for email processor CPU utilization',
+      exportName: `TapStack-EmailProcessorCpuAlarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
+      value: `ses-feedback-processor-cpu-${environmentSuffix}`,
+      description:
+        'CloudWatch alarm name for SES feedback processor CPU utilization',
+      exportName: `TapStack-FeedbackProcessorCpuAlarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SystemSetupInstructions', {ion system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing, and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
 
 **Key Architecture Changes (SQS Integration):**
 -  **SNS→SQS→Lambda Pattern**: Implemented reliable message processing using SQS queues instead of direct SNS→Lambda subscription
--  **Dead Letter Queue**: Added SQS DLQ with 3 retry attempts for failed message processing
+-  **Dead Letter Queue**: Added SQS DLQ for failed message processing
 -  **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
 -  **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
 
@@ -154,7 +173,7 @@ export class TapStack extends cdk.Stack {
 
 - **SNS Topic** for order events (`email-order-events-{suffix}`)
 - **SQS Queue** (`email-queue-{suffix}`) for reliable message processing with:
-  - Dead letter queue for failed messages (3 retry attempts)
+  - Dead letter queue for failed messages
   - 5-minute visibility timeout
   - 20-second long polling for efficiency
 - **SQS Dead Letter Queue** (`email-dead-letter-queue-{suffix}`) for failed processing
@@ -171,7 +190,7 @@ export class TapStack extends cdk.Stack {
   - Bounce rate monitoring and alerting
 - **Lambda Event Source Mapping** connecting SQS queue to email processor
 - **CloudWatch Dashboard** with email volume, delivery rate, and cost metrics
-- **CloudWatch Alarms** for high bounce rates and Lambda errors
+- **CloudWatch Alarms** for high bounce rates, Lambda errors, and CPU utilization
 - **SNS Topics** for SES feedback (bounces, complaints, delivery)
 
 ### 3. Cost Monitoring Stack
@@ -262,5 +281,23 @@ To use this email notification system:
 - **Email Dashboard**: `email-notifications-{environmentSuffix}`
 - **Cost Dashboard**: `email-costs-{environmentSuffix}`
 - **Log Groups**: `/aws/lambda/email-processor-{suffix}` and `/aws/lambda/cost-monitoring-{suffix}`
+- **CPU Utilization Alarms**: 
+  - `email-processor-cpu-{environmentSuffix}` (80% threshold for email processor Lambda)
+  - `ses-feedback-processor-cpu-{environmentSuffix}` (80% threshold for SES feedback processor Lambda)
 
 This implementation demonstrates a production-ready email notification system with proper monitoring, cost controls, and scalability - all using inline Lambda code for simplicity and maintainability.
+
+## Testing
+
+The system includes comprehensive integration tests (`test/tap-stack.int.test.ts`) that validate:
+
+- **Infrastructure Validation**: SNS topics, DynamoDB tables, Lambda functions
+- **End-to-End Order Processing**: Complete email notification workflow
+- **Performance & Reliability**: 30-second processing requirements, batch processing
+- **Cost Monitoring & Alerting**: Cost thresholds, CPU utilization alarms
+- **Security & Compliance**: IAM permissions, SES configuration
+
+**Recent Test Updates:**
+- Added validation for CPU utilization alarms on both Lambda functions
+- CPU alarms configured with 80% threshold and 2 evaluation periods
+- Tests verify alarm names are properly exported and alarms exist in CloudWatch

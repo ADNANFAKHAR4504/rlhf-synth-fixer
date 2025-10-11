@@ -94,6 +94,19 @@ export class TapStack extends cdk.Stack {
       exportName: `TapStack-EmailDeadLetterQueueUrl-${environmentSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
+      value: `email-processor-cpu-${environmentSuffix}`,
+      description: 'CloudWatch alarm name for email processor CPU utilization',
+      exportName: `TapStack-EmailProcessorCpuAlarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
+      value: `ses-feedback-processor-cpu-${environmentSuffix}`,
+      description:
+        'CloudWatch alarm name for SES feedback processor CPU utilization',
+      exportName: `TapStack-FeedbackProcessorCpuAlarm-${environmentSuffix}`,
+    });
+
     new cdk.CfnOutput(this, 'SystemSetupInstructions', {
       value: JSON.stringify({
         integration: {

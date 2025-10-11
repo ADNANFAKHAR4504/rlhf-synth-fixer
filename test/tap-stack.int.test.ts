@@ -612,6 +612,34 @@ describe('TAP Stack Email Notification System - Live Traffic Integration Tests',
       }
     });
 
+    test('should have CPU utilization alarms configured for Lambda functions', async () => {
+      // Verify CPU alarm names are exported
+      expect(outputs.EmailProcessorCpuAlarmName).toBeDefined();
+      expect(outputs.FeedbackProcessorCpuAlarmName).toBeDefined();
+
+      expect(outputs.EmailProcessorCpuAlarmName).toContain('email-processor-cpu');
+      expect(outputs.FeedbackProcessorCpuAlarmName).toContain('ses-feedback-processor-cpu');
+
+      // Verify CPU alarms exist in CloudWatch
+      const alarmsCommand = new DescribeAlarmsCommand({
+        AlarmNames: [outputs.EmailProcessorCpuAlarmName, outputs.FeedbackProcessorCpuAlarmName]
+      });
+      const alarmsResponse = await cloudWatchClient.send(alarmsCommand);
+
+      expect(alarmsResponse.MetricAlarms).toBeDefined();
+      expect(alarmsResponse.MetricAlarms!.length).toBe(2);
+
+      // Verify alarm configurations
+      alarmsResponse.MetricAlarms!.forEach(alarm => {
+        expect(alarm.MetricName).toBe('CPUUtilization');
+        expect(alarm.Threshold).toBe(80);
+        expect(alarm.EvaluationPeriods).toBe(2);
+        expect(alarm.Namespace).toBe('AWS/Lambda');
+      });
+
+      console.log(`CPU alarms configured: ${outputs.EmailProcessorCpuAlarmName}, ${outputs.FeedbackProcessorCpuAlarmName}`);
+    });
+
     test('should track cost threshold configuration', async () => {
       const systemInstructions = JSON.parse(outputs.SystemSetupInstructions);
       const costThreshold = systemInstructions.configuration.costThreshold;
