@@ -3,7 +3,7 @@
 
 This is a comprehensive Terraform configuration request. Let me break down the requirements:
 
-1. VPC in us-west-2 with CIDR 10.0.0.0/16
+1. VPC in us-east-1 with CIDR 10.0.0.0/16
 2. 2 private and 2 public subnets, NAT gateways, internet gateway, route tables, 3 AZs for HA
 3. RDS with Multi-AZ, random username/password, AWS Secrets Manager, encryption, no public access
 4. Elastic Beanstalk for web app
@@ -24,7 +24,7 @@ I'll create a comprehensive Terraform configuration file that meets all your req
 # tap_stack.tf - Complete Infrastructure Stack Configuration
 # =============================================================================
 # This file contains all resources for a highly available, secure infrastructure
-# deployment in us-west-2 region with comprehensive monitoring and security controls
+# deployment in us-east-1 region with comprehensive monitoring and security controls
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -34,7 +34,7 @@ I'll create a comprehensive Terraform configuration file that meets all your req
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "environment" {
