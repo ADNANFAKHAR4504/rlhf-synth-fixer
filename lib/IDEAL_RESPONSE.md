@@ -636,6 +636,7 @@ export class IaCNovaStack extends NestedStack {
 - **High Availability**: Multi-AZ RDS deployment
 - **Monitoring**: CloudWatch integration
 - **Backup**: 7-day RDS backup retention
+- **Deletion Protection**: Disabled (set to false for test environments)
 - **Versioning**: S3 bucket versioning enabled
 - **Configurable**: Extensive parameterization for different environments
 
