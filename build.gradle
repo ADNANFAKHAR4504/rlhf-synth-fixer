@@ -181,6 +181,7 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:cognitoidentityprovider'
     integrationTestImplementation 'software.amazon.awssdk:ecs'
     integrationTestImplementation 'software.amazon.awssdk:servicediscovery'
+    integrationTestImplementation 'software.amazon.awssdk:kinesis'
 
     // Additional AWS SDK dependencies for comprehensive integration tests
     integrationTestImplementation 'software.amazon.awssdk:kendra'
