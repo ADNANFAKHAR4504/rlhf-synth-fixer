@@ -664,12 +664,6 @@ export class CloudWatchModule extends Construct {
   ) {
     super(scope, id);
 
-    // Lambda Logs
-    new CloudwatchLogGroup(this, 'lambda-logs', {
-      name: `/aws/lambda/${props.lambdaFunctionName}`,
-      retentionInDays: 7,
-    });
-
     // ALB Logs
     new CloudwatchLogGroup(this, 'alb-logs', {
       name: `/aws/alb/${props.projectName}-${props.environment}`,

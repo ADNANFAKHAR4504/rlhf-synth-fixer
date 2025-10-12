@@ -25,3 +25,17 @@ TapStackpr4163  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+5aae5c4a7614]
+TapStackpr4163  ╷
+                │ Error: creating CloudWatch Logs Log Group (/aws/lambda/myapp-pr4163-processor): operation error CloudWatch Logs: CreateLogGroup, https response error StatusCode: 400, RequestID: 74e2115b-8753-4000-be40-32588c7edc48, ResourceAlreadyExistsException: The specified log group already exists
+                │ 
+                │   with aws_cloudwatch_log_group.cloudwatch_lambda-logs_2A7F2AA8 (cloudwatch/lambda-logs),
+                │   on cdk.tf.json line 280, in resource.aws_cloudwatch_log_group.cloudwatch_lambda-logs_2A7F2AA8 (cloudwatch/lambda-logs):
+                │  280:       },
+                │ 
+                ╵
+TapStackpr4163  ::error::Terraform exited with code 1.
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.
