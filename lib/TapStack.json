@@ -434,9 +434,7 @@
         "SecurityGroupIds": [{"Ref": "ApplicationSecurityGroup"}],
         "SubnetId": {"Ref": "DefaultSubnet1"},
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\n# Update system\nyum update -y\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n# Disable password authentication\nsed -i 's/PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config\nsystemctl restart sshd\n# Install fail2ban for brute force protection\nyum install -y fail2ban\nsystemctl enable fail2ban\nsystemctl start fail2ban\n# Configure automatic security updates\nyum install -y yum-cron\nsed -i 's/apply_updates = no/apply_updates = yes/g' /etc/yum/yum-cron.conf\nsystemctl enable yum-cron\nsystemctl start yum-cron\n"
-          }
+          "Fn::Base64": "#!/bin/bash\n# Update system\nyum update -y\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n# Disable password authentication\nsed -i 's/PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config\nsystemctl restart sshd\n# Install fail2ban for brute force protection\nyum install -y fail2ban\nsystemctl enable fail2ban\nsystemctl start fail2ban\n# Configure automatic security updates\nyum install -y yum-cron\nsed -i 's/apply_updates = no/apply_updates = yes/g' /etc/yum/yum-cron.conf\nsystemctl enable yum-cron\nsystemctl start yum-cron\n"
         },
         "Tags": [
           {"Key": "Name", "Value": "HardenedApplicationServer"},
@@ -536,7 +534,7 @@
 
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": ["S3LoggingBucket", "CloudTrailBucketPolicy"],
+      "DependsOn": "CloudTrailBucketPolicy",
       "Properties": {
         "TrailName": {
           "Fn::Sub": "SecureTrail-${AWS::StackName}"
