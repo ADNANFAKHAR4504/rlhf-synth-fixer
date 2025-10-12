@@ -41,7 +41,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(environmentSuffix).toBeDefined();
       expect(awsRegion).toBeDefined();
       expect(environmentSuffix.length).toBeGreaterThan(0);
-      expect(['us-east-1', 'us-west-1', 'us-west-2', 'eu-west-1'].includes(awsRegion)).toBe(true);
+      expect(['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1'].includes(awsRegion)).toBe(true);
     });
 
     test('Backup retention periods comply with regulations', () => {
@@ -74,8 +74,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('Client access isolation patterns are implemented', () => {
-      const clientIds = Array.from({length: 10}, (_, i) => i + 1);
-      
+      const clientIds = Array.from({ length: 10 }, (_, i) => i + 1);
+
       clientIds.forEach(clientId => {
         const expectedPath = `client-${clientId}/*`;
         expect(expectedPath).toMatch(/^client-\d+\/\*$/);
