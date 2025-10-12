@@ -36,4 +36,3 @@ new TapStack(app, stackName, {
 
 // Synthesize the app to generate the Terraform configuration
 app.synth();
-
