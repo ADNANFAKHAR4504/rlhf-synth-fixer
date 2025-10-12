@@ -14,7 +14,11 @@ import com.hashicorp.cdktf.providers.aws.iam_role_policy_attachment.IamRolePolic
 import com.hashicorp.cdktf.providers.aws.kinesis_stream.KinesisStream;
 import com.hashicorp.cdktf.providers.aws.lambda_event_source_mapping.LambdaEventSourceMapping;
 import com.hashicorp.cdktf.providers.aws.lambda_event_source_mapping.LambdaEventSourceMappingConfig;
-import com.hashicorp.cdktf.providers.aws.lambda_function.*;
+import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunction;
+import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionConfig;
+import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionEnvironment;
+import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionDeadLetterConfig;
+import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionTracingConfig;
 import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 import software.constructs.Construct;
 

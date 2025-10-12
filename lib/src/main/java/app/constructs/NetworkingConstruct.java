@@ -39,6 +39,16 @@ public class NetworkingConstruct extends BaseConstruct {
     public NetworkingConstruct(final Construct scope, final String id, final DataAwsAvailabilityZones azs) {
         super(scope, id);
 
+        // Validate we have at least 2 AZs for high availability
+        int availableAzCount = azs.getNames().size();
+        if (availableAzCount < 2) {
+            throw new IllegalStateException(
+                    String.format("High availability requires at least 2 availability zones, but only %d found. " +
+                                    "Available AZs: %s. Please check the AWS region configuration.",
+                            availableAzCount, azs.getNames())
+            );
+        }
+
         // Create VPC
         this.vpc = new Vpc(this, "vpc", VpcConfig.builder()
                 .cidrBlock(getVpcCidrBlock())
@@ -53,7 +63,7 @@ public class NetworkingConstruct extends BaseConstruct {
                 .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-igw")))
                 .build());
 
-        // Create public and private subnets in 2 AZs
+        // Create public and private subnets in 2 AZs for high availability
         this.publicSubnets = new ArrayList<>();
         this.privateSubnets = new ArrayList<>();
 

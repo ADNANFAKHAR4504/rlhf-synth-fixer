@@ -9,10 +9,13 @@ import com.hashicorp.cdktf.TerraformOutput;
 import com.hashicorp.cdktf.TerraformOutputConfig;
 import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
 import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesConfig;
+import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesFilter;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProviderConfig;
 import software.constructs.Construct;
 import com.hashicorp.cdktf.TerraformStack;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
+
+import java.util.List;
 
 /**
  * CDKTF Java template stack demonstrating basic AWS infrastructure.
@@ -36,10 +39,15 @@ public class MainStack extends TerraformStack {
                 .region("us-east-1")
                 .build());
 
-        // Get available AZs
+        // Get available AZs (exclude local zones and wavelength zones)
         DataAwsAvailabilityZones azs = new DataAwsAvailabilityZones(this, "azs",
                 DataAwsAvailabilityZonesConfig.builder()
                         .state("available")
+                        .filter(List.of(DataAwsAvailabilityZonesFilter.builder()
+                                .name("opt-in-status")
+                                .values(List.of("opt-in-not-required"))
+                                .build()
+                        ))
                         .build());
 
         // Create networking infrastructure

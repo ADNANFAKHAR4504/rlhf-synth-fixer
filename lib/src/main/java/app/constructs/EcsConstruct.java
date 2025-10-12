@@ -30,7 +30,7 @@ public class EcsConstruct extends BaseConstruct {
 
     private final EcsService service;
 
-    public EcsConstruct(final Construct scope, String id, final Vpc vpc, final KinesisStream kinesisStream) {
+    public EcsConstruct(final Construct scope, final String id, final Vpc vpc, final KinesisStream kinesisStream) {
         super(scope, id);
 
         // ECS Cluster
