@@ -1,5 +1,4 @@
 
-TapStack.json
 ```json
 
 {
