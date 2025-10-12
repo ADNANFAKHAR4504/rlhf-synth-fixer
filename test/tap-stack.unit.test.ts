@@ -68,16 +68,16 @@ describe('TapStack Essential Branch Coverage', () => {
     expect(mainProvider.region).toBe(''); // Empty in test mode when not provided
   });
 
-  // Test 5: stateBucketRegion defaults to awsRegion
-  test('stateBucketRegion defaults to awsRegion when undefined', () => {
+  // Test 5: stateBucketRegion defaults to us-east-1 (where S3 bucket exists)
+  test('stateBucketRegion defaults to us-east-1 when undefined', () => {
     stack = new TapStack(app, 'TestStateBucketRegionDefault', {
       environmentSuffix: 'test',
       awsRegion: 'eu-west-1', // Provide explicit region
-      // stateBucketRegion: undefined - should default to awsRegion
+      // stateBucketRegion: undefined - should default to us-east-1 (where bucket exists)
     });
     synthesized = JSON.parse(Testing.synth(stack));
 
-    expect(synthesized.terraform.backend.s3.region).toBe('eu-west-1');
+    expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
   });
 
   // Test 6: stateBucketRegion || 'us-east-1' - PROVIDED branch  
