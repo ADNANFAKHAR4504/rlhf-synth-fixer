@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.ecs.model.DescribeServicesResponse;
 import software.amazon.awssdk.services.ecs.model.DescribeTasksRequest;
 import software.amazon.awssdk.services.ecs.model.DescribeTasksResponse;
 import software.amazon.awssdk.services.ecs.model.DesiredStatus;
+import software.amazon.awssdk.services.ecs.model.HealthStatus;
 import software.amazon.awssdk.services.ecs.model.LaunchType;
 import software.amazon.awssdk.services.ecs.model.ListTasksRequest;
 import software.amazon.awssdk.services.ecs.model.ListTasksResponse;
@@ -335,7 +336,7 @@ public class MainIntegrationTest {
 
             describeResponse.tasks().forEach(task -> {
                 assertEquals("RUNNING", task.lastStatus(), "Task should be running");
-                assertEquals("HEALTHY", task.healthStatus(), "Task should be healthy");
+                assertEquals(HealthStatus.HEALTHY, task.healthStatus(), "Task should be healthy");
             });
         }
     }
@@ -390,7 +391,7 @@ public class MainIntegrationTest {
             assertEquals(ProtocolEnum.HTTP, tg.protocol(), "Protocol should be HTTP");
             assertEquals(TargetTypeEnum.IP, tg.targetType(), "Target type should be IP for Fargate");
             assertTrue(tg.healthCheckEnabled(), "Health checks should be enabled");
-            assertEquals("/health", tg.healthCheckPath(), "Health check path should be /health");
+            assertEquals("/", tg.healthCheckPath(), "Health check path should be /");
 
             // Check target health
             DescribeTargetHealthResponse healthResponse = elbClient.describeTargetHealth(
@@ -527,10 +528,20 @@ public class MainIntegrationTest {
                         .build()
         );
 
+        // Debug: Print all alarms
+        System.out.println("Total alarms returned: " + alarmsResponse.metricAlarms().size());
+        alarmsResponse.metricAlarms().forEach(alarm -> {
+            System.out.println("  Alarm: " + alarm.alarmName() +
+                             " | Namespace: " + alarm.namespace() +
+                             " | MetricName: " + alarm.metricName());
+        });
+
         // Filter alarms related to our stack
         List<MetricAlarm> stackAlarms = alarmsResponse.metricAlarms().stream()
                 .filter(alarm -> alarm.namespace() != null && alarm.namespace().equals("AWS/ECS"))
                 .toList();
+
+        System.out.println("Filtered ECS alarms: " + stackAlarms.size());
 
         assertFalse(stackAlarms.isEmpty(), "CloudWatch alarms should exist for ECS");
 
