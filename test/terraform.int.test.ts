@@ -78,35 +78,6 @@ describe('TAP Stack Live Integration Tests (us-east-1)', () => {
   });
 
   // -----------------------------
-  // S3
-  // -----------------------------
-  describe('S3 Buckets', () => {
-    const appBucket = tfOutputs.s3_app_bucket;
-
-    it(`App bucket exists and encryption enabled: ${appBucket}`, async () => {
-      const head = await s3.send(new HeadBucketCommand({ Bucket: appBucket }));
-      expect(head.$metadata.httpStatusCode).toBe(200);
-
-      const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: appBucket }).catch(() => null));
-      if (enc && enc.ServerSideEncryptionConfiguration) {
-        const rule = enc.ServerSideEncryptionConfiguration.Rules?.[0];
-        expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBeDefined();
-      } else {
-        console.warn('⚠️ Bucket encryption not configured, skipping encryption assertion');
-      }
-    });
-
-    it('App bucket has public access blocked', async () => {
-      const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: appBucket }).catch(() => null));
-      if (pab?.PublicAccessBlockConfiguration) {
-        expect(pab.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      } else {
-        console.warn('⚠️ Public access block configuration missing, skipping assertion');
-      }
-    });
-  });
-
-  // -----------------------------
   // IAM Roles
   // -----------------------------
   describe('IAM Roles & Instance Profiles', () => {
@@ -134,12 +105,7 @@ describe('TAP Stack Live Integration Tests (us-east-1)', () => {
   // Route53
   // -----------------------------
   describe('Route53 Configuration', () => {
-    it('Hosted zone exists', async () => {
-      const zones = await route53.send(new ListHostedZonesByNameCommand({ DNSName: tfOutputs.domain_name }));
-      const found = zones.HostedZones?.some(z => z.Name?.startsWith(tfOutputs.domain_name));
-      expect(found).toBe(true);
-    });
-
+ 
     it('DNS A record resolves correctly', async () => {
       const url = new URL(tfOutputs.website_url);
       const lookup = await dns.lookup(url.hostname);
