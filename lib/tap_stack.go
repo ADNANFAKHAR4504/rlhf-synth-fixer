@@ -14,11 +14,10 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awskinesis"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awssagemaker"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctions"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsstepfunctionstasks"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -93,7 +92,15 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	if props != nil && props.EnvironmentSuffix != nil {
 		environmentSuffix = *props.EnvironmentSuffix
 	} else if suffix := stack.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil {
-		environmentSuffix = *suffix.(*string)
+		// Context values can be strings or *string depending on how they're set
+		switch v := suffix.(type) {
+		case string:
+			environmentSuffix = v
+		case *string:
+			environmentSuffix = *v
+		default:
+			environmentSuffix = "dev"
+		}
 	} else {
 		environmentSuffix = "dev"
 	}
@@ -169,7 +176,6 @@ func (tapStack *TapStack) createDataInfrastructure(stack awscdk.Stack) {
 	// Kinesis stream for real-time image processing
 	tapStack.DataStream = awskinesis.NewStream(stack, jsii.String("ImageProcessingStream"), &awskinesis.StreamProps{
 		StreamName:      jsii.String(fmt.Sprintf("image-processing-%s", *tapStack.EnvironmentSuffix)),
-		ShardCount:      jsii.Number(1),
 		RetentionPeriod: awscdk.Duration_Hours(jsii.Number(24)),
 		StreamMode:      awskinesis.StreamMode_ON_DEMAND,
 		Encryption:      awskinesis.StreamEncryption_KMS,
@@ -199,9 +205,9 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 	})
 
 	// Grant permissions to the role
-	tapStack.TrainingBucket.GrantReadWrite(tapStack.SageMakerRole)
-	tapStack.RawImageBucket.GrantRead(tapStack.SageMakerRole)
-	tapStack.ProcessedBucket.GrantReadWrite(tapStack.SageMakerRole)
+	tapStack.TrainingBucket.GrantReadWrite(tapStack.SageMakerRole, nil)
+	tapStack.RawImageBucket.GrantRead(tapStack.SageMakerRole, nil)
+	tapStack.ProcessedBucket.GrantReadWrite(tapStack.SageMakerRole, nil)
 
 	// Define training pipeline using Step Functions
 	prepLambda := awslambda.NewFunction(stack, jsii.String("DataPrepLambda"), &awslambda.FunctionProps{
@@ -214,7 +220,7 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 
 	trainingJob := awsstepfunctions.NewPass(stack, jsii.String("ModelTrainingJob"), &awsstepfunctions.PassProps{
 		Comment: jsii.String("Simulate SageMaker Training Job"),
-		Result:  awsstepfunctions.Result_FromObject(map[string]interface{}{"TrainingJobStatus": "Completed"}),
+		Result:  awsstepfunctions.Result_FromObject(&map[string]interface{}{"TrainingJobStatus": "Completed"}),
 	})
 
 	evalLambda := awslambda.NewFunction(stack, jsii.String("ModelEvalLambda"), &awslambda.FunctionProps{
@@ -225,25 +231,24 @@ func (tapStack *TapStack) createTrainingInfrastructure(stack awscdk.Stack) {
 		MemorySize: jsii.Number(512),
 	})
 
-	// Build Step Functions workflow
+	// Build Step Functions workflow with tasks
+	prepTask := awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("PrepareTrainingData"), &awsstepfunctionstasks.LambdaInvokeProps{
+		LambdaFunction: prepLambda,
+		OutputPath:     jsii.String("$.Payload"),
+	})
+
+	evalTask := awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("EvaluateModel"), &awsstepfunctionstasks.LambdaInvokeProps{
+		LambdaFunction: evalLambda,
+		OutputPath:     jsii.String("$.Payload"),
+	})
+
+	// Chain the tasks
+	definition := prepTask.Next(trainingJob).Next(evalTask)
+
 	trainPipeline := awsstepfunctions.NewStateMachine(stack, jsii.String("ModelTrainingPipeline"), &awsstepfunctions.StateMachineProps{
 		StateMachineName: jsii.String(fmt.Sprintf("ml-model-training-pipeline-%s", *tapStack.EnvironmentSuffix)),
-		Definition: awsstepfunctions.NewSequence(stack, jsii.String("TrainingSequence"), &awsstepfunctions.SequenceProps{
-			Children: &[]awsstepfunctions.IChainable{
-				awsstepfunctions.NewTask(stack, jsii.String("PrepareTrainingData"), &awsstepfunctions.TaskProps{
-					Task: awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("InvokePrepLambda"), &awsstepfunctionstasks.LambdaInvokeProps{
-						LambdaFunction: prepLambda,
-					}),
-				}),
-				trainingJob,
-				awsstepfunctions.NewTask(stack, jsii.String("EvaluateModel"), &awsstepfunctions.TaskProps{
-					Task: awsstepfunctionstasks.NewLambdaInvoke(stack, jsii.String("InvokeEvalLambda"), &awsstepfunctionstasks.LambdaInvokeProps{
-						LambdaFunction: evalLambda,
-					}),
-				}),
-			},
-		}),
-		Timeout: awscdk.Duration_Hours(jsii.Number(2)),
+		Definition:       definition,
+		Timeout:          awscdk.Duration_Hours(jsii.Number(2)),
 	})
 
 	tapStack.TrainingPipeline = trainPipeline
@@ -276,7 +281,7 @@ func (tapStack *TapStack) createInferenceInfrastructure(stack awscdk.Stack) {
 	})
 
 	// Grant permissions
-	tapStack.ModelBucket.GrantRead(tapStack.InferenceLambda)
+	tapStack.ModelBucket.GrantRead(tapStack.InferenceLambda, nil)
 	tapStack.MetadataTable.GrantReadWriteData(tapStack.InferenceLambda)
 
 	// API Gateway
@@ -308,8 +313,8 @@ func (tapStack *TapStack) createMonitoringInfrastructure(stack awscdk.Stack) {
 	apiWidget := awscloudwatch.NewGraphWidget(&awscloudwatch.GraphWidgetProps{
 		Title: jsii.String("API Gateway Metrics"),
 		Left: &[]awscloudwatch.IMetric{
-			tapStack.InferenceApi.MetricCount(),
-			tapStack.InferenceApi.MetricLatency(),
+			tapStack.InferenceApi.MetricCount(nil),
+			tapStack.InferenceApi.MetricLatency(nil),
 		},
 	})
 
@@ -317,9 +322,9 @@ func (tapStack *TapStack) createMonitoringInfrastructure(stack awscdk.Stack) {
 	lambdaWidget := awscloudwatch.NewGraphWidget(&awscloudwatch.GraphWidgetProps{
 		Title: jsii.String("Lambda Metrics"),
 		Left: &[]awscloudwatch.IMetric{
-			tapStack.InferenceLambda.MetricInvocations(),
-			tapStack.InferenceLambda.MetricDuration(),
-			tapStack.InferenceLambda.MetricErrors(),
+			tapStack.InferenceLambda.MetricInvocations(nil),
+			tapStack.InferenceLambda.MetricDuration(nil),
+			tapStack.InferenceLambda.MetricErrors(nil),
 		},
 	})
 
@@ -331,7 +336,7 @@ func (tapStack *TapStack) createMonitoringInfrastructure(stack awscdk.Stack) {
 
 func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 	// API Gateway latency alarm
-	apiLatencyAlarm := tapStack.InferenceApi.MetricLatency().CreateAlarm(stack, jsii.String("ApiLatencyAlarm"), &awscloudwatch.CreateAlarmOptions{
+	apiLatencyAlarm := tapStack.InferenceApi.MetricLatency(nil).CreateAlarm(stack, jsii.String("ApiLatencyAlarm"), &awscloudwatch.CreateAlarmOptions{
 		EvaluationPeriods:  jsii.Number(3),
 		Threshold:          jsii.Number(500),
 		AlarmName:          jsii.String(fmt.Sprintf("api-latency-alarm-%s", *tapStack.EnvironmentSuffix)),
@@ -341,7 +346,7 @@ func (tapStack *TapStack) createAlarms(stack awscdk.Stack) {
 	})
 
 	// Lambda error alarm
-	lambdaErrorAlarm := tapStack.InferenceLambda.MetricErrors().CreateAlarm(stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.CreateAlarmOptions{
+	lambdaErrorAlarm := tapStack.InferenceLambda.MetricErrors(nil).CreateAlarm(stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.CreateAlarmOptions{
 		EvaluationPeriods:  jsii.Number(1),
 		Threshold:          jsii.Number(1),
 		AlarmName:          jsii.String(fmt.Sprintf("lambda-error-alarm-%s", *tapStack.EnvironmentSuffix)),
