@@ -1,7 +1,6 @@
 package app.constructs;
 
 import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
-import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesConfig;
 import com.hashicorp.cdktf.providers.aws.eip.Eip;
 import com.hashicorp.cdktf.providers.aws.eip.EipConfig;
 import com.hashicorp.cdktf.providers.aws.internet_gateway.InternetGateway;
@@ -37,14 +36,8 @@ public class NetworkingConstruct extends BaseConstruct {
 
     private final SecurityGroup ecsSecurityGroup;
 
-    public NetworkingConstruct(final Construct scope, final String id) {
+    public NetworkingConstruct(final Construct scope, final String id, final DataAwsAvailabilityZones azs) {
         super(scope, id);
-
-        // Get available AZs
-        DataAwsAvailabilityZones azs = new DataAwsAvailabilityZones(this, "azs",
-                DataAwsAvailabilityZonesConfig.builder()
-                        .state("available")
-                        .build());
 
         // Create VPC
         this.vpc = new Vpc(this, "vpc", VpcConfig.builder()
@@ -64,7 +57,10 @@ public class NetworkingConstruct extends BaseConstruct {
         this.publicSubnets = new ArrayList<>();
         this.privateSubnets = new ArrayList<>();
 
-        for (int i = 0; i < 2; i++) {
+        List<String> availableZones = azs.getNames();
+        int subnetCount = Math.min(2, availableZones.size());
+
+        for (int i = 0; i < subnetCount; i++) {
             String azName = azs.getNames().get(i);
 
             // Public subnet

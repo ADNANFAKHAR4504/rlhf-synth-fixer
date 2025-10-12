@@ -7,6 +7,8 @@ import app.constructs.LambdaConstruct;
 import app.constructs.EcsConstruct;
 import com.hashicorp.cdktf.TerraformOutput;
 import com.hashicorp.cdktf.TerraformOutputConfig;
+import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
+import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesConfig;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProviderConfig;
 import software.constructs.Construct;
 import com.hashicorp.cdktf.TerraformStack;
@@ -34,8 +36,14 @@ public class MainStack extends TerraformStack {
                 .region("us-east-1")
                 .build());
 
+        // Get available AZs
+        DataAwsAvailabilityZones azs = new DataAwsAvailabilityZones(this, "azs",
+                DataAwsAvailabilityZonesConfig.builder()
+                        .state("available")
+                        .build());
+
         // Create networking infrastructure
-        NetworkingConstruct networking = new NetworkingConstruct(this, "networking");
+        NetworkingConstruct networking = new NetworkingConstruct(this, "networking", azs);
 
         // Create Kinesis Data Stream
         KinesisConstruct kinesis = new KinesisConstruct(this, "kinesis");
