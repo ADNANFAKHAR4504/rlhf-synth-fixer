@@ -196,7 +196,7 @@ public class ServiceConstruct extends BaseConstruct {
                               }
                             },
                             "healthCheck": {
-                              "command": ["CMD-SHELL", "curl -f http://localhost:%d/health || exit 1"],
+                              "command": ["CMD-SHELL", "curl -f http://localhost:%d/ || exit 1"],
                               "interval": 30,
                               "timeout": 5,
                               "retries": 3,
