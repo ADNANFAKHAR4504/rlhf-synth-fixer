@@ -17,7 +17,7 @@ export interface TapStackProps extends cdk.StackProps {
   // new configurable options
   deletionProtection?: boolean; // default false; enable when long-lived environment needs protection
   bucketRemovalPolicy?: cdk.RemovalPolicy; // default RETAIN
-  amiId?: string; // EC2 AMI override; defaults to AL2 x86_64 in us-east-1
+  amiId?: string; // EC2 AMI override; defaults to AL2023 x86_64 in us-west-1
 }
 
 export class TapStack extends cdk.Stack {
@@ -41,7 +41,7 @@ export class TapStack extends cdk.Stack {
     const bucketRemovalPolicy =
       props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
     const deletionProtection = props.deletionProtection ?? false;
-    const defaultAmiId = props.amiId ?? 'ami-0c02fb55956c7d316';
+    const defaultAmiId = props.amiId ?? 'ami-08d011d61e7b71968';
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
@@ -213,7 +213,7 @@ export class TapStack extends cdk.Stack {
 
     // Use explicit AMI mapping to satisfy fixed-AMI requirement
     const ami = ec2.MachineImage.genericLinux({
-      'us-east-1': defaultAmiId,
+      'us-west-1': 'ami-08d011d61e7b71968',
     });
 
     const asg = new autoscaling.AutoScalingGroup(this, `ASG-${suffix}`, {
