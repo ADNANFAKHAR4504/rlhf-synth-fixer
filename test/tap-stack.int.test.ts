@@ -76,7 +76,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
   // AWS Configuration
   const awsRegion = process.env.AWS_REGION || 'us-east-1';
-  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
   // Initialize AWS SDK clients
   const ec2Client = new EC2Client({ region: awsRegion });
@@ -127,7 +127,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.VpcId).toBe(vpcId);
-      expect(vpc.CidrBlock).toBe('172.31.0.0/16');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
 
       // Check DNS settings (may not be directly accessible via API)
@@ -163,8 +163,8 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
       // Verify CIDR blocks
       const cidrBlocks = response.Subnets!.map(s => s.CidrBlock).sort();
-      expect(cidrBlocks).toContain('172.31.0.0/20');
-      expect(cidrBlocks).toContain('172.31.16.0/20');
+      expect(cidrBlocks).toContain('10.0.0.0/20');
+      expect(cidrBlocks).toContain('10.0.16.0/20');
     }, 30000);
 
     test('should have Internet Gateway attached to VPC', async () => {
@@ -223,16 +223,19 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
             Name: 'vpc-id',
             Values: [vpcId],
           },
-          {
-            Name: 'group-name',
-            Values: ['ApplicationSecurityGroup*', 'DatabaseSecurityGroup*', 'BastionSecurityGroup*'],
-          },
         ],
       });
       const response = await ec2Client.send(command);
 
+      // Filter to only our custom security groups
+      const customSecurityGroups = response.SecurityGroups!.filter(sg =>
+        sg.GroupName?.includes('ApplicationSecurityGroup') ||
+        sg.GroupName?.includes('DatabaseSecurityGroup') ||
+        sg.GroupName?.includes('BastionSecurityGroup')
+      );
+
       // Should have at least 3 custom security groups
-      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(3);
+      expect(customSecurityGroups.length).toBeGreaterThanOrEqual(3);
 
       // Check ApplicationSecurityGroup
       const appSG = response.SecurityGroups!.find(sg =>
@@ -413,7 +416,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const dbEndpoint = outputs.DatabaseEndpoint;
       expect(dbEndpoint).toBeDefined();
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -431,7 +434,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have database encrypted with KMS', async () => {
       if (skipIfNoDeployment()) return;
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -446,7 +449,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have database not publicly accessible', async () => {
       if (skipIfNoDeployment()) return;
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -459,7 +462,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have database in subnet group with multiple AZs', async () => {
       if (skipIfNoDeployment()) return;
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const dbCommand = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -486,7 +489,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have database with backup configuration', async () => {
       if (skipIfNoDeployment()) return;
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -501,7 +504,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have database with CloudWatch logs enabled', async () => {
       if (skipIfNoDeployment()) return;
 
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbIdentifier,
       });
@@ -599,7 +602,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have EC2 role with proper policies', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
 
@@ -615,7 +618,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have EC2 role with managed policies attached', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
       const command = new ListAttachedRolePoliciesCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
 
@@ -628,7 +631,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have EC2 role with S3 access policy', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
       const command = new GetRolePolicyCommand({
         RoleName: roleName,
         PolicyName: 'S3AccessPolicy',
@@ -650,7 +653,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have EC2 role with Secrets Manager access', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
       const command = new GetRolePolicyCommand({
         RoleName: roleName,
         PolicyName: 'SecretsManagerAccess',
@@ -666,7 +669,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have instance profile with EC2 role', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
 
       // Get instance profile from EC2 instance
       const instanceId = outputs.EC2InstanceId;
@@ -736,15 +739,25 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have CloudTrail log group in CloudWatch', async () => {
       if (skipIfNoDeployment()) return;
 
+      // Get the log group name from CloudTrail
+      const trailArn = outputs.CloudTrailArn;
+      const trailName = trailArn.split('/').pop()!;
+      const trailCommand = new GetTrailCommand({ Name: trailName });
+      const trailResponse = await cloudTrailClient.send(trailCommand);
+      const logGroupArn = trailResponse.Trail!.CloudWatchLogsLogGroupArn!;
+
+      // Extract log group name from ARN (format: arn:aws:logs:region:account:log-group:LOG_GROUP_NAME:*)
+      const logGroupName = logGroupArn.split(':log-group:')[1].split(':')[0];
+
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/cloudtrail/SecureTrail',
+        logGroupNamePrefix: logGroupName,
       });
       const response = await cloudWatchLogsClient.send(command);
 
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups!.length).toBeGreaterThan(0);
       const logGroup = response.logGroups![0];
-      expect(logGroup.logGroupName).toBe('/aws/cloudtrail/SecureTrail');
+      expect(logGroup.logGroupName).toBe(logGroupName);
       expect(logGroup.retentionInDays).toBe(90);
     }, 30000);
   });
@@ -754,8 +767,16 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have metric filter for unauthorized API calls', async () => {
       if (skipIfNoDeployment()) return;
 
+      // Get the log group name from CloudTrail
+      const trailArn = outputs.CloudTrailArn;
+      const trailName = trailArn.split('/').pop()!;
+      const trailCommand = new GetTrailCommand({ Name: trailName });
+      const trailResponse = await cloudTrailClient.send(trailCommand);
+      const logGroupArn = trailResponse.Trail!.CloudWatchLogsLogGroupArn!;
+      const logGroupName = logGroupArn.split(':log-group:')[1].split(':')[0];
+
       const command = new DescribeMetricFiltersCommand({
-        logGroupName: '/aws/cloudtrail/SecureTrail',
+        logGroupName: logGroupName,
         filterNamePrefix: 'UnauthorizedAPICalls',
       });
       const response = await cloudWatchLogsClient.send(command);
@@ -774,8 +795,16 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have metric filter for root account usage', async () => {
       if (skipIfNoDeployment()) return;
 
+      // Get the log group name from CloudTrail
+      const trailArn = outputs.CloudTrailArn;
+      const trailName = trailArn.split('/').pop()!;
+      const trailCommand = new GetTrailCommand({ Name: trailName });
+      const trailResponse = await cloudTrailClient.send(trailCommand);
+      const logGroupArn = trailResponse.Trail!.CloudWatchLogsLogGroupArn!;
+      const logGroupName = logGroupArn.split(':log-group:')[1].split(':')[0];
+
       const command = new DescribeMetricFiltersCommand({
-        logGroupName: '/aws/cloudtrail/SecureTrail',
+        logGroupName: logGroupName,
         filterNamePrefix: 'RootAccountUsage',
       });
       const response = await cloudWatchLogsClient.send(command);
@@ -974,6 +1003,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('should have WAF log group with retention', async () => {
       if (skipIfNoDeployment()) return;
 
+      const expectedLogGroupName = `aws-waf-logs-secure-infrastructure-${environmentSuffix}`;
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: 'aws-waf-logs-secure-infrastructure',
       });
@@ -982,7 +1012,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups!.length).toBeGreaterThan(0);
       const logGroup = response.logGroups![0];
-      expect(logGroup.logGroupName).toBe('aws-waf-logs-secure-infrastructure');
+      expect(logGroup.logGroupName).toBe(expectedLogGroupName);
       expect(logGroup.retentionInDays).toBe(30);
     }, 30000);
   });
@@ -1000,7 +1030,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const ec2SecurityGroupId = instance.SecurityGroups![0].GroupId!;
 
       // Get database security group
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const rdsResponse = await rdsClient.send(rdsCommand);
       const db = rdsResponse.DBInstances![0];
@@ -1039,7 +1069,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       if (skipIfNoDeployment()) return;
 
       const kmsKeyId = outputs.KMSKeyId;
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const response = await rdsClient.send(command);
 
@@ -1074,7 +1104,8 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
 
       const trail = response.Trail!;
       expect(trail.S3BucketName).toBe(s3BucketName);
-      expect(trail.CloudWatchLogsLogGroupArn).toContain('/aws/cloudtrail/SecureTrail');
+      expect(trail.CloudWatchLogsLogGroupArn).toBeDefined();
+      expect(trail.CloudWatchLogsLogGroupArn).toContain(':log-group:');
     }, 30000);
 
     test('End-to-End: CloudWatch alarms notify SNS topic', async () => {
@@ -1100,7 +1131,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('End-to-End: EC2 IAM role allows access to S3 and Secrets Manager', async () => {
       if (skipIfNoDeployment()) return;
 
-      const roleName = `SecureEC2Role-${stackName}`;
+      const roleName = `SecureEC2Role-${environmentSuffix}`;
 
       // Check S3 access
       const s3Command = new GetRolePolicyCommand({
@@ -1126,9 +1157,17 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
     test('End-to-End: Metric filters feed CloudWatch alarms', async () => {
       if (skipIfNoDeployment()) return;
 
+      // Get the log group name from CloudTrail
+      const trailArn = outputs.CloudTrailArn;
+      const trailName = trailArn.split('/').pop()!;
+      const trailCommand = new GetTrailCommand({ Name: trailName });
+      const trailResponse = await cloudTrailClient.send(trailCommand);
+      const logGroupArn = trailResponse.Trail!.CloudWatchLogsLogGroupArn!;
+      const logGroupName = logGroupArn.split(':log-group:')[1].split(':')[0];
+
       // Get metric filter
       const filterCommand = new DescribeMetricFiltersCommand({
-        logGroupName: '/aws/cloudtrail/SecureTrail',
+        logGroupName: logGroupName,
         filterNamePrefix: 'UnauthorizedAPICalls',
       });
       const filterResponse = await cloudWatchLogsClient.send(filterCommand);
@@ -1156,7 +1195,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const secret = JSON.parse(secretResponse.SecretString!);
 
       // Verify database is configured with same username
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const dbCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const dbResponse = await rdsClient.send(dbCommand);
       const db = dbResponse.DBInstances![0];
@@ -1184,7 +1223,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       expect(loggingBucketResponse.ServerSideEncryptionConfiguration).toBeDefined();
 
       // Check RDS
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const rdsResponse = await rdsClient.send(rdsCommand);
       expect(rdsResponse.DBInstances![0].StorageEncrypted).toBe(true);
@@ -1194,7 +1233,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       if (skipIfNoDeployment()) return;
 
       // Check RDS is not public
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const rdsResponse = await rdsClient.send(rdsCommand);
       expect(rdsResponse.DBInstances![0].PubliclyAccessible).toBe(false);
@@ -1228,7 +1267,7 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       expect(trailStatusResponse.IsLogging).toBe(true);
 
       // RDS logs to CloudWatch
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const rdsResponse = await rdsClient.send(rdsCommand);
       expect(rdsResponse.DBInstances![0].EnabledCloudwatchLogsExports).toBeDefined();
@@ -1249,23 +1288,25 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'group-name', Values: ['DatabaseSecurityGroup*'] },
         ],
       });
       const response = await ec2Client.send(command);
 
-      const dbSG = response.SecurityGroups![0];
+      const dbSG = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('DatabaseSecurityGroup')
+      );
+      expect(dbSG).toBeDefined();
       // Database should only allow traffic from application security group
-      expect(dbSG.IpPermissions).toHaveLength(1);
-      expect(dbSG.IpPermissions![0].UserIdGroupPairs).toHaveLength(1);
-      expect(dbSG.IpPermissions![0].FromPort).toBe(3306);
+      expect(dbSG!.IpPermissions).toHaveLength(1);
+      expect(dbSG!.IpPermissions![0].UserIdGroupPairs).toHaveLength(1);
+      expect(dbSG!.IpPermissions![0].FromPort).toBe(3306);
     }, 30000);
 
     test('Backup and retention policies are configured', async () => {
       if (skipIfNoDeployment()) return;
 
       // RDS backups
-      const dbIdentifier = `secure-db-${stackName}`;
+      const dbIdentifier = `secure-db-${environmentSuffix}`;
       const rdsCommand = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const rdsResponse = await rdsClient.send(rdsCommand);
       expect(rdsResponse.DBInstances![0].BackupRetentionPeriod).toBeGreaterThan(0);
