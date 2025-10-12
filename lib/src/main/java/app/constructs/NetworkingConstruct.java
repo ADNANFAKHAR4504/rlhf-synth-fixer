@@ -1,5 +1,6 @@
 package app.constructs;
 
+import com.hashicorp.cdktf.Fn;
 import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
 import com.hashicorp.cdktf.providers.aws.eip.Eip;
 import com.hashicorp.cdktf.providers.aws.eip.EipConfig;
@@ -54,75 +55,119 @@ public class NetworkingConstruct extends BaseConstruct {
                 .build());
 
         // Create public and private subnets in 2 AZs for high availability
+        // Using Fn.element() to access AZ names from the token list
         this.publicSubnets = new ArrayList<>();
         this.privateSubnets = new ArrayList<>();
 
-        List<String> availableZones = azs.getNames();
-        int subnetCount = Math.min(2, availableZones.size());
+        // AZ 1 - Public Subnet
+        Subnet publicSubnet0 = new Subnet(this, "public-subnet-0", SubnetConfig.builder()
+                .vpcId(vpc.getId())
+                .cidrBlock("10.0.0.0/24")
+                .availabilityZone((String) Fn.element(azs.getNames(), 0))
+                .mapPublicIpOnLaunch(true)
+                .tags(mergeTags(Map.of(
+                        "Name", getResourcePrefix() + "-public-subnet-1",
+                        "Type", "Public"
+                )))
+                .build());
+        publicSubnets.add(publicSubnet0);
 
-        for (int i = 0; i < subnetCount; i++) {
-            String azName = azs.getNames().get(i);
+        // AZ 1 - Private Subnet
+        Subnet privateSubnet0 = new Subnet(this, "private-subnet-0", SubnetConfig.builder()
+                .vpcId(vpc.getId())
+                .cidrBlock("10.0.1.0/24")
+                .availabilityZone((String) Fn.element(azs.getNames(), 0))
+                .tags(mergeTags(Map.of(
+                        "Name", getResourcePrefix() + "-private-subnet-1",
+                        "Type", "Private"
+                )))
+                .build());
+        privateSubnets.add(privateSubnet0);
 
-            // Public subnet
-            Subnet publicSubnet = new Subnet(this, "public-subnet-" + i, SubnetConfig.builder()
-                    .vpcId(vpc.getId())
-                    .cidrBlock("10.0." + (i * 2) + ".0/24")
-                    .availabilityZone(azName)
-                    .mapPublicIpOnLaunch(true)
-                    .tags(mergeTags(Map.of(
-                            "Name", getResourcePrefix() + "-public-subnet-" + (i + 1),
-                            "Type", "Public"
-                    )))
-                    .build());
+        // AZ 2 - Public Subnet
+        Subnet publicSubnet1 = new Subnet(this, "public-subnet-1", SubnetConfig.builder()
+                .vpcId(vpc.getId())
+                .cidrBlock("10.0.2.0/24")
+                .availabilityZone((String) Fn.element(azs.getNames(), 1))
+                .mapPublicIpOnLaunch(true)
+                .tags(mergeTags(Map.of(
+                        "Name", getResourcePrefix() + "-public-subnet-2",
+                        "Type", "Public"
+                )))
+                .build());
+        publicSubnets.add(publicSubnet1);
 
-            publicSubnets.add(publicSubnet);
+        // AZ 2 - Private Subnet
+        Subnet privateSubnet1 = new Subnet(this, "private-subnet-1", SubnetConfig.builder()
+                .vpcId(vpc.getId())
+                .cidrBlock("10.0.3.0/24")
+                .availabilityZone((String) Fn.element(azs.getNames(), 1))
+                .tags(mergeTags(Map.of(
+                        "Name", getResourcePrefix() + "-private-subnet-2",
+                        "Type", "Private"
+                )))
+                .build());
+        privateSubnets.add(privateSubnet1);
 
-            // Private subnet
-            Subnet privateSubnet = new Subnet(this, "private-subnet-" + i, SubnetConfig.builder()
-                    .vpcId(vpc.getId())
-                    .cidrBlock("10.0." + ((i * 2) + 1) + ".0/24")
-                    .availabilityZone(azName)
-                    .tags(mergeTags(Map.of(
-                            "Name", getResourcePrefix() + "-private-subnet-" + (i + 1),
-                            "Type", "Private"
-                    )))
-                    .build());
+        // NAT Gateway for AZ 1
+        Eip natEip0 = new Eip(this, "nat-eip-0", EipConfig.builder()
+                .domain("vpc")
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-eip-1")))
+                .build());
 
-            privateSubnets.add(privateSubnet);
-        }
+        NatGateway natGw0 = new NatGateway(this, "nat-gw-0", NatGatewayConfig.builder()
+                .allocationId(natEip0.getId())
+                .subnetId(publicSubnet0.getId())
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-gw-1")))
+                .build());
 
-        // Create NAT Gateways for private subnets
-        for (int i = 0; i < publicSubnets.size(); i++) {
-            Eip natEip = new Eip(this, "nat-eip-" + i, EipConfig.builder()
-                    .domain("vpc")
-                    .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-eip-" + (i + 1))))
-                    .build());
+        // Route table for AZ 1 private subnet
+        RouteTable privateRt0 = new RouteTable(this, "private-rt-0", RouteTableConfig.builder()
+                .vpcId(vpc.getId())
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-private-rt-1")))
+                .build());
 
-            NatGateway natGw = new NatGateway(this, "nat-gw-" + i, NatGatewayConfig.builder()
-                    .allocationId(natEip.getId())
-                    .subnetId(publicSubnets.get(i).getId())
-                    .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-gw-" + (i + 1))))
-                    .build());
+        new Route(this, "private-route-0", RouteConfig.builder()
+                .routeTableId(privateRt0.getId())
+                .destinationCidrBlock("0.0.0.0/0")
+                .natGatewayId(natGw0.getId())
+                .build());
 
-            // Route table for private subnet
-            RouteTable privateRt = new RouteTable(this, "private-rt-" + i, RouteTableConfig.builder()
-                    .vpcId(vpc.getId())
-                    .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-private-rt-" + (i + 1))))
-                    .build());
+        new RouteTableAssociation(this, "private-rta-0", RouteTableAssociationConfig.builder()
+                .subnetId(privateSubnet0.getId())
+                .routeTableId(privateRt0.getId())
+                .build());
 
-            new Route(this, "private-route-" + i, RouteConfig.builder()
-                    .routeTableId(privateRt.getId())
-                    .destinationCidrBlock("0.0.0.0/0")
-                    .natGatewayId(natGw.getId())
-                    .build());
+        // NAT Gateway for AZ 2
+        Eip natEip1 = new Eip(this, "nat-eip-1", EipConfig.builder()
+                .domain("vpc")
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-eip-2")))
+                .build());
 
-            new RouteTableAssociation(this, "private-rta-" + i, RouteTableAssociationConfig.builder()
-                    .subnetId(privateSubnets.get(i).getId())
-                    .routeTableId(privateRt.getId())
-                    .build());
-        }
+        NatGateway natGw1 = new NatGateway(this, "nat-gw-1", NatGatewayConfig.builder()
+                .allocationId(natEip1.getId())
+                .subnetId(publicSubnet1.getId())
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-nat-gw-2")))
+                .build());
 
-        // Public route table
+        // Route table for AZ 2 private subnet
+        RouteTable privateRt1 = new RouteTable(this, "private-rt-1", RouteTableConfig.builder()
+                .vpcId(vpc.getId())
+                .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-private-rt-2")))
+                .build());
+
+        new Route(this, "private-route-1", RouteConfig.builder()
+                .routeTableId(privateRt1.getId())
+                .destinationCidrBlock("0.0.0.0/0")
+                .natGatewayId(natGw1.getId())
+                .build());
+
+        new RouteTableAssociation(this, "private-rta-1", RouteTableAssociationConfig.builder()
+                .subnetId(privateSubnet1.getId())
+                .routeTableId(privateRt1.getId())
+                .build());
+
+        // Public route table (shared by both AZs)
         RouteTable publicRt = new RouteTable(this, "public-rt", RouteTableConfig.builder()
                 .vpcId(vpc.getId())
                 .tags(mergeTags(Map.of("Name", getResourcePrefix() + "-public-rt")))
@@ -134,12 +179,16 @@ public class NetworkingConstruct extends BaseConstruct {
                 .gatewayId(igw.getId())
                 .build());
 
-        for (int i = 0; i < publicSubnets.size(); i++) {
-            new RouteTableAssociation(this, "public-rta-" + i, RouteTableAssociationConfig.builder()
-                    .subnetId(publicSubnets.get(i).getId())
-                    .routeTableId(publicRt.getId())
-                    .build());
-        }
+        // Associate public subnets with public route table
+        new RouteTableAssociation(this, "public-rta-0", RouteTableAssociationConfig.builder()
+                .subnetId(publicSubnet0.getId())
+                .routeTableId(publicRt.getId())
+                .build());
+
+        new RouteTableAssociation(this, "public-rta-1", RouteTableAssociationConfig.builder()
+                .subnetId(publicSubnet1.getId())
+                .routeTableId(publicRt.getId())
+                .build());
 
         // ECS Security Group
         this.ecsSecurityGroup = new SecurityGroup(this, "ecs-sg", SecurityGroupConfig.builder()
