@@ -238,7 +238,7 @@ func testDataInfrastructure(t *testing.T, ctx context.Context, cfg aws.Config, o
 			KeyId: aws.String(keyID),
 		})
 		assert.NoError(t, err, "Should be able to get key rotation status")
-		assert.True(t, *rotationStatus.KeyRotationEnabled, "Key rotation should be enabled")
+		assert.True(t, rotationStatus.KeyRotationEnabled, "Key rotation should be enabled")
 
 		t.Logf("✓ KMS key has rotation enabled")
 	})
