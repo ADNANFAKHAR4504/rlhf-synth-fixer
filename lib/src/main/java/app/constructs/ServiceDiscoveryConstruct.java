@@ -49,7 +49,7 @@ public class ServiceDiscoveryConstruct extends BaseConstruct {
                             .routingPolicy("MULTIVALUE")
                             .build())
                     .healthCheckCustomConfig(ServiceDiscoveryServiceHealthCheckCustomConfig.builder()
-                            .failureThreshold(3)
+                            .failureThreshold(1)
                             .build())
                     .tags(appConfig.tags())
                     .lifecycle(TerraformResourceLifecycle.builder()
