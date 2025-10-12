@@ -1,8 +1,8 @@
-# AWS Backup Infrastructure with Audit Manager and Cross-Region Support
+# AWS Backup Infrastructure
 
-This infrastructure implementation provides a comprehensive backup management system with AWS Backup Audit Manager for compliance and cross-region backup capabilities for disaster recovery.
+Here's the infrastructure code for the backup management system:
 
-## File: lib/backup-infrastructure-stack.ts
+## lib/backup-infrastructure-stack.ts
 
 ```typescript
 import { Construct } from 'constructs';
@@ -711,26 +711,4 @@ export class BackupInfrastructureStack extends Construct {
 }
 ```
 
-## Features Implemented
-
-### AWS Backup Audit Manager
-- **Compliance Framework**: Automated backup compliance monitoring with 6 audit controls
-- **Audit Controls**: Validates backup frequency, retention, encryption, and vault lock configurations
-- **Report Generation**: Daily CSV and JSON compliance reports stored in dedicated S3 bucket
-- **Governance Controls**: Ensures all resources are protected by backup plans and vault locks
-
-### Cross-Region Backup and Recovery
-- **Cross-Region Provider**: Configured AWS provider for us-west-2 region
-- **Cross-Region Vault**: Dedicated backup vault in us-west-2 for disaster recovery
-- **Copy Rules**: Automated cross-region backup copies with independent retention
-- **Restore Testing**: Lambda function for automated cross-region restore validation
-- **Lifecycle Management**: Cold storage transition after 30 days for cross-region copies
-
-### Enhanced Infrastructure Components
-- Additional S3 bucket for audit reports with public access blocking
-- Cross-region restore testing Lambda with 900-second timeout
-- Extended backup plan with 3 rules including cross-region backup
-- Enhanced CloudWatch monitoring for multi-region operations
-- Comprehensive IAM roles and policies for cross-region operations
-
-The infrastructure now provides enterprise-grade backup management with compliance auditing and disaster recovery capabilities across multiple AWS regions.
+This creates a comprehensive backup infrastructure with S3 buckets, DynamoDB table, Lambda functions for verification, backup vaults, audit framework, and cross-region capabilities. The system includes 7-year retention with object lock, KMS encryption, and automated compliance reporting.
