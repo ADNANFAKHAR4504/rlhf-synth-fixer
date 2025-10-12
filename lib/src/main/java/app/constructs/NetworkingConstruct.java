@@ -1,6 +1,7 @@
 package app.constructs;
 
 import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
+import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesConfig;
 import com.hashicorp.cdktf.providers.aws.eip.Eip;
 import com.hashicorp.cdktf.providers.aws.eip.EipConfig;
 import com.hashicorp.cdktf.providers.aws.internet_gateway.InternetGateway;
@@ -36,8 +37,14 @@ public class NetworkingConstruct extends BaseConstruct {
 
     private final SecurityGroup ecsSecurityGroup;
 
-    public NetworkingConstruct(final Construct scope, final String id, final DataAwsAvailabilityZones azs) {
+    public NetworkingConstruct(final Construct scope, final String id) {
         super(scope, id);
+
+        // Get available AZs
+        DataAwsAvailabilityZones azs = new DataAwsAvailabilityZones(this, "azs",
+                DataAwsAvailabilityZonesConfig.builder()
+                        .state("available")
+                        .build());
 
         // Create VPC
         this.vpc = new Vpc(this, "vpc", VpcConfig.builder()
