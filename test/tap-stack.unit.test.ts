@@ -930,7 +930,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const bucket = template.Resources.S3Bucket;
         expect(bucket.Type).toBe('AWS::S3::Bucket');
         expect(bucket.Properties.BucketName).toEqual({
-          'Fn::Sub': '${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-data',
+          'Fn::Sub': '${EnvironmentSuffix}-${AWS::AccountId}-data',
         });
       });
 

@@ -678,7 +678,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}-data"
+          "Fn::Sub": "${EnvironmentSuffix}-${AWS::AccountId}-data"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
