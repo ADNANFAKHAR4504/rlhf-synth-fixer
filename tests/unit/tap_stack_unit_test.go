@@ -13,7 +13,7 @@ import (
 func TestTapStack(t *testing.T) {
 	defer jsii.Close()
 
-	t.Run("creates an S3 bucket with the correct environment suffix", func(t *testing.T) {
+	t.Run("creates complete AI/ML pipeline infrastructure", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		envSuffix := "testenv"
@@ -21,17 +21,39 @@ func TestTapStack(t *testing.T) {
 			StackProps:        &awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String(envSuffix),
 		})
-		_ = assertions.Template_FromStack(stack.Stack, nil)
+
+		template := assertions.Template_FromStack(stack.Stack, nil)
 
 		// ASSERT
-		// Note: Uncomment these assertions when S3 bucket is actually created
-		// template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
-		// template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-		//     "BucketName": "tap-bucket-" + envSuffix,
-		// })
+		// Verify the correct number of resources were created
+		template.ResourceCountIs(jsii.String("AWS::KMS::Key"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(4)) // Raw, Processed, Training, Model
+		template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::Kinesis::Stream"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::Lambda::Function"), jsii.Number(3)) // Prep, Eval, Inference
+		template.ResourceCountIs(jsii.String("AWS::StepFunctions::StateMachine"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::ApiGateway::RestApi"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::CloudWatch::Dashboard"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))
+		template.ResourceCountIs(jsii.String("AWS::Events::Rule"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::IAM::Role"), jsii.Number(7)) // SageMaker + Lambda roles + other roles
 
-		// For now, just verify stack was created successfully
-		assert.NotNil(t, stack)
+		// Verify resource naming
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketName": "raw-images-" + envSuffix,
+		})
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketName": "processed-images-" + envSuffix,
+		})
+		template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
+			"TableName": "image-metadata-" + envSuffix,
+		})
+		template.HasResourceProperties(jsii.String("AWS::ApiGateway::RestApi"), map[string]interface{}{
+			"Name": "ml-inference-api-" + envSuffix,
+		})
+
+		// Verify environment suffix is stored correctly
 		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
 	})
 
@@ -41,23 +63,34 @@ func TestTapStack(t *testing.T) {
 		stack := lib.NewTapStack(app, jsii.String("TapStackTestDefault"), &lib.TapStackProps{
 			StackProps: &awscdk.StackProps{},
 		})
-		_ = assertions.Template_FromStack(stack.Stack, nil)
 
 		// ASSERT
-		// Note: Uncomment these assertions when S3 bucket is actually created
-		// template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
-		// template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-		//     "BucketName": "tap-bucket-dev",
-		// })
-
-		// For now, just verify stack was created successfully with default suffix
-		assert.NotNil(t, stack)
 		assert.Equal(t, "dev", *stack.EnvironmentSuffix)
+
+		template := assertions.Template_FromStack(stack.Stack, nil)
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketName": "raw-images-dev",
+		})
 	})
 
-	t.Run("Write Unit Tests", func(t *testing.T) {
-		// ARRANGE & ASSERT
-		t.Skip("Unit test for TapStack should be implemented here.")
+	t.Run("sets environment suffix from CDK context if available", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(&awscdk.AppProps{
+			Context: map[string]interface{}{
+				"environmentSuffix": "contextenv",
+			},
+		})
+		stack := lib.NewTapStack(app, jsii.String("TapStackTestContext"), &lib.TapStackProps{
+			StackProps: &awscdk.StackProps{},
+		})
+
+		// ASSERT
+		assert.Equal(t, "contextenv", *stack.EnvironmentSuffix)
+
+		template := assertions.Template_FromStack(stack.Stack, nil)
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketName": "raw-images-contextenv",
+		})
 	})
 }
 
