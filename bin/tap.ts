@@ -7,8 +7,7 @@ const app = new App();
 // Get environment variables from the environment or use defaults
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion = process.env.AWS_REGION || 'us-east-1'; // Force us-east-1 for consistency
-const awsRegion = process.env.AWS_REGION || 'us-east-1'; // Force us-east-1 for consistency
+// Region will be read from lib/AWS_REGION file
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
@@ -29,8 +28,6 @@ const defaultTags = {
 new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
-  awsRegion: awsRegion,
   defaultTags: defaultTags,
 });
 
