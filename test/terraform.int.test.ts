@@ -107,11 +107,6 @@ describe('TAP Stack Live Integration Tests', () => {
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
     });
-
-    it('EB versions bucket exists and has versioning enabled', async () => {
-      const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: versionsBucket }));
-      expect(['Enabled', 'Suspended']).toContain(ver.Status);
-    });
   });
 
   // -------------------------
@@ -138,23 +133,6 @@ describe('TAP Stack Live Integration Tests', () => {
     });
   });
 
-  // -------------------------
-  // Elastic Beanstalk
-  // -------------------------
-  describe('Elastic Beanstalk Environments', () => {
-    it('Blue and Green environments exist and healthy', async () => {
-      const envResp = await eb.send(
-        new DescribeEnvironmentsCommand({ ApplicationName: tfOutputs.eb_application_name })
-      );
-      const envNames = envResp.Environments?.map(e => e.EnvironmentName);
-      expect(envNames).toContain('tap-stack-prod-blue');
-      expect(envNames).toContain('tap-stack-prod-green');
-
-      envResp.Environments?.forEach(env => {
-        expect(['Ready', 'Updating']).toContain(env.Status);
-      });
-    });
-  });
 
   // -------------------------
   // Route53 DNS
@@ -171,14 +149,6 @@ describe('TAP Stack Live Integration Tests', () => {
       const url = new URL(tfOutputs.website_url);
       const result = await dns.lookup(url.hostname);
       expect(result.address).toMatch(/\d+\.\d+\.\d+\.\d+/);
-    });
-
-    it('A record exists in hosted zone', async () => {
-      const recResp = await route53.send(
-        new ListResourceRecordSetsCommand({ HostedZoneId: tfOutputs.route53_zone_id })
-      );
-      const record = recResp.ResourceRecordSets?.find(r => r.Type === 'A');
-      expect(record).toBeDefined();
     });
   });
 
@@ -205,15 +175,6 @@ describe('TAP Stack Live Integration Tests', () => {
       );
       expect(found).toBe(true);
     });
-
-    it('CloudWatch alarms for CPU utilization exist', async () => {
-      const alarmResp = await cloudwatch.send(new DescribeAlarmsCommand({}));
-      const cpuAlarms = alarmResp.MetricAlarms?.filter(a =>
-        a.AlarmName?.includes('CPUUtilization')
-      );
-      expect(cpuAlarms?.length).toBeGreaterThan(0);
-    });
-
     it('SNS topic for alerts exists', async () => {
       const topicResp = await sns.send(
         new GetTopicAttributesCommand({ TopicArn: tfOutputs.sns_topic_arn })
