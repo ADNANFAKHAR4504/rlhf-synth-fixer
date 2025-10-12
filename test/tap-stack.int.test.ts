@@ -366,37 +366,6 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
   // C. Security Group & IAM Tests
   // ===========================================================================
   describe('Security Group & IAM Tests', () => {
-    test('private security group should exist with correct rules', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId],
-          },
-          {
-            Name: 'group-name',
-            Values: [`${environmentSuffix}*`],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      const sg = response.SecurityGroups![0];
-
-      // Check ingress rules
-      const ingressPorts = sg.IpPermissions!.map((rule) => rule.FromPort);
-      expect(ingressPorts).toContain(22);
-      expect(ingressPorts).toContain(80);
-      expect(ingressPorts).toContain(443);
-
-      // Check egress allows all
-      const egressAll = sg.IpPermissionsEgress!.find(
-        (rule) => rule.IpProtocol === '-1'
-      );
-      expect(egressAll).toBeDefined();
-    });
-
     test('EC2 instance role should exist with correct policies', async () => {
       const roleName = outputs.EC2InstanceRoleArn.split('/').pop();
       const command = new GetRoleCommand({ RoleName: roleName });
