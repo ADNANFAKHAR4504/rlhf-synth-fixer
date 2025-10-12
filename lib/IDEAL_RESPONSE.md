@@ -14,7 +14,7 @@
         },
         {
           "Label": {"default": "Instance Configuration"},
-          "Parameters": ["InstanceType", "SSHLocation"]
+          "Parameters": ["InstanceType"]
         },
         {
           "Label": {"default": "Notification Configuration"},
@@ -57,15 +57,6 @@
       "AllowedValues": ["t3.micro", "t3.small", "t3.medium", "t3.large"],
       "Description": "EC2 instance type"
     },
-    "SSHLocation": {
-      "Type": "String",
-      "MinLength": "9",
-      "MaxLength": "18",
-      "Default": "0.0.0.0/0",
-      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
-      "Description": "IP CIDR range allowed to SSH to instances",
-      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x"
-    },
     "EmailAddress": {
       "Type": "String",
       "Default": "default@email.com",
@@ -86,9 +77,9 @@
     },
     "EnvironmentSuffix": {
       "Type": "String",
-      "Default": "",
-      "Description": "Optional suffix for environment naming (e.g., -v2, -blue)",
-      "AllowedPattern": "^$|^-[a-zA-Z0-9-]*$"
+      "Default": "dev",
+      "Description": "Environment name for tagging",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$"
     }
   },
 
@@ -98,7 +89,8 @@
       "us-east-2": {"AmiId": "ami-0f393ad09b0767896"},
       "us-west-1": {"AmiId": "ami-0b967c22fe917319b"},
       "us-west-2": {"AmiId": "ami-0caa91d6b7bee0ed0"},
-      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"}
+      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"},
+      "ap-southeast-1": {"AmiId": "ami-0a92b8b70f323d169"}
     }
   },
 
@@ -110,7 +102,7 @@
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-VPC"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-VPC"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -120,7 +112,7 @@
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-IGW"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-IGW"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -142,7 +134,7 @@
         "AvailabilityZone": {"Fn::Select": ["0", {"Fn::GetAZs": ""}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PublicSubnet1"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet1"}},
           {"Key": "Type", "Value": "Public"},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
@@ -157,7 +149,7 @@
         "AvailabilityZone": {"Fn::Select": ["1", {"Fn::GetAZs": ""}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PublicSubnet2"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet2"}},
           {"Key": "Type", "Value": "Public"},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
@@ -171,7 +163,7 @@
         "CidrBlock": {"Ref": "PrivateSubnet1Cidr"},
         "AvailabilityZone": {"Fn::Select": ["0", {"Fn::GetAZs": ""}]},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet1"}},
           {"Key": "Type", "Value": "Private"},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
@@ -185,7 +177,7 @@
         "CidrBlock": {"Ref": "PrivateSubnet2Cidr"},
         "AvailabilityZone": {"Fn::Select": ["1", {"Fn::GetAZs": ""}]},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet2"}},
           {"Key": "Type", "Value": "Private"},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
@@ -214,7 +206,7 @@
         "AllocationId": {"Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]},
         "SubnetId": {"Ref": "PublicSubnet1"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-NATGateway1"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-NATGateway1"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -226,7 +218,7 @@
         "AllocationId": {"Fn::GetAtt": ["NATGateway2EIP", "AllocationId"]},
         "SubnetId": {"Ref": "PublicSubnet2"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-NATGateway2"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-NATGateway2"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -237,7 +229,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PublicRouteTable"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PublicRouteTable"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -274,7 +266,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateRouteTable1"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateRouteTable1"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -302,7 +294,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateRouteTable2"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateRouteTable2"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -357,7 +349,7 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateSecurityGroup"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSecurityGroup"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -424,7 +416,7 @@
           }
         ],
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-EC2InstanceRole"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-EC2InstanceRole"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -440,7 +432,7 @@
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {"Fn::Sub": "${AWS::StackName}-LaunchTemplate"},
+        "LaunchTemplateName": {"Fn::Sub": "${EnvironmentSuffix}-LaunchTemplate"},
         "LaunchTemplateData": {
           "ImageId": {
             "Fn::FindInMap": ["RegionAMIMap", {"Ref": "AWS::Region"}, "AmiId"]
@@ -469,22 +461,20 @@
             "HttpPutResponseHopLimit": 1
           },
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Instance launched successfully' > /var/log/startup.log"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Instance launched successfully' > /var/log/startup.log"
           },
           "TagSpecifications": [
             {
               "ResourceType": "instance",
               "Tags": [
-                {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-Instance"}},
+                {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-Instance"}},
                 {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
               ]
             },
             {
               "ResourceType": "volume",
               "Tags": [
-                {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-Volume"}},
+                {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-Volume"}},
                 {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
               ]
             }
@@ -502,7 +492,7 @@
         },
         "SubnetId": {"Ref": "PrivateSubnet1"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateInstance1"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance1"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -517,7 +507,7 @@
         },
         "SubnetId": {"Ref": "PrivateSubnet2"},
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-PrivateInstance2"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance2"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -526,7 +516,7 @@
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "${AWS::StackName}-Notifications"},
+        "TopicName": {"Fn::Sub": "${EnvironmentSuffix}-Notifications"},
         "DisplayName": "Stack Event Notifications",
         "Subscription": [
           {
@@ -536,7 +526,7 @@
         ],
         "KmsMasterKeyId": "alias/aws/sns",
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-SNSTopic"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-SNSTopic"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -568,7 +558,7 @@
     "CPUAlarmInstance1": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-Instance1-CPUAlarm"},
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance1-CPUAlarm"},
         "AlarmDescription": "Alarm when CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/EC2",
@@ -591,7 +581,7 @@
     "CPUAlarmInstance2": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-Instance2-CPUAlarm"},
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance2-CPUAlarm"},
         "AlarmDescription": "Alarm when CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/EC2",
@@ -614,7 +604,7 @@
     "StatusCheckAlarmInstance1": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-Instance1-StatusCheckAlarm"},
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance1-StatusCheckAlarm"},
         "AlarmDescription": "Alarm when instance status check fails",
         "MetricName": "StatusCheckFailed",
         "Namespace": "AWS/EC2",
@@ -637,7 +627,7 @@
     "StatusCheckAlarmInstance2": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-Instance2-StatusCheckAlarm"},
+        "AlarmName": {"Fn::Sub": "${EnvironmentSuffix}-Instance2-StatusCheckAlarm"},
         "AlarmDescription": "Alarm when instance status check fails",
         "MetricName": "StatusCheckFailed",
         "Namespace": "AWS/EC2",
@@ -660,7 +650,7 @@
     "StackEventRule": {
       "Type": "AWS::Events::Rule",
       "Properties": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-StackEventRule"},
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-StackEventRule"},
         "Description": "Capture all CloudFormation stack events",
         "EventPattern": {
           "source": ["aws.cloudformation"],
@@ -682,7 +672,7 @@
     "LogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/ec2/${AWS::StackName}"},
+        "LogGroupName": {"Fn::Sub": "/aws/ec2/${EnvironmentSuffix}"},
         "RetentionInDays": 30
       }
     },
@@ -691,7 +681,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-data"
+          "Fn::Sub": "${EnvironmentSuffix}-${AWS::AccountId}-data"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -712,7 +702,7 @@
           "RestrictPublicBuckets": true
         },
         "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "${AWS::StackName}-S3Bucket"}},
+          {"Key": "Name", "Value": {"Fn::Sub": "${EnvironmentSuffix}-S3Bucket"}},
           {"Key": "Environment", "Value": {"Ref": "EnvironmentTag"}}
         ]
       }
@@ -747,74 +737,82 @@
   },
 
   "Outputs": {
+    "StackName": {
+      "Description": "CloudFormation Stack Name",
+      "Value": {"Ref": "AWS::StackName"}
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment Suffix used for resource naming",
+      "Value": {"Ref": "EnvironmentSuffix"}
+    },
     "VPCId": {
       "Description": "VPC ID",
       "Value": {"Ref": "VPC"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPC-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-VPC-ID"}
       }
     },
     "PublicSubnet1Id": {
       "Description": "Public Subnet 1 ID",
       "Value": {"Ref": "PublicSubnet1"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet1-ID"}
       }
     },
     "PublicSubnet2Id": {
       "Description": "Public Subnet 2 ID",
       "Value": {"Ref": "PublicSubnet2"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PublicSubnet2-ID"}
       }
     },
     "PrivateSubnet1Id": {
       "Description": "Private Subnet 1 ID",
       "Value": {"Ref": "PrivateSubnet1"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet1-ID"}
       }
     },
     "PrivateSubnet2Id": {
       "Description": "Private Subnet 2 ID",
       "Value": {"Ref": "PrivateSubnet2"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateSubnet2-ID"}
       }
     },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for notifications",
       "Value": {"Ref": "SNSTopic"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SNSTopic-ARN"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-SNSTopic-ARN"}
       }
     },
     "S3BucketName": {
       "Description": "S3 Bucket Name",
       "Value": {"Ref": "S3Bucket"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-S3Bucket-Name"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-S3Bucket-Name"}
       }
     },
     "PrivateInstance1Id": {
       "Description": "Private Instance 1 ID",
       "Value": {"Ref": "PrivateInstance1"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateInstance1-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance1-ID"}
       }
     },
     "PrivateInstance2Id": {
       "Description": "Private Instance 2 ID",
       "Value": {"Ref": "PrivateInstance2"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateInstance2-ID"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-PrivateInstance2-ID"}
       }
     },
     "EC2InstanceRoleArn": {
       "Description": "EC2 Instance Role ARN",
       "Value": {"Fn::GetAtt": ["EC2InstanceRole", "Arn"]},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-EC2InstanceRole-ARN"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-EC2InstanceRole-ARN"}
       }
     }
   }
