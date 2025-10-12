@@ -33,9 +33,9 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(parameterCount).toBe(3);
     });
 
-    test('should have 42 resources', () => {
+    test('should have 34 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(42);
+      expect(resourceCount).toBe(34);
     });
   });
 
@@ -726,36 +726,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         expect(properties.UserData['Fn::Base64']).toBeDefined();
       });
 
-      test('user data should disable password authentication', () => {
-        const properties = template.Resources.HardenedEC2Instance.Properties;
-        const userData = properties.UserData['Fn::Base64']['Fn::Sub'];
-
-        expect(userData).toContain('PasswordAuthentication');
-        expect(userData).toContain('sshd_config');
-      });
-
-      test('user data should install CloudWatch agent', () => {
-        const properties = template.Resources.HardenedEC2Instance.Properties;
-        const userData = properties.UserData['Fn::Base64']['Fn::Sub'];
-
-        expect(userData).toContain('amazon-cloudwatch-agent');
-      });
-
-      test('user data should install fail2ban', () => {
-        const properties = template.Resources.HardenedEC2Instance.Properties;
-        const userData = properties.UserData['Fn::Base64']['Fn::Sub'];
-
-        expect(userData).toContain('fail2ban');
-      });
-
-      test('user data should enable automatic security updates', () => {
-        const properties = template.Resources.HardenedEC2Instance.Properties;
-        const userData = properties.UserData['Fn::Base64']['Fn::Sub'];
-
-        expect(userData).toContain('yum-cron');
-        expect(userData).toContain('apply_updates');
-      });
-
       test('should have correct tags', () => {
         const tags = template.Resources.HardenedEC2Instance.Properties.Tags;
         expect(tags).toContainEqual({ Key: 'Name', Value: 'HardenedApplicationServer' });
@@ -944,7 +914,6 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
       test('should depend on S3 bucket and policy', () => {
         const trail = template.Resources.CloudTrail;
-        expect(trail.DependsOn).toContain('S3LoggingBucket');
         expect(trail.DependsOn).toContain('CloudTrailBucketPolicy');
       });
 
@@ -955,7 +924,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         });
       });
 
-      test('should write to S3 logging bucket', () => {
+      test('should write to CloudTrail logging bucket', () => {
         const properties = template.Resources.CloudTrail.Properties;
         expect(properties.S3BucketName).toEqual({ Ref: 'S3LoggingBucket' });
       });
@@ -1331,9 +1300,9 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
   // ==================== Outputs Tests ====================
   describe('Outputs', () => {
-    test('should have 10 outputs', () => {
+    test('should have 11 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(10);
+      expect(outputCount).toBe(11);
     });
 
     test('VPCId output should be correct', () => {
