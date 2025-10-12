@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "410125",
+  "team": "4",
+  "startedAt": "2025-10-12T04:51:10.147Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "Sagemaker, Lambda, API Gateway,Step functions, DynamoDB, WAF, CloudWatch, X-Ray, SNS, S3, KMS, IAM"
+}
