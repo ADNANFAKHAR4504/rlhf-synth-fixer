@@ -241,9 +241,8 @@ public class MainIntegrationTest {
         assertEquals(EncryptionType.KMS, streamDesc.encryptionType(),
                 "Kinesis stream should use KMS encryption");
 
-        // Verify shard count
-        String shardCount = outputs.get("kinesis-shard-count");
-        assertEquals(10, Integer.parseInt(shardCount),
+        // Verify shard count from actual stream
+        assertEquals(10, streamDesc.shards().size(),
                 "Kinesis should have 10 shards as configured");
 
         System.out.println("✓ Kinesis stream is properly configured");
@@ -529,13 +528,11 @@ public class MainIntegrationTest {
 
         // Verify container insights
         Optional<ClusterSetting> containerInsights = cluster.settings().stream()
-                .filter(setting -> {
-                    setting.name();
-                    return false;
-                })
+                .filter(setting -> "containerInsights".equals(setting.name().toString()))
                 .findFirst();
 
-        fail();
+        assertTrue(containerInsights.isPresent(),
+                "Container Insights setting should be present");
         assertEquals("enabled", containerInsights.get().value(),
                 "Container Insights should be enabled");
 
@@ -971,18 +968,18 @@ public class MainIntegrationTest {
     @Order(22)
     @DisplayName("Performance test: Verify Kinesis throughput capacity")
     void testKinesisThroughputCapacity() {
-        skipIfOutputMissing("kinesis-stream-name", "kinesis-shard-count");
+        skipIfOutputMissing("kinesis-stream-name");
 
         String streamName = outputs.get("kinesis-stream-name");
-        int shardCount = Integer.parseInt(outputs.get("kinesis-shard-count"));
 
         DescribeStreamResponse describeResponse = kinesisClient.describeStream(
                 DescribeStreamRequest.builder().streamName(streamName).build()
         );
 
         List<Shard> shards = describeResponse.streamDescription().shards();
-        assertEquals(shardCount, shards.size(),
-                "Stream should have configured number of shards");
+        int shardCount = shards.size();
+        assertEquals(10, shardCount,
+                "Stream should have 10 shards as configured");
 
         // Calculate theoretical throughput
         // Each shard: 1MB/s ingress, 2MB/s egress, 1000 records/s
