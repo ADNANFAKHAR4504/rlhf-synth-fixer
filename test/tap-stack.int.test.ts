@@ -6,19 +6,19 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 });
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-} from '@aws-sdk/client-ec2';
-import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
-import { DescribeLaunchTemplatesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeLaunchTemplatesCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 

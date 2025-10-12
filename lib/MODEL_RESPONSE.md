@@ -1,4 +1,4 @@
-```typescript
+````typescript
 
  I'll create a production-ready CDKTF project in TypeScript for a multi-availability zone AWS environment. Here's the complete implementation:
 
@@ -154,7 +154,7 @@ export class VpcModule extends Construct {
     const [baseIp, prefixLength] = vpcCidr.split('/');
     const baseOctets = baseIp.split('.').map(Number);
     const newPrefixLength = parseInt(prefixLength) + 8; // /16 -> /24
-    
+
     baseOctets[2] = subnetIndex;
     return `${baseOctets.join('.')}/24`;
   }
@@ -173,7 +173,7 @@ export class SecurityGroupModule extends Construct {
       name: `${config.environment}-web-sg`,
       description: "Security group for web tier",
       vpcId: vpcId,
-      
+
       ingress: [
         {
           fromPort: 80,
@@ -211,7 +211,7 @@ export class SecurityGroupModule extends Construct {
       name: `${config.environment}-app-sg`,
       description: "Security group for application tier",
       vpcId: vpcId,
-      
+
       ingress: [
         {
           fromPort: 8080,
@@ -249,7 +249,7 @@ export class SecurityGroupModule extends Construct {
       name: `${config.environment}-db-sg`,
       description: "Security group for database tier",
       vpcId: vpcId,
-      
+
       ingress: [
         {
           fromPort: 3306,
@@ -324,14 +324,14 @@ echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/pl
     this.launchTemplate = new LaunchTemplate(this, "launch-template", {
       name: `${config.environment}-launch-template`,
       description: `Launch template for ${config.environment} environment`,
-      
+
       imageId: amiData.id,
       instanceType: config.instanceType,
-      
+
       vpcSecurityGroupIds: securityGroupIds,
-      
+
       userData: userData,
-      
+
       blockDeviceMapping: [
         {
           deviceName: "/dev/xvda",
@@ -393,23 +393,23 @@ export class AutoScalingGroupModule extends Construct {
     super(scope, id);
     this.autoScalingGroup = new AutoscalingGroup(this, "asg", {
       name: `${config.environment}-asg`,
-      
+
       minSize: config.minSize,
       maxSize: config.maxSize,
       desiredCapacity: config.desiredCapacity,
-      
+
       vpcZoneIdentifier: subnetIds,
-      
+
       launchTemplate: {
         id: launchTemplateId,
         version: "$Latest",
       },
       healthCheckType: "ELB",
       healthCheckGracePeriod: 300,
-      
+
       // Ensure instances are distributed across AZs
       availabilityZones: undefined, // Use vpc_zone_identifier instead
-      
+
       // Enable instance refresh for zero-downtime deployments
       instanceRefresh: {
         strategy: "Rolling",
@@ -451,7 +451,7 @@ export class S3Module extends Construct {
     // Create S3 bucket
     this.bucket = new S3Bucket(this, "bucket", {
       bucket: `${config.environment}-tap-bucket-${Date.now()}`, // Ensure unique name
-      
+
       tags: {
         Name: `${config.environment}-tap-bucket`,
         Environment: config.environment,
@@ -496,14 +496,14 @@ export class S3Module extends Construct {
     );
   }
 }
-```
+````
 
 ## lib/tap-stack.ts
 
 ```typescript
-import { Construct } from "constructs";
-import { TerraformStack } from "cdktf";
-import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
+import { Construct } from 'constructs';
+import { TerraformStack } from 'cdktf';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import {
   VpcModule,
   SecurityGroupModule,
@@ -511,10 +511,10 @@ import {
   AutoScalingGroupModule,
   S3Module,
   EnvironmentConfig,
-} from "./modules";
+} from './modules';
 /**
  * Main TAP Stack - Orchestrates all infrastructure components
- * 
+ *
  * This stack creates a complete multi-AZ AWS environment including:
  * - VPC with public/private subnets across multiple AZs
  * - Security groups with proper tier separation
@@ -526,39 +526,43 @@ export class TapStack extends TerraformStack {
     super(scope, id);
     // Environment configuration - easily switch between dev/qa/prod
     const config: EnvironmentConfig = {
-      environment: process.env.ENVIRONMENT as 'dev' | 'qa' | 'prod' || 'dev',
+      environment: (process.env.ENVIRONMENT as 'dev' | 'qa' | 'prod') || 'dev',
       region: 'eu-central-1',
       vpcCidr: '10.0.0.0/16',
-      instanceType: this.getInstanceTypeForEnvironment(process.env.ENVIRONMENT || 'dev'),
+      instanceType: this.getInstanceTypeForEnvironment(
+        process.env.ENVIRONMENT || 'dev'
+      ),
       minSize: this.getMinSizeForEnvironment(process.env.ENVIRONMENT || 'dev'),
       maxSize: this.getMaxSizeForEnvironment(process.env.ENVIRONMENT || 'dev'),
-      desiredCapacity: this.getDesiredCapacityForEnvironment(process.env.ENVIRONMENT || 'dev'),
+      desiredCapacity: this.getDesiredCapacityForEnvironment(
+        process.env.ENVIRONMENT || 'dev'
+      ),
     };
     // Configure AWS Provider
-    new AwsProvider(this, "aws", {
+    new AwsProvider(this, 'aws', {
       region: config.region,
       defaultTags: {
         tags: {
-          Project: "TAP",
+          Project: 'TAP',
           Environment: config.environment,
-          ManagedBy: "CDKTF",
+          ManagedBy: 'CDKTF',
           Region: config.region,
         },
       },
     });
     // Create VPC with multi-AZ subnets
-    const vpcModule = new VpcModule(this, "vpc", config);
+    const vpcModule = new VpcModule(this, 'vpc', config);
     // Create Security Groups
     const securityGroupModule = new SecurityGroupModule(
       this,
-      "security-groups",
+      'security-groups',
       vpcModule.vpc.id,
       config
     );
     // Create Launch Template
     const launchTemplateModule = new LaunchTemplateModule(
       this,
-      "launch-template",
+      'launch-template',
       [securityGroupModule.appSecurityGroup.id],
       config
     );
@@ -566,53 +570,53 @@ export class TapStack extends TerraformStack {
     // In production, you might want to use private subnets with a load balancer
     const autoScalingGroupModule = new AutoScalingGroupModule(
       this,
-      "auto-scaling-group",
+      'auto-scaling-group',
       launchTemplateModule.launchTemplate.id,
       vpcModule.publicSubnets.map(subnet => subnet.id),
       config
     );
     // Create S3 bucket for application storage
-    const s3Module = new S3Module(this, "s3", config);
+    const s3Module = new S3Module(this, 's3', config);
     // Output important resource information
-    this.addOutput("vpc-id", {
+    this.addOutput('vpc-id', {
       value: vpcModule.vpc.id,
-      description: "VPC ID",
+      description: 'VPC ID',
     });
-    this.addOutput("public-subnet-ids", {
+    this.addOutput('public-subnet-ids', {
       value: vpcModule.publicSubnets.map(subnet => subnet.id),
-      description: "Public Subnet IDs",
+      description: 'Public Subnet IDs',
     });
-    this.addOutput("private-subnet-ids", {
+    this.addOutput('private-subnet-ids', {
       value: vpcModule.privateSubnets.map(subnet => subnet.id),
-      description: "Private Subnet IDs",
+      description: 'Private Subnet IDs',
     });
-    this.addOutput("availability-zones", {
+    this.addOutput('availability-zones', {
       value: vpcModule.availabilityZones,
-      description: "Availability Zones used",
+      description: 'Availability Zones used',
     });
-    this.addOutput("web-security-group-id", {
+    this.addOutput('web-security-group-id', {
       value: securityGroupModule.webSecurityGroup.id,
-      description: "Web Security Group ID",
+      description: 'Web Security Group ID',
     });
-    this.addOutput("app-security-group-id", {
+    this.addOutput('app-security-group-id', {
       value: securityGroupModule.appSecurityGroup.id,
-      description: "Application Security Group ID",
+      description: 'Application Security Group ID',
     });
-    this.addOutput("launch-template-id", {
+    this.addOutput('launch-template-id', {
       value: launchTemplateModule.launchTemplate.id,
-      description: "Launch Template ID",
+      description: 'Launch Template ID',
     });
-    this.addOutput("auto-scaling-group-name", {
+    this.addOutput('auto-scaling-group-name', {
       value: autoScalingGroupModule.autoScalingGroup.name,
-      description: "Auto Scaling Group Name",
+      description: 'Auto Scaling Group Name',
     });
-    this.addOutput("s3-bucket-name", {
+    this.addOutput('s3-bucket-name', {
       value: s3Module.bucket.bucket,
-      description: "S3 Bucket Name",
+      description: 'S3 Bucket Name',
     });
-    this.addOutput("environment", {
+    this.addOutput('environment', {
       value: config.environment,
-      description: "Deployment Environment",
+      description: 'Deployment Environment',
     });
   }
   /**
@@ -677,7 +681,9 @@ export class TapStack extends TerraformStack {
   private addOutput(name: string, config: { value: any; description: string }) {
     // Note: In CDKTF, outputs are handled differently
     // This is a placeholder for the actual output implementation
-    console.log(`Output ${name}: ${JSON.stringify(config.value)} - ${config.description}`);
+    console.log(
+      `Output ${name}: ${JSON.stringify(config.value)} - ${config.description}`
+    );
   }
 }
 ```
@@ -687,6 +693,7 @@ export class TapStack extends TerraformStack {
 You'll also need these configuration files:
 
 ### package.json
+
 ```json
 {
   "name": "tap-infrastructure",
@@ -716,11 +723,12 @@ You'll also need these configuration files:
 ```
 
 ### main.ts
+
 ```typescript
-import { App } from "cdktf";
-import { TapStack } from "./lib/tap-stack";
+import { App } from 'cdktf';
+import { TapStack } from './lib/tap-stack';
 const app = new App();
-new TapStack(app, "tap-infrastructure");
+new TapStack(app, 'tap-infrastructure');
 app.synth();
 ```
 
@@ -729,7 +737,7 @@ app.synth();
 1. **Multi-AZ Deployment**: VPC spans across 2 availability zones in eu-central-1
 2. **Modular Design**: Reusable modules for each AWS service
 3. **Environment-Aware**: Easy switching between dev/qa/prod environments
-4. **Security Best Practices**: 
+4. **Security Best Practices**:
    - Security groups with least privilege access
    - Encrypted EBS volumes and S3 buckets
    - IMDSv2 enforcement
