@@ -26,7 +26,7 @@
     "DefaultVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": "172.31.0.0/16",
+        "CidrBlock": "10.0.0.0/16",
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
@@ -41,7 +41,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {"Ref": "DefaultVPC"},
-        "CidrBlock": "172.31.0.0/20",
+        "CidrBlock": "10.0.0.0/20",
         "AvailabilityZone": {
           "Fn::Select": [0, {"Fn::GetAZs": ""}]
         },
@@ -58,7 +58,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {"Ref": "DefaultVPC"},
-        "CidrBlock": "172.31.16.0/20",
+        "CidrBlock": "10.0.16.0/20",
         "AvailabilityZone": {
           "Fn::Select": [1, {"Fn::GetAZs": ""}]
         },
@@ -134,7 +134,7 @@
       "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -168,7 +168,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -495,7 +495,6 @@
     "CloudTrailLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": "/aws/cloudtrail/SecureTrail",
         "RetentionInDays": 90
       }
     },
@@ -605,7 +604,6 @@
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": "SecurityAlerts",
         "DisplayName": "Security Alert Notifications",
         "Subscription": [
           {
@@ -787,7 +785,9 @@
     "WAFLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": "aws-waf-logs-secure-infrastructure",
+        "LogGroupName": {
+          "Fn::Sub": "aws-waf-logs-secure-infrastructure-${AWS::StackName}"
+        },
         "RetentionInDays": 30
       }
     },
@@ -800,7 +800,7 @@
         },
         "LogDestinationConfigs": [
           {
-            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure"
+            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${AWS::StackName}"
           }
         ]
       }

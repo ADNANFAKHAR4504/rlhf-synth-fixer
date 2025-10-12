@@ -115,7 +115,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
       test('should have correct CIDR block', () => {
         const properties = template.Resources.DefaultVPC.Properties;
-        expect(properties.CidrBlock).toBe('172.31.0.0/16');
+        expect(properties.CidrBlock).toBe('10.0.0.0/16');
       });
 
       test('should enable DNS hostnames and support', () => {
@@ -142,7 +142,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const subnet = template.Resources.DefaultSubnet1;
         expect(subnet.Type).toBe('AWS::EC2::Subnet');
         expect(subnet.Properties.VpcId).toEqual({ Ref: 'DefaultVPC' });
-        expect(subnet.Properties.CidrBlock).toBe('172.31.0.0/20');
+        expect(subnet.Properties.CidrBlock).toBe('10.0.0.0/20');
         expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
       });
 
@@ -157,7 +157,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const subnet = template.Resources.DefaultSubnet2;
         expect(subnet.Type).toBe('AWS::EC2::Subnet');
         expect(subnet.Properties.VpcId).toEqual({ Ref: 'DefaultVPC' });
-        expect(subnet.Properties.CidrBlock).toBe('172.31.16.0/20');
+        expect(subnet.Properties.CidrBlock).toBe('10.0.16.0/20');
         expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
       });
 
@@ -264,7 +264,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic bucket name', () => {
         const properties = template.Resources.S3LoggingBucket.Properties;
         expect(properties.BucketName).toEqual({
-          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${AWS::Region}'
+          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
         });
       });
 
@@ -309,7 +309,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic bucket name', () => {
         const properties = template.Resources.ApplicationDataBucket.Properties;
         expect(properties.BucketName).toEqual({
-          'Fn::Sub': 'secure-app-data-${AWS::AccountId}-${AWS::Region}'
+          'Fn::Sub': 'secure-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
         });
       });
 
@@ -866,9 +866,9 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         expect(template.Resources.CloudTrailLogGroup.Type).toBe('AWS::Logs::LogGroup');
       });
 
-      test('should have correct log group name', () => {
+      test('should have auto-generated log group name', () => {
         const properties = template.Resources.CloudTrailLogGroup.Properties;
-        expect(properties.LogGroupName).toBe('/aws/cloudtrail/SecureTrail');
+        expect(properties.LogGroupName).toBeUndefined();
       });
 
       test('should have 90-day retention', () => {
@@ -1017,9 +1017,9 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         expect(template.Resources.SNSTopic.Type).toBe('AWS::SNS::Topic');
       });
 
-      test('should have correct topic name', () => {
+      test('should have auto-generated topic name', () => {
         const properties = template.Resources.SNSTopic.Properties;
-        expect(properties.TopicName).toBe('SecurityAlerts');
+        expect(properties.TopicName).toBeUndefined();
       });
 
       test('should have display name', () => {
@@ -1263,9 +1263,11 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         expect(template.Resources.WAFLogGroup.Type).toBe('AWS::Logs::LogGroup');
       });
 
-      test('should have correct log group name', () => {
+      test('should have correct log group name with stack name', () => {
         const properties = template.Resources.WAFLogGroup.Properties;
-        expect(properties.LogGroupName).toBe('aws-waf-logs-secure-infrastructure');
+        expect(properties.LogGroupName).toEqual({
+          'Fn::Sub': 'aws-waf-logs-secure-infrastructure-${AWS::StackName}'
+        });
       });
 
       test('should have 30-day retention', () => {
@@ -1292,7 +1294,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const logDestination = properties.LogDestinationConfigs[0];
 
         expect(logDestination).toEqual({
-          'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure'
+          'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${AWS::StackName}'
         });
       });
     });
