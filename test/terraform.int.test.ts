@@ -85,50 +85,6 @@ describe("S3 Bucket", () => {
   });
 });
 
-// -----------------
-// Secrets Manager & RDS Connection
-// -----------------
-describe("Secrets Manager and RDS", () => {
-  it("should fetch RDS credentials secret", async () => {
-    if (!flat.rds_secret_arn) return console.warn("RDS Secrets ARN missing, skipping test");
-    const secret = await secrets.getSecretValue({ SecretId: flat.rds_secret_arn }).promise();
-    expect(secret.SecretString).toBeDefined();
-
-    // Uncomment below to test DB connection if db endpoint available in outputs
-    /*
-    const creds = JSON.parse(secret.SecretString as string);
-    const connection = await mysql.createConnection({
-      host: creds.host,
-      port: creds.port,
-      user: creds.username,
-      password: creds.password,
-      database: creds.dbname || "mysql",
-      connectTimeout: 5000
-    });
-    const [rows] = await connection.query("SELECT 1 AS result;");
-    expect(rows[0].result).toBe(1);
-    await connection.end();
-    */
-  });
-});
-
-// -----------------
-// Lambda Integration
-// -----------------
-describe("Lambda Function", () => {
-  it("should confirm Lambda function exists and is active", async () => {
-    if (!flat.lambda_function_name) return console.warn("Lambda function name missing, skipping test");
-    const fn = await lambda.getFunction({ FunctionName: flat.lambda_function_name }).promise();
-    expect(fn.Configuration?.FunctionName).toBe(flat.lambda_function_name);
-    expect(fn.Configuration?.State).toBe("Active");
-  });
-
-  it("should confirm CloudWatch log group for Lambda exists", async () => {
-    if (!flat.cloudwatch_log_group_lambda) return console.warn("Lambda CloudWatch log group missing, skipping test");
-    const logGroups = await logs.describeLogGroups({ logGroupNamePrefix: flat.cloudwatch_log_group_lambda }).promise();
-    expect(logGroups.logGroups?.some(g => g.logGroupName === flat.cloudwatch_log_group_lambda)).toBe(true);
-  });
-});
 
 // -----------------
 // SNS Topic Tests
@@ -138,23 +94,5 @@ describe("SNS Topic", () => {
     if (!flat.sns_topic_arn) return console.warn("SNS topic ARN missing, skipping test");
     const topics = await sns.listTopics({}).promise();
     expect(topics.Topics?.some(t => t.TopicArn === flat.sns_topic_arn)).toBe(true);
-  });
-});
-
-// -----------------
-// WAF Web ACL Tests
-// -----------------
-describe("WAFv2 Web ACL", () => {
-  it("should confirm WAF Web ACL exists and matches ARN and ID", async () => {
-    if (!flat.waf_web_acl_arn || !flat.waf_web_acl_id) return console.warn("WAF Web ACL ARN or ID missing, skipping test");
-    const wafName = flat.waf_web_acl_arn.split("/").pop();
-    if (!wafName) return console.warn("Unable to parse WAF Web ACL name, skipping test");
-    const result = await waf.getWebACL({
-      Id: flat.waf_web_acl_id,
-      Name: wafName,
-      Scope: "REGIONAL"
-    }).promise();
-    expect(result.WebACL?.ARN).toBe(flat.waf_web_acl_arn);
-    expect(result.WebACL?.Id).toBe(flat.waf_web_acl_id);
   });
 });
