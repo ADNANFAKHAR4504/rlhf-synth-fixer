@@ -9,15 +9,8 @@ public record Config(String environment, String vpcCidrBlock, List<String> publi
                      List<String> privateSubnetCidrs, String containerImage, Integer kinesisShards,
                      Integer lambdaMemory, String projectName, Map<String, String> tags) {
     public static Config defaultConfig() {
-        return new Config(
-                "development",
-                "10.0.0.0/16",
-                List.of("10.0.0.0/24", "10.0.2.0/24"),  // Public subnets for 2 AZs
-                List.of("10.0.1.0/24", "10.0.3.0/24"),  // Private subnets for 2 AZs
-                "nginx:latest",
-                10,
-                512,
-                "log-analytics",
+        return new Config("development", "10.0.0.0/16", List.of("10.0.0.0/24", "10.0.2.0/24"),
+                List.of("10.0.1.0/24", "10.0.3.0/24"), "nginx:latest", 10, 512, "log-analytics",
                 Map.of(
                         "Environment", "development",
                         "ManagedBy", "CDK For Terraform",
