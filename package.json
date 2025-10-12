@@ -2,6 +2,10 @@
   "name": "tap",
   "version": "0.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TuringGpt/iac-test-automations.git"
+  },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
@@ -19,6 +23,7 @@
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
+    "synth": "cdk synth --all",
     "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}' 'cli/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "format-all": "npm run format && npm run lint",
@@ -75,7 +80,8 @@
     "localstack:tf:deploy": "./scripts/localstack-terraform-deploy.sh",
     "localstack:tf:test": "./scripts/localstack-terraform-test.sh",
     "localstack:tf:cleanup": "./scripts/localstack-terraform-cleanup.sh",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.855.0",
@@ -91,6 +97,7 @@
     "@aws-sdk/client-cloudwatch": "^3.883.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.901.0",
     "@aws-sdk/client-codebuild": "^3.864.0",
+    "@aws-sdk/client-codecommit": "^3.864.0",
     "@aws-sdk/client-codedeploy": "^3.864.0",
     "@aws-sdk/client-codepipeline": "^3.864.0",
     "@aws-sdk/client-config-service": "^3.883.0",
@@ -176,8 +183,11 @@
     "ts-jest": "^29.4.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2",
+    "yaml-cfn": "^0.3.2",
     "uuid": "^11.1.0",
-    "yaml-cfn": "^0.3.2"
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "husky": "^9.0.0"
   },
   "dependencies": {
     "@aws-cdk/aws-pipes-alpha": "^2.204.0-alpha.0",
@@ -195,6 +205,7 @@
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/client-efs": "^3.798.0",
     "@aws-sdk/client-elastic-load-balancing-v2": "^3.873.0",
+    "@aws-sdk/client-opensearch": "^3.906.0",
     "@aws-sdk/client-s3": "^3.884.0",
     "@aws-sdk/client-secrets-manager": "^3.863.0",
     "@aws-sdk/client-sns": "^3.855.0",
