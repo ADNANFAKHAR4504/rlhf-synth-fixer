@@ -56,7 +56,8 @@ export class BackupInfrastructureStack extends Construct {
       },
     });
 
-    const kmsAlias = new KmsAlias(this, 'backup-kms-alias', {
+    // Create KMS alias for easier key identification
+    new KmsAlias(this, 'backup-kms-alias', {
       name: `alias/backup-encryption-key-${uniqueSuffix}`,
       targetKeyId: kmsKey.id,
     });

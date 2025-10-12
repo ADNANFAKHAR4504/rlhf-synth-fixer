@@ -44,39 +44,40 @@ describe('TapStack Essential Branch Coverage', () => {
   });
 
   // Test 4: AWS region always uses us-east-1 (forced)
-  test('AWS region always uses us-east-1 regardless of props', () => {
+  test('AWS region uses provided props.awsRegion when specified', () => {
     stack = new TapStack(app, 'TestPropsRegion', {
-      awsRegion: 'us-west-2', // This should be ignored since we force us-east-1
+      awsRegion: 'us-west-2', // This should be used since props take priority
     });
     synthesized = JSON.parse(Testing.synth(stack));
 
     const awsProvider = synthesized.provider.aws;
     const mainProvider = Array.isArray(awsProvider) ? awsProvider[0] : awsProvider;
-    expect(mainProvider.region).toBe('us-east-1'); // Always us-east-1
+    expect(mainProvider.region).toBe('us-west-2'); // Uses provided prop
   });
 
-  // Test 4b: Test the final fallback branch
-  test('AWS region uses default fallback when both override and props undefined', () => {
+  // Test 4b: Test when AWS region is not provided in test mode
+  test('AWS region is empty when not provided in test mode', () => {
     stack = new TapStack(app, 'TestDefaultRegion', {
       environmentSuffix: 'default-region-test',
-      // awsRegion: undefined - tests the || 'us-east-1' branch
+      // awsRegion: undefined - in test mode, getAwsRegionOverride returns empty string
     });
     synthesized = JSON.parse(Testing.synth(stack));
 
     const awsProvider = synthesized.provider.aws;
     const mainProvider = Array.isArray(awsProvider) ? awsProvider[0] : awsProvider;
-    expect(mainProvider.region).toBe('us-east-1'); // Default fallback
+    expect(mainProvider.region).toBe(''); // Empty in test mode when not provided
   });
 
-  // Test 5: stateBucketRegion || 'us-east-1' - UNDEFINED branch
-  test('stateBucketRegion defaults when undefined', () => {
+  // Test 5: stateBucketRegion defaults to awsRegion
+  test('stateBucketRegion defaults to awsRegion when undefined', () => {
     stack = new TapStack(app, 'TestStateBucketRegionDefault', {
       environmentSuffix: 'test',
-      // stateBucketRegion: undefined - tests || 'us-east-1' branch
+      awsRegion: 'eu-west-1', // Provide explicit region
+      // stateBucketRegion: undefined - should default to awsRegion
     });
     synthesized = JSON.parse(Testing.synth(stack));
 
-    expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
+    expect(synthesized.terraform.backend.s3.region).toBe('eu-west-1');
   });
 
   // Test 6: stateBucketRegion || 'us-east-1' - PROVIDED branch  
@@ -191,19 +192,19 @@ describe('TapStack Essential Branch Coverage', () => {
     expect(bucket.bucket).toMatch(/pr-123-test-useast1-\d+/);
   });
 
-  // Test 14: BackupInfrastructureStack region configuration - always us-east-1
-  test('BackupInfrastructureStack always uses us-east-1 region', () => {
+  // Test 14: BackupInfrastructureStack region configuration - uses provided region
+  test('BackupInfrastructureStack uses provided awsRegion from props', () => {
     stack = new TapStack(app, 'TestRegionConfig', {
       environmentSuffix: 'region-test',
-      awsRegion: 'us-west-1', // This should be ignored since we force us-east-1
+      awsRegion: 'us-west-1', // This should be used
     });
     synthesized = JSON.parse(Testing.synth(stack));
 
-    // Verify the provider uses us-east-1
+    // Verify the provider uses the provided region
     const providers = synthesized.provider.aws;
     expect(providers).toHaveLength(1); // Single provider now
     const mainProvider = providers[0];
-    expect(mainProvider.region).toBe('us-east-1'); // Always us-east-1
+    expect(mainProvider.region).toBe('us-west-1'); // Uses provided prop
   });
 
   // Test 15: Backup plan rules - different rule configurations
@@ -608,16 +609,16 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     expect(vaults).toHaveLength(3); // primary, airgapped, additional
   });
 
-  // Additional test for backup infrastructure region fallback branch  
-  test('BackupInfrastructureStack region fallback when no region provided', () => {
-    // Test the region fallback branch in backup-infrastructure-stack
+  // Additional test for backup infrastructure with us-east-1 region
+  test('BackupInfrastructureStack uses us-east-1 region explicitly', () => {
+    // Provide explicit region for testing
     const stack = new TapStack(app, 'TestRegionFallback', {
       environmentSuffix: 'region-fallback-test',
-      // No awsRegion provided to test fallback
+      awsRegion: 'us-east-1', // Explicit region for test
     });
     const synthesized = JSON.parse(Testing.synth(stack));
 
-    // Verify infrastructure was created with fallback region
+    // Verify infrastructure was created with us-east-1 region
     expect(synthesized.resource.aws_kms_key).toBeDefined();
     expect(synthesized.resource.aws_backup_vault).toBeDefined();
 
@@ -627,29 +628,19 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     expect(providers[0].region).toBe('us-east-1');
   });
 
-  // Test specific branch coverage for AWS_REGION_OVERRIDE logic
-  test('AWS_REGION_OVERRIDE covers all branches when AWS_REGION is undefined', () => {
-    const originalNodeEnv = process.env.NODE_ENV;
-    const originalAwsRegion = process.env.AWS_REGION;
-
-    // Test the NODE_ENV !== 'test' && AWS_REGION is undefined branch
-    process.env.NODE_ENV = 'production';
-    delete process.env.AWS_REGION; // This should trigger the || 'us-east-1' fallback
-
+  // Test that getAwsRegionOverride function is called and used
+  test('TapStack uses getAwsRegionOverride for region configuration', () => {
+    // In production mode, getAwsRegionOverride would read from file
+    // In test mode, it returns empty string, so we provide explicit region
     const stack = new TapStack(app, 'TestAwsRegionBranch', {
       environmentSuffix: 'aws-region-branch-test',
+      awsRegion: 'us-east-1', // Explicit region for test
     });
     const synthesized = JSON.parse(Testing.synth(stack));
 
-    // Should use the 'us-east-1' fallback from AWS_REGION_OVERRIDE
+    // Should use provided region
     const mainProvider = synthesized.provider.aws.find((p: any) => !p.alias);
     expect(mainProvider.region).toBe('us-east-1');
-
-    // Restore environment
-    process.env.NODE_ENV = originalNodeEnv;
-    if (originalAwsRegion) {
-      process.env.AWS_REGION = originalAwsRegion;
-    }
   });
 
   // Test to cover BackupInfrastructureStack region fallback branch (line 41)
@@ -666,33 +657,18 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     expect(synthesized).toBeDefined();
     expect(synthesized.resource).toBeDefined();
   });  // Test to cover AWS_REGION environment variable fallback branch (line 21 in tap-stack.ts)  
-  test('AWS_REGION_OVERRIDE uses fallback when AWS_REGION environment variable is undefined', () => {
-    // Save original values
-    const originalNodeEnv = process.env.NODE_ENV;
-    const originalAwsRegion = process.env.AWS_REGION;
-
-    // Set up test environment to hit the fallback branch
-    process.env.NODE_ENV = 'production'; // Not 'test', so AWS_REGION_OVERRIDE will be used
-    delete process.env.AWS_REGION; // Make AWS_REGION undefined to test || 'us-east-1' branch
-
+  test('TapStack uses provided region configuration', () => {
+    // Test with explicit region
     const stack = new TapStack(app, 'TestAwsRegionFallback', {
-      environmentSuffix: 'aws-region-fallback'
-      // No awsRegion provided to force using AWS_REGION_OVERRIDE
+      environmentSuffix: 'aws-region-fallback',
+      awsRegion: 'us-east-1' // Explicit region for test
     });
 
     const synthesized = JSON.parse(Testing.synth(stack));
 
-    // Should use the fallback region 'us-east-1' from the || branch
+    // Should use the provided region
     const mainProvider = synthesized.provider.aws.find((p: any) => !p.alias);
     expect(mainProvider.region).toBe('us-east-1');
-
-    // Restore environment
-    process.env.NODE_ENV = originalNodeEnv;
-    if (originalAwsRegion) {
-      process.env.AWS_REGION = originalAwsRegion;
-    } else {
-      delete process.env.AWS_REGION;
-    }
   });
 
   // Test to cover more edge cases and improve branch coverage
@@ -718,19 +694,21 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     expect(synthesized.terraform.backend.s3.key).toBe('max-coverage/TestMaxCoverage.tfstate');
 
     const mainProvider = synthesized.provider.aws.find((p: any) => !p.alias);
-    expect(mainProvider.region).toBe('us-east-1'); // Always us-east-1
+    expect(mainProvider.region).toBe('ap-southeast-1'); // Uses provided prop
     expect(mainProvider.default_tags).toBeDefined();
   });
 
-  // Direct test for BackupInfrastructureStack with forced us-east-1 region
-  test('BackupInfrastructureStack always uses us-east-1 region', () => {
+  // Direct test for BackupInfrastructureStack with us-east-1 region
+  test('BackupInfrastructureStack uses us-east-1 region when provided', () => {
     const stack = new TapStack(app, 'TestRegionForced', {
-      environmentSuffix: 'region-forced'
+      environmentSuffix: 'region-forced',
+      awsRegion: 'us-east-1' // Provide explicit region
     });
 
-    // Create BackupInfrastructureStack - should always use us-east-1
+    // Create BackupInfrastructureStack with us-east-1
     const backupStack = new BackupInfrastructureStack(stack, 'backup-region-forced', {
-      environmentSuffix: 'region-forced'
+      environmentSuffix: 'region-forced',
+      region: 'us-east-1'
     });
 
     expect(backupStack).toBeDefined();
@@ -745,15 +723,13 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     expect(mainProvider.region).toBe('us-east-1');
   });
 
-  // Test for AWS_REGION_OVERRIDE forced to us-east-1 in non-test environment
-  test('AWS_REGION_OVERRIDE always returns us-east-1 in non-test env', () => {
+  // Test that explicit props take priority over AWS_REGION file
+  test('props.awsRegion takes priority over AWS_REGION file', () => {
     const originalNodeEnv = process.env.NODE_ENV;
-    const originalAwsRegion = process.env.AWS_REGION;
 
     try {
-      // Set up non-test environment - should always get us-east-1 regardless of AWS_REGION
+      // Set up environment
       process.env.NODE_ENV = 'production';
-      process.env.AWS_REGION = 'us-east-2'; // This should be ignored
 
       // Clear module cache to force re-evaluation
       delete require.cache[require.resolve('../lib/tap-stack')];
@@ -763,23 +739,19 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
 
       const app = new App();
       const stack = new TapStack(app, 'TestAwsRegionForced', {
-        environmentSuffix: 'aws-forced'
+        environmentSuffix: 'aws-forced',
+        awsRegion: 'eu-west-1' // Explicit prop should override AWS_REGION file
       });
 
       const synthesized = JSON.parse(Testing.synth(stack));
 
-      // Should always use us-east-1, ignoring environment variable
+      // Should use eu-west-1 from props, not us-east-1 from file
       const mainProvider = synthesized.provider.aws.find((p: any) => !p.alias);
-      expect(mainProvider.region).toBe('us-east-1');
+      expect(mainProvider.region).toBe('eu-west-1');
 
     } finally {
       // Restore original environment
       process.env.NODE_ENV = originalNodeEnv;
-      if (originalAwsRegion !== undefined) {
-        process.env.AWS_REGION = originalAwsRegion;
-      } else {
-        delete process.env.AWS_REGION;
-      }
 
       // Clear cache again and re-import original
       delete require.cache[require.resolve('../lib/tap-stack')];
@@ -787,12 +759,12 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
     }
   });
 
-  // Direct test of getAwsRegionOverride function - always returns us-east-1
-  test('getAwsRegionOverride function always returns us-east-1 in non-test env', () => {
+  // Direct test of getAwsRegionOverride function - reads from AWS_REGION file
+  test('getAwsRegionOverride function reads from AWS_REGION file in non-test env', () => {
     const originalNodeEnv = process.env.NODE_ENV;
 
     try {
-      // Test: Should always return us-east-1 regardless of environment variables
+      // Test: Should return us-east-1 from AWS_REGION file
       process.env.NODE_ENV = 'production';
 
       // Clear module cache and re-import
@@ -800,7 +772,7 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
       const { getAwsRegionOverride } = require('../lib/tap-stack');
 
       const result = getAwsRegionOverride();
-      expect(result).toBe('us-east-1');
+      expect(result).toBe('us-east-1'); // Reads from lib/AWS_REGION file
 
       // Test in test environment - should return empty string
       process.env.NODE_ENV = 'test';

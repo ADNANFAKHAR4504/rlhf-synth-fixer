@@ -4,6 +4,8 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { BackupInfrastructureStack } from './backup-infrastructure-stack';
 
 interface TapStackProps {
@@ -15,14 +17,28 @@ interface TapStackProps {
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will use AWS_REGION environment variable or default to 'us-east-1'.
+// you can set it here. Otherwise, it will read from AWS_REGION file or default to 'us-east-1'.
 
 export function getAwsRegionOverride(): string {
   if (process.env.NODE_ENV === 'test') {
     return '';
   }
-  // Force us-east-1 regardless of environment variable to ensure consistency
-  return 'us-east-1';
+  try {
+    // Try reading from dist folder first (compiled location), then lib folder (source location)
+    let regionFilePath = join(__dirname, 'AWS_REGION');
+    try {
+      const region = readFileSync(regionFilePath, 'utf-8').trim();
+      return region || 'us-east-1';
+    } catch {
+      // Try lib folder (when running from dist)
+      regionFilePath = join(__dirname, '..', 'lib', 'AWS_REGION');
+      const region = readFileSync(regionFilePath, 'utf-8').trim();
+      return region || 'us-east-1';
+    }
+  } catch (error) {
+    // If file doesn't exist or can't be read, default to us-east-1
+    return 'us-east-1';
+  }
 }
 
 const AWS_REGION_OVERRIDE = getAwsRegionOverride();
@@ -32,8 +48,8 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    // Force us-east-1 for consistency, use override function for testability
-    const awsRegion = AWS_REGION_OVERRIDE || 'us-east-1';
+    // Priority: explicit props > AWS_REGION_OVERRIDE (from file) > default us-east-1
+    const awsRegion = props?.awsRegion || AWS_REGION_OVERRIDE;
     const stateBucketRegion = props?.stateBucketRegion || awsRegion; // Use same region for state bucket
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
