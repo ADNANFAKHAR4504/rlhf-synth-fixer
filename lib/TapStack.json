@@ -86,7 +86,8 @@
       "us-east-2": {"AmiId": "ami-0f393ad09b0767896"},
       "us-west-1": {"AmiId": "ami-0b967c22fe917319b"},
       "us-west-2": {"AmiId": "ami-0caa91d6b7bee0ed0"},
-      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"}
+      "eu-west-1": {"AmiId": "ami-0d4ecc2431e0ef9e1"},
+      "ap-southeast-1": {"AmiId": "ami-0a92b8b70f323d169"}
     }
   },
 
