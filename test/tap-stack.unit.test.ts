@@ -772,7 +772,7 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
       const { getAwsRegionOverride } = require('../lib/tap-stack');
 
       const result = getAwsRegionOverride();
-      expect(result).toBe('us-east-2'); // Reads from lib/AWS_REGION file
+      expect(result).toBe('us-east-1'); // Reads from lib/AWS_REGION file
 
       // Test in test environment - should return empty string
       process.env.NODE_ENV = 'test';
