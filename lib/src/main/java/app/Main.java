@@ -1218,7 +1218,7 @@ public final class Main {
                                 .account(account)
                                 .region(region)
                                 .build())
-                        .description("Comprehensive Customer Support Platform with AI Services in us-west-2")
+                        .description("Comprehensive Customer Support Platform with AI Services in us-east-1")
                         .build())
                 .build());
 
