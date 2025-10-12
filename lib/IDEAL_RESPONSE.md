@@ -1,5 +1,6 @@
 
-```json
+
+```json 
 
 {
   "AWSTemplateFormatVersion": "2010-09-09",
@@ -11,6 +12,11 @@
       "Description": "Environment name for tagging",
       "Default": "Production",
       "AllowedValues": ["Development", "Staging", "Production"]
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment name for tagging",
+      "Default": "dev"
     },
     "AlertEmail": {
       "Type": "String",
@@ -29,7 +35,7 @@
     "DefaultVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": "172.31.0.0/16",
+        "CidrBlock": "10.0.0.0/16",
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
@@ -44,7 +50,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {"Ref": "DefaultVPC"},
-        "CidrBlock": "172.31.0.0/20",
+        "CidrBlock": "10.0.0.0/20",
         "AvailabilityZone": {
           "Fn::Select": [0, {"Fn::GetAZs": ""}]
         },
@@ -61,7 +67,7 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {"Ref": "DefaultVPC"},
-        "CidrBlock": "172.31.16.0/20",
+        "CidrBlock": "10.0.16.0/20",
         "AvailabilityZone": {
           "Fn::Select": [1, {"Fn::GetAZs": ""}]
         },
@@ -137,7 +143,7 @@
       "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "secure-logs-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -171,7 +177,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -256,7 +262,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "/secure-app/database/password-${AWS::StackName}"
+          "Fn::Sub": "/secure-app/database/password-${EnvironmentSuffix}"
         },
         "Description": "RDS database master password",
         "GenerateSecretString": {
@@ -355,7 +361,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "SecureEC2Role-${AWS::StackName}"
+          "Fn::Sub": "SecureEC2Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -437,9 +443,7 @@
         "SecurityGroupIds": [{"Ref": "ApplicationSecurityGroup"}],
         "SubnetId": {"Ref": "DefaultSubnet1"},
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\n# Update system\nyum update -y\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n# Disable password authentication\nsed -i 's/PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config\nsystemctl restart sshd\n# Install fail2ban for brute force protection\nyum install -y fail2ban\nsystemctl enable fail2ban\nsystemctl start fail2ban\n# Configure automatic security updates\nyum install -y yum-cron\nsed -i 's/apply_updates = no/apply_updates = yes/g' /etc/yum/yum-cron.conf\nsystemctl enable yum-cron\nsystemctl start yum-cron\n"
-          }
+          "Fn::Base64": "#!/bin/bash\n# Update system\nyum update -y\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n# Disable password authentication\nsed -i 's/PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config\nsystemctl restart sshd\n# Install fail2ban for brute force protection\nyum install -y fail2ban\nsystemctl enable fail2ban\nsystemctl start fail2ban\n# Configure automatic security updates\nyum install -y yum-cron\nsed -i 's/apply_updates = no/apply_updates = yes/g' /etc/yum/yum-cron.conf\nsystemctl enable yum-cron\nsystemctl start yum-cron\n"
         },
         "Tags": [
           {"Key": "Name", "Value": "HardenedApplicationServer"},
@@ -468,7 +472,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "secure-db-${AWS::StackName}"
+          "Fn::Sub": "secure-db-${EnvironmentSuffix}"
         },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
@@ -500,7 +504,6 @@
     "CloudTrailLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": "/aws/cloudtrail/SecureTrail",
         "RetentionInDays": 90
       }
     },
@@ -539,10 +542,10 @@
 
     "CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": ["S3LoggingBucket", "CloudTrailBucketPolicy"],
+      "DependsOn": "CloudTrailBucketPolicy",
       "Properties": {
         "TrailName": {
-          "Fn::Sub": "SecureTrail-${AWS::StackName}"
+          "Fn::Sub": "SecureTrail-${EnvironmentSuffix}"
         },
         "S3BucketName": {"Ref": "S3LoggingBucket"},
         "IncludeGlobalServiceEvents": true,
@@ -610,7 +613,6 @@
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": "SecurityAlerts",
         "DisplayName": "Security Alert Notifications",
         "Subscription": [
           {
@@ -696,7 +698,7 @@
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
         "Name": {
-          "Fn::Sub": "SecureWebACL-${AWS::StackName}"
+          "Fn::Sub": "SecureWebACL-${EnvironmentSuffix}"
         },
         "Scope": "REGIONAL",
         "DefaultAction": {
@@ -792,7 +794,9 @@
     "WAFLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": "aws-waf-logs-secure-infrastructure",
+        "LogGroupName": {
+          "Fn::Sub": "aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 30
       }
     },
@@ -805,7 +809,7 @@
         },
         "LogDestinationConfigs": [
           {
-            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure"
+            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}"
           }
         ]
       }
@@ -817,21 +821,21 @@
       "Description": "ID of the created VPC",
       "Value": {"Ref": "DefaultVPC"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-VPCId"}
       }
     },
     "S3LoggingBucketName": {
       "Description": "Name of the S3 bucket for logging",
       "Value": {"Ref": "S3LoggingBucket"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-LoggingBucket"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-LoggingBucket"}
       }
     },
     "ApplicationDataBucketName": {
       "Description": "Name of the S3 bucket for application data",
       "Value": {"Ref": "ApplicationDataBucket"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationBucket"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-ApplicationBucket"}
       }
     },
     "DatabaseEndpoint": {
