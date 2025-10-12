@@ -2142,9 +2142,11 @@ output "environment_tag" {
 
 ```
 
+```hcl
+
 # provider.tf
 
-```hcl
+
 
 terraform {
   required_version = ">= 1.4.0"
