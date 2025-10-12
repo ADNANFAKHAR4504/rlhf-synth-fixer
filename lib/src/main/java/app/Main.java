@@ -18,7 +18,7 @@ public final class Main {
     public static void main(final String[] args) {
         final App app = new App();
 
-        MainStack stack = new MainStack(app, "cdktf-java");
+        MainStack stack = new MainStack(app, "log-analytics-platform");
 
         /*
          * Configures S3 backend for remote Terraform state storage.

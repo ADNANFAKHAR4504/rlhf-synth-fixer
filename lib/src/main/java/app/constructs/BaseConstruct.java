@@ -3,6 +3,7 @@ package app.constructs;
 import app.config.Config;
 import software.constructs.Construct;
 
+import java.util.List;
 import java.util.Map;
 
 public class BaseConstruct extends Construct {
@@ -28,6 +29,14 @@ public class BaseConstruct extends Construct {
 
     protected String getVpcCidrBlock() {
         return config.vpcCidrBlock();
+    }
+
+    protected List<String> getPublicSubnetCidrs() {
+        return config.publicSubnetCidrs();
+    }
+
+    protected List<String> getPrivateSubnetCidrs() {
+        return config.privateSubnetCidrs();
     }
 
     protected String getContainerImage() {

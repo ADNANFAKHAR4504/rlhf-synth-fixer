@@ -62,7 +62,7 @@ public class NetworkingConstruct extends BaseConstruct {
         // AZ 1 - Public Subnet
         Subnet publicSubnet0 = new Subnet(this, "public-subnet-0", SubnetConfig.builder()
                 .vpcId(vpc.getId())
-                .cidrBlock("10.0.0.0/24")
+                .cidrBlock(getPublicSubnetCidrs().get(0))
                 .availabilityZone((String) Fn.element(azs.getNames(), 0))
                 .mapPublicIpOnLaunch(true)
                 .tags(mergeTags(Map.of(
@@ -75,7 +75,7 @@ public class NetworkingConstruct extends BaseConstruct {
         // AZ 1 - Private Subnet
         Subnet privateSubnet0 = new Subnet(this, "private-subnet-0", SubnetConfig.builder()
                 .vpcId(vpc.getId())
-                .cidrBlock("10.0.1.0/24")
+                .cidrBlock(getPrivateSubnetCidrs().get(0))
                 .availabilityZone((String) Fn.element(azs.getNames(), 0))
                 .tags(mergeTags(Map.of(
                         "Name", getResourcePrefix() + "-private-subnet-1",
@@ -87,7 +87,7 @@ public class NetworkingConstruct extends BaseConstruct {
         // AZ 2 - Public Subnet
         Subnet publicSubnet1 = new Subnet(this, "public-subnet-1", SubnetConfig.builder()
                 .vpcId(vpc.getId())
-                .cidrBlock("10.0.2.0/24")
+                .cidrBlock(getPublicSubnetCidrs().get(1))
                 .availabilityZone((String) Fn.element(azs.getNames(), 1))
                 .mapPublicIpOnLaunch(true)
                 .tags(mergeTags(Map.of(
@@ -100,7 +100,7 @@ public class NetworkingConstruct extends BaseConstruct {
         // AZ 2 - Private Subnet
         Subnet privateSubnet1 = new Subnet(this, "private-subnet-1", SubnetConfig.builder()
                 .vpcId(vpc.getId())
-                .cidrBlock("10.0.3.0/24")
+                .cidrBlock(getPrivateSubnetCidrs().get(1))
                 .availabilityZone((String) Fn.element(azs.getNames(), 1))
                 .tags(mergeTags(Map.of(
                         "Name", getResourcePrefix() + "-private-subnet-2",

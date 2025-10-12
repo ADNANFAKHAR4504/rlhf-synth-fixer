@@ -17,7 +17,6 @@ import com.hashicorp.cdktf.providers.aws.lambda_event_source_mapping.LambdaEvent
 import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunction;
 import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionConfig;
 import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionEnvironment;
-import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionDeadLetterConfig;
 import com.hashicorp.cdktf.providers.aws.lambda_function.LambdaFunctionTracingConfig;
 import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 import software.constructs.Construct;
@@ -107,20 +106,17 @@ public class LambdaConstruct extends BaseConstruct {
         this.function = new LambdaFunction(this, "log-processor", LambdaFunctionConfig.builder()
                 .functionName(getResourcePrefix() + "-log-processor")
                 .filename(lambdaAsset.getPath())
-                .handler("log-processor.handler")
+                .handler("log_processor.handler")
                 .runtime("python3.9")
                 .role(lambdaRole.getArn())
                 .memorySize(getLambdaMemory())
                 .timeout(60)
                 .reservedConcurrentExecutions(100)
                 .environment(LambdaFunctionEnvironment.builder()
-                        .variables(mergeTags(Map.of(
+                        .variables(Map.of(
                                 "S3_BUCKET", s3Bucket.getBucket(),
                                 "ENVIRONMENT", getEnvironment()
-                        )))
-                        .build())
-                .deadLetterConfig(LambdaFunctionDeadLetterConfig.builder()
-                        .targetArn("")
+                        ))
                         .build())
                 .tracingConfig(LambdaFunctionTracingConfig.builder()
                         .mode("Active")
