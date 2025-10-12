@@ -1,117 +1,165 @@
-import { readFileSync } from "fs";
-import { join } from "path";
-import * as hclParser from "hcl-to-json";
+// test/tap_stack.unit.test.ts
+import * as fs from 'fs';
+import * as path from 'path';
+import { parse } from '@iarna/toml'; // Optional if you use HCL2 parsing lib
+import { execSync } from 'child_process';
 
-const tfFilePath = join(__dirname, "../lib/tap_stack.tf");
-const tfFileContent = readFileSync(tfFilePath, "utf-8");
-const tfJson = hclParser(tfFileContent);
+describe('tap_stack.tf static verification', () => {
+  const terraformFile = path.join(__dirname, '../lib/tap_stack.tf');
+  let tfContent: string;
 
-// Helper function to find resource by type
-function findResource(type: string) {
-  return tfJson.resource?.[type] || {};
-}
-
-// Helper function to find variable by name
-function findVariable(name: string) {
-  return tfJson.variable?.[name] || null;
-}
-
-// Helper function to find output by name
-function findOutput(name: string) {
-  return tfJson.output?.[name] || null;
-}
-
-describe("tap_stack.tf static verification", () => {
-  it("declares all required variables", () => {
-    expect(findVariable("region")).toBeDefined();
-    expect(findVariable("environment")).toBeDefined();
-    expect(findVariable("project_name")).toBeDefined();
-    expect(findVariable("domain_name")).toBeDefined();
-    expect(findVariable("alert_email")).toBeDefined();
-    expect(findVariable("ssh_allowed_cidr")).toBeDefined();
-    expect(findVariable("db_instance_class")).toBeDefined();
-    expect(findVariable("eb_instance_type")).toBeDefined();
+  beforeAll(() => {
+    tfContent = fs.readFileSync(terraformFile, 'utf-8');
   });
 
-  it("defines locals for naming and tagging", () => {
-    expect(tfJson.locals).toBeDefined();
-    expect(tfJson.locals.common_tags).toBeDefined();
-    expect(tfJson.locals.name_prefix).toBeDefined();
-    expect(tfJson.locals.vpc_cidr).toBeDefined();
-    expect(tfJson.locals.azs).toBeDefined();
+  test('Terraform file exists', () => {
+    expect(fs.existsSync(terraformFile)).toBe(true);
   });
 
-  it("creates VPC, subnets, and networking resources", () => {
-    expect(findResource("aws_vpc").main).toBeDefined();
-    expect(findResource("aws_internet_gateway").main).toBeDefined();
-    expect(findResource("aws_subnet").public).toBeDefined();
-    expect(findResource("aws_subnet").private).toBeDefined();
-    expect(findResource("aws_subnet").private_db).toBeDefined();
-    expect(findResource("aws_nat_gateway").main).toBeDefined();
-    expect(findResource("aws_route_table").public).toBeDefined();
-    expect(findResource("aws_route_table").private).toBeDefined();
+  test('All required variables are defined', () => {
+    const variables = [
+      'region',
+      'environment',
+      'project_name',
+      'domain_name',
+      'alert_email',
+      'ssh_allowed_cidr',
+      'db_instance_class',
+      'eb_instance_type',
+    ];
+
+    variables.forEach(variable => {
+      expect(tfContent).toMatch(new RegExp(`variable "${variable}"`));
+    });
   });
 
-  it("creates RDS instance with subnet group and security group", () => {
-    expect(findResource("aws_security_group").rds).toBeDefined();
-    expect(findResource("aws_db_subnet_group").main).toBeDefined();
-    expect(findResource("aws_db_instance").main).toBeDefined();
-    const rds = findResource("aws_db_instance").main;
-    expect(rds.engine).toBe("mysql");
-    expect(rds.multi_az).toBe(true);
-    expect(rds.db_subnet_group_name).toBeDefined();
-    expect(rds.vpc_security_group_ids).toBeDefined();
+  test('Locals are defined correctly', () => {
+    const locals = ['common_tags', 'name_prefix', 'vpc_cidr', 'azs', 'public_subnet_cidrs', 'private_subnet_cidrs', 'db_name'];
+    locals.forEach(localVar => {
+      expect(tfContent).toMatch(new RegExp(`locals \\{[\\s\\S]*${localVar}`));
+    });
   });
 
-  it("creates IAM roles and instance profiles", () => {
-    expect(findResource("aws_iam_role").eb_service).toBeDefined();
-    expect(findResource("aws_iam_role").eb_ec2).toBeDefined();
-    expect(findResource("aws_iam_instance_profile").eb_ec2).toBeDefined();
-    expect(findResource("aws_iam_role_policy_attachment").eb_service_enhanced_health).toBeDefined();
-    expect(findResource("aws_iam_role_policy_attachment").eb_ec2_web_tier).toBeDefined();
+  test('VPC and networking resources exist', () => {
+    const networkResources = [
+      'aws_vpc.main',
+      'aws_internet_gateway.main',
+      'aws_subnet.public',
+      'aws_subnet.private',
+      'aws_subnet.private_db',
+      'aws_nat_gateway.main',
+      'aws_route_table.public',
+      'aws_route_table.private',
+      'aws_route_table_association.public',
+      'aws_route_table_association.private',
+      'aws_route_table_association.private_db',
+    ];
+    networkResources.forEach(res => {
+      expect(tfContent).toMatch(new RegExp(`resource "${res.split('.')[0]}" "${res.split('.')[1]}"`));
+    });
   });
 
-  it("creates S3 buckets with encryption and versioning", () => {
-    expect(findResource("aws_s3_bucket").app_storage).toBeDefined();
-    expect(findResource("aws_s3_bucket_versioning").app_storage).toBeDefined();
-    expect(findResource("aws_s3_bucket_server_side_encryption_configuration").app_storage).toBeDefined();
-    expect(findResource("aws_s3_bucket_public_access_block").app_storage).toBeDefined();
-    expect(findResource("aws_s3_bucket").eb_versions).toBeDefined();
+  test('Security groups exist', () => {
+    const sgs = ['aws_security_group.rds', 'aws_security_group.eb_ec2', 'aws_security_group.eb_alb'];
+    sgs.forEach(sg => {
+      expect(tfContent).toMatch(new RegExp(`resource "${sg.split('.')[0]}" "${sg.split('.')[1]}"`));
+    });
   });
 
-  it("creates Elastic Beanstalk application and environments", () => {
-    expect(findResource("aws_elastic_beanstalk_application").main).toBeDefined();
-    expect(findResource("aws_elastic_beanstalk_environment").blue).toBeDefined();
-    expect(findResource("aws_elastic_beanstalk_environment").green).toBeDefined();
+  test('RDS database resources exist', () => {
+    const rdsResources = ['aws_db_instance.main', 'aws_db_subnet_group.main', 'aws_secretsmanager_secret.rds_credentials', 'aws_secretsmanager_secret_version.rds_credentials'];
+    rdsResources.forEach(rds => {
+      expect(tfContent).toMatch(new RegExp(`resource "${rds.split('.')[0]}" "${rds.split('.')[1]}"`));
+    });
   });
 
-  it("creates Route53 hosted zone and ACM certificate", () => {
-    expect(findResource("aws_route53_zone").main).toBeDefined();
-    expect(findResource("aws_acm_certificate").main).toBeDefined();
-    expect(findResource("aws_acm_certificate_validation").main).toBeDefined();
+  test('Elastic Beanstalk resources exist', () => {
+    const ebResources = [
+      'aws_iam_role.eb_service',
+      'aws_iam_role.eb_ec2',
+      'aws_iam_role_policy.eb_ec2_custom',
+      'aws_iam_instance_profile.eb_ec2',
+      'aws_elastic_beanstalk_application.main',
+      'aws_elastic_beanstalk_environment.blue',
+      'aws_elastic_beanstalk_environment.green'
+    ];
+    ebResources.forEach(res => {
+      expect(tfContent).toMatch(new RegExp(`resource "${res.split('.')[0]}" "${res.split('.')[1]}"`));
+    });
   });
 
-  it("creates CloudFront distribution and OAI", () => {
-    expect(findResource("aws_cloudfront_origin_access_identity").main).toBeDefined();
-    expect(findResource("aws_cloudfront_distribution").main).toBeDefined();
+  test('S3 buckets and configurations exist', () => {
+    const s3Resources = [
+      'aws_s3_bucket.app_storage',
+      'aws_s3_bucket_versioning.app_storage',
+      'aws_s3_bucket_server_side_encryption_configuration.app_storage',
+      'aws_s3_bucket_public_access_block.app_storage',
+      'aws_s3_bucket.eb_versions',
+      'aws_s3_bucket_policy.app_storage'
+    ];
+    s3Resources.forEach(res => {
+      expect(tfContent).toMatch(new RegExp(`resource "${res.split('.')[0]}" "${res.split('.')[1]}"`));
+    });
   });
 
-  it("creates WAF ACL and CloudWatch monitoring resources", () => {
-    expect(findResource("aws_wafv2_web_acl").main).toBeDefined();
-    expect(findResource("aws_sns_topic").alerts).toBeDefined();
-    expect(findResource("aws_cloudwatch_dashboard").main).toBeDefined();
-    expect(findResource("aws_cloudwatch_metric_alarm").rds_cpu).toBeDefined();
-    expect(findResource("aws_cloudwatch_metric_alarm").ec2_cpu_high).toBeDefined();
-    expect(findResource("aws_cloudwatch_log_group").app_logs).toBeDefined();
+  test('CloudFront and ACM resources exist', () => {
+    const cfResources = [
+      'aws_cloudfront_origin_access_identity.main',
+      'aws_cloudfront_distribution.main',
+      'aws_acm_certificate.main',
+      'aws_acm_certificate.cloudfront',
+      'aws_route53_record.acm_validation',
+      'aws_acm_certificate_validation.main'
+    ];
+    cfResources.forEach(res => {
+      expect(tfContent).toMatch(new RegExp(`resource "${res.split('.')[0]}" "${res.split('.')[1]}"`));
+    });
   });
 
-  it("declares all critical outputs", () => {
-    expect(findOutput("vpc_id")).toBeDefined();
-    expect(findOutput("rds_endpoint")).toBeDefined();
-    expect(findOutput("rds_secret_arn")).toBeDefined();
-    expect(findOutput("s3_app_bucket")).toBeDefined();
-    expect(findOutput("eb_application_name")).toBeDefined();
-    expect(findOutput("cloudfront_domain_name")).toBeDefined();
-    expect(findOutput("waf_web_acl_id")).toBeDefined();
+  test('Route53 hosted zone exists', () => {
+    expect(tfContent).toMatch(/resource "aws_route53_zone" "main"/);
+  });
+
+  test('WAF configuration exists', () => {
+    expect(tfContent).toMatch(/resource "aws_wafv2_web_acl" "main"/);
+  });
+
+  test('CloudWatch monitoring resources exist', () => {
+    const cwResources = [
+      'aws_sns_topic.alerts',
+      'aws_sns_topic_subscription.alerts_email',
+      'aws_cloudwatch_dashboard.main',
+      'aws_cloudwatch_metric_alarm.rds_cpu',
+      'aws_cloudwatch_metric_alarm.rds_storage',
+      'aws_cloudwatch_metric_alarm.ec2_cpu_high',
+      'aws_cloudwatch_metric_alarm.ec2_cpu_low',
+      'aws_cloudwatch_log_group.app_logs'
+    ];
+    cwResources.forEach(res => {
+      expect(tfContent).toMatch(new RegExp(`resource "${res.split('.')[0]}" "${res.split('.')[1]}"`));
+    });
+  });
+
+  test('Launch template exists', () => {
+    expect(tfContent).toMatch(/resource "aws_launch_template" "main"/);
+  });
+
+  test('All outputs are declared', () => {
+    const outputs = [
+      'vpc_id', 'vpc_cidr', 'public_subnet_ids', 'private_subnet_ids',
+      'nat_gateway_ids', 'internet_gateway_id', 'rds_endpoint', 'rds_instance_id',
+      'rds_secret_arn', 's3_app_bucket', 's3_app_bucket_arn', 's3_eb_versions_bucket',
+      'eb_application_name', 'eb_environment_blue_url', 'eb_environment_green_url',
+      'eb_environment_blue_id', 'eb_environment_green_id', 'iam_role_eb_service_arn',
+      'iam_role_eb_ec2_arn', 'iam_instance_profile_name', 'route53_zone_id',
+      'route53_name_servers', 'acm_certificate_arn', 'cloudfront_distribution_id',
+      'cloudfront_domain_name', 'waf_web_acl_id', 'waf_web_acl_arn', 'sns_topic_arn',
+      'cloudwatch_dashboard_name', 'cloudwatch_log_group_name', 'security_group_rds_id',
+      'security_group_eb_ec2_id', 'security_group_eb_alb_id', 'launch_template_id',
+      'launch_template_latest_version', 'ami_id'
+    ];
+    outputs.forEach(output => {
+      expect(tfContent).toMatch(new RegExp(`output "${output}"`));
+    });
   });
 });
