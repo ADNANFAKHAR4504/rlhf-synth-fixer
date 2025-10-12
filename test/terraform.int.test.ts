@@ -47,7 +47,7 @@ const tfOutputs = JSON.parse(readFileSync(outputsPath, 'utf8'));
 // -------------------------
 // AWS Clients (region: us-west-2)
 // -------------------------
-const region = 'us-west-2';
+const region = 'us-east-1';
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const iam = new IAMClient({ region });
