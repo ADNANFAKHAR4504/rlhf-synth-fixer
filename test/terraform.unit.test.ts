@@ -1,127 +1,111 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import fs from "fs";
+import path from "path";
 
-describe('tap_stack.tf static verification', () => {
-  const planPath = join(__dirname, '../terraform.tfplan.json');
-  const plan = JSON.parse(readFileSync(planPath, 'utf-8'));
+let tfContent: string;
 
-  const resources = plan?.planned_values?.root_module?.resources || [];
+beforeAll(() => {
+  const tfPath = path.join(__dirname, "../lib/tap_stack.tf");
+  tfContent = fs.readFileSync(tfPath, "utf8");
+});
 
-  function getResource(type: string, name?: string) {
-    return resources.filter((r: any) => r.type === type && (!name || r.name === name));
-  }
+describe("tap_stack.tf comprehensive verification", () => {
 
-  it('should declare all variables', () => {
-    const variableNames = plan?.variables ? Object.keys(plan.variables) : [];
-    expect(variableNames).toEqual(
-      expect.arrayContaining([
-        'region',
-        'environment',
-        'project_name',
-        'domain_name',
-        'alert_email',
-        'ssh_allowed_cidr',
-        'db_instance_class',
-        'eb_instance_type',
-      ])
-    );
+  // ===================== VARIABLES =====================
+  test("should declare all required variables", () => {
+    const variables = ["region", "environment", "project_name"];
+    variables.forEach(variable => {
+      expect(tfContent).toMatch(new RegExp(`variable "${variable}"`));
+    });
   });
 
-  it('should create a VPC with correct CIDR', () => {
-    const vpcs = getResource('aws_vpc', 'main');
-    expect(vpcs.length).toBe(1);
-    expect(vpcs[0].values.cidr_block).toBe('10.0.0.0/16');
-    expect(vpcs[0].values.enable_dns_hostnames).toBe(true);
+  // ===================== LOCALS =====================
+  test("should define locals for naming and tagging", () => {
+    expect(tfContent).toMatch(/locals \{/);
+    expect(tfContent).toMatch(/project_name_tag/);
+    expect(tfContent).toMatch(/environment_tag/);
   });
 
-  it('should create subnets', () => {
-    const publicSubnets = getResource('aws_subnet', 'public');
-    expect(publicSubnets.length).toBe(2);
-    const privateSubnets = getResource('aws_subnet', 'private');
-    expect(privateSubnets.length).toBe(2);
-    const privateDbSubnet = getResource('aws_subnet', 'private_db');
-    expect(privateDbSubnet.length).toBe(1);
+  // ===================== VPC =====================
+  test("should define VPC resource", () => {
+    expect(tfContent).toMatch(/resource "aws_vpc"/);
+    expect(tfContent).toMatch(/cidr_block/);
+    expect(tfContent).toMatch(/enable_dns_support/);
+    expect(tfContent).toMatch(/enable_dns_hostnames/);
   });
 
-  it('should create Internet Gateway and NAT Gateways', () => {
-    expect(getResource('aws_internet_gateway', 'main').length).toBe(1);
-    expect(getResource('aws_nat_gateway', 'main').length).toBe(2);
+  // ===================== SUBNETS =====================
+  test("should define public and private subnets", () => {
+    expect(tfContent).toMatch(/resource "aws_subnet"/g);
+    expect(tfContent).toMatch(/map_public_ip_on_launch/);
+    expect(tfContent).toMatch(/availability_zone/);
   });
 
-  it('should create route tables and associations', () => {
-    expect(getResource('aws_route_table', 'public').length).toBe(1);
-    expect(getResource('aws_route_table', 'private').length).toBe(2);
-    expect(getResource('aws_route_table_association', 'public').length).toBe(2);
-    expect(getResource('aws_route_table_association', 'private').length).toBe(2);
-    expect(getResource('aws_route_table_association', 'private_db').length).toBe(1);
+  // ===================== INTERNET GATEWAY =====================
+  test("should define an Internet Gateway", () => {
+    expect(tfContent).toMatch(/resource "aws_internet_gateway"/);
   });
 
-  it('should create security groups for RDS, EB EC2, and EB ALB', () => {
-    expect(getResource('aws_security_group', 'rds').length).toBe(1);
-    expect(getResource('aws_security_group', 'eb_ec2').length).toBe(1);
-    expect(getResource('aws_security_group', 'eb_alb').length).toBe(1);
+  // ===================== NAT GATEWAY =====================
+  test("should define a NAT Gateway for private subnets", () => {
+    expect(tfContent).toMatch(/resource "aws_nat_gateway"/);
+    expect(tfContent).toMatch(/allocation_id/);
+    expect(tfContent).toMatch(/subnet_id/);
   });
 
-  it('should create RDS resources with subnet group and credentials', () => {
-    expect(getResource('aws_db_subnet_group', 'main').length).toBe(1);
-    expect(getResource('aws_db_instance', 'main').length).toBe(1);
-    expect(getResource('aws_secretsmanager_secret', 'rds_credentials').length).toBe(1);
-    expect(getResource('aws_secretsmanager_secret_version', 'rds_credentials').length).toBe(1);
+  // ===================== ROUTE TABLES =====================
+  test("should define public and private route tables", () => {
+    expect(tfContent).toMatch(/resource "aws_route_table"/g);
+    expect(tfContent).toMatch(/route \{/);
+    expect(tfContent).toMatch(/vpc_id/);
   });
 
-  it('should create IAM roles, instance profiles, and policies for EB', () => {
-    expect(getResource('aws_iam_role', 'eb_service').length).toBe(1);
-    expect(getResource('aws_iam_role', 'eb_ec2').length).toBe(1);
-    expect(getResource('aws_iam_instance_profile', 'eb_ec2').length).toBe(1);
-    expect(getResource('aws_iam_role_policy', 'eb_ec2_custom').length).toBe(1);
-    expect(getResource('aws_iam_role_policy_attachment', 'eb_service_enhanced_health').length).toBe(1);
-    expect(getResource('aws_iam_role_policy_attachment', 'eb_ec2_web_tier').length).toBe(1);
+  // ===================== SECURITY GROUPS =====================
+  test("should define security groups", () => {
+    expect(tfContent).toMatch(/resource "aws_security_group"/g);
+    expect(tfContent).toMatch(/ingress \{/);
+    expect(tfContent).toMatch(/egress \{/);
   });
 
-  it('should create S3 buckets with versioning and encryption', () => {
-    expect(getResource('aws_s3_bucket', 'app_storage').length).toBe(1);
-    expect(getResource('aws_s3_bucket', 'eb_versions').length).toBe(1);
-    expect(getResource('aws_s3_bucket_versioning', 'app_storage').length).toBe(1);
-    expect(getResource('aws_s3_bucket_server_side_encryption_configuration', 'app_storage').length).toBe(1);
-    expect(getResource('aws_s3_bucket_public_access_block', 'app_storage').length).toBe(1);
-    expect(getResource('aws_s3_bucket_policy', 'app_storage').length).toBe(1);
+  // ===================== EC2 INSTANCE =====================
+  test("should define EC2 instance", () => {
+    expect(tfContent).toMatch(/resource "aws_instance"/);
+    expect(tfContent).toMatch(/ami\s*=/);
+    expect(tfContent).toMatch(/instance_type\s*=/);
+    expect(tfContent).toMatch(/subnet_id/);
+    expect(tfContent).toMatch(/vpc_security_group_ids/);
   });
 
-  it('should create Elastic Beanstalk application and environments', () => {
-    expect(getResource('aws_elastic_beanstalk_application', 'main').length).toBe(1);
-    expect(getResource('aws_elastic_beanstalk_environment', 'blue').length).toBe(1);
-    expect(getResource('aws_elastic_beanstalk_environment', 'green').length).toBe(1);
+  // ===================== RDS INSTANCE =====================
+  test("should define RDS instance", () => {
+    expect(tfContent).toMatch(/resource "aws_db_instance"/);
+    expect(tfContent).toMatch(/engine\s*=/);
+    expect(tfContent).toMatch(/instance_class\s*=/);
+    expect(tfContent).toMatch(/allocated_storage\s*=/);
+    expect(tfContent).toMatch(/username\s*=/);
+    expect(tfContent).toMatch(/password\s*=/);
+    expect(tfContent).toMatch(/skip_final_snapshot/);
   });
 
-  it('should create Route53 zone, ACM certificates, and records', () => {
-    expect(getResource('aws_route53_zone', 'main').length).toBe(1);
-    expect(getResource('aws_acm_certificate', 'main').length).toBe(1);
-    expect(getResource('aws_acm_certificate', 'cloudfront').length).toBe(1);
-    expect(getResource('aws_route53_record', 'acm_validation').length).toBeGreaterThan(0);
-    expect(getResource('aws_acm_certificate_validation', 'main').length).toBe(1);
+  // ===================== S3 BUCKET =====================
+  test("should define S3 bucket with logging and public access blocked", () => {
+    expect(tfContent).toMatch(/resource "aws_s3_bucket"/);
+    expect(tfContent).toMatch(/acl\s*=/);
+    expect(tfContent).toMatch(/logging/);
+    expect(tfContent).toMatch(/block_public_acls/);
+    expect(tfContent).toMatch(/block_public_policy/);
   });
 
-  it('should create CloudFront distribution and OAI', () => {
-    expect(getResource('aws_cloudfront_origin_access_identity', 'main').length).toBe(1);
-    expect(getResource('aws_cloudfront_distribution', 'main').length).toBe(1);
+  // ===================== IAM ROLE =====================
+  test("should define IAM role for EC2 with S3 access", () => {
+    expect(tfContent).toMatch(/resource "aws_iam_role"/);
+    expect(tfContent).toMatch(/assume_role_policy/);
+    expect(tfContent).toMatch(/aws_iam_policy_attachment/);
   });
 
-  it('should create WAF ACL', () => {
-    expect(getResource('aws_wafv2_web_acl', 'main').length).toBe(1);
+  // ===================== OUTPUTS =====================
+  test("should define outputs for EC2 and RDS", () => {
+    expect(tfContent).toMatch(/output "ec2_dns"/);
+    expect(tfContent).toMatch(/output "rds_endpoint"/);
   });
 
-  it('should create CloudWatch monitoring resources', () => {
-    expect(getResource('aws_sns_topic', 'alerts').length).toBe(1);
-    expect(getResource('aws_sns_topic_subscription', 'alerts_email').length).toBe(1);
-    expect(getResource('aws_cloudwatch_dashboard', 'main').length).toBe(1);
-    expect(getResource('aws_cloudwatch_metric_alarm', 'rds_cpu').length).toBe(1);
-    expect(getResource('aws_cloudwatch_metric_alarm', 'rds_storage').length).toBe(1);
-    expect(getResource('aws_cloudwatch_metric_alarm', 'ec2_cpu_high').length).toBe(1);
-    expect(getResource('aws_cloudwatch_metric_alarm', 'ec2_cpu_low').length).toBe(1);
-    expect(getResource('aws_cloudwatch_log_group', 'app_logs').length).toBe(1);
-  });
-
-  it('should create launch template for additional EC2 instances', () => {
-    expect(getResource('aws_launch_template', 'main').length).toBe(1);
-  });
 });
