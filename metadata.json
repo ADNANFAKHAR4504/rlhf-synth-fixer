@@ -10,5 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "DynamoDB."
+  "aws_services": ["DynamoDB"],
+  "training_quality": 2
 }
