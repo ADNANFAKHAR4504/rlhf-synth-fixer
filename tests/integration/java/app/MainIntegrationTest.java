@@ -529,19 +529,19 @@ public class MainIntegrationTest {
 
         // Filter alarms related to our stack
         List<MetricAlarm> stackAlarms = alarmsResponse.metricAlarms().stream()
-                .filter(alarm -> alarm.namespace().equals("AWS/ECS"))
+                .filter(alarm -> alarm.namespace() != null && alarm.namespace().equals("AWS/ECS"))
                 .toList();
 
         assertFalse(stackAlarms.isEmpty(), "CloudWatch alarms should exist for ECS");
 
         // Verify we have CPU alarms
         boolean hasCpuAlarms = stackAlarms.stream()
-                .anyMatch(alarm -> alarm.metricName().equals("CPUUtilization"));
+                .anyMatch(alarm -> alarm.metricName() != null && alarm.metricName().equals("CPUUtilization"));
         assertTrue(hasCpuAlarms, "Should have CPU utilization alarms");
 
         // Verify we have Memory alarms
         boolean hasMemoryAlarms = stackAlarms.stream()
-                .anyMatch(alarm -> alarm.metricName().equals("MemoryUtilization"));
+                .anyMatch(alarm -> alarm.metricName() != null && alarm.metricName().equals("MemoryUtilization"));
         assertTrue(hasMemoryAlarms, "Should have memory utilization alarms");
 
         // Verify alarms have actions
