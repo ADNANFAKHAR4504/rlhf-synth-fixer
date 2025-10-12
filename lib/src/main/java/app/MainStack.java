@@ -7,14 +7,10 @@ import app.constructs.LambdaConstruct;
 import app.constructs.EcsConstruct;
 import com.hashicorp.cdktf.TerraformOutput;
 import com.hashicorp.cdktf.TerraformOutputConfig;
-import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZones;
-import com.hashicorp.cdktf.providers.aws.data_aws_availability_zones.DataAwsAvailabilityZonesConfig;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProviderConfig;
 import software.constructs.Construct;
 import com.hashicorp.cdktf.TerraformStack;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
-
-import java.util.List;
 
 /**
  * CDKTF Java template stack demonstrating basic AWS infrastructure.
