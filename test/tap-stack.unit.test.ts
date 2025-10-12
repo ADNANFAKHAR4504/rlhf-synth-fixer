@@ -279,7 +279,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic bucket name', () => {
         const properties = template.Resources.S3LoggingBucket.Properties;
         expect(properties.BucketName).toEqual({
-          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${EnvironmentSuffix}'
         });
       });
 

@@ -139,7 +139,7 @@
       "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
+          "Fn::Sub": "secure-logs-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
