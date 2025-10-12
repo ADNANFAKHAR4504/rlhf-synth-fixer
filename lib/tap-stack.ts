@@ -3,6 +3,7 @@ import {
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 import { Construct } from 'constructs';
 
 // Import all modules
@@ -48,6 +49,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Configure Archive Provider
+    new ArchiveProvider(this, 'archive');
 
     // Configure S3 Backend with native state locking
     new S3Backend(this, {

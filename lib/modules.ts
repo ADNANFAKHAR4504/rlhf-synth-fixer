@@ -8,6 +8,7 @@ import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { Route } from '@cdktf/provider-aws/lib/route';
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -571,6 +572,24 @@ async function processMessage(data) {
 }
 `;
 
+    // Create log group first
+    new CloudwatchLogGroup(this, 'lambda-log-group', {
+      name: `/aws/lambda/${props.projectName}-${props.environment}-processor`,
+      retentionInDays: 7,
+    });
+
+    // Create in-memory zip file for Lambda code
+    const archive = new DataArchiveFile(this, 'lambda-archive', {
+      type: 'zip',
+      outputPath: `${props.projectName}-${props.environment}-processor.zip`,
+      source: [
+        {
+          content: handlerCode,
+          filename: 'index.js',
+        },
+      ],
+    });
+
     this.function = new LambdaFunction(this, 'function', {
       functionName: `${props.projectName}-${props.environment}-processor`,
       runtime: 'nodejs18.x',
@@ -583,8 +602,9 @@ async function processMessage(data) {
           ENVIRONMENT: props.environment,
         },
       },
-      filename: 'lambda.zip',
-      sourceCodeHash: Buffer.from(handlerCode).toString('base64'),
+      // Use filename and sourceCodeHash instead of inlineCode
+      filename: archive.outputPath,
+      sourceCodeHash: archive.outputBase64Sha256,
       tags: {
         Name: `${props.projectName}-${props.environment}-lambda`,
       },
@@ -639,20 +659,24 @@ export class CloudWatchModule extends Construct {
       asgName: string;
       lambdaFunctionName: string;
       albArn: string;
+      targetGroupArn?: string; // Optional target group support
     }
   ) {
     super(scope, id);
 
+    // Lambda Logs
     new CloudwatchLogGroup(this, 'lambda-logs', {
       name: `/aws/lambda/${props.lambdaFunctionName}`,
       retentionInDays: 7,
     });
 
+    // ALB Logs
     new CloudwatchLogGroup(this, 'alb-logs', {
       name: `/aws/alb/${props.projectName}-${props.environment}`,
       retentionInDays: 7,
     });
 
+    // EC2 CPU Utilization Alarm
     new CloudwatchMetricAlarm(this, 'cpu-alarm', {
       alarmName: `${props.projectName}-${props.environment}-cpu-high`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -669,22 +693,30 @@ export class CloudWatchModule extends Construct {
       treatMissingData: 'breaching',
     });
 
-    new CloudwatchMetricAlarm(this, 'alb-unhealthy-hosts', {
-      alarmName: `${props.projectName}-${props.environment}-unhealthy-hosts`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'UnHealthyHostCount',
-      namespace: 'AWS/ApplicationELB',
-      period: 60,
-      statistic: 'Average',
-      threshold: 0,
-      alarmDescription: 'Alert when we have unhealthy instances',
-      dimensions: {
-        LoadBalancer: props.albArn.split('/').slice(1).join('/'),
-      },
-      treatMissingData: 'notBreaching',
-    });
+    // Fixed: ALB Unhealthy Hosts Alarm (only if ALB ARN is valid)
+    if (props.albArn && props.albArn.includes('loadbalancer/app/')) {
+      const albDimension = props.albArn.split('loadbalancer/')[1] || '';
 
+      if (albDimension) {
+        new CloudwatchMetricAlarm(this, 'alb-unhealthy-hosts', {
+          alarmName: `${props.projectName}-${props.environment}-unhealthy-hosts`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 1,
+          metricName: 'UnHealthyHostCount',
+          namespace: 'AWS/ApplicationELB',
+          period: 60,
+          statistic: 'Average',
+          threshold: 0,
+          alarmDescription: 'Alert when we have unhealthy ALB targets',
+          dimensions: {
+            LoadBalancer: albDimension,
+          },
+          treatMissingData: 'notBreaching',
+        });
+      }
+    }
+
+    // Lambda Errors Alarm
     new CloudwatchMetricAlarm(this, 'lambda-errors', {
       alarmName: `${props.projectName}-${props.environment}-lambda-errors`,
       comparisonOperator: 'GreaterThanThreshold',
