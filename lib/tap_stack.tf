@@ -1350,3 +1350,8 @@ output "availability_zones" {
   description = "List of availability zones used"
   value       = local.azs
 }
+
+output "region" {
+  description = "The AWS region used for deployment"
+  value       = var.region
+}
