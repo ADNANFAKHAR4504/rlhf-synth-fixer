@@ -267,7 +267,6 @@ func testTrainingInfrastructure(t *testing.T, ctx context.Context, cfg aws.Confi
 		envSuffix := parts[len(parts)-1]
 		stateMachineName := "ml-model-training-pipeline-" + envSuffix
 
-
 		expectedNamePattern := "ml-model-training-pipeline-"
 		assert.Contains(t, stateMachineName, expectedNamePattern, "State machine name should follow expected pattern")
 
