@@ -772,7 +772,7 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
       const { getAwsRegionOverride } = require('../lib/tap-stack');
 
       const result = getAwsRegionOverride();
-      expect(result).toBe('us-east-1'); // Reads from lib/AWS_REGION file
+      expect(result).toBe('us-east-2'); // Reads from lib/AWS_REGION file
 
       // Test in test environment - should return empty string
       process.env.NODE_ENV = 'test';
@@ -789,6 +789,159 @@ describe('BackupInfrastructureStack Direct Branch Testing', () => {
       process.env.NODE_ENV = originalNodeEnv;
 
       // Clear cache and re-import to restore original state
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      require('../lib/tap-stack');
+    }
+  });
+
+  // Test file reading error handling when AWS_REGION file doesn't exist
+  test('getAwsRegionOverride handles file read errors and falls back to us-east-1', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const fs = require('fs');
+    const originalReadFileSync = fs.readFileSync;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      // Mock readFileSync to throw an error (file doesn't exist)
+      fs.readFileSync = jest.fn(() => {
+        throw new Error('File not found');
+      });
+
+      // Clear module cache and re-import with mocked fs
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      const { getAwsRegionOverride } = require('../lib/tap-stack');
+
+      const result = getAwsRegionOverride();
+      expect(result).toBe('us-east-1'); // Should fall back to default
+
+    } finally {
+      // Restore
+      fs.readFileSync = originalReadFileSync;
+      process.env.NODE_ENV = originalNodeEnv;
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      require('../lib/tap-stack');
+    }
+  });
+
+  // Test when AWS_REGION file is empty (tests the || 'us-east-1' branch)
+  test('getAwsRegionOverride handles empty file content', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const fs = require('fs');
+    const originalReadFileSync = fs.readFileSync;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      // Mock readFileSync to return empty string
+      fs.readFileSync = jest.fn(() => '   '); // Whitespace that trims to empty
+
+      // Clear module cache and re-import with mocked fs
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      const { getAwsRegionOverride } = require('../lib/tap-stack');
+
+      const result = getAwsRegionOverride();
+      expect(result).toBe('us-east-1'); // Should use default when empty
+
+    } finally {
+      // Restore
+      fs.readFileSync = originalReadFileSync;
+      process.env.NODE_ENV = originalNodeEnv;
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      require('../lib/tap-stack');
+    }
+  });
+
+  // Test nested try-catch: first path fails, second path succeeds
+  test('getAwsRegionOverride tries fallback path when first path fails', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const fs = require('fs');
+    const originalReadFileSync = fs.readFileSync;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      let callCount = 0;
+      // Mock readFileSync to fail first time, succeed second time
+      fs.readFileSync = jest.fn((path: string) => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error('First path not found');
+        }
+        return 'us-west-2'; // Return different region on second call
+      });
+
+      // Clear module cache and re-import with mocked fs
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      const { getAwsRegionOverride } = require('../lib/tap-stack');
+
+      const result = getAwsRegionOverride();
+      expect(result).toBe('us-west-2'); // Should use region from second path
+      expect(fs.readFileSync).toHaveBeenCalledTimes(2); // Should try twice
+
+    } finally {
+      // Restore
+      fs.readFileSync = originalReadFileSync;
+      process.env.NODE_ENV = originalNodeEnv;
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      require('../lib/tap-stack');
+    }
+  });
+
+  // Test when both file paths fail (outer catch block)
+  test('getAwsRegionOverride falls back to us-east-1 when both paths fail', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const fs = require('fs');
+    const originalReadFileSync = fs.readFileSync;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      // Mock readFileSync to always throw errors
+      fs.readFileSync = jest.fn(() => {
+        throw new Error('No file found');
+      });
+
+      // Clear module cache and re-import with mocked fs
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      const { getAwsRegionOverride } = require('../lib/tap-stack');
+
+      const result = getAwsRegionOverride();
+      expect(result).toBe('us-east-1'); // Should use final fallback
+      expect(fs.readFileSync).toHaveBeenCalledTimes(2); // Should try both paths
+
+    } finally {
+      // Restore
+      fs.readFileSync = originalReadFileSync;
+      process.env.NODE_ENV = originalNodeEnv;
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      require('../lib/tap-stack');
+    }
+  });
+
+  // Test region with whitespace (tests trim() functionality)
+  test('getAwsRegionOverride trims whitespace from file content', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const fs = require('fs');
+    const originalReadFileSync = fs.readFileSync;
+
+    try {
+      process.env.NODE_ENV = 'production';
+
+      // Mock readFileSync to return region with whitespace
+      fs.readFileSync = jest.fn(() => '  ap-south-1  \n');
+
+      // Clear module cache and re-import with mocked fs
+      delete require.cache[require.resolve('../lib/tap-stack')];
+      const { getAwsRegionOverride } = require('../lib/tap-stack');
+
+      const result = getAwsRegionOverride();
+      expect(result).toBe('ap-south-1'); // Should trim whitespace
+
+    } finally {
+      // Restore
+      fs.readFileSync = originalReadFileSync;
+      process.env.NODE_ENV = originalNodeEnv;
       delete require.cache[require.resolve('../lib/tap-stack')];
       require('../lib/tap-stack');
     }

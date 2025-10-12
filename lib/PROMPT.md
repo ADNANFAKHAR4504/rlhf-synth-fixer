@@ -1,7 +1,7 @@
 Create infrastructure code for a backup management system that handles 14,600 daily client backups.
 
 Requirements:
-- Deploy to AWS region us-east-1
+- Deploy to AWS region us-east-2
 - Use S3 bucket with Object Lock enabled for 7-year retention
 - Configure AWS Backup service with daily backup schedules
 - Create AWS Backup Vault with KMS encryption
@@ -28,7 +28,7 @@ Additional requirements using recent AWS features:
 - Configure AWS Backup Audit Manager with compliance framework for backup audits
 - Create backup audit reports configuration to track compliance with backup policies
 - Set up automated audit control findings for backup governance
-- Enable cross-region backup copies to us-east-1 for disaster recovery
+- Enable cross-region backup copies to us-east-2 for disaster recovery
 - Configure backup copy rules with independent retention periods for copied backups
 - Implement cross-region restore testing capability with automated validation.
 
