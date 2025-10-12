@@ -300,4 +300,3 @@ export class S3BucketModule extends Construct {
     });
   }
 }
-
