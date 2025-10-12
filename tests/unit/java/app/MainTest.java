@@ -268,8 +268,8 @@ public class MainTest {
                 if (healthCheck != null) {
                     assertTrue((Boolean) healthCheck.getOrDefault("enabled", false),
                             "Health checks should be enabled");
-                    assertEquals("/health", healthCheck.get("path"),
-                            "Health check path should be /health");
+                    assertEquals("/", healthCheck.get("path"),
+                            "Health check path should be /");
                 }
             });
         }

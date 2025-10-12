@@ -117,7 +117,7 @@ public class LoadBalancerConstruct extends BaseConstruct {
                 .targetType("ip")
                 .healthCheck(AlbTargetGroupHealthCheck.builder()
                         .enabled(true)
-                        .path("/health")
+                        .path("/")
                         .protocol("HTTP")
                         .healthyThreshold(2)
                         .unhealthyThreshold(3)
@@ -169,20 +169,21 @@ public class LoadBalancerConstruct extends BaseConstruct {
             // Create listener rules for each service
             int priority = 1;
             for (ServiceConfig service : services) {
-                AlbTargetGroup tg = targetGroups.get(service.serviceName());
-                if (tg != null) {
+                AlbTargetGroup targetGroup = targetGroups.get(service.serviceName());
+                if (targetGroup != null) {
                     AlbListenerRule.Builder.create(this, service.serviceName() + "-rule")
                             .listenerArn(httpsListener.getArn())
                             .priority(priority++)
                             .action(List.of(AlbListenerRuleAction.builder()
                                     .type("forward")
-                                    .targetGroupArn(tg.getArn())
+                                    .targetGroupArn(targetGroup.getArn())
                                     .build()))
                             .condition(List.of(AlbListenerRuleCondition.builder()
                                     .pathPattern(AlbListenerRuleConditionPathPattern.builder()
                                             .values(List.of("/" + service.serviceName() + "/*", "/" + service.serviceName()))
                                             .build())
                                     .build()))
+                            .dependsOn(List.of(targetGroup))
                             .build();
                 }
             }

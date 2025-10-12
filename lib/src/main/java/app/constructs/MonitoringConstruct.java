@@ -24,7 +24,8 @@ public class MonitoringConstruct extends BaseConstruct {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public MonitoringConstruct(final Construct scope, final String id, final MonitoringConfig config,
-                               final String clusterName, final List<ServiceConfig> services) {
+                               final String clusterName, final List<ServiceConfig> serviceConfigs,
+                               final List<ServiceConstruct> serviceConstructs) {
         super(scope, id);
 
         AppConfig appConfig = getAppConfig();
@@ -45,18 +46,20 @@ public class MonitoringConstruct extends BaseConstruct {
         }
 
         // Create alarms for each service
-        for (ServiceConfig service : services) {
-            createServiceAlarms(appConfig, config, clusterName, service);
+        for (int i = 0; i < serviceConfigs.size(); i++) {
+            ServiceConfig serviceConfig = serviceConfigs.get(i);
+            ServiceConstruct serviceConstruct = i < serviceConstructs.size() ? serviceConstructs.get(i) : null;
+            createServiceAlarms(appConfig, config, clusterName, serviceConfig, serviceConstruct);
         }
 
         // Create dashboard
-        createDashboard(appConfig, clusterName, services);
+        createDashboard(appConfig, clusterName, serviceConfigs);
     }
 
     private void createServiceAlarms(final AppConfig appConfig, final MonitoringConfig config, final String clusterName,
-                                     final ServiceConfig service) {
+                                     final ServiceConfig service, final ServiceConstruct serviceConstruct) {
         // CPU utilization alarm
-        CloudwatchMetricAlarm cpuAlarm = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-cpu-alarm")
+        CloudwatchMetricAlarm.Builder cpuAlarmBuilder = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-cpu-alarm")
                 .alarmName(String.format("%s-%s-high-cpu", appConfig.appName(), service.serviceName()))
                 .alarmDescription(String.format("High CPU utilization for %s", service.serviceName()))
                 .metricName("CPUUtilization")
@@ -71,12 +74,17 @@ public class MonitoringConstruct extends BaseConstruct {
                         "ServiceName", service.serviceName()
                 ))
                 .alarmActions(List.of(alarmTopic.getArn()))
-                .tags(appConfig.tags())
-                .build();
+                .tags(appConfig.tags());
+
+        if (serviceConstruct != null) {
+            cpuAlarmBuilder.dependsOn(List.of(serviceConstruct.getService()));
+        }
+
+        CloudwatchMetricAlarm cpuAlarm = cpuAlarmBuilder.build();
         alarms.add(cpuAlarm);
 
         // Memory utilization alarm
-        CloudwatchMetricAlarm memoryAlarm = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-memory-alarm")
+        CloudwatchMetricAlarm.Builder memoryAlarmBuilder = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-memory-alarm")
                 .alarmName(String.format("%s-%s-high-memory", appConfig.appName(), service.serviceName()))
                 .alarmDescription(String.format("High memory utilization for %s", service.serviceName()))
                 .metricName("MemoryUtilization")
@@ -91,12 +99,17 @@ public class MonitoringConstruct extends BaseConstruct {
                         "ServiceName", service.serviceName()
                 ))
                 .alarmActions(List.of(alarmTopic.getArn()))
-                .tags(appConfig.tags())
-                .build();
+                .tags(appConfig.tags());
+
+        if (serviceConstruct != null) {
+            memoryAlarmBuilder.dependsOn(List.of(serviceConstruct.getService()));
+        }
+
+        CloudwatchMetricAlarm memoryAlarm = memoryAlarmBuilder.build();
         alarms.add(memoryAlarm);
 
         // Task count alarm
-        CloudwatchMetricAlarm taskAlarm = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-task-alarm")
+        CloudwatchMetricAlarm.Builder taskAlarmBuilder = CloudwatchMetricAlarm.Builder.create(this, service.serviceName() + "-task-alarm")
                 .alarmName(String.format("%s-%s-low-tasks", appConfig.appName(), service.serviceName()))
                 .alarmDescription(String.format("Low running task count for %s", service.serviceName()))
                 .metricName("RunningTaskCount")
@@ -112,8 +125,13 @@ public class MonitoringConstruct extends BaseConstruct {
                 ))
                 .alarmActions(List.of(alarmTopic.getArn()))
                 .treatMissingData("breaching")
-                .tags(appConfig.tags())
-                .build();
+                .tags(appConfig.tags());
+
+        if (serviceConstruct != null) {
+            taskAlarmBuilder.dependsOn(List.of(serviceConstruct.getService()));
+        }
+
+        CloudwatchMetricAlarm taskAlarm = taskAlarmBuilder.build();
         alarms.add(taskAlarm);
     }
 

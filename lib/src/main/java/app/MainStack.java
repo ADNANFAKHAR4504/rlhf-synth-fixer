@@ -77,7 +77,7 @@ public class MainStack extends TerraformStack {
 
         // Create Monitoring
         MonitoringConstruct monitoring = new MonitoringConstruct(this, "monitoring", monitoringConfig,
-                cluster.getCluster().getName(), getServiceConfigs(null));
+                cluster.getCluster().getName(), getServiceConfigs(null), services);
 
         // Output VPC information
         new TerraformOutput(this, "vpcId", TerraformOutputConfig.builder()
