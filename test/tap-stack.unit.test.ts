@@ -28,9 +28,9 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly 3 parameters', () => {
+    test('should have exactly 4 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have 34 resources', () => {
@@ -101,6 +101,21 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
       test('should have description', () => {
         expect(template.Parameters.LatestAmiId.Description).toBe('Latest Amazon Linux 2023 AMI ID');
+      });
+    });
+
+    describe('EnvironmentSuffix Parameter', () => {
+      test('should exist and have correct type', () => {
+        expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+        expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      });
+
+      test('should have correct default value', () => {
+        expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      });
+
+      test('should have description', () => {
+        expect(template.Parameters.EnvironmentSuffix.Description).toBe('Environment name for tagging');
       });
     });
   });
@@ -264,7 +279,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic bucket name', () => {
         const properties = template.Resources.S3LoggingBucket.Properties;
         expect(properties.BucketName).toEqual({
-          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+          'Fn::Sub': 'secure-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
         });
       });
 
@@ -309,7 +324,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic bucket name', () => {
         const properties = template.Resources.ApplicationDataBucket.Properties;
         expect(properties.BucketName).toEqual({
-          'Fn::Sub': 'secure-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+          'Fn::Sub': 'secure-app-data-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
         });
       });
 
@@ -425,7 +440,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic secret name', () => {
         const properties = template.Resources.DatabasePasswordSecret.Properties;
         expect(properties.Name).toEqual({
-          'Fn::Sub': '/secure-app/database/password-${AWS::StackName}'
+          'Fn::Sub': '/secure-app/database/password-${EnvironmentSuffix}'
         });
       });
 
@@ -596,7 +611,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic role name', () => {
         const properties = template.Resources.EC2Role.Properties;
         expect(properties.RoleName).toEqual({
-          'Fn::Sub': 'SecureEC2Role-${AWS::StackName}'
+          'Fn::Sub': 'SecureEC2Role-${EnvironmentSuffix}'
         });
       });
 
@@ -770,7 +785,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic identifier', () => {
         const properties = template.Resources.RDSDatabase.Properties;
         expect(properties.DBInstanceIdentifier).toEqual({
-          'Fn::Sub': 'secure-db-${AWS::StackName}'
+          'Fn::Sub': 'secure-db-${EnvironmentSuffix}'
         });
       });
 
@@ -920,7 +935,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic trail name', () => {
         const properties = template.Resources.CloudTrail.Properties;
         expect(properties.TrailName).toEqual({
-          'Fn::Sub': 'SecureTrail-${AWS::StackName}'
+          'Fn::Sub': 'SecureTrail-${EnvironmentSuffix}'
         });
       });
 
@@ -1172,7 +1187,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       test('should have deterministic name', () => {
         const properties = template.Resources.WebACL.Properties;
         expect(properties.Name).toEqual({
-          'Fn::Sub': 'SecureWebACL-${AWS::StackName}'
+          'Fn::Sub': 'SecureWebACL-${EnvironmentSuffix}'
         });
       });
 
@@ -1263,10 +1278,10 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         expect(template.Resources.WAFLogGroup.Type).toBe('AWS::Logs::LogGroup');
       });
 
-      test('should have correct log group name with stack name', () => {
+      test('should have correct log group name with environment suffix', () => {
         const properties = template.Resources.WAFLogGroup.Properties;
         expect(properties.LogGroupName).toEqual({
-          'Fn::Sub': 'aws-waf-logs-secure-infrastructure-${AWS::StackName}'
+          'Fn::Sub': 'aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}'
         });
       });
 
@@ -1294,7 +1309,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
         const logDestination = properties.LogDestinationConfigs[0];
 
         expect(logDestination).toEqual({
-          'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${AWS::StackName}'
+          'Fn::Sub': 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}'
         });
       });
     });
@@ -1311,21 +1326,21 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('ID of the created VPC');
       expect(output.Value).toEqual({ Ref: 'DefaultVPC' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-VPCId' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${EnvironmentSuffix}-VPCId' });
     });
 
     test('S3LoggingBucketName output should be correct', () => {
       const output = template.Outputs.S3LoggingBucketName;
       expect(output.Description).toBe('Name of the S3 bucket for logging');
       expect(output.Value).toEqual({ Ref: 'S3LoggingBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-LoggingBucket' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${EnvironmentSuffix}-LoggingBucket' });
     });
 
     test('ApplicationDataBucketName output should be correct', () => {
       const output = template.Outputs.ApplicationDataBucketName;
       expect(output.Description).toBe('Name of the S3 bucket for application data');
       expect(output.Value).toEqual({ Ref: 'ApplicationDataBucket' });
-      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-ApplicationBucket' });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${EnvironmentSuffix}-ApplicationBucket' });
     });
 
     test('DatabaseEndpoint output should be correct', () => {

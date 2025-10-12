@@ -9,6 +9,11 @@
       "Default": "Production",
       "AllowedValues": ["Development", "Staging", "Production"]
     },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment name for tagging",
+      "Default": "dev"
+    },
     "AlertEmail": {
       "Type": "String",
       "Description": "Email address for security alerts",
@@ -134,7 +139,7 @@
       "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
+          "Fn::Sub": "secure-logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -168,7 +173,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
+          "Fn::Sub": "secure-app-data-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [{
@@ -253,7 +258,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "/secure-app/database/password-${AWS::StackName}"
+          "Fn::Sub": "/secure-app/database/password-${EnvironmentSuffix}"
         },
         "Description": "RDS database master password",
         "GenerateSecretString": {
@@ -352,7 +357,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "SecureEC2Role-${AWS::StackName}"
+          "Fn::Sub": "SecureEC2Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -463,7 +468,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "secure-db-${AWS::StackName}"
+          "Fn::Sub": "secure-db-${EnvironmentSuffix}"
         },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
@@ -536,7 +541,7 @@
       "DependsOn": "CloudTrailBucketPolicy",
       "Properties": {
         "TrailName": {
-          "Fn::Sub": "SecureTrail-${AWS::StackName}"
+          "Fn::Sub": "SecureTrail-${EnvironmentSuffix}"
         },
         "S3BucketName": {"Ref": "S3LoggingBucket"},
         "IncludeGlobalServiceEvents": true,
@@ -689,7 +694,7 @@
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
         "Name": {
-          "Fn::Sub": "SecureWebACL-${AWS::StackName}"
+          "Fn::Sub": "SecureWebACL-${EnvironmentSuffix}"
         },
         "Scope": "REGIONAL",
         "DefaultAction": {
@@ -786,7 +791,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "aws-waf-logs-secure-infrastructure-${AWS::StackName}"
+          "Fn::Sub": "aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
       }
@@ -800,7 +805,7 @@
         },
         "LogDestinationConfigs": [
           {
-            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${AWS::StackName}"
+            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-secure-infrastructure-${EnvironmentSuffix}"
           }
         ]
       }
@@ -812,21 +817,21 @@
       "Description": "ID of the created VPC",
       "Value": {"Ref": "DefaultVPC"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-VPCId"}
       }
     },
     "S3LoggingBucketName": {
       "Description": "Name of the S3 bucket for logging",
       "Value": {"Ref": "S3LoggingBucket"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-LoggingBucket"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-LoggingBucket"}
       }
     },
     "ApplicationDataBucketName": {
       "Description": "Name of the S3 bucket for application data",
       "Value": {"Ref": "ApplicationDataBucket"},
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationBucket"}
+        "Name": {"Fn::Sub": "${EnvironmentSuffix}-ApplicationBucket"}
       }
     },
     "DatabaseEndpoint": {
