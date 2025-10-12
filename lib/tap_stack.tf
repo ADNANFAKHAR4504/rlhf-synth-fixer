@@ -1,7 +1,7 @@
 # tap_stack.tf - Complete Infrastructure Stack Configuration
 # =============================================================================
 # This file contains all resources for a highly available, secure infrastructure
-# deployment in us-west-2 region with comprehensive monitoring and security controls
+# deployment in us-east-1 region with comprehensive monitoring and security controls
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "environment" {
