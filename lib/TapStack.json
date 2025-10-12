@@ -734,6 +734,14 @@
   },
 
   "Outputs": {
+    "StackName": {
+      "Description": "CloudFormation Stack Name",
+      "Value": {"Ref": "AWS::StackName"}
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment Suffix used for resource naming",
+      "Value": {"Ref": "EnvironmentSuffix"}
+    },
     "VPCId": {
       "Description": "VPC ID",
       "Value": {"Ref": "VPC"},

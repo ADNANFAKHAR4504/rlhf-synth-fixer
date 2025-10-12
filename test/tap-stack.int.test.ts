@@ -53,6 +53,7 @@ import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-clo
 // Read outputs from deployed stack
 let outputs: any;
 let stackName: string;
+let environmentSuffix: string;
 let region: string;
 
 beforeAll(() => {
@@ -64,9 +65,17 @@ beforeAll(() => {
     throw new Error(`Outputs file not found at ${outputsPath}. Please deploy the stack first.`);
   }
 
-  // Get stack name from environment or outputs
+  // Get stack name and environment suffix from outputs
   stackName = outputs.StackName || process.env.STACK_NAME || '';
+  environmentSuffix = outputs.EnvironmentSuffix || '';
   region = process.env.AWS_REGION || 'us-east-1';
+
+  if (!stackName) {
+    throw new Error('StackName not found in outputs or environment variables');
+  }
+  if (!environmentSuffix) {
+    throw new Error('EnvironmentSuffix not found in outputs');
+  }
 });
 
 describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
@@ -113,7 +122,8 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
       const response = await cfnClient.send(command);
 
       expect(response.Stacks).toHaveLength(1);
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      const stackStatus = response.Stacks![0].StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackStatus);
     });
   });
 
@@ -365,7 +375,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
           },
           {
             Name: 'group-name',
-            Values: [`${stackName}*`],
+            Values: [`${environmentSuffix}*`],
           },
         ],
       });
@@ -691,7 +701,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
   describe('CloudWatch Monitoring Tests', () => {
     test('all 4 alarms should exist and be enabled', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -703,7 +713,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('CPU alarms should be configured for correct instances', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -725,7 +735,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('status check alarms should be configured correctly', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -742,7 +752,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('alarm thresholds should be set to 80% CPU', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -758,7 +768,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('alarms should have correct evaluation periods', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -770,7 +780,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('SNS topic should be configured as alarm action', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -783,7 +793,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
 
     test('TreatMissingData should be set to breaching', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: stackName,
+        AlarmNamePrefix: environmentSuffix,
       });
       const response = await cwClient.send(command);
 
@@ -883,54 +893,40 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
   // ===========================================================================
   describe('EventBridge Integration Tests', () => {
     test('stack event rule should exist and be enabled', async () => {
-      // Try with and without suffix since suffix can be empty
-      const ruleName = `${stackName}-StackEventRule`;
+      const ruleName = `${environmentSuffix}-StackEventRule`;
       const command = new DescribeRuleCommand({
         Name: ruleName,
       });
 
-      try {
-        const response = await eventsClient.send(command);
-        expect(response.State).toBe('ENABLED');
-        expect(response.EventPattern).toBeDefined();
-      } catch (error: any) {
-        // Rule name might include suffix, skip this test
-        console.warn('Stack event rule not found with expected name');
-      }
+      const response = await eventsClient.send(command);
+      expect(response.State).toBe('ENABLED');
+      expect(response.EventPattern).toBeDefined();
     });
 
     test('rule should capture CloudFormation stack events', async () => {
-      try {
-        const ruleName = `${stackName}-StackEventRule`;
-        const command = new DescribeRuleCommand({
-          Name: ruleName,
-        });
-        const response = await eventsClient.send(command);
+      const ruleName = `${environmentSuffix}-StackEventRule`;
+      const command = new DescribeRuleCommand({
+        Name: ruleName,
+      });
+      const response = await eventsClient.send(command);
 
-        const eventPattern = JSON.parse(response.EventPattern!);
-        expect(eventPattern.source).toContain('aws.cloudformation');
-        expect(eventPattern['detail-type']).toContain(
-          'CloudFormation Stack Status Change'
-        );
-      } catch (error: any) {
-        console.warn('Stack event rule not found');
-      }
+      const eventPattern = JSON.parse(response.EventPattern!);
+      expect(eventPattern.source).toContain('aws.cloudformation');
+      expect(eventPattern['detail-type']).toContain(
+        'CloudFormation Stack Status Change'
+      );
     });
 
     test('SNS topic should be configured as target', async () => {
-      try {
-        const ruleName = `${stackName}-StackEventRule`;
-        const command = new ListTargetsByRuleCommand({
-          Rule: ruleName,
-        });
-        const response = await eventsClient.send(command);
+      const ruleName = `${environmentSuffix}-StackEventRule`;
+      const command = new ListTargetsByRuleCommand({
+        Rule: ruleName,
+      });
+      const response = await eventsClient.send(command);
 
-        expect(response.Targets).toBeDefined();
-        expect(response.Targets!.length).toBeGreaterThan(0);
-        expect(response.Targets![0].Arn).toBe(outputs.SNSTopicArn);
-      } catch (error: any) {
-        console.warn('Stack event rule targets not found');
-      }
+      expect(response.Targets).toBeDefined();
+      expect(response.Targets!.length).toBeGreaterThan(0);
+      expect(response.Targets![0].Arn).toBe(outputs.SNSTopicArn);
     });
   });
 
@@ -1031,7 +1027,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
       const response = await logsClient.send(command);
 
       const logGroup = response.logGroups!.find((lg) =>
-        lg.logGroupName!.includes(stackName)
+        lg.logGroupName!.includes(environmentSuffix)
       );
       expect(logGroup).toBeDefined();
     });
@@ -1043,7 +1039,7 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
       const response = await logsClient.send(command);
 
       const logGroup = response.logGroups!.find((lg) =>
-        lg.logGroupName!.includes(stackName)
+        lg.logGroupName!.includes(environmentSuffix)
       );
 
       if (logGroup) {
@@ -1209,13 +1205,14 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
   // L. End-to-End Workflow Tests
   // ===========================================================================
   describe('End-to-End Workflow Tests', () => {
-    test('stack should be in CREATE_COMPLETE status', async () => {
+    test('stack should be in a successful state', async () => {
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });
       const response = await cfnClient.send(command);
 
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      const stackStatus = response.Stacks![0].StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackStatus);
     });
 
     test('all resources should be successfully created', async () => {
@@ -1225,7 +1222,8 @@ describe('TapStack Infrastructure - Comprehensive Integration Tests', () => {
       const response = await cfnClient.send(command);
 
       const stack = response.Stacks![0];
-      expect(stack.StackStatus).toBe('CREATE_COMPLETE');
+      const stackStatus = stack.StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackStatus);
       expect(stack.Outputs).toBeDefined();
       expect(stack.Outputs!.length).toBeGreaterThanOrEqual(10);
     });
