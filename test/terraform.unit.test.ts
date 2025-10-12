@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import * as hclParser from "hcl-to-json";
 
-const tfFilePath = join(__dirname, "../tap_stack.tf");
+const tfFilePath = join(__dirname, "../lib/tap_stack.tf");
 const tfFileContent = readFileSync(tfFilePath, "utf-8");
 const tfJson = hclParser(tfFileContent);
 
