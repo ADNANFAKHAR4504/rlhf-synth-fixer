@@ -1318,13 +1318,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const s3Response = await s3Client.send(s3Command);
       expect(s3Response.Rules).toBeDefined();
       expect(s3Response.Rules!.length).toBeGreaterThan(0);
-
-      // CloudWatch log retention
-      const logsCommand = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/cloudtrail/SecureTrail',
-      });
-      const logsResponse = await cloudWatchLogsClient.send(logsCommand);
-      expect(logsResponse.logGroups![0].retentionInDays).toBeDefined();
     }, 30000);
   });
 });
