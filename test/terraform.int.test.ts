@@ -3,12 +3,15 @@ import { join } from "path";
 import AWS from "aws-sdk";
 import mysql from "mysql2/promise";
 
+
 // Load Terraform flat outputs JSON
 const outputsPath = join(__dirname, "../cfn-outputs/flat-outputs.json");
 const flat = JSON.parse(readFileSync(outputsPath, "utf8"));
 
+
 // Dynamically determine AWS region from outputs
 const region = flat.region || "us-west-2";
+
 
 // Initialize AWS SDK clients with the dynamic region
 const ec2 = new AWS.EC2({ region });
@@ -19,9 +22,14 @@ const secrets = new AWS.SecretsManager({ region });
 const logs = new AWS.CloudWatchLogs({ region });
 const sns = new AWS.SNS({ region });
 const waf = new AWS.WAFV2({ region });
+const rds = new AWS.RDS({ region });
+const config = new AWS.ConfigService({ region });
+const cloudwatch = new AWS.CloudWatch({ region });
+
 
 // Utility to parse JSON string arrays in outputs
 const parseJsonArray = (value?: string) => (value ? JSON.parse(value) : []);
+
 
 // -----------------
 // VPC & Networking Tests
@@ -34,6 +42,7 @@ describe("VPC & Networking", () => {
   });
 });
 
+
 // -----------------
 // IAM Role Validation
 // -----------------
@@ -45,12 +54,14 @@ describe("IAM Roles", () => {
     expect(role.Role?.Arn).toBe(flat.iam_role_lambda_arn);
   });
 
+
   it("should validate EC2 IAM role exists", async () => {
     const roleName = flat.iam_role_ec2_arn.split("/").pop();
     if (!roleName) return console.warn("EC2 IAM role name missing, skipping test");
     const role = await iam.getRole({ RoleName: roleName }).promise();
     expect(role.Role?.Arn).toBe(flat.iam_role_ec2_arn);
   });
+
 
   it("should validate AWS Config IAM role exists", async () => {
     const roleName = flat.iam_role_config_arn.split("/").pop();
@@ -59,6 +70,7 @@ describe("IAM Roles", () => {
     expect(role.Role?.Arn).toBe(flat.iam_role_config_arn);
   });
 });
+
 
 // -----------------
 // S3 Bucket Tests
@@ -69,11 +81,13 @@ describe("S3 Bucket", () => {
     await s3.headBucket({ Bucket: flat.s3_bucket_id }).promise();
   });
 
+
   it("should have server-side encryption with AES256", async () => {
     if (!flat.s3_bucket_id) return console.warn("S3 bucket ID missing, skipping test");
     const enc = await s3.getBucketEncryption({ Bucket: flat.s3_bucket_id }).promise();
     expect(enc.ServerSideEncryptionConfiguration?.Rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
   });
+
 
   it("should have public access block fully enabled", async () => {
     if (!flat.s3_bucket_id) return console.warn("S3 bucket ID missing, skipping test");
@@ -86,6 +100,8 @@ describe("S3 Bucket", () => {
 });
 
 
+
+
 // -----------------
 // SNS Topic Tests
 // -----------------
@@ -94,5 +110,120 @@ describe("SNS Topic", () => {
     if (!flat.sns_topic_arn) return console.warn("SNS topic ARN missing, skipping test");
     const topics = await sns.listTopics({}).promise();
     expect(topics.Topics?.some(t => t.TopicArn === flat.sns_topic_arn)).toBe(true);
+  });
+});
+
+// -----------------
+// RDS Multi-AZ Tests
+// -----------------
+describe("RDS Database", () => {
+  it("should confirm RDS instance exists with Multi-AZ enabled", async () => {
+    if (!flat.rds_instance_endpoint) return console.warn("RDS endpoint missing, skipping test");
+    // Extract DBInstanceIdentifier from endpoint (typically the subdomain part before first dot)
+    const dbInstanceId = flat.rds_instance_endpoint.split('.')[0];
+    const instances = await rds.describeDBInstances({ DBInstanceIdentifier: dbInstanceId }).promise();
+    const instance = instances.DBInstances?.[0];
+    expect(instance).toBeDefined();
+    expect(instance.MultiAZ).toBe(true);
+    expect(instance.StorageEncrypted).toBe(true);
+    expect(instance.DBInstanceStatus).toMatch(/available|backing-up/);
+  });
+});
+
+// -----------------
+// CloudWatch Alarms Tests
+// -----------------
+describe("CloudWatch Alarms", () => {
+  it("should confirm unauthorized API access alarm exists with correct threshold", async () => {
+    const alarmName = `${flat.project_name}-${flat.environment}-unauthorized-api-access`;
+    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
+    const alarm = alarms.MetricAlarms?.[0];
+    expect(alarm).toBeDefined();
+    expect(alarm.Threshold).toBe(5);
+    expect(alarm.EvaluationPeriods).toBe(1);
+    expect(alarm.AlarmActions?.length).toBeGreaterThan(0);
+  });
+
+  it("should confirm RDS CPU utilization alarm triggered at 80%", async () => {
+    const alarmName = `${flat.project_name}-${flat.environment}-rds-high-cpu`;
+    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
+    const alarm = alarms.MetricAlarms?.find(a => a.AlarmName === alarmName);
+    expect(alarm).toBeDefined();
+    expect(alarm.Threshold).toBe(80);
+    expect(alarm.Dimensions?.some(d => d.Name === "DBInstanceIdentifier")).toBe(true);
+  });
+
+  it("should confirm EC2 CPU utilization alarm triggered at 80%", async () => {
+    const alarmName = `${flat.project_name}-${flat.environment}-ec2-high-cpu`;
+    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
+    const alarm = alarms.MetricAlarms?.find(a => a.AlarmName === alarmName);
+    expect(alarm).toBeDefined();
+    expect(alarm.Threshold).toBe(80);
+    expect(alarm.Dimensions?.some(d => d.Name === "InstanceId")).toBe(true);
+  });
+});
+
+// -----------------
+// WAF Web ACL Tests
+// -----------------
+describe("WAF Web ACL", () => {
+  it("should confirm WAF Web ACL exists with SQLi, XSS and RateLimit rules", async () => {
+    if (!flat.waf_web_acl_id) return console.warn("WAF Web ACL ID missing, skipping test");
+    const params = {
+      Id: flat.waf_web_acl_id,
+      Scope: "REGIONAL"
+    };
+    const response = await waf.getWebACL(params).promise();
+    const rules = response.WebACL?.Rules || [];
+    const ruleNames = rules.map(rule => rule.Name);
+    expect(ruleNames).toContain("SQLiRule");
+    expect(ruleNames).toContain("XSSRule");
+    expect(ruleNames).toContain("RateLimitRule");
+    expect(response.WebACL?.DefaultAction?.Allow).toBeDefined();
+  });
+});
+
+// -----------------
+// Secrets Manager Tests
+// -----------------
+describe("Secrets Manager", () => {
+  it("should confirm RDS secret exists and contains required keys", async () => {
+    if (!flat.rds_secret_arn) return console.warn("RDS secret ARN missing, skipping test");
+    const secret = await secrets.getSecretValue({ SecretId: flat.rds_secret_arn }).promise();
+    const secretString = secret.SecretString || "{}";
+    const secretJson = JSON.parse(secretString);
+    expect(secretJson).toHaveProperty("username");
+    expect(secretJson).toHaveProperty("password");
+    expect(secretJson).toHaveProperty("engine");
+    expect(secretJson).toHaveProperty("host");
+    expect(secretJson).toHaveProperty("port");
+  });
+});
+
+// -----------------
+// AWS Config Tests
+// -----------------
+describe("AWS Config", () => {
+  it("should confirm Config recorder is enabled", async () => {
+    if (!flat.config_recorder_name) return console.warn("Config recorder name missing, skipping test");
+    const status = await config.describeConfigurationRecorderStatus({ ConfigurationRecorderNames: [flat.config_recorder_name] }).promise();
+    const recorderStatus = status.ConfigurationRecordersStatus?.[0];
+    expect(recorderStatus).toBeDefined();
+    expect(recorderStatus.recording).toBe(true);
+  });
+
+  it("should confirm Config delivery channel exists", async () => {
+    if (!flat.config_bucket_id) return console.warn("Config bucket ID missing, skipping test");
+    const channels = await config.describeDeliveryChannels({}).promise();
+    const channel = channels.DeliveryChannels?.find(dc => dc.s3BucketName === flat.config_bucket_id);
+    expect(channel).toBeDefined();
+  });
+
+  it("should confirm critical Config rules exist", async () => {
+    const rules = await config.describeConfigRules({}).promise();
+    const ruleNames = rules.ConfigRules?.map(r => r.ConfigRuleName) || [];
+    expect(ruleNames.some(name => name.includes("s3-public-read-prohibited"))).toBe(true);
+    expect(ruleNames.some(name => name.includes("rds-encryption-enabled"))).toBe(true);
+    expect(ruleNames.some(name => name.includes("ec2-ssm-managed"))).toBe(true);
   });
 });
