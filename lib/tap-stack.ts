@@ -276,7 +276,7 @@ export class TapStack extends TerraformStack {
 
     // Create public S3 bucket for app assets
     const publicS3Module = new EncryptedS3Bucket(this, 'public-s3', {
-      name: `${id}-${environmentSuffix}-public-assets`,
+      name: `${id.toLowerCase()}-${environmentSuffix}-public-assets`, // Add .toLowerCase()
       versioning: true,
       kmsKeyArn: kmsModule.keyArn,
       lifecycleRules: [
@@ -294,7 +294,7 @@ export class TapStack extends TerraformStack {
 
     // Create private S3 bucket for internal data
     const privateS3Module = new EncryptedS3Bucket(this, 'private-s3', {
-      name: `${id}-${environmentSuffix}-private-data`,
+      name: `${id.toLowerCase()}-${environmentSuffix}-private-data`, // Add .toLowerCase()
       versioning: true,
       kmsKeyArn: kmsModule.keyArn,
       lifecycleRules: [

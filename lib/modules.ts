@@ -704,7 +704,7 @@ export class AuditTrail extends Construct {
 
     // Create S3 bucket for CloudTrail logs
     this.bucket = new EncryptedS3Bucket(this, 'audit-bucket', {
-      name: `${name}-audit-logs`,
+      name: `${name.toLowerCase()}-audit-logs`, // Add .toLowerCase()
       versioning: true,
       kmsKeyArn,
       lifecycleRules: [
