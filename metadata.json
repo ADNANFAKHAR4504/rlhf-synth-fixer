@@ -1,0 +1,27 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "1398565524",
+  "team": "synth",
+  "startedAt": "2025-10-14T00:08:04+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "RDS",
+    "ECS",
+    "EFS",
+    "ElastiCache",
+    "API Gateway",
+    "Kinesis",
+    "CodePipeline",
+    "Secrets Manager"
+  ]
+}
