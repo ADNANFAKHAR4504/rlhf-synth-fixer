@@ -73,7 +73,7 @@ export class TapStack extends TerraformStack {
       environment: environmentSuffix,
       owner: 'infrastructure-team',
       'cost-center': 'engineering',
-      managedBy: 'terraform',
+      // managedBy: 'terraform',
     };
 
     // Create KMS key for encryption
@@ -327,7 +327,7 @@ export class TapStack extends TerraformStack {
       username: 'admin',
       dbSubnetGroupName: vpcModule.dbSubnetGroup.name,
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      kmsKeyId: kmsModule.keyId,
+      kmsKeyId: kmsModule.keyArn,
       backupRetentionPeriod: 7,
       deletionProtection: environmentSuffix === 'prod',
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],

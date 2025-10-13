@@ -94,3 +94,35 @@ TapStackpr4196  ::error::Terraform exited with code 1.
 Invoking Terraform CLI failed with exit code 1
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Error: Process completed with exit code 1.
+
+TapStackpr4196  aws_route.main-vpc_private-route-1_9190DFC9: Creation complete after 1s [id=r-rtb-0d41d8fff7c61fb031080289494]
+TapStackpr4196  ╷
+                │ Error: "kms_key_id" (5b8fbce3-9589-44b7-9cca-c59dcacbe130) is an invalid ARN: arn: invalid prefix
+                │ 
+                │   with aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance),
+                │   on cdk.tf.json line 328, in resource.aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance):
+                │  328:         "kms_key_id": "${aws_kms_key.main-kms_key_0BE179F2 (main-kms/key).key_id}",
+                │ 
+                ╵
+TapStackpr4196  ╷
+                │ Error: creating IAM Role (TapStackpr4196-pr4196-cloudtrail-role): operation error IAM: CreateRole, https response error StatusCode: 400, RequestID: 6e292395-bfb0-4ea0-af63-4338618c8750, InvalidInput: Duplicate tag keys found. Please note that Tag keys are case insensitive.
+                │ 
+                │   with aws_iam_role.audit-trail_trail-role_8CF661E1 (audit-trail/trail-role/role),
+                │   on cdk.tf.json line 455, in resource.aws_iam_role.audit-trail_trail-role_8CF661E1 (audit-trail/trail-role/role):
+                │  455:       },
+                │ 
+                ╵
+TapStackpr4196  ╷
+                │ Error: creating IAM Role (TapStackpr4196-pr4196-ec2-role): operation error IAM: CreateRole, https response error StatusCode: 400, RequestID: c04b1abb-0191-428b-ac67-b6688404afcd, InvalidInput: Duplicate tag keys found. Please note that Tag keys are case insensitive.
+                │ 
+                │   with aws_iam_role.ec2-role_3F52732E (ec2-role/role),
+                │   on cdk.tf.json line 472, in resource.aws_iam_role.ec2-role_3F52732E (ec2-role/role):
+                │  472:       }
+                │ 
+                ╵
+TapStackpr4196  ::error::Terraform exited with code 1.
+
+
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Invoking Terraform CLI failed with exit code 1
+Error: Process completed with exit code 1.
