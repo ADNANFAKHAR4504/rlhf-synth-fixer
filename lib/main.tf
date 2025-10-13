@@ -1,6 +1,6 @@
 # Variables
 variable "aws_region" {
-  description = "The AWS region where resources will be created"
+  description = "The AWS region where resources will be create"
   type        = string
   default     = "us-west-2"
 }
