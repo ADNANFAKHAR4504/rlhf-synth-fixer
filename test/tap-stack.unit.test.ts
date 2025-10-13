@@ -29,6 +29,14 @@ describe('TapStack CloudFormation Template', () => {
   };
   const hasIf = (obj: any) => !!(obj && obj['Fn::If']);
 
+  // NEW: match kebab-case export names used by the template
+  const toKebab = (s: string) =>
+    s
+      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+      .replace(/([A-Za-z])([0-9])/g, '$1-$2')
+      .replace(/([0-9])([A-Za-z])/g, '$1-$2')
+      .toLowerCase();
+
   describe('Write Integration TESTS', () => {
     test('template loads for integration tests', async () => {
       expect(template).toBeDefined();
@@ -243,12 +251,12 @@ describe('TapStack CloudFormation Template', () => {
       expected.forEach(o => expect(getOut(o)).toBeDefined());
     });
 
-    test('each output should export with ${AWS::StackName}-<Key> pattern', () => {
+    test('each output should export with ${AWS::StackName}-<kebab-key> pattern', () => {
       Object.keys(template.Outputs).forEach(k => {
         const out = template.Outputs[k];
-        // Some outputs are conditional (e.g., NatGateway2Id), but still should have Export.Name
         if (out.Export?.Name) {
-          expect(out.Export.Name).toEqual({ 'Fn::Sub': `\${AWS::StackName}-${k}` });
+          const kebabKey = toKebab(k);
+          expect(out.Export.Name).toEqual({ 'Fn::Sub': `\${AWS::StackName}-${kebabKey}` });
         }
       });
     });
@@ -291,8 +299,9 @@ describe('TapStack CloudFormation Template', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         if (output.Export?.Name) {
+          const kebabKey = toKebab(outputKey);
           expect(output.Export.Name).toEqual({
-            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+            'Fn::Sub': `\${AWS::StackName}-${kebabKey}`,
           });
         }
       });
