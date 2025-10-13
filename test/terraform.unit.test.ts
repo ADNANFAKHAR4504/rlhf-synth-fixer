@@ -206,6 +206,14 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
     test('should define vpc_account_ids in locals', () => {
       expect(terraformCode).toMatch(/locals\s+\{[\s\S]*?vpc_account_ids\s*=/);
     });
+
+    test('should define https_ingress_rules in locals for unique security group rules', () => {
+      expect(terraformCode).toMatch(/locals\s+\{[\s\S]*?https_ingress_rules\s*=/);
+    });
+
+    test('should define https_ingress_unique in locals to deduplicate rules', () => {
+      expect(terraformCode).toMatch(/locals\s+\{[\s\S]*?https_ingress_unique\s*=/);
+    });
   });
 
   describe('VPC Resources', () => {
@@ -399,6 +407,10 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
       expect(terraformCode).toMatch(/resource\s+"aws_security_group_rule"\s+"https_ingress"/);
     });
 
+    test('should use for_each for HTTPS ingress rules to avoid duplicates', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_security_group_rule"\s+"https_ingress"[\s\S]*?for_each\s*=\s*local\.https_ingress_unique/);
+    });
+
     test('should allow port 443 in security group rules', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_security_group_rule"[\s\S]*?from_port\s*=\s*443[\s\S]*?to_port\s*=\s*443/);
     });
@@ -524,6 +536,14 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
     test('should allow CloudTrail to write to bucket', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_policy"[\s\S]*?Service.*cloudtrail\.amazonaws\.com/);
     });
+
+    test('should use concat for conditional cross-account policy statements', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_s3_bucket_policy"[\s\S]*?Statement\s*=\s*concat\(/);
+    });
+
+    test('should conditionally add cross-account write policy based on peer_account_ids', () => {
+      expect(terraformCode).toMatch(/length\(var\.peer_account_ids\)\s*>\s*0\s*\?\s*\[[\s\S]*?AllowCrossAccountWrite/);
+    });
   });
 
   describe('CloudTrail', () => {
@@ -580,6 +600,14 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
     test('should allow EventBridge to publish to SNS', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_sns_topic_policy"[\s\S]*?Service.*events\.amazonaws\.com/);
     });
+
+    test('should use concat for conditional SNS cross-account policy', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_sns_topic_policy"[\s\S]*?Statement\s*=\s*concat\(/);
+    });
+
+    test('should conditionally add cross-account publish policy to SNS based on peer_account_ids', () => {
+      expect(terraformCode).toMatch(/length\(var\.peer_account_ids\)\s*>\s*0\s*\?\s*\[[\s\S]*?AllowCrossAccountPublish/);
+    });
   });
 
   describe('CloudWatch Monitoring', () => {
@@ -597,6 +625,22 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
 
     test('should use Corp/VPCPeering/Security namespace', () => {
       expect(terraformCode).toMatch(/namespace\s*=\s*"Corp\/VPCPeering\/Security"/);
+    });
+
+    test('should define dimensions in metric transformation', () => {
+      expect(terraformCode).toMatch(/metric_transformation\s*\{[\s\S]*?dimensions\s*=\s*\{/);
+    });
+
+    test('should not use both dimensions and default_value (mutually exclusive)', () => {
+      // Check that default_value is not present when dimensions are used
+      const metricTransformationBlocks = terraformCode.match(/metric_transformation\s*\{[\s\S]*?\}/g) || [];
+      metricTransformationBlocks.forEach(block => {
+        const hasDimensions = /dimensions\s*=/.test(block);
+        const hasDefaultValue = /default_value\s*=/.test(block);
+        if (hasDimensions) {
+          expect(hasDefaultValue).toBe(false);
+        }
+      });
     });
 
     test('should define alarm for rejected connections', () => {
@@ -665,6 +709,14 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
 
     test('should allow Lambda to assume cross-account roles', () => {
       expect(terraformCode).toMatch(/sts:AssumeRole/);
+    });
+
+    test('should use concat for conditional Lambda IAM policy statements', () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_iam_role_policy"\s+"compliance_lambda"[\s\S]*?Statement\s*=\s*concat\(/);
+    });
+
+    test('should conditionally add AssumeRole policy based on peer_account_ids', () => {
+      expect(terraformCode).toMatch(/length\(var\.peer_account_ids\)\s*>\s*0\s*\?\s*\[[\s\S]*?sts:AssumeRole/);
     });
 
     test('should define archive_file data source for Lambda', () => {

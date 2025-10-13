@@ -238,6 +238,25 @@ locals {
     for i in range(var.vpc_count) :
     i => lookup(var.account_id_map, i, data.aws_caller_identity.current.account_id)
   }
+
+  # Create unique HTTPS ingress rules per VPC to avoid duplicates
+  https_ingress_rules = flatten([
+    for vpc_idx in range(var.vpc_count) : [
+      for pair in local.peering_pairs : {
+        vpc_index   = vpc_idx
+        source_cidr = local.vpc_cidrs[pair.requester_vpc_index]
+        source_idx  = pair.requester_vpc_index
+      }
+      # Only include rules where this VPC is either requester or accepter
+      if vpc_idx == pair.requester_vpc_index || vpc_idx == pair.accepter_vpc_index
+    ]
+  ])
+
+  # Remove duplicates by creating a unique key
+  https_ingress_unique = {
+    for rule in local.https_ingress_rules :
+    "${rule.vpc_index}-${rule.source_cidr}" => rule
+  }
 }
 
 # ================================================================================
@@ -498,15 +517,15 @@ resource "aws_security_group" "vpc_peering" {
 
 # Allow HTTPS (443) from all peered VPC CIDRs
 resource "aws_security_group_rule" "https_ingress" {
-  count = var.vpc_count * length(local.peering_pairs)
+  for_each = local.https_ingress_unique
 
   type              = "ingress"
   from_port         = 443
   to_port           = 443
   protocol          = "tcp"
-  cidr_blocks       = [local.vpc_cidrs[local.peering_pairs[count.index % length(local.peering_pairs)].requester_vpc_index]]
-  security_group_id = aws_security_group.vpc_peering[floor(count.index / length(local.peering_pairs))].id
-  description       = "Allow HTTPS from peered VPC ${local.peering_pairs[count.index % length(local.peering_pairs)].requester_vpc_index}"
+  cidr_blocks       = [each.value.source_cidr]
+  security_group_id = aws_security_group.vpc_peering[each.value.vpc_index].id
+  description       = "Allow HTTPS from peered VPC ${each.value.source_idx}"
 }
 
 # Allow MySQL (3306) from specific VPC CIDRs based on database_access_map
@@ -771,7 +790,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid    = "AllowCloudTrailWrite"
         Effect = "Allow"
@@ -794,20 +813,22 @@ resource "aws_s3_bucket_policy" "logs" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs.arn
-      },
-      {
-        Sid    = "AllowCrossAccountWrite"
-        Effect = "Allow"
-        Principal = {
-          AWS = [for account_id in var.peer_account_ids : "arn:aws:iam::${account_id}:root"]
-        }
-        Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl"
-        ]
-        Resource = "${aws_s3_bucket.logs.arn}/*"
       }
-    ]
+      ],
+      length(var.peer_account_ids) > 0 ? [
+        {
+          Sid    = "AllowCrossAccountWrite"
+          Effect = "Allow"
+          Principal = {
+            AWS = [for account_id in var.peer_account_ids : "arn:aws:iam::${account_id}:root"]
+          }
+          Action = [
+            "s3:PutObject",
+            "s3:PutObjectAcl"
+          ]
+          Resource = "${aws_s3_bucket.logs.arn}/*"
+        }
+    ] : [])
   })
 }
 
@@ -861,7 +882,7 @@ resource "aws_sns_topic_policy" "alerts" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid    = "AllowCloudWatchEvents"
         Effect = "Allow"
@@ -870,17 +891,19 @@ resource "aws_sns_topic_policy" "alerts" {
         }
         Action   = "SNS:Publish"
         Resource = aws_sns_topic.alerts.arn
-      },
-      {
-        Sid    = "AllowCrossAccountPublish"
-        Effect = "Allow"
-        Principal = {
-          AWS = [for account_id in var.peer_account_ids : "arn:aws:iam::${account_id}:root"]
-        }
-        Action   = "SNS:Publish"
-        Resource = aws_sns_topic.alerts.arn
       }
-    ]
+      ],
+      length(var.peer_account_ids) > 0 ? [
+        {
+          Sid    = "AllowCrossAccountPublish"
+          Effect = "Allow"
+          Principal = {
+            AWS = [for account_id in var.peer_account_ids : "arn:aws:iam::${account_id}:root"]
+          }
+          Action   = "SNS:Publish"
+          Resource = aws_sns_topic.alerts.arn
+        }
+    ] : [])
   })
 }
 
@@ -897,10 +920,9 @@ resource "aws_cloudwatch_log_metric_filter" "rejected_connections" {
   pattern        = "[version, account, eni, source, destination, srcport, destport, protocol, packets, bytes, windowstart, windowend, action=REJECT, flowlogstatus]"
 
   metric_transformation {
-    name          = "RejectedConnections"
-    namespace     = "Corp/VPCPeering/Security"
-    value         = "1"
-    default_value = 0
+    name      = "RejectedConnections"
+    namespace = "Corp/VPCPeering/Security"
+    value     = "1"
     dimensions = {
       VPCIndex = count.index
     }
@@ -1038,7 +1060,7 @@ resource "aws_iam_role_policy" "compliance_lambda" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Effect = "Allow"
         Action = [
@@ -1050,41 +1072,45 @@ resource "aws_iam_role_policy" "compliance_lambda" {
           "ec2:DescribeFlowLogs"
         ]
         Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "sts:AssumeRole"
-        ]
-        Resource = [
-          for account_id in var.peer_account_ids :
-          "arn:aws:iam::${account_id}:role/${var.cross_account_role_name}"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:*:*:*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = aws_sns_topic.alerts.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData"
-        ]
-        Resource = "*"
       }
-    ]
+      ],
+      length(var.peer_account_ids) > 0 ? [
+        {
+          Effect = "Allow"
+          Action = [
+            "sts:AssumeRole"
+          ]
+          Resource = [
+            for account_id in var.peer_account_ids :
+            "arn:aws:iam::${account_id}:role/${var.cross_account_role_name}"
+          ]
+        }
+      ] : [],
+      [
+        {
+          Effect = "Allow"
+          Action = [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:PutLogEvents"
+          ]
+          Resource = "arn:aws:logs:*:*:*"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "sns:Publish"
+          ]
+          Resource = aws_sns_topic.alerts.arn
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "cloudwatch:PutMetricData"
+          ]
+          Resource = "*"
+        }
+    ])
   })
 }
 
