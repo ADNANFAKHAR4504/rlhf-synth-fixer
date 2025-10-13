@@ -607,15 +607,59 @@ describe('TapStack CloudFormation Template', () => {
     test('should use parameter reference for username and Secrets Manager for password', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.MasterUsername).toEqual({ Ref: 'DBUsername' });
-      expect(rds.Properties.MasterUserPassword).toBe(
-        '{{resolve:secretsmanager:prod-db-password:SecretString:password}}'
-      );
+      expect(rds.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub':
+          '{{resolve:secretsmanager:prod-db-password-${EnvironmentSuffix}:SecretString:password}}',
+      });
     });
 
     test('should configure deletion policy for RDS', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.DeletionPolicy).toBe('Snapshot');
       expect(rds.UpdateReplacePolicy).toBe('Snapshot');
+    });
+
+    test('should have RDS depend on DBSecret', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.DependsOn).toBe('DBSecret');
+    });
+  });
+
+  describe('Secrets Manager Configuration', () => {
+    test('should create Secrets Manager secret for database password', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('should configure secret with environment-specific name', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Properties.Name).toEqual({
+        'Fn::Sub': 'prod-db-password-${EnvironmentSuffix}',
+      });
+    });
+
+    test('should generate random password in secret', () => {
+      const secret = template.Resources.DBSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(
+        secret.Properties.GenerateSecretString.PasswordLength
+      ).toBe(32);
+      expect(
+        secret.Properties.GenerateSecretString.GenerateStringKey
+      ).toBe('password');
+    });
+
+    test('should tag secret appropriately', () => {
+      const secret = template.Resources.DBSecret;
+      const tags = secret.Properties.Tags;
+      expect(tags).toContainEqual({
+        Key: 'Name',
+        Value: { 'Fn::Sub': 'DBSecret-${EnvironmentSuffix}' },
+      });
+      expect(tags).toContainEqual({
+        Key: 'Environment',
+        Value: 'Production',
+      });
     });
   });
 
@@ -633,6 +677,17 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('dev');
       expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+    });
+  });
+
+  describe('Outputs Configuration', () => {
+    test('should export DBSecretArn output', () => {
+      const output = template.Outputs.DBSecretArn;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'DBSecret' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-DBSecretArn',
+      });
     });
   });
 });

@@ -28,6 +28,7 @@ This CloudFormation template creates a highly available, secure, production-leve
 ### Database Layer
 - **RDS MySQL Instance**: db.t3.micro instance running MySQL 8.0.43 in Multi-AZ configuration for high availability
 - **DB Subnet Group**: Spans both private subnets across two availability zones
+- **Secrets Manager**: Automatically generates and manages database password with 32-character complexity
 - **Encryption**: Storage encrypted at rest using AWS KMS
 - **Backup**: 7-day backup retention with automated backups during 03:00-04:00 UTC maintenance window
 - **Maintenance Window**: Scheduled for Sundays 04:00-05:00 UTC to minimize impact
@@ -40,7 +41,8 @@ This CloudFormation template creates a highly available, secure, production-leve
   - Web Server Security Group: Allows inbound traffic only from ALB on port 80
   - RDS Security Group: Allows inbound MySQL traffic (3306) only from web server security group
 - **IAM Roles**: EC2 instances use IAM roles instead of access keys for AWS service interactions
-- **Encryption**: EBS volumes and RDS storage encrypted at rest, parameters use NoEcho for sensitive data
+- **Secrets Management**: Database password stored in AWS Secrets Manager with automatic rotation support
+- **Encryption**: EBS volumes and RDS storage encrypted at rest
 - **Network Isolation**: Database in private subnets with no direct internet access
 
 ### Monitoring and Operations
@@ -107,6 +109,33 @@ All resources are tagged with:
     }
   },
   "Resources": {
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-db-password-${EnvironmentSuffix}"
+        },
+        "Description": "RDS database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "DBSecret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -906,6 +935,7 @@ All resources are tagged with:
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
+      "DependsOn": "DBSecret",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "production-db-${EnvironmentSuffix}"
@@ -916,7 +946,9 @@ All resources are tagged with:
         "MasterUsername": {
           "Ref": "DBUsername"
         },
-        "MasterUserPassword": "{{resolve:secretsmanager:prod-db-password:SecretString:password}}",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:prod-db-password-${EnvironmentSuffix}:SecretString:password}}"
+        },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
         "StorageEncrypted": true,
@@ -1075,6 +1107,17 @@ All resources are tagged with:
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
         }
       }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the database password secret",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
     }
   }
 }
@@ -1084,8 +1127,7 @@ All resources are tagged with:
 
 ### Prerequisites
 - AWS CLI configured with appropriate credentials
-- Permissions to create VPC, EC2, RDS, IAM, and ELB resources
-- A strong database password prepared for deployment
+- Permissions to create VPC, EC2, RDS, IAM, Secrets Manager, and ELB resources
 
 ### Deployment Steps
 
@@ -1106,13 +1148,7 @@ aws cloudformation create-stack \
   --region ap-south-1
 ```
 
-Note: Before deploying, create the database password in AWS Secrets Manager:
-```bash
-aws secretsmanager create-secret \
-  --name prod-db-password \
-  --secret-string '{"password":"YourSecurePassword123"}' \
-  --region ap-south-1
-```
+Note: The stack automatically creates a Secrets Manager secret with an auto-generated strong password. No manual secret creation is required.
 
 3. **Monitor deployment**:
 ```bash

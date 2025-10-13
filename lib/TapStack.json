@@ -42,6 +42,33 @@
     }
   },
   "Resources": {
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-db-password-${EnvironmentSuffix}"
+        },
+        "Description": "RDS database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "DBSecret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -841,6 +868,7 @@
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
+      "DependsOn": "DBSecret",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "production-db-${EnvironmentSuffix}"
@@ -851,7 +879,9 @@
         "MasterUsername": {
           "Ref": "DBUsername"
         },
-        "MasterUserPassword": "{{resolve:secretsmanager:prod-db-password:SecretString:password}}",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:prod-db-password-${EnvironmentSuffix}:SecretString:password}}"
+        },
         "AllocatedStorage": "20",
         "StorageType": "gp3",
         "StorageEncrypted": true,
@@ -1008,6 +1038,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the database password secret",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
         }
       }
     }
