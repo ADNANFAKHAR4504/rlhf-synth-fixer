@@ -1214,6 +1214,7 @@ public final class Main {
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .stackProps(StackProps.builder()
+                        .stackName("TapStack" + environmentSuffix)
                         .env(Environment.builder()
                                 .account(account)
                                 .region(region)
