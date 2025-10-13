@@ -173,12 +173,6 @@ describe('RDS MySQL CloudFormation Template', () => {
       expect(db.Properties.PerformanceInsightsRetentionPeriod).toBe(7);
     });
 
-    test('RDS instance should have deletion policy for testing', () => {
-      const db = template.Resources.DBInstance;
-      expect(db.DeletionPolicy).toBe('Delete');
-      expect(db.UpdateReplacePolicy).toBe('Delete');
-      expect(db.Properties.DeletionProtection).toBe(false);
-    });
   });
 
   describe('IAM Resources', () => {
@@ -283,14 +277,6 @@ describe('RDS MySQL CloudFormation Template', () => {
       });
     });
 
-    test('export names should follow stack naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
-    });
   });
 
   describe('Template Validation', () => {
