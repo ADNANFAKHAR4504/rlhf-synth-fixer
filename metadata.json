@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "27841506",
+  "team": "synth",
+  "startedAt": "2025-10-03T22:10:18+05:30",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Serverless Architecture",
+    "API Development",
+    "Content Distribution",
+    "Security Configuration",
+    "Database Management",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 5,
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "Lambda@Edge",
+    "DynamoDB",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager"
+  ]
+}
