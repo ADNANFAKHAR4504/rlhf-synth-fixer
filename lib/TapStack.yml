@@ -75,10 +75,7 @@ Mappings:
       AMI: 'ami-0c02fb55956c7d316' # Amazon Linux 2023
     us-west-2:
       AMI: 'ami-008fe2fc65df48dac' # Amazon Linux 2023
-    eu-west-1:
-      AMI: 'ami-0a5d5b5e5b5e5b5e5' # Placeholder, update with actual AMI
-    ap-southeast-1:
-      AMI: 'ami-0b5e5b5e5b5e5b5e5' # Placeholder, update with actual AMI
+
 
 Resources:
   # ============================================
