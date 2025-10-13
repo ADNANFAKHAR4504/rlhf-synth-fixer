@@ -1,0 +1,12 @@
+{
+  "platform": "pulumi",
+  "language": "javascript",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T04:07:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["aws", "healthcare", "hipaa", "data-pipeline", "security"],
+  "po_id": "2698188040",
+  "aws_services": [],
+  "region": "ap-southeast-1"
+}

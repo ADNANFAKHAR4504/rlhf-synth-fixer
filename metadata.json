@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "javascript",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T04:07:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "aws",
+    "healthcare",
+    "hipaa",
+    "data-pipeline",
+    "security"
+  ],
+  "po_id": "2698188040",
+  "aws_services": [
+    "KMS",
+    "CloudWatch Logs",
+    "VPC",
+    "EC2 Subnets",
+    "EC2 Security Groups",
+    "RDS PostgreSQL",
+    "RDS Parameter Group",
+    "RDS Subnet Group",
+    "Kinesis Data Streams",
+    "IAM Roles",
+    "IAM Policies",
+    "CloudWatch Alarms"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 8,
+  "background": "Infrastructure task for Pulumi"
+}
