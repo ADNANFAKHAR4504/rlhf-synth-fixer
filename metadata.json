@@ -10,8 +10,18 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["S3 Bucket"],
-  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "S3 Bucket",
+    "S3 Bucket Versioning", 
+    "S3 Server-side Encryption",
+    "S3 Static Website Hosting",
+    "S3 CORS Configuration",
+    "S3 Lifecycle Management",
+    "S3 Public Access Block",
+    "S3 Bucket Policy"
+  ],
+  "training_quality": 8,
   "coverage": {
     "lines": 100,
     "branches": 100

@@ -1,43 +1,3 @@
-### Reasoning Trace
----
-
-The user wants me to create a Terraform configuration for a static website hosting infrastructure on AWS S3. Let me break down the requirements:
-
-1. **S3 Bucket Configuration:**
-   - Single S3 bucket with name: "media-assets-" + 8-character random suffix
-   - Configured for public website hosting
-   - Host index.html and error.html pages
-   - Version tracking enabled
-   - Lifecycle policies for cost optimization
-   - CORS configuration
-
-2. **Security Requirements:**
-   - Server-side encryption with SSE-S3
-   - Bucket versioning enabled
-   - Public read access via bucket policy
-   - Dynamic ARN references (no hardcoding)
-
-3. **Operational Configuration:**
-   - Random string: exactly 8 characters
-   - Static website: index.html as index, error.html as error document
-   - Lifecycle rule: transition to Standard-IA after 30 days (no deletion)
-   - CORS: GET from any origin, max age 3600, allow Content-Type and Authorization headers
-   - Tags: Environment='production', Project='media-launch'
-
-4. **File Organization:**
-   - provider.tf: Terraform block, S3 backend, AWS provider with default tags
-   - main.tf: Variables, data sources, locals, resources, outputs
-
-5. **Specific Requirements:**
-   - AWS provider version ~> 5.0
-   - Terraform version >= 1.5.0
-   - Region: us-west-2
-   - Use data sources for account ID
-   - No hardcoded values
-
-Let me create these two files:
-### Answer 
----
 
 I'll create a production-ready static website hosting infrastructure on AWS S3. Here are the two Terraform files:
 
@@ -153,7 +113,7 @@ resource "aws_s3_bucket_cors_configuration" "media_assets" {
   
   cors_rule {
     allowed_headers = ["Content-Type", "Authorization"]
-    allowed_methods = ["GET"]
+    allowed_methods = ["GET", "OPTIONS"]
     allowed_origins = ["*"]
     max_age_seconds = 3600
   }
@@ -221,64 +181,3 @@ output "bucket_arn" {
 }
 ```
 
-## Deployment Instructions
-
-1. **Initialize Terraform:**
-```bash
-terraform init
-```
-
-2. **Plan the deployment:**
-```bash
-terraform plan
-```
-
-3. **Apply the configuration:**
-```bash
-terraform apply
-```
-
-4. **Upload your website files:**
-```bash
-# Upload index.html
-aws s3 cp index.html s3://$(terraform output -raw bucket_name)/
-
-# Upload error.html
-aws s3 cp error.html s3://$(terraform output -raw bucket_name)/
-
-# Upload other assets
-aws s3 sync ./assets s3://$(terraform output -raw bucket_name)/assets/
-```
-
-5. **Test the website:**
-```bash
-# Get the website endpoint
-terraform output website_endpoint
-
-# Test with curl
-curl http://$(terraform output -raw website_endpoint)
-```
-
-## Key Features Implemented
-
-1. **Security:**
-   - Server-side encryption with AWS-managed keys (SSE-S3)
-   - Bucket versioning for complete change history
-   - Carefully scoped bucket policy allowing only GetObject
-
-2. **Cost Optimization:**
-   - Lifecycle policy transitions objects to Standard-IA after 30 days
-   - No deletion rules to preserve all content
-
-3. **Web Hosting:**
-   - Static website hosting with index.html and error.html
-   - CORS configuration for cross-origin requests
-   - Public read access properly configured
-
-4. **Best Practices:**
-   - Dynamic ARN references using resource attributes
-   - Account ID from data source
-   - Proper tagging for resource management
-   - Exact 8-character random suffix for bucket naming
-
-The infrastructure is production-ready and will successfully deploy with the standard Terraform workflow.

@@ -1,5 +1,6 @@
 # provider.tf
 
+```hcl
 terraform {
   required_version = ">= 1.5.0"
   
@@ -27,8 +28,11 @@ provider "aws" {
     }
   }
 }
+```
 
 # main.tf
+
+```hcl
 
 # ============================================================================
 # S3 Static Website Hosting for Media Assets
@@ -179,4 +183,4 @@ output "bucket_arn" {
   description = "The ARN of the S3 bucket"
   value       = aws_s3_bucket.media_assets.arn
 }
-
+```
