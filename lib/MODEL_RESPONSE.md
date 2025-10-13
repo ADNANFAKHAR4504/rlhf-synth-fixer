@@ -63,7 +63,7 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AmazonLinux2AMI: ami-0cff7528ff583bf9a  # Amazon Linux 2 AMI (HVM) - Kernel 5.10
+      AmazonLinux2AMI: ami-052064a798f08f0d3  # Amazon Linux 2 AMI (HVM) - Kernel 5.10
 
 Resources:
 # EC2 Key Pair Resource
