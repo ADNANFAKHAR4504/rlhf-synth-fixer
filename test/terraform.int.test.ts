@@ -464,16 +464,16 @@ P005,41,hypertension,lifestyle,improved,3.1`;
 
       } catch (error: any) {
         // Handle KMS key issues gracefully (pending deletion, disabled, etc.)
-        if (error.code === 'KMSInvalidStateException' || 
-            error.code === 'ValidationException' ||
-            error.message?.includes('pending deletion') ||
-            error.message?.includes('KMSInvalidStateException')) {
+        if (error.code === 'KMSInvalidStateException' ||
+          error.code === 'ValidationException' ||
+          error.message?.includes('pending deletion') ||
+          error.message?.includes('KMSInvalidStateException')) {
           console.log(`\n⚠️  KMS key issue detected - skipping E2E test`);
           console.log(`   Error: ${error.message}`);
           console.log(`   This is expected when infrastructure is being cleaned up or KMS keys are pending deletion`);
           return; // Skip gracefully instead of failing
         }
-        
+
         console.error(`\n❌ End-to-End test failed: ${error.message}`);
         console.error(`Error details:`, error);
         throw error;
