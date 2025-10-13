@@ -75,5 +75,11 @@
     "Infrastructure debugging and failure resolution methodologies",
     "Security configuration for content distribution networks",
     "Performance optimization for serverless architectures"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
