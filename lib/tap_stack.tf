@@ -676,7 +676,6 @@ that closes the Lambda resource — roughly **line 721–725**, depending on spa
 
 ### ✅ Replace that entire block with this code **(starting at line 688)**
 
-```hcl
 # -----------------------------------------------------------------------------
 # Lambda Function for Event Processing
 # -----------------------------------------------------------------------------
