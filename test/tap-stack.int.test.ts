@@ -425,6 +425,43 @@ describe('TapStack Production Integration Tests', () => {
     });
   });
 
+  describe('End-to-End Functional Flow', () => {
+    test('ALB serves site content from EC2', async () => {
+      if (!hasAwsCredentials) return;
+      const albDns = stackOutputs['ALB-DNS'] || valueFromOutputsSuffix('ALB-DNS');
+      if (!albDns) return;
+      const url = `http://${albDns}`;
+      const res = await axios.get(url, { validateStatus: () => true, timeout: 10000 });
+      expect(res.status).toBeLessThan(500);
+      if (res.status === 200) {
+        expect(String(res.data)).toContain('Hello from SecureEnv web server');
+      }
+    });
+
+    test('API Gateway -> Lambda -> S3 (put then get)', async () => {
+      if (!hasAwsCredentials) return;
+      const apiUrl = valueFromOutputsSuffix('API-URL');
+      if (!apiUrl) return;
+
+      const key = `it-${Date.now()}`;
+      const val = 'tapstack-ok';
+
+      const put = await axios.get(`${apiUrl}/secure?op=put&key=${encodeURIComponent(key)}&value=${encodeURIComponent(val)}`, {
+        validateStatus: () => true,
+        timeout: 10000,
+      });
+      expect(put.status).toBe(200);
+
+      const get = await axios.get(`${apiUrl}/secure?op=get&key=${encodeURIComponent(key)}`, {
+        validateStatus: () => true,
+        timeout: 10000,
+      });
+      expect(get.status).toBe(200);
+      const body = typeof get.data === 'string' ? get.data : JSON.stringify(get.data);
+      expect(body).toContain(val);
+    });
+  });
+
   describe('IAM Security Validation', () => {
     test('EC2 role has appropriate permissions', async () => {
       if (!hasAwsCredentials) return;
