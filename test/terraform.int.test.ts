@@ -685,10 +685,22 @@ describe('DynamoDB Payment Transactions - Integration Tests (Live)', () => {
       // Step 8: Update transaction status
       // -----------------------------------------------------------------------
       console.log('Step 8: Updating transaction...');
+      
+      // Get current item state before update
+      const currentItemResponse = await dynamoClient.send(new GetItemCommand({
+        TableName: tableName,
+        Key: marshall({
+          transaction_id: transactionId,
+          timestamp: baseTimestamp
+        })
+      }));
+      
+      const currentItem = unmarshall(currentItemResponse.Item!);
+      
       await dynamoClient.send(new PutItemCommand({
         TableName: tableName,
         Item: marshall({
-          ...retrievedItem,
+          ...currentItem,
           status: 'completed',
           completed_at: Date.now(),
           settlement_status: 'settled'
