@@ -75,7 +75,7 @@ Use Auto Scaling and load balancing to ensure zero-downtime scaling.
 
 Ensure architecture supports future expansion and multi-region failover.
 
-Constraints
+Constraints:
 
 Must comply with AWS IAM best practices.
 
