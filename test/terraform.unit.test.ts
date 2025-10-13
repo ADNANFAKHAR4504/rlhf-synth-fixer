@@ -114,10 +114,10 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"payment_transactions"\s*{/);
     });
 
-    test('table name should be exactly "payment-transactions"', () => {
+    test('table name should be exactly "payment-transactions-v2"', () => {
       const nameMatch = mainTfContent.match(/name\s*=\s*"([^"]+)"/);
       expect(nameMatch).toBeTruthy();
-      expect(nameMatch![1]).toBe('payment-transactions');
+      expect(nameMatch![1]).toBe('payment-transactions-v2');
     });
 
     test('billing mode should be PAY_PER_REQUEST (on-demand)', () => {
@@ -450,9 +450,9 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
   // ============================================================================
 
   describe('Naming Convention Compliance', () => {
-    test('table name should use kebab-case "payment-transactions"', () => {
+    test('table name should use kebab-case "payment-transactions-v2"', () => {
       const nameMatch = mainTfContent.match(/name\s*=\s*"([^"]+)"/);
-      expect(nameMatch![1]).toBe('payment-transactions');
+      expect(nameMatch![1]).toBe('payment-transactions-v2');
       expect(nameMatch![1]).toContain('-');
       expect(nameMatch![1]).not.toMatch(/_/);
     });
@@ -490,7 +490,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
 
     test('all string values should be lowercase or PascalCase (no UPPERCASE)', () => {
       // Table name, GSI name should be lowercase with hyphens
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions-v2"/);
       expect(mainTfContent).toMatch(/name\s*=\s*"date-index"/);
       
       // Tag keys should be PascalCase
@@ -551,11 +551,11 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
 
     test('should use consistent quote style (double quotes)', () => {
       // Terraform prefers double quotes
-      expect(mainTfContent).toMatch(/"payment-transactions"/);
+      expect(mainTfContent).toMatch(/"payment-transactions-v2"/);
       expect(mainTfContent).toMatch(/"date-index"/);
       
       // Should not use single quotes
-      expect(mainTfContent).not.toMatch(/'payment-transactions'/);
+      expect(mainTfContent).not.toMatch(/'payment-transactions-v2'/);
     });
 
     test('blocks should have proper opening/closing braces', () => {
@@ -629,8 +629,8 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
   // ============================================================================
 
   describe('Requirements Coverage', () => {
-    test('REQ-1: Table named payment-transactions with on-demand billing', () => {
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+    test('REQ-1: Table named payment-transactions-v2 with on-demand billing', () => {
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions-v2"/);
       expect(mainTfContent).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
     });
 
@@ -684,7 +684,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"payment_transactions"/);
       
       // Table name: kebab-case
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions-v2"/);
       
       // Output names: snake_case
       expect(mainTfContent).toMatch(/output\s+"payment_transactions_table_arn"/);
@@ -726,7 +726,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
 
     test('should follow financial services naming standards', () => {
       // Table name reflects business domain
-      expect(mainTfContent).toMatch(/payment-transactions/);
+      expect(mainTfContent).toMatch(/payment-transactions-v2/);
       
       // Tags reflect department
       expect(mainTfContent).toMatch(/Department\s*=\s*"finance"/);
