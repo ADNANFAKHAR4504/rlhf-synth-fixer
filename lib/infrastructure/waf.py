@@ -49,10 +49,10 @@ class WAFStack:
         """Create WAF Web ACL with security rules."""
         web_acl_name = self.config.get_resource_name('waf-web-acl', 'main')
         
-        # Create IP set for allowed IPs
+        # Create IP set for allowed IPs with unique name to avoid region conflicts
         ip_set = aws.wafv2.IpSet(
             self.config.get_resource_name('waf-ip-set', 'allowed-ips'),
-            name=f"{web_acl_name}-allowed-ips",
+            name=f"{web_acl_name}-allowed-ips-{self.config.aws_region}",
             scope="REGIONAL",
             ip_address_version="IPV4",
             addresses=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"] if "0.0.0.0/0" in self.config.allowed_ips else self.config.allowed_ips,
@@ -60,10 +60,10 @@ class WAFStack:
             opts=ResourceOptions(parent=self.opts.parent, provider=self.opts.provider)
         )
         
-        # Create rate-based rule
+        # Create rate-based rule with unique name to avoid region conflicts
         rate_based_rule = aws.waf.RateBasedRule(
             self.config.get_resource_name('waf-rate-rule', 'main'),
-            name=f"{web_acl_name}-rate-limit",
+            name=f"{web_acl_name}-rate-limit-{self.config.aws_region}",
             metric_name=f"{web_acl_name.replace('-', '')}RateLimit",
             rate_key="IP",
             rate_limit=2000,  # 2000 requests per 5 minutes
@@ -74,7 +74,7 @@ class WAFStack:
         # Create Web ACL with explicit dependency on IP set
         web_acl = aws.wafv2.WebAcl(
             web_acl_name,
-            name=web_acl_name,
+            name=f"{web_acl_name}-{self.config.aws_region}",
             scope="REGIONAL",
             default_action=aws.wafv2.WebAclDefaultActionArgs(
                 allow=aws.wafv2.WebAclDefaultActionAllowArgs()
