@@ -1,28 +1,23 @@
-# Terraform Infrastructure Code
+Complete Terraform configuration for DynamoDB table with on-demand billing, global secondary index, point-in-time recovery, and comprehensive security features.
 
 ## provider.tf
 
 ```hcl
-# provider.tf
-
 terraform {
+  required_version = ">= 1.0"
+  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
   }
-  required_version = ">= 1.0"
-  backend "s3" {
-
-  }
 }
 
 provider "aws" {
- 
+  # AWS region will be determined from environment or AWS config
 }
 ```
-
 ## main.tf
 
 ```hcl
