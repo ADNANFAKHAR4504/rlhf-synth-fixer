@@ -382,6 +382,9 @@ export class IaCNovaStack extends NestedStack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       roleName: formatResourceName('lambda-role'),
       description: 'IAM role for the email event processor Lambda function.',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+      ],
     });
     applyCommonTags(lambdaRole, formatResourceName('lambda-role'));
 
@@ -437,14 +440,14 @@ export class IaCNovaStack extends NestedStack {
     const rdsCredentialsSecret =
       rdsCredentialsSecretArn !== undefined && rdsCredentialsSecretArn !== ''
         ? secretsmanager.Secret.fromSecretCompleteArn(
-            this,
-            'ImportedRdsCredentialsSecret',
-            rdsCredentialsSecretArn
-          )
+          this,
+          'ImportedRdsCredentialsSecret',
+          rdsCredentialsSecretArn
+        )
         : this.createManagedDatabaseSecret(
-            formatResourceName('db-credentials', true),
-            dbMasterUsername
-          );
+          formatResourceName('db-credentials', true),
+          dbMasterUsername
+        );
     if (rdsCredentialsSecret instanceof secretsmanager.Secret) {
       applyCommonTags(
         rdsCredentialsSecret,
