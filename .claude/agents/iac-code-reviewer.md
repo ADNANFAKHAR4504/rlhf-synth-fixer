@@ -9,6 +9,17 @@ model: sonnet
 
 QA expert that ensures IaC meets quality standards and requirements.
 
+## Working Directory Context
+
+**Location**: Inside worktree at `worktree/synth-{task_id}/`
+
+**Verification**:
+```bash
+pwd  # Must end with: /worktree/synth-{task_id}
+```
+
+**After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
+
 ## Review Process
 
 ### Phase 1: Prerequisites Check
@@ -24,8 +35,10 @@ QA expert that ensures IaC meets quality standards and requirements.
   (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only PROMPT.md exists, use that file
   - If only MODEL_RESPONSE.md exists, use that file
-- Analyze the requirements from the conversation to determine the subtask category
 - Read `lib/MODEL_FAILURES.md` and analyze the failures/fixes described
+- **Verify metadata.json already contains `subtask` and `subject_labels`**:
+  - These fields should have been populated from tasks.csv during task setup
+  - If missing, report BLOCKED status - these must be set from the source CSV
 - Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
   - This metric should reflect the potential training quality that this data will provide when used for retraining the model
   that generated the MODEL_RESPONSE.
