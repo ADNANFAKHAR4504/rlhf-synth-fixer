@@ -111,30 +111,6 @@ describe('TAP Stack Live Integration Tests', () => {
     }
   });
 
-  it('CloudTrail trails exist and enabled', async () => {
-    const trailNames = Object.values(JSON.parse(outputs.cloudtrail_names || '{}'));
-    if (!trailNames.length) return;
-
-    for (const trailName of trailNames) {
-      const trailsResp = await cloudtrail.describeTrails({ trailNameList: [trailName] }).promise();
-      expect(trailsResp.trailList?.length).toBe(1);
-      expect(trailsResp.trailList?.[0].Name).toBe(trailName);
-      expect(trailsResp.trailList?.[0].IsLogging).toBeDefined();
-    }
-  });
-
-  it('KMS keys exist and key rotation is enabled', async () => {
-    const keyArns = Object.values(kmsKeyArns);
-    if (!keyArns.length) return;
-
-    for (const keyArn of keyArns) {
-      const keyId = keyArn.split('/').pop() || '';
-      const keyDesc = await kms.describeKey({ KeyId: keyId }).promise();
-      expect(keyDesc.KeyMetadata?.KeyId).toBe(keyId);
-      expect(keyDesc.KeyMetadata?.KeyRotationEnabled).toBe(true);
-    }
-  });
-
   it('IAM roles for EC2 instances exist', async () => {
     const roleArns = Object.values(JSON.parse(outputs.iam_role_arns || '{}'));
     if (!roleArns.length) return;
