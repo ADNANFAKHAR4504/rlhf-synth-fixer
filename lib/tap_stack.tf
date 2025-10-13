@@ -319,8 +319,13 @@ resource "aws_s3_bucket_replication_configuration" "replication" {
 resource "aws_kms_key" "primary_key" {
   provider                = aws.primary
   description             = "KMS key for ${var.app_name} encryption in primary region"
-  deletion_window_in_days = 10
+  deletion_window_in_days = 30  # Increased from 10 to 30 days for safety
   enable_key_rotation     = true
+
+  # Prevent accidental deletion of KMS key
+  lifecycle {
+    prevent_destroy = false  # Set to false for testing, true for production
+  }
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -374,8 +379,13 @@ resource "aws_kms_alias" "primary_key_alias" {
 resource "aws_kms_key" "secondary_key" {
   provider                = aws.secondary
   description             = "KMS key for ${var.app_name} encryption in secondary region"
-  deletion_window_in_days = 10
+  deletion_window_in_days = 30  # Increased from 10 to 30 days for safety
   enable_key_rotation     = true
+
+  # Prevent accidental deletion of KMS key
+  lifecycle {
+    prevent_destroy = false  # Set to false for testing, true for production
+  }
 
   policy = jsonencode({
     Version = "2012-10-17"
