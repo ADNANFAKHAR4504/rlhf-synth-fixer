@@ -6,7 +6,7 @@ const outputs = JSON.parse(
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr65';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS services
 const s3 = new AWS.S3();
