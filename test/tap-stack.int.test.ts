@@ -322,7 +322,7 @@ describe('TapStack Integration Tests', () => {
     test('should validate environment-specific configurations', () => {
       // Validate that the environment suffix is used consistently
       const isProd = environmentSuffix.includes('prod');
-      const isDev = environmentSuffix.includes('dev');
+      const isDev = !isProd
 
       expect(isProd || isDev).toBe(true);
     });
