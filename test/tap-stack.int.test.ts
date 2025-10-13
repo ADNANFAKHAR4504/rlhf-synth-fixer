@@ -47,7 +47,7 @@ describe('TapStack Integration Tests', () => {
       const bucketName = outputs['AssetsBucketName'];
       expect(bucketName).toBeDefined();
       expect(bucketName).toMatch(
-        /^bookstore-assets-us-east-1-pr3399-[a-z0-9]+$/
+        /^bookstore-assets-ap-south-1-pr3399-[a-z0-9]+$/
       );
     });
   });
@@ -198,7 +198,7 @@ describe('TapStack Integration Tests', () => {
       const alarmName = outputs['CPUAlarmName'];
 
       // Verify naming patterns (now includes unique suffix)
-      expect(bucketName).toMatch(/^bookstore-assets-us-east-1-pr3399-[a-z0-9]+$/);
+      expect(bucketName).toMatch(/^bookstore-assets-ap-south-1-pr3399-[a-z0-9]+$/);
       expect(alarmName).toMatch(/^bookstore-high-cpu-[a-z0-9-]+$/);
     });
   });
