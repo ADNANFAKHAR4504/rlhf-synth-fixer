@@ -414,6 +414,39 @@ resource "aws_s3_bucket_public_access_block" "all" {
   restrict_public_buckets = true
 }
 
+# S3 bucket policies to enforce TLS/HTTPS
+resource "aws_s3_bucket_policy" "enforce_tls" {
+  for_each = {
+    raw       = aws_s3_bucket.raw_data.id
+    processed = aws_s3_bucket.processed_data.id
+    artifacts = aws_s3_bucket.model_artifacts.id
+    logs      = aws_s3_bucket.logs.id
+  }
+
+  bucket = each.value
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnforceTLS"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          "arn:aws:s3:::${each.value}",
+          "arn:aws:s3:::${each.value}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # DynamoDB metadata table
 resource "aws_dynamodb_table" "pipeline_metadata" {
   name         = "${local.resource_prefix}-ml-metadata"
@@ -816,10 +849,213 @@ resource "aws_cloudwatch_event_target" "step_functions" {
   input    = jsonencode({ input_key = "daily-batch/medical-data" })
 }
 
-# CloudWatch dashboard (minimal placeholder)
+# CloudWatch dashboard with comprehensive metrics
 resource "aws_cloudwatch_dashboard" "ml_pipeline" {
   dashboard_name = "${local.resource_prefix}-ml-pipeline"
-  dashboard_body = jsonencode({ widgets = [] })
+  
+  dashboard_body = jsonencode({
+    widgets = [
+      # Lambda Invocations
+      {
+        type = "metric"
+        x    = 0
+        y    = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", { stat = "Sum", label = "Lambda Invocations" }],
+            [".", "Errors", { stat = "Sum", label = "Lambda Errors" }],
+            [".", "Duration", { stat = "Average", label = "Average Duration (ms)" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "Lambda Function Metrics"
+          period  = 300
+        }
+      },
+      # Step Functions Executions
+      {
+        type = "metric"
+        x    = 12
+        y    = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/States", "ExecutionsFailed", { stat = "Sum", label = "Failed Executions" }],
+            [".", "ExecutionsSucceeded", { stat = "Sum", label = "Successful Executions" }],
+            [".", "ExecutionTime", { stat = "Average", label = "Avg Execution Time (ms)" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "Step Functions Executions"
+          period  = 300
+        }
+      },
+      # SageMaker Endpoint Invocations
+      {
+        type = "metric"
+        x    = 0
+        y    = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/SageMaker", "ModelInvocations", { stat = "Sum", label = "Model Invocations" }],
+            [".", "ModelLatency", { stat = "Average", label = "Model Latency (μs)" }],
+            [".", "Invocation4XXErrors", { stat = "Sum", label = "4XX Errors" }],
+            [".", "Invocation5XXErrors", { stat = "Sum", label = "5XX Errors" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "SageMaker Endpoint Performance"
+          period  = 300
+        }
+      },
+      # DynamoDB Metrics
+      {
+        type = "metric"
+        x    = 12
+        y    = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { stat = "Sum", label = "Read Capacity" }],
+            [".", "ConsumedWriteCapacityUnits", { stat = "Sum", label = "Write Capacity" }],
+            [".", "UserErrors", { stat = "Sum", label = "User Errors" }],
+            [".", "SystemErrors", { stat = "Sum", label = "System Errors" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "DynamoDB Table Metrics"
+          period  = 300
+        }
+      },
+      # S3 Storage Metrics
+      {
+        type = "metric"
+        x    = 0
+        y    = 12
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/S3", "BucketSizeBytes", { stat = "Average", label = "Raw Data Size" }],
+            [".", "NumberOfObjects", { stat = "Average", label = "Object Count" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "S3 Storage Metrics"
+          period  = 86400
+        }
+      },
+      # Pipeline Health Summary
+      {
+        type = "metric"
+        x    = 12
+        y    = 12
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            [{ expression = "m1 + m2", label = "Total Errors", id = "e1" }],
+            ["AWS/Lambda", "Errors", { id = "m1", visible = false }],
+            ["AWS/States", "ExecutionsFailed", { id = "m2", visible = false }]
+          ]
+          view    = "singleValue"
+          region  = var.aws_region
+          title   = "Pipeline Health"
+          period  = 300
+        }
+      }
+    ]
+  })
+}
+
+# CloudWatch Alarms for pipeline monitoring
+resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
+  alarm_name          = "${local.resource_prefix}-lambda-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "Alert when Lambda function has more than 5 errors in 5 minutes"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    FunctionName = aws_lambda_function.preprocessing.function_name
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "sfn_execution_failures" {
+  alarm_name          = "${local.resource_prefix}-sfn-failures"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ExecutionsFailed"
+  namespace           = "AWS/States"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "Alert when Step Functions execution fails"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    StateMachineArn = aws_sfn_state_machine.ml_pipeline.arn
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "sagemaker_model_latency" {
+  alarm_name          = "${local.resource_prefix}-sagemaker-latency"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "ModelLatency"
+  namespace           = "AWS/SageMaker"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 1000000
+  alarm_description   = "Alert when SageMaker model latency exceeds 1 second (1000000 microseconds)"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    EndpointName = aws_sagemaker_endpoint.ml_endpoint.name
+    VariantName  = "AllTraffic"
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "sagemaker_invocation_errors" {
+  alarm_name          = "${local.resource_prefix}-sagemaker-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Invocation5XXErrors"
+  namespace           = "AWS/SageMaker"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 5
+  alarm_description   = "Alert when SageMaker endpoint has 5XX errors"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    EndpointName = aws_sagemaker_endpoint.ml_endpoint.name
+    VariantName  = "AllTraffic"
+  }
+
+  tags = local.common_tags
 }
 
 # Optional RDS with conditional Performance Insights (to address Task1)
@@ -903,5 +1139,23 @@ output "kms_aliases" {
     dynamodb   = aws_kms_alias.dynamodb.name
     sagemaker  = aws_kms_alias.sagemaker.name
     cloudwatch = aws_kms_alias.cloudwatch.name
+  }
+}
+
+output "cloudwatch_dashboard" {
+  description = "CloudWatch dashboard for ML pipeline monitoring"
+  value = {
+    name = aws_cloudwatch_dashboard.ml_pipeline.dashboard_name
+    url  = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.ml_pipeline.dashboard_name}"
+  }
+}
+
+output "cloudwatch_alarms" {
+  description = "CloudWatch alarms for pipeline monitoring"
+  value = {
+    lambda_errors           = aws_cloudwatch_metric_alarm.lambda_errors.alarm_name
+    sfn_failures            = aws_cloudwatch_metric_alarm.sfn_execution_failures.alarm_name
+    sagemaker_latency       = aws_cloudwatch_metric_alarm.sagemaker_model_latency.alarm_name
+    sagemaker_errors        = aws_cloudwatch_metric_alarm.sagemaker_invocation_errors.alarm_name
   }
 }
