@@ -7,6 +7,8 @@ export interface ApiStackArgs {
   licenseApiLambdaName: pulumi.Output<string>;
   usageTrackingLambdaArn: pulumi.Output<string>;
   usageTrackingLambdaName: pulumi.Output<string>;
+  signedUrlLambdaArn: pulumi.Output<string>;
+  signedUrlLambdaName: pulumi.Output<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -26,6 +28,8 @@ export class ApiStack extends pulumi.ComponentResource {
       licenseApiLambdaName,
       usageTrackingLambdaArn,
       usageTrackingLambdaName,
+      signedUrlLambdaArn,
+      signedUrlLambdaName,
       tags,
     } = args;
 
@@ -86,6 +90,28 @@ export class ApiStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create /download resource
+    const downloadResource = new aws.apigateway.Resource(
+      `download-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'download',
+      },
+      { parent: this }
+    );
+
+    // Create /download/signed-url resource
+    const signedUrlResource = new aws.apigateway.Resource(
+      `signed-url-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        parentId: downloadResource.id,
+        pathPart: 'signed-url',
+      },
+      { parent: this }
+    );
+
     // Create Lambda permission for license API
     const licenseApiPermission = new aws.lambda.Permission(
       `license-api-permission-${environmentSuffix}`,
@@ -104,6 +130,18 @@ export class ApiStack extends pulumi.ComponentResource {
       {
         action: 'lambda:InvokeFunction',
         function: usageTrackingLambdaName,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
+      },
+      { parent: this }
+    );
+
+    // Create Lambda permission for signed URL generation
+    const signedUrlPermission = new aws.lambda.Permission(
+      `signed-url-permission-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: signedUrlLambdaName,
         principal: 'apigateway.amazonaws.com',
         sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
       },
@@ -170,6 +208,36 @@ export class ApiStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [usageTrackingPermission] }
     );
 
+    // Create POST method for /download/signed-url
+    const signedUrlMethod = new aws.apigateway.Method(
+      `signed-url-post-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        resourceId: signedUrlResource.id,
+        httpMethod: 'POST',
+        authorization: 'NONE',
+        apiKeyRequired: true,
+      },
+      { parent: this }
+    );
+
+    // Create integration for signed URL generation
+    const signedUrlIntegration = new aws.apigateway.Integration(
+      `signed-url-integration-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        resourceId: signedUrlResource.id,
+        httpMethod: signedUrlMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: signedUrlLambdaArn.apply(
+          arn =>
+            `arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${arn}/invocations`
+        ),
+      },
+      { parent: this, dependsOn: [signedUrlPermission] }
+    );
+
     // Deploy the API
     const deployment = new aws.apigateway.Deployment(
       `api-deployment-${environmentSuffix}`,
@@ -182,11 +250,20 @@ export class ApiStack extends pulumi.ComponentResource {
               validateIntegration.id,
               trackMethod.id,
               trackIntegration.id,
+              signedUrlMethod.id,
+              signedUrlIntegration.id,
             ])
             .apply(ids => JSON.stringify(ids)),
         },
       },
-      { parent: this, dependsOn: [validateIntegration, trackIntegration] }
+      {
+        parent: this,
+        dependsOn: [
+          validateIntegration,
+          trackIntegration,
+          signedUrlIntegration,
+        ],
+      }
     );
 
     // Create stage

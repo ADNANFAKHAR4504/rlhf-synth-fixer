@@ -6,22 +6,9 @@
   "po_id": "27841506",
   "team": "synth",
   "startedAt": "2025-10-03T22:10:18+05:30",
-  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Serverless Architecture",
-    "API Development",
-    "Content Distribution",
-    "Security Configuration",
-    "Database Management",
-    "Access Control",
-    "Performance Optimization",
-    "State Management",
-    "CI/CD Integration",
-    "Production Deployment Patterns",
-    "Resource Lifecycle Management",
-    "Integration Testing",
-    "Lambda@Edge Optimization",
-    "Infrastructure as Code Best Practices"
+    "Cloud Environment Setup"
   ],
   "training_quality": 9,
   "training_quality_justification": {

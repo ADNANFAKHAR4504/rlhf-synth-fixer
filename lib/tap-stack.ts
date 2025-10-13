@@ -1,11 +1,11 @@
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { StorageStack } from './storage-stack';
-import { DistributionStack } from './distribution-stack';
-import { DatabaseStack } from './database-stack';
 import { ApiStack } from './api-stack';
+import { DatabaseStack } from './database-stack';
+import { DistributionStack } from './distribution-stack';
 import { LambdaStack } from './lambda-stack';
 import { MonitoringStack } from './monitoring-stack';
+import { StorageStack } from './storage-stack';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -90,6 +90,8 @@ export class TapStack extends pulumi.ComponentResource {
         licenseApiLambdaName: lambdaStack.licenseApiLambdaName,
         usageTrackingLambdaArn: lambdaStack.usageTrackingLambdaArn,
         usageTrackingLambdaName: lambdaStack.usageTrackingLambdaName,
+        signedUrlLambdaArn: lambdaStack.signedUrlLambdaArn,
+        signedUrlLambdaName: lambdaStack.signedUrlLambdaName,
         tags,
       },
       { parent: this }

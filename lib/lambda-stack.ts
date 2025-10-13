@@ -15,6 +15,8 @@ export class LambdaStack extends pulumi.ComponentResource {
   public readonly licenseApiLambdaName: pulumi.Output<string>;
   public readonly usageTrackingLambdaArn: pulumi.Output<string>;
   public readonly usageTrackingLambdaName: pulumi.Output<string>;
+  public readonly signedUrlLambdaArn: pulumi.Output<string>;
+  public readonly signedUrlLambdaName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -356,16 +358,124 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
+    // Create Lambda function for signed URL generation
+    const signedUrlLambda = new aws.lambda.Function(
+      `signed-url-generator-${environmentSuffix}`,
+      {
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        role: lambdaRole.arn,
+        timeout: 30,
+        memorySize: 512,
+        environment: {
+          variables: {
+            DISTRIBUTION_DOMAIN: 'REPLACE_WITH_DISTRIBUTION_DOMAIN',
+            CLOUDFRONT_KEY_PAIR_ID: 'REPLACE_WITH_KEY_PAIR_ID',
+            SIGNING_KEY_SECRET_ARN: 'REPLACE_WITH_SIGNING_KEY_SECRET_ARN',
+          },
+        },
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(`
+const AWS = require('aws-sdk');
+const crypto = require('crypto');
+
+const secretsManager = new AWS.SecretsManager();
+
+exports.handler = async (event) => {
+  try {
+    const { filePath, expirationMinutes = 15 } = JSON.parse(event.body || '{}');
+    
+    if (!filePath) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'File path is required' }),
+      };
+    }
+
+    // Calculate expiration time (default 15 minutes from now)
+    const expiration = Math.floor(Date.now() / 1000) + (expirationMinutes * 60);
+    
+    // Get configuration from environment
+    const distributionDomain = process.env.DISTRIBUTION_DOMAIN;
+    const keyPairId = process.env.CLOUDFRONT_KEY_PAIR_ID;
+    const signingKeySecretArn = process.env.SIGNING_KEY_SECRET_ARN;
+
+    if (!distributionDomain || !keyPairId || !signingKeySecretArn) {
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'CloudFront configuration incomplete' }),
+      };
+    }
+
+    // Construct the resource URL
+    const resourceUrl = \`https://\${distributionDomain}/\${filePath.replace(/^\\//, '')}\`;
+
+    // Create the policy for the signed URL
+    const policy = {
+      Statement: [
+        {
+          Resource: resourceUrl,
+          Condition: {
+            DateLessThan: {
+              'AWS:EpochTime': expiration,
+            },
+          },
+        },
+      ],
+    };
+
+    const policyString = JSON.stringify(policy).replace(/\\s/g, '');
+    const base64Policy = Buffer.from(policyString).toString('base64')
+      .replace(/\\+/g, '-')
+      .replace(/\\//g, '_')
+      .replace(/=/g, '');
+
+    // In production, retrieve private key from Secrets Manager and create signature
+    // For now, return a URL structure that would work with proper signing
+    const signedUrl = \`\${resourceUrl}?Expires=\${expiration}&Policy=\${base64Policy}&Key-Pair-Id=\${keyPairId}&Signature=SIGNATURE_PLACEHOLDER\`;
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        signedUrl,
+        expiresAt: new Date(expiration * 1000).toISOString(),
+        resourceUrl,
+        policy: policyString,
+        message: 'Note: This is a template. In production, implement proper RSA signing with private key from Secrets Manager.'
+      }),
+    };
+  } catch (error) {
+    console.error('Signed URL Generation Error:', error);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Failed to generate signed URL', details: error.message }),
+    };
+  }
+};
+        `),
+        }),
+        tags,
+      },
+      { parent: this }
+    );
+
     this.edgeLambdaQualifiedArn = edgeLambda.qualifiedArn;
     this.licenseApiLambdaArn = licenseApiLambda.arn;
     this.licenseApiLambdaName = licenseApiLambda.name;
     this.usageTrackingLambdaArn = usageTrackingLambda.arn;
     this.usageTrackingLambdaName = usageTrackingLambda.name;
+    this.signedUrlLambdaArn = signedUrlLambda.arn;
+    this.signedUrlLambdaName = signedUrlLambda.name;
 
     this.registerOutputs({
       edgeLambdaQualifiedArn: this.edgeLambdaQualifiedArn,
       licenseApiLambdaArn: this.licenseApiLambdaArn,
       usageTrackingLambdaArn: this.usageTrackingLambdaArn,
+      signedUrlLambdaArn: this.signedUrlLambdaArn,
     });
   }
 }

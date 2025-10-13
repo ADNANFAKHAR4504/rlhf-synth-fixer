@@ -74,6 +74,8 @@ describe('LambdaStack', () => {
       expect(stack.licenseApiLambdaName).toBeDefined();
       expect(stack.usageTrackingLambdaArn).toBeDefined();
       expect(stack.usageTrackingLambdaName).toBeDefined();
+      expect(stack.signedUrlLambdaArn).toBeDefined();
+      expect(stack.signedUrlLambdaName).toBeDefined();
     });
 
     it('should create Edge Lambda IAM role', () => {
@@ -139,6 +141,25 @@ describe('LambdaStack', () => {
           environment: expect.objectContaining({
             variables: expect.objectContaining({
               ANALYTICS_TABLE: expect.stringContaining('download-analytics-test'),
+            }),
+          }),
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it('should create signed URL generation Lambda', () => {
+      expect(aws.lambda.Function).toHaveBeenCalledWith(
+        expect.stringContaining('signed-url-generator'),
+        expect.objectContaining({
+          runtime: 'nodejs18.x',
+          handler: 'index.handler',
+          timeout: 30,
+          memorySize: 512,
+          environment: expect.objectContaining({
+            variables: expect.objectContaining({
+              DISTRIBUTION_DOMAIN: 'REPLACE_WITH_DISTRIBUTION_DOMAIN',
+              CLOUDFRONT_KEY_PAIR_ID: 'REPLACE_WITH_KEY_PAIR_ID',
             }),
           }),
         }),

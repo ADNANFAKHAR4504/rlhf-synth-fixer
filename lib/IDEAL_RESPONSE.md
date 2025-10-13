@@ -193,207 +193,47 @@ exports.handler = async (event) => {
 );
 ```
 
-### 2. Integration Tests with Module Compatibility
+### 2. Resource Lifecycle Management
 
-**CRITICAL FIX**: Integration tests must avoid AWS SDK v3 ES module conflicts:
+**CRITICAL FIX**: Lambda@Edge functions require special lifecycle protection:
 
-```typescript
-// test/tap-stack.int.test.ts
-import * as fs from 'fs';
-import * as path from 'path';
-import axios from 'axios'; // FIXED: Use axios instead of AWS SDK v3
-
-describe('TAP Stack Integration Tests', () => {
-  let outputs: any;
-
-  // Get environment suffix from environment variable or default
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-  beforeAll(() => {
-    // Load the deployment outputs
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    } else {
-      throw new Error('Deployment outputs not found. Run deployment first.');
-    }
-  });
-
-  // FIXED: Use pattern validation instead of AWS API calls
-  describe('S3 Storage', () => {
-    test('should have created the S3 bucket', async () => {
-      expect(outputs.bucketName).toBeDefined();
-      expect(outputs.bucketName).toContain('software-dist-binaries');
-      
-      // Verify bucket name follows expected pattern
-      expect(outputs.bucketName).toMatch(/^software-dist-binaries-dev-[a-z0-9]+$/);
-    });
-  });
-
-  // FIXED: Use URL pattern validation instead of AWS API calls
-  describe('API Gateway', () => {
-    test('should have created the API Gateway', async () => {
-      expect(outputs.apiUrl).toBeDefined();
-      expect(outputs.apiUrl).toContain('execute-api.us-east-1.amazonaws.com');
-      
-      // Verify the URL structure is correct
-      expect(outputs.apiUrl).toMatch(/https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/dev$/);
-    });
-  });
-
-  // FIXED: Use HTTP testing instead of CloudFront API calls  
-  describe('CloudFront Distribution', () => {
-    test('should be accessible via HTTPS', async () => {
-      const url = `https://${outputs.distributionUrl}`;
-      expect(url).toMatch(/^https:\/\/.+\.cloudfront\.net$/);
-
-      // Test that the CloudFront distribution responds (may return 403 but should not timeout)
-      try {
-        const response = await axios.head(url, { timeout: 10000 });
-        expect(response.status).toBeDefined();
-      } catch (error: any) {
-        // CloudFront may return 403 or 404 for root path, which is expected
-        expect([403, 404]).toContain(error.response?.status);
-      }
-    });
-  });
-
-  // Get environment suffix from environment variable or default
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-  beforeAll(() => {
-    // Load the deployment outputs
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    } else {
-      throw new Error('Deployment outputs not found. Run deployment first.');
-    }
-  });
-
-  describe('S3 Storage', () => {
-    test('should have created the S3 bucket', async () => {
-      expect(outputs.bucketName).toBeDefined();
-      expect(outputs.bucketName).toContain('software-dist-binaries');
-
-      // FIXED: Validate pattern instead of AWS API call
-      expect(outputs.bucketName).toMatch(/^software-dist-binaries-dev-[a-z0-9]+$/);
-    });
-  });
-
-  describe('CloudFront Distribution', () => {
-    test('should be accessible via HTTPS', async () => {
-      const url = `https://${outputs.distributionUrl}`;
-      expect(url).toMatch(/^https:\/\/.+\.cloudfront\.net$/);
-
-      // FIXED: HTTP test instead of AWS SDK call
-      try {
-        const response = await axios.head(url, { timeout: 10000 });
-        expect(response.status).toBeDefined();
-      } catch (error: any) {
-        // CloudFront may return 403 or 404 for root path, which is expected
-        expect([403, 404]).toContain(error.response?.status);
-      }
-    });
-  });
-}
-```
-
-### 3. Key Deployment Considerations
+### 3. Environment Configuration
 
 **State Management**: 
 - Lambda@Edge function names must remain consistent across deployments to prevent state corruption
 - Use `skipDestroy: true` and proper `ignoreChanges` for Lambda@Edge functions
-
-**Module Compatibility**: 
-- Integration tests should avoid AWS SDK v3 direct imports due to ES module conflicts
-- Use HTTP-based testing with axios for CloudFront and API Gateway validation
-- Validate resource patterns instead of making AWS API calls in tests
 
 **Environment Configuration**:
 - Ensure `PULUMI_BACKEND_URL` and `PULUMI_ORG` are properly configured for deployment
 - Use local file backend for development: `file:///tmp/pulumi-state`
 - Set organization to `"organization"` to match stack configuration
 
-## Test Results
+## Deployment
 
-### Unit Tests ✅
-- **4 test suites passed**: Database, Lambda, Storage, TapStack  
-- **30 tests passed** with **100% coverage**
-- All infrastructure components properly validated
-
-### Integration Tests ✅
-- **8 tests passed** covering:
-  - S3 bucket pattern validation
-  - API Gateway endpoint structure verification  
-  - CloudFront distribution HTTP accessibility
-  - End-to-end workflow component integration
-
-## Deployment Outputs
-
-The infrastructure produces the following outputs:
-```json
-{
-  "apiUrl": "https://3ypzucms64.execute-api.us-east-1.amazonaws.com/dev",
-  "bucketName": "software-dist-binaries-dev-5db8133", 
-  "distributionUrl": "d3nhvps8ts7eyc.cloudfront.net"
-}
-```
-
-## Deployment Summary
-
-### Infrastructure Status ✅
-- **Total AWS Resources**: 54 successfully deployed
-- **Resource Categories**: S3, CloudFront, Lambda, API Gateway, DynamoDB, IAM, CloudWatch, Secrets Manager
-- **Environment**: us-east-1 with dev suffix
-- **State Management**: Pulumi with file backend and passphrase configuration
-
-### Quality Metrics 
-- **Integration Tests**: 8/8 passing (100%)
-- **Unit Test Coverage**: 100% (30/30 tests passing)
-- **Code Quality Score**: B grade 
-- **Security Score**: 75/100
-- **Production Readiness**: Successfully Deployed
-
-### Key Fixes Applied
-1. **Lambda@Edge State Corruption**: Fixed with `-fixed` suffix and comprehensive resource protection
-2. **Integration Test Compatibility**: Replaced AWS SDK calls with HTTP-based testing
-3. **Resource Lifecycle Management**: Added proper `ignoreChanges`, `skipDestroy`, and `retainOnDelete` options
-4. **Pulumi Passphrase Configuration**: Set PULUMI_CONFIG_PASSPHRASE environment variable for CI/CD
-5. **Environment Suffix Handling**: Ensured consistent environment naming across all resources
-6. **Output Generation**: Fixed get-outputs.sh script to work with Pulumi passphrase requirements
-
-### Deployment Command
 ```bash
 # Set Pulumi passphrase for CI/CD
 export PULUMI_CONFIG_PASSPHRASE=""
 
 # Deploy the infrastructure
 ENVIRONMENT_SUFFIX=dev pulumi up --stack dev --yes
-
-# Generate outputs for integration tests
-./scripts/get-outputs.sh
-
-# Run integration tests  
-npm run test:integration
 ```
 
-### Pipeline Execution Results
-All pipeline stages completed successfully:
-- ✅ **Build**: TypeScript compilation successful
-- ✅ **Lint**: ESLint validation passed  
-- ✅ **Unit Tests**: 30/30 tests passed with 100% coverage
-- ✅ **Synth**: 54 resources validated for deployment
-- ✅ **Deploy**: All 54 AWS resources created successfully
-- ✅ **Integration Tests**: 8/8 tests passed (100% success rate)
-- ✅ **Cleanup**: Temporary files cleaned up
+## Infrastructure Components
 
-## Advanced Learning Patterns Demonstrated
+The infrastructure consists of the following main components:
 
-This implementation showcases several **production-grade infrastructure patterns** that provide exceptional learning value:
+- **Storage**: S3 bucket with versioning and intelligent tiering
+- **Distribution**: CloudFront with Origin Access Control (OAC)
+- **Database**: DynamoDB tables for license validation and usage analytics
+- **API**: API Gateway with Lambda integration for license management
+- **Lambda**: Edge functions for authentication and API handlers
+- **Monitoring**: CloudWatch logs, metrics, and dashboards
 
-### 🔧 **Lambda@Edge State Management Mastery**
-The most critical pattern demonstrated is **stateful Lambda@Edge deployment protection**:
+## Advanced Infrastructure Patterns
+
+This implementation demonstrates several production-grade patterns:
+
+### Lambda@Edge State Management
 
 ```typescript
 // PRODUCTION PATTERN: Complete Lambda@Edge protection
@@ -407,7 +247,6 @@ const edgeLambda = new aws.lambda.Function(
     ignoreChanges: [
       'code', 'handler', 'runtime', 'publish', 'timeout', 'memorySize',
       'arn', 'lastModified', 'version', 'qualifiedArn', 'invokeArn',
-      // ... comprehensive list prevents resource drift
     ],
     retainOnDelete: true,        // Keeps resources during stack destruction  
     deleteBeforeReplace: false,  // Prevents replacement-based failures
@@ -416,32 +255,9 @@ const edgeLambda = new aws.lambda.Function(
 );
 ```
 
-**Learning Value**: Lambda@Edge functions have unique AWS replication requirements that standard infrastructure patterns don't account for. This pattern is essential for any CDN-based authentication system.
+### Multi-Stack Component Architecture
 
-### 🧪 **CI/CD-Ready Integration Testing Pattern**
-Revolutionary approach to infrastructure testing that **avoids AWS SDK v3 ES module conflicts**:
-
-```typescript
-// PRODUCTION PATTERN: Environment-agnostic integration testing
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-// Instead of AWS API calls that fail in CI/CD:
-// ❌ const s3Client = new S3Client({}); // ES module conflicts
-// ❌ const command = new HeadBucketCommand({ Bucket: outputs.bucketName });
-
-// Use pattern validation + HTTP testing:
-expect(outputs.bucketName).toMatch(/^software-dist-binaries-[a-z0-9]+-[a-z0-9]+$/);
-expect(outputs.apiUrl).toMatch(/https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/[a-z0-9]+$/);
-
-// HTTP connectivity validation:
-const response = await axios.head(`https://${outputs.distributionUrl}`, { timeout: 10000 });
-expect([200, 403, 404]).toContain(response.status); // CloudFront auth expected
-```
-
-**Learning Value**: This pattern enables automated infrastructure validation in any CI/CD environment without complex AWS credential setup or module system conflicts.
-
-### 📊 **Multi-Stack Component Architecture**
-Demonstrates **enterprise-grade separation of concerns** across infrastructure domains:
+The infrastructure uses a modular architecture with clear separation of concerns:
 
 ```
 lib/
@@ -454,48 +270,26 @@ lib/
 └── monitoring-stack.ts  # CloudWatch logs, alarms, dashboards
 ```
 
-**Learning Value**: Each stack has single responsibility, clear interfaces, and proper dependency injection. This architecture scales to enterprise applications with hundreds of resources.
+Each stack has single responsibility, clear interfaces, and proper dependency injection. This architecture scales to enterprise applications with hundreds of resources.
 
-### 🚀 **Production Environment Configuration**
-Shows how to handle **real-world deployment automation requirements**:
+## Key Infrastructure Patterns
 
-```bash
-# PRODUCTION PATTERN: CI/CD environment configuration
-export PULUMI_CONFIG_PASSPHRASE=""  # Enables automated output retrieval
-export ENVIRONMENT_SUFFIX="pr3524"   # Dynamic environment naming
-
-# Pipeline-ready commands:
-./scripts/get-outputs.sh           # Generates test fixtures
-npm run test:integration          # Validates deployment
-```
-
-**Learning Value**: Demonstrates the gap between "works on my machine" and "works in production CI/CD" - crucial for enterprise infrastructure.
-
-## Educational Outcomes Achieved
-
-### 🎯 **Advanced Infrastructure Patterns**
 1. **Stateful resource protection** for AWS edge services
 2. **Resource lifecycle management** in distributed cloud environments  
 3. **Multi-environment deployment** with consistent naming patterns
 4. **Security-first design** with least-privilege IAM and encryption
 5. **Cost optimization** through S3 Intelligent-Tiering and serverless architecture
 
-### 🔬 **Production Debugging Methodology**
-The accompanying `MODEL_FAILURES.md` documents **24 real infrastructure issues** and their solutions, including:
-- Pulumi state corruption and recovery techniques
-- AWS resource dependency resolution  
-- CI/CD environment compatibility challenges
-- Integration testing strategy evolution
-- Performance optimization discoveries
+## Deployment Configuration
 
-### 💡 **Enterprise-Ready Practices**
-- **100% test coverage** with both unit and integration validation
-- **Environment-agnostic deployments** supporting dev, staging, prod patterns
-- **Comprehensive monitoring** with CloudWatch dashboards and alerting
-- **Security compliance** with encryption, access controls, and audit trails
-- **Documentation-driven development** with detailed failure analysis
+```bash
+# Set Pulumi configuration for deployment
+export PULUMI_CONFIG_PASSPHRASE=""
+export ENVIRONMENT_SUFFIX="dev"
 
-This implementation provides a **production-ready software distribution platform** demonstrating advanced infrastructure engineering patterns that directly apply to enterprise cloud architectures serving millions of users.
+# Deploy infrastructure
+pulumi up --stack dev --yes
+```
 
 ## Security Features
 
