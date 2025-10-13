@@ -28,12 +28,13 @@ provider "aws" {
 
 # Aliased providers for peer accounts (dynamically configured)
 # These will be used for cross-account VPC peering
+# Note: These are configured for cross-account access when account_id_map is provided
 provider "aws" {
   alias  = "account1"
   region = var.primary_region
 
   assume_role {
-    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 0, var.primary_account_id)}:role/${var.cross_account_role_name}"
+    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 0, data.aws_caller_identity.current.account_id)}:role/${var.cross_account_role_name}"
   }
 }
 
@@ -42,7 +43,7 @@ provider "aws" {
   region = var.primary_region
 
   assume_role {
-    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 1, var.primary_account_id)}:role/${var.cross_account_role_name}"
+    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 1, data.aws_caller_identity.current.account_id)}:role/${var.cross_account_role_name}"
   }
 }
 
@@ -51,6 +52,9 @@ provider "aws" {
   region = var.primary_region
 
   assume_role {
-    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 2, var.primary_account_id)}:role/${var.cross_account_role_name}"
+    role_arn = "arn:aws:iam::${lookup(var.account_id_map, 2, data.aws_caller_identity.current.account_id)}:role/${var.cross_account_role_name}"
   }
 }
+
+# Data source for current account ID
+data "aws_caller_identity" "current" {}

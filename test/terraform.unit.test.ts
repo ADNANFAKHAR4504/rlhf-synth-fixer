@@ -27,10 +27,6 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
       expect(terraformCode).toMatch(/variable\s+"primary_region"\s+\{[\s\S]*?default\s*=\s*"us-east-1"/);
     });
 
-    test('should define primary_account_id variable', () => {
-      expect(terraformCode).toMatch(/variable\s+"primary_account_id"\s+\{/);
-    });
-
     test('should define peer_account_ids variable as list', () => {
       expect(terraformCode).toMatch(/variable\s+"peer_account_ids"\s+\{[\s\S]*?type\s*=\s*list\(string\)/);
     });
@@ -692,7 +688,7 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
     });
 
     test('should define environment variables for Lambda', () => {
-      expect(terraformCode).toMatch(/resource\s+"aws_lambda_function"[\s\S]*?environment\s*\{[\s\S]*?variables\s*\{/);
+      expect(terraformCode).toMatch(/resource\s+"aws_lambda_function"[\s\S]*?environment\s*\{[\s\S]*?variables\s*=/);
     });
 
     test('should pass VPC_IDS to Lambda environment', () => {
@@ -794,9 +790,11 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
 
   describe('Security and Compliance', () => {
     test('should have encryption enabled for all storage', () => {
-      const kmsMatches = terraformCode.match(/kms_key_id\s*=\s*aws_kms_key\.main\.(arn|id)/g);
-      expect(kmsMatches).not.toBeNull();
-      expect(kmsMatches!.length).toBeGreaterThanOrEqual(5);
+      // Match both kms_key_id and kms_master_key_id patterns
+      const kmsKeyIdMatches = terraformCode.match(/kms_key_id\s*=\s*aws_kms_key\.main\.(arn|id)/g) || [];
+      const kmsMasterKeyIdMatches = terraformCode.match(/kms_master_key_id\s*=\s*aws_kms_key\.main\.(arn|id)/g) || [];
+      const totalKmsMatches = kmsKeyIdMatches.length + kmsMasterKeyIdMatches.length;
+      expect(totalKmsMatches).toBeGreaterThanOrEqual(5);
     });
 
     test('should have proper tagging on resources', () => {

@@ -10,11 +10,6 @@ variable "primary_region" {
   default     = "us-east-1"
 }
 
-variable "primary_account_id" {
-  description = "Primary AWS account ID"
-  type        = string
-}
-
 variable "peer_account_ids" {
   description = "List of peer AWS account IDs"
   type        = list(string)
@@ -22,7 +17,7 @@ variable "peer_account_ids" {
 }
 
 variable "account_id_map" {
-  description = "Map of VPC index to AWS account ID"
+  description = "Map of VPC index to AWS account ID (defaults to current account)"
   type        = map(string)
   default     = {}
 }
@@ -240,10 +235,10 @@ locals {
   # Flatten peering connections
   peering_pairs = flatten(local.peering_connections)
 
-  # Account ID for each VPC
+  # Account ID for each VPC (defaults to current account)
   vpc_account_ids = {
     for i in range(var.vpc_count) :
-    i => lookup(var.account_id_map, i, var.primary_account_id)
+    i => lookup(var.account_id_map, i, data.aws_caller_identity.current.account_id)
   }
 }
 
