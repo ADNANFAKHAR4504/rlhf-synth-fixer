@@ -20,7 +20,8 @@ echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
-export AWS_REGION=${AWS_REGION:-us-east-1}
+export AWS_REGION='ap-south-1'
+#export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
