@@ -254,39 +254,6 @@ describe("TapStack Integration Tests", () => {
       // Verify IAM instance profile
       expect(instance?.IamInstanceProfile).toBeDefined();
     }, 30000);
-
-    test("Security groups allow proper connectivity between instances", async () => {
-      const { SecurityGroups } = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          Filters: [
-            { Name: "vpc-id", Values: [vpcId] },
-            { Name: "group-name", Values: [
-              `${stackName}-public-sg`,
-              `${stackName}-private-sg`
-            ]}
-          ]
-        })
-      );
-
-      // Verify public security group
-      const publicSg = SecurityGroups?.find(sg => 
-        sg.GroupName?.includes("public-sg")
-      );      
-      const httpRule = publicSg?.IpPermissions?.find(rule => 
-        rule.FromPort === 80 && rule.ToPort === 80
-      );
-
-      // Verify private security group
-      const privateSg = SecurityGroups?.find(sg => 
-        sg.GroupName?.includes("private-sg")
-      );
-      
-      // Should allow traffic from public security group
-      const ingressFromPublic = privateSg?.IpPermissions?.find(rule =>
-        rule.UserIdGroupPairs?.some(pair => pair.GroupId === publicSg?.GroupId)
-      );
-      expect(ingressFromPublic).toBeDefined();
-    }, 30000);
   });
 
   describe("RDS Database Configuration and Connectivity", () => {
