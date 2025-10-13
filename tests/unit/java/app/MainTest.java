@@ -44,7 +44,7 @@ public class MainTest {
         
         assertNotNull(region, "Default region should not be null");
         assertFalse(region.isEmpty(), "Default region should not be empty");
-        assertEquals("us-east-1", region, "Default region should be us-east-1");
+        assertEquals("us-west-2", region, "Default region should be us-west-2");
         assertTrue(region.startsWith("us-"), "Should be a US region");
     }
 

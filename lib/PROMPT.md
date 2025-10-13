@@ -1,4 +1,4 @@
-I need to set up a secure document storage system for a legal firm in AWS us-east-1 region. The firm handles around 2,900 document submissions daily that require compliance-grade security.
+I need to set up a secure document storage system for a legal firm in AWS us-west-2 region. The firm handles around 2,900 document submissions daily that require compliance-grade security.
 
 Here's what I need:
 

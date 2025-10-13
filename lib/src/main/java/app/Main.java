@@ -61,7 +61,7 @@ public final class Main {
 
     // Additional helper method for testing
     public static String getDefaultRegion() {
-        return "us-east-1";
+        return "us-west-2";
     }
 
     // Method to validate input parameters
