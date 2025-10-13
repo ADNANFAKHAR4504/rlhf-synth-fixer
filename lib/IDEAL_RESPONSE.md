@@ -2,26 +2,7 @@
 
 ## Architecture Overview
 
-This solution implements a scalable email no    new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
-      value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
-      description: 'SQS dead letter queue URL for failed email processing',
-      exportName: `TapStack-EmailDeadLetterQueueUrl-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
-      value: `email-processor-cpu-${environmentSuffix}`,
-      description: 'CloudWatch alarm name for email processor CPU utilization',
-      exportName: `TapStack-EmailProcessorCpuAlarm-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
-      value: `ses-feedback-processor-cpu-${environmentSuffix}`,
-      description:
-        'CloudWatch alarm name for SES feedback processor CPU utilization',
-      exportName: `TapStack-FeedbackProcessorCpuAlarm-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(this, 'SystemSetupInstructions', {ion system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing, and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
+This solution implements a scalable email notification system for e-commerce order processing using AWS CDK with TypeScript. The system uses Amazon SES for email delivery, Lambda for processing, SNS→SQS→Lambda pattern for reliable message processing, and DynamoDB for tracking - all with inline Lambda code embedded directly in the CDK stacks.
 
 **Key Architecture Changes (SQS Integration):**
 -  **SNS→SQS→Lambda Pattern**: Implemented reliable message processing using SQS queues instead of direct SNS→Lambda subscription
@@ -29,13 +10,65 @@ This solution implements a scalable email no    new cdk.CfnOutput(this, 'EmailDe
 -  **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
 -  **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
 
-## Implementation Files
+```typescript
+new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
+  value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
+  description: 'SQS dead letter queue URL for failed email processing',
+  exportName: `TapStack-EmailDeadLetterQueueUrl-${environmentSuffix}`,
+});
+
+new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
+  value: `email-processor-cpu-${environmentSuffix}`,
+  description: 'CloudWatch alarm name for email processor CPU utilization',
+  exportName: `TapStack-EmailProcessorCpuAlarm-${environmentSuffix}`,
+});
+
+new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
+  value: `ses-feedback-processor-cpu-${environmentSuffix}`,
+  description:
+    'CloudWatch alarm name for SES feedback processor CPU utilization',
+  exportName: `TapStack-FeedbackProcessorCpuAlarm-${environmentSuffix}`,
+});
+
+new cdk.CfnOutput(this, 'SystemSetupInstructions', {
+  value: JSON.stringify({
+    integration: {
+      orderEventsTopic: emailNotificationStack.orderEventsTopic.topicArn,
+      messageFormat: {
+        orderId: 'string - unique order identifier',
+        customerEmail: 'string - customer email address',
+        customerName: 'string - customer full name',
+        orderItems: 'array - list of order items with name, quantity, price',
+        orderTotal: 'string - total order amount',
+        orderTimestamp: 'string - ISO 8601 timestamp',
+      },
+    },
+    monitoring: {
+      deliveryTracking: emailNotificationStack.deliveryTrackingTable.tableName,
+      costDashboard: `email-costs-${environmentSuffix}`,
+      emailDashboard: `email-notifications-${environmentSuffix}`,
+    },
+    configuration: {
+      verifiedDomain: verifiedDomain,
+      costThreshold: costBudgetThreshold,
+      alertEmails: notificationEmails,
+    },
+  }),
+  description: 'JSON configuration for integrating with the email notification system',
+  exportName: `TapStack-SetupInstructions-${environmentSuffix}`,
+});
+```
+
+});
+}
+```
 
 The system consists of four main TypeScript CDK stack files in the `lib/` directory:
 
 ### 1. Main Orchestration Stack
 
-**tap-stack.ts**
+**tap-stack.ts** - The main orchestration stack that coordinates all components:
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -131,6 +164,19 @@ export class TapStack extends cdk.Stack {
       value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
       description: 'SQS dead letter queue URL for failed email processing',
       exportName: `TapStack-EmailDeadLetterQueue-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EmailProcessorCpuAlarmName', {
+      value: `email-processor-cpu-${environmentSuffix}`,
+      description: 'CloudWatch alarm name for email processor CPU utilization',
+      exportName: `TapStack-EmailProcessorCpuAlarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'FeedbackProcessorCpuAlarmName', {
+      value: `ses-feedback-processor-cpu-${environmentSuffix}`,
+      description:
+        'CloudWatch alarm name for SES feedback processor CPU utilization',
+      exportName: `TapStack-FeedbackProcessorCpuAlarm-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SystemSetupInstructions', {
