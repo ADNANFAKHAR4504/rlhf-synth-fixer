@@ -16,7 +16,6 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
 
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags = {
   tags: {
     Environment: environmentSuffix,
