@@ -94,7 +94,7 @@ public final class Main {
         var cloudtrailBucket = storageResources.cloudtrailBucket;
 
         // Create monitoring and logging resources
-        var monitoringResources = createMonitoringResources();
+        var monitoringResources = createMonitoringResources(environmentSuffix);
 
         // Create CloudTrail resources
         var cloudtrailResources = createCloudTrailResources(
@@ -252,10 +252,10 @@ public final class Main {
         return new StorageResources(documentBucket, cloudtrailBucket);
     }
 
-    private static MonitoringResources createMonitoringResources() {
+    private static MonitoringResources createMonitoringResources(String environmentSuffix) {
         // Create CloudWatch Log Group for CloudTrail
         var cloudtrailLogGroup = new LogGroup("cloudtrail-log-group", LogGroupArgs.builder()
-                .name("/aws/cloudtrail/legal-documents")
+                .name("/aws/cloudtrail/legal-documents-" + environmentSuffix)
                 .retentionInDays(2557)
                 .tags(Map.of(
                         "Name", "cloudtrail-logs",
@@ -265,7 +265,7 @@ public final class Main {
 
         // Create CloudWatch Log Group for S3 access logs
         var s3AccessLogGroup = new LogGroup("s3-access-log-group", LogGroupArgs.builder()
-                .name("/aws/s3/legal-documents-access")
+                .name("/aws/s3/legal-documents-access-" + environmentSuffix)
                 .retentionInDays(90)
                 .tags(Map.of(
                         "Name", "s3-access-logs",
