@@ -12,13 +12,8 @@ terraform {
     }
   }
 
-<<<<<<< Updated upstream
   backend "s3" {
   }
-=======
-  # backend "s3" {
-  # }
->>>>>>> Stashed changes
 }
 
 # Primary Region Provider
