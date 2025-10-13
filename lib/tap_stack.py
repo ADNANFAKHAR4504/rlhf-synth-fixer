@@ -993,9 +993,9 @@ def handler(event, context):
             "transaction-api",
             name=f"transaction-ingestion-api-{environment}",
             description="API for ingesting financial transactions",
-            endpoint_configuration=aws.apigateway.RestApiEndpointConfigurationArgs(
-                types=["REGIONAL"]
-            ),
+            endpoint_configuration={
+                "types": ["REGIONAL"]
+            },
             tags=default_tags,
             opts=ResourceOptions(parent=self)
         )
