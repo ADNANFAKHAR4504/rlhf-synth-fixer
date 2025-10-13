@@ -557,12 +557,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
     });
 
-    test('should have HTTP listener that redirects to HTTPS', () => {
+    test('should have HTTP listener that forwards to target group', () => {
       expect(template.Resources.ALBListenerHTTP).toBeDefined();
       const listener = template.Resources.ALBListenerHTTP;
       expect(listener.Properties.Port).toBe(80);
-      expect(listener.Properties.DefaultActions[0].Type).toBe('redirect');
-      expect(listener.Properties.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+      expect(listener.Properties.DefaultActions[0].Type).toBe('forward');
+      expect(listener.Properties.DefaultActions[0].TargetGroupArn).toEqual({ Ref: 'TargetGroup' });
     });
   });
 

@@ -671,11 +671,35 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # Note: HTTPS listener requires an SSL certificate
+  # Uncomment and configure when you have an SSL certificate
+  # ALBListenerHTTP:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+  #     Port: 80
+  #     Protocol: HTTP
+  #     DefaultActions:
+  #       - Type: redirect
+  #         RedirectConfig:
+  #           Protocol: HTTPS
+  #           Port: 443
+  #           StatusCode: HTTP_301
+  #
+  # ALBListenerHTTPS:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+  #     Port: 443
+  #     Protocol: HTTPS
+  #     Certificates:
+  #       - CertificateArn: !Ref Certificate
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref TargetGroup
 
   # ==================== Launch Template and Auto Scaling ====================
   LaunchTemplate:
