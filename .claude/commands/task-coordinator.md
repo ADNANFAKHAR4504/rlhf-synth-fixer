@@ -31,7 +31,36 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `task-coordinator` (orchestrates final steps)
 
-**Prerequisites**: Phase 4 (code-reviewer) reports "Ready"
+**Prerequisites**: 
+- Phase 4 (code-reviewer) reports "Ready"
+- GitHub CLI (`gh`) is installed and authenticated
+- Git remote origin is accessible
+- User has write permissions to the repository
+
+**Pre-flight Checks**:
+```bash
+# Verify gh CLI is installed
+if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is not installed"
+    echo "Install from: https://cli.github.com/"
+    exit 1
+fi
+
+# Verify gh CLI is authenticated
+if ! gh auth status &> /dev/null; then
+    echo "❌ GitHub CLI is not authenticated"
+    echo "Run: gh auth login"
+    exit 1
+fi
+
+# Verify we're in the correct worktree directory
+if [[ ! $(pwd) =~ worktree/synth-[^/]+$ ]]; then
+    echo "❌ Not in worktree directory. Current: $(pwd)"
+    exit 1
+fi
+
+echo "✅ Pre-flight checks passed"
+```
 
 **Steps**:
 
@@ -77,7 +106,8 @@ Task ID: ${TASK_ID}"
    # Get AWS services count
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
    
-   gh pr create \
+   # Create PR with error handling
+   if gh pr create \
      --title "Task ${TASK_ID}: ${SUBTASK}" \
      --body "**Platform**: ${PLATFORM}-${LANGUAGE}
 **Complexity**: ${COMPLEXITY}
@@ -86,23 +116,64 @@ Task ID: ${TASK_ID}"
 
 Auto-generated infrastructure task.
 
-Task ID: ${TASK_ID}" \
+Task ID: ${TASK_ID}
+
+### Description
+This PR contains auto-generated Infrastructure as Code for the specified task.
+
+### IAC Link
+[IAC-${TASK_ID}](https://labeling-z.turing.com/conversations/${TASK_ID}/view)
+
+### PR Checklist
+- [x] Code includes appropriate test coverage
+- [x] Code includes proper integration tests
+- [x] Code follows the style guidelines
+- [x] Self-review completed
+- [x] Code properly commented
+- [x] Prompt follows proper markdown format
+- [x] Ideal response follows proper markdown format
+- [x] Model response follows proper markdown format
+- [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
      --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "complexity-${COMPLEXITY}"; then
+     echo "✅ PR created successfully"
+   else
+     echo "❌ Failed to create PR. Checking if gh CLI is authenticated..."
+     gh auth status
+     echo "ERROR: PR creation failed. Task status will be updated to 'error'."
+     exit 1
+   fi
    ```
 
-6. **Capture PR number**:
+6. **Capture PR number and validate**:
    ```bash
+   # Capture PR number with retry logic
    PR_NUMBER=$(gh pr view ${BRANCH_NAME} --json number -q .number)
+   
+   if [ -z "$PR_NUMBER" ]; then
+     echo "❌ Failed to capture PR number"
+     exit 1
+   fi
+   
    echo "✅ Created PR #${PR_NUMBER}"
+   
+   # Verify PR was created successfully
+   PR_URL=$(gh pr view ${PR_NUMBER} --json url -q .url)
+   echo "📎 PR URL: ${PR_URL}"
    ```
 
 7. **Update CSV status to "done"**:
    ```bash
    # Return to main repo to update CSV
    cd ../..
+   
+   # Verify we're in the correct directory
+   if [ ! -f "tasks.csv" ]; then
+     echo "❌ ERROR: tasks.csv not found. Current directory: $(pwd)"
+     exit 1
+   fi
    
    # Update tasks.csv (using Python for safe CSV handling)
    python3 << 'PYTHON_SCRIPT'
@@ -112,30 +183,39 @@ import sys
 task_id = "${TASK_ID}"
 pr_number = "${PR_NUMBER}"
 
-# Read CSV
-rows = []
-updated = False
-with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-    reader = csv.DictReader(f)
-    fieldnames = reader.fieldnames
-    for row in reader:
-        if row['task_id'] == task_id and row['status'] == 'in_progress':
-            row['status'] = 'done'
-            row['trainr_notes'] = f"Completed - PR #{pr_number}"
-            updated = True
-        rows.append(row)
+try:
+    # Read CSV
+    rows = []
+    updated = False
+    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            if row['task_id'] == task_id and row['status'] == 'in_progress':
+                row['status'] = 'done'
+                row['trainr_notes'] = f"Completed - PR #{pr_number}"
+                updated = True
+            rows.append(row)
 
-# Write back
-if updated:
-    with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"✅ Updated task {task_id} status to 'done'")
-else:
-    print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
+    # Write back
+    if updated:
+        with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"✅ Updated task {task_id} status to 'done' with PR #{pr_number}")
+    else:
+        print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
+        sys.exit(1)
+except Exception as e:
+    print(f"❌ ERROR updating CSV: {e}")
     sys.exit(1)
 PYTHON_SCRIPT
+   
+   if [ $? -ne 0 ]; then
+     echo "❌ Failed to update tasks.csv"
+     exit 1
+   fi
    ```
 
 8. **Cleanup worktree**:
@@ -274,6 +354,67 @@ Important: Do not generate the `/lib/PROMPT.md` code, delegate that to the subag
 ## Task Completion Requirements
 Important: If, for any reason, you're unable to finish the task. set the task status in the csv as "error" and put the error
 information inside the trainr_notes column of that task.
+
+### Error Handling for PR Creation Failures
+
+If PR creation fails at any step:
+
+1. **Capture the error details**:
+   ```bash
+   ERROR_MESSAGE="<detailed error description>"
+   ERROR_STEP="<which step failed: commit/push/pr-create/csv-update>"
+   ```
+
+2. **Update CSV with error status**:
+   ```bash
+   cd ../../  # Return to main repo if not already there
+   
+   python3 << 'PYTHON_SCRIPT'
+import csv
+import sys
+
+task_id = "${TASK_ID}"
+error_msg = "${ERROR_MESSAGE}"
+error_step = "${ERROR_STEP}"
+
+try:
+    rows = []
+    updated = False
+    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        for row in reader:
+            if row['task_id'] == task_id and row['status'] == 'in_progress':
+                row['status'] = 'error'
+                row['trainr_notes'] = f"PR creation failed at {error_step}: {error_msg}"
+                updated = True
+            rows.append(row)
+
+    if updated:
+        with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"✅ Updated task {task_id} status to 'error'")
+    else:
+        print(f"⚠️ Task {task_id} not found or not in 'in_progress' status")
+except Exception as e:
+    print(f"❌ ERROR updating CSV: {e}")
+    sys.exit(1)
+PYTHON_SCRIPT
+   ```
+
+3. **Report to user with recovery options**:
+   ```
+   ❌ Task ${TASK_ID} failed at ${ERROR_STEP}
+   Error: ${ERROR_MESSAGE}
+   
+   Recovery options:
+   - For auth issues: Run 'gh auth login' and retry Phase 5
+   - For network issues: Check connectivity and retry
+   - For permission issues: Verify repository write access
+   - For git issues: Check branch state and remote status
+   ```
 
 Additional:
 - If you find an issue in the task description that blocks you from deploying the infrastructure properly, and its an issue
