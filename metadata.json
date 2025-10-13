@@ -11,5 +11,11 @@
     "Cloud Environment Setup"
   ],
   "aws_services": ["DynamoDB"],
-  "training_quality": 2
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
