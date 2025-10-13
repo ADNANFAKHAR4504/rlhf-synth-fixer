@@ -61,7 +61,20 @@ public final class Main {
 
     // Additional helper method for testing
     public static String getDefaultRegion() {
-        return "us-east-2";
+        return "us-east-1";
+    }
+
+    // Check if running in CI environment to skip CloudTrail (avoid limits)
+    public static boolean isRunningInCI() {
+        // Check for common CI environment variables
+        String ci = System.getenv("CI");
+        String githubActions = System.getenv("GITHUB_ACTIONS");
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        
+        // Skip CloudTrail if running in CI or if environment suffix indicates PR
+        return "true".equals(ci) 
+               || "true".equals(githubActions) 
+               || (environmentSuffix != null && environmentSuffix.startsWith("pr"));
     }
 
     // Method to validate input parameters
@@ -96,15 +109,20 @@ public final class Main {
         // Create monitoring and logging resources
         var monitoringResources = createMonitoringResources(environmentSuffix);
 
-        // Create CloudTrail resources
-        var cloudtrailResources = createCloudTrailResources(
-                cloudtrailBucket, kmsKey, monitoringResources.cloudtrailLogGroup, environmentSuffix);
+        // Create CloudTrail resources (optional in CI environments to avoid limits)
+        boolean skipCloudTrail = isRunningInCI();
+        CloudTrailResources cloudtrailResources = null;
+        if (!skipCloudTrail) {
+            cloudtrailResources = createCloudTrailResources(
+                    cloudtrailBucket, kmsKey, monitoringResources.cloudtrailLogGroup, environmentSuffix);
+        }
 
         // Create IAM policies
         var accessPolicy = createDocumentAccessPolicy(documentBucket, kmsKey, environmentSuffix);
 
         // Export outputs
-        exportOutputs(ctx, documentBucket, kmsKey, cloudtrailResources.trail, 
+        exportOutputs(ctx, documentBucket, kmsKey, 
+                cloudtrailResources != null ? cloudtrailResources.trail : null, 
                 monitoringResources, accessPolicy);
     }
 
@@ -252,7 +270,7 @@ public final class Main {
         return new StorageResources(documentBucket, cloudtrailBucket);
     }
 
-    private static MonitoringResources createMonitoringResources(String environmentSuffix) {
+    private static MonitoringResources createMonitoringResources(final String environmentSuffix) {
         // Create CloudWatch Log Group for CloudTrail
         var cloudtrailLogGroup = new LogGroup("cloudtrail-log-group", LogGroupArgs.builder()
                 .name("/aws/cloudtrail/legal-documents-" + environmentSuffix)
@@ -477,7 +495,14 @@ public final class Main {
         ctx.export("documentBucketArn", documentBucket.arn());
         ctx.export("kmsKeyId", kmsKey.id());
         ctx.export("kmsKeyArn", kmsKey.arn());
-        ctx.export("cloudtrailName", trail.name());
+        
+        // Export CloudTrail name only if CloudTrail was created
+        if (trail != null) {
+            ctx.export("cloudtrailName", trail.name());
+        } else {
+            ctx.export("cloudtrailName", Output.of("cloudtrail-skipped-in-ci"));
+        }
+        
         ctx.export("cloudtrailLogGroupName", monitoringResources.cloudtrailLogGroup.name());
         ctx.export("accessLogGroupName", monitoringResources.s3AccessLogGroup.name());
         ctx.export("documentAccessPolicyArn", documentAccessPolicy.arn());
