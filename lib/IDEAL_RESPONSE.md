@@ -308,6 +308,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:PutObject
                 Resource: !Sub 'arn:aws:s3:::${SecureEnvDataBucket}/*'
         - PolicyName: SecureEnvLambdaEC2Policy
           PolicyDocument:
@@ -448,8 +449,13 @@ Resources:
       UserData:
         Fn::Base64: |
           #!/bin/bash
+          set -euxo pipefail
           yum update -y
-          yum install -y amazon-cloudwatch-agent
+          amazon-linux-extras enable nginx1 || true
+          yum install -y nginx amazon-cloudwatch-agent
+          systemctl enable nginx
+          echo "<html><body><h1>Hello from SecureEnv web server</h1></body></html>" > /usr/share/nginx/html/index.html
+          systemctl start nginx
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvWebServer'
@@ -565,13 +571,45 @@ Resources:
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt SecureEnvLambdaRole.Arn
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref SecureEnvDataBucket
       Code:
         ZipFile: |
           import json
+          import os
+          import boto3
+
+          s3 = boto3.client('s3')
+          DATA_BUCKET = os.environ.get('DATA_BUCKET')
+
           def lambda_handler(event, context):
+              params = (event or {}).get('queryStringParameters') or {}
+              op = (params.get('op') or '').lower()
+              key = params.get('key') or 'test-object'
+              value = params.get('value') or 'ok'
+
+              if op == 'put' and DATA_BUCKET:
+                  s3.put_object(Bucket=DATA_BUCKET, Key=key, Body=value.encode('utf-8'))
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'ok': True, 'action': 'put', 'key': key})
+                  }
+
+              if op == 'get' and DATA_BUCKET:
+                  try:
+                      obj = s3.get_object(Bucket=DATA_BUCKET, Key=key)
+                      body = obj['Body'].read().decode('utf-8')
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({'ok': True, 'action': 'get', 'key': key, 'value': body})
+                      }
+                  except Exception as e:
+                      return {'statusCode': 404, 'body': json.dumps({'ok': False, 'error': str(e)})}
+
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
+                  'body': json.dumps({'ok': True, 'message': 'Hello from Lambda!'})
               }
       VpcConfig:
         SecurityGroupIds:
