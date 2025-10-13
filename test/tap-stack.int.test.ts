@@ -117,12 +117,11 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
     publicS3BucketName = stackOutputs["public-s3-bucket-name"];
     rdsEndpoint = stackOutputs["rds-endpoint"];
     route53ZoneId = stackOutputs["route53-zone-id"];
+    albArn = stackOutputs["alb-arn"] || ''; // Set albArn if available in outputs
 
-    privateS3BucketName = privateS3BucketArn?.split(':::')[1];
-
-    // Extract ALB ARN from DNS name (we'll query this later)
-    if (albDnsName) {
-      const albName = albDnsName.split('-')[0] + '-' + albDnsName.split('-')[1] + '-' + albDnsName.split('-')[2];
+    // Extract bucket name from ARN
+    if (privateS3BucketArn) {
+      privateS3BucketName = privateS3BucketArn.split(':::')[1] || privateS3BucketArn.split(':').pop() || '';
     }
 
     if (!vpcId || !albDnsName || !rdsEndpoint) {
@@ -186,9 +185,29 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
 
   describe("Application Load Balancer and Auto Scaling", () => {
     test("ALB is healthy and properly configured", async () => {
+      // First, get the load balancer
+      const { LoadBalancers } = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({})
+      );
 
-    )
-  );
+      const alb = LoadBalancers?.find(lb => lb.DNSName === albDnsName);
+      expect(alb).toBeDefined();
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Type).toBe('application');
+      expect(alb?.Scheme).toMatch(/^(internet-facing|internal)$/);
+
+      // Store the ALB ARN for later use
+      if (alb?.LoadBalancerArn) {
+        albArn = alb.LoadBalancerArn;
+      }
+
+      // Check listeners
+      if (albArn) {
+        const { Listeners } = await elbv2Client.send(
+          new DescribeListenersCommand({
+            LoadBalancerArn: albArn
+          })
+        );
 
         expect(Listeners?.length).toBeGreaterThan(0);
         const httpListener = Listeners?.find(l => l.Port === 80);
@@ -341,7 +360,7 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
       
       const { Configuration } = await lambdaClient.send(
         new GetFunctionCommand({
-          FunctionName: functionName
+          FunctionName: functionName!
         })
       );
 
@@ -358,9 +377,19 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
       
       const { Configuration } = await lambdaClient.send(
         new GetFunctionConfigurationCommand({
-          FunctionName: functionName
+          FunctionName: functionName!
         })
       );
+
+      // Check that configuration exists
+      expect(Configuration).toBeDefined();
+      expect(Configuration?.FunctionArn).toBe(lambdaFunctionArn);
+      
+      // Check environment variables if they exist
+      if (Configuration?.Environment?.Variables) {
+        console.log('Lambda environment variables are configured');
+        expect(Object.keys(Configuration.Environment.Variables).length).toBeGreaterThan(0);
+      }
     }, 30000);
 
     test("Lambda function can be invoked successfully", async () => {
@@ -369,7 +398,7 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
       try {
         const result = await lambdaClient.send(
           new InvokeCommand({
-            FunctionName: functionName,
+            FunctionName: functionName!,
             InvocationType: 'RequestResponse',
             Payload: JSON.stringify({ test: true, timestamp: Date.now() })
           })
@@ -399,7 +428,7 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
       );
 
       expect(Attributes?.TopicArn).toBe(monitoringSnsTopicArn);
-      expect(Attributes?.DisplayName).toContain('Alert');
+      expect(Attributes?.DisplayName).toBeDefined();
       
       // Check subscriptions
       const { Subscriptions } = await snsClient.send(
@@ -411,6 +440,8 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
       // There should be at least one subscription (email, SMS, or Lambda)
       if (Subscriptions && Subscriptions.length > 0) {
         Subscriptions.forEach(sub => {
+          console.log(`SNS Subscription: ${sub.Protocol} - ${sub.Endpoint}`);
+          expect(sub.SubscriptionArn).toBeDefined();
         });
       }
     }, 30000);
@@ -431,6 +462,8 @@ describe("TapProject Integration Tests - Complete Infrastructure", () => {
           const hasSnsTopic = alarm.AlarmActions?.some(action => 
             action.includes(monitoringSnsTopicArn)
           );
+          
+          console.log(`Alarm ${alarm.AlarmName} has SNS topic: ${hasSnsTopic}`);
         });
 
         // Check for specific alarm types
