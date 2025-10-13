@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -55,6 +54,7 @@ export class TapStack extends Construct {
     environment: 'primary' | 'secondary'
   ) {
     const region = stack.region;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const domainName = stack.node.tryGetContext('domainName') || 'example.com';
     const notificationEmail =
       stack.node.tryGetContext('notificationEmail') || 'ops@example.com';
