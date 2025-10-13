@@ -205,23 +205,16 @@ export class TapStack extends cdk.Stack {
 
     // AWS Config Delivery Channel
     // Note: AWS allows only 1 delivery channel per region per account
-    // For PR environments, you may want to skip this with an environment variable
-    const createDeliveryChannel =
-      process.env.CREATE_CONFIG_DELIVERY_CHANNEL !== 'false';
-
-    let configDeliveryChannel: config.CfnDeliveryChannel | undefined;
-    if (createDeliveryChannel) {
-      configDeliveryChannel = new config.CfnDeliveryChannel(
-        this,
-        'ConfigDeliveryChannel',
-        {
-          name: `tap-config-delivery-${this.stackName}`,
-          s3BucketName: configBucket.bucketName,
-          s3KmsKeyArn: kmsKey.keyArn,
-        }
-      );
-      configDeliveryChannel.addDependency(configRecorder);
-    }
+    // The delivery channel must exist before the recorder can start
+    const configDeliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        name: `tap-config-delivery-${this.stackName}`,
+        s3BucketName: configBucket.bucketName,
+        s3KmsKeyArn: kmsKey.keyArn,
+      }
+    );
 
     // Create SNS topic for compliance alerts
     const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
@@ -230,11 +223,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Configure AWS Config rules
-    this.setupAwsConfigRules(
-      complianceTopic,
-      configRecorder,
-      configDeliveryChannel
-    );
+    this.setupAwsConfigRules(complianceTopic, configRecorder, configDeliveryChannel);
 
     // Output important values
     new cdk.CfnOutput(this, 'VpcId', {
@@ -271,7 +260,7 @@ export class TapStack extends cdk.Stack {
   private setupAwsConfigRules(
     complianceTopic: sns.Topic,
     configRecorder: config.CfnConfigurationRecorder,
-    configDeliveryChannel?: config.CfnDeliveryChannel
+    configDeliveryChannel: config.CfnDeliveryChannel
   ): void {
     // S3 bucket encryption rule
     const s3EncryptionRule = new config.ManagedRule(
@@ -287,9 +276,7 @@ export class TapStack extends cdk.Stack {
     const s3EncryptionCfnRule = s3EncryptionRule.node
       .defaultChild as config.CfnConfigRule;
     s3EncryptionCfnRule.addDependency(configRecorder);
-    if (configDeliveryChannel) {
-      s3EncryptionCfnRule.addDependency(configDeliveryChannel);
-    }
+    s3EncryptionCfnRule.addDependency(configDeliveryChannel);
 
     // RDS encryption rule
     const rdsEncryptionRule = new config.ManagedRule(
@@ -304,9 +291,7 @@ export class TapStack extends cdk.Stack {
     const rdsEncryptionCfnRule = rdsEncryptionRule.node
       .defaultChild as config.CfnConfigRule;
     rdsEncryptionCfnRule.addDependency(configRecorder);
-    if (configDeliveryChannel) {
-      rdsEncryptionCfnRule.addDependency(configDeliveryChannel);
-    }
+    rdsEncryptionCfnRule.addDependency(configDeliveryChannel);
 
     // Security group SSH rule
     const sshRule = new config.CfnConfigRule(this, 'RestrictedSSHRule', {
@@ -318,9 +303,7 @@ export class TapStack extends cdk.Stack {
       description: 'Checks that security groups do not allow unrestricted SSH access',
     });
     sshRule.addDependency(configRecorder);
-    if (configDeliveryChannel) {
-      sshRule.addDependency(configDeliveryChannel);
-    }
+    sshRule.addDependency(configDeliveryChannel);
 
     // Lambda VPC rule
     const lambdaVpcRule = new config.ManagedRule(this, 'LambdaVPCRule', {
@@ -331,9 +314,7 @@ export class TapStack extends cdk.Stack {
     const lambdaVpcCfnRule = lambdaVpcRule.node
       .defaultChild as config.CfnConfigRule;
     lambdaVpcCfnRule.addDependency(configRecorder);
-    if (configDeliveryChannel) {
-      lambdaVpcCfnRule.addDependency(configDeliveryChannel);
-    }
+    lambdaVpcCfnRule.addDependency(configDeliveryChannel);
 
     // CloudWatch alarm for non-compliant resources
     const nonCompliantMetric = new cloudwatch.Metric({

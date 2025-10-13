@@ -44,6 +44,7 @@ export class NetworkingConstruct extends Construct {
       destination: ec2.FlowLogDestination.toCloudWatchLogs(),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
+  
 
     this.privateSubnets = this.vpc.privateSubnets;
     this.publicSubnets = this.vpc.publicSubnets;
