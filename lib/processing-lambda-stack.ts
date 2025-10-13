@@ -89,6 +89,7 @@ exports.handler = async (event) => {
       logGroup: logGroup,
     });
 
+    // Outputs for integration testing
     new cdk.CfnOutput(this, 'ProcessingLambdaArn', {
       value: this.processingLambda.functionArn,
       description: 'ARN of the Trading Event Processing Lambda',
@@ -99,6 +100,66 @@ exports.handler = async (event) => {
       value: this.processingLambda.functionName,
       description: 'Name of the Trading Event Processing Lambda',
       exportName: `trading-lambda-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRoleArn', {
+      value: lambdaRole.roleArn,
+      description: 'ARN of the Lambda execution role',
+      exportName: `trading-lambda-role-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRoleName', {
+      value: lambdaRole.roleName,
+      description: 'Name of the Lambda execution role',
+      exportName: `trading-lambda-role-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaLogGroupName', {
+      value: logGroup.logGroupName,
+      description: 'CloudWatch Log Group name for Lambda',
+      exportName: `trading-lambda-log-group-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaLogGroupArn', {
+      value: logGroup.logGroupArn,
+      description: 'CloudWatch Log Group ARN for Lambda',
+      exportName: `trading-lambda-log-group-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRuntime', {
+      value: this.processingLambda.runtime.name,
+      description: 'Lambda runtime',
+      exportName: `trading-lambda-runtime-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaTimeout', {
+      value: '10',
+      description: 'Lambda timeout in seconds',
+      exportName: `trading-lambda-timeout-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaMemorySize', {
+      value: '1024',
+      description: 'Lambda memory size in MB',
+      exportName: `trading-lambda-memory-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaTracingMode', {
+      value: 'ACTIVE',
+      description: 'Lambda X-Ray tracing mode',
+      exportName: `trading-lambda-tracing-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaTableName', {
+      value: props.globalTable.tableName,
+      description: 'DynamoDB table name used by Lambda',
+      exportName: `trading-lambda-table-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LogRetentionDays', {
+      value: '14',
+      description: 'CloudWatch Logs retention period in days',
+      exportName: `trading-lambda-log-retention-${suffix}`,
     });
   }
 }

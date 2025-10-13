@@ -42,16 +42,59 @@ export class MonitoringStack extends cdk.Stack {
       new cloudwatch_actions.SnsAction(this.alertTopic)
     );
 
+    // Outputs for integration testing
     new cdk.CfnOutput(this, 'DLQAlarmArn', {
       value: this.dlqAlarm.alarmArn,
       description: 'ARN of the DLQ Messages Alarm',
       exportName: `trading-dlq-alarm-arn-${suffix}`,
     });
 
+    new cdk.CfnOutput(this, 'DLQAlarmName', {
+      value: this.dlqAlarm.alarmName,
+      description: 'Name of the DLQ Messages Alarm',
+      exportName: `trading-dlq-alarm-name-${suffix}`,
+    });
+
     new cdk.CfnOutput(this, 'AlertTopicArn', {
       value: this.alertTopic.topicArn,
       description: 'ARN of the Alert SNS Topic',
       exportName: `trading-alert-topic-arn-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlertTopicName', {
+      value: this.alertTopic.topicName,
+      description: 'Name of the Alert SNS Topic',
+      exportName: `trading-alert-topic-name-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmThreshold', {
+      value: '0',
+      description: 'Alarm threshold for DLQ messages',
+      exportName: `trading-alarm-threshold-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmEvaluationPeriods', {
+      value: '1',
+      description: 'Number of evaluation periods for the alarm',
+      exportName: `trading-alarm-eval-periods-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmComparisonOperator', {
+      value: 'GREATER_THAN_THRESHOLD',
+      description: 'Comparison operator for the alarm',
+      exportName: `trading-alarm-operator-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmMetricName', {
+      value: 'ApproximateNumberOfMessagesVisible',
+      description: 'CloudWatch metric name for the alarm',
+      exportName: `trading-alarm-metric-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'MonitoredQueueArn', {
+      value: props.dlq.queueArn,
+      description: 'ARN of the queue being monitored',
+      exportName: `trading-monitored-queue-arn-${suffix}`,
     });
   }
 }
