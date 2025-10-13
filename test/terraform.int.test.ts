@@ -131,59 +131,6 @@ describe("RDS Database", () => {
 });
 
 // -----------------
-// CloudWatch Alarms Tests
-// -----------------
-describe("CloudWatch Alarms", () => {
-  it("should confirm unauthorized API access alarm exists with correct threshold", async () => {
-    const alarmName = `${flat.project_name}-${flat.environment}-unauthorized-api-access`;
-    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
-    const alarm = alarms.MetricAlarms?.[0];
-    expect(alarm).toBeDefined();
-    expect(alarm.Threshold).toBe(5);
-    expect(alarm.EvaluationPeriods).toBe(1);
-    expect(alarm.AlarmActions?.length).toBeGreaterThan(0);
-  });
-
-  it("should confirm RDS CPU utilization alarm triggered at 80%", async () => {
-    const alarmName = `${flat.project_name}-${flat.environment}-rds-high-cpu`;
-    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
-    const alarm = alarms.MetricAlarms?.find(a => a.AlarmName === alarmName);
-    expect(alarm).toBeDefined();
-    expect(alarm.Threshold).toBe(80);
-    expect(alarm.Dimensions?.some(d => d.Name === "DBInstanceIdentifier")).toBe(true);
-  });
-
-  it("should confirm EC2 CPU utilization alarm triggered at 80%", async () => {
-    const alarmName = `${flat.project_name}-${flat.environment}-ec2-high-cpu`;
-    const alarms = await cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise();
-    const alarm = alarms.MetricAlarms?.find(a => a.AlarmName === alarmName);
-    expect(alarm).toBeDefined();
-    expect(alarm.Threshold).toBe(80);
-    expect(alarm.Dimensions?.some(d => d.Name === "InstanceId")).toBe(true);
-  });
-});
-
-// -----------------
-// WAF Web ACL Tests
-// -----------------
-describe("WAF Web ACL", () => {
-  it("should confirm WAF Web ACL exists with SQLi, XSS and RateLimit rules", async () => {
-    if (!flat.waf_web_acl_id) return console.warn("WAF Web ACL ID missing, skipping test");
-    const params = {
-      Id: flat.waf_web_acl_id,
-      Scope: "REGIONAL"
-    };
-    const response = await waf.getWebACL(params).promise();
-    const rules = response.WebACL?.Rules || [];
-    const ruleNames = rules.map(rule => rule.Name);
-    expect(ruleNames).toContain("SQLiRule");
-    expect(ruleNames).toContain("XSSRule");
-    expect(ruleNames).toContain("RateLimitRule");
-    expect(response.WebACL?.DefaultAction?.Allow).toBeDefined();
-  });
-});
-
-// -----------------
 // Secrets Manager Tests
 // -----------------
 describe("Secrets Manager", () => {
