@@ -126,3 +126,13 @@ TapStackpr4196  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+TapStackpr4196  ╷
+                │ Error: creating CloudTrail Trail (TapStackpr4196-pr4196): operation error CloudTrail: CreateTrail, https response error StatusCode: 400, RequestID: e0042425-6942-4d72-95b7-f5813de76fb3, InsufficientS3BucketPolicyException: Incorrect S3 bucket policy is detected for bucket: tapstackpr4196-pr4196-audit-logs
+                │ 
+                │   with aws_cloudtrail.audit-trail_8AEAD1CA (audit-trail/trail),
+                │   on cdk.tf.json line 240, in resource.aws_cloudtrail.audit-trail_8AEAD1CA (audit-trail/trail):
+                │  240:       }
+                │ 
+                ╵
+TapStackpr4196  ╷

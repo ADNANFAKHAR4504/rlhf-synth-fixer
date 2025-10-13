@@ -967,7 +967,12 @@ export class AuditTrail extends Construct {
         },
       ],
       tags,
-      dependsOn: [this.trailBucketPolicy, trailRole.role], // Ensure policies are created first
+      dependsOn: [
+        this.bucket.bucket,
+        this.trailBucketPolicy,
+        trailRole.role,
+        logGroup.logGroup,
+      ], // Ensure bucket, policies, and role are created first
     });
   }
 }
