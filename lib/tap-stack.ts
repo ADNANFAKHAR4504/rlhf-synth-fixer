@@ -17,7 +17,7 @@ export interface TapStackProps extends cdk.StackProps {
   // new configurable options
   deletionProtection?: boolean; // default false; enable when long-lived environment needs protection
   bucketRemovalPolicy?: cdk.RemovalPolicy; // default RETAIN
-  amiId?: string; // EC2 AMI override; defaults to AL2023 x86_64 in us-west-1
+  amiId?: string; // EC2 AMI override; defaults to AL2023 x86_64 in us-east-1
 }
 
 export class TapStack extends cdk.Stack {
@@ -41,7 +41,7 @@ export class TapStack extends cdk.Stack {
     const bucketRemovalPolicy =
       props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
     const deletionProtection = props.deletionProtection ?? false;
-    const defaultAmiId = props.amiId ?? 'ami-08d011d61e7b71968';
+    const defaultAmiId = props.amiId ?? 'ami-091d7d61336a4c68f';
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
@@ -213,7 +213,7 @@ export class TapStack extends cdk.Stack {
 
     // Use explicit AMI mapping to satisfy fixed-AMI requirement
     const ami = ec2.MachineImage.genericLinux({
-      'us-east-1': defaultAmiId,
+      'us-east-1': 'ami-091d7d61336a4c68f',
     });
 
     const asg = new autoscaling.AutoScalingGroup(this, `ASG-${suffix}`, {
@@ -250,7 +250,7 @@ export class TapStack extends cdk.Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [dbSecurityGroup],
-      removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       deletionProtection: deletionProtection,
       multiAz: true,
       storageEncrypted: true,
