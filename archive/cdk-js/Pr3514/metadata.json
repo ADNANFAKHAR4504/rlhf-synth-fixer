@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "3493",
+  "team": "5",
+  "startedAt": "2025-10-03T15:18:02.302Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "CodeDeploy",
+    "S3",
+    "CloudWatch",
+    "Lambda",
+    "IAM",
+    "Logs"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}
