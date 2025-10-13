@@ -688,15 +688,23 @@ describe('Launch Template to EC2 to IAM Integration', () => {
     );
     expect(runningInstances.length).toBeGreaterThanOrEqual(2);
 
-    runningInstances.forEach(instance => {
+    for (const instance of runningInstances) {
       expect(instance.IamInstanceProfile).toBeDefined();
-      const profileArn = instance.IamInstanceProfile!.Arn!;
-      const profileName = profileArn.split('/').pop()!;
+      expect(instance.IamInstanceProfile!.Arn).toBeDefined();
 
-      const profile = instanceProfiles.find(p => p.InstanceProfileName === profileName);
-      expect(profile).toBeDefined();
-      expect(profile!.Roles).toBeDefined();
-      expect(profile!.Roles!.length).toBeGreaterThan(0);
-    });
+      const profileArn = instance.IamInstanceProfile!.Arn!;
+      const profileName = profileArn.split('/').slice(-1)[0];
+
+      const profileResponse = await iam
+        .getInstanceProfile({ InstanceProfileName: profileName })
+        .promise();
+
+      expect(profileResponse.InstanceProfile).toBeDefined();
+      expect(profileResponse.InstanceProfile.Roles).toBeDefined();
+      expect(profileResponse.InstanceProfile.Roles.length).toBeGreaterThan(0);
+
+      const role = profileResponse.InstanceProfile.Roles[0];
+      expect(role.RoleName).toContain('EC2InstanceRole');
+    }
   });
 });
