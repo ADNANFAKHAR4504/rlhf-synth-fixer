@@ -884,10 +884,10 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-24.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
+    # permissions:
+    #   contents: write
+    #   issues: write
+    #   pull-requests: write
     concurrency:
       group: semantic_release_pipeline
       cancel-in-progress: true
