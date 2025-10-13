@@ -1,0 +1,29 @@
+{
+  "platform": "CDK",
+  "language": "Python",
+  "complexity": "medium",
+  "turn_type": "multi",
+  "po_id": "1184609787",
+  "team": "synth",
+  "startedAt": "2025-10-13T17:24:27.950318Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 6,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "EFS",
+    "API Gateway",
+    "Lambda",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "Step Functions"
+  ]
+}
