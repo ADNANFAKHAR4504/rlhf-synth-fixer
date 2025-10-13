@@ -68,7 +68,7 @@ describe('Batch Processing CloudFormation Template', () => {
       const bucket = template.Resources.ProcessedDataBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
+        'Fn::Sub': 'processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
       });
     });
 

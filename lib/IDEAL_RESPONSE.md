@@ -62,7 +62,7 @@ Resources:
   ProcessedDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -147,7 +147,7 @@ Resources:
   BatchProcessingTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'batch-processing-alerts-${EnvironmentSuffix}'
+      TopicName: !Sub 'batchprocessing-alerts-${EnvironmentSuffix}'
       DisplayName: Batch Processing Alerts
       Subscription:
         - Endpoint: !Ref NotificationEmail
@@ -198,8 +198,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
         - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -258,8 +258,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -317,8 +317,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -884,7 +884,7 @@ Resources:
   BatchProcessingDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'batch-processing-${EnvironmentSuffix}'
+      DashboardName: !Sub 'batchprocessing-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1023,7 +1023,7 @@ Outputs:
 
   DashboardURL:
     Description: URL to the CloudWatch Dashboard
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=batch-processing-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=batchprocessing-${EnvironmentSuffix}'
 
   VPCId:
     Description: VPC ID for the batch processing environment
@@ -1043,27 +1043,32 @@ Outputs:
 This comprehensive CloudFormation template provides a production-ready batch processing system for financial transactions with the following capabilities:
 
 ### Core Infrastructure
+
 - **AWS Batch**: Managed compute environment with auto-scaling (0-256 vCPUs)
 - **S3 Buckets**: Separate encrypted storage for raw and processed data with lifecycle policies
 - **DynamoDB Tables**: Job status tracking and audit logging with TTL and point-in-time recovery
 - **VPC**: Isolated network environment with public subnets across multiple AZs
 
 ### Processing Pipeline
+
 - **Lambda Functions**: Automatic job submission when files arrive in S3, continuous job monitoring
 - **Batch Jobs**: Containerized processing with retry logic and timeout controls
 - **S3 Notifications**: Trigger processing pipeline automatically
 
 ### Monitoring & Alerting
+
 - **CloudWatch**: Comprehensive dashboard with metrics for jobs, Lambda functions, and DynamoDB
 - **SNS**: Email notifications for job failures and completions
 - **Alarms**: Automated alerts for submission failures and job failures
 
 ### Security & Compliance
+
 - **IAM Roles**: Least-privilege access controls for all components
 - **Encryption**: S3 server-side encryption and secure data transfer
 - **Audit Trail**: Complete audit logging in DynamoDB with TTL for compliance
 
 ### Scalability & Reliability
+
 - **Auto-scaling**: Batch compute environment scales based on workload
 - **Retry Logic**: Automatic job retries with configurable attempts
 - **Failure Handling**: Graceful error handling and notifications

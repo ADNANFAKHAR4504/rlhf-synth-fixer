@@ -57,7 +57,7 @@ Resources:
   ProcessedDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -193,8 +193,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
         - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -253,8 +253,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -312,8 +312,8 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem

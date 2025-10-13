@@ -75,7 +75,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "processed-data-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -316,10 +316,10 @@
                       "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     }
                   ]
                 }
@@ -437,10 +437,10 @@
                       "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     }
                   ]
                 },
@@ -554,10 +554,10 @@
                       "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::processed-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     }
                   ]
                 },

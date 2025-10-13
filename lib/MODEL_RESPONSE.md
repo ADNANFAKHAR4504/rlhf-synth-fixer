@@ -62,7 +62,7 @@ Resources:
   ProcessedDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'processed-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -297,7 +297,7 @@ Resources:
   BatchProcessingTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'batch-processing-alerts-${EnvironmentSuffix}'
+      TopicName: !Sub 'batchprocessing-alerts-${EnvironmentSuffix}'
       DisplayName: Batch Processing Alerts
       Subscription:
         - Endpoint: !Ref NotificationEmail
