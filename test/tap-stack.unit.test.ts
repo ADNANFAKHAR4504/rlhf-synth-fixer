@@ -11,7 +11,7 @@ describe('TapStack CloudFormation Template (Unit Tests)', () => {
 
   beforeAll(() => {
     // NOTE: Adjust the path if your TapStack.yml is not in '../lib' relative to your test file.
-    const templatePath = path.join(__dirname, '../TapStack.yml');
+    const templatePath = path.join(__dirname, '..lib/TapStack.yml');
     // Assuming the test file is next to the YAML file. If not, adjust the path.
     const raw = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(raw) as any;

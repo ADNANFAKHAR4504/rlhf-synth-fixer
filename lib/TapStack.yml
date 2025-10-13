@@ -117,7 +117,9 @@ Mappings:
     eu-west-2:
       AMI: ami-08c6d344574f547b8
     ap-southeast-1:
-      AMI: ami-0e5f882be1900e43b    
+      AMI: ami-0e5f882be1900e43b
+    ap-south-1:
+      AMI: ami-0dee22c13ea7a9a67
     sa-east-1:
       AMI: ami-07b14488da8ea02a0
 
@@ -219,7 +221,7 @@ Resources:
     Type: AWS::KMS::Alias
     Properties:
       AliasName:
-        Fn::Sub: 'alias/tap-stakes-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'alias/tap-stakes-cftap-exc-${EnvironmentSuffix}'
       TargetKeyId:
         Ref: ApplicationKMSKey
 
@@ -232,7 +234,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'vpc-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'vpc-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Environment
@@ -245,7 +247,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'igw-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'igw-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -271,7 +273,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'pubsub1-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'pubsub1-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -291,7 +293,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'pubsub2-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'pubsub2-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -310,7 +312,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'privsub1-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'privsub1-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -329,7 +331,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'privsub2-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'privsub2-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -348,7 +350,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'dbsub1-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'dbsub1-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -367,7 +369,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'dbsub2-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'dbsub2-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
         - Key: Type
@@ -381,7 +383,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'nat1-eip-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'nat1-eip-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -393,7 +395,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'nat2-eip-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'nat2-eip-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -409,7 +411,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'nat1-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'nat1-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -425,7 +427,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'nat2-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'nat2-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -437,7 +439,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'pubrt-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'pubrt-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -459,7 +461,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'privrt1-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'privrt1-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -480,7 +482,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'privrt2-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'privrt2-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -497,7 +499,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: 'vpcflow-role-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'vpcflow-role-cftap-exc-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -526,7 +528,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName:
-        Fn::Sub: '/aws/vpc/flowlogs/tap-stakes-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: '/aws/vpc/flowlogs/tap-stakes-cftap-exc-${EnvironmentSuffix}'
       RetentionInDays: 30
       KmsKeyId:
         Fn::GetAtt:
@@ -550,7 +552,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'vpcflow-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'vpcflow-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -578,7 +580,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'alb-cftap-exe-sg-${EnvironmentSuffix}'
+            Fn::Sub: 'alb-cftap-exc-sg-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -607,7 +609,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'web-sg-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'web-sg-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -629,7 +631,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'bastion-sg-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'bastion-sg-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -652,7 +654,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'db-sg-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'db-sg-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -676,7 +678,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'lambda-sg-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'lambda-sg-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -706,7 +708,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'dbsubgrp-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'dbsubgrp-cftap-exc-${EnvironmentSuffix}'
         - Key: cost-center
           Value: '1234'
 
@@ -716,7 +718,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier:
-        Fn::Sub: 'db-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'db-cftap-exc-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.medium
       Engine: mysql
       EngineVersion: '8.0.42'
@@ -761,7 +763,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier:
-        Fn::Sub: 'dbrep-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'dbrep-cftap-exc-${EnvironmentSuffix}'
       SourceDBInstanceIdentifier:
         Ref: RDSDatabase
       DBInstanceClass: db.t3.medium
@@ -777,7 +779,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: 'rds-mon-tscf-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'rds-mon-tscf-exc-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1041,7 +1043,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: 'ec2-role-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'ec2-role-cftap-exc-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1087,7 +1089,7 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName:
-        Fn::Sub: 'ec2-ip-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'ec2-ip-cftap-exc-${EnvironmentSuffix}'
       Roles:
         - Ref: EC2Role
 
@@ -1095,7 +1097,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name:
-        Fn::Sub: 'alb-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'alb-exc-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -1130,7 +1132,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name:
-        Fn::Sub: 'tg-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'tg-cftap-exc-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId:
@@ -1204,7 +1206,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName:
-        Fn::Sub: 'lt-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'lt-exc-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId:
           Ref: LatestAmi
@@ -1263,7 +1265,7 @@ Resources:
             Tags:
               - Key: Name
                 Value:
-                  Fn::Sub: 'inst-exe-${EnvironmentSuffix}'
+                  Fn::Sub: 'inst-exc-${EnvironmentSuffix}'
               - Key: cost-center
                 Value: '1234'
               - Key: Environment
@@ -1277,7 +1279,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName:
-        Fn::Sub: 'asg-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'asg-cftap-exc-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId:
           Ref: LaunchTemplate
@@ -1303,7 +1305,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: 'asg-cftap-exe-${EnvironmentSuffix}'
+            Fn::Sub: 'asg-cftap-exc-${EnvironmentSuffix}'
           PropagateAtLaunch: true
         - Key: cost-center
           Value: '1234'
@@ -1324,7 +1326,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name:
-        Fn::Sub: 'wacl-stake-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'wacl-stake-cftap-exc-${EnvironmentSuffix}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -1369,7 +1371,7 @@ Resources:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
         MetricName:
-          Fn::Sub: 'wacl-stake-cftap-exe-${EnvironmentSuffix}'
+          Fn::Sub: 'wacl-stake-cftap-exc-${EnvironmentSuffix}'
       Tags:
         - Key: cost-center
           Value: '1234'
@@ -1389,7 +1391,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: 'lambda-exe-cftap-${EnvironmentSuffix}'
+        Fn::Sub: 'lambda-exc-cftap-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1476,7 +1478,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName:
-        Fn::Sub: 'alerts-exe-stake-cftap-${EnvironmentSuffix}'
+        Fn::Sub: 'alerts-exc-stake-cftap-${EnvironmentSuffix}'
       DisplayName: Application Alerts
       KmsMasterKeyId:
         Ref: ApplicationKMSKey
@@ -1492,7 +1494,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: 'highcpu-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'highcpu-cftap-exc-${EnvironmentSuffix}'
       AlarmDescription: Triggers when CPU utilization is high
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1512,7 +1514,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: 'dbcpu-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'dbcpu-cftap-exc-${EnvironmentSuffix}'
       AlarmDescription: Triggers when database CPU is high
       MetricName: CPUUtilization
       Namespace: AWS/RDS
@@ -1532,7 +1534,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: 'unhealthy-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'unhealthy-cftap-exc-${EnvironmentSuffix}'
       AlarmDescription: Triggers when targets are unhealthy
       MetricName: UnHealthyHostCount
       Namespace: AWS/ApplicationELB
@@ -1556,7 +1558,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: 'cfg-role-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'cfg-role-cftap-exc-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1615,7 +1617,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name:
-        Fn::Sub: 'cfg-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'cfg-exc-${EnvironmentSuffix}'
       RoleARN:
         Fn::GetAtt: [ConfigRole, Arn]
       RecordingGroup:
@@ -1627,7 +1629,7 @@ Resources:
     Type: AWS::Config::DeliveryChannel
     Properties:
       Name:
-        Fn::Sub: 'cfgdl-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'cfgdl-exc-${EnvironmentSuffix}'
       S3BucketName:
         Ref: ConfigBucket
       SnsTopicARN:
@@ -1639,7 +1641,7 @@ Resources:
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName:
-        Fn::Sub: 'reqtags-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'reqtags-exc-${EnvironmentSuffix}'
       Description: Checks whether resources have the required tags
       Source:
         Owner: AWS
@@ -1659,7 +1661,7 @@ Resources:
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName:
-        Fn::Sub: 'encvol-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'encvol-exc-${EnvironmentSuffix}'
       Description: Checks whether EBS volumes are encrypted
       Source:
         Owner: AWS
@@ -1696,7 +1698,7 @@ Outputs:
       Ref: VPC
     Export:
       Name:
-        Fn::Sub: 'tap-stakes-cftap-exe-vpc-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stakes-cftap-exc-vpc-${EnvironmentSuffix}'
 
   ALBDNSName:
     Description: Application Load Balancer DNS Name
@@ -1704,7 +1706,7 @@ Outputs:
       Fn::GetAtt: [ApplicationLoadBalancer, DNSName]
     Export:
       Name:
-        Fn::Sub: 'tap-stake-cftap-exe-alb-dns-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stake-cftap-exc-alb-dns-${EnvironmentSuffix}'
 
   CloudFrontDomain:
     Description: CloudFront Distribution Domain Name
@@ -1712,7 +1714,7 @@ Outputs:
       Fn::GetAtt: [CloudFrontDistribution, DomainName]
     Export:
       Name:
-        Fn::Sub: 'tap-stake-cftap-exe-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stake-cftap-exc-${EnvironmentSuffix}'
 
   RDSEndpoint:
     Description: RDS Database Endpoint
@@ -1720,7 +1722,7 @@ Outputs:
       Fn::GetAtt: [RDSDatabase, 'Endpoint.Address']
     Export:
       Name:
-        Fn::Sub: 'tap-stakes-cftap-exe-db-endp-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stakes-cftap-exc-db-endp-${EnvironmentSuffix}'
 
   SNSTopic:
     Description: SNS Topic ARN for Alerts
@@ -1728,7 +1730,7 @@ Outputs:
       Ref: AlertTopic
     Export:
       Name:
-        Fn::Sub: 'tap-stake-cftap-exe-alert-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stake-cftap-exc-alert-${EnvironmentSuffix}'
 
   LogsBucket:
     Description: S3 Bucket for Logs
@@ -1736,7 +1738,7 @@ Outputs:
       Ref: LogsBucket
     Export:
       Name:
-        Fn::Sub: 'tap-stake-cftap-exe-logs-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stake-cftap-exc-logs-${EnvironmentSuffix}'
 
   KMSKeyId:
     Description: KMS Key ID for Encryption
@@ -1744,7 +1746,7 @@ Outputs:
       Ref: ApplicationKMSKey
     Export:
       Name:
-        Fn::Sub: 'tap-stakes-cftap-exe-kms-${EnvironmentSuffix}'
+        Fn::Sub: 'tap-stakes-cftap-exc-kms-${EnvironmentSuffix}'
 
   ALBListenerType:
     Description: Listener type created (HTTP or HTTPS)
