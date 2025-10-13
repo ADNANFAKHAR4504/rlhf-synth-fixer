@@ -61,7 +61,7 @@ class LambdaStack:
     
     def _create_api_handler(self):
         """Create the main API handler Lambda function."""
-        function_name = self.config.get_resource_name('lambda-function', 'api-handler')
+        function_name = f"{self.config.get_resource_name('lambda-function', 'api-handler')}-{self.config.environment}"
         
         # Create explicit log group with retention
         log_group = aws.cloudwatch.LogGroup(
@@ -114,7 +114,7 @@ class LambdaStack:
     
     def _create_data_processor(self):
         """Create the data processor Lambda function."""
-        function_name = self.config.get_resource_name('lambda-function', 'data-processor')
+        function_name = f"{self.config.get_resource_name('lambda-function', 'data-processor')}-{self.config.environment}"
         
         # Create explicit log group with retention
         log_group = aws.cloudwatch.LogGroup(
@@ -166,7 +166,7 @@ class LambdaStack:
     
     def _create_error_handler(self):
         """Create the error handler Lambda function."""
-        function_name = self.config.get_resource_name('lambda-function', 'error-handler')
+        function_name = f"{self.config.get_resource_name('lambda-function', 'error-handler')}-{self.config.environment}"
         
         # Create explicit log group with retention
         log_group = aws.cloudwatch.LogGroup(

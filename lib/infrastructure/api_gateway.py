@@ -66,7 +66,7 @@ class APIGatewayStack:
     
     def _create_rest_api(self):
         """Create the REST API with resource policy for IP restrictions."""
-        api_name = self.config.get_resource_name('api-gateway', 'rest-api')
+        api_name = f"{self.config.get_resource_name('api-gateway', 'rest-api')}-{self.config.environment}"
         
         # Create resource policy for IP restrictions
         resource_policy = self._create_resource_policy()

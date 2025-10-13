@@ -51,7 +51,7 @@ class StepFunctionsStack:
     
     def _create_state_machine(self):
         """Create Step Functions state machine with proper Lambda integration."""
-        state_machine_name = self.config.get_resource_name('step-function', 'workflow')
+        state_machine_name = f"{self.config.get_resource_name('step-function', 'workflow')}-{self.config.environment}"
         
         # Define the state machine definition with CORRECT Lambda service integration
         definition = pulumi.Output.all(

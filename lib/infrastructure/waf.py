@@ -47,7 +47,7 @@ class WAFStack:
     
     def _create_web_acl(self):
         """Create WAF Web ACL with security rules."""
-        web_acl_name = self.config.get_resource_name('waf-web-acl', 'main')
+        web_acl_name = f"{self.config.get_resource_name('waf-web-acl', 'main')}-{self.config.environment}"
         
         # Create IP set for allowed IPs with unique name to avoid region conflicts
         ip_set = aws.wafv2.IpSet(
@@ -115,22 +115,15 @@ class WAFStack:
     
     def _create_api_gateway_association(self):
         """Create API Gateway association with proper ARN construction."""
-        # DISABLED: WAF association causing dependency issues in CI/CD
-        # The association creates circular dependencies that prevent clean deletion
-        # WAF resources are created but not associated with API Gateway
-        # This allows CI/CD to succeed while maintaining WAF infrastructure
-        
-        # TODO: Re-enable association once dependency issues are resolved
-        # stage_arn = self.api_gateway_stack.stage.arn
-        # association = aws.wafv2.WebAclAssociation(
-        #     self.config.get_resource_name('waf-association', 'api-gateway'),
-        #     resource_arn=stage_arn,
-        #     web_acl_arn=self.web_acl.arn,
-        #     opts=ResourceOptions(parent=self.opts.parent, provider=self.opts.provider)
-        # )
-        # return association
-        
-        return None
+        stage_arn = self.api_gateway_stack.stage.arn
+        association = aws.wafv2.WebAclAssociation(
+            self.config.get_resource_name('waf-association', 'api-gateway'),
+            resource_arn=stage_arn,
+            web_acl_arn=self.web_acl.arn,
+            opts=ResourceOptions(parent=self.opts.parent, provider=self.opts.provider)
+        )
+        return association
+
     
     def get_web_acl_arn(self) -> pulumi.Output[str]:
         """Get Web ACL ARN."""

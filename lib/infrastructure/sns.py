@@ -5,9 +5,11 @@ This module creates SNS topics for critical alert notifications.
 """
 
 from typing import Optional
+
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi import ResourceOptions
+
 from .config import InfrastructureConfig
 
 
@@ -43,7 +45,7 @@ class SNSStack:
     
     def _create_critical_topic(self):
         """Create SNS topic for critical alerts."""
-        topic_name = self.config.get_resource_name('sns-topic', 'critical-alerts')
+        topic_name = f"{self.config.get_resource_name('sns-topic', 'critical-alerts')}-{self.config.environment}"
         
         topic = aws.sns.Topic(
             topic_name,
@@ -56,7 +58,7 @@ class SNSStack:
     
     def _create_error_topic(self):
         """Create SNS topic for error notifications."""
-        topic_name = self.config.get_resource_name('sns-topic', 'error-notifications')
+        topic_name = f"{self.config.get_resource_name('sns-topic', 'error-notifications')}-{self.config.environment}"
         
         topic = aws.sns.Topic(
             topic_name,
@@ -69,7 +71,7 @@ class SNSStack:
     
     def _create_compliance_topic(self):
         """Create SNS topic for compliance violations."""
-        topic_name = self.config.get_resource_name('sns-topic', 'compliance-violations')
+        topic_name = f"{self.config.get_resource_name('sns-topic', 'compliance-violations')}-{self.config.environment}"
         
         topic = aws.sns.Topic(
             topic_name,

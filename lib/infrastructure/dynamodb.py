@@ -43,7 +43,7 @@ class DynamoDBStack:
     
     def _create_main_table(self):
         """Create the main application DynamoDB table."""
-        table_name = self.config.get_resource_name('dynamodb-table', 'main')
+        table_name = f"{self.config.get_resource_name('dynamodb-table', 'main')}-{self.config.environment}"
         
         # Define table attributes
         attributes = [
@@ -94,7 +94,7 @@ class DynamoDBStack:
     
     def _create_audit_table(self):
         """Create audit log DynamoDB table."""
-        table_name = self.config.get_resource_name('dynamodb-table', 'audit')
+        table_name = f"{self.config.get_resource_name('dynamodb-table', 'audit')}-{self.config.environment}"
         
         # Define table attributes for audit logs
         attributes = [

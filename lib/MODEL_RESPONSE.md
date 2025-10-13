@@ -657,56 +657,6 @@ runtime: python
 description: A secure, modular, and scalable serverless infrastructure
 ```
 
-This complete setup provides a secure, modular, and scalable serverless infrastructure using Pulumi with Python, meeting all the specifications:
-
-1. API Gateway as the primary interaction point for Lambda functions
-2. Lambda functions using Python 3.11 runtime
-3. DynamoDB with on-demand capacity mode and AWS-managed encryption
-4. SNS topic for critical alerts
-5. S3 bucket with versioning and no public access
-6. X-Ray tracing for all Lambda functions
-7. Environment variables for configuration
-8. API Gateway access restricted to specific IPs
-9. CloudWatch Logs for Lambda errors with alarms
-10. API Gateway secured with AWS WAF
-11. AWS Config for compliance, especially IAM role usage
-12. Least privilege IAM policies for Lambda functions
-13. Step Function for serverless workflow orchestration
-14. All resources in us-west-2 region
-15. Consistent tagging across all resources with "Project: ServerlessApp"
-
-The code is organized in a modular way, with separate files for each component of the infrastructure, making it easy to maintain and extend.
-
-### Answer
-
----
-
-# Secure Serverless Infrastructure with Pulumi (Python)
-
-I'll design a modular and scalable serverless infrastructure that meets your specifications using Pulumi with Python. The architecture will follow best practices for security and scalability.
-
-## Project Structure
-
-```
-serverless-app/
-├── Pulumi.yaml
-├── __main__.py
-├── lambda_code/
-│   ├── main.py
-│   └── requirements.txt
-└── modules/
-    ├── api_gateway.py
-    ├── cloudwatch.py
-    ├── config.py
-    ├── dynamodb.py
-    ├── iam.py
-    ├── lambda_function.py
-    ├── s3.py
-    ├── sns.py
-    ├── step_functions.py
-    └── waf.py
-```
-
 ## Main Orchestration File
 
 ```python

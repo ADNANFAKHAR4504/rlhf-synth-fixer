@@ -62,7 +62,7 @@ class CloudWatchStack:
     
     def _create_api_gateway_log_group(self):
         """Create CloudWatch log group for API Gateway with explicit retention."""
-        log_group_name = f"/aws/apigateway/{self.config.get_resource_name('api-gateway', 'rest-api')}"
+        log_group_name = f"/aws/apigateway/{self.config.get_resource_name('api-gateway', 'rest-api')}-{self.config.environment}"
         
         log_group = aws.cloudwatch.LogGroup(
             self.config.get_resource_name('cloudwatch-log-group', 'api-gateway'),

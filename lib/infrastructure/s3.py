@@ -44,7 +44,7 @@ class S3Stack:
     
     def _create_static_assets_bucket(self):
         """Create S3 bucket for static assets with proper security configuration."""
-        bucket_name = self.config.get_resource_name('s3-bucket', 'static-assets')
+        bucket_name = f"{self.config.get_resource_name('s3-bucket', 'static-assets')}-{self.config.environment}"
         
         # Create the bucket
         bucket = aws.s3.Bucket(
@@ -105,7 +105,7 @@ class S3Stack:
     
     def _create_lambda_deployments_bucket(self):
         """Create S3 bucket for Lambda deployment packages."""
-        bucket_name = self.config.get_resource_name('s3-bucket', 'lambda-deployments')
+        bucket_name = f"{self.config.get_resource_name('s3-bucket', 'lambda-deployments')}-{self.config.environment}"
         
         # Create the bucket
         bucket = aws.s3.Bucket(
