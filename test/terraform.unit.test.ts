@@ -142,7 +142,7 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"cloudwatch_logs"/);
       expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ssm_managed"/);
       expect(tfContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/);
-      
+
       expect(tfContent).toMatch(/for_each\s*=\s*toset\(var\.environments\)/);
       expect(tfContent).toMatch(/assume_role_policy\s*=\s*jsonencode/);
     });
