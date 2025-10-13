@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import threading
 import time
@@ -8,7 +9,27 @@ import uuid
 import pymysql
 from flask import Flask, jsonify, request
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log_handlers = [logging.StreamHandler()]
+log_file_path = os.environ.get("APP_LOG_PATH")
+if log_file_path:
+    try:
+        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+        log_handlers.append(
+            RotatingFileHandler(
+                log_file_path,
+                maxBytes=5 * 1024 * 1024,
+                backupCount=5,
+            ),
+        )
+    except Exception:
+        # Fall back to stdout logging if file handler setup fails.
+        pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=log_handlers,
+)
 
 app = Flask(__name__)
 
@@ -48,15 +69,6 @@ def get_db_connection(writer: bool = False):
     )
 
 
-<<<<<<< Updated upstream
-def ensure_table():
-    attempts = 10
-    delay_seconds = 6
-    for attempt in range(1, attempts + 1):
-        connection = None
-        try:
-            connection = get_db_connection(writer=True)
-=======
 def is_database_read_only(connection) -> bool:
     try:
         with connection.cursor() as cursor:
@@ -90,25 +102,11 @@ def ensure_table() -> bool:
             if is_database_read_only(connection):
                 logging.info("Database is in read-only mode; skipping ensure_table write check.")
                 return True
->>>>>>> Stashed changes
             with connection.cursor() as cursor:
                 cursor.execute(
                     "CREATE TABLE IF NOT EXISTS example_data (id VARCHAR(36) PRIMARY KEY, data VARCHAR(255))"
                 )
             logging.info("Ensured example_data table exists.")
-<<<<<<< Updated upstream
-            return
-        except Exception as exc:
-            logging.warning("Database initialization attempt %s failed: %s", attempt, exc)
-            time.sleep(delay_seconds)
-        finally:
-            if connection:
-                connection.close()
-    logging.error("Unable to initialize database after %s attempts.", attempts)
-
-
-ensure_table()
-=======
             return True
         except Exception as exc:
             logging.warning(
@@ -122,7 +120,6 @@ ensure_table()
         finally:
             if connection:
                 connection.close()
->>>>>>> Stashed changes
 
 
 @app.before_request
@@ -152,12 +149,9 @@ def create_data():
     connection = None
     try:
         connection = get_db_connection(writer=True)
-<<<<<<< Updated upstream
-=======
         if is_database_read_only(connection):
             logging.warning("Write operation attempted while database is read-only.")
             return jsonify({"error": "database is currently read-only"}), 503
->>>>>>> Stashed changes
         with connection.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO example_data (id, data) VALUES (%s, %s)",
@@ -228,9 +222,6 @@ def trigger_failure():
 
 
 if __name__ == "__main__":
-<<<<<<< Updated upstream
-=======
     logging.info("Ensuring database initialization completed before starting application.")
     ensure_table()
->>>>>>> Stashed changes
     app.run(host="0.0.0.0", port=8080)

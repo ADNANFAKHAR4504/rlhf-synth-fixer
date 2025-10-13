@@ -668,6 +668,11 @@ resource "aws_iam_role_policy_attachment" "app_instance_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy_attachment" "app_instance_cw_agent" {
+  role       = aws_iam_role.app_instance.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_instance_profile" "app" {
   name = "${local.resource_prefix}-app-instance-profile"
   role = aws_iam_role.app_instance.name
@@ -691,6 +696,8 @@ resource "aws_instance" "app_primary" {
     db_write_host = aws_db_instance.primary.address
     db_read_host  = aws_db_instance.primary.address
     db_password   = replace(random_password.db_master.result, "%", "%%")
+    cw_log_group  = aws_cloudwatch_log_group.app_primary.name
+    app_log_path  = "/var/log/example-app/app.log"
   })
   user_data_replace_on_change = true
 
@@ -717,6 +724,8 @@ resource "aws_instance" "app_secondary" {
     db_write_host = aws_db_instance.secondary.address
     db_read_host  = aws_db_instance.secondary.address
     db_password   = replace(random_password.db_master.result, "%", "%%")
+    cw_log_group  = aws_cloudwatch_log_group.app_secondary.name
+    app_log_path  = "/var/log/example-app/app.log"
   })
   user_data_replace_on_change = true
 
@@ -1335,6 +1344,26 @@ resource "aws_cloudwatch_log_group" "lambda_failover" {
   
   tags = merge(local.primary_tags, {
     Name = "${local.resource_prefix}-lambda-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "app_primary" {
+  provider          = aws.primary
+  name              = "/ec2/${local.resource_prefix}/app-primary"
+  retention_in_days = 7
+
+  tags = merge(local.primary_tags, {
+    Name = "${local.resource_prefix}-app-primary-logs"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "app_secondary" {
+  provider          = aws.secondary
+  name              = "/ec2/${local.resource_prefix}/app-secondary"
+  retention_in_days = 7
+
+  tags = merge(local.secondary_tags, {
+    Name = "${local.resource_prefix}-app-secondary-logs"
   })
 }
 
