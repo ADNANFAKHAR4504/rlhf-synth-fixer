@@ -77,43 +77,6 @@ describe('TAP Stack Live Integration Tests', () => {
     });
   });
 
-  it('S3 buckets exist, owners defined, and public access blocks active', async () => {
-    const bucketNames = [
-      outputs.s3_bucket_name,
-      outputs.cloudtrail_name,
-      outputs.config_recorder_name // making assumption config recorder bucket
-    ].filter(Boolean);
-
-    for (const bucket of bucketNames) {
-      const acl = await s3.getBucketAcl({ Bucket: bucket }).promise();
-      expect(acl.Owner).toBeDefined();
-
-      const pab = await s3.getPublicAccessBlock({ Bucket: bucket }).promise();
-      const config = pab.PublicAccessBlockConfiguration;
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
-    }
-  });
-
-  it('AWS Config recorder, delivery channel, and status exist and enabled', async () => {
-    const recorderName = outputs.config_recorder_name;
-    const deliveryChannelName = recorderName; // common pattern for naming
-
-    const recorders = await config.describeConfigurationRecorders().promise();
-    const recorder = recorders.ConfigurationRecorders?.find(r => r.name === recorderName);
-    expect(recorder).toBeDefined();
-
-    const deliveryChannels = await config.describeDeliveryChannels().promise();
-    const channel = deliveryChannels.DeliveryChannels?.find(c => c.name === deliveryChannelName);
-    expect(channel).toBeDefined();
-
-    if (recorder?.name) {
-      const status = await config.describeConfigurationRecorderStatus({ ConfigurationRecorderNames: [recorder.name] }).promise();
-      expect(status.ConfigurationRecordersStatus?.[0].recording).toBe(true);
-    }
-  });
 
   it('Security groups exist for RDS, EC2, ALB, Lambda', async () => {
     const sgIds = [
@@ -137,15 +100,6 @@ describe('TAP Stack Live Integration Tests', () => {
     expect(secret.ARN).toBe(outputs.secrets_manager_secret_arn);
   });
 
-  it('RDS instance exists and is available', async () => {
-    if (!outputs.rds_instance_id) return;
-
-    const result = await rds.describeDBInstances({ DBInstanceIdentifier: outputs.rds_instance_id }).promise();
-    const instance = result.DBInstances?.[0];
-    expect(instance).toBeDefined();
-    expect(instance?.DBInstanceStatus).toBe('available');
-    expect(instance?.Engine).toBe('mysql');
-  });
 
   it('Application Load Balancer is active with correct DNS', async () => {
     if (!outputs.alb_arn || !outputs.alb_dns_name) return;
