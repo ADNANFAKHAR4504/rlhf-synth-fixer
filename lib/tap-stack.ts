@@ -75,7 +75,7 @@ export class TapStack extends Construct {
       vpcName: `prod-app-vpc-${stringSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
-      natGateways: 2,
+      natGateways: 1, // Reduced to 1 to use fewer EIPs
       subnetConfiguration: [
         {
           cidrMask: 24,
