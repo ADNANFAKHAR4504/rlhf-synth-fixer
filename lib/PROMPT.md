@@ -5,7 +5,7 @@ Output only Terraform code — no explanations, comments, or placeholders.
 You are tasked with implementing a secure and compliant AWS infrastructure using Terraform instead of CloudFormation.
 The result must be a single-file Terraform configuration (main.tf), deployable directly via terraform apply, following AWS and enterprise security standards.
 
-Problem Context
+Problem Context:
 
 Design an AWS infrastructure that meets strict security, encryption, access control, and monitoring standards.
 The deployment will occur in us-west-2 and must enforce encryption, compliance auditing, and least-privilege IAM access across all resources.
