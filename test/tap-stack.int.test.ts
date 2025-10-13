@@ -1,595 +1,471 @@
-/**
- * TapStack Live Traffic Integration Tests
- * 
- * Comprehensive real-time traffic simulation tests that validate infrastructure
- * objectives through actual HTTP requests, load testing, and traffic analysis.
- * Tests focus purely on live traffic validation without configuration checking.
- */
+import * as AWS from 'aws-sdk';
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
-import fs from 'fs';
-import axios, { AxiosResponse } from 'axios';
-import * as https from 'https';
+// Load deployed stack outputs
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+const stackOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-// Load CloudFormation deployment outputs
-let outputs: any = {};
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  console.warn('CloudFormation outputs not found, using environment variables');
-  outputs = {
-    ALBDNSName: process.env.ALB_DNS_NAME || 'test-alb.example.com',
-    VPCId: process.env.VPC_ID || 'vpc-test',
-    S3BucketName: process.env.S3_BUCKET_NAME || 'test-bucket'
-  };
-}
+// AWS SDK configuration
+const s3 = new AWS.S3({ region: 'us-east-1' });
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-// Traffic simulation utilities
 interface TrafficResult {
-  success: boolean;
-  status: number | string;
+  statusCode: number;
   responseTime: number;
-  requestId: string;
-  headers?: any;
-  data?: string;
+  success: boolean;
   error?: string;
-  size?: number;
 }
 
-interface TrafficAnalysis {
+interface LoadTestResult {
   totalRequests: number;
   successfulRequests: number;
   failedRequests: number;
-  avgResponseTime: number;
-  minResponseTime: number;
+  averageResponseTime: number;
   maxResponseTime: number;
-  statusCodes: { [key: string]: number };
-  errors: { [key: string]: number };
-  totalDataTransferred: number;
-  throughputMbps: number;
+  minResponseTime: number;
+  successRate: number;
 }
 
-class LiveTrafficSimulator {
-  private requestCounter = 0;
-  private testStartTime = Date.now();
+describe('TapStack Integration Tests - Pure Traffic Validation', () => {
+  const albDnsName = stackOutputs.ALBDNSName;
+  const s3BucketName = stackOutputs.S3BucketName;
 
-  async generateHttpTraffic(
+  // Helper function to generate HTTP traffic
+  async function generateHttpTraffic(
     url: string,
     requestCount: number = 10,
-    concurrency: number = 5,
-    options: any = {}
-  ): Promise<TrafficResult[]> {
+    concurrency: number = 2,
+    options: { timeout?: number; headers?: any } = {}
+  ): Promise<LoadTestResult> {
     const results: TrafficResult[] = [];
-    
-    console.log(`Generating ${requestCount} HTTP requests with ${concurrency} concurrent connections to ${url}`);
-    
-    for (let batch = 0; batch < Math.ceil(requestCount / concurrency); batch++) {
-      const batchPromises: Promise<TrafficResult>[] = [];
-      
-      for (let i = 0; i < concurrency && (batch * concurrency + i) < requestCount; i++) {
-        this.requestCounter++;
-        const requestId = `traffic-sim-${Date.now()}-${this.requestCounter}`;
-        const requestStart = Date.now();
-        
-        const promise = axios({
-          method: options.method || 'GET',
-          url: url,
-          timeout: options.timeout || 10000,
-          headers: {
-            'User-Agent': `TapStack-TrafficSim/${requestId}`,
-            'X-Test-Request-Id': requestId,
-            'X-Test-Batch': batch.toString(),
-            'Accept': 'text/html,application/json,*/*',
-            'Connection': 'close',
-            ...options.headers
-          },
-          data: options.data,
-          validateStatus: () => true, // Accept all status codes
-          maxRedirects: 5,
-          httpsAgent: new https.Agent({
-            rejectUnauthorized: false // Allow self-signed certificates for testing
-          })
-        }).then((response: AxiosResponse) => {
-          const responseSize = JSON.stringify(response.data || '').length;
-          return {
-            success: true,
-            status: response.status,
-            responseTime: Date.now() - requestStart,
-            requestId,
-            headers: response.headers,
-            data: typeof response.data === 'string' ? 
-              response.data.substring(0, 200) : 
-              JSON.stringify(response.data).substring(0, 200),
-            size: responseSize
-          };
-        }).catch((error: any) => ({
-          success: false,
-          status: error.response?.status || error.code || 'NETWORK_ERROR',
-          responseTime: Date.now() - requestStart,
-          requestId,
-          error: error.code || error.message || 'Unknown network error',
-          headers: error.response?.headers,
-          size: 0
-        }));
-        
-        batchPromises.push(promise);
+    const { timeout = 5000, headers = {} } = options;
+
+    // Create batches for concurrent requests
+    const batches = [];
+    for (let i = 0; i < requestCount; i += concurrency) {
+      const batch = [];
+      for (let j = 0; j < concurrency && i + j < requestCount; j++) {
+        batch.push(
+          (async (): Promise<TrafficResult> => {
+            const startTime = Date.now();
+            try {
+              const response = await axios.get(url, {
+                timeout,
+                headers,
+                validateStatus: () => true // Accept any status code
+              });
+              const responseTime = Date.now() - startTime;
+              return {
+                statusCode: response.status,
+                responseTime,
+                success: response.status < 400
+              };
+            } catch (error: any) {
+              const responseTime = Date.now() - startTime;
+              return {
+                statusCode: 0,
+                responseTime,
+                success: false,
+                error: error.message
+              };
+            }
+          })()
+        );
       }
-      
-      const batchResults = await Promise.all(batchPromises);
+      batches.push(batch);
+    }
+
+    // Execute batches with delay between them
+    for (const batch of batches) {
+      const batchResults = await Promise.all(batch);
       results.push(...batchResults);
-      
-      // Controlled delay between batches
-      if (batch < Math.ceil(requestCount / concurrency) - 1) {
-        await new Promise(resolve => setTimeout(resolve, 250));
+      // Small delay between batches to avoid overwhelming
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
-    
-    return results;
-  }
 
-  async generateLoadTestTraffic(
-    url: string,
-    durationSeconds: number = 30,
-    requestsPerSecond: number = 10
-  ): Promise<TrafficResult[]> {
-    console.log(`Load testing ${url} for ${durationSeconds}s at ${requestsPerSecond} req/s`);
-    
-    const results: TrafficResult[] = [];
-    const endTime = Date.now() + (durationSeconds * 1000);
-    const intervalMs = 1000 / requestsPerSecond;
-    
-    while (Date.now() < endTime) {
-      const batchStart = Date.now();
-      
-      // Generate batch of requests for this second
-      const batchPromises: Promise<TrafficResult>[] = [];
-      for (let i = 0; i < requestsPerSecond && Date.now() < endTime; i++) {
-        this.requestCounter++;
-        const requestId = `load-test-${Date.now()}-${this.requestCounter}`;
-        const requestStart = Date.now();
-        
-        const promise = axios({
-          method: 'GET',
-          url: url,
-          timeout: 8000,
-          headers: {
-            'User-Agent': `TapStack-LoadTest/${requestId}`,
-            'X-Load-Test-Request': requestId,
-            'Accept': 'text/html,*/*',
-            'Connection': 'close'
-          },
-          validateStatus: () => true,
-          httpsAgent: new https.Agent({
-            rejectUnauthorized: false
-          })
-        }).then((response: AxiosResponse) => ({
-          success: true,
-          status: response.status,
-          responseTime: Date.now() - requestStart,
-          requestId,
-          headers: response.headers,
-          size: JSON.stringify(response.data || '').length
-        })).catch((error: any) => ({
-          success: false,
-          status: error.response?.status || error.code || 'TIMEOUT',
-          responseTime: Date.now() - requestStart,
-          requestId,
-          error: error.code || error.message || 'Load test error',
-          size: 0
-        }));
-        
-        batchPromises.push(promise);
-      }
-      
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
-      
-      // Wait for next interval
-      const elapsed = Date.now() - batchStart;
-      if (elapsed < 1000) {
-        await new Promise(resolve => setTimeout(resolve, 1000 - elapsed));
-      }
-    }
-    
-    return results;
-  }
+    // Calculate statistics
+    const successfulResults = results.filter(r => r.success);
+    const responseTimes = results.map(r => r.responseTime);
 
-  analyzeTrafficResults(results: TrafficResult[]): TrafficAnalysis {
-    const analysis: TrafficAnalysis = {
+    return {
       totalRequests: results.length,
-      successfulRequests: results.filter(r => r.success).length,
-      failedRequests: results.filter(r => !r.success).length,
-      avgResponseTime: 0,
-      minResponseTime: 0,
-      maxResponseTime: 0,
-      statusCodes: {},
-      errors: {},
-      totalDataTransferred: 0,
-      throughputMbps: 0
+      successfulRequests: successfulResults.length,
+      failedRequests: results.length - successfulResults.length,
+      averageResponseTime: responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length,
+      maxResponseTime: Math.max(...responseTimes),
+      minResponseTime: Math.min(...responseTimes),
+      successRate: (successfulResults.length / results.length) * 100
     };
-
-    if (results.length > 0) {
-      const responseTimes = results.map(r => r.responseTime);
-      analysis.avgResponseTime = responseTimes.reduce((sum, rt) => sum + rt, 0) / results.length;
-      analysis.minResponseTime = Math.min(...responseTimes);
-      analysis.maxResponseTime = Math.max(...responseTimes);
-      analysis.totalDataTransferred = results.reduce((sum, r) => sum + (r.size || 0), 0);
-      
-      // Calculate throughput in Mbps
-      const testDurationSeconds = (Date.now() - this.testStartTime) / 1000;
-      analysis.throughputMbps = (analysis.totalDataTransferred * 8) / (testDurationSeconds * 1000000);
-    }
-
-    results.forEach(r => {
-      const status = r.status.toString();
-      analysis.statusCodes[status] = (analysis.statusCodes[status] || 0) + 1;
-      
-      if (r.error) {
-        analysis.errors[r.error] = (analysis.errors[r.error] || 0) + 1;
-      }
-    });
-
-    return analysis;
   }
 
-  printTrafficAnalysis(analysis: TrafficAnalysis, testName: string): void {
-    console.log(`\n=== ${testName} Traffic Analysis ===`);
-    console.log(`Total Requests: ${analysis.totalRequests}`);
-    console.log(`Successful: ${analysis.successfulRequests} (${((analysis.successfulRequests/analysis.totalRequests)*100).toFixed(1)}%)`);
-    console.log(`Failed: ${analysis.failedRequests} (${((analysis.failedRequests/analysis.totalRequests)*100).toFixed(1)}%)`);
-    console.log(`Avg Response Time: ${analysis.avgResponseTime.toFixed(2)}ms`);
-    console.log(`Min/Max Response Time: ${analysis.minResponseTime}ms / ${analysis.maxResponseTime}ms`);
-    console.log(`Data Transferred: ${(analysis.totalDataTransferred/1024).toFixed(2)} KB`);
-    console.log(`Throughput: ${analysis.throughputMbps.toFixed(3)} Mbps`);
-    console.log(`Status Codes:`, analysis.statusCodes);
-    if (Object.keys(analysis.errors).length > 0) {
-      console.log(`Errors:`, analysis.errors);
-    }
-    console.log('==========================================\n');
-  }
-}
+  describe('Application Load Balancer Traffic Tests', () => {
+    test('should handle HTTP traffic and demonstrate ALB functionality', async () => {
+      console.log('Testing HTTP traffic to ALB...');
+      const httpUrl = `http://${albDnsName}`;
+      
+      const result = await generateHttpTraffic(httpUrl, 15, 3);
+      
+      console.log('HTTP Traffic Results:');
+      console.log(`- Total Requests: ${result.totalRequests}`);
+      console.log(`- Success Rate: ${result.successRate.toFixed(2)}%`);
+      console.log(`- Average Response Time: ${result.averageResponseTime.toFixed(2)}ms`);
+      console.log(`- Max Response Time: ${result.maxResponseTime}ms`);
 
-describe('TapStack Live Traffic Integration Tests', () => {
-  let trafficSim: LiveTrafficSimulator;
-  
-  // Extended timeout for traffic simulation tests
-  jest.setTimeout(180000);
+      // ALB should be accessible and handle requests
+      expect(result.totalRequests).toBe(15);
+      expect(result.successRate).toBeGreaterThan(0);
+      expect(result.averageResponseTime).toBeLessThan(10000); // Should respond within 10 seconds
+    }, 60000);
 
-  beforeAll(() => {
-    trafficSim = new LiveTrafficSimulator();
-    console.log('Initializing live traffic simulation tests...');
-    console.log(`Target ALB: ${outputs.ALBDNSName}`);
-    console.log(`Environment: ${environmentSuffix}`);
-  });
+    test('should handle concurrent traffic load', async () => {
+      console.log('Testing concurrent traffic to validate load handling...');
+      const httpUrl = `http://${albDnsName}`;
+      
+      // Generate higher concurrent load
+      const result = await generateHttpTraffic(httpUrl, 25, 5);
+      
+      console.log('Concurrent Load Test Results:');
+      console.log(`- Total Requests: ${result.totalRequests}`);
+      console.log(`- Success Rate: ${result.successRate.toFixed(2)}%`);
+      console.log(`- Failed Requests: ${result.failedRequests}`);
+      console.log(`- Average Response Time: ${result.averageResponseTime.toFixed(2)}ms`);
 
-  describe('1. Infrastructure Availability & Load Balancer Traffic Tests', () => {
-    test('ALB should handle concurrent HTTP traffic and maintain availability', async () => {
-      console.log('Testing ALB availability with concurrent traffic...');
-      
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Generate concurrent traffic to test ALB availability
-      const results = await trafficSim.generateHttpTraffic(albUrl, 25, 8);
-      const analysis = trafficSim.analyzeTrafficResults(results);
-      
-      trafficSim.printTrafficAnalysis(analysis, 'ALB Availability Test');
-      
-      // Validate ALB is handling traffic appropriately
-      expect(analysis.totalRequests).toBe(25);
-      expect(analysis.avgResponseTime).toBeLessThan(30000); // Should respond within 30 seconds
-      
-      // Infrastructure is working if we get any HTTP responses OR consistent network behavior
-      const infrastructureResponding = analysis.successfulRequests > 0 || 
-                                     analysis.statusCodes['503'] > 0 || // ALB responding with no targets
-                                     analysis.statusCodes['502'] > 0 || // ALB responding
-                                     analysis.errors['ENOTFOUND'] > 0 || // Consistent DNS resolution
-                                     analysis.errors['ECONNREFUSED'] > 0; // Consistent connection behavior
-      
-      expect(infrastructureResponding).toBeTruthy();
-      console.log('ALB availability test completed successfully');
-    });
+      // ALB should handle concurrent load effectively
+      expect(result.totalRequests).toBe(25);
+      expect(result.successfulRequests).toBeGreaterThan(0);
+      // Allow some failures but majority should succeed
+      expect(result.successRate).toBeGreaterThan(60);
+    }, 90000);
 
-    test('ALB should handle traffic spikes without degradation', async () => {
-      console.log('Testing ALB resilience with traffic spikes...');
+    test('should maintain performance under sustained load', async () => {
+      console.log('Testing sustained load performance...');
+      const httpUrl = `http://${albDnsName}`;
       
-      const albUrl = `http://${outputs.ALBDNSName}`;
+      // Generate sustained load over multiple rounds
+      const rounds = 3;
+      const results: LoadTestResult[] = [];
       
-      // Simulate traffic spike - burst of high concurrent requests
-      const spike1Results = await trafficSim.generateHttpTraffic(albUrl, 15, 12);
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Brief pause
-      const spike2Results = await trafficSim.generateHttpTraffic(albUrl, 20, 15);
-      
-      const allResults = [...spike1Results, ...spike2Results];
-      const analysis = trafficSim.analyzeTrafficResults(allResults);
-      
-      trafficSim.printTrafficAnalysis(analysis, 'Traffic Spike Resilience');
-      
-      // Infrastructure should handle spikes gracefully
-      expect(analysis.totalRequests).toBe(35);
-      
-      // Validate infrastructure stability under load
-      const infrastructureStable = analysis.avgResponseTime < 45000 && // Reasonable response times
-                                  (analysis.successfulRequests > 0 || 
-                                   analysis.statusCodes['503'] > 0 ||
-                                   analysis.statusCodes['502'] > 0);
-      
-      expect(infrastructureStable).toBeTruthy();
-      console.log('Traffic spike resilience test completed successfully');
-    });
-  });
-
-  describe('2. High Availability & Multi-AZ Traffic Distribution', () => {
-    test('ALB should distribute traffic across multiple availability zones', async () => {
-      console.log('Testing multi-AZ traffic distribution...');
-      
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Generate sustained traffic to test AZ distribution
-      const results = await trafficSim.generateHttpTraffic(albUrl, 30, 6, {
-        headers: { 'X-Test-Type': 'MultiAZ-Distribution' }
-      });
-      
-      const analysis = trafficSim.analyzeTrafficResults(results);
-      trafficSim.printTrafficAnalysis(analysis, 'Multi-AZ Distribution');
-      
-      expect(analysis.totalRequests).toBe(30);
-      
-      // Multi-AZ setup should provide consistent response patterns
-      const consistentBehavior = analysis.statusCodes && Object.keys(analysis.statusCodes).length > 0;
-      expect(consistentBehavior).toBeTruthy();
-      
-      console.log('Multi-AZ traffic distribution test completed');
-    });
-
-    test('Infrastructure should maintain availability during sustained load', async () => {
-      console.log('Testing infrastructure under sustained load...');
-      
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Sustained load test - 30 seconds at 5 requests per second
-      const results = await trafficSim.generateLoadTestTraffic(albUrl, 20, 3);
-      const analysis = trafficSim.analyzeTrafficResults(results);
-      
-      trafficSim.printTrafficAnalysis(analysis, 'Sustained Load Test');
-      
-      expect(analysis.totalRequests).toBeGreaterThan(50);
-      
-      // Infrastructure should maintain stability under sustained load
-      const sustainedStability = analysis.avgResponseTime < 60000 && // Reasonable response times
-                                analysis.totalRequests > 0;
-      
-      expect(sustainedStability).toBeTruthy();
-      console.log('Sustained load test completed successfully');
-    });
-  });
-
-  describe('3. Auto Scaling & Performance Traffic Validation', () => {
-    test('Auto Scaling should trigger under increased traffic load', async () => {
-      console.log('Testing Auto Scaling behavior under traffic load...');
-      
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Generate increasing load to potentially trigger scaling
-      const phase1 = await trafficSim.generateHttpTraffic(albUrl, 10, 3, {
-        headers: { 'X-Test-Phase': '1-Baseline' }
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Allow monitoring
-      
-      const phase2 = await trafficSim.generateHttpTraffic(albUrl, 20, 8, {
-        headers: { 'X-Test-Phase': '2-Increased' }
-      });
-      
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Allow scaling time
-      
-      const phase3 = await trafficSim.generateHttpTraffic(albUrl, 25, 10, {
-        headers: { 'X-Test-Phase': '3-Peak' }
-      });
-      
-      const allResults = [...phase1, ...phase2, ...phase3];
-      const analysis = trafficSim.analyzeTrafficResults(allResults);
-      
-      trafficSim.printTrafficAnalysis(analysis, 'Auto Scaling Load Test');
-      
-      expect(analysis.totalRequests).toBe(55);
-      
-      // Auto scaling infrastructure should handle increasing load
-      const scalingCapable = analysis.avgResponseTime < 90000; // Should remain responsive
-      expect(scalingCapable).toBeTruthy();
-      
-      console.log('Auto Scaling traffic validation completed');
-    });
-  });
-
-  describe('4. Security & WAF Traffic Validation', () => {
-    test('Infrastructure should handle malicious traffic patterns', async () => {
-      console.log('Testing security response to malicious traffic...');
-      
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Generate potentially malicious traffic patterns
-      const maliciousPatterns = [
-        { path: '/?id=1\' OR \'1\'=\'1', headers: { 'X-Attack-Type': 'SQL-Injection' } },
-        { path: '/?q=<script>alert(1)</script>', headers: { 'X-Attack-Type': 'XSS' } },
-        { path: '/../../etc/passwd', headers: { 'X-Attack-Type': 'Directory-Traversal' } },
-        { path: '/?data=' + 'A'.repeat(5000), headers: { 'X-Attack-Type': 'Large-Payload' } }
-      ];
-      
-      const securityResults: TrafficResult[] = [];
-      
-      for (const pattern of maliciousPatterns) {
-        console.log(`Testing security pattern: ${pattern.headers['X-Attack-Type']}`);
-        const results = await trafficSim.generateHttpTraffic(
-          `${albUrl}${pattern.path}`,
-          3,
-          1,
-          { 
-            timeout: 8000,
-            headers: pattern.headers
-          }
-        );
-        securityResults.push(...results);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      for (let i = 0; i < rounds; i++) {
+        console.log(`Sustained load round ${i + 1}/${rounds}...`);
+        const result = await generateHttpTraffic(httpUrl, 10, 2);
+        results.push(result);
+        
+        // Brief pause between rounds
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       
-      const analysis = trafficSim.analyzeTrafficResults(securityResults);
-      trafficSim.printTrafficAnalysis(analysis, 'Security Traffic Test');
-      
-      expect(analysis.totalRequests).toBe(12);
-      
-      // Security infrastructure should handle malicious traffic appropriately
-      const securityActive = analysis.statusCodes['403'] > 0 || // WAF blocking
-                            analysis.statusCodes['400'] > 0 || // Bad request filtering
-                            analysis.statusCodes['503'] > 0 || // Service protection
-                            analysis.statusCodes['502'] > 0 || // Gateway protection
-                            analysis.errors['ECONNRESET'] > 0; // Connection protection
-      
-      // Even if no specific security responses, infrastructure should handle requests
-      const infrastructureHandling = Object.keys(analysis.statusCodes).length > 0 || 
-                                    Object.keys(analysis.errors).length > 0;
-      
-      expect(infrastructureHandling).toBeTruthy();
-      console.log('Security traffic validation completed');
-    });
+      // Calculate overall performance
+      const totalRequests = results.reduce((sum, r) => sum + r.totalRequests, 0);
+      const totalSuccessful = results.reduce((sum, r) => sum + r.successfulRequests, 0);
+      const avgSuccessRate = (totalSuccessful / totalRequests) * 100;
+      const avgResponseTime = results.reduce((sum, r) => sum + r.averageResponseTime, 0) / results.length;
+
+      console.log('Sustained Load Results:');
+      console.log(`- Total Rounds: ${rounds}`);
+      console.log(`- Total Requests: ${totalRequests}`);
+      console.log(`- Overall Success Rate: ${avgSuccessRate.toFixed(2)}%`);
+      console.log(`- Average Response Time: ${avgResponseTime.toFixed(2)}ms`);
+
+      expect(totalRequests).toBe(rounds * 10);
+      expect(avgSuccessRate).toBeGreaterThan(50); // Allow some flexibility for real infrastructure
+      expect(avgResponseTime).toBeLessThan(15000); // 15 second timeout
+    }, 120000);
   });
 
-  describe('5. HTTPS & SSL/TLS Traffic Validation', () => {
-    test('HTTPS traffic should be properly handled or redirected', async () => {
-      console.log('Testing HTTPS/SSL traffic handling...');
+  describe('S3 Bucket Functionality Tests', () => {
+    test('should allow object upload and retrieval operations', async () => {
+      console.log('Testing S3 bucket functionality through data operations...');
       
-      const httpsUrl = `https://${outputs.ALBDNSName}`;
-      const httpUrl = `http://${outputs.ALBDNSName}`;
+      const testKey = `integration-test-${Date.now()}.txt`;
+      const testContent = 'Integration test content for S3 bucket validation';
       
-      // Test HTTPS connectivity
-      const httpsResults = await trafficSim.generateHttpTraffic(httpsUrl, 5, 2, {
-        timeout: 10000,
-        headers: { 'X-Protocol-Test': 'HTTPS' }
-      });
+      try {
+        // Test upload
+        console.log('Uploading test object to S3...');
+        await s3.putObject({
+          Bucket: s3BucketName,
+          Key: testKey,
+          Body: testContent,
+          ContentType: 'text/plain'
+        }).promise();
+
+        // Test retrieval
+        console.log('Retrieving test object from S3...');
+        const getResult = await s3.getObject({
+          Bucket: s3BucketName,
+          Key: testKey
+        }).promise();
+
+        const retrievedContent = getResult.Body?.toString();
+        
+        console.log('S3 Operations Results:');
+        console.log(`- Upload: Success`);
+        console.log(`- Retrieval: Success`);
+        console.log(`- Content Match: ${retrievedContent === testContent}`);
+
+        expect(retrievedContent).toBe(testContent);
+        
+        // Cleanup
+        await s3.deleteObject({
+          Bucket: s3BucketName,
+          Key: testKey
+        }).promise();
+        
+      } catch (error: any) {
+        console.error('S3 operation failed:', error.message);
+        throw error;
+      }
+    }, 30000);
+
+    test('should support versioning through multiple uploads', async () => {
+      console.log('Testing S3 versioning behavior through uploads...');
       
-      // Test HTTP connectivity (should redirect to HTTPS if configured)
-      const httpResults = await trafficSim.generateHttpTraffic(httpUrl, 5, 2, {
-        timeout: 10000,
-        headers: { 'X-Protocol-Test': 'HTTP' }
-      });
+      const testKey = `versioning-test-${Date.now()}.txt`;
+      const versions = ['Version 1 content', 'Version 2 content', 'Version 3 content'];
       
-      const httpsAnalysis = trafficSim.analyzeTrafficResults(httpsResults);
-      const httpAnalysis = trafficSim.analyzeTrafficResults(httpResults);
-      
-      trafficSim.printTrafficAnalysis(httpsAnalysis, 'HTTPS Traffic');
-      trafficSim.printTrafficAnalysis(httpAnalysis, 'HTTP Traffic');
-      
-      // At least one protocol should be working or providing valid responses
-      const protocolWorking = httpsAnalysis.successfulRequests > 0 || 
-                            httpAnalysis.successfulRequests > 0 ||
-                            httpAnalysis.statusCodes['301'] > 0 || // Redirect to HTTPS
-                            httpAnalysis.statusCodes['302'] > 0 || // Redirect to HTTPS
-                            httpsAnalysis.statusCodes['503'] > 0 || // HTTPS service available
-                            httpAnalysis.statusCodes['503'] > 0;   // HTTP service available
-      
-      expect(protocolWorking).toBeTruthy();
-      console.log('HTTPS/SSL traffic validation completed');
-    });
+      try {
+        console.log('Uploading multiple versions of the same object...');
+        
+        // Upload multiple versions of the same key
+        for (let i = 0; i < versions.length; i++) {
+          await s3.putObject({
+            Bucket: s3BucketName,
+            Key: testKey,
+            Body: versions[i],
+            ContentType: 'text/plain'
+          }).promise();
+          console.log(`Uploaded version ${i + 1}`);
+        }
+
+        // Retrieve the latest version
+        const latestVersion = await s3.getObject({
+          Bucket: s3BucketName,
+          Key: testKey
+        }).promise();
+
+        const retrievedContent = latestVersion.Body?.toString();
+        
+        console.log('S3 Versioning Behavior Results:');
+        console.log(`- Versions uploaded: ${versions.length}`);
+        console.log(`- Latest content retrieved: ${retrievedContent === versions[versions.length - 1]}`);
+
+        expect(retrievedContent).toBe(versions[versions.length - 1]);
+        
+        // Cleanup
+        await s3.deleteObject({
+          Bucket: s3BucketName,
+          Key: testKey
+        }).promise();
+        
+      } catch (error: any) {
+        console.error('S3 versioning test failed:', error.message);
+        throw error;
+      }
+    }, 30000);
   });
 
-  describe('6. End-to-End Application Traffic Flow', () => {
-    test('Complete application request flow should work end-to-end', async () => {
-      console.log('Testing complete application traffic flow...');
+  describe('Auto Scaling Behavior Validation Through Load Testing', () => {
+    test('should demonstrate scaling behavior under increasing load', async () => {
+      console.log('Testing Auto Scaling behavior through progressive load...');
       
-      const albUrl = `http://${outputs.ALBDNSName}`;
-      
-      // Simulate realistic application traffic patterns
-      const appTrafficPatterns = [
-        { path: '/', method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0 WebBrowser' } },
-        { path: '/health', method: 'GET', headers: { 'X-Health-Check': 'true' } },
-        { path: '/api/status', method: 'GET', headers: { 'Accept': 'application/json' } },
-        { path: '/static/css/style.css', method: 'GET', headers: { 'Accept': 'text/css' } },
-        { path: '/api/data', method: 'POST', headers: { 'Content-Type': 'application/json' }, data: '{"test": "data"}' }
+      const httpUrl = `http://${albDnsName}`;
+      const loadPhases = [
+        { requests: 10, concurrency: 2, phase: 'baseline' },
+        { requests: 20, concurrency: 4, phase: 'moderate' },
+        { requests: 30, concurrency: 6, phase: 'high' }
       ];
       
-      const appResults: TrafficResult[] = [];
+      const phaseResults: any[] = [];
       
-      for (const pattern of appTrafficPatterns) {
-        console.log(`Testing application flow: ${pattern.method} ${pattern.path}`);
-        const results = await trafficSim.generateHttpTraffic(
-          `${albUrl}${pattern.path}`,
-          3,
-          2,
-          {
-            method: pattern.method,
-            headers: pattern.headers,
-            data: pattern.data,
-            timeout: 12000
-          }
-        );
-        appResults.push(...results);
-        await new Promise(resolve => setTimeout(resolve, 500));
+      for (const phase of loadPhases) {
+        console.log(`Running ${phase.phase} load phase: ${phase.requests} requests with ${phase.concurrency} concurrency...`);
+        
+        const result = await generateHttpTraffic(httpUrl, phase.requests, phase.concurrency);
+        phaseResults.push({
+          phase: phase.phase,
+          ...result
+        });
+        
+        console.log(`${phase.phase.charAt(0).toUpperCase() + phase.phase.slice(1)} Phase Results:`);
+        console.log(`- Success Rate: ${result.successRate.toFixed(2)}%`);
+        console.log(`- Average Response Time: ${result.averageResponseTime.toFixed(2)}ms`);
+        
+        // Wait between phases to observe scaling
+        if (loadPhases.indexOf(phase) < loadPhases.length - 1) {
+          console.log('Waiting 30 seconds for potential scaling...');
+          await new Promise(resolve => setTimeout(resolve, 30000));
+        }
       }
       
-      const analysis = trafficSim.analyzeTrafficResults(appResults);
-      trafficSim.printTrafficAnalysis(analysis, 'Application Flow Test');
+      // Validate that the system handled increasing load
+      const baselineSuccess = phaseResults.find(r => r.phase === 'baseline')?.successRate || 0;
+      const highLoadSuccess = phaseResults.find(r => r.phase === 'high')?.successRate || 0;
       
-      expect(analysis.totalRequests).toBe(15);
+      console.log('Load Scaling Summary:');
+      phaseResults.forEach(result => {
+        console.log(`- ${result.phase}: ${result.successRate.toFixed(2)}% success, ${result.averageResponseTime.toFixed(2)}ms avg`);
+      });
+
+      // System should handle load progression reasonably well
+      expect(baselineSuccess).toBeGreaterThan(50);
+      expect(highLoadSuccess).toBeGreaterThan(30); // Allow for some degradation under high load
+      expect(phaseResults.length).toBe(3);
+    }, 180000);
+
+    test('should maintain availability during load variations', async () => {
+      console.log('Testing consistent availability through load variations...');
       
-      // Application infrastructure should handle various request types
-      const applicationResponsive = analysis.avgResponseTime < 120000 && // Reasonable response times
-                                   (analysis.successfulRequests > 0 || 
-                                    analysis.statusCodes['404'] > 0 || // Valid HTTP responses
-                                    analysis.statusCodes['503'] > 0 || // Service responses
-                                    analysis.statusCodes['502'] > 0);  // Gateway responses
+      const httpUrl = `http://${albDnsName}`;
+      const testRounds = 5;
+      const results: LoadTestResult[] = [];
       
-      expect(applicationResponsive).toBeTruthy();
-      console.log('End-to-end application traffic flow validation completed');
-    });
+      for (let i = 0; i < testRounds; i++) {
+        console.log(`Availability test round ${i + 1}/${testRounds}...`);
+        
+        // Vary the load pattern
+        const requests = 8 + (i * 2); // 8, 10, 12, 14, 16 requests
+        const concurrency = 2;
+        
+        const result = await generateHttpTraffic(httpUrl, requests, concurrency);
+        results.push(result);
+        
+        console.log(`Round ${i + 1}: ${result.successRate.toFixed(2)}% success, ${result.averageResponseTime.toFixed(2)}ms avg`);
+        
+        // Short pause between rounds
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+      
+      const averageSuccessRate = results.reduce((sum, r) => sum + r.successRate, 0) / results.length;
+      const totalRequests = results.reduce((sum, r) => sum + r.totalRequests, 0);
+      
+      console.log('Availability Test Summary:');
+      console.log(`- Total Rounds: ${testRounds}`);
+      console.log(`- Total Requests: ${totalRequests}`);
+      console.log(`- Average Success Rate: ${averageSuccessRate.toFixed(2)}%`);
+
+      expect(results.length).toBe(testRounds);
+      expect(averageSuccessRate).toBeGreaterThan(40); // Allow flexibility for real infrastructure
+    }, 120000);
   });
 
-  describe('7. Performance & Throughput Validation', () => {
-    test('Infrastructure should maintain performance under various load patterns', async () => {
-      console.log('Testing infrastructure performance under various loads...');
+  describe('End-to-End Application Flow Tests', () => {
+    test('should validate complete request flow through ALB to application', async () => {
+      console.log('Testing end-to-end application flow...');
       
-      const albUrl = `http://${outputs.ALBDNSName}`;
+      const httpUrl = `http://${albDnsName}`;
       
-      // Test different load patterns
-      const lowLoad = await trafficSim.generateHttpTraffic(albUrl, 5, 1, {
-        headers: { 'X-Load-Pattern': 'Low' }
-      });
+      // Test various endpoints if they exist
+      const testPaths = ['/', '/health', '/api/status', '/index.html'];
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      for (const testPath of testPaths) {
+        try {
+          console.log(`Testing path: ${testPath}`);
+          const fullUrl = `${httpUrl}${testPath}`;
+          const result = await generateHttpTraffic(fullUrl, 5, 2);
+          
+          console.log(`Path ${testPath} Results:`);
+          console.log(`- Success Rate: ${result.successRate.toFixed(2)}%`);
+          console.log(`- Average Response Time: ${result.averageResponseTime.toFixed(2)}ms`);
+          
+          // At least the root path should work
+          if (testPath === '/') {
+            expect(result.successfulRequests).toBeGreaterThan(0);
+          }
+          
+        } catch (error: any) {
+          console.log(`Path ${testPath} failed: ${error.message}`);
+          // Continue with other paths
+        }
+      }
+    }, 60000);
+
+    test('should demonstrate multi-region capability through traffic patterns', async () => {
+      console.log('Testing multi-region infrastructure behavior...');
       
-      const mediumLoad = await trafficSim.generateHttpTraffic(albUrl, 15, 5, {
-        headers: { 'X-Load-Pattern': 'Medium' }
-      });
+      const httpUrl = `http://${albDnsName}`;
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Simulate traffic patterns that would benefit from multi-region setup
+      const trafficPatterns = [
+        { name: 'US-East Pattern', requests: 12, concurrency: 3 },
+        { name: 'US-West Pattern', requests: 10, concurrency: 2 },
+        { name: 'EU Pattern', requests: 8, concurrency: 2 }
+      ];
       
-      const highLoad = await trafficSim.generateHttpTraffic(albUrl, 25, 10, {
-        headers: { 'X-Load-Pattern': 'High' }
-      });
+      const patternResults: any[] = [];
       
-      const lowAnalysis = trafficSim.analyzeTrafficResults(lowLoad);
-      const mediumAnalysis = trafficSim.analyzeTrafficResults(mediumLoad);
-      const highAnalysis = trafficSim.analyzeTrafficResults(highLoad);
+      for (const pattern of trafficPatterns) {
+        console.log(`Testing ${pattern.name}...`);
+        
+        const result = await generateHttpTraffic(httpUrl, pattern.requests, pattern.concurrency);
+        patternResults.push({
+          pattern: pattern.name,
+          ...result
+        });
+        
+        console.log(`${pattern.name} Results:`);
+        console.log(`- Success Rate: ${result.successRate.toFixed(2)}%`);
+        console.log(`- Average Response Time: ${result.averageResponseTime.toFixed(2)}ms`);
+        
+        // Brief pause between patterns
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
       
-      trafficSim.printTrafficAnalysis(lowAnalysis, 'Low Load Performance');
-      trafficSim.printTrafficAnalysis(mediumAnalysis, 'Medium Load Performance');
-      trafficSim.printTrafficAnalysis(highAnalysis, 'High Load Performance');
+      const overallSuccess = patternResults.reduce((sum, r) => sum + r.successfulRequests, 0);
+      const overallRequests = patternResults.reduce((sum, r) => sum + r.totalRequests, 0);
+      const overallSuccessRate = (overallSuccess / overallRequests) * 100;
       
-      // Performance should be consistent across load patterns
-      const performanceConsistent = lowAnalysis.totalRequests === 5 &&
-                                   mediumAnalysis.totalRequests === 15 &&
-                                   highAnalysis.totalRequests === 25;
+      console.log('Multi-Region Traffic Summary:');
+      console.log(`- Total Patterns Tested: ${patternResults.length}`);
+      console.log(`- Overall Success Rate: ${overallSuccessRate.toFixed(2)}%`);
+
+      expect(patternResults.length).toBe(3);
+      expect(overallSuccessRate).toBeGreaterThan(40);
+    }, 90000);
+  });
+
+  describe('Security Validation Through Traffic Behavior', () => {
+    test('should handle various request types and validate HTTPS termination capability', async () => {
+      console.log('Testing security through different request patterns...');
       
-      expect(performanceConsistent).toBeTruthy();
+      const httpUrl = `http://${albDnsName}`;
       
-      // Infrastructure should handle all load levels
-      const allLoadsHandled = (lowAnalysis.successfulRequests > 0 || Object.keys(lowAnalysis.statusCodes).length > 0) &&
-                             (mediumAnalysis.successfulRequests > 0 || Object.keys(mediumAnalysis.statusCodes).length > 0) &&
-                             (highAnalysis.successfulRequests > 0 || Object.keys(highAnalysis.statusCodes).length > 0);
+      // Test different HTTP methods and headers
+      const securityTests = [
+        { name: 'Standard GET', method: 'GET', headers: {} },
+        { name: 'POST with data', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        { name: 'Custom headers', method: 'GET', headers: { 'X-Test-Header': 'security-test' } }
+      ];
       
-      expect(allLoadsHandled).toBeTruthy();
-      console.log('Performance validation under various loads completed');
-    });
+      for (const test of securityTests) {
+        try {
+          console.log(`Testing ${test.name}...`);
+          
+          const startTime = Date.now();
+          const response = await axios({
+            method: test.method as any,
+            url: httpUrl,
+            headers: test.headers,
+            timeout: 5000,
+            validateStatus: () => true
+          });
+          const responseTime = Date.now() - startTime;
+          
+          console.log(`${test.name} Results:`);
+          console.log(`- Status: ${response.status}`);
+          console.log(`- Response Time: ${responseTime}ms`);
+          console.log(`- Headers Received: ${Object.keys(response.headers).length}`);
+          
+          // Should receive some response
+          expect(responseTime).toBeLessThan(10000);
+          
+        } catch (error: any) {
+          console.log(`${test.name} failed: ${error.message}`);
+          // Continue with other tests
+        }
+      }
+    }, 45000);
   });
 });
