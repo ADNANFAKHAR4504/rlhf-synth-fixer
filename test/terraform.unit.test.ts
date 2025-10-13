@@ -163,27 +163,21 @@ describe("S3 Static Website - Unit Tests", () => {
 
     test("allows GET method", () => {
       // Check that GET is included in allowed_methods
-      expect(has(/allowed_methods\s*=\s*```math
-.*"GET".*```/)).toBe(true);
+      expect(has(/allowed_methods\s*=\s*\[\s*"GET"\s*\]/)).toBe(true);
     });
 
-    test("allows OPTIONS method for CORS preflight", () => {
-      // Your code has both GET and OPTIONS
-      expect(has(/allowed_methods\s*=\s*```math
-.*"OPTIONS".*```/)).toBe(true);
+    test("does not include OPTIONS method (not supported by S3 static websites)", () => {
+      // S3 static website hosting does not support OPTIONS method
+      expect(has(/allowed_methods\s*=\s*\[\s*"GET",\s*"OPTIONS"\s*\]/)).toBe(false);
     });
 
     test("allows all origins", () => {
-      expect(has(/allowed_origins\s*=\s*```math
-.*"\*".*```/)).toBe(true);
+      expect(has(/allowed_origins\s*=\s*\[\s*"\*"\s*\]/)).toBe(true);
     });
 
     test("specifies required headers", () => {
       // Check both headers are present
-      expect(has(/allowed_headers\s*=\s*```math
-.*"Content-Type".*```/)).toBe(true);
-      expect(has(/allowed_headers\s*=\s*```math
-.*"Authorization".*```/)).toBe(true);
+      expect(has(/allowed_headers\s*=\s*\[\s*"Content-Type",\s*"Authorization"\s*\]/)).toBe(true);
     });
 
     test("max age is 3600 seconds", () => {
@@ -259,12 +253,12 @@ describe("S3 Static Website - Unit Tests", () => {
 
     test("policy allows public read", () => {
       expect(has(/PublicReadGetObject/)).toBe(true);
-      expect(has(/"Effect"\s*=\s*"Allow"/)).toBe(true);
-      expect(has(/"Principal"\s*=\s*"\*"/)).toBe(true);
+      expect(has(/Effect\s*=\s*"Allow"/)).toBe(true);
+      expect(has(/Principal\s*=\s*"\*"/)).toBe(true);
     });
 
     test("policy allows s3:GetObject action", () => {
-      expect(has(/"Action"\s*=\s*"s3:GetObject"/)).toBe(true);
+      expect(has(/Action\s*=\s*"s3:GetObject"/)).toBe(true);
     });
 
     test("policy uses bucket ARN reference", () => {
@@ -276,8 +270,7 @@ describe("S3 Static Website - Unit Tests", () => {
     });
 
     test("policy depends on public access block", () => {
-      expect(has(/depends_on\s*=\s*```math
-aws_s3_bucket_public_access_block\.media_assets```/)).toBe(true);
+      expect(has(/depends_on\s*=\s*\[\s*aws_s3_bucket_public_access_block\.media_assets\s*\]/)).toBe(true);
     });
   });
 
@@ -356,7 +349,7 @@ aws_s3_bucket_public_access_block\.media_assets```/)).toBe(true);
     });
 
     test("uses jsonencode for policies", () => {
-      expect(has(/jsonencode\s*KATEX_INLINE_OPEN/)).toBe(true);
+      expect(has(/jsonencode\s*\(/)).toBe(true);
     });
 
     test("bucket references use .id not .bucket", () => {
@@ -368,7 +361,7 @@ aws_s3_bucket_public_access_block\.media_assets```/)).toBe(true);
     });
 
     test("all S3 configuration resources reference the main bucket", () => {
-      expect(count(/aws_s3_bucket\.media_assets/)).toBeGreaterThan(5);
+      expect(count(/aws_s3_bucket\.media_assets/g)).toBeGreaterThan(5);
     });
   });
 

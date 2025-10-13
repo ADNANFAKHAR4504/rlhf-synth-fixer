@@ -75,7 +75,7 @@ resource "aws_s3_bucket_cors_configuration" "media_assets" {
   
   cors_rule {
     allowed_headers = ["Content-Type", "Authorization"]
-    allowed_methods = ["GET", "OPTIONS"]
+    allowed_methods = ["GET"]
     allowed_origins = ["*"]
     max_age_seconds = 3600
   }
