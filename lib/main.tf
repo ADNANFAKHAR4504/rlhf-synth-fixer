@@ -1,6 +1,6 @@
 resource "aws_dynamodb_table" "payment_transactions" {
   name = "payment-transactions-v2"
-  billing_mode = "PAY_PER_REQUEST" # On-demand billing mode
+  billing_mode = "PAY_PER_REQUEST" ## On-demand billing mode
 
   # Primary key configuration
   hash_key = "transaction_id"
