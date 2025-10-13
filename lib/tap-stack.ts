@@ -408,7 +408,7 @@ EOF`,
     const rdsInstance = new rds.DatabaseInstance(stack, 'Database', {
       instanceIdentifier: `prod-mysql-db-${stringSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_34,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
