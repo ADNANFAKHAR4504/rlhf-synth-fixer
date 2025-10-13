@@ -378,30 +378,30 @@ app.synth();
 
 ## Key Features Implemented
 
-### 🏗️ **Modular Architecture**
-- **Reusable modules** in `modules.ts` for S3, Security Groups, and IAM roles
-- **Environment-agnostic** module design with configuration injection
-- **Type-safe interfaces** for consistent configuration
+### Modular Architecture
+- Reusable modules in `modules.ts` for S3, Security Groups, and IAM roles
+- Environment-agnostic module design with configuration injection
+- Type-safe interfaces for consistent configuration
 
-### 🔒 **Security Best Practices**
-- **S3 buckets** with versioning, encryption, and public access blocking
-- **Security groups** allowing only HTTPS (port 443) inbound traffic
-- **IAM roles** with least privilege policies scoped to specific resources
-- **Conditional policies** restricting access by region and account
+### Security Best Practices
+- S3 buckets with versioning, encryption, and public access blocking
+- Security groups allowing only HTTPS (port 443) inbound traffic
+- IAM roles with least privilege policies scoped to specific resources
+- Conditional policies restricting access by region and account
 
-### 🌍 **Multi-Environment Support**
-- **Separate Terraform Cloud workspaces** for staging and production
-- **Environment-specific naming** conventions (e.g., `tap-staging-bucket`)
-- **Isolated state management** with distinct backends
-- **Environment-specific tagging** and resource configuration
+### Multi-Environment Support
+- Separate Terraform Cloud workspaces for staging and production
+- Environment-specific naming conventions (e.g., `tap-staging-bucket`)
+- Isolated state management with distinct backends
+- Environment-specific tagging and resource configuration
 
-### 📊 **Resource Management**
-- **Comprehensive tagging** strategy for cost allocation and governance
-- **Output values** for cross-stack references and debugging
-- **Default tags** applied automatically via AWS provider
-- **Resource naming** following consistent patterns
+### Resource Management
+- Comprehensive tagging strategy for cost allocation and governance
+- Output values for cross-stack references and debugging
+- Default tags applied automatically via AWS provider
+- Resource naming following consistent patterns
 
-### 🚀 **Deployment Instructions**
+### Deployment Instructions
 
 1. **Install dependencies:**
    ```bash
