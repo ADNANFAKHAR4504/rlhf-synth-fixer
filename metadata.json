@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350131",
+  "team": "4",
+  "startedAt": "2025-10-13T10:01:13.264Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "S3 Bucket, IAM, KMS, Lambda, RDS, CloudTrail, CloudWatch, VPC"
+}
