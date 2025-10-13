@@ -456,7 +456,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\n\n\n# Install CloudWatch Agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n\n# Configure and start CloudWatch Agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"agent\": { \"metrics_collection_interval\": 60, \"run_as_user\": \"cwagent\" },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${EC2LogGroup}\",\n            \"log_stream_name\": \"{instance_id}-messages\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"SaaSApp/${EnvironmentTag}\",\n    \"metrics_collected\": { \"cpu\": { \"measurement\": [\"cpu_usage_idle\"], \"metrics_collection_interval\": 60 } }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n\n# Simple web demo\nyum install -y httpd\necho \"<h1>SaaS App - Instance $(hostname)</h1>\" > /var/www/html/index.html\nsystemctl enable --now httpd\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\n\n# Install CloudWatch Agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure and start CloudWatch Agent (full metrics)\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"agent\": { \"metrics_collection_interval\": 60, \"run_as_user\": \"cwagent\" },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${EC2LogGroup}\",\n            \"log_stream_name\": \"{instance_id}-messages\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"SaaSApp/${EnvironmentTag}\",\n    \"metrics_collected\": {\n      \"cpu\": { \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_system\", \"cpu_usage_user\"], \"metrics_collection_interval\": 60 },\n      \"mem\": { \"measurement\": [\"mem_used_percent\"], \"metrics_collection_interval\": 60 },\n      \"disk\": { \"measurement\": [\"disk_used_percent\"], \"metrics_collection_interval\": 60 },\n      \"diskio\": { \"measurement\": [\"io_time\"], \"metrics_collection_interval\": 60 }\n    }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Simple web demo\nyum install -y httpd\necho \"<h1>SaaS App - Instance $(hostname)</h1>\" > /var/www/html/index.html\nsystemctl enable --now httpd\n"
                         }
                     },
                     "TagSpecifications": [
@@ -488,7 +488,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -516,7 +521,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -544,7 +554,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -572,7 +587,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -600,7 +620,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -628,7 +653,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -656,7 +686,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -684,7 +719,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -712,7 +752,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -740,7 +785,12 @@
                     "LaunchTemplateId": {
                         "Ref": "EC2LaunchTemplate"
                     },
-                    "Version": "1"
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "EC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet"
