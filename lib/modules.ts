@@ -393,7 +393,6 @@ export class RdsModule extends Construct {
     this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
       identifier: 'tap-postgres-db',
       engine: 'postgres',
-      engineVersion: '13.7',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
@@ -402,8 +401,8 @@ export class RdsModule extends Construct {
       kmsKeyId: config.kmsKeyArn,
 
       dbName: 'tapdb',
-      username: 'dbadmin',
-      password: 'ChangeMe#2024$Secure!',
+      username: process.env.DB_USERNAME || 'dbadmin',
+      password: process.env.DB_PASSWORD || 'ChangeMe#2024$Secure!',
 
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
@@ -474,16 +473,22 @@ export class Ec2Module extends Construct {
     });
 
     // EC2 IAM Policy
+    // EC2 IAM Policy
     new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-policy', {
       role: this.role.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['s3:PutObject', 's3:PutObjectAcl', 's3:GetObject'],
-            Resource: [`${config.s3BucketArn}/*`],
-          },
+          // Only include S3 statement if bucket ARN is provided
+          ...(config.s3BucketArn
+            ? [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:PutObject', 's3:PutObjectAcl', 's3:GetObject'],
+                  Resource: [`${config.s3BucketArn}/*`],
+                },
+              ]
+            : []),
           {
             Effect: 'Allow',
             Action: [
