@@ -723,11 +723,13 @@ resource "aws_autoscaling_group" "main" {
   name               = "${var.project_name}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-  min_size            = 1  # Reduced to 1 for faster deployment
+
+  wait_for_capacity_timeout = "0"
+  health_check_type   = "EC2"
+  health_check_grace_period = 120
+  min_size            = 0  # Reduced to 1 for faster deployment
   max_size            = 4  # Reduced max size
-  desired_capacity    = 2
+  desired_capacity    = 1
 
   launch_template {
     id      = aws_launch_template.main.id
