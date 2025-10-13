@@ -22,7 +22,6 @@ import {
   CloudWatchAlarm,
   NotificationTopic,
   CostBudget,
-  //AuditTrail,
   IamRoleConstruct,
   MfaEnforcementPolicy,
 } from './modules';
@@ -32,16 +31,17 @@ interface TapStackProps {
   stateBucket?: string;
   stateBucketRegion?: string;
   awsRegion?: string;
+  awsRegionOverride?: string; // Add this
   defaultTags?: AwsProviderDefaultTags;
 }
-
-const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
+    const AWS_REGION_OVERRIDE =
+      props?.awsRegionOverride || process.env.AWS_REGION_OVERRIDE || '';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-east-1';
@@ -334,16 +334,6 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // // Create CloudTrail for audit logging
-    // const auditTrail = new AuditTrail(
-    //   this,
-    //   'audit-trail',
-    //   `${id}-${environmentSuffix}`,
-    //   current.accountId,
-    //   kmsModule.keyArn,
-    //   commonTags
-    // );
-
     // Create CloudWatch Log Groups
     new CloudWatchLogGroup(
       this,
@@ -448,10 +438,5 @@ export class TapStack extends TerraformStack {
       value: notificationTopic.topic.arn,
       description: 'SNS topic ARN for notifications',
     });
-
-    // new TerraformOutput(this, 'cloudtrail-s3-bucket', {
-    //   value: auditTrail.bucket.bucket.bucket,
-    //   description: 'S3 bucket for CloudTrail logs',
-    // });
   }
 }
