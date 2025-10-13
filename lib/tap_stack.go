@@ -985,7 +985,7 @@ func main() {
 		}
 
 		// API Gateway Method
-		_, err = apigateway.NewMethod(ctx, "api-method", &apigateway.MethodArgs{
+		apiMethod, err := apigateway.NewMethod(ctx, "api-method", &apigateway.MethodArgs{
 			RestApi:       apiGateway.ID(),
 			ResourceId:    apiResource.ID(),
 			HttpMethod:    pulumi.String("POST"),
@@ -995,11 +995,49 @@ func main() {
 			return err
 		}
 
-		// API Gateway Deployment
+		// API Gateway Integration with ALB
+		apiIntegration, err := apigateway.NewIntegration(ctx, "api-integration", &apigateway.IntegrationArgs{
+			RestApi:               apiGateway.ID(),
+			ResourceId:            apiResource.ID(),
+			HttpMethod:            apiMethod.HttpMethod,
+			Type:                  pulumi.String("HTTP_PROXY"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Uri: alb.DnsName.ApplyT(func(dnsName string) string {
+				return fmt.Sprintf("http://%s/", dnsName)
+			}).(pulumi.StringOutput),
+			ConnectionType: pulumi.String("INTERNET"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// API Gateway Method Response
+		_, err = apigateway.NewMethodResponse(ctx, "api-method-response", &apigateway.MethodResponseArgs{
+			RestApi:    apiGateway.ID(),
+			ResourceId: apiResource.ID(),
+			HttpMethod: apiMethod.HttpMethod,
+			StatusCode: pulumi.String("200"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// API Gateway Integration Response
+		_, err = apigateway.NewIntegrationResponse(ctx, "api-integration-response", &apigateway.IntegrationResponseArgs{
+			RestApi:    apiGateway.ID(),
+			ResourceId: apiResource.ID(),
+			HttpMethod: apiMethod.HttpMethod,
+			StatusCode: pulumi.String("200"),
+		}, pulumi.DependsOn([]pulumi.Resource{apiIntegration}))
+		if err != nil {
+			return err
+		}
+
+		// API Gateway Deployment - depends on integration being complete
 		apiDeployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
 			RestApi:     apiGateway.ID(),
 			Description: pulumi.String("Initial deployment"),
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{apiMethod, apiIntegration}))
 		if err != nil {
 			return err
 		}
