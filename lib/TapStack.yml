@@ -36,8 +36,8 @@ Mappings:
   RegionMap:
     us-east-1:
       AmazonLinux2AMI: ami-052064a798f08f0d3  # Amazon Linux 2 AMI (HVM) - Kernel 5.10
-    eu-west-2:
-      AmazonLinux2AMI: ami-0336cdd409ab5eec4
+    us-west-2:
+      AmazonLinux2AMI: ami-0caa91d6b7bee0ed0
 
 Resources:
   MyKeyPair:
@@ -154,7 +154,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-ec2-role
+      RoleName: !Sub "${AWS::StackName}-ec2-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -165,7 +165,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: CloudWatchLogsS3Policy
+        - PolicyName: !Sub "${AWS::StackName}-CloudWatchLogsS3Policy-${AWS::Region}"
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -189,7 +189,7 @@ Resources:
                   - !Sub 'arn:aws:s3:::${LogsBucket}'
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-ec2-role
+          Value: !Sub "${AWS::StackName}-ec2-role-${AWS::Region}"
         - Key: Environment
           Value: !Ref EnvironmentTag
 
@@ -199,7 +199,7 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2Role
-      InstanceProfileName: !Sub ${AWS::StackName}-ec2-profile
+      InstanceProfileName: !Sub "${AWS::StackName}-ec2-profile-${AWS::Region}"
 
 
   # S3 Bucket for Logs
