@@ -1,8 +1,8 @@
 {
   "po_id": "7855388917",
   "team": "synth",
-  "platform": "CDK",
-  "language": "TypeScript",
+  "platform": "cdk",
+  "language": "typescript",
   "complexity": "medium",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
