@@ -2,19 +2,77 @@
 name: iac-task-selector
 description: Selects a task to perform from tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
 color: yellow
-model: opus
+model: sonnet
 ---
 
 # Task Selector
 
 This agent is responsible for selecting a task to perform. if `tasks.csv` is present, use option 1, otherwise use option 2.
 
+## Working Directory Context
+
+**Initial Location**: Main repository root (where tasks.csv is located)
+
+**After worktree creation**: Must hand off to task-coordinator which will `cd` into the worktree
+
 ### Option 1: CSV Task Selection
 If `tasks.csv` is present:
-1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" or "done" from tasks csv. 
-    - Be aware that, in the csv file there are some rows that take more than one line of the file.
-2. Set the status column to in_progress.
-3. Follow instructions in `task-coordinator` to set up the worktree:
+1. **Read tasks.csv using proper CSV parser** (handles multi-line rows):
+   ```python
+   import csv
+   
+   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+       reader = csv.DictReader(f)
+       for row in reader:
+           difficulty = row['difficulty']
+           status = row['status']
+           if difficulty in ['hard', 'medium'] and status not in ['in_progress', 'done']:
+               # This is our task
+               selected_task = row
+               break
+   ```
+   
+2. **Extract task metadata from the selected CSV row**:
+    - Get `task_id` column value
+    - Get `subtask` column value
+    - Get `subject_labels` column value (it's a JSON array string like `["CI/CD Pipeline", "Security Configuration as Code"]`)
+    - Parse the subject_labels as a JSON array
+    - Pass these values to the task-coordinator for inclusion in metadata.json
+
+3. **Update status column to "in_progress"**:
+   ```python
+   import csv
+   
+   rows = []
+   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+       reader = csv.DictReader(f)
+       fieldnames = reader.fieldnames
+       for row in reader:
+           if row['task_id'] == selected_task_id:
+               row['status'] = 'in_progress'
+           rows.append(row)
+   
+   with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+       writer = csv.DictWriter(f, fieldnames=fieldnames)
+       writer.writeheader()
+       writer.writerows(rows)
+   ```
+
+4. **Validate task complexity matches requirements** (Quality assurance):
+   - Extract AWS services count from task description
+   - Validate against difficulty level:
+     - "hard" or "expert" tasks: Should have 5+ AWS services
+     - "medium" tasks: Should have 3-5 AWS services
+     - "easy" tasks: Should have 1-3 AWS services
+   - If mismatch detected:
+     - Log warning: "Task {task_id} marked as {difficulty} but appears to have {count} services"
+     - Add note to trainr_notes in CSV for review
+     - Proceed with task but flag for quality review
+   - **Quality Impact**: Ensures consistent difficulty levels across training data
+
+5. **Follow instructions in `task-coordinator` to set up the worktree**:
+   - Use EXACT format: `worktree/synth-{task_id}`
+   - Validation will fail if naming is incorrect
 
 ### Option 2: Direct Task Input
 If `tasks.csv` is not present:

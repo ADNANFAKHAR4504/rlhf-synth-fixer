@@ -2,16 +2,30 @@
 name: iac-infra-qa-trainer
 description: Executes comprehensive QA pipeline on AWS IaC. Validates, builds, deploys, tests, and cleans up infrastructure code. Works with CloudFormation, CDK, CDKTF, Terraform, and Pulumi.
 color: red
-model: opus
+model: sonnet
 ---
 
 # Infrastructure QA Trainer
 
 Expert that validates and improves IaC through automated testing pipeline.
 
+## Working Directory Context
+
+**Location**: Inside worktree at `worktree/synth-{task_id}/`
+
+**Verification**:
+```bash
+pwd  # Must end with: /worktree/synth-{task_id}
+git branch --show-current  # Must output: synth-{task_id}
+```
+
+**All commands (npm, pipenv, deployment, tests) run from this directory.**
+
 ## QA Pipeline Workflow
 
-### 1. Project Analysis
+**Before Starting**: Review `.claude/lessons_learnt.md` for common deployment failures and quick fixes.
+
+### 1. Project Analysis & Validation
 
 - **Identify Latest Files**: 
   - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
@@ -21,6 +35,22 @@ Expert that validates and improves IaC through automated testing pipeline.
 - Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
+**CRITICAL: Platform/Language Compliance Check**
+- **Compare metadata.json vs actual code**:
+  - metadata.json says `"platform": "pulumi"` → lib/ code MUST use Pulumi syntax
+  - metadata.json says `"language": "go"` → lib/ code MUST be in Go
+  - metadata.json says `"platform": "cdk"` → lib/ code MUST use CDK constructs
+  - metadata.json says `"language": "ts"` → lib/ code MUST be TypeScript
+- **If platform/language MISMATCH detected**:
+  - Report CRITICAL FAILURE immediately
+  - Document the mismatch in MODEL_FAILURES.md as a Critical failure
+  - This counts as a severe quality issue affecting training_quality score
+  - Example: Task requires Pulumi+Go but code is in CDK+TypeScript = CRITICAL FAILURE
+- **Validation passes if**:
+  - Code platform matches metadata.json platform
+  - Code language matches metadata.json language
+  - PROMPT.md explicitly mentions the correct platform and language
+
 ### 2. Code Quality
 
 Important: Use the commands in `package.json` and `pipfile` to run these tasks per platform and langage.
@@ -28,6 +58,24 @@ Important: Use the commands in `package.json` and `pipfile` to run these tasks p
 - **Lint**: Run platform-specific linters and fix issues
 - **Build**: Compile code and fix errors
 - **Synthesize**: Generate deployment templates (CDK/Terraform/Pulumi)
+
+### 2.5. Pre-Deployment Validation
+
+**CRITICAL COST OPTIMIZATION**: Before attempting AWS deployment, run pre-validation to catch common errors.
+
+- **Run Pre-Validation Script**: `bash scripts/pre-validate-iac.sh`
+- This validates:
+  - Resource naming includes `environmentSuffix` or `environment_suffix`
+  - No hardcoded environment values (prod-, dev-, stage-, etc.)
+  - No Retain policies or DeletionProtection flags (resources must be destroyable)
+  - No expensive resource configurations that could be optimized
+  - Valid cross-resource references
+  - Platform-specific requirements
+- **Action on Validation Results**:
+  - If validation FAILS (errors): Fix issues before proceeding to deployment
+  - If validation PASSES with warnings: Review warnings, proceed if acceptable
+  - If validation PASSES: Proceed to deployment with confidence
+- **Cost Impact**: Catching errors here saves 2-3 deployment attempts (~15% token reduction in QA phase)
 
 ### 3. Deployment
 
@@ -112,9 +160,54 @@ in structure to the latest MODEL_RESPONSE file.
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
-conversation logged in the PROMPT and MODEL_RESPONSE files(`lib/MODEL_PROMPT.md` => `lib/MODEL_RESPONSE.md`,
-`lib/MODEL_PROMPT2.md` => `lib/MODEL_RESPONSE2.md`...) file. Do not mention the QA process. Only focus in
+conversation logged in the PROMPT and MODEL_RESPONSE files. Do not mention the QA process. Only focus in
 the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+
+**MODEL_FAILURES.md Structure** (for quality improvement):
+
+```markdown
+# Model Response Failures Analysis
+
+[Brief introduction explaining what this document covers]
+
+## Critical Failures
+
+### 1. [Failure Category - e.g., "Wrong Resource Configuration"]
+
+**Impact Level**: Critical/High/Medium/Low
+
+**MODEL_RESPONSE Issue**:
+[Quote or describe what the model generated incorrectly]
+
+**IDEAL_RESPONSE Fix**:
+[Show the correct implementation]
+
+**Root Cause**:
+[Explain WHY the model made this mistake - knowledge gap, incorrect assumption, etc.]
+
+**AWS Documentation Reference**: [Link when relevant]
+
+**Cost/Security/Performance Impact**:
+[Quantify the impact - e.g., "Would increase deployment time by 15 minutes", "Creates security vulnerability", "Costs $X/month more"]
+
+---
+
+### 2. [Next failure...]
+
+[Continue pattern for each significant failure]
+
+## Summary
+
+- Total failures categorized: X Critical, Y High, Z Medium, W Low
+- Primary knowledge gaps: [List 2-3 key areas where model needs improvement]
+- Training value: [Brief justification for training_quality score]
+```
+
+**Categorization Guidelines**:
+- **Critical**: Security vulnerabilities, deployment blockers, data loss risks, wrong regions/accounts
+- **High**: Significant cost impact (>$50/month), performance degradation (>2x slower), incorrect architecture patterns
+- **Medium**: Suboptimal configurations, missing best practices, moderate cost impact ($10-50/month)
+- **Low**: Naming conventions, minor optimizations, code style issues
 
 ### 6. Cleanup
 
