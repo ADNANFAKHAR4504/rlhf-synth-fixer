@@ -97,7 +97,7 @@ public final class Main {
         String environmentSuffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
 
         // Create encryption resources
-        var kmsResources = createKmsResources(accountId);
+        var kmsResources = createKmsResources(accountId, environmentSuffix);
         var kmsKey = kmsResources.key;
         var kmsAlias = kmsResources.alias;
 
@@ -126,7 +126,7 @@ public final class Main {
                 monitoringResources, accessPolicy);
     }
 
-    private static KmsResources createKmsResources(final Output<String> accountId) {
+    private static KmsResources createKmsResources(final Output<String> accountId, final String environmentSuffix) {
         var kmsKey = new Key("document-kms-key", KeyArgs.builder()
                 .description("KMS key for encrypting legal documents")
                 .enableKeyRotation(true)
@@ -179,7 +179,7 @@ public final class Main {
                 .build());
 
         var kmsAlias = new Alias("document-kms-alias", AliasArgs.builder()
-                .name("alias/legal-documents-key")
+                .name("alias/legal-documents-key-" + environmentSuffix)
                 .targetKeyId(kmsKey.keyId())
                 .build());
 
