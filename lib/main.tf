@@ -70,7 +70,6 @@ data "aws_caller_identity" "current" {}
 # Get available RDS engine versions for PostgreSQL
 data "aws_rds_engine_version" "postgresql" {
   engine = "postgres"
-  preferred_versions = ["15.3", "14.9", "13.12"]  # Use available versions
 }
 
 # KMS KEYS
