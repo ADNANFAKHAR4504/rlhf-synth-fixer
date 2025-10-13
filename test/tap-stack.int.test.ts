@@ -11,24 +11,9 @@ import { GetWebACLCommand, ListResourcesForWebACLCommand, ListWebACLsCommand, WA
 import { ELBv2 } from 'aws-sdk';
 import fs from 'fs';
 
-// Load outputs from actual CloudFormation stack
-let outputs: any;
-try {
-  // Try to get real outputs from deployed stack
-  const { execSync } = require('child_process');
-  const stackName = process.env.STACK_NAME || 'TapStackpr4238';
-  const realOutputs = execSync(`aws cloudformation describe-stacks --stack-name ${stackName} --query 'Stacks[0].Outputs' --output json`, { encoding: 'utf8' });
-  const parsedOutputs = JSON.parse(realOutputs);
-  outputs = {};
-  parsedOutputs.forEach((output: any) => {
-    outputs[output.OutputKey] = output.OutputValue;
-  });
-  console.log('Using real CloudFormation outputs from stack:', stackName);
-} catch (error) {
-  // Fallback to mock data if real stack not available
-  console.log('Using mock data from flat-outputs.json');
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
-}
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
