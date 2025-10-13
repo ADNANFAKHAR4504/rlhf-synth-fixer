@@ -12,7 +12,7 @@ The deployment will occur in us-west-2 and must enforce encryption, compliance a
 
 All infrastructure resources must follow a consistent naming convention beginning with the prefix SecCFN.
 
-Core Implementation Requirements
+Core Implementation Requirements:
 1. IAM and Access Control
 
 Create IAM roles and policies for all services (Lambda, RDS, CloudTrail, AWS Config).
