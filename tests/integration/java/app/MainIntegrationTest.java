@@ -76,7 +76,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - STACK_NAME: The CloudFormation stack name to test
  * - AWS_ACCESS_KEY_ID: AWS access key
  * - AWS_SECRET_ACCESS_KEY: AWS secret key
- * - AWS_REGION: AWS region (default: us-west-2)
+ * - AWS_REGION: AWS region (default: us-east-1)
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class MainIntegrationTest {
@@ -117,7 +117,7 @@ public class MainIntegrationTest {
         // Get AWS credentials from environment variables
         awsAccessKeyId = System.getenv("AWS_ACCESS_KEY_ID");
         awsSecretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY");
-        awsRegion = Optional.ofNullable(System.getenv("AWS_REGION")).orElse("us-west-2");
+        awsRegion = "ap-south-1";
         environmentSuffix = Optional.ofNullable(System.getenv("ENVIRONMENT_SUFFIX")).orElse("dev");
         stackName = Optional.ofNullable(System.getenv("STACK_NAME")).orElse("TapStack" + environmentSuffix);
         
@@ -216,14 +216,14 @@ public class MainIntegrationTest {
                 System.out.println("  " + key + " = " + value)
             );
         }
-        System.out.println("============================\n");
+        System.out.println("\n");
         
         System.out.println("Integration test setup complete for stack: " + stackName);
     }
     
     @AfterAll
     public static void cleanup() {
-        System.out.println("\n=== Starting cleanup ===");
+        System.out.println("\n Starting cleanup");
         
         // Clean up DynamoDB test items
         if (!createdTicketIds.isEmpty() && stackOutputs.containsKey("DynamoDBTableName")) {
