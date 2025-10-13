@@ -437,4 +437,4 @@ This infrastructure provides:
 6. Full encryption at rest and in transit
 7. Public access blocking
 
-All resources follow AWS security best practices and meet compliance requirements for legal document storage.
+All resources follow AWS security best practices and meet compliance requirements for legal document storage
