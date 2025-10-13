@@ -240,19 +240,25 @@ locals {
   }
 
   # Create unique HTTPS ingress rules per VPC to avoid duplicates
+  # For each peering pair, create two rules: one for each direction
   https_ingress_rules = flatten([
-    for vpc_idx in range(var.vpc_count) : [
-      for pair in local.peering_pairs : {
-        vpc_index   = vpc_idx
+    for pair in local.peering_pairs : [
+      # Rule for accepter VPC to allow traffic from requester VPC
+      {
+        vpc_index   = pair.accepter_vpc_index
         source_cidr = local.vpc_cidrs[pair.requester_vpc_index]
         source_idx  = pair.requester_vpc_index
+      },
+      # Rule for requester VPC to allow traffic from accepter VPC
+      {
+        vpc_index   = pair.requester_vpc_index
+        source_cidr = local.vpc_cidrs[pair.accepter_vpc_index]
+        source_idx  = pair.accepter_vpc_index
       }
-      # Only include rules where this VPC is either requester or accepter
-      if vpc_idx == pair.requester_vpc_index || vpc_idx == pair.accepter_vpc_index
     ]
   ])
 
-  # Remove duplicates by creating a unique key
+  # Create unique map with vpc_index and source_cidr as key
   https_ingress_unique = {
     for rule in local.https_ingress_rules :
     "${rule.vpc_index}-${rule.source_cidr}" => rule
