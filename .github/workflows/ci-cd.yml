@@ -893,12 +893,6 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      # - name: Validate PAT usage context
-      #   run: |
-      #     if [ "${{ github.event_name }}" != "push" ] || [ "${{ github.ref }}" != "refs/heads/main" ]; then
-      #       echo "ERROR: PAT should only be used for semantic-release on main branch"
-      #       exit 1
-      #     fi
       - name: Checkout code
         uses: actions/checkout@v4
         with:
