@@ -200,7 +200,7 @@ describe('TAP Stack Unit Tests - Comprehensive Coverage', () => {
 
     test('should create DynamoDB table for delivery tracking', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: 'email-delivery-tracking-test',
+        TableName: 'email-delivery-tracking-test-temp',
         BillingMode: 'PAY_PER_REQUEST'
       });
     });
