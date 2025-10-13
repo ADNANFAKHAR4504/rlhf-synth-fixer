@@ -16,79 +16,92 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
+export class TapStack extends Construct {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: {
+      stackName?: string;
+      environmentSuffix?: string;
+      env?: { account?: string; region?: string };
+    },
+  ) {
+    super(scope, id);
 
-export class TapStack extends cdk.Stack {
-  private readonly stringSuffix: string;
-  public readonly environment: 'primary' | 'secondary';
-  private readonly domainName: string;
-  private readonly notificationEmail: string;
+    // Use account from props if available
+    const account = props?.env?.account || process.env.CDK_DEFAULT_ACCOUNT;
 
-  public readonly vpcId: string;
-  public readonly elbDnsName: string;
-  public readonly rdsEndpoint: string;
-  public readonly publicSubnetIds: string[];
-  public readonly privateSubnetIds: string[];
-  public readonly securityGroupIds: string[];
-  public readonly instanceIds: cdk.CfnOutput;
+    // Create primary stack (us-east-1)
+    const primaryEnv: cdk.Environment = {
+      region: 'us-east-1',
+      ...(account && { account }),
+    };
+    const primaryStack = new cdk.Stack(this, 'PrimaryStack', {
+      env: primaryEnv,
+    });
+    this.createResources(primaryStack, 'primary');
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    // Create secondary stack (us-west-2)
+    const secondaryEnv: cdk.Environment = {
+      region: 'us-west-2',
+      ...(account && { account }),
+    };
+    const secondaryStack = new cdk.Stack(this, 'SecondaryStack', {
+      env: secondaryEnv,
+    });
+    this.createResources(secondaryStack, 'secondary');
+  }
 
-    // Determine environment based on region
-    const region = cdk.Stack.of(this).region;
-    this.environment = region === 'us-east-1' ? 'primary' : 'secondary';
-    this.domainName = this.node.tryGetContext('domainName') || 'example.com';
-    this.notificationEmail =
-      this.node.tryGetContext('notificationEmail') || 'ops@example.com';
+  private createResources(
+    stack: cdk.Stack,
+    environment: 'primary' | 'secondary'
+  ) {
+    const region = stack.region;
+    const domainName = stack.node.tryGetContext('domainName') || 'example.com';
+    const notificationEmail =
+      stack.node.tryGetContext('notificationEmail') || 'ops@example.com';
 
     // Generate unique string suffix for resource naming
-    this.stringSuffix = `${this.environment}-${region}`;
+    const stringSuffix = `${environment}-${region}`;
 
     // Create KMS Key for encryption
-    const kmsKey = new kms.Key(this, 'EncryptionKey', {
+    const kmsKey = new kms.Key(stack, 'EncryptionKey', {
       description: 'KMS key for encrypting all data at rest',
-      alias: `prod-encryption-key-${this.stringSuffix}`,
+      alias: `prod-encryption-key-${stringSuffix}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Create VPC
-    const vpc = new ec2.Vpc(this, 'AppVpc', {
-      vpcName: `prod-app-vpc-${this.stringSuffix}`,
+    const vpc = new ec2.Vpc(stack, 'AppVpc', {
+      vpcName: `prod-app-vpc-${stringSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
       natGateways: 2,
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: `prod-public-subnet-${this.stringSuffix}`,
+          name: `prod-public-subnet-${stringSuffix}`,
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: `prod-private-subnet-${this.stringSuffix}`,
+          name: `prod-private-subnet-${stringSuffix}`,
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
     });
 
-    this.vpcId = vpc.vpcId;
-    this.publicSubnetIds = vpc.publicSubnets.map(subnet => subnet.subnetId);
-    this.privateSubnetIds = vpc.privateSubnets.map(subnet => subnet.subnetId);
-
     // Create Network ACLs
-    const publicNacl = new ec2.NetworkAcl(this, 'PublicNacl', {
+    const publicNacl = new ec2.NetworkAcl(stack, 'PublicNacl', {
       vpc,
-      networkAclName: `prod-public-nacl-${this.stringSuffix}`,
+      networkAclName: `prod-public-nacl-${stringSuffix}`,
     });
 
     // Associate NACLs with subnets
     vpc.publicSubnets.forEach((subnet, index) => {
       new ec2.SubnetNetworkAclAssociation(
-        this,
+        stack,
         `PublicNaclAssociation${index}`,
         {
           subnet,
@@ -131,9 +144,9 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create Security Groups
-    const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
+    const albSecurityGroup = new ec2.SecurityGroup(stack, 'AlbSecurityGroup', {
       vpc,
-      securityGroupName: `prod-alb-sg-${this.stringSuffix}`,
+      securityGroupName: `prod-alb-sg-${stringSuffix}`,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: true,
     });
@@ -151,11 +164,11 @@ export class TapStack extends cdk.Stack {
     );
 
     const webServerSecurityGroup = new ec2.SecurityGroup(
-      this,
+      stack,
       'WebServerSecurityGroup',
       {
         vpc,
-        securityGroupName: `prod-webserver-sg-${this.stringSuffix}`,
+        securityGroupName: `prod-webserver-sg-${stringSuffix}`,
         description: 'Security group for web servers',
         allowAllOutbound: true,
       }
@@ -167,9 +180,9 @@ export class TapStack extends cdk.Stack {
       'Allow traffic from ALB'
     );
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+    const rdsSecurityGroup = new ec2.SecurityGroup(stack, 'RdsSecurityGroup', {
       vpc,
-      securityGroupName: `prod-rds-sg-${this.stringSuffix}`,
+      securityGroupName: `prod-rds-sg-${stringSuffix}`,
       description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
@@ -180,15 +193,9 @@ export class TapStack extends cdk.Stack {
       'Allow MySQL traffic from web servers'
     );
 
-    this.securityGroupIds = [
-      albSecurityGroup.securityGroupId,
-      webServerSecurityGroup.securityGroupId,
-      rdsSecurityGroup.securityGroupId,
-    ];
-
     // Create S3 bucket for logs
-    const logBucket = new s3.Bucket(this, 'LogBucket', {
-      bucketName: `prod-app-logs-${this.stringSuffix}`.toLowerCase(),
+    const logBucket = new s3.Bucket(stack, 'LogBucket', {
+      bucketName: `prod-app-logs-${stringSuffix}`.toLowerCase(),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -210,8 +217,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create IAM role for EC2 instances
-    const ec2Role = new iam.Role(this, 'Ec2Role', {
-      roleName: `prod-ec2-role-${this.stringSuffix}`,
+    const ec2Role = new iam.Role(stack, 'Ec2Role', {
+      roleName: `prod-ec2-role-${stringSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -224,38 +231,36 @@ export class TapStack extends cdk.Stack {
     logBucket.grantWrite(ec2Role);
 
     // Create CloudWatch Log Group
-    const logGroup = new logs.LogGroup(this, 'AppLogGroup', {
-      logGroupName: `/aws/ec2/prod-app-${this.stringSuffix}`,
+    const logGroup = new logs.LogGroup(stack, 'AppLogGroup', {
+      logGroupName: `/aws/ec2/prod-app-${stringSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     // Create SNS Topic for notifications
-    const snsTopic = new sns.Topic(this, 'AlarmTopic', {
-      topicName: `prod-alarm-topic-${this.stringSuffix}`,
+    const snsTopic = new sns.Topic(stack, 'AlarmTopic', {
+      topicName: `prod-alarm-topic-${stringSuffix}`,
       masterKey: kmsKey,
     });
 
     snsTopic.addSubscription(
-      new sns_subscriptions.EmailSubscription(this.notificationEmail)
+      new sns_subscriptions.EmailSubscription(notificationEmail)
     );
 
     // Create Application Load Balancer
-    const alb = new elbv2.ApplicationLoadBalancer(this, 'AppLoadBalancer', {
+    const alb = new elbv2.ApplicationLoadBalancer(stack, 'AppLoadBalancer', {
       vpc,
-      loadBalancerName: `prod-alb-${this.stringSuffix}`,
+      loadBalancerName: `prod-alb-${stringSuffix}`,
       internetFacing: true,
       securityGroup: albSecurityGroup,
       crossZoneEnabled: true,
     });
 
-    this.elbDnsName = alb.loadBalancerDnsName;
-
     // Create Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
+    const targetGroup = new elbv2.ApplicationTargetGroup(stack, 'TargetGroup', {
       vpc,
-      targetGroupName: `prod-tg-${this.stringSuffix}`,
+      targetGroupName: `prod-tg-${stringSuffix}`,
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.INSTANCE,
@@ -273,9 +278,9 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create ACM Certificate for HTTPS
-    const certificate = new acm.Certificate(this, 'Certificate', {
-      domainName: this.domainName,
-      subjectAlternativeNames: [`*.${this.domainName}`],
+    const certificate = new acm.Certificate(stack, 'Certificate', {
+      domainName: domainName,
+      subjectAlternativeNames: [`*.${domainName}`],
       validation: acm.CertificateValidation.fromDns(),
     });
 
@@ -336,8 +341,8 @@ EOF`,
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
-    const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
-      launchTemplateName: `prod-lt-${this.stringSuffix}`,
+    const launchTemplate = new ec2.LaunchTemplate(stack, 'LaunchTemplate', {
+      launchTemplateName: `prod-lt-${stringSuffix}`,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
@@ -362,11 +367,11 @@ EOF`,
 
     // Create Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
-      this,
+      stack,
       'AutoScalingGroup',
       {
         vpc,
-        autoScalingGroupName: `prod-asg-${this.stringSuffix}`,
+        autoScalingGroupName: `prod-asg-${stringSuffix}`,
         launchTemplate: launchTemplate,
         minCapacity: 2,
         maxCapacity: 6,
@@ -392,9 +397,9 @@ EOF`,
     });
 
     // Create RDS subnet group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
+    const dbSubnetGroup = new rds.SubnetGroup(stack, 'DbSubnetGroup', {
       vpc,
-      subnetGroupName: `prod-db-subnet-group-${this.stringSuffix}`,
+      subnetGroupName: `prod-db-subnet-group-${stringSuffix}`,
       description: 'Subnet group for RDS database',
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -403,8 +408,8 @@ EOF`,
     });
 
     // Create RDS instance with deletionProtection set to false
-    const rdsInstance = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `prod-mysql-db-${this.stringSuffix}`,
+    const rdsInstance = new rds.DatabaseInstance(stack, 'Database', {
+      instanceIdentifier: `prod-mysql-db-${stringSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
@@ -430,11 +435,9 @@ EOF`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    this.rdsEndpoint = rdsInstance.instanceEndpoint.socketAddress;
-
     // Create CloudWatch Alarms
-    const cpuAlarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
-      alarmName: `prod-high-cpu-${this.stringSuffix}`,
+    const cpuAlarm = new cloudwatch.Alarm(stack, 'HighCpuAlarm', {
+      alarmName: `prod-high-cpu-${stringSuffix}`,
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
         metricName: 'CPUUtilization',
@@ -452,10 +455,10 @@ EOF`,
     cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(snsTopic));
 
     const rdsConnectionAlarm = new cloudwatch.Alarm(
-      this,
+      stack,
       'RdsConnectionAlarm',
       {
-        alarmName: `prod-rds-connections-${this.stringSuffix}`,
+        alarmName: `prod-rds-connections-${stringSuffix}`,
         metric: rdsInstance.metricDatabaseConnections(),
         threshold: 80,
         evaluationPeriods: 2,
@@ -468,10 +471,10 @@ EOF`,
     );
 
     const albHealthyHostsAlarm = new cloudwatch.Alarm(
-      this,
+      stack,
       'UnhealthyHostsAlarm',
       {
-        alarmName: `prod-unhealthy-hosts-${this.stringSuffix}`,
+        alarmName: `prod-unhealthy-hosts-${stringSuffix}`,
         metric: targetGroup.metricHealthyHostCount(),
         threshold: 1,
         comparisonOperator:
@@ -486,15 +489,14 @@ EOF`,
     );
 
     // Create Route 53 resources
-    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-      domainName: this.domainName,
+    const hostedZone = route53.HostedZone.fromLookup(stack, 'HostedZone', {
+      domainName: domainName,
     });
 
     // Create Route 53 record
-    new route53.ARecord(this, 'AppRecord', {
+    new route53.ARecord(stack, 'AppRecord', {
       zone: hostedZone,
-      recordName:
-        this.environment === 'primary' ? 'app' : `app-${this.environment}`,
+      recordName: environment === 'primary' ? 'app' : `app-${environment}`,
       target: route53.RecordTarget.fromAlias(
         new route53_targets.LoadBalancerTarget(alb)
       ),
@@ -502,8 +504,8 @@ EOF`,
 
     // Create CloudWatch Dashboard
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const dashboard = new cloudwatch.Dashboard(this, 'MonitoringDashboard', {
-      dashboardName: `prod-monitoring-${this.stringSuffix}`,
+    const dashboard = new cloudwatch.Dashboard(stack, 'MonitoringDashboard', {
+      dashboardName: `prod-monitoring-${stringSuffix}`,
       widgets: [
         [
           new cloudwatch.GraphWidget({
@@ -542,58 +544,62 @@ EOF`,
     });
 
     // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
+    new cdk.CfnOutput(stack, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
-      exportName: `${this.stackName}-vpc-id`,
+      exportName: `${stack.stackName}-vpc-id`,
     });
 
-    new cdk.CfnOutput(this, 'ElbDnsName', {
+    new cdk.CfnOutput(stack, 'ElbDnsName', {
       value: alb.loadBalancerDnsName,
       description: 'Load Balancer DNS Name',
-      exportName: `${this.stackName}-elb-dns`,
+      exportName: `${stack.stackName}-elb-dns`,
     });
 
-    new cdk.CfnOutput(this, 'RdsEndpoint', {
+    new cdk.CfnOutput(stack, 'RdsEndpoint', {
       value: rdsInstance.instanceEndpoint.socketAddress,
       description: 'RDS Endpoint',
-      exportName: `${this.stackName}-rds-endpoint`,
+      exportName: `${stack.stackName}-rds-endpoint`,
     });
 
-    new cdk.CfnOutput(this, 'PublicSubnetIds', {
+    new cdk.CfnOutput(stack, 'PublicSubnetIds', {
       value: vpc.publicSubnets.map(s => s.subnetId).join(','),
       description: 'Public Subnet IDs',
-      exportName: `${this.stackName}-public-subnets`,
+      exportName: `${stack.stackName}-public-subnets`,
     });
 
-    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+    new cdk.CfnOutput(stack, 'PrivateSubnetIds', {
       value: vpc.privateSubnets.map(s => s.subnetId).join(','),
       description: 'Private Subnet IDs',
-      exportName: `${this.stackName}-private-subnets`,
+      exportName: `${stack.stackName}-private-subnets`,
     });
 
-    new cdk.CfnOutput(this, 'SecurityGroupIds', {
-      value: this.securityGroupIds.join(','),
+    new cdk.CfnOutput(stack, 'SecurityGroupIds', {
+      value: [
+        albSecurityGroup.securityGroupId,
+        webServerSecurityGroup.securityGroupId,
+        rdsSecurityGroup.securityGroupId,
+      ].join(','),
       description: 'Security Group IDs (ALB, WebServer, RDS)',
-      exportName: `${this.stackName}-security-groups`,
+      exportName: `${stack.stackName}-security-groups`,
     });
 
-    this.instanceIds = new cdk.CfnOutput(this, 'AutoScalingGroupName', {
+    new cdk.CfnOutput(stack, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
       description: 'Auto Scaling Group Name (use to query instance IDs)',
-      exportName: `${this.stackName}-asg-name`,
+      exportName: `${stack.stackName}-asg-name`,
     });
 
-    new cdk.CfnOutput(this, 'LogBucketName', {
+    new cdk.CfnOutput(stack, 'LogBucketName', {
       value: logBucket.bucketName,
       description: 'S3 Bucket for Application Logs',
-      exportName: `${this.stackName}-log-bucket`,
+      exportName: `${stack.stackName}-log-bucket`,
     });
 
-    new cdk.CfnOutput(this, 'KmsKeyId', {
+    new cdk.CfnOutput(stack, 'KmsKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for Encryption',
-      exportName: `${this.stackName}-kms-key`,
+      exportName: `${stack.stackName}-kms-key`,
     });
   }
 }
