@@ -19,9 +19,8 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const primaryRegion = 'ap-southeast-1';
     // Note: For multi-region deployment, create separate stacks per region
-    // This stack deploys only to the primary region
+    // This stack deploys only to the primary region (ap-southeast-1)
 
     // Primary Region Infrastructure
     const primaryNetwork = new NetworkStack(this, 'PrimaryNetwork', {

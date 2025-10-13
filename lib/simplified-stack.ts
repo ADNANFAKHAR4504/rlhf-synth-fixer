@@ -19,7 +19,10 @@ export class SimplifiedStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: SimplifiedStackProps) {
     super(scope, id, props);
 
-    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
     // Network
     const vpc = new ec2.Vpc(this, 'VPC', {
@@ -174,20 +177,21 @@ export class SimplifiedStack extends cdk.Stack {
     fileSystem.connections.allowDefaultPortFrom(service);
 
     // Cache
-    const cacheSubnetGroup = new elasticache.CfnSubnetGroup(this, 'CacheSubnetGroup', {
-      description: 'Cache subnet group',
-      subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
-    });
+    const cacheSubnetGroup = new elasticache.CfnSubnetGroup(
+      this,
+      'CacheSubnetGroup',
+      {
+        description: 'Cache subnet group',
+        subnetIds: vpc.privateSubnets.map(subnet => subnet.subnetId),
+      }
+    );
 
     const cacheSG = new ec2.SecurityGroup(this, 'CacheSG', {
       vpc: vpc,
       allowAllOutbound: false,
     });
 
-    cacheSG.addIngressRule(
-      ec2.Peer.ipv4(vpc.vpcCidrBlock),
-      ec2.Port.tcp(6379),
-    );
+    cacheSG.addIngressRule(ec2.Peer.ipv4(vpc.vpcCidrBlock), ec2.Port.tcp(6379));
 
     new elasticache.CfnReplicationGroup(this, 'Cache', {
       replicationGroupId: `cache-${environmentSuffix}`,
