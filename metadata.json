@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-10-08T21:15:30+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "training_quality": 8,
   "aws_services": [
     "S3",
