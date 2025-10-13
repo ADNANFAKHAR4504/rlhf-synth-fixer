@@ -1,0 +1,824 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Complete production-ready network infrastructure (VPC, subnets, IGW, NATGW, EC2, ASG, CloudWatch, IAM, S3) Deployable only in us-west-2 for compliance and architectural consistency.\n",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Network Configuration (us-west-2)"
+                    },
+                    "Parameters": [
+                        "VpcCidr",
+                        "PublicSubnetACidr",
+                        "PublicSubnetBCidr",
+                        "PrivateSubnetACidr",
+                        "PrivateSubnetBCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "AmiId",
+                        "InstanceType",
+                        "SshCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Scaling Configuration"
+                    },
+                    "Parameters": [
+                        "AsgMinSize",
+                        "AsgDesiredCapacity",
+                        "AsgMaxSize"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "VpcCidr": {
+                    "default": "VPC CIDR"
+                },
+                "AmiId": {
+                    "default": "AMI (Amazon Linux 2)"
+                },
+                "InstanceType": {
+                    "default": "Instance Type"
+                },
+                "SshCidr": {
+                    "default": "SSH Source CIDR"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16"
+        },
+        "PublicSubnetACidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24"
+        },
+        "PublicSubnetBCidr": {
+            "Type": "String",
+            "Default": "10.0.2.0/24"
+        },
+        "PrivateSubnetACidr": {
+            "Type": "String",
+            "Default": "10.0.11.0/24"
+        },
+        "PrivateSubnetBCidr": {
+            "Type": "String",
+            "Default": "10.0.12.0/24"
+        },
+        "AmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t2.micro",
+            "AllowedValues": [
+                "t2.micro",
+                "t3.micro",
+                "t3a.micro"
+            ]
+        },
+        "SshCidr": {
+            "Type": "String",
+            "Default": "203.0.113.0/24"
+        },
+        "AsgMinSize": {
+            "Type": "Number",
+            "Default": 2
+        },
+        "AsgDesiredCapacity": {
+            "Type": "Number",
+            "Default": 2
+        },
+        "AsgMaxSize": {
+            "Type": "Number",
+            "Default": 4
+        }
+    },
+    "Conditions": {
+        "IsUsWest2": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-2"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-VPC"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-IGW"
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": "us-west-2"
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetACidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Public-A"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "public"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": "us-west-2"
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnetBCidr"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Public-B"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "public"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": "us-west-2"
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetACidr"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-A"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "private"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": "us-west-2"
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnetBCidr"
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-B"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "private"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Public-RT"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            },
+            "DependsOn": "VPCGatewayAttachment"
+        },
+        "PublicSubnetAAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetBAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "NatEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-NAT-EIP"
+                    }
+                ]
+            }
+        },
+        "NatGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-NATGW"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableA": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-RT-A"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableB": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-RT-B"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteA": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway"
+                }
+            }
+        },
+        "PrivateRouteB": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway"
+                }
+            }
+        },
+        "PrivateAssocA": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                }
+            }
+        },
+        "PrivateAssocB": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                }
+            }
+        },
+        "InstanceSG": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "GroupDescription": "Allow SSH only from a specific CIDR",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "SshCidr"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Instance-SG"
+                    }
+                ]
+            }
+        },
+        "AppBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tapstack-app-bucket-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "Ec2Role": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${AppBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "s3:ListBucket",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${AppBucket}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ]
+            }
+        },
+        "InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "Ec2Role"
+                    }
+                ]
+            }
+        },
+        "PrivateInstanceA": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "InstanceProfile"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetA"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "InstanceSG"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-Instance-A"
+                    }
+                ]
+            }
+        },
+        "PrivateInstanceB": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "AmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "InstanceProfile"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnetB"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "InstanceSG"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-Private-Instance-B"
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "LaunchTemplateName": "TapStack-LaunchTemplate",
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "AmiId"
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Name": {
+                            "Ref": "InstanceProfile"
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "InstanceSG"
+                        }
+                    ],
+                    "Monitoring": {
+                        "Enabled": true
+                    }
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnetA"
+                    },
+                    {
+                        "Ref": "PrivateSubnetB"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": {
+                    "Ref": "AsgMinSize"
+                },
+                "MaxSize": {
+                    "Ref": "AsgMaxSize"
+                },
+                "DesiredCapacity": {
+                    "Ref": "AsgDesiredCapacity"
+                },
+                "HealthCheckType": "EC2",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapStack-ASG-Instance",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScaleOutPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "SimpleScaling",
+                "AdjustmentType": "ChangeInCapacity",
+                "ScalingAdjustment": 1,
+                "Cooldown": 180
+            }
+        },
+        "ScaleInPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "SimpleScaling",
+                "AdjustmentType": "ChangeInCapacity",
+                "ScalingAdjustment": -1,
+                "Cooldown": 300
+            }
+        },
+        "CPUHighAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AlarmDescription": "Scale out when average CPU >= 70%",
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleOutPolicy"
+                    }
+                ]
+            }
+        },
+        "CPULowAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsUsWest2",
+            "Properties": {
+                "AlarmDescription": "Scale in when average CPU <= 30%",
+                "Namespace": "AWS/EC2",
+                "MetricName": "CPUUtilization",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 60,
+                "EvaluationPeriods": 4,
+                "Threshold": 30,
+                "ComparisonOperator": "LessThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleInPolicy"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "RegionCheck": {
+            "Description": "Ensures deployment in us-west-2 only.",
+            "Value": {
+                "Fn::If": [
+                    "IsUsWest2",
+                    "Valid region (us-west-2)",
+                    "ERROR: This stack must be deployed in us-west-2"
+                ]
+            }
+        },
+        "VpcId": {
+            "Condition": "IsUsWest2",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Description": "ID of created VPC"
+        },
+        "NatGatewayId": {
+            "Condition": "IsUsWest2",
+            "Value": {
+                "Ref": "NatGateway"
+            },
+            "Description": "NAT Gateway ID"
+        },
+        "PrivateSubnets": {
+            "Condition": "IsUsWest2",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnetA"
+                        },
+                        {
+                            "Ref": "PrivateSubnetB"
+                        }
+                    ]
+                ]
+            },
+            "Description": "Private subnet IDs"
+        },
+        "AutoScalingGroupName": {
+            "Condition": "IsUsWest2",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Description": "Auto Scaling Group Name"
+        }
+    }
+}
