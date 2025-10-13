@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349553",
+  "team": "6",
+  "startedAt": "2025-10-13T08:09:55.955Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "(VPC, Subnets, Internet Gateway, NAT Gateway, Route Tables, Security Groups, Network ACLs, S3 Bucket)"
+}
