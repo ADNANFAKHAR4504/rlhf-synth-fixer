@@ -34,7 +34,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -310,10 +310,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
                       "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -431,10 +431,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
                       "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -548,10 +548,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*"
                     },
                     {
                       "Fn::Sub": "arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -1100,7 +1100,7 @@
                     "s3:GetBucketNotification"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                    "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
                   }
                 }
               ]
@@ -1121,7 +1121,7 @@
           "Ref": "AWS::AccountId"
         },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}"
         }
       }
     },

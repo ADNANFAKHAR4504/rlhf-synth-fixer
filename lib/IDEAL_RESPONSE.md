@@ -38,7 +38,7 @@ Resources:
   TransactionDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -196,8 +196,8 @@ Resources:
                   - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
         - PolicyName: DynamoDBAccess
@@ -256,8 +256,8 @@ Resources:
                   - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
@@ -315,8 +315,8 @@ Resources:
                   - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}/*'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::processeddata-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
@@ -801,7 +801,7 @@ Resources:
                 Action:
                   - s3:PutBucketNotification
                   - s3:GetBucketNotification
-                Resource: !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
+                Resource: !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
 
   S3InvokeLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -810,7 +810,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub 'arn:aws:s3:::transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      SourceArn: !Sub 'arn:aws:s3:::transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
 
   S3BucketNotification:
     Type: Custom::S3BucketNotification

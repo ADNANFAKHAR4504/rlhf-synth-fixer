@@ -38,7 +38,7 @@ Resources:
   TransactionDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

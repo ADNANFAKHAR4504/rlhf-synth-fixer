@@ -59,7 +59,7 @@ describe('Batch Processing CloudFormation Template', () => {
       const bucket = template.Resources.TransactionDataBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'transaction-data-${EnvironmentSuffix}-${AWS::AccountId}'
+        'Fn::Sub': 'transactiondata-${EnvironmentSuffix}-${AWS::AccountId}'
       });
     });
 
