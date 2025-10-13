@@ -1,15 +1,15 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { ApiStack } from './api-stack';
+import { CacheStack } from './cache-stack';
+import { ComputeStack } from './compute-stack';
+import { DatabaseStack } from './database-stack';
 import { KmsStack } from './kms-stack';
+import { MonitoringStack } from './monitoring-stack';
 import { NetworkStack } from './network-stack';
 import { SecretsStack } from './secrets-stack';
-import { DatabaseStack } from './database-stack';
-import { CacheStack } from './cache-stack';
 import { StorageStack } from './storage-stack';
-import { ComputeStack } from './compute-stack';
-import { ApiStack } from './api-stack';
 import { StreamingStack } from './streaming-stack';
-import { MonitoringStack } from './monitoring-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;

@@ -1,15 +1,15 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 interface ApiStackProps {
   environmentSuffix: string;
   vpc: ec2.Vpc;
-  vpcLink: cdk.CfnResource;
+  vpcLink: apigateway.VpcLink;
   loadBalancer: elbv2.ApplicationLoadBalancer;
 }
 
@@ -73,11 +73,7 @@ export class ApiStack extends Construct {
       uri: `http://${props.loadBalancer.loadBalancerDnsName}`,
       options: {
         connectionType: apigateway.ConnectionType.VPC_LINK,
-        vpcLink: apigateway.VpcLink.fromVpcLinkId(
-          this,
-          'ImportedVpcLink',
-          props.vpcLink.ref
-        ),
+        vpcLink: props.vpcLink,
         requestParameters: {
           'integration.request.path.proxy': 'method.request.path.proxy',
         },
