@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade secure infrastructure stack with comprehensive compliance controls'
 
-
 Parameters:
   StackName:
     Type: String
@@ -21,24 +20,10 @@ Parameters:
     Description: 'Database administrator username'
     MaxLength: 16
 
-
-
-
   TrustedCIDR:
     Type: String
     Default: '0.0.0.0/0'
     Description: 'CIDR block allowed to access bastion host (restrict in production)'
-
-  DBSubnetGroupName:
-    Type: String
-    Default: 'default-db-subnet-group'
-    Description: 'Name of DB subnet group for RDS database'
-
-
-  CloudTrailName:
-    Type: String
-    Default: 'default-cloudtrail'
-    Description: 'Name of CloudTrail to use'
 
   DBEngine:
     Type: String
@@ -59,7 +44,6 @@ Parameters:
     Type: String
     Default: 'default-lambda-function'
     Description: 'Name of the Lambda function'
-
 
 Mappings:
   EnvironmentMap:
@@ -851,6 +835,20 @@ Resources:
   # RDS DATABASE (Constraints 4, 5)
   # =============================================
 
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'DB subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub '${StackName}-db-subnet-group'
+        - Key: Environment
+          Value: !Ref Environment
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -864,7 +862,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: alias/aws/rds
       MultiAZ: true
-      DBSubnetGroupName: !Ref DBSubnetGroupName
+      DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       MasterUsername: !Ref DBUsername
@@ -1019,7 +1017,7 @@ Resources:
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Ref CloudTrailName
+      TrailName: !Sub '${StackName}-cloudtrail'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -1030,7 +1028,7 @@ Resources:
           IncludeManagementEvents: true
       Tags:
         - Key: Name
-          Value: !Ref CloudTrailName
+          Value: !Sub '${StackName}-cloudtrail'
         - Key: Environment
           Value: !Ref Environment
 
@@ -1269,7 +1267,7 @@ Outputs:
 
   CloudTrailName:
     Description: 'Name of the CloudTrail being used'
-    Value: !Ref CloudTrailName
+    Value: !Ref CloudTrailTrail
 
   RDSEndpoint:
     Description: 'Endpoint of the RDS instance'
