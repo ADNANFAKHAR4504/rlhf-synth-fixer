@@ -1,4 +1,5 @@
 ```yml
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'SecureEnv - Foundational secure AWS environment for sensitive workloads'
 
