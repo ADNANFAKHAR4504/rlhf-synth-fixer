@@ -11,6 +11,9 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Determine region based on environment suffix
+const region = environmentSuffix === 'secondary' ? 'us-west-2' : 'us-east-1';
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
@@ -22,6 +25,6 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
+    region: region,
   },
 });
