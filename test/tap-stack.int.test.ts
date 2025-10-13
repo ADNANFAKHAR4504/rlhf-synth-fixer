@@ -478,7 +478,7 @@ describe("TapStack Infrastructure Integration Tests", () => {
       expect(VpcEndpoints?.length).toBeGreaterThanOrEqual(1);
       
       const s3Endpoint = VpcEndpoints![0];
-      expect(s3Endpoint.State).toBe("Available");
+      expect(s3Endpoint.State).toBe("available");
       expect(s3Endpoint.VpcEndpointType).toBe("Gateway");
       
       // Check tags
