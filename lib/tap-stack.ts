@@ -22,7 +22,7 @@ import {
   CloudWatchAlarm,
   NotificationTopic,
   CostBudget,
-  AuditTrail,
+  //AuditTrail,
   IamRoleConstruct,
   MfaEnforcementPolicy,
 } from './modules';
@@ -334,15 +334,15 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // Create CloudTrail for audit logging
-    const auditTrail = new AuditTrail(
-      this,
-      'audit-trail',
-      `${id}-${environmentSuffix}`,
-      current.accountId,
-      kmsModule.keyArn,
-      commonTags
-    );
+    // // Create CloudTrail for audit logging
+    // const auditTrail = new AuditTrail(
+    //   this,
+    //   'audit-trail',
+    //   `${id}-${environmentSuffix}`,
+    //   current.accountId,
+    //   kmsModule.keyArn,
+    //   commonTags
+    // );
 
     // Create CloudWatch Log Groups
     new CloudWatchLogGroup(
@@ -449,9 +449,9 @@ export class TapStack extends TerraformStack {
       description: 'SNS topic ARN for notifications',
     });
 
-    new TerraformOutput(this, 'cloudtrail-s3-bucket', {
-      value: auditTrail.bucket.bucket.bucket,
-      description: 'S3 bucket for CloudTrail logs',
-    });
+    // new TerraformOutput(this, 'cloudtrail-s3-bucket', {
+    //   value: auditTrail.bucket.bucket.bucket,
+    //   description: 'S3 bucket for CloudTrail logs',
+    // });
   }
 }
