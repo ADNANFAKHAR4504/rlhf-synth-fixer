@@ -993,9 +993,6 @@ def handler(event, context):
             "transaction-api",
             name=f"transaction-ingestion-api-{environment}",
             description="API for ingesting financial transactions",
-            endpoint_configuration={
-                "types": ["REGIONAL"]
-            },
             tags=default_tags,
             opts=ResourceOptions(parent=self)
         )
@@ -1064,9 +1061,9 @@ def handler(event, context):
             rest_api=api.id,
             deployment=api_deployment.id,
             stage_name=environment,
-            access_log_settings=aws.apigateway.StageAccessLogSettingsArgs(
-                destination_arn=api_log_group.arn,
-                format=json.dumps({
+            access_log_settings={
+                "destination_arn": api_log_group.arn,
+                "format": json.dumps({
                     "requestId": "$context.requestId",
                     "ip": "$context.identity.sourceIp",
                     "caller": "$context.identity.caller",
@@ -1078,7 +1075,7 @@ def handler(event, context):
                     "protocol": "$context.protocol",
                     "responseLength": "$context.responseLength"
                 })
-            ),
+            },
             xray_tracing_enabled=True,
             tags=default_tags,
             opts=ResourceOptions(parent=self)
