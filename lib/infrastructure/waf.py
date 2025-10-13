@@ -42,8 +42,8 @@ class WAFStack:
         self.api_gateway_stack = api_gateway_stack
         self.opts = opts or ResourceOptions()
         
-        # Create WAF Web ACL
-        self.web_acl = self._create_web_acl()
+        # Create WAF resources
+        self.ip_set, self.rate_based_rule, self.web_acl = self._create_web_acl()
     
     def _create_web_acl(self):
         """Create WAF Web ACL with security rules."""
@@ -71,7 +71,7 @@ class WAFStack:
             opts=ResourceOptions(parent=self.opts.parent, provider=self.opts.provider)
         )
         
-        # Create Web ACL
+        # Create Web ACL with explicit dependency on IP set
         web_acl = aws.wafv2.WebAcl(
             web_acl_name,
             name=web_acl_name,
@@ -104,10 +104,14 @@ class WAFStack:
                 )
             ],
             tags=self.config.tags,
-            opts=ResourceOptions(parent=self.opts.parent, provider=self.opts.provider)
+            opts=ResourceOptions(
+                parent=self.opts.parent, 
+                provider=self.opts.provider,
+                depends_on=[ip_set]  # Explicit dependency to ensure proper deletion order
+            )
         )
         
-        return web_acl
+        return ip_set, rate_based_rule, web_acl
     
     def _create_api_gateway_association(self):
         """Create API Gateway association with proper ARN construction."""
