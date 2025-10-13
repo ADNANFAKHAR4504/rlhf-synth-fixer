@@ -1608,7 +1608,6 @@ output "website_url" {
 ```
 
 ```hcl
-
 # provider.tf
 
 terraform {
@@ -1629,5 +1628,4 @@ terraform {
 provider "aws" {
   region = var.region
 }
-
 ```
