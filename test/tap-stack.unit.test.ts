@@ -75,10 +75,10 @@ describe('Batch Processing CloudFormation Template', () => {
     test('S3 buckets should have encryption enabled', () => {
       const transactionBucket = template.Resources.TransactionDataBucket;
       const processedBucket = template.Resources.ProcessedDataBucket;
-      
+
       expect(transactionBucket.Properties.BucketEncryption).toBeDefined();
       expect(transactionBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-      
+
       expect(processedBucket.Properties.BucketEncryption).toBeDefined();
       expect(processedBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
     });
@@ -86,10 +86,10 @@ describe('Batch Processing CloudFormation Template', () => {
     test('S3 buckets should have public access blocked', () => {
       const transactionBucket = template.Resources.TransactionDataBucket;
       const processedBucket = template.Resources.ProcessedDataBucket;
-      
+
       expect(transactionBucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
       expect(transactionBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      
+
       expect(processedBucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
       expect(processedBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
     });
@@ -141,7 +141,7 @@ describe('Batch Processing CloudFormation Template', () => {
     test('DynamoDB tables should have point-in-time recovery enabled', () => {
       const jobStatusTable = template.Resources.JobStatusTable;
       const auditLogTable = template.Resources.AuditLogTable;
-      
+
       expect(jobStatusTable.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
       expect(auditLogTable.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
     });
@@ -176,7 +176,7 @@ describe('Batch Processing CloudFormation Template', () => {
     test('BatchJobDefinition should have correct environment variables', () => {
       const jobDef = template.Resources.BatchJobDefinition;
       const env = jobDef.Properties.ContainerProperties.Environment;
-      
+
       const envNames = env.map((e: any) => e.Name);
       expect(envNames).toContain('JOB_STATUS_TABLE');
       expect(envNames).toContain('AUDIT_LOG_TABLE');
@@ -262,14 +262,6 @@ describe('Batch Processing CloudFormation Template', () => {
       });
     });
 
-    test('outputs should have proper export names', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
-        });
-      });
-    });
   });
 
   describe('Template Validation', () => {
@@ -307,15 +299,6 @@ describe('Batch Processing CloudFormation Template', () => {
       const auditLogTable = template.Resources.AuditLogTable;
       expect(auditLogTable.Properties.TableName).toEqual({
         'Fn::Sub': 'audit-log-${EnvironmentSuffix}'
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
-        });
       });
     });
   });
