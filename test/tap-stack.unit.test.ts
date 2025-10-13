@@ -29,7 +29,7 @@ describe('TapStack CloudFormation Template', () => {
   };
   const hasIf = (obj: any) => !!(obj && obj['Fn::If']);
 
-  // Kebab-case transform (e.g., InternetGatewayId -> internet-gateway-id)
+  // Basic kebab (fallback) – used when we don't have an explicit override
   const toKebab = (s: string) =>
     s
       .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
@@ -37,14 +37,21 @@ describe('TapStack CloudFormation Template', () => {
       .replace(/([0-9])([A-Za-z])/g, '$1-$2')
       .toLowerCase();
 
-  // Some outputs intentionally use shorter export suffixes than strict kebab-case of the key.
-  // Map those exceptions here so the tests accept the template as-is.
+  // Explicit suffixes matching your template's export names
   const EXPORT_NAME_OVERRIDES: Record<string, string> = {
+    // short forms
     InternetGatewayId: 'igw-id',
     NatGateway1Id: 'nat-1-id',
     NatGateway2Id: 'nat-2-id',
     DbPasswordSecretArn: 'db-secret-arn',
+    // numeric/initialism tokens
+    S3BucketName: 's3-bucket-name',
+    S3BucketArn: 's3-bucket-arn',
+    // AWS-ism (DynamoDb -> dynamodb)
+    DynamoDbTableName: 'dynamodb-table-name',
+    DynamoDbTableArn: 'dynamodb-table-arn',
   };
+
   const expectedExportSuffixFor = (key: string) =>
     EXPORT_NAME_OVERRIDES[key] ?? toKebab(key);
 
