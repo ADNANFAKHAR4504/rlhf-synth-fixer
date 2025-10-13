@@ -11,5 +11,21 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Kinesis, Lambda, S3, IAM, SQS, CloudWatch, DynamoDB"
+  "aws_services": [
+    "Kinesis",
+    "Lambda",
+    "S3",
+    "IAM",
+    "SQS",
+    "CloudWatch",
+    "DynamoDB",
+    "VPC",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deepaktatineni",
+  "dockerS3Location": ""
 }
