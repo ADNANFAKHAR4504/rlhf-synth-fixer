@@ -30,5 +30,11 @@
     "EC2",
     "VPC"
   ],
-  "training_quality": "high"
+  "training_quality": "high",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
