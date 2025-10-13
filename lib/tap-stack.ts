@@ -88,7 +88,7 @@ export class TapStack extends TerraformStack {
       minSize: 1,
       maxSize: 3,
       desiredCapacity: 2,
-      keyName: 'latest-key-pair', // Make sure this key exists
+      keyName: 'TapStackpr4141-keypair', // Make sure this key exists
     });
 
     // 4. RDS Module
