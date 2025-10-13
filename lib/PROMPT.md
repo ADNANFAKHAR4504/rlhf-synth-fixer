@@ -1,7 +1,8 @@
-You are an expert AWS CloudFormation engineer.  
-Generate a complete **CloudFormation YAML template** that deploys EC2 monitoring for a SaaS company with 1,000 daily users.
+# Prompt
 
-### Requirements
+You are an expert AWS CloudFormation engineer. Generate a complete **CloudFormation YAML template** that deploys EC2 monitoring for a SaaS company with 1,000 daily users.
+
+## Requirements
 
 - **Region:** `us-east-1`
 - **VPC:**
@@ -29,19 +30,20 @@ Generate a complete **CloudFormation YAML template** that deploys EC2 monitoring
   - Trigger when **CPU utilization > 80% for 5 minutes**
   - Send alerts to an **SNS Topic** (created in the stack)
 - **Outputs:**
-  - VPC ID  
-  - Instance IDs  
-  - S3 bucket name  
+  - VPC ID
+  - Instance IDs
+  - S3 bucket name
   - CloudWatch alarm names
 
-### Additional Requirements
+## Additional Requirements
 
 - Follow best practices for **naming, tagging, and parameters**
 - Use **Parameters** for:
-  - Instance type  
-  - Alarm threshold  
+  - Instance type
+  - Alarm threshold
   - Key pair name
 - Keep it **simple and cost-effective**
 - Ensure YAML syntax is valid for direct deployment using:
   ```bash
   aws cloudformation deploy
+  ```

@@ -1,14 +1,15 @@
-### Reasoning Trace
----
+# Model Response
+
+## Reasoning Trace
 
 Let me create a comprehensive CloudFormation template that meets all the requirements:
 
-1. Region: us-east-1
-2. VPC with CIDR 10.0.0.0/16
+1. Region: `us-east-1`
+2. VPC with CIDR `10.0.0.0/16`
 3. Public subnet
 4. Internet Gateway and Route Table
 5. Security Group (HTTP 80, SSH 22)
-6. 10 t3.medium EC2 instances
+6. 10 `t3.medium` EC2 instances
 7. Latest Amazon Linux 2 AMI
 8. Public IP addresses
 9. User data for CloudWatch Agent
@@ -23,10 +24,10 @@ Let me create a comprehensive CloudFormation template that meets all the require
 18. Simple and cost-effective
 
 I'll structure the template properly with all these components.
-### Answer 
+
 ---
 
-Here's a complete CloudFormation YAML template that meets all your requirements:
+## CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -775,52 +776,56 @@ Outputs:
 
 1. **Save the template** to a file named `saas-monitoring-stack.yaml`
 
-2. **Deploy using AWS CLI**:
-```bash
-aws cloudformation deploy \
-  --template-file saas-monitoring-stack.yaml \
-  --stack-name saas-monitoring \
-  # No KeyPairName parameter needed, key pair is created in the stack
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
+2. **Deploy using AWS CLI:**
+   ```bash
+   aws cloudformation deploy \
+     --template-file saas-monitoring-stack.yaml \
+     --stack-name saas-monitoring \
+     # No KeyPairName parameter needed, key pair is created in the stack
+     --capabilities CAPABILITY_NAMED_IAM \
+     --region us-east-1
+   ```
 
-3. **Monitor deployment**:
-```bash
-aws cloudformation describe-stacks \
-  --stack-name saas-monitoring \
-  --region us-east-1 \
-  --query 'Stacks[0].StackStatus'
-```
+3. **Monitor deployment:**
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name saas-monitoring \
+     --region us-east-1 \
+     --query 'Stacks[0].StackStatus'
+   ```
 
 ## Key Features
 
-### Best Practices Implemented:
-- **Parameterized Configuration**: Instance type, CPU threshold, and key pair are configurable
-- **Resource Tagging**: All resources are tagged with Name and Environment
-- **Security**: S3 bucket has encryption and public access blocked
-- **Cost Optimization**: 
-  - Use of t3.medium instances (burstable)
+### Best Practices Implemented
+
+- **Parameterized Configuration:** Instance type, CPU threshold, and key pair are configurable
+- **Resource Tagging:** All resources are tagged with Name and Environment
+- **Security:** S3 bucket has encryption and public access blocked
+- **Cost Optimization:**
+  - Use of `t3.medium` instances (burstable)
   - 90-day log retention in S3
   - 30-day CloudWatch log retention
-- **Monitoring**: Comprehensive CloudWatch metrics and alarms
-- **Scalability**: Launch template for consistent configuration
+- **Monitoring:** Comprehensive CloudWatch metrics and alarms
+- **Scalability:** Launch template for consistent configuration
 
-### What Gets Deployed:
-1. **Network Infrastructure**: VPC, subnet, internet gateway, route tables
-2. **Compute**: 10 EC2 instances with CloudWatch agent
-3. **Storage**: S3 bucket for log archival
-4. **Monitoring**: CloudWatch alarms, log groups, SNS topic
-5. **Security**: IAM roles, security groups
+### What Gets Deployed
 
-### Cost Estimates (Monthly):
-- 10 x t3.medium instances: ~$302
+1. **Network Infrastructure:** VPC, subnet, internet gateway, route tables
+2. **Compute:** 10 EC2 instances with CloudWatch agent
+3. **Storage:** S3 bucket for log archival
+4. **Monitoring:** CloudWatch alarms, log groups, SNS topic
+5. **Security:** IAM roles, security groups
+
+### Cost Estimates (Monthly)
+
+- 10 x `t3.medium` instances: ~$302
 - CloudWatch Logs: ~$5
 - CloudWatch Alarms: ~$1
 - S3 Storage: ~$2
-- **Total**: ~$310/month
+- **Total:** ~$310/month
 
-### Post-Deployment Steps:
+### Post-Deployment Steps
+
 1. Subscribe to the SNS topic for alarm notifications
 2. Access instances via public IPs on port 80
 3. Review CloudWatch dashboards and logs

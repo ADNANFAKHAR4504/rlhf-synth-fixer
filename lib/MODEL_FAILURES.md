@@ -1,84 +1,88 @@
-#Model Failures Analysis
-##Critical Failures
-**1. Launch Template Version Reference Error**
+# Model Failures Analysis
 
-Requirement: Use the latest version of the EC2 Launch Template in all EC2 instance resources.
+## Critical Failures
 
-Model Response: Used Version: $Latest (incorrect syntax).
+### 1. Launch Template Version Reference Error
 
-Ideal Response: Uses Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber.
+**Requirement:** Use the latest version of the EC2 Launch Template in all EC2 instance resources.
 
-Impact: CloudFormation validation error — $Latest is not a valid intrinsic function reference. Deployment fails before stack creation.
+**Model Response:** Used Version: `$Latest` (incorrect syntax).
 
-**2. Key Pair Handling Error**
+**Ideal Response:** Uses Version: `!GetAtt EC2LaunchTemplate.LatestVersionNumber`.
 
-Requirement: Create a new EC2 key pair dynamically within the stack.
+**Impact:** CloudFormation validation error — `$Latest` is not a valid intrinsic function reference. Deployment fails before stack creation.
 
-Model Response: Referenced an existing key pair using a parameter or static name.
+### 2. Key Pair Handling Error
 
-Ideal Response: Creates a new key pair resource using AWS::EC2::KeyPair and !Sub '${AWS::StackName}-keypair'.
+**Requirement:** Create a new EC2 key pair dynamically within the stack.
 
-Impact: Stack deployment fails if the referenced key pair does not exist. Also violates stack self-containment (infrastructure should be fully reproducible).
+**Model Response:** Referenced an existing key pair using a parameter or static name.
 
-**3. CloudWatch Metrics Configuration Error**
+**Ideal Response:** Creates a new key pair resource using `AWS::EC2::KeyPair` and `!Sub '${AWS::StackName}-keypair'`.
 
-Requirement: Collect extended CloudWatch metrics — CPU, memory, disk, and network I/O.
+**Impact:** Stack deployment fails if the referenced key pair does not exist. Also violates stack self-containment (infrastructure should be fully reproducible).
 
-Model Response: Configured only CPU metric collection.
+### 3. CloudWatch Metrics Configuration Error
 
-Ideal Response: Configures all metrics in the CloudWatch Agent JSON (cpu, mem, disk, and diskio).
+**Requirement:** Collect extended CloudWatch metrics — CPU, memory, disk, and network I/O.
 
-Impact: Partial monitoring coverage. Memory and disk utilization data missing from CloudWatch dashboards and alarms.
+**Model Response:** Configured only CPU metric collection.
 
-**4. IAM Role Policy Misconfiguration**
+**Ideal Response:** Configures all metrics in the CloudWatch Agent JSON (cpu, mem, disk, and diskio).
 
-Requirement: Grant minimal permissions for CloudWatch and S3 logging.
+**Impact:** Partial monitoring coverage. Memory and disk utilization data missing from CloudWatch dashboards and alarms.
 
-Model Response: Included only CloudWatchAgentServerPolicy, missing explicit permissions for S3 log delivery.
+### 4. IAM Role Policy Misconfiguration
 
-Ideal Response: Adds inline policy for both CloudWatch metrics and S3 (logs:CreateLogGroup, s3:PutObject, etc.).
+**Requirement:** Grant minimal permissions for CloudWatch and S3 logging.
 
-Impact: EC2 instances unable to send logs to S3 or create new log streams — CloudWatch and S3 integration fails.
+**Model Response:** Included only CloudWatchAgentServerPolicy, missing explicit permissions for S3 log delivery.
 
-**Major Issues**
-**5. CloudWatch Alarm Evaluation Configuration**
+**Ideal Response:** Adds inline policy for both CloudWatch metrics and S3 (`logs:CreateLogGroup`, `s3:PutObject`, etc.).
 
-Requirement: Trigger CPU alarms above threshold (e.g., 80%) with missing data treated as breaching.
+**Impact:** EC2 instances unable to send logs to S3 or create new log streams — CloudWatch and S3 integration fails.
 
-Model Response: Some alarms missing TreatMissingData: breaching.
+## Major Issues
 
-Ideal Response: All alarms include TreatMissingData: breaching.
+### 5. CloudWatch Alarm Evaluation Configuration
 
-Impact: Alarm state remains INSUFFICIENT_DATA instead of alerting when metrics stop reporting, reducing reliability.
+**Requirement:** Trigger CPU alarms above threshold (e.g., 80%) with missing data treated as breaching.
 
-**6. Missing Resource Tag Consistency**
+**Model Response:** Some alarms missing `TreatMissingData: breaching`.
 
-Requirement: Every resource should include Environment and Name tags for cost tracking and filtering.
+**Ideal Response:** All alarms include `TreatMissingData: breaching`.
 
-Model Response: Some EC2 and alarm resources missing consistent tagging.
+**Impact:** Alarm state remains INSUFFICIENT_DATA instead of alerting when metrics stop reporting, reducing reliability.
 
-Ideal Response: All resources have consistent tags (e.g., ${AWS::StackName}-instance, ${EnvironmentTag}).
+### 6. Missing Resource Tag Consistency
 
-Impact: Inconsistent tagging breaks cost allocation and environment-based automation workflows.
+**Requirement:** Every resource should include Environment and Name tags for cost tracking and filtering.
 
-**7. S3 Bucket Security Misconfiguration**
+**Model Response:** Some EC2 and alarm resources missing consistent tagging.
 
-Requirement: Logs bucket must block all public access and enable encryption.
+**Ideal Response:** All resources have consistent tags (e.g., `${AWS::StackName}-instance`, `${EnvironmentTag}`).
 
-Model Response: Either omitted or misconfigured PublicAccessBlockConfiguration or encryption settings.
+**Impact:** Inconsistent tagging breaks cost allocation and environment-based automation workflows.
 
-Ideal Response: Includes ServerSideEncryptionConfiguration with AES256 and all BlockPublic* properties set to true.
+### 7. S3 Bucket Security Misconfiguration
 
-Impact: Security risk — logs bucket may be exposed or fail compliance checks.
+**Requirement:** Logs bucket must block all public access and enable encryption.
 
-Minor Issues
-**8. Lifecycle Policy Missing Expiration**
+**Model Response:** Either omitted or misconfigured PublicAccessBlockConfiguration or encryption settings.
 
-Requirement: Automatically delete logs older than 90 days.
+**Ideal Response:** Includes ServerSideEncryptionConfiguration with AES256 and all BlockPublic* properties set to true.
 
-Model Response: No lifecycle configuration or used invalid property names.
+**Impact:** Security risk — logs bucket may be exposed or fail compliance checks.
 
-Ideal Response:
+## Minor Issues
+
+### 8. Lifecycle Policy Missing Expiration
+
+**Requirement:** Automatically delete logs older than 90 days.
+
+**Model Response:** No lifecycle configuration or used invalid property names.
+
+**Ideal Response:**
 ```yaml
 LifecycleConfiguration:
   Rules:
@@ -87,32 +91,32 @@ LifecycleConfiguration:
       ExpirationInDays: 90
 ```
 
-Impact: S3 bucket accumulates logs indefinitely, increasing storage costs.
+**Impact:** S3 bucket accumulates logs indefinitely, increasing storage costs.
 
-**9. Output Section Omissions**
+### 9. Output Section Omissions
 
-Requirement: Export VPC ID, EC2 instance IDs, log group name, and alarm names.
+**Requirement:** Export VPC ID, EC2 instance IDs, log group name, and alarm names.
 
-Model Response: Missing one or more of these outputs.
+**Model Response:** Missing one or more of these outputs.
 
-Ideal Response:
+**Ideal Response:** Exports all critical IDs and names using `Export: Name:` syntax.
 
-Exports all critical IDs and names using Export: Name: syntax.
+**Impact:** Dependent stacks cannot reference resources via `Fn::ImportValue`.
 
-Impact: Dependent stacks cannot reference resources via Fn::ImportValue.
+## Summary
 
-**Summary**
-**Severity	Issue	Impact**
- - Critical	Invalid Launch Template version syntax ($Latest)	Deployment failure
- - Critical	Key pair not dynamically created	Deployment dependency error
- - Critical	Incomplete CloudWatch metric configuration	Missing monitoring visibility
- - Critical	Insufficient IAM permissions	Logs fail to reach CloudWatch/S3
- - Major	Missing alarm configuration consistency	False negatives in monitoring
- - Major	Tag inconsistency across resources	Breaks automation/cost reports
- - Major	S3 bucket security misconfiguration	Potential compliance breach
- - Minor	Missing lifecycle expiration	Cost inefficiency
- - Minor	Missing outputs for dependencies	Stack interoperability issues
+| Severity | Issue | Impact |
+|----------|-------|--------|
+| Critical | Invalid Launch Template version syntax (`$Latest`) | Deployment failure |
+| Critical | Key pair not dynamically created | Deployment dependency error |
+| Critical | Incomplete CloudWatch metric configuration | Missing monitoring visibility |
+| Critical | Insufficient IAM permissions | Logs fail to reach CloudWatch/S3 |
+| Major | Missing alarm configuration consistency | False negatives in monitoring |
+| Major | Tag inconsistency across resources | Breaks automation/cost reports |
+| Major | S3 bucket security misconfiguration | Potential compliance breach |
+| Minor | Missing lifecycle expiration | Cost inefficiency |
+| Minor | Missing outputs for dependencies | Stack interoperability issues |
 
-**Overall Assessment:**
-The model_response contains 4 critical deployment-blocking errors and 5 configuration-quality issues.
-The most severe problems are incorrect Launch Template versioning, static key pair reference, and incomplete CloudWatch/S3 integration — all of which prevent the stack from deploying or functioning as intended.
+## Overall Assessment
+
+The model response contains 4 critical deployment-blocking errors and 5 configuration-quality issues. The most severe problems are incorrect Launch Template versioning, static key pair reference, and incomplete CloudWatch/S3 integration — all of which prevent the stack from deploying or functioning as intended.

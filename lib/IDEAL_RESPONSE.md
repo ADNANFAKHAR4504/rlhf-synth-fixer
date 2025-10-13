@@ -1,31 +1,31 @@
-# Ideal_response.md
+# Ideal Response
 
 ## Reasoning Trace
+
+To design an optimal **AWS CloudFormation template (TapStack)** for a SaaS application serving ~1000 daily users, we focus on scalability, simplicity, and cost-efficiency.
+
+### Key Design Choices
+
+1. **Region:** `us-east-1` for cost and availability
+2. **Networking:** A single VPC with a public subnet for simplicity
+3. **Security:** Only HTTP (80) and SSH (22) allowed
+4. **Compute:** 10 EC2 instances (`t3.medium`), launched via an Auto Scaling Group
+5. **IAM:** Minimal permissions for CloudWatch and S3 logging
+6. **Monitoring:** CloudWatch log group, CPU alarm, and SNS notifications
+7. **Storage:** Encrypted S3 bucket for logs with lifecycle policy
+8. **Maintainability:** Uses parameters, mappings, and consistent tagging
+
+### AWS Best Practices Followed
+
+- Modular design with parameters and mappings
+- IAM least privilege
+- Encrypted storage
+- Cost awareness via auto scaling (fixed 10)
+- Consistent tagging for environment tracking
+
 ---
 
-To design an optimal **AWS CloudFormation template (TapStack)** for a SaaS application serving ~1000 daily users, we focus on scalability, simplicity, and cost-efficiency.  
-
-### Key Design Choices:
-1. **Region:** `us-east-1` for cost and availability.
-2. **Networking:** A single VPC with a public subnet for simplicity.
-3. **Security:** Only HTTP (80) and SSH (22) allowed.
-4. **Compute:** 10 EC2 instances (`t3.medium`), launched via an Auto Scaling Group.
-5. **IAM:** Minimal permissions for CloudWatch and S3 logging.
-6. **Monitoring:** CloudWatch log group, CPU alarm, and SNS notifications.
-7. **Storage:** Encrypted S3 bucket for logs with lifecycle policy.
-8. **Maintainability:** Uses parameters, mappings, and consistent tagging.
-
-### AWS Best Practices Followed:
-- Modular design with parameters and mappings.  
-- IAM least privilege.  
-- Encrypted storage.  
-- Cost awareness via auto scaling (fixed 10).  
-- Consistent tagging for environment tracking.
-
----
-
-## Answer
----
+## CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
