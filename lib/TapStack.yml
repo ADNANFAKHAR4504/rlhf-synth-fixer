@@ -142,7 +142,7 @@ Resources:
   BatchProcessingTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'batch-processing-alerts-${EnvironmentSuffix}'
+      TopicName: !Sub 'batchprocessing-alerts-${EnvironmentSuffix}'
       DisplayName: Batch Processing Alerts
       Subscription:
         - Endpoint: !Ref NotificationEmail
@@ -879,7 +879,7 @@ Resources:
   BatchProcessingDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub 'batch-processing-${EnvironmentSuffix}'
+      DashboardName: !Sub 'batchprocessing-${EnvironmentSuffix}'
       DashboardBody: !Sub |
         {
           "widgets": [
@@ -1018,7 +1018,7 @@ Outputs:
 
   DashboardURL:
     Description: URL to the CloudWatch Dashboard
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=batch-processing-${EnvironmentSuffix}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=batchprocessing-${EnvironmentSuffix}'
 
   VPCId:
     Description: VPC ID for the batch processing environment

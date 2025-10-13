@@ -207,7 +207,7 @@ describe('Batch Processing CloudFormation Template', () => {
       const topic = template.Resources.BatchProcessingTopic;
       expect(topic.Type).toBe('AWS::SNS::Topic');
       expect(topic.Properties.TopicName).toEqual({
-        'Fn::Sub': 'batch-processing-alerts-${EnvironmentSuffix}'
+        'Fn::Sub': 'batchprocessing-alerts-${EnvironmentSuffix}'
       });
     });
 
