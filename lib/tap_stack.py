@@ -79,8 +79,8 @@ class TapStack(pulumi.ComponentResource):
         # Initialize all infrastructure components
         self._initialize_infrastructure()
 
-        # Export outputs for integration tests
-        self._export_outputs()
+        # Register outputs for Pulumi stack exports
+        self._register_outputs()
 
     def _initialize_infrastructure(self):
         """Initialize all infrastructure components in the correct order."""
@@ -144,94 +144,89 @@ class TapStack(pulumi.ComponentResource):
             ResourceOptions(parent=self)
         )
 
-    def _export_outputs(self):
-        """Export all outputs for integration tests and external access.
+    def _register_outputs(self):
+        """Register all stack outputs for integration testing and CI/CD pipeline."""
+        # Collect all outputs from infrastructure components
+        all_outputs = {
+            # Configuration outputs
+            "environment_suffix": self.environment_suffix,
+            "aws_region": self.config.aws_region,
+            "project_name": self.config.project_name,
+            
+            # API Gateway outputs
+            "api_endpoint": self.api_gateway_stack.stage.invoke_url,
+            "rest_api_id": self.api_gateway_stack.rest_api.id,
+            "stage_name": self.api_gateway_stack.stage.stage_name,
+            
+            # Lambda outputs
+            "api_handler_arn": self.lambda_stack.api_handler.arn,
+            "api_handler_invoke_arn": self.lambda_stack.api_handler.invoke_arn,
+            "data_processor_arn": self.lambda_stack.data_processor.arn,
+            "error_handler_arn": self.lambda_stack.error_handler.arn,
+            
+            # DynamoDB outputs
+            "main_table_name": self.dynamodb_stack.main_table.name,
+            "main_table_arn": self.dynamodb_stack.main_table.arn,
+            "audit_table_name": self.dynamodb_stack.audit_table.name,
+            "audit_table_arn": self.dynamodb_stack.audit_table.arn,
+            
+            # S3 outputs
+            "static_assets_bucket_name": self.s3_stack.static_assets_bucket.bucket,
+            "static_assets_bucket_arn": self.s3_stack.static_assets_bucket.arn,
+            "lambda_deployments_bucket_name": self.s3_stack.lambda_deployments_bucket.bucket,
+            "lambda_deployments_bucket_arn": self.s3_stack.lambda_deployments_bucket.arn,
+            
+            # Step Functions outputs
+            "state_machine_arn": self.step_functions_stack.state_machine.arn,
+            "state_machine_name": self.step_functions_stack.state_machine.name,
+            
+            # CloudWatch outputs
+            "lambda_error_alarm_arn": self.cloudwatch_stack.alarms['lambda_errors'].arn,
+            "api_4xx_alarm_arn": self.cloudwatch_stack.alarms['api_4xx_errors'].arn,
+            "api_5xx_alarm_arn": self.cloudwatch_stack.alarms['api_5xx_errors'].arn,
+            "dashboard_url": self.cloudwatch_stack.get_dashboard_url(),
+            
+            # SNS outputs
+            "critical_topic_arn": self.sns_stack.critical_topic.arn,
+            "error_topic_arn": self.sns_stack.error_topic.arn,
+            "compliance_topic_arn": self.sns_stack.compliance_topic.arn,
+            
+            # WAF outputs
+            "web_acl_arn": self.waf_stack.web_acl.arn,
+            "web_acl_id": self.waf_stack.web_acl.id,
+            
+            # Config rules outputs
+            "config_rule_arns": [rule.arn for rule in self.config_rules_stack.rules.values()]
+        }
         
-        This method creates flat outputs that are directly accessible as stack properties:
-        - API Gateway: api_endpoint, rest_api_id, stage_name
-        - Lambda: api_handler_arn, api_handler_invoke_arn, data_processor_arn, error_handler_arn
-        - DynamoDB: main_table_name, main_table_arn, audit_table_name, audit_table_arn
-        - S3: static_assets_bucket_name, static_assets_bucket_arn, lambda_deployments_bucket_name, lambda_deployments_bucket_arn
-        - Step Functions: state_machine_arn, state_machine_name
-        - CloudWatch: lambda_error_alarm_arn, api_4xx_alarm_arn, api_5xx_alarm_arn, dashboard_url
-        - SNS: critical_topic_arn, error_topic_arn, compliance_topic_arn
-        - WAF: web_acl_arn, web_acl_id
-        - Config Rules: config_rule_arns (list of rule ARNs)
+        # Create individual attributes for direct access (flat outputs)
+        self.api_endpoint = all_outputs["api_endpoint"]
+        self.rest_api_id = all_outputs["rest_api_id"]
+        self.stage_name = all_outputs["stage_name"]
+        self.api_handler_arn = all_outputs["api_handler_arn"]
+        self.api_handler_invoke_arn = all_outputs["api_handler_invoke_arn"]
+        self.data_processor_arn = all_outputs["data_processor_arn"]
+        self.error_handler_arn = all_outputs["error_handler_arn"]
+        self.main_table_name = all_outputs["main_table_name"]
+        self.main_table_arn = all_outputs["main_table_arn"]
+        self.audit_table_name = all_outputs["audit_table_name"]
+        self.audit_table_arn = all_outputs["audit_table_arn"]
+        self.static_assets_bucket_name = all_outputs["static_assets_bucket_name"]
+        self.static_assets_bucket_arn = all_outputs["static_assets_bucket_arn"]
+        self.lambda_deployments_bucket_name = all_outputs["lambda_deployments_bucket_name"]
+        self.lambda_deployments_bucket_arn = all_outputs["lambda_deployments_bucket_arn"]
+        self.state_machine_arn = all_outputs["state_machine_arn"]
+        self.state_machine_name = all_outputs["state_machine_name"]
+        self.lambda_error_alarm_arn = all_outputs["lambda_error_alarm_arn"]
+        self.api_4xx_alarm_arn = all_outputs["api_4xx_alarm_arn"]
+        self.api_5xx_alarm_arn = all_outputs["api_5xx_alarm_arn"]
+        self.dashboard_url = all_outputs["dashboard_url"]
+        self.critical_topic_arn = all_outputs["critical_topic_arn"]
+        self.error_topic_arn = all_outputs["error_topic_arn"]
+        self.compliance_topic_arn = all_outputs["compliance_topic_arn"]
+        self.web_acl_arn = all_outputs["web_acl_arn"]
+        self.web_acl_id = all_outputs["web_acl_id"]
+        self.config_rule_arns = all_outputs["config_rule_arns"]
         
-        All outputs are also registered with Pulumi for stack exports.
-        """
-        # API Gateway outputs - using direct resource attributes
-        self.api_endpoint = self.api_gateway_stack.stage.invoke_url
-        self.rest_api_id = self.api_gateway_stack.rest_api.id
-        self.stage_name = self.api_gateway_stack.stage.stage_name
-        
-        # Lambda outputs - using direct resource attributes
-        self.api_handler_arn = self.lambda_stack.api_handler.arn
-        self.api_handler_invoke_arn = self.lambda_stack.api_handler.invoke_arn
-        self.data_processor_arn = self.lambda_stack.data_processor.arn
-        self.error_handler_arn = self.lambda_stack.error_handler.arn
-        
-        # DynamoDB outputs - using direct resource attributes
-        self.main_table_name = self.dynamodb_stack.main_table.name
-        self.main_table_arn = self.dynamodb_stack.main_table.arn
-        self.audit_table_name = self.dynamodb_stack.audit_table.name
-        self.audit_table_arn = self.dynamodb_stack.audit_table.arn
-        
-        # S3 outputs - using direct resource attributes
-        self.static_assets_bucket_name = self.s3_stack.static_assets_bucket.bucket
-        self.static_assets_bucket_arn = self.s3_stack.static_assets_bucket.arn
-        self.lambda_deployments_bucket_name = self.s3_stack.lambda_deployments_bucket.bucket
-        self.lambda_deployments_bucket_arn = self.s3_stack.lambda_deployments_bucket.arn
-        
-        # Step Functions outputs - using direct resource attributes
-        self.state_machine_arn = self.step_functions_stack.state_machine.arn
-        self.state_machine_name = self.step_functions_stack.state_machine.name
-        
-        # CloudWatch outputs - using direct resource attributes
-        self.lambda_error_alarm_arn = self.cloudwatch_stack.alarms['lambda_errors'].arn
-        self.api_4xx_alarm_arn = self.cloudwatch_stack.alarms['api_4xx_errors'].arn
-        self.api_5xx_alarm_arn = self.cloudwatch_stack.alarms['api_5xx_errors'].arn
-        self.dashboard_url = self.cloudwatch_stack.get_dashboard_url()
-        
-        # SNS outputs - using direct resource attributes
-        self.critical_topic_arn = self.sns_stack.critical_topic.arn
-        self.error_topic_arn = self.sns_stack.error_topic.arn
-        self.compliance_topic_arn = self.sns_stack.compliance_topic.arn
-        
-        # WAF outputs - using direct resource attributes
-        self.web_acl_arn = self.waf_stack.web_acl.arn
-        self.web_acl_id = self.waf_stack.web_acl.id
-        
-        # Config rules outputs - using direct resource attributes
-        self.config_rule_arns = [rule.arn for rule in self.config_rules_stack.rules.values()]
-
-        # Register outputs for Pulumi stack exports
-        self.register_outputs({
-            "api_endpoint": self.api_endpoint,
-            "rest_api_id": self.rest_api_id,
-            "stage_name": self.stage_name,
-            "api_handler_arn": self.api_handler_arn,
-            "api_handler_invoke_arn": self.api_handler_invoke_arn,
-            "data_processor_arn": self.data_processor_arn,
-            "error_handler_arn": self.error_handler_arn,
-            "main_table_name": self.main_table_name,
-            "main_table_arn": self.main_table_arn,
-            "audit_table_name": self.audit_table_name,
-            "audit_table_arn": self.audit_table_arn,
-            "static_assets_bucket_name": self.static_assets_bucket_name,
-            "static_assets_bucket_arn": self.static_assets_bucket_arn,
-            "lambda_deployments_bucket_name": self.lambda_deployments_bucket_name,
-            "lambda_deployments_bucket_arn": self.lambda_deployments_bucket_arn,
-            "state_machine_arn": self.state_machine_arn,
-            "state_machine_name": self.state_machine_name,
-            "lambda_error_alarm_arn": self.lambda_error_alarm_arn,
-            "api_4xx_alarm_arn": self.api_4xx_alarm_arn,
-            "api_5xx_alarm_arn": self.api_5xx_alarm_arn,
-            "dashboard_url": self.dashboard_url,
-            "critical_topic_arn": self.critical_topic_arn,
-            "error_topic_arn": self.error_topic_arn,
-            "compliance_topic_arn": self.compliance_topic_arn,
-            "web_acl_arn": self.web_acl_arn,
-            "web_acl_id": self.web_acl_id,
-            "config_rule_arns": self.config_rule_arns
-        })
+        # Register outputs with Pulumi for stack exports
+        self.register_outputs(all_outputs)
