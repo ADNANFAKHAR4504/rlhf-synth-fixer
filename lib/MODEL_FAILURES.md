@@ -56,3 +56,41 @@ TapStackpr4196  ::error::Terraform exited with code 1.
 0 Stacks deploying     1 Stack done     0 Stacks waiting
 Invoking Terraform CLI failed with exit code 1
 Error: Process completed with exit code 1.
+
+╷
+                │ Error: only lowercase alphanumeric characters and hyphens allowed in "identifier"
+                │ 
+                │   with aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance),
+                │   on cdk.tf.json line 343, in resource.aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance):
+                │  343:         "identifier": "TapStackpr4196-pr4196-db",
+                │ 
+                ╵
+TapStackpr4196  ╷
+                │ Error: first character of "identifier" must be a letter
+                │ 
+                │   with aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance),
+                │   on cdk.tf.json line 343, in resource.aws_db_instance.main-rds_instance_2D733CBC (main-rds/instance):
+                │  343:         "identifier": "TapStackpr4196-pr4196-db",
+                │ 
+                ╵
+TapStackpr4196  ╷
+TapStackpr4196  │ Error: Extraneous JSON object property
+                │ 
+                │   on cdk.tf.json line 1007, in resource.aws_s3_bucket_lifecycle_configuration.public-s3_lifecycle_5C6BE8CD (public-s3/lifecycle).rule[0].noncurrent_version_expiration:
+                │ 1007:               "noncurrentDays": 90
+                │ 
+                │ No argument or block type is named "noncurrentDays". Did you mean
+                │ "noncurrent_days"?
+                ╵
+TapStackpr4196  ╷
+                │ Error: Missing required argument
+                │ 
+                │   on cdk.tf.json line 1008, in resource.aws_s3_bucket_lifecycle_configuration.public-s3_lifecycle_5C6BE8CD (public-s3/lifecycle).rule[0].noncurrent_version_expiration:
+                │ 1008:             },
+                │ 
+                │ The argument "noncurrent_days" is required, but no definition was found.
+                ╵
+TapStackpr4196  ::error::Terraform exited with code 1.
+Invoking Terraform CLI failed with exit code 1
+0 Stacks deploying     1 Stack done     0 Stacks waiting
+Error: Process completed with exit code 1.

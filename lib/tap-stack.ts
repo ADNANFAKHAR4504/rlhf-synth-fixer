@@ -285,7 +285,7 @@ export class TapStack extends TerraformStack {
           status: 'Enabled',
           filter: {}, // Add empty filter
           noncurrentVersionExpiration: {
-            noncurrentDays: 90, // Change from 'days' to 'noncurrentDays'
+            noncurrent_days: 90, // Change from 'days' to 'noncurrentDays'
           },
         },
       ],
@@ -319,7 +319,7 @@ export class TapStack extends TerraformStack {
 
     // Create RDS instance
     const rdsModule = new SecureRdsInstance(this, 'main-rds', {
-      name: `${id}-${environmentSuffix}-db`,
+      name: `db-${id.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${environmentSuffix}`, // Prefix with 'db-' to ensure it starts with a letter
       engine: 'mysql',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
