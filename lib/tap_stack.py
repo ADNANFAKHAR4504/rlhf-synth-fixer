@@ -327,7 +327,8 @@ class TapStack(pulumi.ComponentResource):
                         "Action": [
                             "sqs:SendMessage",
                             "sqs:ReceiveMessage",
-                            "sqs:DeleteMessage"
+                            "sqs:DeleteMessage",
+                            "sqs:GetQueueAttributes"
                         ],
                         "Resource": args['error_queue_arn']
                     },
