@@ -211,6 +211,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Use explicit AMI mapping to satisfy fixed-AMI requirement
+    // AMI: Amazon Linux 2023 x86_64 HVM kernel-6.1 - ami-091d7d61336a4c68f (us-east-1)
     const ami = ec2.MachineImage.genericLinux({
       'us-east-1': 'ami-091d7d61336a4c68f',
     });
