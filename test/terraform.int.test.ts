@@ -39,7 +39,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(validation.error_count).toBe(0);
         terraformValidated = true;
       } catch (error: any) {
-        fail(`Terraform validation failed: ${error.message}`);
+        // If terraform validate fails, throw an error with the message
+        throw new Error(`Terraform validation failed: ${error.message}`);
       }
     });
   });
