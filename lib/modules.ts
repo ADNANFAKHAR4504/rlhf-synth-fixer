@@ -247,16 +247,61 @@ export class KmsKeyConstruct extends Construct {
   public readonly keyId?: string;
   private key?: KmsKey;
 
-  constructor(scope: Construct, id: string, config: KmsKeyConfig) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: KmsKeyConfig & { accountId?: string }
+  ) {
     super(scope, id);
 
     if (config.customKeyArn) {
       this.keyArn = config.customKeyArn;
     } else {
-      // Create customer-managed KMS key
+      // Create customer-managed KMS key with proper policy for CloudTrail
+      const keyPolicy = {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: config.accountId
+                ? `arn:aws:iam::${config.accountId}:root`
+                : '*',
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudTrail to encrypt logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:GenerateDataKey*', 'kms:DecryptDataKey*'],
+            Resource: '*',
+            Condition: {
+              StringLike: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': '*',
+              },
+            },
+          },
+          {
+            Sid: 'Allow CloudTrail to describe key',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 'kms:DescribeKey',
+            Resource: '*',
+          },
+        ],
+      };
+
       this.key = new KmsKey(this, 'key', {
         description: config.description || `KMS key for ${config.name}`,
         enableKeyRotation: config.enableKeyRotation ?? true,
+        policy: JSON.stringify(keyPolicy),
         tags: config.tags,
       });
 
@@ -763,18 +808,19 @@ export class SsmParameterConstruct extends Construct {
 export class AuditTrail extends Construct {
   public readonly trail: Cloudtrail;
   public readonly bucket: EncryptedS3Bucket;
+  private trailBucketPolicy: S3BucketPolicy;
 
   constructor(
     scope: Construct,
     id: string,
     name: string,
-    accountId: string, // Add this parameter
+    accountId: string,
     kmsKeyArn: string | undefined,
     tags: CommonTags
   ) {
     super(scope, id);
 
-    // Create S3 bucket for CloudTrail logs
+    // Create S3 bucket for CloudTrail logs (without the default policy)
     this.bucket = new EncryptedS3Bucket(this, 'audit-bucket', {
       name: `${name.toLowerCase()}-audit-logs`,
       versioning: true,
@@ -801,9 +847,25 @@ export class AuditTrail extends Construct {
       ],
       tags,
     });
-    const trailBucketPolicy = {
+
+    // Create CloudTrail-specific bucket policy
+    const trailBucketPolicyDocument = {
       Version: '2012-10-17',
       Statement: [
+        // Existing SSL enforcement from EncryptedS3Bucket
+        {
+          Sid: 'DenyInsecureConnections',
+          Effect: 'Deny',
+          Principal: '*',
+          Action: 's3:*',
+          Resource: [this.bucket.bucket.arn, `${this.bucket.bucket.arn}/*`],
+          Condition: {
+            Bool: {
+              'aws:SecureTransport': 'false',
+            },
+          },
+        },
+        // CloudTrail specific permissions
         {
           Sid: 'AWSCloudTrailAclCheck',
           Effect: 'Allow',
@@ -812,6 +874,11 @@ export class AuditTrail extends Construct {
           },
           Action: 's3:GetBucketAcl',
           Resource: this.bucket.bucket.arn,
+          Condition: {
+            StringEquals: {
+              'AWS:SourceArn': `arn:aws:cloudtrail:*:${accountId}:trail/${name}`,
+            },
+          },
         },
         {
           Sid: 'AWSCloudTrailWrite',
@@ -820,19 +887,21 @@ export class AuditTrail extends Construct {
             Service: 'cloudtrail.amazonaws.com',
           },
           Action: 's3:PutObject',
-          Resource: `${this.bucket.bucket.arn}/*`,
+          Resource: `${this.bucket.bucket.arn}/AWSLogs/${accountId}/*`,
           Condition: {
             StringEquals: {
               's3:x-amz-acl': 'bucket-owner-full-control',
+              'AWS:SourceArn': `arn:aws:cloudtrail:*:${accountId}:trail/${name}`,
             },
           },
         },
       ],
     };
 
-    new S3BucketPolicy(this, 'trail-bucket-policy', {
+    // Override the default bucket policy with CloudTrail-specific one
+    this.trailBucketPolicy = new S3BucketPolicy(this, 'trail-bucket-policy', {
       bucket: this.bucket.bucket.id,
-      policy: JSON.stringify(trailBucketPolicy),
+      policy: JSON.stringify(trailBucketPolicyDocument),
     });
 
     // Create CloudWatch Log Group for CloudTrail
@@ -844,7 +913,6 @@ export class AuditTrail extends Construct {
       tags
     );
 
-    // IAM role for CloudTrail to write to CloudWatch
     // IAM role for CloudTrail to write to CloudWatch
     const trailRole = new IamRoleConstruct(this, 'trail-role', {
       name: `${name}-cloudtrail-role`,
@@ -866,11 +934,7 @@ export class AuditTrail extends Construct {
           Statement: [
             {
               Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
+              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
               Resource: `${logGroup.logGroup.arn}:*`,
             },
           ],
@@ -879,6 +943,7 @@ export class AuditTrail extends Construct {
       tags,
     });
 
+    // Create CloudTrail with explicit dependencies
     this.trail = new Cloudtrail(this, 'trail', {
       name,
       s3BucketName: this.bucket.bucket.id,
@@ -902,7 +967,7 @@ export class AuditTrail extends Construct {
         },
       ],
       tags,
-      dependsOn: [this.bucket.bucketPolicy], // Add explicit dependency
+      dependsOn: [this.trailBucketPolicy, trailRole.role], // Ensure policies are created first
     });
   }
 }

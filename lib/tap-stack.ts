@@ -75,11 +75,12 @@ export class TapStack extends TerraformStack {
       CostCenter: 'engineering', // Remove hyphens from keys
     };
 
-    // Create KMS key for encryption
+    // Create KMS key for encryption with CloudTrail support
     const kmsModule = new KmsKeyConstruct(this, 'main-kms', {
       name: `${id}-${environmentSuffix}-main`,
       description: `Main KMS key for ${id} ${environmentSuffix} environment`,
       enableKeyRotation: true,
+      accountId: current.accountId, // Add this line
       tags: commonTags,
     });
 
