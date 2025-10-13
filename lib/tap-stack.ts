@@ -10,7 +10,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -47,32 +46,74 @@ export class TapStack extends cdk.Stack {
 
     // VPC Configuration - using existing VPCs as required
     const vpcId = this.node.tryGetContext('vpcId') || 'vpc-12345678';
-    const privateSubnetIds = this.node.tryGetContext('privateSubnetIds') || [
-      'subnet-11111111',
-      'subnet-22222222',
-    ];
-    const publicSubnetIds = this.node.tryGetContext('publicSubnetIds') || [
-      'subnet-44444444',
-      'subnet-55555555',
-    ];
+
+    // Get availability zones for this region
+    const availabilityZones = cdk.Stack.of(this).availabilityZones;
+    const numAZs = availabilityZones.length;
+
+    // Generate default subnet IDs based on the number of availability zones
+    const generateDefaultSubnetIds = (
+      prefix: string,
+      count: number
+    ): string[] => {
+      return Array.from(
+        { length: count },
+        (_, i) => `${prefix}-${String(i + 1).padStart(8, '0')}`
+      );
+    };
+
+    const generateDefaultRouteTableIds = (
+      prefix: string,
+      count: number
+    ): string[] => {
+      return Array.from(
+        { length: count },
+        (_, i) => `${prefix}-${String(i + 1).padStart(8, '0')}`
+      );
+    };
+
+    const privateSubnetIds =
+      this.node.tryGetContext('privateSubnetIds') ||
+      generateDefaultSubnetIds('subnet-11111111', numAZs);
+    const publicSubnetIds =
+      this.node.tryGetContext('publicSubnetIds') ||
+      generateDefaultSubnetIds('subnet-22222222', numAZs);
+    const privateSubnetRouteTableIds =
+      this.node.tryGetContext('privateSubnetRouteTableIds') ||
+      generateDefaultRouteTableIds('rtb-11111111', numAZs);
+    const publicSubnetRouteTableIds =
+      this.node.tryGetContext('publicSubnetRouteTableIds') ||
+      generateDefaultRouteTableIds('rtb-22222222', numAZs);
 
     // === NETWORKING ===
 
-    // Import existing VPC
-    const vpc = ec2.Vpc.fromVpcAttributes(this, 'ExistingVpc', {
-      vpcId: vpcId,
-      availabilityZones: cdk.Stack.of(this).availabilityZones,
-      privateSubnetIds: privateSubnetIds,
-      publicSubnetIds: publicSubnetIds,
-      privateSubnetRouteTableIds: [
-        'rtb-11111111',
-        'rtb-22222222',
-      ],
-      publicSubnetRouteTableIds: [
-        'rtb-44444444',
-        'rtb-55555555',
-      ],
-    });
+    // Create new VPC or import existing one based on context
+    const vpc =
+      vpcId && vpcId !== 'vpc-12345678'
+        ? ec2.Vpc.fromVpcAttributes(this, 'ExistingVpc', {
+            vpcId: vpcId,
+            availabilityZones: cdk.Stack.of(this).availabilityZones,
+            privateSubnetIds: privateSubnetIds,
+            publicSubnetIds: publicSubnetIds,
+            privateSubnetRouteTableIds: privateSubnetRouteTableIds,
+            publicSubnetRouteTableIds: publicSubnetRouteTableIds,
+          })
+        : new ec2.Vpc(this, 'Vpc', {
+            maxAzs: 3, // Use 3 AZs for cost optimization
+            natGateways: 1, // Use 1 NAT gateway to save EIPs
+            subnetConfiguration: [
+              {
+                cidrMask: 24,
+                name: 'Public',
+                subnetType: ec2.SubnetType.PUBLIC,
+              },
+              {
+                cidrMask: 24,
+                name: 'Private',
+                subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+              },
+            ],
+          });
 
     // Security Groups with least privilege principle
     const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
@@ -194,40 +235,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // S3 Bucket for CloudTrail audit logs
-    const auditBucket = new s3.Bucket(this, 'AuditBucket', {
-      bucketName:
-        `${this.stackName.toLowerCase()}-audit-${environmentSuffix}-${this.account}-${this.region}`.replace(
-          /[^a-z0-9-]/g,
-          '-'
-        ),
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey,
-      versioned: true, // Required for Object Lock
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      objectLockEnabled: true,
-      objectLockDefaultRetention: s3.ObjectLockRetention.compliance(
-        cdk.Duration.days(2555)
-      ), // 7 years
-    });
-
-    // CloudTrail for API audit logging
-    const trail = new cloudtrail.Trail(this, 'AuditTrail', {
-      bucket: auditBucket,
-      encryptionKey,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableFileValidation: true,
-      managementEvents: cloudtrail.ReadWriteType.ALL,
-    });
-
-    trail.addS3EventSelector([
-      {
-        bucket: staticBucket,
-      },
-    ]);
-
     // Database credentials in Secrets Manager
     const dbCredentials = new secretsmanager.Secret(this, 'DbCredentials', {
       description: 'RDS database master credentials',
@@ -242,7 +249,7 @@ export class TapStack extends cdk.Stack {
     // RDS Database Instance with Multi-AZ for HA
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_37,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -270,6 +277,8 @@ export class TapStack extends cdk.Stack {
       deletionProtection: false,
       autoMinorVersionUpgrade: true,
       databaseName: `enterpriseapp${environmentSuffix}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deleteAutomatedBackups: true,
     });
 
     // === COMPUTE ===
@@ -442,18 +451,18 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    loadBalancer.logAccessLogs(albAccessLogsBucket, 'alb-access-logs/');
+    loadBalancer.logAccessLogs(albAccessLogsBucket, 'alb-access-logs');
 
     // TLS Certificate for HTTPS
-    let certificate: acm.ICertificate;
+    let certificate: acm.ICertificate | undefined;
     if (certificateArn) {
       certificate = acm.Certificate.fromCertificateArn(
         this,
         'Certificate',
         certificateArn
       );
-    } else {
-      // Create a certificate with DNS validation (requires hosted zone)
+    } else if (domainName && domainName !== 'example.com') {
+      // Only create certificate if a real domain is provided
       certificate = new acm.Certificate(this, 'Certificate', {
         domainName: domainName,
         subjectAlternativeNames: [`*.${domainName}`],
@@ -461,37 +470,40 @@ export class TapStack extends cdk.Stack {
       });
     }
 
-    // HTTPS Listener with TLS 1.2 only
-    const httpsListener = loadBalancer.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [certificate],
-      sslPolicy: elbv2.SslPolicy.TLS12_EXT,
-    });
+    // HTTPS Listener with TLS 1.2 only (only if certificate is available)
+    let httpsListener: elbv2.ApplicationListener | undefined;
+    if (certificate) {
+      httpsListener = loadBalancer.addListener('HttpsListener', {
+        port: 443,
+        protocol: elbv2.ApplicationProtocol.HTTPS,
+        certificates: [certificate],
+        sslPolicy: elbv2.SslPolicy.TLS12_EXT,
+      });
 
-    // Target Group with health checks
-    httpsListener.addTargets('TargetGroup', {
-      port: 8080,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [autoScalingGroup],
-      healthCheck: {
-        enabled: true,
-        path: '/health',
-        protocol: elbv2.Protocol.HTTP,
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        healthyHttpCodes: '200',
-      },
-      deregistrationDelay: cdk.Duration.seconds(30),
-      stickinessCookieDuration: cdk.Duration.hours(1),
-      stickinessCookieName: 'AppSessionCookie',
-    });
+      // Target Group with health checks
+      httpsListener.addTargets('TargetGroup', {
+        port: 8080,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targets: [autoScalingGroup],
+        healthCheck: {
+          enabled: true,
+          path: '/health',
+          protocol: elbv2.Protocol.HTTP,
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyHttpCodes: '200',
+        },
+        deregistrationDelay: cdk.Duration.seconds(30),
+        stickinessCookieDuration: cdk.Duration.hours(1),
+        stickinessCookieName: 'AppSessionCookie',
+      });
+    }
 
-    // Route 53 DNS configuration (optional - only if enabled via context)
+    // Route 53 DNS configuration (optional - only if enabled via context and certificate is available)
     const enableRoute53 = this.node.tryGetContext('enableRoute53') === 'true';
-    if (enableRoute53) {
+    if (enableRoute53 && certificate) {
       const hostedZone = route53.HostedZone.fromLookup(this, 'DnsHostedZone', {
         domainName: domainName,
       });
@@ -793,7 +805,9 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'ApplicationURL', {
-      value: `https://${domainName}`,
+      value: certificate
+        ? `https://${domainName}`
+        : `http://${loadBalancer.loadBalancerDnsName}`,
       description: 'Application URL',
     });
 

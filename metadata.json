@@ -10,5 +10,23 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "codePipeline, CodeBuild, VPC, S3"
+  "aws_services": [
+    "EC2",
+    "AutoScaling",
+    "ApplicationLoadBalancer",
+    "VPC",
+    "S3",
+    "RDS",
+    "KMS",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "CodePipeline",
+    "CodeBuild",
+    "Route53",
+    "ACM",
+    "IAM",
+    "CloudWatchLogs",
+    "EventBridge"
+  ]
 }
