@@ -226,7 +226,7 @@ describe('TapStack CloudFormation Template', () => {
     test('Lambda function is created with VPC configuration', () => {
       const fn = template.Resources.SecureEnvLambdaFunction;
       expect(fn.Type).toBe('AWS::Lambda::Function');
-      expect(fn.Properties.Runtime).toBe('python3.9');
+      expect(fn.Properties.Runtime).toBe('python3.12');
       expect(fn.Properties.Handler).toBe('index.lambda_handler');
       expect(fn.Properties.VpcConfig).toBeDefined();
     });

@@ -6,6 +6,7 @@ import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatG
 import { DescribeListenersCommand, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { GetInstanceProfileCommand, GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { ListTopicsCommand, SNSClient } from '@aws-sdk/client-sns';
 import { DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand, RDSClient } from '@aws-sdk/client-rds';
 import { GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { DescribeSecretCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
@@ -33,6 +34,7 @@ const iam = new IAMClient({ region });
 const cw = new CloudWatchClient({ region });
 const logs = new CloudWatchLogsClient({ region });
 const secrets = new SecretsManagerClient({ region });
+const sns = new SNSClient({ region });
 
 type OutputsMap = Record<string, string>;
 type StackResource = { LogicalResourceId?: string; PhysicalResourceId?: string; ResourceType?: string; };
@@ -508,6 +510,13 @@ describe('TapStack Production Integration Tests', () => {
       const alarms = await cw.send(new DescribeAlarmsCommand({}));
       const alarmNames = (alarms.MetricAlarms || []).map(a => a.AlarmName).filter(Boolean);
       expect(alarmNames.length).toBeGreaterThan(0);
+    });
+
+    test('SNS topic for alarms exists', async () => {
+      if (!hasAwsCredentials) return;
+      const topics = await sns.send(new ListTopicsCommand({}));
+      const exists = (topics.Topics || []).some(t => (t.TopicArn || '').includes('SecureEnvAlarmTopic'));
+      expect(exists).toBe(true);
     });
 
     test('VPC Flow Logs are enabled for network monitoring', async () => {

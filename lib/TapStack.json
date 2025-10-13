@@ -1084,7 +1084,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${AWS::StackName}-SecureEnvLambdaFunction"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.12",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -1321,6 +1321,11 @@
                         }
                     }
                 ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1353,11 +1358,32 @@
                         }
                     }
                 ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${AWS::StackName}-SecureEnvRDSConnectionsAlarm"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureEnvAlarmTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-SecureEnvAlarmTopic"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-SecureEnvAlarmTopic"
                         }
                     }
                 ]
@@ -1386,6 +1412,11 @@
                                 "LoadBalancerFullName"
                             ]
                         }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
                     }
                 ],
                 "Tags": [
@@ -1432,6 +1463,11 @@
                         }
                     }
                 ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1467,6 +1503,11 @@
                         }
                     }
                 ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1500,6 +1541,11 @@
                                 "LoadBalancerFullName"
                             ]
                         }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SecureEnvAlarmTopic"
                     }
                 ],
                 "Tags": [

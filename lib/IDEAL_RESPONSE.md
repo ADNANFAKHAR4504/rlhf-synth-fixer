@@ -582,7 +582,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-SecureEnvLambdaFunction'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt SecureEnvLambdaRole.Arn
       Environment:
@@ -751,6 +751,8 @@ Resources:
       Dimensions:
         - Name: InstanceId
           Value: !Ref SecureEnvWebServer
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvEC2CPUAlarm'
@@ -770,9 +772,20 @@ Resources:
       Dimensions:
         - Name: DBInstanceIdentifier
           Value: !Ref SecureEnvDatabase
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvRDSConnectionsAlarm'
+
+  # Notifications
+  SecureEnvAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-SecureEnvAlarmTopic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureEnvAlarmTopic'
 
   SecureEnvALBTargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -789,6 +802,8 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvALBTargetResponseTimeAlarm'
@@ -809,6 +824,8 @@ Resources:
           Value: !GetAtt SecureEnvALB.LoadBalancerFullName
         - Name: TargetGroup
           Value: !GetAtt SecureEnvTargetGroup.TargetGroupFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyHostsAlarm'
@@ -828,6 +845,8 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvALBUnhealthyTargetsAlarm'
@@ -846,6 +865,8 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt SecureEnvALB.LoadBalancerFullName
+      AlarmActions:
+        - !Ref SecureEnvAlarmTopic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-SecureEnvALBResponseTimeAlarm'
