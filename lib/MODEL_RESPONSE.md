@@ -50,10 +50,6 @@ Parameters:
     MaxValue: 95
     Description: CPU utilization threshold percentage for CloudWatch alarms
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-    ConstraintDescription: Must be an existing EC2 KeyPair
 
   EnvironmentTag:
     Type: String
@@ -70,6 +66,17 @@ Mappings:
       AmazonLinux2AMI: ami-0cff7528ff583bf9a  # Amazon Linux 2 AMI (HVM) - Kernel 5.10
 
 Resources:
+# EC2 Key Pair Resource
+  MyKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${AWS::StackName}-keypair'
+      KeyType: rsa
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-keypair'
+        - Key: Environment
+          Value: !Ref EnvironmentTag
   # VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
@@ -216,7 +223,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::AccountId}-${AWS::Region}-${EnvironmentTag}-logs'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -269,7 +276,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AmazonLinux2AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !Ref MyKeyPair 
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -728,7 +735,7 @@ Outputs:
     Description: Name of the S3 bucket for logs
     Value: !Ref LogsBucket
     Export:
-      Name: !Sub ${AWS::StackName}-logs-bucket
+      Name: !Sub ${AWS::AccountId}-${AWS::Region}-${EnvironmentTag}-logs-bucket
 
   CloudWatchAlarmNames:
     Description: List of CloudWatch alarm names
@@ -773,7 +780,7 @@ Outputs:
 aws cloudformation deploy \
   --template-file saas-monitoring-stack.yaml \
   --stack-name saas-monitoring \
-  --parameter-overrides KeyPairName=<your-key-pair> \
+  # No KeyPairName parameter needed, key pair is created in the stack
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 ```
