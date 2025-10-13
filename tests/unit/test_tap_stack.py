@@ -468,7 +468,7 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_instance.alarms['lambda_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
         mock_cloudwatch_instance.alarms['api_4xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
         mock_cloudwatch_instance.alarms['api_5xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
-        mock_cloudwatch_instance.dashboard.url = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
+        mock_cloudwatch_instance.get_dashboard_url.return_value = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
         mock_cloudwatch.return_value = mock_cloudwatch_instance
 
         # Mock Step Functions stack with direct resource attributes
@@ -763,7 +763,7 @@ class TestTapStack(unittest.TestCase):
         mock_cloudwatch_instance.alarms['lambda_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
         mock_cloudwatch_instance.alarms['api_4xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
         mock_cloudwatch_instance.alarms['api_5xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
-        mock_cloudwatch_instance.dashboard.url = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
+        mock_cloudwatch_instance.get_dashboard_url.return_value = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
         mock_cloudwatch.return_value = mock_cloudwatch_instance
         
         # Mock Step Functions stack with direct resource attributes

@@ -145,7 +145,21 @@ class TapStack(pulumi.ComponentResource):
         )
 
     def _export_outputs(self):
-        """Export all outputs for integration tests and external access."""
+        """Export all outputs for integration tests and external access.
+        
+        This method creates flat outputs that are directly accessible as stack properties:
+        - API Gateway: api_endpoint, rest_api_id, stage_name
+        - Lambda: api_handler_arn, api_handler_invoke_arn, data_processor_arn, error_handler_arn
+        - DynamoDB: main_table_name, main_table_arn, audit_table_name, audit_table_arn
+        - S3: static_assets_bucket_name, static_assets_bucket_arn, lambda_deployments_bucket_name, lambda_deployments_bucket_arn
+        - Step Functions: state_machine_arn, state_machine_name
+        - CloudWatch: lambda_error_alarm_arn, api_4xx_alarm_arn, api_5xx_alarm_arn, dashboard_url
+        - SNS: critical_topic_arn, error_topic_arn, compliance_topic_arn
+        - WAF: web_acl_arn, web_acl_id
+        - Config Rules: config_rule_arns (list of rule ARNs)
+        
+        All outputs are also registered with Pulumi for stack exports.
+        """
         # API Gateway outputs - using direct resource attributes
         self.api_endpoint = self.api_gateway_stack.stage.invoke_url
         self.rest_api_id = self.api_gateway_stack.rest_api.id
@@ -177,7 +191,7 @@ class TapStack(pulumi.ComponentResource):
         self.lambda_error_alarm_arn = self.cloudwatch_stack.alarms['lambda_errors'].arn
         self.api_4xx_alarm_arn = self.cloudwatch_stack.alarms['api_4xx_errors'].arn
         self.api_5xx_alarm_arn = self.cloudwatch_stack.alarms['api_5xx_errors'].arn
-        self.dashboard_url = self.cloudwatch_stack.dashboard.url
+        self.dashboard_url = self.cloudwatch_stack.get_dashboard_url()
         
         # SNS outputs - using direct resource attributes
         self.critical_topic_arn = self.sns_stack.critical_topic.arn
