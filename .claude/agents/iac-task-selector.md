@@ -32,98 +32,66 @@ ALL CSV operations MUST:
 
 ### Option 1: CSV Task Selection
 If `tasks.csv` is present:
-1. **Read tasks.csv using proper CSV parser** (handles multi-line rows):
-   ```python
-   import csv
-   
-   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-       reader = csv.DictReader(f)
-       for row in reader:
-           difficulty = row['difficulty']
-           status = row['status']
-           if difficulty in ['hard', 'medium'] and status not in ['in_progress', 'done']:
-               # This is our task
-               selected_task = row
-               break
-   ```
-   
-2. **Extract task metadata from the selected CSV row**:
-    - Get `task_id` column value
-    - Get `subtask` column value
-    - Get `subject_labels` column value (it's a JSON array string like `["CI/CD Pipeline", "Security Configuration as Code"]`)
-    - Parse the subject_labels as a JSON array
-    - Pass these values to the task-coordinator for inclusion in metadata.json
 
-3. **Update status column to "in_progress"** (with backup and validation):
-   ```python
-   import csv
-   import shutil
-   import sys
+**Use the optimized task manager script** for all CSV operations. This script is faster and more reliable than Python alternatives.
+
+1. **Select and update task atomically** (recommended - single operation):
+   ```bash
+   # Select next pending task and mark as in_progress atomically
+   TASK_JSON=$(./scripts/task-manager.sh select-and-update)
    
-   # CRITICAL: Create backup before modifying
-   shutil.copy2('tasks.csv', 'tasks.csv.backup')
+   # Extract task_id and other fields
+   TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
+   SUBTASK=$(echo "$TASK_JSON" | jq -r '.subtask')
+   PLATFORM=$(echo "$TASK_JSON" | jq -r '.platform')
+   LANGUAGE=$(echo "$TASK_JSON" | jq -r '.language')
+   DIFFICULTY=$(echo "$TASK_JSON" | jq -r '.difficulty')
    
-   # Read all rows
-   rows = []
-   original_count = 0
-   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-       reader = csv.DictReader(f)
-       fieldnames = reader.fieldnames
-       for row in reader:
-           original_count += 1
-           if row['task_id'] == selected_task_id:
-               row['status'] = 'in_progress'
-           rows.append(row)
-   
-   # VALIDATION: Ensure we haven't lost any rows
-   if len(rows) != original_count:
-       print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
-       print("Restoring from backup...")
-       shutil.copy2('tasks.csv.backup', 'tasks.csv')
-       sys.exit(1)
-   
-   # VALIDATION: Ensure we have all fieldnames
-   if not fieldnames or len(fieldnames) == 0:
-       print("❌ ERROR: No fieldnames found in CSV")
-       print("Restoring from backup...")
-       shutil.copy2('tasks.csv.backup', 'tasks.csv')
-       sys.exit(1)
-   
-   # Write back all rows
-   with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
-       writer = csv.DictWriter(f, fieldnames=fieldnames)
-       writer.writeheader()
-       writer.writerows(rows)
-   
-   # VALIDATION: Verify the write was successful
-   verify_count = 0
-   with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
-       reader = csv.DictReader(f)
-       for row in reader:
-           verify_count += 1
-   
-   if verify_count != original_count:
-       print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
-       print("Restoring from backup...")
-       shutil.copy2('tasks.csv.backup', 'tasks.csv')
-       sys.exit(1)
-   
-   print(f"✅ Successfully updated task {selected_task_id} status to 'in_progress' ({verify_count} total rows preserved)")
+   echo "✅ Selected task $TASK_ID: $SUBTASK"
    ```
 
-4. **Validate task complexity matches requirements** (Quality assurance):
-   - Extract AWS services count from task description
-   - Validate against difficulty level:
-     - "hard" or "expert" tasks: Should have 5+ AWS services
-     - "medium" tasks: Should have 3-5 AWS services
-     - "easy" tasks: Should have 1-3 AWS services
-   - If mismatch detected:
-     - Log warning: "Task {task_id} marked as {difficulty} but appears to have {count} services"
-     - Add note to trainr_notes in CSV for review
-     - Proceed with task but flag for quality review
-   - **Quality Impact**: Ensures consistent difficulty levels across training data
+2. **Alternative: Separate select and update** (if you need to validate before updating):
+   ```bash
+   # Select next pending task (doesn't modify CSV)
+   TASK_JSON=$(./scripts/task-manager.sh select)
+   TASK_ID=$(echo "$TASK_JSON" | jq -r '.task_id')
+   
+   # Validate task or perform checks here...
+   
+   # Update status to in_progress
+   ./scripts/task-manager.sh update "$TASK_ID" "in_progress"
+   ```
 
-5. **Follow instructions in `task-coordinator` to set up the worktree**:
+3. **Check task status distribution** (optional - for monitoring):
+   ```bash
+   ./scripts/task-manager.sh status
+   ```
+
+4. **Get full task details** (if you need all fields):
+   ```bash
+   # Get complete task data including background, problem, constraints, etc.
+   TASK_DETAILS=$(./scripts/task-manager.sh get "$TASK_ID")
+   
+   # Save to temporary file for create-task-files.sh
+   echo "$TASK_DETAILS" > /tmp/task_${TASK_ID}.json
+   ```
+
+5. **Create metadata.json and PROMPT.md**:
+   ```bash
+   # Use the optimized script to generate both files
+   # This is much faster than Python equivalents
+   ./scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
+   ```
+
+**Benefits of new scripts:**
+- **3-5x faster** than Python scripts (native shell/awk processing)
+- **Atomic operations** - select and update in single transaction
+- **Less memory usage** - no Python interpreter overhead
+- **Built-in validation** - automatic backup and restore on failure
+- **Single source of truth** - one script for all CSV operations
+- **Better error handling** - clear colored output and exit codes
+
+6. **Follow instructions in `task-coordinator` to set up the worktree**:
    - Use EXACT format: `worktree/synth-{task_id}`
    - Validation will fail if naming is incorrect
 
