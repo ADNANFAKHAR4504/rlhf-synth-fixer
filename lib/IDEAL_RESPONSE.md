@@ -244,6 +244,33 @@ export class SimplifiedStack extends cdk.Stack {
 }
 ```
 
+## Additional Code Files (Legacy/Unused)
+
+The following files exist in the codebase but are not used in the current simplified implementation. They represent an alternative nested stack architecture that was replaced by the simplified single-stack design:
+
+### File: lib/tap-stack.ts
+Main orchestration stack that coordinates nested stacks. Uses NetworkStack, SecurityStack, DatabaseStack, ComputeStack, and CacheStack to build multi-region infrastructure. Not currently used; replaced by SimplifiedStack.
+
+### File: lib/network-stack.ts
+Defines VPC, subnets, NAT gateways, and network configuration. Implements multi-AZ networking with public and private subnets. Part of unused nested stack architecture.
+
+### File: lib/security-stack.ts
+Manages KMS keys, Secrets Manager, and security groups. Handles encryption and credential management. Part of unused nested stack architecture.
+
+### File: lib/database-stack.ts
+Configures Aurora Serverless v2 PostgreSQL database with encryption, backups, and monitoring. Part of unused nested stack architecture.
+
+### File: lib/compute-stack.ts
+Manages ECS Fargate cluster, Application Load Balancer, EFS file system, and auto-scaling. Part of unused nested stack architecture.
+
+### File: lib/cache-stack.ts
+Configures ElastiCache Redis for session management and caching. Part of unused nested stack architecture.
+
+### File: lib/storage-stack.ts
+Manages EFS file system configuration and mount targets. Part of unused nested stack architecture.
+
+**Note**: The current implementation uses `lib/simplified-stack.ts` which consolidates all functionality into a single stack, avoiding circular dependencies and reducing complexity.
+
 ## File: bin/tap.ts
 
 ```typescript
@@ -307,47 +334,6 @@ new SimplifiedStack(app, stackName, {
 - **CloudWatch Logs**: Centralized logging for all services
 - **Tagging Strategy**: Consistent tags for resource management
 - **Infrastructure as Code**: Fully automated deployment
-
-## Deployment Instructions
-
-1. **Prerequisites**:
-   ```bash
-   # Install dependencies
-   npm install
-
-   # Configure AWS credentials
-   aws configure
-   ```
-
-2. **Deploy the stack**:
-   ```bash
-   # Set environment suffix
-   export ENVIRONMENT_SUFFIX=prod
-
-   # Bootstrap CDK (first time only)
-   npx cdk bootstrap
-
-   # Deploy the stack
-   npx cdk deploy TapStack${ENVIRONMENT_SUFFIX}
-   ```
-
-3. **Verify deployment**:
-   - Check CloudFormation stack status
-   - Access ALB endpoint from stack outputs
-   - Verify ECS service is running
-   - Test database connectivity
-
-## Testing
-
-### Unit Tests
-```bash
-npm run test:unit
-```
-
-### Integration Tests
-```bash
-NODE_OPTIONS="--experimental-vm-modules" npm run test:integration
-```
 
 ## Disaster Recovery Considerations
 
