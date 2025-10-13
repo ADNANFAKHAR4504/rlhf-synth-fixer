@@ -10,5 +10,12 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "S3 Bucket, IAM, KMS, Lambda, RDS, CloudTrail, CloudWatch, VPC"
+  "aws_services": [
+    "KMS", "S3", "VPC", "Subnet", "Internet Gateway", 
+    "NAT Gateway", "Route Table", "Network ACL", "Security Group",
+    "RDS", "IAM", "Secrets Manager", "CloudWatch Logs",
+    "CloudWatch Alarms", "CloudWatch Metric Filters", "CloudTrail",
+    "CloudTrail Event Data Store", "AWS Config", "SNS"
+  ],
+  "training_quality": 9
 }
