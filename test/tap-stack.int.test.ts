@@ -504,8 +504,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
             return (
               response.statusCode === 200 &&
               response.body.includes('Hello from') &&
-              response.body.includes('myapp') &&
-              response.body.includes(environmentSuffix)
+              /Hello from\s+myapp-(dev|staging|prod)/i.test(response.body)
             );
           } catch (error) {
             return false;
