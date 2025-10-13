@@ -1,10 +1,12 @@
 // lib/modules.ts
+// lib/modules.ts
 import { Construct } from 'constructs';
-import { Fn } from 'cdktf'; // Add this impor
+import { Fn } from 'cdktf';
 // IAM
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 
 // KMS
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
@@ -54,6 +56,10 @@ import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parame
 
 // CloudTrail
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
+
+// Secrets Manager
+import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
 // Interfaces
 // Interfaces
@@ -143,8 +149,13 @@ export interface BudgetConfig {
  */
 export class IamRoleConstruct extends Construct {
   public readonly role: IamRole;
+  public readonly instanceProfile?: IamInstanceProfile;
 
-  constructor(scope: Construct, id: string, config: IamRoleConfig) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: IamRoleConfig & { createInstanceProfile?: boolean }
+  ) {
     super(scope, id);
 
     this.role = new IamRole(this, 'role', {
@@ -152,6 +163,14 @@ export class IamRoleConstruct extends Construct {
       assumeRolePolicy: JSON.stringify(config.assumeRolePolicy),
       tags: config.tags,
     });
+
+    // Create instance profile if needed (for EC2)
+    if (config.createInstanceProfile) {
+      this.instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
+        name: config.name,
+        role: this.role.name,
+      });
+    }
 
     // Attach inline policies if provided
     if (config.inlinePolicies) {
@@ -348,15 +367,10 @@ export class EncryptedS3Bucket extends Construct {
  */
 export class SecureRdsInstance extends Construct {
   public readonly instance: DbInstance;
+  public readonly secretArn: string;
 
   constructor(scope: Construct, id: string, config: RdsInstanceConfig) {
     super(scope, id);
-
-    // Generate password using AWS-managed credentials if supported
-    // For now, retrieve from SSM Parameter Store (must be pre-created)
-    const passwordParam = new DataAwsSsmParameter(this, 'db-password', {
-      name: `/${config.tags.project}/${config.tags.environment}/rds/${config.name}/password`,
-    });
 
     this.instance = new DbInstance(this, 'instance', {
       identifier: config.name,
@@ -366,7 +380,10 @@ export class SecureRdsInstance extends Construct {
       storageEncrypted: true,
       kmsKeyId: config.kmsKeyId,
       username: config.username,
-      password: passwordParam.value,
+
+      // Use AWS-managed password generation and storage
+      manageMasterUserPassword: true,
+
       dbSubnetGroupName: config.dbSubnetGroupName,
       vpcSecurityGroupIds: config.vpcSecurityGroupIds,
       backupRetentionPeriod: config.backupRetentionPeriod ?? 7,
@@ -379,9 +396,32 @@ export class SecureRdsInstance extends Construct {
       copyTagsToSnapshot: true,
       autoMinorVersionUpgrade: true,
       monitoringInterval: 60, // Enhanced monitoring
-      monitoringRoleArn: undefined, // Will be set if enhanced monitoring role is created
       tags: config.tags,
     });
+
+    // The secret ARN where the password is stored
+    this.secretArn = this.instance.masterUserSecret.get(0).secretArn;
+  }
+
+  /**
+   * Helper method to get the database secret for use in applications
+   * Returns the secret data source that can be used to retrieve the connection details
+   */
+  public getSecretDataSource(
+    scope: Construct,
+    id: string
+  ): DataAwsSecretsmanagerSecretVersion {
+    const secret = new DataAwsSecretsmanagerSecret(scope, `${id}-secret`, {
+      arn: this.secretArn,
+    });
+
+    return new DataAwsSecretsmanagerSecretVersion(
+      scope,
+      `${id}-secret-version`,
+      {
+        secretId: secret.id,
+      }
+    );
   }
 }
 

@@ -219,6 +219,7 @@ export class TapStack extends TerraformStack {
           },
         ],
       },
+      createInstanceProfile: true, // Add this flag
       inlinePolicies: {
         's3-access': {
           Version: '2012-10-17',
@@ -247,7 +248,7 @@ export class TapStack extends TerraformStack {
         subnetId: vpcModule.publicSubnets[0].id,
         vpcSecurityGroupIds: [publicSecurityGroup.id],
         associatePublicIpAddress: true,
-        iamInstanceProfile: ec2Role.role.name,
+        iamInstanceProfile: ec2Role.instanceProfile?.name, // Use instance profile
         rootBlockDevice: {
           encrypted: true,
           volumeType: 'gp3',
@@ -264,7 +265,7 @@ export class TapStack extends TerraformStack {
         instanceType: 't3.micro',
         subnetId: vpcModule.privateSubnets[0].id,
         vpcSecurityGroupIds: [privateSecurityGroup.id],
-        iamInstanceProfile: ec2Role.role.name,
+        iamInstanceProfile: ec2Role.instanceProfile?.name, // Use instance profile
         rootBlockDevice: {
           encrypted: true,
           volumeType: 'gp3',
@@ -319,7 +320,7 @@ export class TapStack extends TerraformStack {
 
     // Create RDS instance
     const rdsModule = new SecureRdsInstance(this, 'main-rds', {
-      name: `db-${id.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${environmentSuffix}`, // Prefix with 'db-' to ensure it starts with a letter
+      name: `db-${id.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${environmentSuffix}`,
       engine: 'mysql',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
@@ -390,6 +391,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'public-subnet-ids', {
       value: vpcModule.publicSubnets.map(subnet => subnet.id),
       description: 'Public subnet IDs',
+    });
+
+    new TerraformOutput(this, 'rds-endpoint', {
+      value: rdsModule.instance.endpoint,
+      description: 'RDS instance endpoint',
     });
 
     new TerraformOutput(this, 'private-subnet-ids', {
