@@ -29,6 +29,33 @@ export class TapStack extends cdk.Stack {
       alias: `alias/tap-${props.environment}-key`,
     });
 
+    // Grant CloudWatch Logs permission to use the KMS key
+    kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow CloudWatch Logs to use the key',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(
+            `logs.${this.region}.amazonaws.com`
+          ),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:CreateGrant',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnLike: {
+            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:*`,
+          },
+        },
+      })
+    );
+
     // Apply tags to all resources
     cdk.Tags.of(this).add('Environment', props.environment);
     cdk.Tags.of(this).add('Project', 'TAP');
