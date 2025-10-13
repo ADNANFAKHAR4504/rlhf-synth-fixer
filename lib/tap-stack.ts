@@ -132,7 +132,7 @@ export class TapStack extends TerraformStack {
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       ec2SecurityGroupId: ec2Module.securityGroup.id,
       dbName: 'tapdb',
-      dbUsername: process.env.DB_USERNAME || 'admin',
+      dbUsername: process.env.DB_USERNAME || 'tap_admin',
       dbPassword: process.env.DB_PASSWORD || 'ChangeMePlease123!',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
