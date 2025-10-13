@@ -62,6 +62,9 @@ export class TapStack extends Construct {
     // Generate unique string suffix for resource naming
     const stringSuffix = `${environment}-${region}`;
 
+    // Generate timestamp for unique resource names
+    const timestamp = Date.now().toString();
+
     // Create KMS Key for encryption
     const kmsKey = new kms.Key(stack, 'EncryptionKey', {
       description: 'KMS key for encrypting all data at rest',
@@ -193,7 +196,7 @@ export class TapStack extends Construct {
 
     // Create S3 bucket for logs
     const logBucket = new s3.Bucket(stack, 'LogBucket', {
-      bucketName: `prod-app-logs-${stringSuffix}`.toLowerCase(),
+      bucketName: `prod-app-logs-${stringSuffix}-${timestamp}`.toLowerCase(),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -229,7 +232,6 @@ export class TapStack extends Construct {
     logBucket.grantWrite(ec2Role);
 
     // Create CloudWatch Log Group
-    const timestamp = Date.now().toString();
     const logGroup = new logs.LogGroup(stack, 'AppLogGroup', {
       logGroupName: `/aws/ec2/prod-app-${stringSuffix}-${timestamp}`,
       retention: logs.RetentionDays.ONE_MONTH,
