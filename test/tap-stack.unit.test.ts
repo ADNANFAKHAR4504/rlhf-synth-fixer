@@ -46,8 +46,8 @@ describe('TapStack CloudFormation Template', () => {
         'Owner',
         'SSHAllowedIP',
         'DBUsername',
-        'DBPassword',
         'InstanceType',
+        'AmiId',
       ];
 
       expectedParams.forEach(param => {
@@ -70,11 +70,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Default).toBe('prod');
     });
 
-    test('DBPassword parameter should have security constraints', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.ConstraintDescription).toBe('Must be at least 8 characters');
+    test('AmiId parameter should resolve via SSM public parameter', () => {
+      const param = template.Parameters.AmiId;
+      expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64');
     });
 
     test('InstanceType parameter should have allowed values', () => {
@@ -86,16 +85,8 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Mappings', () => {
-    test('should have RegionAMI mapping', () => {
-      expect(template.Mappings.RegionAMI).toBeDefined();
-    });
-
-    test('RegionAMI mapping should include multiple regions', () => {
-      const mapping = template.Mappings.RegionAMI;
-      expect(mapping['us-east-1']).toBeDefined();
-      expect(mapping['us-west-2']).toBeDefined();
-      expect(mapping['eu-west-1']).toBeDefined();
-      expect(mapping['ap-south-1']).toBeDefined();
+    test('should not use static RegionAMI mapping (uses SSM instead)', () => {
+      expect(template.Mappings).toBeUndefined();
     });
   });
 
