@@ -1,0 +1,18 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T03:18:09+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["CI/CD Pipeline", "Cloud Environment Setup", "Failure Recovery Automation", "Infrastructure Analysis/Monitoring", "Security Configuration as Code"],
+  "po_id": "2237444138",
+  "aws_services": ["VPC", "EC2", "API Gateway", "ECS", "RDS", "Secrets Manager", "Kinesis", "KMS", "CloudWatch", "IAM"],
+  "region": "us-east-1",
+  "training_quality": 7,
+  "deployment_attempts": 4,
+  "deployment_success": true,
+  "test_coverage": "95%",
+  "integration_tests_passed": 9,
+  "integration_tests_total": 10
+}
