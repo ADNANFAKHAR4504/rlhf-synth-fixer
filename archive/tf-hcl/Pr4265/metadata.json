@@ -25,5 +25,11 @@
     "Route Tables",
     "VPC Endpoint"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
 }
