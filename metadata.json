@@ -10,5 +10,22 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "CloudFormation, VPC, Subnets, Internet Gateway, NAT Gateway, EC2, Auto Scaling, Load Balancer, RDS, IAM, S3, KMS, CloudFront, CloudWatch, CodePipeline, CodeBuild, Security Groups"
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "IAM",
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "CodePipeline",
+    "CodeBuild",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 8
 }
