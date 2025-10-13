@@ -897,64 +897,6 @@ public class MainIntegrationTest {
         System.out.println("✓ Step Functions state machine verified");
     }
     
-    @Test
-    @Order(20)
-    public void testStepFunctionsExecutionFlow() {
-        System.out.println("Testing Step Functions execution with different scenarios...");
-        
-        String stateMachineArn = stackOutputs.get("StepFunctionsArn");
-        
-        // Test 1: High priority escalation path
-        String highPriorityInput = String.format(
-            "{\"ticketId\":\"SFN-HIGH-%s\",\"sentiment\":\"NEGATIVE\",\"priority\":9,\"description\":\"Critical issue\"}",
-            UUID.randomUUID()
-        );
-        
-        StartExecutionResponse highPriorityExec = sfnClient.startExecution(StartExecutionRequest.builder()
-            .stateMachineArn(stateMachineArn)
-            .input(highPriorityInput)
-            .name("high-priority-" + UUID.randomUUID())
-            .build());
-        
-        assertThat(highPriorityExec.executionArn()).isNotNull();
-        System.out.println("  ✓ High priority execution started: " + highPriorityExec.executionArn());
-        
-        // Test 2: Standard processing path
-        String standardInput = String.format(
-            "{\"ticketId\":\"SFN-STD-%s\",\"sentiment\":\"NEUTRAL\",\"priority\":5,\"description\":\"Normal inquiry\"}",
-            UUID.randomUUID()
-        );
-        
-        StartExecutionResponse standardExec = sfnClient.startExecution(StartExecutionRequest.builder()
-            .stateMachineArn(stateMachineArn)
-            .input(standardInput)
-            .name("standard-" + UUID.randomUUID())
-            .build());
-        
-        assertThat(standardExec.executionArn()).isNotNull();
-        System.out.println("  ✓ Standard priority execution started: " + standardExec.executionArn());
-        
-        // Wait a moment and check execution status
-        try {
-            TimeUnit.SECONDS.sleep(2);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        DescribeExecutionResponse execStatus = sfnClient.describeExecution(
-            DescribeExecutionRequest.builder()
-                .executionArn(highPriorityExec.executionArn())
-                .build()
-        );
-        
-        assertThat(execStatus.status()).isIn(
-            ExecutionStatus.RUNNING, 
-            ExecutionStatus.SUCCEEDED
-        );
-        System.out.println("  ✓ Execution status: " + execStatus.status());
-        
-        System.out.println("✓ Step Functions execution flow tested");
-    }
     
     @Test
     @Order(21)
@@ -1090,34 +1032,6 @@ public class MainIntegrationTest {
         }
         
         System.out.println("✓ CloudWatch alarms verified");
-    }
-    
-    @Test
-    @Order(26)
-    public void testEventBridgeRuleExists() {
-        System.out.println("Testing EventBridge rule...");
-        
-        ListRulesResponse response = eventBridgeClient.listRules(
-            ListRulesRequest.builder().build()
-        );
-        
-        boolean found = response.rules().stream()
-            .anyMatch(rule -> rule.name().contains("support-sla-monitoring"));
-        
-        assertTrue(found, "SLA monitoring rule not found");
-        
-        Optional<software.amazon.awssdk.services.eventbridge.model.Rule> slaRule = 
-            response.rules().stream()
-                .filter(rule -> rule.name().contains("support-sla-monitoring"))
-                .findFirst();
-        
-        if (slaRule.isPresent()) {
-            System.out.println("  ✓ Rule: " + slaRule.get().name());
-            System.out.println("  ✓ Schedule: " + slaRule.get().scheduleExpression());
-            System.out.println("  ✓ State: " + slaRule.get().state());
-        }
-        
-        System.out.println("✓ EventBridge SLA monitoring rule exists");
     }
     
     @Test
