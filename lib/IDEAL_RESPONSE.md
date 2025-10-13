@@ -136,7 +136,7 @@ import com.pulumi.aws.s3.BucketPublicAccessBlockArgs;import com.pulumi.aws.s3.Bu
 
     public static String getDefaultRegion() {
 
-        return "us-west-2";
+        return "us-east-2";
 
     }
 
