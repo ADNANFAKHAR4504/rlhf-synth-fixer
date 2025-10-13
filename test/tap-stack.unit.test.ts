@@ -19,7 +19,7 @@ describe('TapStack', () => {
       environmentSuffix,
       isPrimary: true,
       primaryRegion: 'us-east-1',
-      secondaryRegion: 'us-west-1',
+      secondaryRegion: 'us-east-2',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
       enableSecurityHub: true,
@@ -30,11 +30,11 @@ describe('TapStack', () => {
       environmentSuffix,
       isPrimary: false,
       primaryRegion: 'us-east-1',
-      secondaryRegion: 'us-west-1',
+      secondaryRegion: 'us-east-2',
       globalClusterId: `global-${environmentSuffix}`,
       globalTableName: `metadata-table-${environmentSuffix}`,
       enableSecurityHub: true,
-      env: { account: '123456789012', region: 'us-west-1' },
+      env: { account: '123456789012', region: 'us-east-2' },
       crossRegionReferences: true,
     });
     primaryTemplate = Template.fromStack(primaryStack);
@@ -445,7 +445,7 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         enableSecurityHub: false,
         env: { account: '123456789012', region: 'us-east-1' },
       });
@@ -593,7 +593,7 @@ describe('TapStack', () => {
         environmentSuffix: 'test123',
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         globalClusterId: 'global-test123',
         globalTableName: 'metadata-table-test123',
         env: { account: '123456789012', region: 'us-east-1' },
@@ -608,7 +608,7 @@ describe('TapStack', () => {
       const testStack = new TapStack(testApp, 'TestStackWithContext', {
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         globalClusterId: 'global-ctx456',
         globalTableName: 'metadata-table-ctx456',
         env: { account: '123456789012', region: 'us-east-1' },
@@ -623,7 +623,7 @@ describe('TapStack', () => {
       const testStack = new TapStack(testApp, 'TestStackDefault', {
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         globalClusterId: 'global-dev',
         globalTableName: 'metadata-table-dev',
         env: { account: '123456789012', region: 'us-east-1' },
@@ -732,7 +732,7 @@ describe('TapStack', () => {
         DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-east-1'),
       });
       secondaryTemplate.hasResourceProperties('AWS::RDS::DBCluster', {
-        DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-west-1'),
+        DBClusterIdentifier: Match.stringLikeRegexp('aurora-us-east-2'),
       });
     });
 
@@ -742,7 +742,7 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         // No globalClusterId provided - should use default
         env: { account: '123456789012', region: 'us-east-1' },
       });
@@ -759,7 +759,7 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
         isPrimary: true,
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         // No globalTableName provided - should use default
         env: { account: '123456789012', region: 'us-east-1' },
       });
@@ -776,9 +776,9 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
         isPrimary: false, // Secondary stack without replication
         primaryRegion: 'us-east-1',
-        secondaryRegion: 'us-west-1',
+        secondaryRegion: 'us-east-2',
         globalClusterId: 'global-test',
-        env: { account: '123456789012', region: 'us-west-1' },
+        env: { account: '123456789012', region: 'us-east-2' },
       });
       const singleTemplate2 = Template.fromStack(singleStack2);
       
