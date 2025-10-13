@@ -1031,7 +1031,6 @@ def handler(event, context):
         api_deployment = aws.apigateway.Deployment(
             "api-deployment",
             rest_api=api.id,
-            stage_name=environment,
             opts=pulumi.ResourceOptions(depends_on=[post_method, lambda_integration], parent=self)
         )
 
