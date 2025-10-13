@@ -32,10 +32,15 @@ Execute these phases in sequence to deliver production-ready IaC:
 
 **Agent**: `iac-code-reviewer`
 
-- If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment issues deploying the MODEL_RESPONSE), 
-  then request iac-infra-generator to add two more recent AWS Features or services to increase the complexity of the
-  task. Then go to phase2 and give it another round. The idea of this is to make sure that we are truly finding flaws 
-  in the initial `lib/MODEL_RESPONSE.md` and fix them in the `lib/IDEAL_RESPONSE.md`.
+- **Cost-Optimized Iteration Logic**: If the `lib/MODEL_FAILURES.md` file reports minimal issues (not big deployment 
+  issues deploying the MODEL_RESPONSE) AND `training_quality` score < 6, consider requesting iac-infra-generator to 
+  add 1 additional AWS feature or service to increase task complexity.
+  - **Maximum 1 additional iteration** to avoid excessive regeneration cycles
+  - Only iterate if the current task would provide limited training value (score < 6)
+  - The goal is to ensure meaningful differences between MODEL_RESPONSE.md and IDEAL_RESPONSE.md
+  - Skip iteration if training_quality >= 6 (already provides good training value)
+- **Cost Impact**: Reducing "always add 2 features" to "conditionally add 1 feature max" saves 5-10% by avoiding 
+  unnecessary iterations
 
 ### Phase 5: PR Creation & Task Completion
 
@@ -365,12 +370,41 @@ PYTHON_SCRIPT
      }
    ```
 
-    - **Validate metadata.json immediately after creation**:
-      - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
-      - If validation fails, fix the metadata.json before proceeding
-      - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `subject_labels`, using `difficulty` instead of `complexity`
-    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
-      region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+   - **Validate metadata.json immediately after creation**:
+     - Run: `bash scripts/detect-metadata.sh` to verify all required fields are present
+     - If validation fails, fix the metadata.json before proceeding
+     - Common errors: missing `team`, missing `startedAt`, missing `subtask`, missing `subject_labels`, using `difficulty` instead of `complexity`
+   - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
+     region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
+
+### Context Optimization (Cost Reduction Strategy)
+
+**Purpose**: Minimize redundant file reads and context loading across agent phases.
+
+**Guidelines for All Sub-Agents**:
+
+1. **Cache Frequently Accessed Files**:
+   - Read `metadata.json` once and reference the cached content across operations
+   - Template files should be loaded once per phase, not repeatedly
+   - Use file modification timestamps to detect changes before re-reading
+
+2. **Avoid Redundant File Operations**:
+   - Before reading a file, check if you already have its current content
+   - Use `ls -l --time-style=full-iso` to check modification times
+   - Skip re-reading files that haven't changed since last access
+
+3. **Efficient Context Management**:
+   - When comparing files (e.g., IDEAL_RESPONSE vs TapStack), check file sizes first
+   - Use checksums (md5sum/sha256sum) for quick equality checks before detailed comparison
+   - Load only necessary portions of large files when possible
+
+4. **Cross-Phase Communication**:
+   - Each phase should document what files it modified
+   - Next phase can skip validation of unmodified files
+   - Share key metadata across phases without re-extraction
+
+**Cost Impact**: These optimizations reduce token usage by 2-4% across all phases by eliminating redundant reads.
+
 8. Install dependencies inside the worktree with error handling:
     - If language is py: `pipenv install --dev --ignore-pipfile`
     - If language is not py: `npm ci`

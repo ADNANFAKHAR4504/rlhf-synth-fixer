@@ -22,6 +22,8 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ## Review Process
 
+**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+
 ### Phase 1: Prerequisites Check
 
 - Verify latest PROMPT file (e.g., `lib/PROMPT.md`, `lib/PROMPT2.md`, `lib/PROMPT3.md`, etc.) and `lib/IDEAL_RESPONSE.md` exist
@@ -42,28 +44,42 @@ pwd  # Must end with: /worktree/synth-{task_id}
 - Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
   - This metric should reflect the potential training quality that this data will provide when used for retraining the model
   that generated the MODEL_RESPONSE.
-  - It should be a number between 0 and 10 where:
-    - 0 means no improves on the model retraining at all.
-    - 1 means that the improvement is minimal.
-    - ...
-    - 10 means that the data will increase the model's knowledge substantially on the specific domain of the task.
+  - **Detailed Scoring Rubric** (0-10):
+    - **8-10 (Excellent)**: Significant model knowledge gaps identified, complex multi-service integration, novel failure patterns, 
+      security/performance issues uncovered, real-world edge cases discovered
+    - **6-7 (Good)**: Moderate improvements, standard service integrations with some complexity, common failure patterns 
+      with clear fixes, useful deployment insights
+    - **4-5 (Fair)**: Minor fixes, simple configurations, trivial errors (typos, missing imports), basic resource setup
+    - **0-3 (Poor)**: Minimal training value, no meaningful improvements, only formatting changes, consider excluding from training set
+  - The score should reflect: "How much would a model learn from the MODEL_FAILURES.md differences?"
+  - **Quality Impact**: Higher quality scores mean more valuable training data for model improvement
 - Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` an array of
 strings of AWS Services used in the task.
 - Provide report on the training_quality metric and it's justification.
 
 ### Phase 2: Compliance Analysis
 
+**Cost Optimization**: Focus on meaningful differences only to reduce token usage.
+
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
 - Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
+  - **Skip detailed file-by-file comparison if files are identical** (check file hashes or timestamps first)
+  - Only report on actual differences
 - Calculate compliance percentage
 - Compare `lib/IDEAL_RESPONSE.md` and the latest MODEL_RESPONSE file. Highlight the differences in terms
  of infrastructure and validate the value added.
+  - **Focus on significant infrastructure differences**: resource additions/removals, configuration changes, security improvements
+  - Avoid listing trivial formatting or comment differences
 
 ### Phase 3: Test Coverage
 
+**Cost Optimization**: Focus coverage report on gaps rather than comprehensive listings.
+
 - Analyze integration test coverage for all resources (Note: Integration should use stack output file to
 test live resource and it should not use any mocks)
-- Generate coverage report: Requirement | Covered? | Test Name | Notes
+- Generate coverage report focusing on gaps: Requirement | Covered? | Test Name | Notes
+  - **Prioritize uncovered resources** - list what's missing first
+  - Only briefly summarize what's already covered
 - Provide Ready/Pending recommendation
 
 ## Focus Areas

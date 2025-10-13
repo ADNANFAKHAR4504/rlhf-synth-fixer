@@ -23,16 +23,22 @@ pwd  # Must end with: /worktree/synth-{task_id}
 
 ## Workflow
 
+**Before Starting**: Review `.claude/lessons_learnt.md` for common patterns and pitfalls to avoid unnecessary iterations.
+
 1. **Generate Requirements**
    - Create  `lib/PROMPT.md` from task description. Restrict the scope of the prompt to generate
     what the task description is requiring, keeping a minimal approach.
    - The prompt should look like 'Human generated'. Do not make it more complex than needed.
-   - Explore AWS docs and include 2 latest features or services in the prompt. Keep it simple.
+   - **Cost Optimization**: Include 1-2 AWS features or best practices relevant to the task requirements.
+    Reuse patterns from similar completed tasks in the `archive/` directory when applicable.
+    Avoid unnecessary exploration of AWS docs unless required for task completion.
    - Avoid creating resources that take too long to deploy. If those are needed,
     make sure to set properties that reduce the deployment time.
      - e.g. ConfigRecorder
-     - e.g RDS non-serverless instances
+     - e.g RDS non-serverless instances (prefer Aurora Serverless)
+     - e.g. NAT Gateways (prefer VPC endpoints when possible)
    - Do not over engineer the prompt. Keep the prompt minimal to meet the task requirements.
+   - **Be concise**: Generate prompts that are clear and complete but avoid verbose explanations (~20% less verbose than before).
    - Do not use emojis or any other characteristic to the prompt that could make it look non-human generated
    - Explicitly request infrastructure code in the prompt. One code block per file.
 
@@ -45,6 +51,7 @@ pwd  # Must end with: /worktree/synth-{task_id}
    - Create `lib/MODEL_RESPONSE.md` based on the reponse from the prompt.
      - The `lib/MODEL_RESPONSE.md` should have one code-block for each file. Its important that every file
       can be created by simply copy pasting from the `lib/MODEL_RESPONSE.md`.
+     - **Be code-focused**: Minimize explanatory text, focus on clean, well-commented code.
      - Minimize file count while meeting requirements
    - Extract code to `/lib` folder matching existing structure
      - Check the existing code to understand the file structure.
