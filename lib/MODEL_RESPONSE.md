@@ -1,12 +1,15 @@
 ### Reasoning Trace
+
 ---
 
 The user wants me to create a comprehensive AWS CDK TypeScript application with:
+
 1. Real-time analytics infrastructure
 2. Event-driven architecture
 3. Multiple AWS services properly connected
 
 Let me design a system that includes:
+
 - API Gateway for data ingestion
 - Lambda functions for processing
 - Kinesis Data Streams for real-time data flow
@@ -23,13 +26,16 @@ Let me design a system that includes:
 - SageMaker for ML processing
 
 I'll create a real-time analytics platform that processes streaming data with multiple pathways:
+
 1. Real-time path: API → Lambda → Kinesis Stream → Analytics → DynamoDB/OpenSearch
 2. Batch path: Kinesis Stream → Firehose → S3 → Glue → Athena
 3. ML path: Step Functions → SageMaker
 4. Alerting: SNS → SQS
 
 Let me structure this properly with all connections and permissions.
-### Answer 
+
+### Answer
+
 ---
 
 I'll create a comprehensive real-time analytics platform with event-driven architecture using AWS CDK. This solution implements a streaming data pipeline with multiple processing paths, ML capabilities, and full observability.
@@ -54,7 +60,8 @@ const env = {
 new RealTimeAnalyticsStack(app, 'RealTimeAnalyticsStack', {
   env,
   stackName: 'real-time-analytics-prod',
-  description: 'Production real-time analytics platform with event-driven architecture',
+  description:
+    'Production real-time analytics platform with event-driven architecture',
   tags: {
     Environment: 'prod',
     Project: 'real-time-analytics',
@@ -102,60 +109,61 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
   private readonly opensearchDomain: opensearch.Domain;
   private readonly alertTopic: sns.Topic;
   private readonly deadLetterQueue: sqs.Queue;
-  
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // Create encryption key for all services
     this.encryptionKey = this.createEncryptionKey();
-    
+
     // Create S3 data lake bucket
     this.dataLakeBucket = this.createDataLakeBucket();
-    
+
     // Create Kinesis Data Stream for real-time ingestion
     this.kinesisStream = this.createKinesisStream();
-    
+
     // Create DynamoDB table for analytics results
     this.dynamoTable = this.createDynamoTable();
-    
+
     // Create OpenSearch domain for search and analytics
     this.opensearchDomain = this.createOpenSearchDomain();
-    
+
     // Create SNS/SQS for alerting and dead letter queue
     const { topic, dlq } = this.createMessagingInfrastructure();
     this.alertTopic = topic;
     this.deadLetterQueue = dlq;
-    
+
     // Create Lambda functions for processing
-    const { ingestLambda, processorLambda, alertLambda } = this.createLambdaFunctions();
-    
+    const { ingestLambda, processorLambda, alertLambda } =
+      this.createLambdaFunctions();
+
     // Create API Gateway for data ingestion
     this.createApiGateway(ingestLambda);
-    
+
     // Create Kinesis Data Firehose for batch processing
     const firehose = this.createKinesisFirehose();
-    
+
     // Create Glue catalog and crawler
     const { database, crawler } = this.createGlueInfrastructure();
-    
+
     // Create Athena workgroup for queries
     this.createAthenaWorkgroup();
-    
+
     // Create Kinesis Analytics application
     this.createKinesisAnalytics(processorLambda);
-    
+
     // Create SageMaker endpoint for ML inference
     const sagemakerEndpoint = this.createSageMakerEndpoint();
-    
+
     // Create Step Functions for orchestration
     this.createStepFunctions(processorLambda, firehose, sagemakerEndpoint);
-    
+
     // Set up CloudWatch dashboards and alarms
     this.createMonitoringInfrastructure(ingestLambda, processorLambda);
-    
+
     // Enable X-Ray tracing
     this.enableXRayTracing();
-    
+
     // Output important resource ARNs
     this.createOutputs();
   }
@@ -254,7 +262,10 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
     });
   }
 
-  private createMessagingInfrastructure(): { topic: sns.Topic; dlq: sqs.Queue } {
+  private createMessagingInfrastructure(): {
+    topic: sns.Topic;
+    dlq: sqs.Queue;
+  } {
     // Dead letter queue for failed messages
     const dlq = new sqs.Queue(this, 'DeadLetterQueue', {
       queueName: 'analytics-dlq',
@@ -399,15 +410,17 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
     this.kinesisStream.grantRead(processorLambda);
     this.dynamoTable.grantWriteData(processorLambda);
     this.alertTopic.grantPublish(processorLambda);
-    
+
     // Add Kinesis event source to processor
-    processorLambda.addEventSource(new cdk.aws_lambda_event_sources.KinesisEventSource(this.kinesisStream, {
-      startingPosition: lambda.StartingPosition.LATEST,
-      batchSize: 100,
-      maxBatchingWindow: cdk.Duration.seconds(5),
-      parallelizationFactor: 10,
-      retryAttempts: 3,
-    }));
+    processorLambda.addEventSource(
+      new cdk.aws_lambda_event_sources.KinesisEventSource(this.kinesisStream, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 100,
+        maxBatchingWindow: cdk.Duration.seconds(5),
+        parallelizationFactor: 10,
+        retryAttempts: 3,
+      })
+    );
 
     return { ingestLambda, processorLambda, alertLambda };
   }
@@ -433,18 +446,26 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
 
     // Create /ingest endpoint
     const ingestResource = api.root.addResource('ingest');
-    ingestResource.addMethod('POST', new apigateway.LambdaIntegration(ingestLambda, {
-      requestTemplates: {
-        'application/json': '{ "statusCode": 200 }',
-      },
-    }), {
-      apiKeyRequired: true,
-      requestValidator: new apigateway.RequestValidator(this, 'IngestValidator', {
-        restApi: api,
-        validateRequestBody: true,
-        validateRequestParameters: true,
+    ingestResource.addMethod(
+      'POST',
+      new apigateway.LambdaIntegration(ingestLambda, {
+        requestTemplates: {
+          'application/json': '{ "statusCode": 200 }',
+        },
       }),
-    });
+      {
+        apiKeyRequired: true,
+        requestValidator: new apigateway.RequestValidator(
+          this,
+          'IngestValidator',
+          {
+            restApi: api,
+            validateRequestBody: true,
+            validateRequestParameters: true,
+          }
+        ),
+      }
+    );
 
     // Create API key and usage plan
     const apiKey = new apigateway.ApiKey(this, 'ApiKey', {
@@ -487,7 +508,8 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       },
       extendedS3DestinationConfiguration: {
         bucketArn: this.dataLakeBucket.bucketArn,
-        prefix: 'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+        prefix:
+          'raw-data/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
         errorOutputPrefix: 'errors/',
         roleArn: firehoseRole.roleArn,
         compressionFormat: 'GZIP',
@@ -505,23 +527,32 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
         },
         processingConfiguration: {
           enabled: true,
-          processors: [{
-            type: 'RecordDeAggregation',
-            parameters: [{
-              parameterName: 'SubRecordType',
-              parameterValue: 'JSON',
-            }],
-          }],
+          processors: [
+            {
+              type: 'RecordDeAggregation',
+              parameters: [
+                {
+                  parameterName: 'SubRecordType',
+                  parameterValue: 'JSON',
+                },
+              ],
+            },
+          ],
         },
       },
     });
   }
 
-  private createGlueInfrastructure(): { database: glue.CfnDatabase; crawler: glue.CfnCrawler } {
+  private createGlueInfrastructure(): {
+    database: glue.CfnDatabase;
+    crawler: glue.CfnCrawler;
+  } {
     const glueRole = new iam.Role(this, 'GlueRole', {
       assumedBy: new iam.ServicePrincipal('glue.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSGlueServiceRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSGlueServiceRole'
+        ),
       ],
     });
 
@@ -540,9 +571,11 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       role: glueRole.roleArn,
       databaseName: database.ref,
       targets: {
-        s3Targets: [{
-          path: `s3://${this.dataLakeBucket.bucketName}/raw-data/`,
-        }],
+        s3Targets: [
+          {
+            path: `s3://${this.dataLakeBucket.bucketName}/raw-data/`,
+          },
+        ],
       },
       schedule: {
         scheduleExpression: 'rate(1 hour)',
@@ -561,10 +594,12 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       bucketName: `athena-results-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.encryptionKey,
-      lifecycleRules: [{
-        id: 'cleanup-old-results',
-        expiration: cdk.Duration.days(7),
-      }],
+      lifecycleRules: [
+        {
+          id: 'cleanup-old-results',
+          expiration: cdk.Duration.days(7),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
@@ -586,7 +621,9 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
     });
   }
 
-  private createKinesisAnalytics(processorLambda: lambda.Function): kinesisanalytics.CfnApplicationV2 {
+  private createKinesisAnalytics(
+    processorLambda: lambda.Function
+  ): kinesisanalytics.CfnApplicationV2 {
     const analyticsRole = new iam.Role(this, 'AnalyticsRole', {
       assumedBy: new iam.ServicePrincipal('kinesisanalytics.amazonaws.com'),
     });
@@ -627,13 +664,15 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
           codeContentType: 'PLAINTEXT',
         },
         environmentProperties: {
-          propertyGroups: [{
-            propertyGroupId: 'consumer.config',
-            propertyMap: {
-              'input.stream.name': this.kinesisStream.streamName,
-              'flink.stream.initpos': 'LATEST',
+          propertyGroups: [
+            {
+              propertyGroupId: 'consumer.config',
+              propertyMap: {
+                'input.stream.name': this.kinesisStream.streamName,
+                'flink.stream.initpos': 'LATEST',
+              },
             },
-          }],
+          ],
         },
         flinkApplicationConfiguration: {
           parallelismConfiguration: {
@@ -666,31 +705,35 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       modelName: 'analytics-ml-model',
       executionRoleArn: sagemakerRole.roleArn,
       primaryContainer: {
-        image: '763104351884.dkr.ecr.us-east-1.amazonaws.com/sklearn-inference:0.23-1-cpu-py3',
+        image:
+          '763104351884.dkr.ecr.us-east-1.amazonaws.com/sklearn-inference:0.23-1-cpu-py3',
         modelDataUrl: `s3://${this.dataLakeBucket.bucketName}/models/model.tar.gz`,
       },
     });
 
     // Endpoint configuration
-    const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'MLEndpointConfig', {
-      endpointConfigName: 'analytics-endpoint-config',
-      productionVariants: [{
-        modelName: model.modelName!,
-        variantName: 'AllTraffic',
-        initialInstanceCount: 1,
-        instanceType: 'ml.t2.medium',
-        initialVariantWeight: 1,
-      }],
-      dataCaptureConfig: {
-        enableCapture: true,
-        initialSamplingPercentage: 100,
-        destinationS3Uri: `s3://${this.dataLakeBucket.bucketName}/sagemaker-capture/`,
-        captureOptions: [
-          { captureMode: 'Input' },
-          { captureMode: 'Output' },
+    const endpointConfig = new sagemaker.CfnEndpointConfig(
+      this,
+      'MLEndpointConfig',
+      {
+        endpointConfigName: 'analytics-endpoint-config',
+        productionVariants: [
+          {
+            modelName: model.modelName!,
+            variantName: 'AllTraffic',
+            initialInstanceCount: 1,
+            instanceType: 'ml.t2.medium',
+            initialVariantWeight: 1,
+          },
         ],
-      },
-    });
+        dataCaptureConfig: {
+          enableCapture: true,
+          initialSamplingPercentage: 100,
+          destinationS3Uri: `s3://${this.dataLakeBucket.bucketName}/sagemaker-capture/`,
+          captureOptions: [{ captureMode: 'Input' }, { captureMode: 'Output' }],
+        },
+      }
+    );
 
     // Create endpoint
     return new sagemaker.CfnEndpoint(this, 'MLEndpoint', {
@@ -705,34 +748,42 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
     sagemakerEndpoint: sagemaker.CfnEndpoint
   ): stepfunctions.StateMachine {
     // Define Lambda invoke task
-    const processTask = new stepfunctionsTasks.LambdaInvoke(this, 'ProcessData', {
-      lambdaFunction: processorLambda,
-      outputPath: '$.Payload',
-    });
+    const processTask = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'ProcessData',
+      {
+        lambdaFunction: processorLambda,
+        outputPath: '$.Payload',
+      }
+    );
 
     // Define SageMaker invoke task
-    const mlInferenceTask = new stepfunctionsTasks.SageMakerCreateTransformJob(this, 'MLInference', {
-      transformJobName: stepfunctions.JsonPath.stringAt('$.jobName'),
-      modelName: sagemakerEndpoint.endpointName!,
-      transformInput: {
-        dataSource: {
-          s3DataSource: {
-            s3Uri: stepfunctions.JsonPath.stringAt('$.inputPath'),
-            s3DataType: stepfunctionsTasks.S3DataType.S3_PREFIX,
+    const mlInferenceTask = new stepfunctionsTasks.SageMakerCreateTransformJob(
+      this,
+      'MLInference',
+      {
+        transformJobName: stepfunctions.JsonPath.stringAt('$.jobName'),
+        modelName: sagemakerEndpoint.endpointName!,
+        transformInput: {
+          dataSource: {
+            s3DataSource: {
+              s3Uri: stepfunctions.JsonPath.stringAt('$.inputPath'),
+              s3DataType: stepfunctionsTasks.S3DataType.S3_PREFIX,
+            },
           },
         },
-      },
-      transformOutput: {
-        s3OutputPath: stepfunctions.JsonPath.stringAt('$.outputPath'),
-      },
-      transformResources: {
-        instanceCount: 1,
-        instanceType: cdk.aws_ec2.InstanceType.of(
-          cdk.aws_ec2.InstanceClass.ML,
-          cdk.aws_ec2.InstanceSize.LARGE
-        ),
-      },
-    });
+        transformOutput: {
+          s3OutputPath: stepfunctions.JsonPath.stringAt('$.outputPath'),
+        },
+        transformResources: {
+          instanceCount: 1,
+          instanceType: cdk.aws_ec2.InstanceType.of(
+            cdk.aws_ec2.InstanceClass.ML,
+            cdk.aws_ec2.InstanceSize.LARGE
+          ),
+        },
+      }
+    );
 
     // Define parallel processing
     const parallel = new stepfunctions.Parallel(this, 'ParallelProcessing');
@@ -749,8 +800,7 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
     const success = new stepfunctions.Succeed(this, 'Success');
 
     // Build state machine
-    const definition = stepfunctions.Chain
-      .start(parallel)
+    const definition = stepfunctions.Chain.start(parallel)
       .addCatch(handleError, {
         errors: ['States.ALL'],
         resultPath: '$.error',
@@ -788,17 +838,11 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
           ingestLambda.metricInvocations(),
           processorLambda.metricInvocations(),
         ],
-        right: [
-          ingestLambda.metricErrors(),
-          processorLambda.metricErrors(),
-        ],
+        right: [ingestLambda.metricErrors(), processorLambda.metricErrors()],
       }),
       new cloudwatch.GraphWidget({
         title: 'Lambda Duration',
-        left: [
-          ingestLambda.metricDuration(),
-          processorLambda.metricDuration(),
-        ],
+        left: [ingestLambda.metricDuration(), processorLambda.metricDuration()],
       })
     );
 
@@ -837,24 +881,32 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       alarmDescription: 'High error rate in stream processor',
     });
 
-    const kinesisIteratorAgeAlarm = new cloudwatch.Alarm(this, 'KinesisIteratorAge', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Kinesis',
-        metricName: 'GetRecords.IteratorAgeMilliseconds',
-        dimensionsMap: {
-          StreamName: this.kinesisStream.streamName,
-        },
-        statistic: 'Maximum',
-      }),
-      threshold: 60000, // 1 minute
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Kinesis iterator age is too high',
-    });
+    const kinesisIteratorAgeAlarm = new cloudwatch.Alarm(
+      this,
+      'KinesisIteratorAge',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Kinesis',
+          metricName: 'GetRecords.IteratorAgeMilliseconds',
+          dimensionsMap: {
+            StreamName: this.kinesisStream.streamName,
+          },
+          statistic: 'Maximum',
+        }),
+        threshold: 60000, // 1 minute
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Kinesis iterator age is too high',
+      }
+    );
 
     // Add alarm actions
-    highErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.alertTopic));
-    kinesisIteratorAgeAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.alertTopic));
+    highErrorAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alertTopic)
+    );
+    kinesisIteratorAgeAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alertTopic)
+    );
 
     // Add DynamoDB alarms
     const dynamoThrottleAlarm = new cloudwatch.Alarm(this, 'DynamoThrottle', {
@@ -867,7 +919,9 @@ export class RealTimeAnalyticsStack extends cdk.Stack {
       alarmDescription: 'DynamoDB throttling detected',
     });
 
-    dynamoThrottleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.alertTopic));
+    dynamoThrottleAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alertTopic)
+    );
   }
 
   private enableXRayTracing(): void {
@@ -943,12 +997,14 @@ This CDK application creates a comprehensive real-time analytics platform with:
 ## **Architecture Components:**
 
 ### **Data Ingestion & Processing:**
+
 - API Gateway with throttling and API key authentication
 - Lambda functions for data ingestion and stream processing
 - Kinesis Data Stream for real-time data flow
 - Kinesis Data Analytics for SQL-based stream processing
 
 ### **Storage & Analytics:**
+
 - S3 data lake with lifecycle policies and encryption
 - DynamoDB for real-time results storage
 - OpenSearch for search and analytics
@@ -956,22 +1012,26 @@ This CDK application creates a comprehensive real-time analytics platform with:
 - Athena for SQL queries on S3 data
 
 ### **Orchestration & ML:**
+
 - Step Functions for workflow orchestration
 - SageMaker endpoint for ML inference
 - Kinesis Firehose for batch processing to S3
 
 ### **Messaging & Alerts:**
+
 - SNS topics for notifications
 - SQS queues with DLQ for reliable processing
 - CloudWatch alarms for monitoring
 
 ### **Security & Compliance:**
+
 - KMS encryption for all data at rest
 - IAM roles with least privilege access
 - VPC endpoints where applicable
 - X-Ray tracing for observability
 
 ### **Cost Optimization:**
+
 - S3 lifecycle rules for tiered storage
 - DynamoDB with TTL for automatic cleanup
 - Reserved concurrent executions for Lambda

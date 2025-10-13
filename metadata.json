@@ -10,5 +10,25 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, DynamoDB, CloudWatch, Lambda, SNS, Kinesis, Opensearch"
+  "aws_services": [
+    "S3",
+    "CloudFormation",
+    "DynamoDB",
+    "CloudWatch",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "Kinesis Data Streams",
+    "Kinesis Data Firehose",
+    "Kinesis Analytics",
+    "OpenSearch Service",
+    "API Gateway",
+    "Glue",
+    "Athena",
+    "KMS",
+    "IAM",
+    "EC2",
+    "VPC"
+  ],
+  "training_quality": "high"
 }
