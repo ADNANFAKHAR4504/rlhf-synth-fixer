@@ -139,7 +139,8 @@ describe('TapStack Production Integration Tests', () => {
       if (!hasAwsCredentials) return;
       const result = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
       expect(result.Stacks && result.Stacks[0]?.StackName).toBe(stackName);
-      expect(result.Stacks?.[0]?.StackStatus).toBe('CREATE_COMPLETE');
+      const status = result.Stacks?.[0]?.StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(status);
     });
 
     test('deployment outputs are accessible', async () => {

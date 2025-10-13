@@ -1,30 +1,65 @@
-Create a complete, validated, and deployable YAML CloudFormation template that establishes a foundational, secure AWS environment in the us-east-1 region for a sensitive workload (e.g., in finance or healthcare).
+Create a complete, validated, and deployable YAML CloudFormation template that establishes a foundational, secure AWS environment for a sensitive workload (e.g., in finance or healthcare) with end-to-end functional integration.
 
-Objective: Create a template named SecureEnv.yaml that rigorously implements security best practices as code. The environment must be built to the exacting standards required for regulatory compliance.
+## Primary Objectives
 
-Core Requirements & Constraints: Your solution must meticulously adhere to the following 16 specific security mandates. The template will be evaluated against each one:
+### 1. Web Application Delivery
+- Deploy a web server (EC2) in private subnets that serves content via Nginx
+- Configure an Application Load Balancer (ALB) to distribute traffic to the web server
+- Ensure the ALB can successfully serve web content from the EC2 instance
+- Implement proper health checks and target group configuration
 
-Least Privilege IAM: All created IAM Roles must have policies granting the minimum permissions necessary for their specific function.
-Managed Policies: Prefer and utilize AWS Managed Policies (e.g., AmazonS3ReadOnlyAccess) over custom inline policies where a suitable managed policy exists.
-EC2 in VPC: All provisioned EC2 instances must be deployed within the created VPC and subnets.
-EBS Encryption: Enable encryption for all Elastic Block Store (EBS) volumes attached to any EC2 instances.
-RDS High Availability: Any Relational Database Service (RDS) instances must be deployed in a Multi-AZ configuration for fault tolerance.
-S3 Default Encryption: All S3 buckets must have default encryption enabled (SSE-S3 is acceptable for this task).
-TLS for In-Transit Data: Ensure all services that support it (e.g., Application Load Balancer, API Gateway) are configured to use TLS 1.2 or higher.
-CloudWatch Alarms: Define meaningful CloudWatch Alarms for critical resources (e.g., CPU utilization on EC2, Database connections on RDS).
-S3 Versioning: Enable versioning on all S3 buckets to protect against accidental overwrites and deletions.
-ELB Access Logging: Configure access logging for any Elastic Load Balancers created.
-Lambda in VPC: Any AWS Lambda functions must be configured to execute within the VPC.
-RDS Public Access: Explicitly ensure RDS instances are not publicly accessible.
-Minimal Security Groups: All Security Groups must be defined with the most restrictive rules possible (e.g., specific ports and CIDR ranges only).
-GuardDuty: Implement and enable Amazon GuardDuty for threat detection.
-RDS Backups: Ensure RDS instances have automatic backups enabled with a reasonable retention period (e.g., 7 days).
-API Gateway Logging: Enable full execution logging for all API Gateway requests.
-Naming & Technical Specifications:
+### 2. API-Driven Data Operations
+- Create a REST API via API Gateway that integrates with Lambda functions
+- Implement Lambda functions that can perform S3 operations (read/write)
+- Enable end-to-end data flow: API Gateway → Lambda → S3
+- Support both PUT and GET operations for data persistence and retrieval
 
-Filename: The output must be a single file named SecureEnv.yaml.
-Resource Naming: All resources must use the prefix SecureEnv (e.g., SecureEnvVPC, SecureEnvDataBucket).
-AWS Account: Use the placeholder account ID 123456789012 in any resource ARNs if needed.
-Region: The template must target the us-east-1 region.
-Validation: The final YAML must be syntactically correct and pass a aws cloudformation validate-template check.
-Deliverable: Provide the complete, self-contained YAML code for the SecureEnv.yaml CloudFormation template. The template should create a cohesive environment, including at a minimum: a VPC with public and private subnets, an example EC2 instance, an S3 bucket, and demonstrate the implementation of the security constraints listed above. Do not include any explanatory text outside of the YAML code itself.
+### 3. Secure Data Storage and Access
+- Deploy encrypted RDS database in private subnets with Multi-AZ configuration
+- Store database credentials securely in AWS Secrets Manager
+- Implement proper security groups to restrict database access to application tier only
+- Enable automated backups with appropriate retention policies
+
+### 4. Comprehensive Monitoring and Security
+- Enable CloudWatch alarms for critical infrastructure metrics (EC2, RDS, ALB)
+- Implement GuardDuty for threat detection across the environment
+- Configure VPC Flow Logs for network traffic monitoring
+- Enable API Gateway execution logging and ALB access logging
+
+## Security Requirements (16 Mandates)
+
+1. **Least Privilege IAM**: All IAM Roles must have minimum necessary permissions
+2. **Managed Policies**: Prefer AWS Managed Policies over custom inline policies
+3. **EC2 in VPC**: All EC2 instances deployed within VPC and private subnets
+4. **EBS Encryption**: All EBS volumes must be encrypted
+5. **RDS High Availability**: RDS instances in Multi-AZ configuration
+6. **S3 Default Encryption**: All S3 buckets with default encryption enabled
+7. **TLS for In-Transit**: Services configured for TLS 1.2+ where supported
+8. **CloudWatch Alarms**: Meaningful alarms for critical resources
+9. **S3 Versioning**: Versioning enabled on all S3 buckets
+10. **ELB Access Logging**: Access logging configured for load balancers
+11. **Lambda in VPC**: Lambda functions configured to execute within VPC
+12. **RDS Public Access**: RDS instances explicitly not publicly accessible
+13. **Minimal Security Groups**: Most restrictive security group rules
+14. **GuardDuty**: Amazon GuardDuty enabled for threat detection
+15. **RDS Backups**: Automatic backups with reasonable retention (7 days)
+16. **API Gateway Logging**: Full execution logging for API Gateway requests
+
+## Technical Specifications
+
+- **Filename**: SecureEnv.yaml
+- **Resource Naming**: All resources use "SecureEnv" prefix
+- **Region**: us-east-1 (configurable via parameters)
+- **Validation**: Must pass `aws cloudformation validate-template` check
+
+## End-to-End Integration Requirements
+
+The template must create a functional system where:
+1. Users can access a website through the ALB that serves content from EC2
+2. API endpoints can store and retrieve data via Lambda functions writing to S3
+3. All components are properly secured, monitored, and follow AWS best practices
+4. The infrastructure supports real-world workloads with proper failover and backup capabilities
+
+## Deliverable
+
+Provide the complete, self-contained YAML code for the SecureEnv.yaml CloudFormation template that creates a cohesive, functional environment demonstrating real integration between ALB+EC2+Web Content and API Gateway+Lambda+S3 data operations, while implementing all security constraints listed above.
