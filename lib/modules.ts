@@ -52,7 +52,6 @@ import { BudgetsBudget } from '@cdktf/provider-aws/lib/budgets-budget';
 
 // SSM
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
-import { DataAwsSsmParameter } from '@cdktf/provider-aws/lib/data-aws-ssm-parameter';
 
 // CloudTrail
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
@@ -62,13 +61,12 @@ import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-se
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
 // Interfaces
-// Interfaces
 export interface CommonTags {
   [key: string]: string;
-  project: string;
-  environment: string;
-  owner: string;
-  'cost-center': string;
+  Project: string; // Capitalized
+  Environment: string; // Capitalized
+  Owner: string; // Capitalized
+  CostCenter: string; // No hyphen, capitalized
 }
 
 export interface IamRoleConfig {
@@ -107,6 +105,7 @@ export interface RdsInstanceConfig {
   backupRetentionPeriod?: number;
   deletionProtection?: boolean;
   enabledCloudwatchLogsExports?: string[];
+  monitoringInterval?: number; // Add this
   tags: CommonTags;
 }
 
@@ -158,10 +157,19 @@ export class IamRoleConstruct extends Construct {
   ) {
     super(scope, id);
 
+    // Filter out duplicate tags (case-insensitive)
+    const uniqueTags: { [key: string]: string } = {};
+    Object.entries(config.tags).forEach(([key, value]) => {
+      const lowerKey = key.toLowerCase();
+      if (!Object.keys(uniqueTags).some(k => k.toLowerCase() === lowerKey)) {
+        uniqueTags[key] = value;
+      }
+    });
+
     this.role = new IamRole(this, 'role', {
       name: config.name,
       assumeRolePolicy: JSON.stringify(config.assumeRolePolicy),
-      tags: config.tags,
+      tags: uniqueTags, // Use filtered tags
     });
 
     // Create instance profile if needed (for EC2)
@@ -368,9 +376,35 @@ export class EncryptedS3Bucket extends Construct {
 export class SecureRdsInstance extends Construct {
   public readonly instance: DbInstance;
   public readonly secretArn: string;
+  private monitoringRole?: IamRole;
 
   constructor(scope: Construct, id: string, config: RdsInstanceConfig) {
     super(scope, id);
+
+    // Create monitoring role if monitoring is enabled
+    let monitoringRoleArn: string | undefined;
+    if (config.monitoringInterval && config.monitoringInterval > 0) {
+      this.monitoringRole = new IamRole(this, 'monitoring-role', {
+        name: `${config.name}-rds-monitoring-role`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+        ],
+        tags: config.tags,
+      });
+      monitoringRoleArn = this.monitoringRole.arn;
+    }
 
     this.instance = new DbInstance(this, 'instance', {
       identifier: config.name,
@@ -380,10 +414,7 @@ export class SecureRdsInstance extends Construct {
       storageEncrypted: true,
       kmsKeyId: config.kmsKeyId,
       username: config.username,
-
-      // Use AWS-managed password generation and storage
       manageMasterUserPassword: true,
-
       dbSubnetGroupName: config.dbSubnetGroupName,
       vpcSecurityGroupIds: config.vpcSecurityGroupIds,
       backupRetentionPeriod: config.backupRetentionPeriod ?? 7,
@@ -395,11 +426,11 @@ export class SecureRdsInstance extends Construct {
       finalSnapshotIdentifier: `${config.name}-final-snapshot-${Date.now()}`,
       copyTagsToSnapshot: true,
       autoMinorVersionUpgrade: true,
-      monitoringInterval: 60, // Enhanced monitoring
+      monitoringInterval: config.monitoringInterval || 0, // Default to 0 if not specified
+      monitoringRoleArn: monitoringRoleArn, // Add the monitoring role ARN
       tags: config.tags,
     });
 
-    // The secret ARN where the password is stored
     this.secretArn = this.instance.masterUserSecret.get(0).secretArn;
   }
 
@@ -770,7 +801,7 @@ export class AuditTrail extends Construct {
       ],
       tags,
     });
-const trailBucketPolicy = {
+    const trailBucketPolicy = {
       Version: '2012-10-17',
       Statement: [
         {
@@ -814,7 +845,7 @@ const trailBucketPolicy = {
     );
 
     // IAM role for CloudTrail to write to CloudWatch
-// IAM role for CloudTrail to write to CloudWatch
+    // IAM role for CloudTrail to write to CloudWatch
     const trailRole = new IamRoleConstruct(this, 'trail-role', {
       name: `${name}-cloudtrail-role`,
       assumeRolePolicy: {
@@ -848,7 +879,7 @@ const trailBucketPolicy = {
       tags,
     });
 
-   this.trail = new Cloudtrail(this, 'trail', {
+    this.trail = new Cloudtrail(this, 'trail', {
       name,
       s3BucketName: this.bucket.bucket.id,
       includeGlobalServiceEvents: true,

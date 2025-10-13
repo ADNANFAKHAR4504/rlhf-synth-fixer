@@ -69,11 +69,10 @@ export class TapStack extends TerraformStack {
 
     // Common tags for all resources
     const commonTags: CommonTags = {
-      project: id,
-      environment: environmentSuffix,
-      owner: 'infrastructure-team',
-      'cost-center': 'engineering',
-      // managedBy: 'terraform',
+      Project: id, // Use capitalized keys consistently
+      Environment: environmentSuffix,
+      Owner: 'infrastructure-team',
+      CostCenter: 'engineering', // Remove hyphens from keys
     };
 
     // Create KMS key for encryption
