@@ -426,7 +426,6 @@ resource "aws_vpc_peering_connection" "main" {
   peer_vpc_id = aws_vpc.main[local.peering_pairs[count.index].accepter_vpc_index].id
 
   peer_owner_id = local.vpc_account_ids[local.peering_pairs[count.index].accepter_vpc_index]
-  peer_region   = var.primary_region
 
   auto_accept = local.vpc_account_ids[local.peering_pairs[count.index].requester_vpc_index] == local.vpc_account_ids[local.peering_pairs[count.index].accepter_vpc_index]
 
@@ -930,7 +929,7 @@ resource "aws_cloudwatch_log_metric_filter" "rejected_connections" {
     namespace = "Corp/VPCPeering/Security"
     value     = "1"
     dimensions = {
-      VPCIndex = count.index
+      VPCIndex = tostring(count.index)
     }
   }
 }

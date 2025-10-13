@@ -355,10 +355,6 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
       expect(terraformCode).toMatch(/resource\s+"aws_vpc_peering_connection"[\s\S]*?peer_owner_id\s*=/);
     });
 
-    test('should set peer_region for peering', () => {
-      expect(terraformCode).toMatch(/resource\s+"aws_vpc_peering_connection"[\s\S]*?peer_region\s*=/);
-    });
-
     test('should define VPC peering connection accepter', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"\s+"main"/);
     });
