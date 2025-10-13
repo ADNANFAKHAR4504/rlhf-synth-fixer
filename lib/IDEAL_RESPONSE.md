@@ -662,7 +662,7 @@ All resources are tagged with:
           ],
           "UserData": {
             "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Hello from Web Server in ${EnvironmentSuffix} environment</h1>' > /var/www/html/index.html\n"
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd mysql\nsystemctl start httpd\nsystemctl enable httpd\nINSTANCE_ID=$(ec2-metadata --instance-id | cut -d ' ' -f 2)\necho \"<h1>Hello from Web Server in ${EnvironmentSuffix} environment</h1><p>Instance ID: $INSTANCE_ID</p>\" > /var/www/html/index.html\n"
             }
           },
           "TagSpecifications": [
