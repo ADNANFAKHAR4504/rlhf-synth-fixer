@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348951",
+  "team": "4",
+  "startedAt": "2025-10-02T11:15:52.332Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "Amazon EC2",
+    "Elastic IP",
+    "Amazon VPC",
+    "Subnets",
+    "Internet Gateway",
+    "Route Table",
+    "Security Groups",
+    "Amazon S3",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "AWS Systems Manager"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anilg-turing",
+  "dockerS3Location": ""
+}

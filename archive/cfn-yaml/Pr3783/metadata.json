@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350010",
+  "team": "2",
+  "startedAt": "2025-10-07T18:28:52.498Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "CloudFormation",
+    "KMS",
+    "S3",
+    "SNS",
+    "IAM",
+    "Elastic Beanstalk",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch Events"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

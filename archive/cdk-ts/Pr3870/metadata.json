@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "63927418",
+  "team": "synth",
+  "startedAt": "2025-10-08T16:44:38+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "API Gateway v2 (WebSocket)",
+    "DynamoDB",
+    "DynamoDB Streams",
+    "SNS",
+    "SQS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "X-Ray"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

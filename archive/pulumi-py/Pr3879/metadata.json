@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "60923817",
+  "team": "synth",
+  "startedAt": "2025-10-08T18:20:24+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon SQS",
+    "Amazon CloudWatch",
+    "AWS IAM",
+    "AWS Systems Manager Parameter Store",
+    "Amazon EventBridge",
+    "AWS AppSync",
+    "AWS Translate"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

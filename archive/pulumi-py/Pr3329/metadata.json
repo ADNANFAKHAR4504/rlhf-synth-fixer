@@ -1,0 +1,21 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "21142738",
+  "team": "1",
+  "startedAt": "2025-10-02T09:41:41.066Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "VPC, Application Load Balancer, Auto Scaling Group, EC2, Aurora PostgreSQL, ElastiCache Redis, S3 Bucket, DynamoDB, CloudFront, Route 53, Certificate Manager, Cognito, Lambda, CloudWatch LogGroup, Systems Manager, IAM, EventBridge",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}
