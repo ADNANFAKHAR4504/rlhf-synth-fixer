@@ -753,6 +753,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
     id     = "archive-logs"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.log_archive_transition_days
       storage_class = "GLACIER"
@@ -826,11 +828,6 @@ resource "aws_cloudtrail" "main" {
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
-    data_resource {
-      type   = "AWS::EC2::Instance"
-      values = ["arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"]
-    }
   }
 
   tags = merge(local.common_tags, {
