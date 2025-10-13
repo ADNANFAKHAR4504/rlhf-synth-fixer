@@ -58,7 +58,19 @@ If `tasks.csv` is present:
        writer.writerows(rows)
    ```
 
-4. **Follow instructions in `task-coordinator` to set up the worktree**:
+4. **Validate task complexity matches requirements** (Quality assurance):
+   - Extract AWS services count from task description
+   - Validate against difficulty level:
+     - "hard" or "expert" tasks: Should have 5+ AWS services
+     - "medium" tasks: Should have 3-5 AWS services
+     - "easy" tasks: Should have 1-3 AWS services
+   - If mismatch detected:
+     - Log warning: "Task {task_id} marked as {difficulty} but appears to have {count} services"
+     - Add note to trainr_notes in CSV for review
+     - Proceed with task but flag for quality review
+   - **Quality Impact**: Ensures consistent difficulty levels across training data
+
+5. **Follow instructions in `task-coordinator` to set up the worktree**:
    - Use EXACT format: `worktree/synth-{task_id}`
    - Validation will fail if naming is incorrect
 

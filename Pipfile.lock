@@ -108,6 +108,15 @@
             "markers": "python_version >= '3.7'",
             "version": "==2.14.0"
         },
+        "aws-xray-sdk": {
+            "hashes": [
+                "sha256:aab843c331af9ab9ba5cefb3a303832a19db186140894a523edafc024cc0493c",
+                "sha256:cfbe6feea3d26613a2a869d14c9246a844285c97087ad8f296f901633554ad94"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.7'",
+            "version": "==2.14.0"
+        },
         "boto3": {
             "hashes": [
                 "sha256:62901bc616c64236700001f530fc66b659ecd1acb4f541ddac6fcae3a1d37ea6",
