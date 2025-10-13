@@ -364,3 +364,339 @@ describe('RDS Multi-AZ and Backup Configuration', () => {
     expect(dbInstance!.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
   });
 });
+
+describe('NAT Gateway to Private Subnet Integration', () => {
+  let natGateways: AWS.EC2.NatGatewayList;
+  let routeTables: AWS.EC2.RouteTableList;
+  let subnets: AWS.EC2.SubnetList;
+  let vpcs: AWS.EC2.VpcList;
+
+  beforeAll(async () => {
+    const vpcResponse = await ec2.describeVpcs({}).promise();
+    vpcs = vpcResponse.Vpcs || [];
+
+    const natResponse = await ec2.describeNatGateways({}).promise();
+    natGateways = natResponse.NatGateways || [];
+
+    const rtResponse = await ec2.describeRouteTables({}).promise();
+    routeTables = rtResponse.RouteTables || [];
+
+    const subnetResponse = await ec2.describeSubnets({}).promise();
+    subnets = subnetResponse.Subnets || [];
+  });
+
+  test('should have NAT Gateway in public subnet routing private traffic', async () => {
+    const vpc = vpcs.find(v =>
+      v.Tags?.some(
+        tag =>
+          tag.Key === 'Name' &&
+          tag.Value?.includes(`ProductionVPC-${environmentSuffix}`)
+      )
+    );
+    expect(vpc).toBeDefined();
+
+    const natGateway = natGateways.find(
+      nat =>
+        nat.State === 'available' &&
+        nat.Tags?.some(
+          tag =>
+            tag.Key === 'Name' &&
+            tag.Value?.includes(`NATGateway-${environmentSuffix}`)
+        )
+    );
+    expect(natGateway).toBeDefined();
+
+    const natSubnet = subnets.find(s => s.SubnetId === natGateway!.SubnetId);
+    expect(natSubnet).toBeDefined();
+    expect(natSubnet!.MapPublicIpOnLaunch).toBe(true);
+
+    const privateRouteTable = routeTables.find(
+      rt =>
+        rt.VpcId === vpc!.VpcId &&
+        rt.Tags?.some(
+          tag =>
+            tag.Key === 'Name' &&
+            tag.Value?.includes(`PrivateRouteTable-${environmentSuffix}`)
+        )
+    );
+    expect(privateRouteTable).toBeDefined();
+
+    const natRoute = privateRouteTable!.Routes?.find(
+      route =>
+        route.DestinationCidrBlock === '0.0.0.0/0' &&
+        route.NatGatewayId === natGateway!.NatGatewayId
+    );
+    expect(natRoute).toBeDefined();
+
+    const privateSubnets = subnets.filter(
+      s =>
+        s.VpcId === vpc!.VpcId &&
+        !s.MapPublicIpOnLaunch &&
+        s.Tags?.some(tag => tag.Value?.includes(environmentSuffix))
+    );
+    expect(privateSubnets.length).toBe(2);
+  });
+
+  test('should have NAT Gateway with Elastic IP allocated', async () => {
+    const natGateway = natGateways.find(
+      nat =>
+        nat.State === 'available' &&
+        nat.Tags?.some(
+          tag =>
+            tag.Key === 'Name' &&
+            tag.Value?.includes(`NATGateway-${environmentSuffix}`)
+        )
+    );
+    expect(natGateway).toBeDefined();
+    expect(natGateway!.NatGatewayAddresses).toBeDefined();
+    expect(natGateway!.NatGatewayAddresses!.length).toBeGreaterThan(0);
+    expect(natGateway!.NatGatewayAddresses![0].AllocationId).toBeDefined();
+  });
+});
+
+describe('Internet Gateway to Public Subnet Integration', () => {
+  let internetGateways: AWS.EC2.InternetGatewayList;
+  let routeTables: AWS.EC2.RouteTableList;
+  let subnets: AWS.EC2.SubnetList;
+  let vpcs: AWS.EC2.VpcList;
+
+  beforeAll(async () => {
+    const vpcResponse = await ec2.describeVpcs({}).promise();
+    vpcs = vpcResponse.Vpcs || [];
+
+    const igwResponse = await ec2.describeInternetGateways({}).promise();
+    internetGateways = igwResponse.InternetGateways || [];
+
+    const rtResponse = await ec2.describeRouteTables({}).promise();
+    routeTables = rtResponse.RouteTables || [];
+
+    const subnetResponse = await ec2.describeSubnets({}).promise();
+    subnets = subnetResponse.Subnets || [];
+  });
+
+  test('should have Internet Gateway attached to VPC routing public traffic', async () => {
+    const vpc = vpcs.find(v =>
+      v.Tags?.some(
+        tag =>
+          tag.Key === 'Name' &&
+          tag.Value?.includes(`ProductionVPC-${environmentSuffix}`)
+      )
+    );
+    expect(vpc).toBeDefined();
+
+    const igw = internetGateways.find(
+      gateway =>
+        gateway.Attachments?.some(
+          att => att.VpcId === vpc!.VpcId && att.State === 'available'
+        ) &&
+        gateway.Tags?.some(
+          tag =>
+            tag.Key === 'Name' &&
+            tag.Value?.includes(`ProductionIGW-${environmentSuffix}`)
+        )
+    );
+    expect(igw).toBeDefined();
+
+    const publicRouteTable = routeTables.find(
+      rt =>
+        rt.VpcId === vpc!.VpcId &&
+        rt.Tags?.some(
+          tag =>
+            tag.Key === 'Name' &&
+            tag.Value?.includes(`PublicRouteTable-${environmentSuffix}`)
+        )
+    );
+    expect(publicRouteTable).toBeDefined();
+
+    const igwRoute = publicRouteTable!.Routes?.find(
+      route =>
+        route.DestinationCidrBlock === '0.0.0.0/0' &&
+        route.GatewayId === igw!.InternetGatewayId
+    );
+    expect(igwRoute).toBeDefined();
+    expect(igwRoute!.State).toBe('active');
+
+    const publicSubnets = subnets.filter(
+      s =>
+        s.VpcId === vpc!.VpcId &&
+        s.MapPublicIpOnLaunch &&
+        s.Tags?.some(tag => tag.Value?.includes(environmentSuffix))
+    );
+    expect(publicSubnets.length).toBe(2);
+  });
+});
+
+describe('CloudWatch Alarms to Auto Scaling Integration', () => {
+  const cloudwatch = new AWS.CloudWatch();
+  let alarms: AWS.CloudWatch.MetricAlarms;
+  let autoScalingGroups: AWS.AutoScaling.AutoScalingGroups;
+  let policies: AWS.AutoScaling.PoliciesType['ScalingPolicies'];
+
+  beforeAll(async () => {
+    const alarmsResponse = await cloudwatch.describeAlarms({}).promise();
+    alarms = alarmsResponse.MetricAlarms || [];
+
+    const asgResponse = await autoscaling
+      .describeAutoScalingGroups({})
+      .promise();
+    autoScalingGroups = asgResponse.AutoScalingGroups || [];
+
+    const policiesResponse = await autoscaling.describePolicies({}).promise();
+    policies = policiesResponse.ScalingPolicies || [];
+  });
+
+  test('should have CloudWatch high CPU alarm triggering scale up policy', async () => {
+    const asg = autoScalingGroups.find(group =>
+      group.AutoScalingGroupName?.includes(environmentSuffix)
+    );
+    expect(asg).toBeDefined();
+
+    const highCPUAlarm = alarms.find(
+      alarm =>
+        alarm.AlarmName?.includes('CPUAlarmHigh') &&
+        alarm.AlarmName?.includes(environmentSuffix)
+    );
+    expect(highCPUAlarm).toBeDefined();
+    expect(highCPUAlarm!.MetricName).toBe('CPUUtilization');
+    expect(highCPUAlarm!.ComparisonOperator).toBe('GreaterThanThreshold');
+    expect(highCPUAlarm!.Threshold).toBe(70);
+
+    expect(highCPUAlarm!.AlarmActions).toBeDefined();
+    expect(highCPUAlarm!.AlarmActions!.length).toBeGreaterThan(0);
+
+    const scaleUpPolicy = policies!.find(
+      p =>
+        p.PolicyName?.includes('ScaleUpPolicy') &&
+        p.AutoScalingGroupName === asg!.AutoScalingGroupName
+    );
+    expect(scaleUpPolicy).toBeDefined();
+    expect(scaleUpPolicy!.ScalingAdjustment).toBe(1);
+  });
+
+  test('should have CloudWatch low CPU alarm triggering scale down policy', async () => {
+    const asg = autoScalingGroups.find(group =>
+      group.AutoScalingGroupName?.includes(environmentSuffix)
+    );
+    expect(asg).toBeDefined();
+
+    const lowCPUAlarm = alarms.find(
+      alarm =>
+        alarm.AlarmName?.includes('CPUAlarmLow') &&
+        alarm.AlarmName?.includes(environmentSuffix)
+    );
+    expect(lowCPUAlarm).toBeDefined();
+    expect(lowCPUAlarm!.MetricName).toBe('CPUUtilization');
+    expect(lowCPUAlarm!.ComparisonOperator).toBe('LessThanThreshold');
+    expect(lowCPUAlarm!.Threshold).toBe(30);
+
+    expect(lowCPUAlarm!.AlarmActions).toBeDefined();
+    expect(lowCPUAlarm!.AlarmActions!.length).toBeGreaterThan(0);
+
+    const scaleDownPolicy = policies!.find(
+      p =>
+        p.PolicyName?.includes('ScaleDownPolicy') &&
+        p.AutoScalingGroupName === asg!.AutoScalingGroupName
+    );
+    expect(scaleDownPolicy).toBeDefined();
+    expect(scaleDownPolicy!.ScalingAdjustment).toBe(-1);
+  });
+});
+
+describe('Secrets Manager to RDS Integration', () => {
+  const secretsmanager = new AWS.SecretsManager();
+  let secrets: AWS.SecretsManager.SecretListEntry[];
+  let dbInstances: AWS.RDS.DBInstanceList;
+
+  beforeAll(async () => {
+    const secretsResponse = await secretsmanager.listSecrets({}).promise();
+    secrets = secretsResponse.SecretList || [];
+
+    const rdsResponse = await rds.describeDBInstances({}).promise();
+    dbInstances = rdsResponse.DBInstances || [];
+  });
+
+  test('should have Secrets Manager secret for RDS password', async () => {
+    const dbSecret = secrets.find(
+      s =>
+        s.Name?.includes('prod-db-password') &&
+        s.Name?.includes(environmentSuffix)
+    );
+    expect(dbSecret).toBeDefined();
+    expect(dbSecret!.Name).toBe(`prod-db-password-${environmentSuffix}`);
+
+    const secretValue = await secretsmanager
+      .getSecretValue({ SecretId: dbSecret!.ARN! })
+      .promise();
+    expect(secretValue.SecretString).toBeDefined();
+
+    const secretData = JSON.parse(secretValue.SecretString!);
+    expect(secretData.password).toBeDefined();
+    expect(secretData.password.length).toBe(32);
+  });
+
+  test('should have RDS instance using Secrets Manager password', async () => {
+    const dbInstance = dbInstances.find(db =>
+      db.DBInstanceIdentifier?.includes(environmentSuffix)
+    );
+    expect(dbInstance).toBeDefined();
+
+    const dbSecret = secrets.find(
+      s =>
+        s.Name?.includes('prod-db-password') &&
+        s.Name?.includes(environmentSuffix)
+    );
+    expect(dbSecret).toBeDefined();
+  });
+});
+
+describe('Launch Template to EC2 to IAM Integration', () => {
+  const iam = new AWS.IAM();
+  let launchTemplates: AWS.EC2.LaunchTemplateList;
+  let instances: AWS.EC2.InstanceList;
+  let instanceProfiles: AWS.IAM.InstanceProfileList;
+
+  beforeAll(async () => {
+    const ltResponse = await ec2.describeLaunchTemplates({}).promise();
+    launchTemplates = ltResponse.LaunchTemplates || [];
+
+    const ec2Response = await ec2.describeInstances({}).promise();
+    instances =
+      ec2Response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+    const profilesResponse = await iam.listInstanceProfiles({}).promise();
+    instanceProfiles = profilesResponse.InstanceProfiles || [];
+  });
+
+  test('should have Launch Template with IAM profile attached to running EC2 instances', async () => {
+    const launchTemplate = launchTemplates.find(lt =>
+      lt.LaunchTemplateName?.includes(environmentSuffix)
+    );
+    expect(launchTemplate).toBeDefined();
+
+    const ltVersion = await ec2
+      .describeLaunchTemplateVersions({
+        LaunchTemplateId: launchTemplate!.LaunchTemplateId!,
+      })
+      .promise();
+    const ltData = ltVersion.LaunchTemplateVersions![0].LaunchTemplateData;
+    expect(ltData!.IamInstanceProfile).toBeDefined();
+
+    const runningInstances = instances.filter(
+      i =>
+        i.State?.Name === 'running' &&
+        i.Tags?.some(tag => tag.Value?.includes(environmentSuffix))
+    );
+    expect(runningInstances.length).toBeGreaterThanOrEqual(2);
+
+    runningInstances.forEach(instance => {
+      expect(instance.IamInstanceProfile).toBeDefined();
+      const profileArn = instance.IamInstanceProfile!.Arn!;
+      const profileName = profileArn.split('/').pop()!;
+
+      const profile = instanceProfiles.find(p => p.InstanceProfileName === profileName);
+      expect(profile).toBeDefined();
+      expect(profile!.Roles).toBeDefined();
+      expect(profile!.Roles!.length).toBeGreaterThan(0);
+    });
+  });
+});
