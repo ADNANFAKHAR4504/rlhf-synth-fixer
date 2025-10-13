@@ -25,9 +25,12 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         cls.region = os.getenv('AWS_REGION', 'us-east-1')
         cls.project_name = os.getenv('PULUMI_PROJECT', 'TapStack')
-        cls.stack_name = os.getenv('PULUMI_STACK', cls.environment_suffix)
         
-        # Resource name prefix
+        # Stack name follows the pattern TapStack${ENVIRONMENT_SUFFIX} in deployment scripts
+        cls.stack_name = os.getenv('PULUMI_STACK', f'TapStack{cls.environment_suffix}')
+        
+        # Resource name prefix - matches how Pulumi creates resources: {project_name}-{stack_name}
+        # This results in: TapStack-TapStackpr3987 for PR #3987
         cls.resource_prefix = f"{cls.project_name}-{cls.stack_name}"
 
         # Initialize AWS clients
