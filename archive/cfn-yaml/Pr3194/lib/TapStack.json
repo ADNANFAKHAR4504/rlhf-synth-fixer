@@ -1,0 +1,411 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Media Storage System with S3, DynamoDB, Lambda, and CloudWatch",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix to append to resource names (e.g., dev, test, prod)",
+      "Type": "String",
+      "Default": "dev"
+    }
+  },
+  "Resources": {
+    "MediaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "media-storage",
+              {"Ref": "AWS::AccountId"},
+              {"Ref": "EnvironmentSuffix"}
+            ]
+          ]
+        },
+        "NotificationConfiguration": {
+          "EventBridgeConfiguration": {
+            "EventBridgeEnabled": true
+          }
+        },
+        "CorsConfiguration": {
+          "CorsRules": [
+            {
+              "AllowedHeaders": ["*"],
+              "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+              "AllowedOrigins": ["*"],
+              "MaxAge": 3000
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToInfrequentAccess",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 90
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "MediaBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "MediaBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {"Fn::GetAtt": ["ImageProcessorRole", "Arn"]}
+              },
+              "Action": ["s3:GetObject", "s3:PutObject"],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [{"Fn::GetAtt": ["MediaBucket", "Arn"]}, "/*"]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ImageMetadataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Join": ["-", ["ImageMetadata", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "uploadedBy",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "uploadDate",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserUploadIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "uploadedBy",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "uploadDate",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ]
+      }
+    },
+    "ImageProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": ["-", ["ImageProcessorPolicy", {"Ref": "EnvironmentSuffix"}]]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:GetObject", "s3:PutObject"],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [{"Fn::GetAtt": ["MediaBucket", "Arn"]}, "/*"]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {"Fn::GetAtt": ["ImageMetadataTable", "Arn"]}
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["dynamodb:Query"],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [{"Fn::GetAtt": ["ImageMetadataTable", "Arn"]}, "/index/*"]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ImageRetrieverRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": ["-", ["ImageRetrieverPolicy", {"Ref": "EnvironmentSuffix"}]]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:GetObject"],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [{"Fn::GetAtt": ["MediaBucket", "Arn"]}, "/*"]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {"Fn::GetAtt": ["ImageMetadataTable", "Arn"]}
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["dynamodb:Query"],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [{"Fn::GetAtt": ["ImageMetadataTable", "Arn"]}, "/index/*"]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ImageProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Join": ["-", ["ImageProcessor", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "Handler": "index.handler",
+        "Role": {"Fn::GetAtt": ["ImageProcessorRole", "Arn"]},
+        "Runtime": "nodejs20.x",
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {"Ref": "ImageMetadataTable"},
+            "S3_BUCKET": {"Ref": "MediaBucket"},
+            "ENVIRONMENT": {"Ref": "EnvironmentSuffix"}
+          }
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\nconst dynamoDB = new AWS.DynamoDB.DocumentClient();\nconst crypto = require('crypto');\n\nexports.handler = async (event) => {\n  try {\n    console.log('Received event:', JSON.stringify(event));\n    \n    const bucket = event.detail.bucket.name;\n    const key = decodeURIComponent(event.detail.object.key.replace(/\\+/g, ' '));\n    \n    console.log(`Processing object from bucket: ${bucket}, key: ${key}`);\n    \n    const s3Object = await s3.headObject({\n      Bucket: bucket,\n      Key: key\n    }).promise();\n    \n    const metadata = s3Object.Metadata || {};\n    const contentType = s3Object.ContentType;\n    const fileSize = s3Object.ContentLength;\n    const uploadDate = new Date().toISOString();\n    const uploadedBy = metadata.uploadedby || 'unknown';\n    \n    const id = metadata.id || crypto.randomUUID();\n    \n    const item = {\n      id: id,\n      key: key,\n      contentType: contentType,\n      fileSize: fileSize,\n      uploadDate: uploadDate,\n      uploadedBy: uploadedBy,\n      bucket: bucket,\n      metadata: metadata\n    };\n    \n    await dynamoDB.put({\n      TableName: process.env.DYNAMODB_TABLE,\n      Item: item\n    }).promise();\n    \n    console.log(`Successfully processed image: ${key}`);\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Image processed successfully',\n        id: id\n      })\n    };\n  } catch (error) {\n    console.error('Error processing image:', error);\n    throw error;\n  }\n};"
+        }
+      }
+    },
+    "ImageRetrieverFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Join": ["-", ["ImageRetriever", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "Handler": "index.handler",
+        "Role": {"Fn::GetAtt": ["ImageRetrieverRole", "Arn"]},
+        "Runtime": "nodejs20.x",
+        "Timeout": 10,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {"Ref": "ImageMetadataTable"},
+            "S3_BUCKET": {"Ref": "MediaBucket"},
+            "ENVIRONMENT": {"Ref": "EnvironmentSuffix"}
+          }
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\nconst dynamoDB = new AWS.DynamoDB.DocumentClient();\n\nexports.handler = async (event) => {\n  try {\n    const queryParams = event.queryStringParameters || {};\n    const imageId = queryParams.id;\n    const userId = queryParams.userId;\n    \n    let items;\n    \n    if (imageId) {\n      const result = await dynamoDB.get({\n        TableName: process.env.DYNAMODB_TABLE,\n        Key: { id: imageId }\n      }).promise();\n      \n      items = result.Item ? [result.Item] : [];\n    } \n    else if (userId) {\n      const result = await dynamoDB.query({\n        TableName: process.env.DYNAMODB_TABLE,\n        IndexName: 'UserUploadIndex',\n        KeyConditionExpression: 'uploadedBy = :userId',\n        ExpressionAttributeValues: { ':userId': userId }\n      }).promise();\n      \n      items = result.Items || [];\n    } \n    else {\n      const result = await dynamoDB.scan({\n        TableName: process.env.DYNAMODB_TABLE,\n        Limit: 100\n      }).promise();\n      \n      items = result.Items || [];\n    }\n    \n    const imagesWithUrls = await Promise.all(items.map(async (item) => {\n      const signedUrl = await s3.getSignedUrlPromise('getObject', {\n        Bucket: item.bucket,\n        Key: item.key,\n        Expires: 3600\n      });\n      \n      return {\n        ...item,\n        url: signedUrl\n      };\n    }));\n    \n    return {\n      statusCode: 200,\n      headers: {\n        'Content-Type': 'application/json',\n        'Access-Control-Allow-Origin': '*'\n      },\n      body: JSON.stringify({\n        images: imagesWithUrls\n      })\n    };\n  } catch (error) {\n    console.error('Error retrieving images:', error);\n    return {\n      statusCode: 500,\n      headers: {\n        'Content-Type': 'application/json',\n        'Access-Control-Allow-Origin': '*'\n      },\n      body: JSON.stringify({\n        message: 'Error retrieving images',\n        error: error.message\n      })\n    };\n  }\n};"
+        }
+      }
+    },
+    "S3EventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Join": ["-", ["S3ImageUploadRule", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "Description": "Trigger Lambda when objects are uploaded to S3",
+        "EventPattern": {
+          "source": ["aws.s3"],
+          "detail-type": ["Object Created"],
+          "detail": {
+            "bucket": {
+              "name": [{"Ref": "MediaBucket"}]
+            }
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Fn::GetAtt": ["ImageProcessorFunction", "Arn"]},
+            "Id": "ImageProcessorTarget"
+          }
+        ]
+      }
+    },
+    "EventBridgeLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "ImageProcessorFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["S3EventRule", "Arn"]}
+      }
+    },
+    "MediaStorageDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Join": ["-", ["MediaStorageDashboard", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/S3\", \"NumberOfObjects\", \"BucketName\", \"${MediaBucket}\", \"StorageType\", \"AllStorageTypes\" ],\n          [ \".\", \"BucketSizeBytes\", \".\", \".\", \".\", \".\" ]\n        ],\n        \"period\": 86400,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Bucket Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${ImageProcessorFunction}\" ],\n          [ \".\", \"Errors\", \".\", \".\" ],\n          [ \".\", \"Duration\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Image Processor Lambda Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${ImageRetrieverFunction}\" ],\n          [ \".\", \"Errors\", \".\", \".\" ],\n          [ \".\", \"Duration\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Image Retriever Lambda Metrics\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${ImageMetadataTable}\" ],\n          [ \".\", \"ConsumedWriteCapacityUnits\", \".\", \".\" ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Metrics\"\n      }\n    }\n  ]\n}"
+        }
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": ["-", ["LambdaErrorsAlarm", {"Ref": "EnvironmentSuffix"}]]
+        },
+        "AlarmDescription": "Alarm if Lambda function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {"Ref": "ImageProcessorFunction"}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "MediaBucketName": {
+      "Description": "Name of the S3 bucket for media storage",
+      "Value": {"Ref": "MediaBucket"}
+    },
+    "ImageMetadataTableName": {
+      "Description": "Name of the DynamoDB table for image metadata",
+      "Value": {"Ref": "ImageMetadataTable"}
+    },
+    "ImageProcessorFunctionName": {
+      "Description": "Name of the Lambda function for processing images",
+      "Value": {"Ref": "ImageProcessorFunction"}
+    },
+    "ImageRetrieverFunctionName": {
+      "Description": "Name of the Lambda function for retrieving images",
+      "Value": {"Ref": "ImageRetrieverFunction"}
+    },
+    "DashboardURL": {
+      "Description": "URL for the CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MediaStorageDashboard}"
+      }
+    },
+    "EventRuleArn": {
+      "Description": "ARN of the EventBridge rule",
+      "Value": {"Fn::GetAtt": ["S3EventRule", "Arn"]}
+    }
+  }
+}

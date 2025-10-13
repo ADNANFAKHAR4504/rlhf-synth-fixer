@@ -30,7 +30,8 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: "organization"
   AWS_REGION: ${{ vars.AWS_REGION }}
-  CURRENT_ACCOUNT_ID: "342597974367"
+  CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
+  CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   # Go caching optimization
@@ -53,6 +54,24 @@ jobs:
       - name: Detect metadata and validate project
         id: metadata
         run: ./scripts/detect-metadata.sh
+
+  validate-commit-message:
+    name: Validate Commit Message
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch all history for commitlint
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
+
+      - name: Validate commit message
+        run: npx commitlint --from=HEAD~1 --to=HEAD
 
   build:
     name: Build
@@ -719,8 +738,25 @@ jobs:
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
+            # Extract metadata for commit message
+            METADATA_FILE="$ARCHIVE_DIR/metadata.json"
+            METADATA_PLATFORM=$(jq -r '.platform' "$METADATA_FILE")
+            METADATA_PO_ID=$(jq -r '.po_id' "$METADATA_FILE")
+            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' "$METADATA_FILE")
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' "$METADATA_FILE")
+
+            METADATA_AUTHOR=$(jq -r '.author' "$METADATA_FILE")
+
+            # Truncate subject_labels to 100 characters if needed
+            if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
+              METADATA_SUBJECT_LABELS="${METADATA_SUBJECT_LABELS:0:97}..." # 97 chars + "..." = 100
+            fi
+
+            COMMIT_SUBJECT="feat(${METADATA_PLATFORM}): ${METADATA_PO_ID} ${METADATA_SUBTASK}"
+            COMMIT_BODY="${METADATA_SUBJECT_LABELS}\nAuthor: ${METADATA_AUTHOR}"
+
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
+            git commit -m "${COMMIT_SUBJECT}" -m "${COMMIT_BODY}" -m "[skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -844,31 +880,32 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  # TODO: For future use
-  # ? Need fine-grained Personal Access Token from repo owner
-  # semantic-release:
-  #   name: Semantic Release
-  #   runs-on: ubuntu-24.04
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   permissions:
-  #     contents: write
-  #     issues: write
-  #     pull-requests: write
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # permissions:
+    #   contents: write
+    #   issues: write
+    #   pull-requests: write
+    concurrency:
+      group: semantic_release_pipeline
+      cancel-in-progress: true
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         fetch-depth: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: 'false'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
 
-  #     - name: Run semantic-release
-  #       run: npm run release
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+      - name: Run semantic-release
+        run: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_PAT }}

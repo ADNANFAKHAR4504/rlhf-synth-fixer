@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348811",
+  "team": "4",
+  "startedAt": "2025-10-01T11:59:39.018Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "EC2",
+    "EIP",
+    "ALB",
+    "AutoScaling",
+    "LaunchTemplate",
+    "S3",
+    "RDS",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 7,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
