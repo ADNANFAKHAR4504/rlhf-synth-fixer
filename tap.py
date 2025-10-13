@@ -13,6 +13,7 @@ import os
 
 import aws_cdk as cdk
 from aws_cdk import Tags
+
 from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
@@ -30,7 +31,6 @@ Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
 
 # Create a TapStackProps object to pass environment_suffix
-
 props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
@@ -42,4 +42,11 @@ props = TapStackProps(
 # Initialize the stack with proper parameters
 TapStack(app, STACK_NAME, props=props)
 
+app.synth()
+app.synth()
+app.synth()
+app.synth()
+app.synth()
+app.synth()
+app.synth()
 app.synth()
