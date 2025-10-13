@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350131",
+  "team": "4",
+  "startedAt": "2025-10-13T10:01:13.264Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Network ACL",
+    "Security Group",
+    "RDS",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Metric Filters",
+    "CloudTrail",
+    "CloudTrail Event Data Store",
+    "AWS Config",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
