@@ -74,7 +74,7 @@ export class EmailNotificationStack extends cdk.Stack {
       this,
       'DeliveryTrackingTable',
       {
-        tableName: `email-delivery-tracking-${environmentSuffix}`,
+        tableName: `email-delivery-tracking-${environmentSuffix}-temp`,
         partitionKey: { name: 'emailId', type: dynamodb.AttributeType.STRING },
         sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
