@@ -1,10 +1,11 @@
+# pylint: disable=too-many-lines
 """
 tap_stack.py
 
-This module defines the TapStack class, the main Pulumi ComponentResource for 
+This module defines the TapStack class, the main Pulumi ComponentResource for
 the TAP (Test Automation Platform) project.
 
-It orchestrates the instantiation of other resource-specific components 
+It orchestrates the instantiation of other resource-specific components
 and manages environment-specific configurations.
 """
 
@@ -22,17 +23,19 @@ import pulumi_aws as aws
 
 
 class TapStackArgs:
-  """
-  TapStackArgs defines the input arguments for the TapStack Pulumi component.
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-    tags (Optional[dict]): Optional default tags to apply to resources.
-  """
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for
+            identifying the deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+    """
 
-  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-    self.environment_suffix = environment_suffix or 'dev'
-    self.tags = tags
+    def __init__(self, environment_suffix: Optional[str] = None,
+                 tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):
@@ -84,17 +87,22 @@ class TapStack(pulumi.ComponentResource):
         # ============================================================================
 
         # Bucket for raw transaction data
+        stack_lower = pulumi.get_stack().lower()
+        # pylint: disable=line-too-long
+        sse_default_args = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+            sse_algorithm="AES256"
+        )
+        # pylint: enable=line-too-long
+        sse_config = aws.s3.BucketServerSideEncryptionConfigurationArgs(
+            rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=sse_default_args
+            )
+        )
         raw_data_bucket = aws.s3.Bucket(
             "raw-transactions-bucket",
-            bucket=f"financial-raw-transactions-{environment}-{pulumi.get_stack().lower()}",
+            bucket=f"financial-raw-transactions-{environment}-{stack_lower}",
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
+            server_side_encryption_configuration=sse_config,
             lifecycle_rules=[
                 aws.s3.BucketLifecycleRuleArgs(
                     enabled=True,
@@ -118,15 +126,10 @@ class TapStack(pulumi.ComponentResource):
         # Bucket for processed transaction data
         processed_data_bucket = aws.s3.Bucket(
             "processed-transactions-bucket",
-            bucket=f"financial-processed-transactions-{environment}-{pulumi.get_stack().lower()}",
+            bucket=(f"financial-processed-transactions-{environment}-"
+                    f"{stack_lower}"),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
+            server_side_encryption_configuration=sse_config,
             tags={**default_tags, "DataType": "Processed"},
             opts=ResourceOptions(parent=self)
         )
