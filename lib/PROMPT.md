@@ -1,4 +1,4 @@
-Create a single Terraform configuration file named tap_stack.tf containing all variables, locals, resources, and outputs (no provider block, no module references) that fulfills the following security and infrastructure requirements:
+Create a single Terraform configuration file named tap_stack.tf containing all variables, locals, resources, and outputs that fulfills the following security and infrastructure requirements:
 1. There is requirement to have resources deployed in this region us-west-2 . So Please create proper VPC and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16.
 2. VPCs should have 2 private and 2 public subnets in VPC. Also  crate necessary Nat gateway, internet gateway, route table and route table association as per the network infrastructure requirements. Implement high availability with at least three availability zones, automatic failover, and robust redundancy plans. Use NAT Gateways to allow internet access for resources in private subnets. 
 3. Create non public S3 bucket with required security.

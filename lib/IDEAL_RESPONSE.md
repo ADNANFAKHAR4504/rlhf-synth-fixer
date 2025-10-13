@@ -1,5 +1,4 @@
 ```hcl
-
 # tap_stack.tf - Complete Infrastructure Stack Configuration
 
 # ===========================
