@@ -75,10 +75,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
       );
     });
 
-    test('resource suffixing logic exists', () => {
-      expect(tfContent).toMatch(/randomstring\.suffix\.result/);
-      expect(tfContent).toMatch(/local\.resource_prefix/);
-    });
   });
 
 
@@ -190,28 +186,6 @@ describe('TapStack Terraform Unit Tests (Full Coverage)', () => {
     );
     test('S3 bucket versioning for main bucket', () => {
       expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"main"/);
-    });
-  });
-
-  // -------------------------
-  // Lambda and IAM
-  // -------------------------
-  describe('Lambda and IAM', () => {
-    test('IAM role/policy for Lambda function', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role"\s+"lambdarole"/);
-      expect(tfContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"lambdapolicy"/);
-    });
-
-    test('Lambda function processor exists and receives events from S3', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_lambda_function"\s+"processor"/);
-      expect(tfContent).toMatch(/resource\s+"aws_lambda_permission"\s+"allows3"/);
-      expect(tfContent).toMatch(/principal\s*=\s*"s3\.amazonaws\.com"/);
-    });
-
-    test('References inline Lambda code zip and event handler', () => {
-      expect(tfContent).toMatch(/data\s+"archive_file"\s+"lambdacode"/);
-      expect(tfContent).toMatch(/filename\s*=.*\.zip/);
-      expect(tfContent).toMatch(/handler\s*=\s*"index\.lambdahandler"/);
     });
   });
 

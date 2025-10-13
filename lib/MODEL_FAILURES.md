@@ -1,3 +1,7 @@
+1. Deployment failed because model wornlgy useed the inline code for the lambda fucntion which failed the deployemnt.
+
+2. Deployment also failed because of the IAM role worng naming convention.
+
 ```
 ╷
 │ Error: Unsupported argument
