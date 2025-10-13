@@ -525,3 +525,147 @@ output "cloudwatch_alarm_name" {
   value       = aws_cloudwatch_metric_alarm.high_cpu.alarm_name
 }
 ```
+
+## CloudFront Cache Invalidation Procedures
+
+When you deploy new content or make updates to your application, CloudFront may serve cached content instead of the latest version. Use cache invalidation to force CloudFront to fetch fresh content from your origin.
+
+### Method 1: AWS CLI Cache Invalidation
+
+```bash
+# Invalidate all files
+aws cloudfront create-invalidation \
+  --distribution-id <DISTRIBUTION_ID> \
+  --paths "/*"
+
+# Invalidate specific files
+aws cloudfront create-invalidation \
+  --distribution-id <DISTRIBUTION_ID> \
+  --paths "/index.html" "/css/styles.css" "/js/app.js"
+
+# Invalidate a specific directory
+aws cloudfront create-invalidation \
+  --distribution-id <DISTRIBUTION_ID> \
+  --paths "/images/*"
+```
+
+### Method 2: AWS Console Cache Invalidation
+
+1. Navigate to CloudFront in AWS Console
+2. Select your distribution
+3. Go to the "Invalidations" tab
+4. Click "Create Invalidation"
+5. Enter the paths to invalidate (e.g., `/*` for all files)
+6. Click "Create Invalidation"
+
+### Method 3: Terraform Null Resource for Automated Invalidation
+
+Add this to your Terraform configuration for automatic invalidation on deploy:
+
+```hcl
+resource "null_resource" "cloudfront_invalidation" {
+  triggers = {
+    # Trigger on any ALB DNS change or manual trigger
+    alb_dns = aws_lb.us_east_1.dns_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws cloudfront create-invalidation \
+        --distribution-id ${aws_cloudfront_distribution.s3_distribution.id} \
+        --paths "/*"
+    EOT
+  }
+
+  depends_on = [aws_cloudfront_distribution.s3_distribution]
+}
+```
+
+### Method 4: S3 Event + Lambda Automatic Invalidation
+
+For production environments, set up automatic invalidation when S3 content changes:
+
+```hcl
+# Lambda function to invalidate CloudFront cache
+resource "aws_lambda_function" "cloudfront_invalidator" {
+  filename      = "cloudfront_invalidator.zip"
+  function_name = "cloudfront-invalidator"
+  role          = aws_iam_role.lambda_cloudfront_invalidator.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+
+  environment {
+    variables = {
+      DISTRIBUTION_ID = aws_cloudfront_distribution.s3_distribution.id
+    }
+  }
+}
+
+# S3 bucket notification to trigger Lambda
+resource "aws_s3_bucket_notification" "cloudfront_invalidation_trigger" {
+  bucket = aws_s3_bucket.us_east_1.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.cloudfront_invalidator.arn
+    events              = ["s3:ObjectCreated:*"]
+  }
+}
+```
+
+### Best Practices
+
+1. **Limit Invalidation Paths**: The first 1,000 invalidation paths per month are free, then $0.005 per path. Use wildcard patterns like `/images/*` instead of individual files.
+
+2. **Use Versioned Filenames**: Instead of invalidating, append version numbers or hashes to filenames (e.g., `app.v2.js`, `styles.abc123.css`). This is more efficient and immediate.
+
+3. **Set Appropriate TTL**: Configure `Cache-Control` headers on your origin to set appropriate TTL values (e.g., `Cache-Control: max-age=3600`).
+
+4. **Monitor Invalidation Status**: Check invalidation status:
+   ```bash
+   aws cloudfront get-invalidation \
+     --distribution-id <DISTRIBUTION_ID> \
+     --id <INVALIDATION_ID>
+   ```
+
+5. **Invalidation Time**: Invalidations typically complete in 10-15 minutes but can take longer depending on the number of edge locations.
+
+### Example Invalidation Script
+
+Create a reusable script for common invalidation tasks:
+
+```bash
+#!/bin/bash
+# invalidate-cloudfront.sh
+
+DISTRIBUTION_ID="your-distribution-id"
+
+case "$1" in
+  all)
+    aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+    ;;
+  static)
+    aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/css/*" "/js/*" "/images/*"
+    ;;
+  index)
+    aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/index.html"
+    ;;
+  *)
+    echo "Usage: $0 {all|static|index}"
+    exit 1
+    ;;
+esac
+
+echo "Invalidation request submitted for: $1"
+```
+
+### Monitoring Invalidation Costs
+
+To avoid unexpected costs, monitor invalidation usage:
+
+```bash
+# List all invalidations
+aws cloudfront list-invalidations --distribution-id <DISTRIBUTION_ID>
+
+# Get distribution config to check cache behaviors
+aws cloudfront get-distribution --id <DISTRIBUTION_ID> --query 'Distribution.DistributionConfig.CacheBehaviors'
+```

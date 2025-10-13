@@ -385,6 +385,420 @@ resource "aws_route_table_association" "database_us_west_2" {
   route_table_id = aws_route_table.private_us_west_2[count.index].id
 }
 
+# Network ACLs - US-EAST-1
+resource "aws_network_acl" "public_us_east_1" {
+  provider = aws.us_east_1
+  vpc_id   = aws_vpc.us_east_1.id
+  subnet_ids = [
+    for subnet in aws_subnet.public_us_east_1 : subnet.id
+  ]
+
+  # Inbound HTTP
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Inbound HTTPS
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Inbound SSH
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 22
+    to_port    = 22
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound HTTP
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Outbound HTTPS
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Outbound Ephemeral ports
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to private subnets
+  egress {
+    protocol   = "-1"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-public-nacl-us-east-1"
+  })
+}
+
+resource "aws_network_acl" "private_us_east_1" {
+  provider = aws.us_east_1
+  vpc_id   = aws_vpc.us_east_1.id
+  subnet_ids = [
+    for subnet in aws_subnet.private_us_east_1 : subnet.id
+  ]
+
+  # Inbound from VPC
+  ingress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to VPC
+  egress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  # Outbound HTTP
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Outbound HTTPS
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Outbound Ephemeral ports
+  egress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-private-nacl-us-east-1"
+  })
+}
+
+resource "aws_network_acl" "database_us_east_1" {
+  provider = aws.us_east_1
+  vpc_id   = aws_vpc.us_east_1.id
+  subnet_ids = [
+    for subnet in aws_subnet.database_us_east_1 : subnet.id
+  ]
+
+  # Inbound PostgreSQL from private subnets
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 5432
+    to_port    = 5432
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to VPC
+  egress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.0.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-database-nacl-us-east-1"
+  })
+}
+
+# Network ACLs - US-WEST-2
+resource "aws_network_acl" "public_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
+  subnet_ids = [
+    for subnet in aws_subnet.public_us_west_2 : subnet.id
+  ]
+
+  # Inbound HTTP
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Inbound HTTPS
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Inbound SSH
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 22
+    to_port    = 22
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound HTTP
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Outbound HTTPS
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Outbound Ephemeral ports
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to private subnets
+  egress {
+    protocol   = "-1"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-public-nacl-us-west-2"
+  })
+}
+
+resource "aws_network_acl" "private_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
+  subnet_ids = [
+    for subnet in aws_subnet.private_us_west_2 : subnet.id
+  ]
+
+  # Inbound from VPC
+  ingress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to VPC
+  egress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  # Outbound HTTP
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Outbound HTTPS
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Outbound Ephemeral ports
+  egress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-private-nacl-us-west-2"
+  })
+}
+
+resource "aws_network_acl" "database_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
+  subnet_ids = [
+    for subnet in aws_subnet.database_us_west_2 : subnet.id
+  ]
+
+  # Inbound PostgreSQL from private subnets
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 5432
+    to_port    = 5432
+  }
+
+  # Inbound Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound to VPC
+  egress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.1.0.0/16"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-database-nacl-us-west-2"
+  })
+}
+
 resource "aws_security_group" "bastion_us_east_1" {
   provider    = aws.us_east_1
   name_prefix = "${var.project_name}-bastion-"

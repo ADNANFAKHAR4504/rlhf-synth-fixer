@@ -13,7 +13,25 @@
     "Security & Compliance",
     "Network Architecture"
   ],
-  "aws_services": "VPC, EC2, ALB, ASG, RDS, S3, CloudTrail, CloudWatch, KMS, Route53, CloudFront, IAM, NAT Gateway",
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "ASG",
+    "RDS",
+    "S3",
+    "CloudTrail",
+    "CloudWatch",
+    "KMS",
+    "Route53",
+    "CloudFront",
+    "IAM",
+    "NAT Gateway",
+    "Secrets Manager",
+    "Internet Gateway",
+    "EIP"
+  ],
   "testDependencies": {
     "@aws-sdk/client-ec2": "^3.901.0",
     "@aws-sdk/client-rds": "^3.901.0",
