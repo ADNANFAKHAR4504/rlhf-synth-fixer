@@ -11,7 +11,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const primaryRegion = 'us-east-1';
 const secondaryRegion = 'us-west-1';
 const globalClusterId = `global-financial-${environmentSuffix}`;
-const globalTableName = `metadata-table-${environmentSuffix}`;
+const globalTableName = `metadata-${environmentSuffix}`;
 // Only enable Security Hub if not already enabled in the account
 // Pass -c enableSecurityHub=true to enable it during deployment
 const enableSecurityHub =
