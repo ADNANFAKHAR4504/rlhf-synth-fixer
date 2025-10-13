@@ -5,7 +5,8 @@ This program instantiates the TapStack and exports all outputs.
 """
 
 import pulumi
-from tap_stack import TapStack, TapStackArgs
+
+from lib.tap_stack import TapStack, TapStackArgs
 
 # Create the TapStack
 stack = TapStack(

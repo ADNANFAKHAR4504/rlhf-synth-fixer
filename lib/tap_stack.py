@@ -11,19 +11,20 @@ and manages environment-specific configurations with proper output exports.
 from typing import Optional
 
 import pulumi
-from infrastructure.api_gateway import APIGatewayStack
-from infrastructure.cloudwatch import CloudWatchStack
-# Import infrastructure modules
-from infrastructure.config import InfrastructureConfig
-from infrastructure.config_rules import ConfigRulesStack
-from infrastructure.dynamodb import DynamoDBStack
-from infrastructure.iam import IAMStack
-from infrastructure.lambda_function import LambdaStack
-from infrastructure.s3 import S3Stack
-from infrastructure.sns import SNSStack
-from infrastructure.step_functions import StepFunctionsStack
-from infrastructure.waf import WAFStack
 from pulumi import ResourceOptions
+
+from lib.infrastructure.api_gateway import APIGatewayStack
+from lib.infrastructure.cloudwatch import CloudWatchStack
+# Import infrastructure modules
+from lib.infrastructure.config import InfrastructureConfig
+from lib.infrastructure.config_rules import ConfigRulesStack
+from lib.infrastructure.dynamodb import DynamoDBStack
+from lib.infrastructure.iam import IAMStack
+from lib.infrastructure.lambda_function import LambdaStack
+from lib.infrastructure.s3 import S3Stack
+from lib.infrastructure.sns import SNSStack
+from lib.infrastructure.step_functions import StepFunctionsStack
+from lib.infrastructure.waf import WAFStack
 
 
 class TapStackArgs:
