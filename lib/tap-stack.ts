@@ -102,7 +102,7 @@ export class TapStack extends TerraformStack {
       instanceClass: 'db.t3.small',
       allocatedStorage: 20,
       storageEncrypted: true,
-      multiAz: false, // Set to true for production
+      multiAz: false,
       backupRetentionPeriod: 7,
       preferredBackupWindow: '03:00-04:00',
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
