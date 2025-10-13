@@ -430,7 +430,7 @@ EOF`,
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
       deletionProtection: false, // Set to false as per requirements
       monitoringInterval: cdk.Duration.seconds(60),
-      enablePerformanceInsights: true,
+      enablePerformanceInsights: false, // Disabled for t3.micro instances
       cloudwatchLogsExports: ['error', 'general', 'slowquery'],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
