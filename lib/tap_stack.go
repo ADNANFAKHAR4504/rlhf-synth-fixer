@@ -661,7 +661,6 @@ func main() {
 
 		// IAM Role for ECS Task Execution
 		ecsTaskExecutionRole, err := iam.NewRole(ctx, "ecs-task-execution-role", &iam.RoleArgs{
-			Name: pulumi.String(fmt.Sprintf("%s-%s-ecs-task-exec-role", projectName, envSuffix)),
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
 				"Statement": [
@@ -694,7 +693,6 @@ func main() {
 
 		// IAM Role for ECS Task
 		ecsTaskRole, err := iam.NewRole(ctx, "ecs-task-role", &iam.RoleArgs{
-			Name: pulumi.String(fmt.Sprintf("%s-%s-ecs-task-role", projectName, envSuffix)),
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
 				"Statement": [
@@ -718,7 +716,6 @@ func main() {
 		}
 
 		ecsTaskPolicy, err := iam.NewPolicy(ctx, "ecs-task-policy", &iam.PolicyArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-%s-ecs-task-policy", projectName, envSuffix)),
 			Description: pulumi.String("Policy for ECS tasks to access secrets and logs"),
 			Policy: pulumi.All(dbSecret.Arn).ApplyT(func(args []interface{}) string {
 				secretArn := args[0].(string)
