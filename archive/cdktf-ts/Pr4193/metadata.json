@@ -1,0 +1,34 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349451",
+  "team": "3",
+  "startedAt": "2025-10-13T07:47:37.244Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Security Groups",
+    "Route Tables",
+    "VPC Endpoints",
+    "Elastic IP",
+    "Subnets"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}
