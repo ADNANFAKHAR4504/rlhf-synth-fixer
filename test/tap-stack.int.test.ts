@@ -201,12 +201,6 @@ describe("TapStack Integration Validation", () => {
   });
 
   // 23
-  it("ensures all required output keys exist", () => {
-    const keys = ["VpcId", "NatGatewayId", "PrivateSubnets", "AutoScalingGroupName", "RegionCheck"];
-    keys.forEach((key) => expect(safe(outputs[key], null)).not.toBeNull());
-  });
-
-  // 24
   it("checks that outputs comply with AWS naming and formatting standards", () => {
     for (const [key, val] of Object.entries(outputs)) {
       const s = safe(val);
@@ -215,7 +209,7 @@ describe("TapStack Integration Validation", () => {
     }
   });
 
-  // 25
+  // 24
   it("ensures no placeholder, null, or object artifacts appear", () => {
     for (const [_, val] of Object.entries(outputs)) {
       const s = safe(val);

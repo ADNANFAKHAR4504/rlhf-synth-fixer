@@ -32,7 +32,7 @@ Define a single, production-ready CloudFormation template (**TapStack.yml**) tha
    - Encrypted S3 with BPA enabled
    - Clear, descriptive logical names.
 4. **Operational Instructions**:
-   - `validate-templ
+   - `validate-template` and `create-stack` commands with `--region us-west-2`.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
