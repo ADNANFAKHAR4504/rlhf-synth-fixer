@@ -16,9 +16,6 @@ describe('CloudFormation Template', () => {
     const keyPair = template.Resources.MyKeyPair;
     expect(keyPair).toBeDefined();
     expect(keyPair.Type).toBe('AWS::EC2::KeyPair');
-
-
-    // Check Fn::Sub exists and has the correct value
     expect(keyPair.Properties.KeyName).toHaveProperty('Fn::Sub', '${AWS::StackName}-keypair');
   });
 
@@ -73,12 +70,9 @@ describe('CloudFormation Template', () => {
     expect(bucket).toBeDefined();
     expect(bucket.Type).toBe('AWS::S3::Bucket');
     const props = bucket.Properties;
-    // Encryption
     expect(props.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-    // Lifecycle
     expect(props.LifecycleConfiguration.Rules[0].Status).toBe('Enabled');
     expect(props.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(90);
-    // Public access block
     expect(props.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
   });
 
@@ -92,28 +86,34 @@ describe('CloudFormation Template', () => {
     expect(props.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
 
     // Inline Policy
-    const policy = props.Policies.find((p: any) => p.PolicyName === 'CloudWatchLogsS3Policy');
+    const policy = props.Policies.find((p: any) => {
+      if (typeof p.PolicyName === 'string') return p.PolicyName.includes('CloudWatchLogsS3Policy');
+      if (p.PolicyName && p.PolicyName['Fn::Sub']) return p.PolicyName['Fn::Sub'].includes('CloudWatchLogsS3Policy');
+      return false;
+    });
     expect(policy).toBeDefined();
 
     const statements = policy.PolicyDocument.Statement;
     const hasCloudWatchActions = statements.some((s: any) =>
-      s.Action.includes('cloudwatch:PutMetricData')
+      Array.isArray(s.Action) ? s.Action.includes('cloudwatch:PutMetricData') : s.Action === 'cloudwatch:PutMetricData'
     );
     const hasS3Access = statements.some((s: any) =>
-      s.Action.includes('s3:PutObject')
+      Array.isArray(s.Action) ? s.Action.includes('s3:PutObject') : s.Action === 's3:PutObject'
     );
 
     expect(hasCloudWatchActions).toBe(true);
     expect(hasS3Access).toBe(true);
+
+    // RoleName uses Fn::Sub with placeholders
+    expect(props.RoleName).toHaveProperty('Fn::Sub');
+    expect(props.RoleName['Fn::Sub']).toContain('-ec2-role-');
   });
 
   test('should have CloudWatch LogGroup with retention period and tags', () => {
     const logGroup = template.Resources.EC2LogGroup;
     expect(logGroup).toBeDefined();
-
     const props = logGroup.Properties;
 
-    // Handle Fn::Sub structure
     if (props.LogGroupName['Fn::Sub']) {
       expect(props.LogGroupName['Fn::Sub']).toContain('/aws/ec2/');
     } else {
@@ -125,14 +125,24 @@ describe('CloudFormation Template', () => {
     expect(props.Tags.some((t: any) => t.Key === 'Environment')).toBe(true);
   });
 
+  test('should have InstanceProfile with correct role and name', () => {
+    const profile = template.Resources.EC2InstanceProfile;
+    expect(profile).toBeDefined();
+
+    // Roles array contains Ref to EC2Role
+    expect(profile.Properties.Roles.some((r: any) => r.Ref === 'EC2Role')).toBe(true);
+
+    // InstanceProfileName uses Fn::Sub with placeholders
+    expect(profile.Properties.InstanceProfileName).toHaveProperty('Fn::Sub');
+    expect(profile.Properties.InstanceProfileName['Fn::Sub']).toContain('-ec2-profile-');
+  });
+
   test('should have SNS Topic for Alarm notifications', () => {
     const sns = template.Resources.AlarmTopic;
     expect(sns).toBeDefined();
     expect(sns.Type).toBe('AWS::SNS::Topic');
 
     const topicName = sns.Properties.TopicName;
-
-    // Handle Fn::Sub structure
     if (topicName['Fn::Sub']) {
       expect(topicName['Fn::Sub']).toContain('cpu-alarms');
     } else {

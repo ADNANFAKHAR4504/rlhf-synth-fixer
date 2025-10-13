@@ -6,9 +6,9 @@ import * as fs from "fs";
 // Load actual deployment outputs
 const outputs = JSON.parse(fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8"));
 
-const ec2Client = new EC2Client({ region: "us-east-1" });
-const logsClient = new CloudWatchLogsClient({ region: "us-east-1" });
-const cwClient = new CloudWatchClient({ region: "us-east-1" });
+const ec2Client = new EC2Client({ region: "us-west-2" });
+const logsClient = new CloudWatchLogsClient({ region: "us-west-2" });
+const cwClient = new CloudWatchClient({ region: "us-west-2" });
 
 describe("Live AWS Integration", () => {
   test("EC2 instances should be running and accessible", async () => {
@@ -22,7 +22,7 @@ describe("Live AWS Integration", () => {
     const logGroupName = outputs.CloudWatchLogGroup;
     const streams = await logsClient.send(new DescribeLogStreamsCommand({ logGroupName }));
     expect(streams.logStreams?.length).toBeGreaterThan(0);
-    // Optionally check for log events in the first stream
+
     if (streams.logStreams && streams.logStreams.length > 0) {
       const streamName = streams.logStreams[0].logStreamName;
       const events = await logsClient.send(new GetLogEventsCommand({ logGroupName, logStreamName: streamName }));
@@ -88,7 +88,6 @@ describe("CloudFormation Template Integration", () => {
     // KeyPair now references MyKeyPair
     expect(data.KeyName?.Ref).toBe("MyKeyPair");
 
-    // Other base expectations
     expect(data.InstanceType?.Ref || data.InstanceType).toBeDefined();
     expect(data.UserData).toBeDefined();
   });
@@ -144,6 +143,20 @@ describe("CloudFormation Template Integration", () => {
     const sns = template.Resources.AlarmTopic;
     expect(sns).toBeDefined();
     expect(sns.Type).toBe("AWS::SNS::Topic");
+  });
+
+  // --- IAM Role and InstanceProfile ---
+  test("EC2Role and EC2InstanceProfile should be defined and use Fn::Sub", () => {
+    const role = template.Resources.EC2Role;
+    expect(role).toBeDefined();
+    expect(role.Properties.RoleName).toHaveProperty("Fn::Sub");
+    expect(role.Properties.RoleName["Fn::Sub"]).toContain("-ec2-role-");
+
+    const profile = template.Resources.EC2InstanceProfile;
+    expect(profile).toBeDefined();
+    expect(profile.Properties.Roles.some((r: any) => r.Ref === "EC2Role")).toBe(true);
+    expect(profile.Properties.InstanceProfileName).toHaveProperty("Fn::Sub");
+    expect(profile.Properties.InstanceProfileName["Fn::Sub"]).toContain("-ec2-profile-");
   });
 
   // --- Outputs Validation ---
