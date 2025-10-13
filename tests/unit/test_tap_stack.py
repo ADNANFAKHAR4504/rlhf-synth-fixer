@@ -413,110 +413,119 @@ class TestTapStack(unittest.TestCase):
                                          mock_sns, mock_dynamodb, mock_s3, mock_iam, mock_config):
         """Test TapStack output registration."""
         
-        # Mock all components with output methods
+        # Mock all components with direct resource attributes
         mock_config_instance = MagicMock()
         mock_config.return_value = mock_config_instance
-        
+
         mock_iam_instance = MagicMock()
         mock_iam.return_value = mock_iam_instance
-        
+
+        # Mock S3 stack with direct resource attributes
         mock_s3_instance = MagicMock()
-        mock_s3_instance.get_static_assets_bucket_name.return_value = MockPulumiOutput("static-bucket")
-        mock_s3_instance.get_static_assets_bucket_arn.return_value = MockPulumiOutput("arn:aws:s3:::static-bucket")
-        mock_s3_instance.get_lambda_deployments_bucket_name.return_value = MockPulumiOutput("lambda-bucket")
-        mock_s3_instance.get_lambda_deployments_bucket_arn.return_value = MockPulumiOutput("arn:aws:s3:::lambda-bucket")
+        mock_s3_instance.static_assets_bucket.bucket = MockPulumiOutput("static-bucket")
+        mock_s3_instance.static_assets_bucket.arn = MockPulumiOutput("arn:aws:s3:::static-bucket")
+        mock_s3_instance.lambda_deployments_bucket.bucket = MockPulumiOutput("lambda-bucket")
+        mock_s3_instance.lambda_deployments_bucket.arn = MockPulumiOutput("arn:aws:s3:::lambda-bucket")
         mock_s3.return_value = mock_s3_instance
-        
+
+        # Mock DynamoDB stack with direct resource attributes
         mock_dynamodb_instance = MagicMock()
-        mock_dynamodb_instance.get_main_table_name.return_value = MockPulumiOutput("main-table")
-        mock_dynamodb_instance.get_main_table_arn.return_value = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/main-table")
-        mock_dynamodb_instance.get_audit_table_name.return_value = MockPulumiOutput("audit-table")
-        mock_dynamodb_instance.get_audit_table_arn.return_value = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/audit-table")
+        mock_dynamodb_instance.main_table.name = MockPulumiOutput("main-table")
+        mock_dynamodb_instance.main_table.arn = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/main-table")
+        mock_dynamodb_instance.audit_table.name = MockPulumiOutput("audit-table")
+        mock_dynamodb_instance.audit_table.arn = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/audit-table")
         mock_dynamodb.return_value = mock_dynamodb_instance
-        
+
+        # Mock SNS stack with direct resource attributes
         mock_sns_instance = MagicMock()
-        mock_sns_instance.get_critical_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:critical-topic")
-        mock_sns_instance.get_error_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:error-topic")
-        mock_sns_instance.get_compliance_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:compliance-topic")
+        mock_sns_instance.critical_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:critical-topic")
+        mock_sns_instance.error_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:error-topic")
+        mock_sns_instance.compliance_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:compliance-topic")
         mock_sns.return_value = mock_sns_instance
-        
+
+        # Mock Lambda stack with direct resource attributes
         mock_lambda_instance = MagicMock()
-        mock_lambda_instance.get_api_handler_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:api-handler")
-        mock_lambda_instance.get_api_handler_invoke_arn.return_value = MockPulumiOutput("arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:api-handler/invocations")
-        mock_lambda_instance.get_data_processor_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:data-processor")
-        mock_lambda_instance.get_error_handler_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:error-handler")
+        mock_lambda_instance.api_handler.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:api-handler")
+        mock_lambda_instance.api_handler.invoke_arn = MockPulumiOutput("arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:api-handler/invocations")
+        mock_lambda_instance.data_processor.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:data-processor")
+        mock_lambda_instance.error_handler.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:error-handler")
         mock_lambda.return_value = mock_lambda_instance
-        
+
+        # Mock API Gateway stack with direct resource attributes
         mock_api_gateway_instance = MagicMock()
-        mock_api_gateway_instance.get_api_endpoint.return_value = MockPulumiOutput("https://api-id.execute-api.us-east-1.amazonaws.com/v1")
-        mock_api_gateway_instance.get_rest_api_id.return_value = MockPulumiOutput("api-id")
-        mock_api_gateway_instance.get_stage_name.return_value = MockPulumiOutput("v1")
+        mock_api_gateway_instance.stage.invoke_url = MockPulumiOutput("https://api-id.execute-api.us-east-1.amazonaws.com/v1")
+        mock_api_gateway_instance.rest_api.id = MockPulumiOutput("api-id")
+        mock_api_gateway_instance.stage.stage_name = MockPulumiOutput("v1")
         mock_api_gateway.return_value = mock_api_gateway_instance
-        
+
+        # Mock CloudWatch stack with direct resource attributes
         mock_cloudwatch_instance = MagicMock()
-        mock_cloudwatch_instance.get_lambda_error_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
-        mock_cloudwatch_instance.get_api_4xx_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
-        mock_cloudwatch_instance.get_api_5xx_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
-        mock_cloudwatch_instance.get_dashboard_url.return_value = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
-        mock_cloudwatch.return_value = mock_cloudwatch_instance
-        
-        mock_step_functions_instance = MagicMock()
-        mock_step_functions_instance.get_state_machine_arn.return_value = MockPulumiOutput("arn:aws:states:us-east-1:123456789012:stateMachine:workflow")
-        mock_step_functions_instance.get_state_machine_name.return_value = MockPulumiOutput("workflow")
-        mock_step_functions.return_value = mock_step_functions_instance
-        
-        mock_waf_instance = MagicMock()
-        mock_waf_instance.get_web_acl_arn.return_value = MockPulumiOutput("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/web-acl")
-        mock_waf_instance.get_web_acl_id.return_value = MockPulumiOutput("web-acl-id")
-        mock_waf.return_value = mock_waf_instance
-        
-        mock_config_rules_instance = MagicMock()
-        mock_config_rules_instance.get_rule_arns.return_value = {
-            'iam_managed_policy': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/iam-policy"),
-            's3_public_access': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/s3-public"),
-            'dynamodb_encryption': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/dynamodb-encryption")
+        mock_cloudwatch_instance.alarms = {
+            'lambda_errors': MagicMock(),
+            'api_4xx_errors': MagicMock(),
+            'api_5xx_errors': MagicMock()
         }
+        mock_cloudwatch_instance.alarms['lambda_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
+        mock_cloudwatch_instance.alarms['api_4xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
+        mock_cloudwatch_instance.alarms['api_5xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
+        mock_cloudwatch_instance.dashboard.url = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
+        mock_cloudwatch.return_value = mock_cloudwatch_instance
+
+        # Mock Step Functions stack with direct resource attributes
+        mock_step_functions_instance = MagicMock()
+        mock_step_functions_instance.state_machine.arn = MockPulumiOutput("arn:aws:states:us-east-1:123456789012:stateMachine:workflow")
+        mock_step_functions_instance.state_machine.name = MockPulumiOutput("workflow")
+        mock_step_functions.return_value = mock_step_functions_instance
+
+        # Mock WAF stack with direct resource attributes
+        mock_waf_instance = MagicMock()
+        mock_waf_instance.web_acl.arn = MockPulumiOutput("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/web-acl")
+        mock_waf_instance.web_acl.id = MockPulumiOutput("web-acl-id")
+        mock_waf.return_value = mock_waf_instance
+
+        # Mock Config Rules stack with direct resource attributes
+        mock_config_rules_instance = MagicMock()
+        mock_config_rules_instance.rules = {
+            'iam_managed_policy': MagicMock(),
+            's3_public_access': MagicMock(),
+            'dynamodb_encryption': MagicMock()
+        }
+        mock_config_rules_instance.rules['iam_managed_policy'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/iam-policy")
+        mock_config_rules_instance.rules['s3_public_access'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/s3-public")
+        mock_config_rules_instance.rules['dynamodb_encryption'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/dynamodb-encryption")
         mock_config_rules.return_value = mock_config_rules_instance
         
         # Create TapStack instance
         stack = TapStack("test-stack", self.args, self.mock_opts)
         
-        # Verify all output methods were called
-        mock_s3_instance.get_static_assets_bucket_name.assert_called_once()
-        mock_s3_instance.get_static_assets_bucket_arn.assert_called_once()
-        mock_s3_instance.get_lambda_deployments_bucket_name.assert_called_once()
-        mock_s3_instance.get_lambda_deployments_bucket_arn.assert_called_once()
-        
-        mock_dynamodb_instance.get_main_table_name.assert_called_once()
-        mock_dynamodb_instance.get_main_table_arn.assert_called_once()
-        mock_dynamodb_instance.get_audit_table_name.assert_called_once()
-        mock_dynamodb_instance.get_audit_table_arn.assert_called_once()
-        
-        mock_sns_instance.get_critical_topic_arn.assert_called_once()
-        mock_sns_instance.get_error_topic_arn.assert_called_once()
-        mock_sns_instance.get_compliance_topic_arn.assert_called_once()
-        
-        mock_lambda_instance.get_api_handler_arn.assert_called_once()
-        mock_lambda_instance.get_api_handler_invoke_arn.assert_called_once()
-        mock_lambda_instance.get_data_processor_arn.assert_called_once()
-        mock_lambda_instance.get_error_handler_arn.assert_called_once()
-        
-        mock_api_gateway_instance.get_api_endpoint.assert_called_once()
-        mock_api_gateway_instance.get_rest_api_id.assert_called_once()
-        mock_api_gateway_instance.get_stage_name.assert_called_once()
-        
-        mock_cloudwatch_instance.get_lambda_error_alarm_arn.assert_called_once()
-        mock_cloudwatch_instance.get_api_4xx_alarm_arn.assert_called_once()
-        mock_cloudwatch_instance.get_api_5xx_alarm_arn.assert_called_once()
-        mock_cloudwatch_instance.get_dashboard_url.assert_called_once()
-        
-        mock_step_functions_instance.get_state_machine_arn.assert_called_once()
-        mock_step_functions_instance.get_state_machine_name.assert_called_once()
-        
-        mock_waf_instance.get_web_acl_arn.assert_called_once()
-        mock_waf_instance.get_web_acl_id.assert_called_once()
-        
-        mock_config_rules_instance.get_rule_arns.assert_called_once()
+        # Verify outputs are accessible as flat properties
+        self.assertIsNotNone(stack.api_endpoint)
+        self.assertIsNotNone(stack.rest_api_id)
+        self.assertIsNotNone(stack.stage_name)
+        self.assertIsNotNone(stack.api_handler_arn)
+        self.assertIsNotNone(stack.api_handler_invoke_arn)
+        self.assertIsNotNone(stack.data_processor_arn)
+        self.assertIsNotNone(stack.error_handler_arn)
+        self.assertIsNotNone(stack.main_table_name)
+        self.assertIsNotNone(stack.main_table_arn)
+        self.assertIsNotNone(stack.audit_table_name)
+        self.assertIsNotNone(stack.audit_table_arn)
+        self.assertIsNotNone(stack.static_assets_bucket_name)
+        self.assertIsNotNone(stack.static_assets_bucket_arn)
+        self.assertIsNotNone(stack.lambda_deployments_bucket_name)
+        self.assertIsNotNone(stack.lambda_deployments_bucket_arn)
+        self.assertIsNotNone(stack.state_machine_arn)
+        self.assertIsNotNone(stack.state_machine_name)
+        self.assertIsNotNone(stack.lambda_error_alarm_arn)
+        self.assertIsNotNone(stack.api_4xx_alarm_arn)
+        self.assertIsNotNone(stack.api_5xx_alarm_arn)
+        self.assertIsNotNone(stack.dashboard_url)
+        self.assertIsNotNone(stack.critical_topic_arn)
+        self.assertIsNotNone(stack.error_topic_arn)
+        self.assertIsNotNone(stack.compliance_topic_arn)
+        self.assertIsNotNone(stack.web_acl_arn)
+        self.assertIsNotNone(stack.web_acl_id)
+        self.assertIsNotNone(stack.config_rule_arns)
 
     def test_tap_stack_config_override(self):
         """Test TapStack with environment override in config."""
@@ -699,69 +708,86 @@ class TestTapStack(unittest.TestCase):
                                        mock_sns, mock_dynamodb, mock_s3, mock_iam, mock_config):
         """Test TapStack output validation and type checking."""
         
-        # Mock all components with specific output types
+        # Mock all components with direct resource attributes
         mock_config_instance = MagicMock()
         mock_config.return_value = mock_config_instance
         
         mock_iam_instance = MagicMock()
         mock_iam.return_value = mock_iam_instance
         
+        # Mock S3 stack with direct resource attributes
         mock_s3_instance = MagicMock()
-        mock_s3_instance.get_static_assets_bucket_name.return_value = MockPulumiOutput("static-bucket")
-        mock_s3_instance.get_static_assets_bucket_arn.return_value = MockPulumiOutput("arn:aws:s3:::static-bucket")
-        mock_s3_instance.get_lambda_deployments_bucket_name.return_value = MockPulumiOutput("lambda-bucket")
-        mock_s3_instance.get_lambda_deployments_bucket_arn.return_value = MockPulumiOutput("arn:aws:s3:::lambda-bucket")
+        mock_s3_instance.static_assets_bucket.bucket = MockPulumiOutput("static-bucket")
+        mock_s3_instance.static_assets_bucket.arn = MockPulumiOutput("arn:aws:s3:::static-bucket")
+        mock_s3_instance.lambda_deployments_bucket.bucket = MockPulumiOutput("lambda-bucket")
+        mock_s3_instance.lambda_deployments_bucket.arn = MockPulumiOutput("arn:aws:s3:::lambda-bucket")
         mock_s3.return_value = mock_s3_instance
         
+        # Mock DynamoDB stack with direct resource attributes
         mock_dynamodb_instance = MagicMock()
-        mock_dynamodb_instance.get_main_table_name.return_value = MockPulumiOutput("main-table")
-        mock_dynamodb_instance.get_main_table_arn.return_value = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/main-table")
-        mock_dynamodb_instance.get_audit_table_name.return_value = MockPulumiOutput("audit-table")
-        mock_dynamodb_instance.get_audit_table_arn.return_value = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/audit-table")
+        mock_dynamodb_instance.main_table.name = MockPulumiOutput("main-table")
+        mock_dynamodb_instance.main_table.arn = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/main-table")
+        mock_dynamodb_instance.audit_table.name = MockPulumiOutput("audit-table")
+        mock_dynamodb_instance.audit_table.arn = MockPulumiOutput("arn:aws:dynamodb:us-east-1:123456789012:table/audit-table")
         mock_dynamodb.return_value = mock_dynamodb_instance
         
+        # Mock SNS stack with direct resource attributes
         mock_sns_instance = MagicMock()
-        mock_sns_instance.get_critical_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:critical-topic")
-        mock_sns_instance.get_error_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:error-topic")
-        mock_sns_instance.get_compliance_topic_arn.return_value = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:compliance-topic")
+        mock_sns_instance.critical_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:critical-topic")
+        mock_sns_instance.error_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:error-topic")
+        mock_sns_instance.compliance_topic.arn = MockPulumiOutput("arn:aws:sns:us-east-1:123456789012:compliance-topic")
         mock_sns.return_value = mock_sns_instance
         
+        # Mock Lambda stack with direct resource attributes
         mock_lambda_instance = MagicMock()
-        mock_lambda_instance.get_api_handler_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:api-handler")
-        mock_lambda_instance.get_api_handler_invoke_arn.return_value = MockPulumiOutput("arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:api-handler/invocations")
-        mock_lambda_instance.get_data_processor_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:data-processor")
-        mock_lambda_instance.get_error_handler_arn.return_value = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:error-handler")
+        mock_lambda_instance.api_handler.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:api-handler")
+        mock_lambda_instance.api_handler.invoke_arn = MockPulumiOutput("arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:api-handler/invocations")
+        mock_lambda_instance.data_processor.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:data-processor")
+        mock_lambda_instance.error_handler.arn = MockPulumiOutput("arn:aws:lambda:us-east-1:123456789012:function:error-handler")
         mock_lambda.return_value = mock_lambda_instance
         
+        # Mock API Gateway stack with direct resource attributes
         mock_api_gateway_instance = MagicMock()
-        mock_api_gateway_instance.get_api_endpoint.return_value = MockPulumiOutput("https://api-id.execute-api.us-east-1.amazonaws.com/v1")
-        mock_api_gateway_instance.get_rest_api_id.return_value = MockPulumiOutput("api-id")
-        mock_api_gateway_instance.get_stage_name.return_value = MockPulumiOutput("v1")
+        mock_api_gateway_instance.stage.invoke_url = MockPulumiOutput("https://api-id.execute-api.us-east-1.amazonaws.com/v1")
+        mock_api_gateway_instance.rest_api.id = MockPulumiOutput("api-id")
+        mock_api_gateway_instance.stage.stage_name = MockPulumiOutput("v1")
         mock_api_gateway.return_value = mock_api_gateway_instance
         
+        # Mock CloudWatch stack with direct resource attributes
         mock_cloudwatch_instance = MagicMock()
-        mock_cloudwatch_instance.get_lambda_error_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
-        mock_cloudwatch_instance.get_api_4xx_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
-        mock_cloudwatch_instance.get_api_5xx_alarm_arn.return_value = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
-        mock_cloudwatch_instance.get_dashboard_url.return_value = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
+        mock_cloudwatch_instance.alarms = {
+            'lambda_errors': MagicMock(),
+            'api_4xx_errors': MagicMock(),
+            'api_5xx_errors': MagicMock()
+        }
+        mock_cloudwatch_instance.alarms['lambda_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:lambda-errors")
+        mock_cloudwatch_instance.alarms['api_4xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-4xx")
+        mock_cloudwatch_instance.alarms['api_5xx_errors'].arn = MockPulumiOutput("arn:aws:cloudwatch:us-east-1:123456789012:alarm:api-5xx")
+        mock_cloudwatch_instance.dashboard.url = MockPulumiOutput("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=main-dashboard")
         mock_cloudwatch.return_value = mock_cloudwatch_instance
         
+        # Mock Step Functions stack with direct resource attributes
         mock_step_functions_instance = MagicMock()
-        mock_step_functions_instance.get_state_machine_arn.return_value = MockPulumiOutput("arn:aws:states:us-east-1:123456789012:stateMachine:workflow")
-        mock_step_functions_instance.get_state_machine_name.return_value = MockPulumiOutput("workflow")
+        mock_step_functions_instance.state_machine.arn = MockPulumiOutput("arn:aws:states:us-east-1:123456789012:stateMachine:workflow")
+        mock_step_functions_instance.state_machine.name = MockPulumiOutput("workflow")
         mock_step_functions.return_value = mock_step_functions_instance
         
+        # Mock WAF stack with direct resource attributes
         mock_waf_instance = MagicMock()
-        mock_waf_instance.get_web_acl_arn.return_value = MockPulumiOutput("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/web-acl")
-        mock_waf_instance.get_web_acl_id.return_value = MockPulumiOutput("web-acl-id")
+        mock_waf_instance.web_acl.arn = MockPulumiOutput("arn:aws:wafv2:us-east-1:123456789012:regional/webacl/web-acl")
+        mock_waf_instance.web_acl.id = MockPulumiOutput("web-acl-id")
         mock_waf.return_value = mock_waf_instance
         
+        # Mock Config Rules stack with direct resource attributes
         mock_config_rules_instance = MagicMock()
-        mock_config_rules_instance.get_rule_arns.return_value = {
-            'iam_managed_policy': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/iam-policy"),
-            's3_public_access': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/s3-public"),
-            'dynamodb_encryption': MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/dynamodb-encryption")
+        mock_config_rules_instance.rules = {
+            'iam_managed_policy': MagicMock(),
+            's3_public_access': MagicMock(),
+            'dynamodb_encryption': MagicMock()
         }
+        mock_config_rules_instance.rules['iam_managed_policy'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/iam-policy")
+        mock_config_rules_instance.rules['s3_public_access'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/s3-public")
+        mock_config_rules_instance.rules['dynamodb_encryption'].arn = MockPulumiOutput("arn:aws:config:us-east-1:123456789012:rule/dynamodb-encryption")
         mock_config_rules.return_value = mock_config_rules_instance
         
         # Create TapStack instance
@@ -782,7 +808,7 @@ class TestTapStack(unittest.TestCase):
         self.assertIsInstance(stack.lambda_error_alarm_arn, MockPulumiOutput)
         self.assertIsInstance(stack.critical_topic_arn, MockPulumiOutput)
         self.assertIsInstance(stack.web_acl_arn, MockPulumiOutput)
-        self.assertIsInstance(stack.config_rule_arns, dict)
+        self.assertIsInstance(stack.config_rule_arns, list)
         
         # Verify output values
         self.assertEqual(stack.api_endpoint.value, "https://api-id.execute-api.us-east-1.amazonaws.com/v1")
@@ -800,10 +826,11 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(stack.critical_topic_arn.value, "arn:aws:sns:us-east-1:123456789012:critical-topic")
         self.assertEqual(stack.web_acl_arn.value, "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/web-acl")
         
-        # Verify config rule ARNs
-        self.assertIn('iam_managed_policy', stack.config_rule_arns)
-        self.assertIn('s3_public_access', stack.config_rule_arns)
-        self.assertIn('dynamodb_encryption', stack.config_rule_arns)
+        # Verify config rule ARNs are present
+        self.assertEqual(len(stack.config_rule_arns), 3)
+        self.assertIsInstance(stack.config_rule_arns[0], MockPulumiOutput)
+        self.assertIsInstance(stack.config_rule_arns[1], MockPulumiOutput)
+        self.assertIsInstance(stack.config_rule_arns[2], MockPulumiOutput)
 
 
 class TestInfrastructureConfig(unittest.TestCase):
