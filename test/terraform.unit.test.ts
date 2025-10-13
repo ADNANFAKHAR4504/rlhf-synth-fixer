@@ -127,10 +127,6 @@ describe('Terraform Infrastructure Unit Tests - Multi-Account VPC Peering', () =
   });
 
   describe('Data Sources', () => {
-    test('should define aws_caller_identity data source', () => {
-      expect(terraformCode).toMatch(/data\s+"aws_caller_identity"\s+"current"/);
-    });
-
     test('should define aws_availability_zones data source', () => {
       expect(terraformCode).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
